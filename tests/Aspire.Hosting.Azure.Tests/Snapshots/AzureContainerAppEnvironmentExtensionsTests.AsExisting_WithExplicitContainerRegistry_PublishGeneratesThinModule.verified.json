@@ -4,6 +4,7 @@
   "params": {
     "environmentName": "{environmentName.value}",
     "sharedRg": "{sharedRg.value}",
+    "env_mi_outputs_id": "{env-mi.outputs.id}",
     "registryName": "{registryName.value}",
     "userPrincipalId": ""
   }

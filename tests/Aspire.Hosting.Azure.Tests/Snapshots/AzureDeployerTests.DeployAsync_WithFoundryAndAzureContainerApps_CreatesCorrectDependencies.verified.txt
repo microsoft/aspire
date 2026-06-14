@@ -5,7 +5,7 @@ PIPELINE DEPENDENCY GRAPH DIAGNOSTICS
 This diagnostic output shows the complete pipeline dependency graph structure.
 Use this to understand step relationships and troubleshoot execution issues.
 
-Total steps defined: 43
+Total steps defined: 46
 
 Analysis for full pipeline execution (showing all steps and their relationships)
 
@@ -14,49 +14,52 @@ EXECUTION ORDER
 This shows the order in which steps would execute, respecting all dependencies.
 Steps with no dependencies run first, followed by steps that depend on them.
 
-  1. azure-prepare-resources
-  2. validate-compute-environments
-  3. prepare-azure-container-apps-aca-env
-  4. prepare-foundry-project-foundry-project
-  5. validate-azure-container-apps
-  6. before-start
-  7. process-parameters
-  8. build-prereq
-  9. check-container-runtime
- 10. validate-build-only-container-references
- 11. deploy-prereq
- 12. build-agent
- 13. build-api
- 14. build
- 15. validate-azure-login
- 16. create-provisioning-context
- 17. provision-aca-env-acr
- 18. provision-aca-env
- 19. login-to-acr-aca-env-acr
- 20. provision-foundry-project-acr
- 21. login-to-acr-foundry-project-acr
- 22. push-prereq
- 23. push-api
- 24. provision-api-containerapp
- 25. provision-foundry
- 26. provision-foundry-project
- 27. provision-azure-bicep-resources
- 28. compute-endpoints-foundry-project
- 29. push-agent
- 30. deploy-agent-ha
- 31. print-api-summary
- 32. print-dashboard-url-aca-env
- 33. deploy
- 34. deploy-api
- 35. destroy-prereq
- 36. destroy-azure-azure-environment
- 37. destroy
- 38. diagnostics
- 39. publish-prereq
- 40. publish-azure-environment
- 41. publish
- 42. publish-manifest
- 43. push
+  1. finalize-azure-container-apps-acr-pull-roles
+  2. azure-prepare-resources
+  3. validate-compute-environments
+  4. prepare-azure-container-apps-aca-env
+  5. prepare-foundry-project-foundry-project
+  6. validate-azure-container-apps
+  7. before-start
+  8. process-parameters
+  9. build-prereq
+ 10. check-container-runtime
+ 11. validate-build-only-container-references
+ 12. deploy-prereq
+ 13. build-agent
+ 14. build-api
+ 15. build
+ 16. validate-azure-login
+ 17. create-provisioning-context
+ 18. provision-aca-env-acr
+ 19. provision-aca-env-mi
+ 20. provision-aca-env
+ 21. provision-aca-env-mi-roles-aca-env-acr
+ 22. login-to-acr-aca-env-acr
+ 23. provision-foundry-project-acr
+ 24. login-to-acr-foundry-project-acr
+ 25. push-prereq
+ 26. push-api
+ 27. provision-api-containerapp
+ 28. provision-foundry
+ 29. provision-foundry-project
+ 30. provision-azure-bicep-resources
+ 31. compute-endpoints-foundry-project
+ 32. push-agent
+ 33. deploy-agent-ha
+ 34. print-api-summary
+ 35. print-dashboard-url-aca-env
+ 36. deploy
+ 37. deploy-api
+ 38. destroy-prereq
+ 39. destroy-azure-azure-environment
+ 40. destroy
+ 41. diagnostics
+ 42. publish-prereq
+ 43. publish-azure-environment
+ 44. publish
+ 45. publish-manifest
+ 46. push
 
 DETAILED STEP ANALYSIS
 ======================
@@ -65,7 +68,7 @@ Shows each step's dependencies, associated resources, tags, and descriptions.
 
 Step: azure-prepare-resources
     Description: Prepares the Azure resources.
-    Dependencies: none
+    Dependencies: ✓ finalize-azure-container-apps-acr-pull-roles
     Resource: azure-environment (AzureEnvironmentResource)
 
 Step: before-start
@@ -141,6 +144,9 @@ Step: diagnostics
     Description: Dumps dependency graph information for troubleshooting pipeline execution.
     Dependencies: none
 
+Step: finalize-azure-container-apps-acr-pull-roles
+    Dependencies: none
+
 Step: login-to-acr-aca-env-acr
     Dependencies: ✓ provision-aca-env-acr
     Resource: aca-env-acr (AzureContainerRegistryResource)
@@ -179,7 +185,7 @@ Step: process-parameters
 
 Step: provision-aca-env
     Description: Provisions the Azure Bicep resource aca-env using Azure infrastructure.
-    Dependencies: ✓ create-provisioning-context, ✓ provision-aca-env-acr
+    Dependencies: ✓ create-provisioning-context, ✓ provision-aca-env-acr, ✓ provision-aca-env-mi
     Resource: aca-env (AzureContainerAppEnvironmentResource)
     Tags: provision-infra
 
@@ -187,6 +193,18 @@ Step: provision-aca-env-acr
     Description: Provisions the Azure Bicep resource aca-env-acr using Azure infrastructure.
     Dependencies: ✓ create-provisioning-context
     Resource: aca-env-acr (AzureContainerRegistryResource)
+    Tags: provision-infra
+
+Step: provision-aca-env-mi
+    Description: Provisions the Azure Bicep resource aca-env-mi using Azure infrastructure.
+    Dependencies: ✓ create-provisioning-context
+    Resource: aca-env-mi (AzureUserAssignedIdentityResource)
+    Tags: provision-infra
+
+Step: provision-aca-env-mi-roles-aca-env-acr
+    Description: Provisions the Azure Bicep resource aca-env-mi-roles-aca-env-acr using Azure infrastructure.
+    Dependencies: ✓ create-provisioning-context, ✓ provision-aca-env-acr, ✓ provision-aca-env-mi
+    Resource: aca-env-mi-roles-aca-env-acr (AzureRoleAssignmentResource)
     Tags: provision-infra
 
 Step: provision-api-containerapp
@@ -197,7 +215,7 @@ Step: provision-api-containerapp
 
 Step: provision-azure-bicep-resources
     Description: Aggregation step for all Azure infrastructure provisioning operations.
-    Dependencies: ✓ create-provisioning-context, ✓ deploy-prereq, ✓ provision-aca-env, ✓ provision-aca-env-acr, ✓ provision-api-containerapp, ✓ provision-foundry, ✓ provision-foundry-project, ✓ provision-foundry-project-acr
+    Dependencies: ✓ create-provisioning-context, ✓ deploy-prereq, ✓ provision-aca-env, ✓ provision-aca-env-acr, ✓ provision-aca-env-mi, ✓ provision-aca-env-mi-roles-aca-env-acr, ✓ provision-api-containerapp, ✓ provision-foundry, ✓ provision-foundry-project, ✓ provision-foundry-project-acr
     Resource: azure-environment (AzureEnvironmentResource)
     Tags: provision-infra
 
@@ -282,18 +300,20 @@ Shows what steps would run for each possible target step and in what order.
 Steps at the same level can run concurrently.
 ─────────────────────────────────────────────────────────────────────────────
 If targeting 'azure-prepare-resources':
-  Direct dependencies: none
-  Total steps: 1
+  Direct dependencies: finalize-azure-container-apps-acr-pull-roles
+  Total steps: 2
   Execution order:
-    [0] azure-prepare-resources
+    [0] finalize-azure-container-apps-acr-pull-roles
+    [1] azure-prepare-resources
 
 If targeting 'before-start':
   Direct dependencies: azure-prepare-resources, prepare-azure-container-apps-aca-env, prepare-foundry-project-foundry-project, validate-azure-container-apps, validate-compute-environments
-  Total steps: 6
+  Total steps: 7
   Execution order:
-    [0] azure-prepare-resources | validate-azure-container-apps | validate-compute-environments (parallel)
-    [1] prepare-azure-container-apps-aca-env | prepare-foundry-project-foundry-project (parallel)
-    [2] before-start
+    [0] finalize-azure-container-apps-acr-pull-roles | validate-azure-container-apps | validate-compute-environments (parallel)
+    [1] azure-prepare-resources
+    [2] prepare-azure-container-apps-aca-env | prepare-foundry-project-foundry-project (parallel)
+    [3] before-start
 
 If targeting 'build':
   Direct dependencies: build-agent, build-api
@@ -335,14 +355,14 @@ If targeting 'check-container-runtime':
 
 If targeting 'compute-endpoints-foundry-project':
   Direct dependencies: provision-azure-bicep-resources
-  Total steps: 20
+  Total steps: 22
   Execution order:
     [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
-    [4] provision-aca-env-acr | provision-foundry | provision-foundry-project-acr (parallel)
-    [5] login-to-acr-aca-env-acr | login-to-acr-foundry-project-acr | provision-aca-env | provision-foundry-project (parallel)
+    [4] provision-aca-env-acr | provision-aca-env-mi | provision-foundry | provision-foundry-project-acr (parallel)
+    [5] login-to-acr-aca-env-acr | login-to-acr-foundry-project-acr | provision-aca-env | provision-aca-env-mi-roles-aca-env-acr | provision-foundry-project (parallel)
     [6] push-prereq
     [7] push-api
     [8] provision-api-containerapp
@@ -360,14 +380,14 @@ If targeting 'create-provisioning-context':
 
 If targeting 'deploy':
   Direct dependencies: build-agent, build-api, compute-endpoints-foundry-project, create-provisioning-context, deploy-agent-ha, print-api-summary, print-dashboard-url-aca-env, provision-azure-bicep-resources, validate-azure-login
-  Total steps: 26
+  Total steps: 28
   Execution order:
     [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-agent | build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
-    [4] provision-aca-env-acr | provision-foundry | provision-foundry-project-acr (parallel)
-    [5] login-to-acr-aca-env-acr | login-to-acr-foundry-project-acr | provision-aca-env | provision-foundry-project (parallel)
+    [4] provision-aca-env-acr | provision-aca-env-mi | provision-foundry | provision-foundry-project-acr (parallel)
+    [5] login-to-acr-aca-env-acr | login-to-acr-foundry-project-acr | provision-aca-env | provision-aca-env-mi-roles-aca-env-acr | provision-foundry-project (parallel)
     [6] push-prereq
     [7] push-agent | push-api (parallel)
     [8] provision-api-containerapp
@@ -377,14 +397,14 @@ If targeting 'deploy':
 
 If targeting 'deploy-agent-ha':
   Direct dependencies: deploy-prereq, provision-azure-bicep-resources, push-agent
-  Total steps: 22
+  Total steps: 24
   Execution order:
     [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-agent | build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
-    [4] provision-aca-env-acr | provision-foundry | provision-foundry-project-acr (parallel)
-    [5] login-to-acr-aca-env-acr | login-to-acr-foundry-project-acr | provision-aca-env | provision-foundry-project (parallel)
+    [4] provision-aca-env-acr | provision-aca-env-mi | provision-foundry | provision-foundry-project-acr (parallel)
+    [5] login-to-acr-aca-env-acr | login-to-acr-foundry-project-acr | provision-aca-env | provision-aca-env-mi-roles-aca-env-acr | provision-foundry-project (parallel)
     [6] push-prereq
     [7] push-agent | push-api (parallel)
     [8] provision-api-containerapp
@@ -393,13 +413,13 @@ If targeting 'deploy-agent-ha':
 
 If targeting 'deploy-api':
   Direct dependencies: print-api-summary
-  Total steps: 18
+  Total steps: 19
   Execution order:
     [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
-    [4] provision-aca-env-acr | provision-foundry-project-acr (parallel)
+    [4] provision-aca-env-acr | provision-aca-env-mi | provision-foundry-project-acr (parallel)
     [5] login-to-acr-aca-env-acr | login-to-acr-foundry-project-acr | provision-aca-env (parallel)
     [6] push-prereq
     [7] push-api
@@ -441,6 +461,12 @@ If targeting 'diagnostics':
   Execution order:
     [0] diagnostics
 
+If targeting 'finalize-azure-container-apps-acr-pull-roles':
+  Direct dependencies: none
+  Total steps: 1
+  Execution order:
+    [0] finalize-azure-container-apps-acr-pull-roles
+
 If targeting 'login-to-acr-aca-env-acr':
   Direct dependencies: provision-aca-env-acr
   Total steps: 7
@@ -465,27 +491,29 @@ If targeting 'login-to-acr-foundry-project-acr':
 
 If targeting 'prepare-azure-container-apps-aca-env':
   Direct dependencies: azure-prepare-resources, validate-compute-environments
-  Total steps: 3
+  Total steps: 4
   Execution order:
-    [0] azure-prepare-resources | validate-compute-environments (parallel)
-    [1] prepare-azure-container-apps-aca-env
+    [0] finalize-azure-container-apps-acr-pull-roles | validate-compute-environments (parallel)
+    [1] azure-prepare-resources
+    [2] prepare-azure-container-apps-aca-env
 
 If targeting 'prepare-foundry-project-foundry-project':
   Direct dependencies: azure-prepare-resources, validate-compute-environments
-  Total steps: 3
+  Total steps: 4
   Execution order:
-    [0] azure-prepare-resources | validate-compute-environments (parallel)
-    [1] prepare-foundry-project-foundry-project
+    [0] finalize-azure-container-apps-acr-pull-roles | validate-compute-environments (parallel)
+    [1] azure-prepare-resources
+    [2] prepare-foundry-project-foundry-project
 
 If targeting 'print-api-summary':
   Direct dependencies: provision-api-containerapp
-  Total steps: 17
+  Total steps: 18
   Execution order:
     [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
-    [4] provision-aca-env-acr | provision-foundry-project-acr (parallel)
+    [4] provision-aca-env-acr | provision-aca-env-mi | provision-foundry-project-acr (parallel)
     [5] login-to-acr-aca-env-acr | login-to-acr-foundry-project-acr | provision-aca-env (parallel)
     [6] push-prereq
     [7] push-api
@@ -494,14 +522,14 @@ If targeting 'print-api-summary':
 
 If targeting 'print-dashboard-url-aca-env':
   Direct dependencies: provision-aca-env, provision-azure-bicep-resources
-  Total steps: 20
+  Total steps: 22
   Execution order:
     [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
-    [4] provision-aca-env-acr | provision-foundry | provision-foundry-project-acr (parallel)
-    [5] login-to-acr-aca-env-acr | login-to-acr-foundry-project-acr | provision-aca-env | provision-foundry-project (parallel)
+    [4] provision-aca-env-acr | provision-aca-env-mi | provision-foundry | provision-foundry-project-acr (parallel)
+    [5] login-to-acr-aca-env-acr | login-to-acr-foundry-project-acr | provision-aca-env | provision-aca-env-mi-roles-aca-env-acr | provision-foundry-project (parallel)
     [6] push-prereq
     [7] push-api
     [8] provision-api-containerapp
@@ -515,14 +543,14 @@ If targeting 'process-parameters':
     [0] process-parameters
 
 If targeting 'provision-aca-env':
-  Direct dependencies: create-provisioning-context, provision-aca-env-acr
-  Total steps: 7
+  Direct dependencies: create-provisioning-context, provision-aca-env-acr, provision-aca-env-mi
+  Total steps: 8
   Execution order:
     [0] process-parameters | validate-build-only-container-references (parallel)
     [1] deploy-prereq
     [2] validate-azure-login
     [3] create-provisioning-context
-    [4] provision-aca-env-acr
+    [4] provision-aca-env-acr | provision-aca-env-mi (parallel)
     [5] provision-aca-env
 
 If targeting 'provision-aca-env-acr':
@@ -535,30 +563,51 @@ If targeting 'provision-aca-env-acr':
     [3] create-provisioning-context
     [4] provision-aca-env-acr
 
+If targeting 'provision-aca-env-mi':
+  Direct dependencies: create-provisioning-context
+  Total steps: 6
+  Execution order:
+    [0] process-parameters | validate-build-only-container-references (parallel)
+    [1] deploy-prereq
+    [2] validate-azure-login
+    [3] create-provisioning-context
+    [4] provision-aca-env-mi
+
+If targeting 'provision-aca-env-mi-roles-aca-env-acr':
+  Direct dependencies: create-provisioning-context, provision-aca-env-acr, provision-aca-env-mi
+  Total steps: 8
+  Execution order:
+    [0] process-parameters | validate-build-only-container-references (parallel)
+    [1] deploy-prereq
+    [2] validate-azure-login
+    [3] create-provisioning-context
+    [4] provision-aca-env-acr | provision-aca-env-mi (parallel)
+    [5] provision-aca-env-mi-roles-aca-env-acr
+
 If targeting 'provision-api-containerapp':
   Direct dependencies: create-provisioning-context, provision-aca-env, push-api
-  Total steps: 16
+  Total steps: 17
   Execution order:
     [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
-    [4] provision-aca-env-acr | provision-foundry-project-acr (parallel)
+    [4] provision-aca-env-acr | provision-aca-env-mi | provision-foundry-project-acr (parallel)
     [5] login-to-acr-aca-env-acr | login-to-acr-foundry-project-acr | provision-aca-env (parallel)
     [6] push-prereq
     [7] push-api
     [8] provision-api-containerapp
 
 If targeting 'provision-azure-bicep-resources':
-  Direct dependencies: create-provisioning-context, deploy-prereq, provision-aca-env, provision-aca-env-acr, provision-api-containerapp, provision-foundry, provision-foundry-project, provision-foundry-project-acr
-  Total steps: 19
+  Direct dependencies: create-provisioning-context, deploy-prereq, provision-aca-env, provision-aca-env-acr, provision-aca-env-mi, provision-aca-env-mi-roles-aca-env-acr, provision-api-containerapp, provision-foundry, provision-foundry-project, provision-foundry-project-acr
+  Total steps: 21
   Execution order:
     [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
-    [4] provision-aca-env-acr | provision-foundry | provision-foundry-project-acr (parallel)
-    [5] login-to-acr-aca-env-acr | login-to-acr-foundry-project-acr | provision-aca-env | provision-foundry-project (parallel)
+    [4] provision-aca-env-acr | provision-aca-env-mi | provision-foundry | provision-foundry-project-acr (parallel)
+    [5] login-to-acr-aca-env-acr | login-to-acr-foundry-project-acr | provision-aca-env | provision-aca-env-mi-roles-aca-env-acr | provision-foundry-project (parallel)
     [6] push-prereq
     [7] push-api
     [8] provision-api-containerapp

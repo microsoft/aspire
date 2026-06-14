@@ -73,16 +73,16 @@ public class AzureUserAssignedIdentityTests
         Assert.Collection(model.Resources,
             r => Assert.IsType<AzureEnvironmentResource>(r),
             r => Assert.IsType<AzureContainerRegistryResource>(r),
+            // The environment's default ACR-pull identity is now a first-class model resource (#11256).
+            r => Assert.IsType<AzureUserAssignedIdentityResource>(r),
             r => Assert.IsType<AzureContainerAppEnvironmentResource>(r),
             r => Assert.IsType<AzureContainerRegistryResource>(r),
             r => Assert.IsType<AzureUserAssignedIdentityResource>(r),
-            r =>
-            {
-                Assert.IsType<AzureRoleAssignmentResource>(r);
-                Assert.Equal("myidentity-roles-myregistry", r.Name);
-            });
+            r => Assert.IsType<AzureRoleAssignmentResource>(r),
+            // The default ACR-pull identity's AcrPull role assignment module (#11256).
+            r => Assert.IsType<AzureRoleAssignmentResource>(r));
 
-        var identityResource = Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>());
+        var identityResource = Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>(), r => r.Name == "myidentity");
         var (_, identityBicep) = await GetManifestWithBicep(identityResource, skipPreparer: true);
 
         var registryResource = Assert.Single(model.Resources.OfType<AzureContainerRegistryResource>(), r => r.Name == "myregistry");
@@ -117,8 +117,9 @@ public class AzureUserAssignedIdentityTests
 
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
 
-        // Check that only one AzureUserAssignedIdentityResource is created, the one that we explicitly constructed
-        var identityResource = Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>());
+        // Check that the explicitly-constructed identity exists (the environment also adds its own
+        // default ACR-pull identity as a model resource since #11256).
+        var identityResource = Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>(), r => r.Name == "myidentity");
         Assert.Equal("myidentity", identityResource.Name);
 
         // Check for IComputeResource having the correct identity
@@ -158,14 +159,18 @@ public class AzureUserAssignedIdentityTests
         Assert.Collection(model.Resources,
             r => Assert.IsType<AzureEnvironmentResource>(r),
             r => Assert.IsType<AzureContainerRegistryResource>(r),
+            // The environment's default ACR-pull identity is now a first-class model resource (#11256).
+            r => Assert.IsType<AzureUserAssignedIdentityResource>(r),
             r => Assert.IsType<AzureContainerAppEnvironmentResource>(r),
             r => Assert.IsType<AzureStorageResource>(r),
             r => Assert.IsType<AzureUserAssignedIdentityResource>(r),
             r => Assert.IsType<ProjectResource>(r),
+            r => Assert.IsType<AzureRoleAssignmentResource>(r),
+            // The default ACR-pull identity's AcrPull role assignment module (#11256).
             r => Assert.IsType<AzureRoleAssignmentResource>(r));
 
-        // Verify the identity resource is the only one that exists
-        var identityResource = Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>());
+        // Verify the explicitly-constructed identity resource exists
+        var identityResource = Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>(), r => r.Name == "myidentity");
         Assert.Equal("myidentity", identityResource.Name);
 
         // Verify the compute resource has the identity annotation
@@ -216,14 +221,18 @@ public class AzureUserAssignedIdentityTests
         Assert.Collection(model.Resources,
             r => Assert.IsType<AzureEnvironmentResource>(r),
             r => Assert.IsType<AzureContainerRegistryResource>(r),
+            // The environment's default ACR-pull identity is now a first-class model resource (#11256).
+            r => Assert.IsType<AzureUserAssignedIdentityResource>(r),
             r => Assert.IsType<AzureAppServiceEnvironmentResource>(r),
             r => Assert.IsType<AzureStorageResource>(r),
             r => Assert.IsType<AzureUserAssignedIdentityResource>(r),
             r => Assert.IsType<ProjectResource>(r),
+            r => Assert.IsType<AzureRoleAssignmentResource>(r),
+            // The default ACR-pull identity's AcrPull role assignment module (#11256).
             r => Assert.IsType<AzureRoleAssignmentResource>(r));
 
-        // Verify the identity resource is the only one that exists
-        var identityResource = Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>());
+        // Verify the explicitly-constructed identity resource exists
+        var identityResource = Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>(), r => r.Name == "myidentity");
         Assert.Equal("myidentity", identityResource.Name);
 
         // Verify the compute resource has the identity annotation
@@ -295,16 +304,21 @@ public class AzureUserAssignedIdentityTests
         Assert.Collection(model.Resources,
             r => Assert.IsType<AzureEnvironmentResource>(r),
             r => Assert.IsType<AzureContainerRegistryResource>(r),
+            // The environment's default ACR-pull identity is now a first-class model resource (#11256).
+            r => Assert.IsType<AzureUserAssignedIdentityResource>(r),
             r => Assert.IsType<AzureContainerAppEnvironmentResource>(r),
             r => Assert.IsType<AzureStorageResource>(r),
             r => Assert.IsType<AzureUserAssignedIdentityResource>(r),
             r => Assert.IsType<ProjectResource>(r),
             r => Assert.IsType<ProjectResource>(r),
-            r => Assert.True(r is AzureRoleAssignmentResource { Name: "myapp-roles-mystorage" }),
-            r => Assert.True(r is AzureRoleAssignmentResource { Name: "myapp2-roles-mystorage" }));
+            // Three role-assignment modules: one per project plus the default ACR-pull identity's
+            // AcrPull role assignment (#11256). Asserted by type since their relative order is incidental.
+            r => Assert.IsType<AzureRoleAssignmentResource>(r),
+            r => Assert.IsType<AzureRoleAssignmentResource>(r),
+            r => Assert.IsType<AzureRoleAssignmentResource>(r));
 
-        // Verify the identity resource is the only one that exists
-        var identityResource = Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>());
+        // Verify the explicitly-constructed identity resource exists
+        var identityResource = Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>(), r => r.Name == "myidentity");
         Assert.Equal("myidentity", identityResource.Name);
 
         // Verify that both compute resources have the same identity annotation

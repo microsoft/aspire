@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001 // Pipeline APIs are experimental
+#pragma warning disable ASPIREAZURE001 // AzureEnvironmentResource is for evaluation purposes only. Suppressed to reference the well-known prepare-resources step name.
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
@@ -24,6 +25,22 @@ namespace Aspire.Hosting;
 /// </summary>
 public static partial class AzureAppServiceEnvironmentExtensions
 {
+    // The AcrPull role granted to the environment's container-pull identity. Declared as a model
+    // RoleAssignmentAnnotation (rather than an inline role assignment in the env Bicep) so the preparer
+    // can emit it as a separately scoped module for cross-resource-group existing registries (BCP139).
+    // See https://github.com/microsoft/aspire/issues/11256.
+    //
+    // NOTE: This field and the helpers below (AssignAcrPullRoleToGeneratedIdentity, ResolveContainerRegistry,
+    // CreateDefaultAcrPullIdentity, GetUniqueAcrPullIdentityName, RemoveGeneratedAcrPullIdentity) plus the
+    // "finalize-azure-app-service-acr-pull-roles" pipeline step are intentionally duplicated in
+    // AzureContainerAppExtensions (the two packages don't share internals). Keep the two copies in sync.
+    private static readonly IReadOnlySet<RoleDefinition> s_acrPullRole = new HashSet<RoleDefinition>
+    {
+        new(
+            ContainerRegistryBuiltInRole.AcrPull.ToString(),
+            ContainerRegistryBuiltInRole.GetBuiltInRoleName(ContainerRegistryBuiltInRole.AcrPull))
+    };
+
     internal static IDistributedApplicationBuilder AddAzureAppServiceInfrastructureCore(this IDistributedApplicationBuilder builder)
     {
         builder.AddAzureProvisioning();
@@ -65,9 +82,65 @@ public static partial class AzureAppServiceEnvironmentExtensions
                     return Task.CompletedTask;
                 },
                 requiredBy: WellKnownPipelineSteps.BeforeStart);
+
+            // Grant the Aspire-generated ACR-pull identity the AcrPull role on each environment's FINAL
+            // container registry. This runs just before azure-prepare-resources so it observes the registry
+            // chosen by WithAzureContainerRegistry, and the preparer then emits the role assignment as a
+            // separately scoped module (required for cross-resource-group existing registries — BCP139).
+            // See https://github.com/microsoft/aspire/issues/11256.
+            builder.Pipeline.AddStep(
+                name: "finalize-azure-app-service-acr-pull-roles",
+                action: ctx =>
+                {
+                    if (!ctx.ExecutionContext.IsPublishMode)
+                    {
+                        return Task.CompletedTask;
+                    }
+
+                    foreach (var env in ctx.Model.Resources.OfType<AzureAppServiceEnvironmentResource>())
+                    {
+                        AssignAcrPullRoleToGeneratedIdentity(env);
+                    }
+
+                    return Task.CompletedTask;
+                },
+                requiredBy: AzureEnvironmentResource.PrepareResourcesStepName);
         }
 
         return builder;
+    }
+
+    private static void AssignAcrPullRoleToGeneratedIdentity(AzureAppServiceEnvironmentResource env)
+    {
+        if (!env.TryGetLastAnnotation<AzureAppServiceEnvironmentAcrPullIdentityAnnotation>(out var identityAnnotation) ||
+            !identityAnnotation.AssignAcrPullRole)
+        {
+            // No generated identity (run mode, or the caller supplied their own identity via WithAcrPullIdentity).
+            return;
+        }
+
+        var registry = ResolveContainerRegistry(env);
+        var identity = identityAnnotation.Identity;
+
+        // Idempotent: the step may run once per pipeline, but guard against re-adding if invoked again.
+        if (identity.Annotations.OfType<RoleAssignmentAnnotation>().Any(a => a.Target == registry && a.Roles.SetEquals(s_acrPullRole)))
+        {
+            return;
+        }
+
+        identity.Annotations.Add(new RoleAssignmentAnnotation(registry, s_acrPullRole));
+    }
+
+    private static AzureProvisioningResource ResolveContainerRegistry(AzureAppServiceEnvironmentResource env)
+    {
+        if (env.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var registryReferenceAnnotation) &&
+            registryReferenceAnnotation.Registry is AzureProvisioningResource explicitRegistry)
+        {
+            return explicitRegistry;
+        }
+
+        return env.DefaultContainerRegistry as AzureProvisioningResource
+            ?? throw new InvalidOperationException($"No container registry associated with environment '{env.Name}'. This should have been added automatically.");
     }
 
     private sealed class AppServicePipelineStepMarker
@@ -291,6 +364,18 @@ public static partial class AzureAppServiceEnvironmentExtensions
         {
             DefaultContainerRegistry = defaultRegistry
         };
+
+        if (builder.ExecutionContext.IsPublishMode)
+        {
+            // Materialize the ACR-pull identity as a first-class model resource so AzureResourcePreparer emits
+            // the AcrPull role assignment as a separate module — correctly scoped to the registry's resource
+            // group when it is an existing registry in another resource group. This is the fix for BCP139.
+            // See https://github.com/microsoft/aspire/issues/11256. The role assignment itself is added against
+            // the environment's FINAL registry by the finalize-acr-pull-identity-roles pipeline step (which runs
+            // just before the preparer), so that WithAzureContainerRegistry swaps are observed.
+            var acrPullIdentity = CreateDefaultAcrPullIdentity(builder, name);
+            resource.Annotations.Add(new AzureAppServiceEnvironmentAcrPullIdentityAnnotation(acrPullIdentity, assignAcrPullRole: true));
+        }
 
         // Create the resource builder first, then attach the registry to avoid recreating builders
         var appServiceEnvBuilder = builder.ExecutionContext.IsPublishMode
@@ -534,9 +619,55 @@ public static partial class AzureAppServiceEnvironmentExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(identityBuilder);
 
-        builder.WithAnnotation(new AzureAppServiceEnvironmentAcrPullIdentityAnnotation(identityBuilder.Resource));
+        RemoveGeneratedAcrPullIdentity(builder);
+        builder.WithAnnotation(
+            new AzureAppServiceEnvironmentAcrPullIdentityAnnotation(identityBuilder.Resource),
+            ResourceAnnotationMutationBehavior.Replace);
 
         return builder;
+    }
+
+    private static void RemoveGeneratedAcrPullIdentity(IResourceBuilder<AzureAppServiceEnvironmentResource> builder)
+    {
+        if (!builder.Resource.TryGetLastAnnotation<AzureAppServiceEnvironmentAcrPullIdentityAnnotation>(out var existing) ||
+            !existing.AssignAcrPullRole)
+        {
+            return;
+        }
+
+        // The caller is supplying their own identity and owns its AcrPull role assignment, so drop the
+        // Aspire-generated identity entirely. The role assignment is added later (in the finalize pipeline
+        // step) only for AssignAcrPullRole identities, so removing the generated identity from the model is
+        // sufficient to ensure no generated identity or role module is emitted.
+        builder.ApplicationBuilder.Resources.Remove(existing.Identity);
+    }
+
+    private static AzureUserAssignedIdentityResource CreateDefaultAcrPullIdentity(IDistributedApplicationBuilder builder, string environmentName)
+    {
+        // The identity is a first-class resource so the preparer can order it before the environment
+        // module and pass its id into the environment Bicep as an input parameter.
+        var identity = new AzureUserAssignedIdentityResource(GetUniqueAcrPullIdentityName(builder, environmentName));
+        builder.AddResource(identity);
+
+        return identity;
+    }
+
+    private static string GetUniqueAcrPullIdentityName(IDistributedApplicationBuilder builder, string environmentName)
+    {
+        var baseName = $"{environmentName}-mi";
+        if (!builder.Resources.TryGetByName(baseName, out _))
+        {
+            return baseName;
+        }
+
+        for (var i = 2; ; i++)
+        {
+            var candidate = $"{baseName}-{i}";
+            if (!builder.Resources.TryGetByName(candidate, out _))
+            {
+                return candidate;
+            }
+        }
     }
 
     private static AzureContainerRegistryResource CreateDefaultAzureContainerRegistry(IDistributedApplicationBuilder builder, string name)

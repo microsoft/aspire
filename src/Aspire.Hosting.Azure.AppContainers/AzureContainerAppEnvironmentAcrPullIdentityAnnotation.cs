@@ -12,10 +12,21 @@ namespace Aspire.Hosting.Azure;
 /// role assignment.
 /// </summary>
 /// <param name="identity">The user-assigned identity resource to use for the <c>AcrPull</c> role.</param>
-internal sealed class AzureContainerAppEnvironmentAcrPullIdentityAnnotation(AzureUserAssignedIdentityResource identity) : IResourceAnnotation
+/// <param name="assignAcrPullRole">
+/// <see langword="true"/> when the identity is Aspire-generated and Aspire is responsible for granting it the
+/// <c>AcrPull</c> role on the environment's registry; <see langword="false"/> when the caller supplied their own
+/// identity via <c>WithAcrPullIdentity</c> and therefore owns the role assignment.
+/// </param>
+internal sealed class AzureContainerAppEnvironmentAcrPullIdentityAnnotation(AzureUserAssignedIdentityResource identity, bool assignAcrPullRole = false) : IResourceAnnotation
 {
     /// <summary>
     /// Gets the user-assigned identity resource that holds the <c>AcrPull</c> role.
     /// </summary>
     public AzureUserAssignedIdentityResource Identity { get; } = identity;
+
+    /// <summary>
+    /// Gets a value indicating whether Aspire generated <see cref="Identity"/> and must grant it the
+    /// <c>AcrPull</c> role on the environment's container registry.
+    /// </summary>
+    public bool AssignAcrPullRole { get; } = assignAcrPullRole;
 }

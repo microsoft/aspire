@@ -23,11 +23,20 @@ module acaEnv_acr 'acaEnv-acr/acaEnv-acr.bicep' = {
   }
 }
 
+module acaEnv_mi 'acaEnv-mi/acaEnv-mi.bicep' = {
+  name: 'acaEnv-mi'
+  scope: rg
+  params: {
+    location: location
+  }
+}
+
 module acaEnv 'acaEnv/acaEnv.bicep' = {
   name: 'acaEnv'
   scope: rg
   params: {
     location: location
+    acaenv_mi_outputs_id: acaEnv_mi.outputs.id
     acaenv_acr_outputs_name: acaEnv_acr.outputs.name
     userPrincipalId: principalId
   }
@@ -84,6 +93,16 @@ module fe_roles_account 'fe-roles-account/fe-roles-account.bicep' = {
     location: location
     account_outputs_name: account.outputs.name
     principalId: fe_identity.outputs.principalId
+  }
+}
+
+module acaEnv_mi_roles_acaEnv_acr 'acaEnv-mi-roles-acaEnv-acr/acaEnv-mi-roles-acaEnv-acr.bicep' = {
+  name: 'acaEnv-mi-roles-acaEnv-acr'
+  scope: rg
+  params: {
+    location: location
+    acaenv_acr_outputs_name: acaEnv_acr.outputs.name
+    principalId: acaEnv_mi.outputs.principalId
   }
 }
 
