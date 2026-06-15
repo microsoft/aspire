@@ -978,34 +978,6 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         Assert.True(executionTimes["D"] >= executionTimes["C"], "D should start after C completes");
     }
 
-    // Creates a test builder with the service registrations every pipeline test needs:
-    // the test output helper, a FakeContainerRuntime so the container-runtime preflight does
-    // not depend on a real Docker daemon, and an IPipelineActivityReporter (the default
-    // TestPipelineActivityReporter, or a caller-supplied instance for tests that inspect it).
-    private IDistributedApplicationTestingBuilder CreatePipelineTestBuilder(
-        string? step = null,
-        string? logLevel = "information",
-        IPipelineActivityReporter? activityReporter = null)
-    {
-        var builder = TestDistributedApplicationBuilder
-            .Create(DistributedApplicationOperation.Publish, logLevel: logLevel, step: step)
-            .WithTestAndResourceLogging(testOutputHelper);
-
-        builder.Services.AddSingleton(testOutputHelper);
-        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
-
-        if (activityReporter is not null)
-        {
-            builder.Services.AddSingleton(activityReporter);
-        }
-        else
-        {
-            builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
-        }
-
-        return builder;
-    }
-
     private static PipelineContext CreateDeployingContext(DistributedApplication app)
     {
         return new PipelineContext(
@@ -2447,5 +2419,33 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
 
         var deployStep = resolved.Single(s => s.Name == WellKnownPipelineSteps.Deploy);
         Assert.DoesNotContain("transient-step", deployStep.DependsOnSteps);
+    }
+
+    // Creates a test builder with the service registrations every pipeline test needs:
+    // the test output helper, a FakeContainerRuntime so the container-runtime preflight does
+    // not depend on a real Docker daemon, and an IPipelineActivityReporter (the default
+    // TestPipelineActivityReporter, or a caller-supplied instance for tests that inspect it).
+    private IDistributedApplicationTestingBuilder CreatePipelineTestBuilder(
+        string? step = null,
+        string? logLevel = "information",
+        IPipelineActivityReporter? activityReporter = null)
+    {
+        var builder = TestDistributedApplicationBuilder
+            .Create(DistributedApplicationOperation.Publish, logLevel: logLevel, step: step)
+            .WithTestAndResourceLogging(testOutputHelper);
+
+        builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
+
+        if (activityReporter is not null)
+        {
+            builder.Services.AddSingleton(activityReporter);
+        }
+        else
+        {
+            builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        }
+
+        return builder;
     }
 }
