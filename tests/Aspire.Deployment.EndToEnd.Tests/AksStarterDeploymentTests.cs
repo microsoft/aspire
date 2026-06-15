@@ -155,12 +155,8 @@ public sealed class AksStarterDeploymentTests(ITestOutputHelper output)
 
             // ===== PHASE 2: Create Aspire Project and Generate Helm Charts =====
 
-            // Step 10: Set up CLI environment (in CI)
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                output.WriteLine("Step 10: Using pre-installed Aspire CLI from local build...");
-                await auto.SourceAspireCliEnvironmentAsync(counter);
-            }
+            // Step 10: Set up CLI environment
+            await auto.InstallCurrentBuildAspireCliAsync(counter, output, "Step 10");
 
             // Step 11: Create starter project using aspire new with interactive prompts
             output.WriteLine("Step 11: Creating Aspire starter project...");
@@ -177,14 +173,8 @@ public sealed class AksStarterDeploymentTests(ITestOutputHelper output)
             await auto.TypeAsync("aspire add Aspire.Hosting.Kubernetes");
             await auto.EnterAsync();
 
-            // In CI, aspire add shows a version selection prompt
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync(); // select first version (PR build)
-            }
-
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            // aspire add may show a version selection prompt
+            await auto.WaitForAspireAddCompletionAsync(counter);
 
             // Step 14: Modify AppHost.cs to add Kubernetes environment
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
@@ -328,7 +318,11 @@ builder.Build().Run();
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
 
-            // Step 28: Exit terminal
+            // Step 28: Clean up Azure resources using aspire destroy
+            output.WriteLine("Step 28: Destroying Azure deployment...");
+            await auto.AspireDestroyAsync(counter);
+
+            // Step 29: Exit terminal
             await auto.TypeAsync("exit");
             await auto.EnterAsync();
 

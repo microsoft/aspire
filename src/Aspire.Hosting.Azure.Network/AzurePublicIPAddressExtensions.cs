@@ -19,18 +19,20 @@ public static class AzurePublicIPAddressExtensions
     /// <param name="builder">The builder for the distributed application.</param>
     /// <param name="name">The name of the Azure Public IP Address resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzurePublicIPAddressResource}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// The Public IP Address is created with Standard SKU and Static allocation by default.
     /// Use <see cref="AzureProvisioningResourceExtensions.ConfigureInfrastructure{T}(IResourceBuilder{T}, Action{AzureResourceInfrastructure})"/>
     /// to customize properties such as DNS labels, availability zones, or IP version.
     /// </remarks>
+    /// <ats-remarks />
     /// <example>
     /// This example creates a Public IP Address:
     /// <code>
     /// var pip = builder.AddPublicIPAddress("my-pip");
     /// </code>
     /// </example>
-    [AspireExport("addPublicIPAddress", Description = "Adds an Azure Public IP Address resource to the application model.")]
+    [AspireExport]
     public static IResourceBuilder<AzurePublicIPAddressResource> AddPublicIPAddress(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name)

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.Azure.DurableTask;
@@ -13,6 +14,7 @@ namespace Aspire.Hosting.Azure.DurableTask;
 /// <param name="name">The logical name of the Task Hub (used as the TaskHub value).</param>
 /// <param name="scheduler">The durable task scheduler resource whose connection string is the base for this hub.</param>
 [AspireExport(ExposeProperties = true)]
+[Experimental("ASPIREDURABLETASK001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class DurableTaskHubResource(string name, DurableTaskSchedulerResource scheduler)
     : Resource(name), IResourceWithConnectionString, IResourceWithParent<DurableTaskSchedulerResource>, IResourceWithAzureFunctionsConfig
 {

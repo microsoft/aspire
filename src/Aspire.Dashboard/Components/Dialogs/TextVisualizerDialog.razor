@@ -35,7 +35,16 @@
     <div class="text-visualizer-container">
         @if (IsTextContentDisplayed)
         {
-            <TextVisualizer ViewModel="TextVisualizerViewModel" />
+            if (IsMarkdownFormat)
+            {
+                <div class="markdown-content">
+                    <MarkdownRenderer Markdown="@Content.Text" MarkdownProcessor="@GetMarkdownProcessor()" SuppressParagraphOnNewLines="false" />
+                </div>
+            }
+            else
+            {
+                <TextVisualizer ViewModel="TextVisualizerViewModel" />
+            }
         }
         else if (ShowSecretsWarning is true)
         {

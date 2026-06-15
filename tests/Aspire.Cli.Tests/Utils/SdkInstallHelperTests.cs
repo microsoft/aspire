@@ -86,5 +86,28 @@ public class SdkInstallHelperTests
         Assert.Equal("8.0.100", tags[TelemetryConstants.Tags.SdkDetectedVersion]);
         Assert.Equal("9.0.302", tags[TelemetryConstants.Tags.SdkMinimumRequiredVersion]);
         Assert.Equal("not_installed", tags[TelemetryConstants.Tags.SdkCheckResult]);
+        Assert.NotEmpty(interactionService.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task EnsureSdkInstalledAsync_WhenSdkMissing_AndDisplayErrorFalse_DoesNotDisplayError()
+    {
+        using var fixture = new TelemetryFixture();
+
+        var sdkInstaller = new TestDotNetSdkInstaller
+        {
+            CheckAsyncCallback = _ => (false, "8.0.100", "9.0.302")
+        };
+
+        var interactionService = new TestInteractionService();
+
+        var result = await SdkInstallHelper.EnsureSdkInstalledAsync(
+            sdkInstaller,
+            interactionService,
+            fixture.Telemetry,
+            displayError: false);
+
+        Assert.False(result);
+        Assert.Empty(interactionService.DisplayedErrors);
     }
 }

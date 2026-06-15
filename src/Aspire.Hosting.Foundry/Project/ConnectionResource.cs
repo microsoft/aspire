@@ -13,15 +13,42 @@ namespace Aspire.Hosting.Foundry;
 public class AzureCognitiveServicesProjectConnectionResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure, AzureCognitiveServicesProjectResource parent) :
     AzureProvisionableAspireResourceWithParent<CognitiveServicesProjectConnection, AzureCognitiveServicesProjectResource>(name, configureInfrastructure, parent)
 {
+    internal const string ResourceVersion = "2026-03-01";
+
     /// <inheritdoc/>
     public override CognitiveServicesProjectConnection FromExisting(string bicepIdentifier)
     {
-        return CognitiveServicesProjectConnection.FromExisting(bicepIdentifier);
+        return CognitiveServicesProjectConnection.FromExisting(bicepIdentifier, ResourceVersion);
     }
 
     /// <inheritdoc/>
 
     public override void SetName(CognitiveServicesProjectConnection provisionableResource, BicepValue<string> name)
+    {
+        provisionableResource.Name = name;
+    }
+}
+
+/// <summary>
+/// A Foundry project connection resource specifically for Grounding with Bing Search connections.
+/// </summary>
+/// <remarks>
+/// This type is used to distinguish Bing grounding connections from other connection types,
+/// ensuring that only connections created by <c>AddBingGroundingConnection</c>
+/// can be linked to a <see cref="BingGroundingToolResource"/>.
+/// </remarks>
+[AspireExport]
+public class BingGroundingConnectionResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure, AzureCognitiveServicesProjectResource parent) :
+    AzureProvisionableAspireResourceWithParent<CognitiveServicesConnection, AzureCognitiveServicesProjectResource>(name, configureInfrastructure, parent)
+{
+    /// <inheritdoc/>
+    public override CognitiveServicesConnection FromExisting(string bicepIdentifier)
+    {
+        return CognitiveServicesConnection.FromExisting(bicepIdentifier, AzureCognitiveServicesProjectConnectionResource.ResourceVersion);
+    }
+
+    /// <inheritdoc/>
+    public override void SetName(CognitiveServicesConnection provisionableResource, BicepValue<string> name)
     {
         provisionableResource.Name = name;
     }
@@ -72,5 +99,20 @@ internal class AzureStorageAccountConnectionProperties : AadAuthTypeConnectionPr
     {
         base.DefineProvisionableProperties();
         DefineProperty<string>("category", ["category"], defaultValue: "AzureStorageAccount");
+    }
+}
+
+/// <summary>
+/// Connection properties for a Grounding with Bing Search connection.
+/// This overrides the category property of ApiKeyAuthConnectionProperties to
+/// "GroundingWithBingSearch", which is not an available enum variant.
+/// </summary>
+internal class BingGroundingConnectionProperties : ApiKeyAuthConnectionProperties
+{
+    /// <inheritdoc/>
+    protected override void DefineProvisionableProperties()
+    {
+        base.DefineProvisionableProperties();
+        DefineProperty<string>("category", ["category"], defaultValue: "GroundingWithBingSearch");
     }
 }

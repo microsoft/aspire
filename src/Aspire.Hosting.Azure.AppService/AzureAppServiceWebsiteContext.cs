@@ -119,6 +119,8 @@ internal sealed class AzureAppServiceWebsiteContext(
             throw new NotSupportedException("App Service does not support resources with multiple external endpoints.");
         }
 
+        var preserveHttp = environmentContext.Environment.PreserveHttpEndpoints;
+
         foreach (var resolved in resolvedEndpoints)
         {
             var endpoint = resolved.Endpoint;
@@ -128,15 +130,31 @@ internal sealed class AzureAppServiceWebsiteContext(
                 throw new NotSupportedException($"The endpoint '{endpoint.Name}' on resource '{resource.Name}' is not external. App Service only supports external endpoints.");
             }
 
+            // By default, HTTP endpoints are upgraded to HTTPS in App Service
+            // If PreserveHttpEndpoints is true, keep the original scheme
+            var scheme = preserveHttp ? endpoint.UriScheme : "https";
+            var port = scheme is "http" ? 80 : 443;
+
             // For App Service, we ignore port mappings since ports are handled by the platform
             // TargetPort is null only for default ProjectResource endpoints (container port decides)
             _endpointMapping[endpoint.Name] = new(
-                Scheme: endpoint.UriScheme,
+                Scheme: scheme,
                 Host: HostName,
-                Port: endpoint.UriScheme == "https" ? 443 : 80,
+                Port: port,
                 TargetPort: resolved.TargetPort,
                 IsHttpIngress: true,
                 External: true); // All App Service endpoints are external
+        }
+
+        // Record HTTP endpoints being upgraded (logged once at environment level)
+        if (!preserveHttp)
+        {
+            var upgradedEndpoints = resolvedEndpoints
+                .Where(r => r.Endpoint.UriScheme is "http")
+                .Select(r => r.Endpoint.Name)
+                .ToArray();
+
+            environmentContext.RecordHttpsUpgrade(resource.Name, upgradedEndpoints);
         }
     }
 
@@ -149,6 +167,15 @@ internal sealed class AzureAppServiceWebsiteContext(
 
         if (value is EndpointReference ep)
         {
+            // The referenced endpoint may belong to a resource deployed to a different compute
+            // environment (for example a Foundry hosted agent). In that case delegate to the owning
+            // compute environment instead of looking it up in this environment's local endpoint map.
+            if (ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
+                ep, [environmentContext.Environment], out var crossExpr))
+            {
+                return ProcessValue(crossExpr, secretType, parent, isSlot);
+            }
+
             var context = environmentContext.GetAppServiceContext(ep.Resource);
             return isSlot ?
                 (GetEndpointValue(context._slotEndpointMapping[ep.EndpointName], EndpointProperty.Url), secretType) :
@@ -188,6 +215,12 @@ internal sealed class AzureAppServiceWebsiteContext(
 
         if (value is EndpointReferenceExpression epExpr)
         {
+            if (ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
+                epExpr, [environmentContext.Environment], out var crossExpr))
+            {
+                return ProcessValue(crossExpr, secretType, parent, isSlot);
+            }
+
             var context = environmentContext.GetAppServiceContext(epExpr.Endpoint.Resource);
             var mapping = isSlot ? context._slotEndpointMapping[epExpr.Endpoint.EndpointName] : context._endpointMapping[epExpr.Endpoint.EndpointName];
             var val = GetEndpointValue(mapping, epExpr.Property);

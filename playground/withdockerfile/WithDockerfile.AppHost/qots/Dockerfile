@@ -6,7 +6,7 @@ COPY . .
 RUN go build qots.go
 
 # Stage 2: Run the Go program
-FROM mcr.microsoft.com/cbl-mariner/base/core:2.0.20260102
+FROM mcr.microsoft.com/cbl-mariner/base/core:2.0.20260311
 WORKDIR /app
 RUN --mount=type=secret,id=SECRET_ASENV cp /run/secrets/SECRET_ASENV /app/SECRET_ASENV
 COPY --from=builder /app/qots .

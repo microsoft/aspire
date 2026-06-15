@@ -29,7 +29,7 @@ aspire <command> [options]
 | `new` | Create a new app from an Aspire starter template. |
 | `init` | Initialize Aspire in an existing codebase. |
 | `add [<integration>]` | Add a hosting integration to the apphost. |
-| `update` | Update integrations in the Aspire project. (Preview) |
+| `update` | Update integrations in the Aspire project. |
 | `run` | Run an apphost in development mode. |
 | `stop` | Stop a running apphost or the specified resource. |
 | `ps` | List running apphosts. |
@@ -56,9 +56,10 @@ aspire <command> [options]
 
 | Command | Description |
 |---------|-------------|
-| `publish` | Generate deployment artifacts for an apphost. (Preview) |
-| `deploy` | Deploy an apphost to its deployment targets. (Preview) |
-| `do <step>` | Execute a specific pipeline step and its dependencies. (Preview) |
+| `publish` | Generate deployment artifacts for an apphost. |
+| `deploy` | Deploy an apphost to its deployment targets. |
+| `destroy` | Destroy a previously deployed AppHost environment. |
+| `do <step>` | Execute a specific pipeline step and its dependencies. |
 
 ### Tools & Configuration
 
@@ -67,7 +68,7 @@ aspire <command> [options]
 | `config` | Manage CLI configuration including feature flags. |
 | `cache` | Manage disk cache for CLI operations. |
 | `doctor` | Diagnose Aspire environment issues and verify setup. |
-| `docs` | Browse and search Aspire documentation from aspire.dev. |
+| `docs` | Browse and search Aspire documentation and API reference from aspire.dev. |
 | `agent` | Manage AI agent specific setup. |
 
 ## Examples
@@ -105,12 +106,16 @@ aspire add redis
 # Diagnose environment issues
 aspire doctor
 
+# Search the API reference
+aspire docs api search "RunAsEmulator" --language csharp
+
 # Search Aspire documentation
 aspire docs search "redis"
 ```
 
 ## Additional documentation
 
+* [CLI output formats](../../docs/specs/cli-output-formats.md)
 * https://aspire.dev
 * https://learn.microsoft.com/microsoft/aspire
 

@@ -3,7 +3,6 @@
 
 using System.Diagnostics;
 using System.Reflection;
-using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -207,6 +206,12 @@ public class DistributedApplicationFactory(Type entryPoint, string[] args) : IDi
         SetDefault(KnownConfigNames.AspNetCoreUrls, "http://localhost:8080");
         SetDefaultFallback(KnownConfigNames.DashboardOtlpGrpcEndpointUrl, KnownConfigNames.Legacy.DashboardOtlpGrpcEndpointUrl, "http://localhost:4317");
 
+        // Since the testing builder defaults all dashboard/OTLP URLs to HTTP, also allow
+        // unsecured transport by default. This prevents OptionsValidationException when the
+        // user enables the dashboard (DisableDashboard = false) without explicitly setting
+        // ASPIRE_ALLOW_UNSECURED_TRANSPORT. See https://github.com/microsoft/aspire/issues/17622
+        SetDefault(KnownConfigNames.AllowUnsecuredTransport, "true");
+
         var appHostProjectPath = ResolveProjectPath(entryPointAssembly);
         if (!string.IsNullOrEmpty(appHostProjectPath) && Directory.Exists(appHostProjectPath))
         {
@@ -342,30 +347,7 @@ public class DistributedApplicationFactory(Type entryPoint, string[] args) : IDi
             return null;
         }
 
-        var projectFileInfo = new DirectoryInfo(appHostPath);
-        var launchSettingsFilePath = projectFileInfo.FullName switch
-        {
-            null => Path.Combine("Properties", "launchSettings.json"),
-            _ => Path.Combine(projectFileInfo.FullName, "Properties", "launchSettings.json")
-        };
-
-        // It isn't mandatory that the launchSettings.json file exists!
-        if (!File.Exists(launchSettingsFilePath))
-        {
-            return null;
-        }
-
-        using var stream = File.OpenRead(launchSettingsFilePath);
-        try
-        {
-            var settings = JsonSerializer.Deserialize(stream, LaunchSettingsSerializerContext.Default.LaunchSettings);
-            return settings;
-        }
-        catch (JsonException ex)
-        {
-            var message = $"Failed to get effective launch profile for project '{appHostPath}'. There is malformed JSON in the project's launch settings file at '{launchSettingsFilePath}'.";
-            throw new DistributedApplicationException(message, ex);
-        }
+        return LaunchSettingsReader.GetLaunchSettingsFromDirectory(appHostPath, $"project '{appHostPath}'");
     }
 
     private void OnBuilderCreatedCore(DistributedApplicationBuilder applicationBuilder)

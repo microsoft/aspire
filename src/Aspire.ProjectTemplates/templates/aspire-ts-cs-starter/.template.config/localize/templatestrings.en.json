@@ -1,6 +1,6 @@
 {
   "author": "Microsoft",
-  "name": "Aspire Starter App (ASP.NET Core/React)",
+  "name": "Aspire Starter App (ASP.NET Core/React, C# AppHost)",
   "description": "A project template for creating an Aspire app with a React frontend and a C# Minimal API backend service, with optional Redis caching.",
   "symbols/Framework/description": "The target framework for the project.",
   "symbols/Framework/choices/net8.0/description": "Target net8.0",
@@ -21,6 +21,7 @@
   "symbols/LocalhostTld/displayName": "Use the .dev.localhost TLD in the application URL",
   "symbols/LocalhostTld/description": "Whether to combine the project name with the .dev.localhost TLD in the application URL for local development, e.g. https://myapp.dev.localhost:12345. Supported on .NET 10 and later.",
   "postActions/set-startup-project/description": "Sets the startup project in the solution",
+  "postActions/set-startup-project/manualInstructions/default/text": "",
   "postActions/restore/description": "Restore NuGet packages required by this project.",
   "postActions/restore/manualInstructions/default/text": "Run 'dotnet restore'"
 }

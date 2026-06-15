@@ -34,10 +34,11 @@ public static class AzureCognitiveServicesProjectExtensions
     /// <param name="builder">The <see cref="IResourceBuilder{T}"/> for the parent Microsoft Foundry account resource.</param>
     /// <param name="name">The name of the Microsoft Foundry project resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the Microsoft Foundry project resource.</returns>
-    [AspireExport("addProject", Description = "Adds a Microsoft Foundry project resource to a Microsoft Foundry resource.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureCognitiveServicesProjectResource> AddProject(
         this IResourceBuilder<FoundryResource> builder,
-        string name)
+        [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
@@ -49,41 +50,12 @@ public static class AzureCognitiveServicesProjectExtensions
         builder.ApplicationBuilder.Services.Configure<AzureProvisioningOptions>(o => o.SupportsTargetedRoleAssignments = true);
 
         var project = builder.ApplicationBuilder.AddResource(new AzureCognitiveServicesProjectResource(name, ConfigureInfrastructure, builder.Resource));
-        project.Resource.DefaultContainerRegistry = CreateDefaultRegistry(builder.ApplicationBuilder, $"{name}-acr");
+        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            project.Resource.DefaultContainerRegistry = CreateDefaultRegistry(builder.ApplicationBuilder, $"{name}-acr");
+        }
+
         return project;
-    }
-
-    /// <summary>
-    /// Associates a container registry with the Microsoft Foundry project resource for
-    /// publishing and locating hosted agents.
-    /// </summary>
-    [AspireExport("withContainerRegistry", Description = "Associates a container registry with a Microsoft Foundry project resource.")]
-    public static IResourceBuilder<AzureCognitiveServicesProjectResource> WithContainerRegistry(
-        this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
-        IResourceBuilder<AzureContainerRegistryResource> registryBuilder)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(registryBuilder);
-
-        return builder.WithContainerRegistry(registryBuilder.Resource);
-    }
-
-    /// <summary>
-    /// Associates a container registry with the Microsoft Foundry project resource for
-    /// publishing and locating hosted agents.
-    /// </summary>
-    /// <remarks>This overload is not available in polyglot app hosts. Use the resource-builder overload instead.</remarks>
-    [AspireExportIgnore(Reason = "IContainerRegistry is not ATS-compatible. Use the resource-builder overload instead.")]
-    public static IResourceBuilder<AzureCognitiveServicesProjectResource> WithContainerRegistry(
-        this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
-        IContainerRegistry registry)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(registry);
-
-        // This will be queried during the "publish" phase
-        builder.Resource.Annotations.Add(new ContainerRegistryReferenceAnnotation(registry));
-        return builder;
     }
 
     /// <summary>
@@ -113,8 +85,9 @@ public static class AzureCognitiveServicesProjectExtensions
     /// <param name="builder">The resource builder for the Microsoft Foundry project.</param>
     /// <param name="keyVault">The Key Vault resource to associate with the project.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="InvalidOperationException">Thrown when the project already has a Key Vault connection configured.</exception>
-    [AspireExport("withKeyVault", Description = "Associates an Azure Key Vault resource with a Microsoft Foundry project.")]
+    [AspireExport]
     public static IResourceBuilder<AzureCognitiveServicesProjectResource> WithKeyVault(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         IResourceBuilder<AzureKeyVaultResource> keyVault)
@@ -139,7 +112,8 @@ public static class AzureCognitiveServicesProjectExtensions
     /// <param name="builder">The resource builder for the Microsoft Foundry project.</param>
     /// <param name="appInsights">The Application Insights resource to associate with the project.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport("withAppInsights", Description = "Associates an Azure Application Insights resource with a Microsoft Foundry project.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureCognitiveServicesProjectResource> WithAppInsights(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         IResourceBuilder<AzureApplicationInsightsResource> appInsights)
@@ -168,14 +142,131 @@ public static class AzureCognitiveServicesProjectExtensions
     [AspireExportIgnore(Reason = "CapabilityHostBuilder is not ATS-compatible.")]
     public static CapabilityHostBuilder AddCapabilityHost(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
-        string name)
+        [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
 
-        var config = new CapabilityHostConfiguration(name);
-        builder.Resource.CapabilityHostConfiguration = config;
+        var config = CreateCapabilityHostConfiguration(builder, name);
         return new CapabilityHostBuilder(builder, config);
+    }
+
+    /// <summary>
+    /// Adds a capability host to the Microsoft Foundry project.
+    /// </summary>
+    /// <param name="builder">The resource builder for the Microsoft Foundry project.</param>
+    /// <param name="name">The name of the capability host.</param>
+    /// <returns>A reference to the project builder for chaining capability host configuration.</returns>
+    [AspireExport("addCapabilityHostProject", MethodName = "addCapabilityHost")]
+    internal static IResourceBuilder<AzureCognitiveServicesProjectResource> AddCapabilityHostExport(
+        this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
+        [ResourceName] string name)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        CreateCapabilityHostConfiguration(builder, name);
+        return builder;
+    }
+
+    /// <summary>
+    /// Configures the Cosmos DB resource for the capability host on a Microsoft Foundry project.
+    /// </summary>
+    /// <param name="builder">The resource builder for the Microsoft Foundry project.</param>
+    /// <param name="cosmosDb">The Cosmos DB resource builder.</param>
+    /// <returns>A reference to the project builder for chaining capability host configuration.</returns>
+    [AspireExportIgnore(Reason = "Use the polyglot withCapabilityHost overload instead.")]
+    internal static IResourceBuilder<AzureCognitiveServicesProjectResource> WithCapabilityHostCosmosDB(
+        this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
+        IResourceBuilder<AzureCosmosDBResource> cosmosDb)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(cosmosDb);
+
+        GetCapabilityHostConfiguration(builder).CosmosDB = cosmosDb.Resource;
+        return builder;
+    }
+
+    /// <summary>
+    /// Configures the Storage resource for the capability host on a Microsoft Foundry project.
+    /// </summary>
+    /// <param name="builder">The resource builder for the Microsoft Foundry project.</param>
+    /// <param name="storage">The Storage resource builder.</param>
+    /// <returns>A reference to the project builder for chaining capability host configuration.</returns>
+    [AspireExportIgnore(Reason = "Use the polyglot withCapabilityHost overload instead.")]
+    internal static IResourceBuilder<AzureCognitiveServicesProjectResource> WithCapabilityHostStorage(
+        this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
+        IResourceBuilder<AzureStorageResource> storage)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(storage);
+
+        GetCapabilityHostConfiguration(builder).Storage = storage.Resource;
+        return builder;
+    }
+
+    /// <summary>
+    /// Configures the Azure Search resource for the capability host on a Microsoft Foundry project.
+    /// </summary>
+    /// <param name="builder">The resource builder for the Microsoft Foundry project.</param>
+    /// <param name="search">The Azure Search resource builder.</param>
+    /// <returns>A reference to the project builder for chaining capability host configuration.</returns>
+    [AspireExportIgnore(Reason = "Use the polyglot withCapabilityHost overload instead.")]
+    internal static IResourceBuilder<AzureCognitiveServicesProjectResource> WithCapabilityHostSearch(
+        this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
+        IResourceBuilder<AzureSearchResource> search)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(search);
+
+        GetCapabilityHostConfiguration(builder).Search = search.Resource;
+        return builder;
+    }
+
+    /// <summary>
+    /// Configures the Microsoft Foundry resource used for Azure OpenAI model calls by the capability host.
+    /// </summary>
+    /// <param name="builder">The resource builder for the Microsoft Foundry project.</param>
+    /// <param name="openAI">The Microsoft Foundry resource builder.</param>
+    /// <returns>A reference to the project builder for chaining capability host configuration.</returns>
+    [AspireExportIgnore(Reason = "Use the polyglot withCapabilityHost overload instead.")]
+    internal static IResourceBuilder<AzureCognitiveServicesProjectResource> WithCapabilityHostAzureOpenAI(
+        this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
+        IResourceBuilder<FoundryResource> openAI)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(openAI);
+
+        GetCapabilityHostConfiguration(builder).AzureOpenAI = openAI.Resource;
+        return builder;
+    }
+
+    /// <summary>
+    /// Associates a supported resource with a capability host on a Microsoft Foundry project.
+    /// </summary>
+    /// <param name="builder">The resource builder for the Microsoft Foundry project.</param>
+    /// <param name="resource">The supported capability host resource.</param>
+    /// <returns>A reference to the project builder for chaining capability host configuration.</returns>
+    [AspireExport]
+    internal static IResourceBuilder<AzureCognitiveServicesProjectResource> WithCapabilityHost(
+        this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
+        [AspireUnion(
+            typeof(IResourceBuilder<AzureCosmosDBResource>),
+            typeof(IResourceBuilder<AzureStorageResource>),
+            typeof(IResourceBuilder<AzureSearchResource>),
+            typeof(IResourceBuilder<FoundryResource>))] object resource)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(resource);
+
+        return resource switch
+        {
+            IResourceBuilder<AzureCosmosDBResource> cosmosDb => builder.WithCapabilityHostCosmosDB(cosmosDb),
+            IResourceBuilder<AzureStorageResource> storage => builder.WithCapabilityHostStorage(storage),
+            IResourceBuilder<AzureSearchResource> search => builder.WithCapabilityHostSearch(search),
+            IResourceBuilder<FoundryResource> openAI => builder.WithCapabilityHostAzureOpenAI(openAI),
+            _ => throw new ArgumentException("Resource must be a supported capability host resource.", nameof(resource))
+        };
     }
 
     /// <summary>
@@ -185,7 +276,7 @@ public static class AzureCognitiveServicesProjectExtensions
     /// <param name="name">Name to give the model deployment</param>
     /// <param name="model">The <see cref="FoundryModel"/> to deploy.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the deployment resource.</returns>
-    [AspireExport("addModelDeploymentFromModel", Description = "Adds a model deployment to the parent Microsoft Foundry resource by using a model descriptor.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addModelDeployment dispatcher export.")]
     public static IResourceBuilder<FoundryDeploymentResource> AddModelDeployment(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         [ResourceName] string name,
@@ -197,9 +288,34 @@ public static class AzureCognitiveServicesProjectExtensions
     }
 
     /// <summary>
+    /// Adds a model deployment to the parent Microsoft Foundry resource.
+    /// </summary>
+    [AspireExport("addModelDeployment")]
+    internal static IResourceBuilder<FoundryDeploymentResource> AddModelDeploymentForPolyglot(
+        this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
+        [ResourceName] string name,
+        [AspireUnion(typeof(FoundryModel), typeof(string))] object model,
+        string? modelVersion = null,
+        string? format = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(model);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        return model switch
+        {
+            FoundryModel foundryModel when modelVersion is null && format is null => builder.AddModelDeployment(name, foundryModel),
+            FoundryModel => throw new ArgumentException("Model version and format must be omitted when using a FoundryModel.", nameof(modelVersion)),
+            string modelName when modelVersion is not null && format is not null => builder.AddModelDeployment(name, modelName, modelVersion, format),
+            string => throw new ArgumentException("Model version and format are required when the model is provided as a string.", nameof(modelVersion)),
+            _ => throw new ArgumentException("Model must be a FoundryModel or a string model name.", nameof(model))
+        };
+    }
+
+    /// <summary>
     /// Adds a model deployment to the parent Microsoft Foundry resource of the Microsoft Foundry project.
     /// </summary>
-    [AspireExport("addModelDeployment", Description = "Adds a model deployment to the parent Microsoft Foundry resource.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addModelDeployment dispatcher export.")]
     public static IResourceBuilder<FoundryDeploymentResource> AddModelDeployment(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         [ResourceName] string name,
@@ -210,6 +326,12 @@ public static class AzureCognitiveServicesProjectExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
         return builder.ApplicationBuilder.CreateResourceBuilder(builder.Resource.Parent).AddDeployment(name, modelName, modelVersion, format);
+    }
+
+    private static bool RequiresContainerRegistryProvisioning(AzureCognitiveServicesProjectResource project)
+    {
+        return project.HasAnnotationOfType<RequiresHostedAgentRegistryAnnotation>()
+            || project.HasAnnotationOfType<ContainerRegistryReferenceAnnotation>();
     }
 
     internal static void ConfigureInfrastructure(AzureResourceInfrastructure infra)
@@ -286,7 +408,7 @@ public static class AzureCognitiveServicesProjectExtensions
         {
             Value = project.Id
         });
-        infra.Add(new ProvisioningOutput("name", typeof(string)) { Value = project.Name });
+        infra.Add(new ProvisioningOutput("name", typeof(string)) { Value = BicepFunction.Interpolate($"{account.Name}/{project.Name}") });
         infra.Add(new ProvisioningOutput("endpoint", typeof(string))
         {
             Value = (BicepValue<string>)new IndexExpression((BicepExpression)project.Properties.Endpoints!, "AI Foundry API")
@@ -299,44 +421,47 @@ public static class AzureCognitiveServicesProjectExtensions
         /*
          * Container registry for hosted agents
          *
-         * TODO: only provision if we need to create a Hosted Agent
+         * Only provision registry dependencies when the project will publish a hosted agent
+         * or when the user has explicitly supplied a registry override.
          */
+        if (RequiresContainerRegistryProvisioning(aspireResource))
+        {
+            AzureProvisioningResource? registry = null;
+            if (aspireResource.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var registryReferenceAnnotation) && registryReferenceAnnotation.Registry is AzureProvisioningResource r)
+            {
+                registry = r;
+            }
+            else if (aspireResource.DefaultContainerRegistry is not null)
+            {
+                registry = aspireResource.DefaultContainerRegistry;
+            }
+            else
+            {
+                throw new InvalidOperationException($"No container registry configured for Azure Cognitive Services project resource '{aspireResource.Name}'. A container registry is required to publish hosted agents.");
+            }
 
-        AzureProvisioningResource? registry = null;
-        if (aspireResource.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var registryReferenceAnnotation) && registryReferenceAnnotation.Registry is AzureProvisioningResource r)
-        {
-            registry = r;
-        }
-        else if (aspireResource.DefaultContainerRegistry is not null)
-        {
-            registry = aspireResource.DefaultContainerRegistry;
-        }
-        else
-        {
-            throw new InvalidOperationException($"No container registry configured for Azure Cognitive Services project resource '{aspireResource.Name}'. A container registry is required to publish and run hosted agents.");
-        }
-        var containerRegistry = (ContainerRegistryService)registry.AddAsExistingResource(infra);
-        // Why do we need this?
-        infra.Add(containerRegistry);
+            var containerRegistry = (ContainerRegistryService)registry.AddAsExistingResource(infra);
+            infra.Add(containerRegistry);
 
-        // Project needs this to pull hosted agent images and run them
-        var pullRa = containerRegistry.CreateRoleAssignment(ContainerRegistryBuiltInRole.AcrPull, RoleManagementPrincipalType.ServicePrincipal, projectPrincipalId);
-        // There's a bug in the CDK, see https://github.com/Azure/azure-sdk-for-net/issues/47265
-        pullRa.Name = BicepFunction.CreateGuid(containerRegistry.Id, project.Id, pullRa.RoleDefinitionId);
-        infra.Add(pullRa);
-        infra.Add(containerRegistry);
-        infra.Add(new ProvisioningOutput("AZURE_CONTAINER_REGISTRY_ENDPOINT", typeof(string))
-        {
-            Value = containerRegistry.LoginServer
-        });
-        infra.Add(new ProvisioningOutput("AZURE_CONTAINER_REGISTRY_NAME", typeof(string))
-        {
-            Value = containerRegistry.Name
-        });
-        infra.Add(new ProvisioningOutput("AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID", typeof(string))
-        {
-            Value = projectPrincipalId
-        });
+            // Project needs this to pull hosted agent images during hosted-agent deployment.
+            var pullRa = containerRegistry.CreateRoleAssignment(ContainerRegistryBuiltInRole.AcrPull, RoleManagementPrincipalType.ServicePrincipal, projectPrincipalId);
+            // There's a bug in the CDK, see https://github.com/Azure/azure-sdk-for-net/issues/47265
+            pullRa.Name = BicepFunction.CreateGuid(containerRegistry.Id, project.Id, pullRa.RoleDefinitionId);
+            infra.Add(pullRa);
+            infra.Add(containerRegistry);
+            infra.Add(new ProvisioningOutput("AZURE_CONTAINER_REGISTRY_ENDPOINT", typeof(string))
+            {
+                Value = containerRegistry.LoginServer
+            });
+            infra.Add(new ProvisioningOutput("AZURE_CONTAINER_REGISTRY_NAME", typeof(string))
+            {
+                Value = containerRegistry.Name
+            });
+            infra.Add(new ProvisioningOutput("AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID", typeof(string))
+            {
+                Value = projectPrincipalId
+            });
+        }
 
         // Implicit dependencies for capability hosts
         List<ProvisionableResource> capHostDeps = [];
@@ -372,7 +497,7 @@ public static class AzureCognitiveServicesProjectExtensions
             Value = appInsights.ConnectionString
         });
         // Project needs a connection to send server-side telemetry
-        var appInsightsConn = new CognitiveServicesProjectConnection($"{aspireResource.GetBicepIdentifier()}_ai_conn")
+        var appInsightsConn = new CognitiveServicesProjectConnection($"{aspireResource.GetBicepIdentifier()}_ai_conn", AzureCognitiveServicesProjectConnectionResource.ResourceVersion)
         {
             Parent = project,
             Name = $"{aspireResource.Name}-ai-conn",
@@ -421,7 +546,7 @@ public static class AzureCognitiveServicesProjectExtensions
         */
 
         var storage = (StorageAccount)capHostConfig.Storage!.AddAsExistingResource(infra);
-        var storageConn = new CognitiveServicesProjectConnection($"{aspireResource.GetBicepIdentifier()}_storage_conn")
+        var storageConn = new CognitiveServicesProjectConnection($"{aspireResource.GetBicepIdentifier()}_storage_conn", AzureCognitiveServicesProjectConnectionResource.ResourceVersion)
         {
             Parent = project,
             Name = BicepFunction.Interpolate($"{project.Name}-{storage.Name}"),
@@ -453,7 +578,7 @@ public static class AzureCognitiveServicesProjectExtensions
         */
 
         var cosmosDb = (CosmosDBAccount)capHostConfig.CosmosDB!.AddAsExistingResource(infra);
-        var cosmosDbConn = new CognitiveServicesProjectConnection($"{aspireResource.GetBicepIdentifier()}_cosmosdb_conn")
+        var cosmosDbConn = new CognitiveServicesProjectConnection($"{aspireResource.GetBicepIdentifier()}_cosmosdb_conn", AzureCognitiveServicesProjectConnectionResource.ResourceVersion)
         {
             Parent = project,
             Name = BicepFunction.Interpolate($"{project.Name}-{cosmosDb.Name}"),
@@ -492,7 +617,7 @@ public static class AzureCognitiveServicesProjectExtensions
         */
 
         var searchService = (SearchService)capHostConfig.Search!.AddAsExistingResource(infra);
-        var searchConn = new CognitiveServicesProjectConnection($"{aspireResource.GetBicepIdentifier()}_search_conn")
+        var searchConn = new CognitiveServicesProjectConnection($"{aspireResource.GetBicepIdentifier()}_search_conn", AzureCognitiveServicesProjectConnectionResource.ResourceVersion)
         {
             Parent = project,
             Name = BicepFunction.Interpolate($"{project.Name}-{searchService.Name}"),
@@ -532,7 +657,7 @@ public static class AzureCognitiveServicesProjectExtensions
         if (capHostConfig.AzureOpenAI is not null)
         {
             var aoaiAccount = capHostConfig.AzureOpenAI.AddAsExistingResource(infra);
-            aoaiConn = new CognitiveServicesProjectConnection($"{aspireResource.GetBicepIdentifier()}_aoai_conn")
+            aoaiConn = new CognitiveServicesProjectConnection($"{aspireResource.GetBicepIdentifier()}_aoai_conn", AzureCognitiveServicesProjectConnectionResource.ResourceVersion)
             {
                 Parent = project,
                 Name = BicepFunction.Interpolate($"{project.Name}-{aoaiAccount.Name}"),
@@ -581,28 +706,21 @@ public static class AzureCognitiveServicesProjectExtensions
 
     private static AzureContainerRegistryResource CreateDefaultRegistry(IDistributedApplicationBuilder builder, string name)
     {
-        static void configureInfrastructure(AzureResourceInfrastructure infrastructure)
-        {
-            var registry = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(infrastructure,
-                (identifier, resourceName) =>
-                {
-                    var resource = ContainerRegistryService.FromExisting(identifier);
-                    resource.Name = resourceName;
-                    return resource;
-                },
-                (infra) => new ContainerRegistryService(infra.AspireResource.GetBicepIdentifier())
-                {
-                    Sku = new ContainerRegistrySku { Name = ContainerRegistrySkuName.Basic },
-                    Tags = { { "aspire-resource-name", infra.AspireResource.Name } }
-                });
-
-            infrastructure.Add(registry);
-            infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = registry.Name });
-            infrastructure.Add(new ProvisioningOutput("loginServer", typeof(string)) { Value = registry.LoginServer });
-        }
-
-        var resource = new AzureContainerRegistryResource(name, configureInfrastructure);
+        var resource = new AzureContainerRegistryResource(name, ContainerRegistryInfrastructure.ConfigureContainerRegistry);
         builder.AddResource(resource);
         return resource;
     }
+
+    private static CapabilityHostConfiguration CreateCapabilityHostConfiguration(
+        IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
+        string name)
+    {
+        var config = new CapabilityHostConfiguration(name);
+        builder.Resource.CapabilityHostConfiguration = config;
+        return config;
+    }
+
+    private static CapabilityHostConfiguration GetCapabilityHostConfiguration(IResourceBuilder<AzureCognitiveServicesProjectResource> builder)
+        => builder.Resource.CapabilityHostConfiguration
+            ?? throw new InvalidOperationException($"Microsoft Foundry project resource '{builder.Resource.Name}' does not have a capability host configured. Call addCapabilityHost first.");
 }

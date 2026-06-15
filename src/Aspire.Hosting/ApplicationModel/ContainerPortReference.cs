@@ -20,6 +20,7 @@ public class ContainerPortReference(IResource resource) : IManifestExpressionPro
     public string ValueExpression => $"{{{Resource.Name}.containerPort}}";
 
     /// <inheritdoc/>
+    [global::Aspire.Hosting.AspireExportIgnore(Reason = "Reference enumeration is not needed in the ATS surface for container port provenance.")]
     public IEnumerable<object> References => [Resource];
 
     ValueTask<string?> IValueProvider.GetValueAsync(CancellationToken cancellationToken)

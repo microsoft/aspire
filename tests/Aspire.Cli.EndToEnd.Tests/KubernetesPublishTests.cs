@@ -20,43 +20,36 @@ public sealed class KubernetesPublishTests(ITestOutputHelper output)
     private const string ProjectName = "AspireKubernetesPublishTest";
     private const string ClusterNamePrefix = "aspire-e2e";
 
-    private static string KindVersion => Environment.GetEnvironmentVariable("KIND_VERSION") ?? "v0.31.0";
-    private static string HelmVersion => Environment.GetEnvironmentVariable("HELM_VERSION") ?? "v3.17.3";
+    private static string KindVersion => KubernetesE2EVersions.KindVersion;
+    private static string HelmVersion => KubernetesE2EVersions.HelmVersion;
 
     private static string GenerateUniqueClusterName() =>
         $"{ClusterNamePrefix}-{Guid.NewGuid():N}"[..32]; // KinD cluster names max 32 chars
 
     [Fact]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/15511")]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/15930")]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/15870")]
     public async Task CreateAndPublishToKubernetes()
     {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         using var workspace = TemporaryWorkspace.Create(output);
 
-        var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
-        var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
-        var isCI = CliE2ETestHelpers.IsRunningInCI;
         var clusterName = GenerateUniqueClusterName();
 
         output.WriteLine($"Using KinD version: {KindVersion}");
         output.WriteLine($"Using Helm version: {HelmVersion}");
         output.WriteLine($"Using cluster name: {clusterName}");
 
-        using var terminal = CliE2ETestHelpers.CreateTestTerminal();
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
-        // Prepare environment
-        await auto.PrepareEnvironmentAsync(workspace, counter);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
-        if (isCI)
-        {
-            await auto.InstallAspireCliFromPullRequestAsync(prNumber, counter);
-            await auto.SourceAspireCliEnvironmentAsync(counter);
-            await auto.VerifyAspireCliVersionAsync(commitSha, counter);
-        }
+        await auto.VerifyPullRequestCliVersionAsync(counter);
 
         try
         {
@@ -132,12 +125,9 @@ public sealed class KubernetesPublishTests(ITestOutputHelper output)
 
             // Step 3: Add Aspire.Hosting.Kubernetes package using aspire add
             // Pass the package name directly as an argument to avoid interactive selection
-            // The version selection prompt always appears for 'aspire add'
             await auto.TypeAsync("aspire add Aspire.Hosting.Kubernetes");
             await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-            await auto.EnterAsync(); // select first version
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromSeconds(180));
 
             // Step 4: Modify AppHost's main file to add Kubernetes environment
             // Note: Aspire templates use AppHost.cs as the main entry point, not Program.cs
@@ -292,18 +282,13 @@ builder.Build().Run();
             // Phase 6: Cleanup
             // =====================================================================
 
-            // Uninstall the Helm release
-            await auto.TypeAsync("helm uninstall aspire-app");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
+            // Destroy the deployment using aspire destroy (runs helm uninstall)
+            await auto.AspireDestroyAsync(counter);
 
             // Delete the KinD cluster
             await auto.TypeAsync($"kind delete cluster --name={clusterName}");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
-
-            await auto.TypeAsync("exit");
-            await auto.EnterAsync();
         }
         finally
         {
@@ -326,7 +311,5 @@ builder.Build().Run();
                 output.WriteLine($"Cleanup: Failed to delete KinD cluster '{clusterName}': {ex.Message}");
             }
         }
-
-        await pendingRun;
     }
 }

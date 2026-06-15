@@ -54,6 +54,7 @@ public static class MauiWindowsExtensions
     /// <param name="builder">The MAUI project resource builder.</param>
     /// <param name="name">The name of the Windows device resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method creates a new Windows platform resource that will run the MAUI application
     /// targeting the Windows platform using <c>dotnet run</c>. The resource does not auto-start 
@@ -74,7 +75,7 @@ public static class MauiWindowsExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
-    [AspireExport("addWindowsDevice", Description = "Adds a Windows platform resource for a .NET MAUI project.")]
+    [AspireExport]
     public static IResourceBuilder<MauiWindowsPlatformResource> AddWindowsDevice(
         this IResourceBuilder<MauiProjectResource> builder,
         [ResourceName] string name)

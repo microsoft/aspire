@@ -16,7 +16,8 @@ internal interface ICertificateToolRunner
     CertificateTrustResult CheckHttpCertificate();
 
     /// <summary>
-    /// Ensures the HTTPS development certificate exists without trusting it.
+    /// Ensures an HTTPS development certificate exists in the personal certificate store,
+    /// creating one if necessary, without trusting it.
     /// </summary>
     EnsureCertificateResult EnsureHttpCertificateExists();
 

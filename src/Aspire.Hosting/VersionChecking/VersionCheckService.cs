@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREUSERSECRETS001
 
 using System.Diagnostics;
@@ -148,7 +147,7 @@ internal sealed class VersionCheckService : BackgroundService
             options: new NotificationInteractionOptions
             {
                 LinkText = InteractionStrings.VersionCheckLinkText,
-                LinkUrl = "https://aka.ms/dotnet/aspire/update-latest",
+                LinkUrl = "https://aka.ms/aspire/update-latest",
                 PrimaryButtonText = InteractionStrings.VersionCheckPrimaryButtonText
             },
             cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -191,5 +190,3 @@ internal sealed class VersionCheckService : BackgroundService
         return false;
     }
 }
-
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

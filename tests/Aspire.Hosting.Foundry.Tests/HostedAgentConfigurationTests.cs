@@ -59,7 +59,7 @@ public class HostedAgentConfigurationTests
     }
 
     [Fact]
-    public void ToAgentVersionCreationOptions_ProducesValidOptions()
+    public void ToProjectsAgentVersionCreationOptions_ProducesValidOptions()
     {
         var config = new HostedAgentConfiguration("myimage:latest")
         {
@@ -67,7 +67,7 @@ public class HostedAgentConfigurationTests
             Cpu = 1.0m,
         };
 
-        var options = config.ToAgentVersionCreationOptions();
+        var options = config.ToProjectsAgentVersionCreationOptions("target");
 
         Assert.NotNull(options);
         Assert.Equal("Test agent", options.Description);
@@ -81,6 +81,36 @@ public class HostedAgentConfigurationTests
 
         Assert.Single(config.EnvironmentVariables);
         Assert.Equal("VALUE", config.EnvironmentVariables["KEY"]);
+    }
+
+    [Fact]
+    public void ToProjectsAgentVersionCreationOptions_ThrowsForInvalidEnvironmentVariableNames()
+    {
+        var config = new HostedAgentConfiguration("myimage:latest");
+        config.EnvironmentVariables["VALID_NAME_1"] = "value";
+        config.EnvironmentVariables["INVALID-NAME"] = "value";
+        config.EnvironmentVariables["invalid.name"] = "value";
+
+        var ex = Assert.Throws<DistributedApplicationException>(() => config.ToProjectsAgentVersionCreationOptions("target"));
+
+        Assert.Equal(
+            "Foundry hosted agent for target resource 'target' contains environment variable names that are not supported by Foundry Hosted Agents. Environment variable names must contain only ASCII letters, digits, or underscores. Invalid name(s): 'INVALID-NAME', 'invalid.name'",
+            ex.Message);
+    }
+
+    [Fact]
+    public void ToProjectsAgentVersionCreationOptions_ThrowsForReservedEnvironmentVariableNames()
+    {
+        var config = new HostedAgentConfiguration("myimage:latest");
+        config.EnvironmentVariables["PORT"] = "8000";
+        config.EnvironmentVariables["AGENT_NAME"] = "agent";
+        config.EnvironmentVariables["FOUNDRY_MODE"] = "hosted";
+
+        var ex = Assert.Throws<DistributedApplicationException>(() => config.ToProjectsAgentVersionCreationOptions("target"));
+
+        Assert.Equal(
+            "Foundry hosted agent for target resource 'target' contains environment variable names that are reserved by Foundry Hosted Agents. Reserved name(s): 'AGENT_NAME', 'FOUNDRY_MODE', 'PORT'",
+            ex.Message);
     }
 
     [Fact]

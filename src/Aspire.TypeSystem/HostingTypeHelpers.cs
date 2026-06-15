@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace Aspire.TypeSystem;
 
 /// <summary>
@@ -16,6 +18,9 @@ public static class HostingTypeNames
 
     /// <summary>Full name of the AspireDtoAttribute type.</summary>
     public const string AspireDtoAttribute = "Aspire.Hosting.AspireDtoAttribute";
+
+    /// <summary>Full name of the AspireValueAttribute type.</summary>
+    public const string AspireValueAttribute = "Aspire.Hosting.AspireValueAttribute";
 
     /// <summary>Full name of the AspireUnionAttribute type.</summary>
     public const string AspireUnionAttribute = "Aspire.Hosting.AspireUnionAttribute";
@@ -50,13 +55,13 @@ public static class HostingTypeHelpers
     /// <summary>
     /// Determines whether the specified <paramref name="type"/> implements the IResource interface.
     /// </summary>
-    public static bool IsResourceType(Type? type) =>
+    public static bool IsResourceType([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] Type? type) =>
         IsAssignableToType(type, HostingTypeNames.ResourceInterface);
 
     /// <summary>
     /// Determines whether the specified <paramref name="type"/> implements the generic IResourceBuilder interface.
     /// </summary>
-    public static bool IsResourceBuilderType(Type? type)
+    public static bool IsResourceBuilderType([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] Type? type)
         => IsAssignableToType(type, HostingTypeNames.ResourceBuilderInterface);
 
     /// <summary>
@@ -71,7 +76,7 @@ public static class HostingTypeHelpers
     public static bool IsDistributedApplicationType(Type? type) =>
         string.Equals(type?.FullName, HostingTypeNames.DistributedApplication, StringComparison.Ordinal);
 
-    private static bool IsAssignableToType(Type? type, string fullName)
+    private static bool IsAssignableToType([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] Type? type, string fullName)
     {
         if (type is null)
         {

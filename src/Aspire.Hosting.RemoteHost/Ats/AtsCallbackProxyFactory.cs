@@ -157,7 +157,8 @@ internal sealed class AtsCallbackProxyFactory : IDisposable
             var marshalCall = Expression.Call(
                 Expression.Constant(this),
                 marshalMethod,
-                Expression.Convert(paramExpr, typeof(object)));
+                Expression.Convert(paramExpr, typeof(object)),
+                Expression.Constant(param.ParameterType, typeof(Type)));
 
             // Use positional key (p0, p1, p2, ...) instead of param.Name
             var addCall = Expression.Call(jsonObjVar, addMethod!, Expression.Constant($"p{paramIndex}"), marshalCall);
@@ -169,9 +170,9 @@ internal sealed class AtsCallbackProxyFactory : IDisposable
         return Expression.Block(new[] { jsonObjVar }, expressions);
     }
 
-    private JsonNode? MarshalArg(object? value)
+    private JsonNode? MarshalArg(object? value, Type declaredType)
     {
-        return _marshaller.MarshalToJson(value);
+        return _marshaller.MarshalToJson(value, declaredType);
     }
 
     private Expression BuildSyncVoidCall(string callbackId, Expression? argsExpr, Expression? ctExpr, int ctParamIndex)

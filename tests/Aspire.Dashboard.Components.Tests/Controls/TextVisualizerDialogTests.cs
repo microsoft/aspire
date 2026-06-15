@@ -113,7 +113,20 @@ public class TextVisualizerDialogTests : DashboardTestContext
 
         Assert.Equal(DashboardUIHelpers.PlaintextFormat, instance.TextVisualizerViewModel.FormatKind);
         Assert.Equal(rawText, instance.TextVisualizerViewModel.FormattedText);
-        Assert.Equal([DashboardUIHelpers.PlaintextFormat], instance.EnabledOptions.ToImmutableSortedSet());
+        Assert.Equal([DashboardUIHelpers.MarkdownFormat, DashboardUIHelpers.PlaintextFormat], instance.EnabledOptions.ToImmutableSortedSet());
+    }
+
+    [Fact]
+    public async Task Render_TextVisualizerDialog_WithPlaintextUrl_RendersClickableLinkAsync()
+    {
+        const string rawText = "See https://aka.ms/aspire/container-runtime-unhealthy for more information.";
+
+        var cut = SetUpDialog(out var dialogService);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, false), []);
+        cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
+
+        var link = cut.Find("a[href='https://aka.ms/aspire/container-runtime-unhealthy']");
+        Assert.Equal("_blank", link.GetAttribute("target"));
     }
 
     [Fact]

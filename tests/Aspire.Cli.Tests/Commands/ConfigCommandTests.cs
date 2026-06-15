@@ -2,8 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Documentation.ApiDocs;
+using Aspire.Cli.Documentation.Docs;
+using Aspire.Cli.Packaging;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.AspNetCore.InternalTesting;
@@ -12,6 +18,26 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class ConfigCommandTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public void ConfigInfoJson_UsesCamelCasePropertyNames()
+    {
+        var info = new Aspire.Cli.Commands.ConfigInfo(
+            LocalSettingsPath: "local.json",
+            GlobalSettingsPath: "global.json",
+            AvailableFeatures: [new Aspire.Cli.Commands.FeatureInfo("featureA", "Description", DefaultValue: false)],
+            LocalSettingsSchema: new Aspire.Cli.Commands.SettingsSchema([]),
+            GlobalSettingsSchema: new Aspire.Cli.Commands.SettingsSchema([]),
+            ConfigFileSchema: new Aspire.Cli.Commands.SettingsSchema([]),
+            Capabilities: ["docs"]);
+
+        var json = JsonSerializer.Serialize(info, JsonSourceGenerationContext.Default.ConfigInfo);
+
+        Assert.Contains("\"localSettingsPath\"", json);
+        Assert.Contains("\"globalSettingsPath\"", json);
+        Assert.Contains("\"availableFeatures\"", json);
+        Assert.DoesNotContain("\"LocalSettingsPath\"", json);
+    }
+
     [Fact]
     public async Task ConfigCommand_WithExtensionMode_Works()
     {
@@ -31,7 +57,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
 
                 options.ConfigurationServiceFactory = _ => new TestConfigurationService();
             });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("config");
@@ -45,13 +71,13 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("config");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
     }
 
     [Fact]
@@ -59,7 +85,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("config set foo bar");
@@ -78,11 +104,48 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DocsSourceUrls_CanBeConfiguredViaAspireConfig()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+
+        var setLlmsResult = command.Parse("config set docs.llmsTxtUrl http://localhost:4321/llms-small.txt");
+        var setLlmsExitCode = await setLlmsResult.InvokeAsync().DefaultTimeout();
+        Assert.Equal(0, setLlmsExitCode);
+
+        var setSitemapResult = command.Parse("config set docs.api.sitemapUrl http://localhost:4321/sitemap-0.xml");
+        var setSitemapExitCode = await setSitemapResult.InvokeAsync().DefaultTimeout();
+        Assert.Equal(0, setSitemapExitCode);
+
+        var configurationService = provider.GetRequiredService<IConfigurationService>();
+        var settingsPath = configurationService.GetSettingsFilePath(isGlobal: false);
+        var settingsJson = await File.ReadAllTextAsync(settingsPath);
+        var settings = JsonNode.Parse(settingsJson)?.AsObject();
+
+        Assert.NotNull(settings);
+        Assert.True(settings["docs"] is JsonObject);
+        var docsObject = settings["docs"]!.AsObject();
+        Assert.Equal("http://localhost:4321/llms-small.txt", docsObject["llmsTxtUrl"]?.ToString());
+        Assert.True(docsObject["api"] is JsonObject);
+        Assert.Equal("http://localhost:4321/sitemap-0.xml", docsObject["api"]?["sitemapUrl"]?.ToString());
+
+        var reloadedServices = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var reloadedProvider = reloadedServices.BuildServiceProvider();
+        var configuration = reloadedProvider.GetRequiredService<IConfiguration>();
+
+        Assert.Equal("http://localhost:4321/llms-small.txt", DocsSourceConfiguration.GetLlmsTxtUrl(configuration));
+        Assert.Equal("http://localhost:4321/sitemap-0.xml", ApiDocsSourceConfiguration.GetSitemapUrl(configuration));
+    }
+
+    [Fact]
     public async Task ConfigSetCommand_WithDotNotation_CreatesNestedObject()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("config set foo.bar baz");
@@ -107,7 +170,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("config set foo.bar.baz hello");
@@ -135,7 +198,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
 
@@ -165,7 +228,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services1 = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider1 = services1.BuildServiceProvider();
+        using var provider1 = services1.BuildServiceProvider();
 
         var command1 = provider1.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
 
@@ -176,7 +239,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
 
         // Create a new service collection to reload config.
         var services2 = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider2 = services2.BuildServiceProvider();
+        using var provider2 = services2.BuildServiceProvider();
 
         var command2 = provider2.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
 
@@ -191,7 +254,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services1 = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider1 = services1.BuildServiceProvider();
+        using var provider1 = services1.BuildServiceProvider();
 
         var command1 = provider1.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
 
@@ -201,7 +264,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, setExitCode);
 
         var services2 = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider2 = services2.BuildServiceProvider();
+        using var provider2 = services2.BuildServiceProvider();
 
         var command2 = provider2.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
 
@@ -216,7 +279,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("config get nonexistent.key");
@@ -230,7 +293,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
 
@@ -255,7 +318,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
 
@@ -284,7 +347,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
 
@@ -316,7 +379,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
         {
             options.OutputTextWriter = outputWriter;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
 
@@ -342,7 +405,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
         {
             options.OutputTextWriter = outputWriter;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
 
@@ -360,6 +423,50 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ConfigListCommand_WithoutAllFlag_NoConfig_ShowsHintAboutAllFlag()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+
+        // List without --all and with no config set
+        var listResult = command.Parse("config list");
+        var listExitCode = await listResult.InvokeAsync().DefaultTimeout();
+        Assert.Equal(0, listExitCode);
+
+        var output = string.Join("\n", outputWriter.Logs);
+        Assert.Contains("--all", output);
+    }
+
+    [Fact]
+    public async Task ConfigListCommand_WithAllFlag_NoConfig_ShowsAvailableFeatures()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+
+        // List with --all and with no config set
+        var listResult = command.Parse("config list --all");
+        var listExitCode = await listResult.InvokeAsync().DefaultTimeout();
+        Assert.Equal(0, listExitCode);
+
+        var output = string.Join("\n", outputWriter.Logs);
+        Assert.Contains("default:", output);
+    }
+
+    [Fact]
     public async Task FeatureFlags_WhenSetToTrue_ReturnsTrue()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -368,7 +475,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
             outputHelper,
             options => options.EnabledFeatures = new[] { "testFeature" }
             );
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         // Set the feature flag to true
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
@@ -386,7 +493,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options => options.DisabledFeatures = new[] { "testFeature" });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         // Set the feature flag to false
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
@@ -410,7 +517,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
             {
                 confing[$"{KnownFeatures.FeaturePrefix}:testFeature"] = "invalid"; // Set an invalid value
             });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         // Set the feature flag to an invalid value
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
@@ -428,7 +535,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var rootCommand = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
 
@@ -442,7 +549,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
 
@@ -453,7 +560,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
 
         // Create new service provider to pick up the configuration change
         var newServices = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var newProvider = newServices.BuildServiceProvider();
+        using var newProvider = newServices.BuildServiceProvider();
 
         // Verify the feature flag is enabled
         var featureFlags = newProvider.GetRequiredService<IFeatures>();
@@ -465,7 +572,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         // Verify the feature flag defaults to false
         var featureFlags = provider.GetRequiredService<IFeatures>();
@@ -477,7 +584,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("config set features:polyglotSupportEnabled true");
@@ -503,7 +610,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
 
@@ -534,7 +641,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
 
@@ -565,7 +672,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
 
@@ -608,7 +715,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
 
         // Loading configuration should succeed after normalizing the corrupted file
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         // Verify the file was normalized - flat key should be gone, existing nested value preserved
         var json = await File.ReadAllTextAsync(settingsPath);
@@ -641,7 +748,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
 
         // Loading configuration triggers normalization
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         // The existing nested value should be preserved; the flat key value should be dropped
         var json = await File.ReadAllTextAsync(settingsPath);
@@ -650,6 +757,174 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
         Assert.False(settings.ContainsKey("features:polyglotSupportEnabled"));
         var featuresObject = settings["features"]!.AsObject();
         Assert.Equal("nested-value", featuresObject["polyglotSupportEnabled"]?.ToString());
+    }
+
+    [Theory]
+    [InlineData("appHost.path")]
+    [InlineData("appHost:path")]
+    public async Task ConfigSetCommand_LocalAppHostPath_RemainsAllowed(string key)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.Delete(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "settings.json"));
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+        var result = command.Parse($"config set {key} AppHost.csproj");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        var json = await File.ReadAllTextAsync(configPath);
+        var settings = JsonNode.Parse(json)?.AsObject();
+
+        Assert.NotNull(settings);
+        var appHost = settings["appHost"]?.AsObject();
+        Assert.NotNull(appHost);
+        Assert.Equal("AppHost.csproj", appHost["path"]?.ToString());
+        Assert.False(settings.ContainsKey("appHost:path"));
+    }
+
+    [Theory]
+    [InlineData("appHost.path")]
+    [InlineData("appHost:path")]
+    public async Task ConfigSetCommand_LocalAppHostPath_MigratesLegacySettingsFile(string key)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var legacySettingsPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "settings.json");
+        await File.WriteAllTextAsync(legacySettingsPath, """{ "channel": "daily" }""");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+        var result = command.Parse($"config set {key} AppHost.csproj");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        var json = await File.ReadAllTextAsync(configPath);
+        var settings = JsonNode.Parse(json)?.AsObject();
+
+        Assert.NotNull(settings);
+        Assert.Equal("daily", settings["channel"]?.ToString());
+        var appHost = settings["appHost"]?.AsObject();
+        Assert.NotNull(appHost);
+        Assert.Equal("AppHost.csproj", appHost["path"]?.ToString());
+    }
+
+    [Theory]
+    [InlineData("appHost.path", nameof(ErrorStrings.GlobalAppHostPathCannotBeSetWithConfigCommand))]
+    [InlineData("appHost:path", nameof(ErrorStrings.GlobalAppHostPathCannotBeSetWithConfigCommand))]
+    [InlineData("appHostPath", nameof(ErrorStrings.LegacyAppHostPathCannotBeSetWithConfigCommand))]
+    public async Task ConfigSetCommand_GlobalAppHostPath_ReturnsInvalidCommand(string key, string expectedErrorResourceName)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var testInteractionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+        var result = command.Parse($"config set {key} AppHost.csproj --global");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Equal(GetErrorString(expectedErrorResourceName), Assert.Single(testInteractionService.DisplayedErrors));
+
+        var settingsPath = provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(isGlobal: true);
+        if (File.Exists(settingsPath))
+        {
+            var json = await File.ReadAllTextAsync(settingsPath);
+            Assert.DoesNotContain("AppHost.csproj", json);
+        }
+    }
+
+    [Fact]
+    public async Task ConfigSetCommand_GlobalOverrideStagingFeed_IsReadByPackagingService()
+    {
+        const string stagingFeed = "https://example.com/staging/v3/index.json";
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using (var provider = services.BuildServiceProvider())
+        {
+            var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+            var result = command.Parse($"config set -g overrideStagingFeed {stagingFeed}");
+
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.Success, exitCode);
+
+            var settingsPath = provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(isGlobal: true);
+            var json = await File.ReadAllTextAsync(settingsPath);
+            Assert.Contains(stagingFeed, json);
+        }
+
+        var reloadedServices = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var reloadedProvider = reloadedServices.BuildServiceProvider();
+        var packagingService = reloadedProvider.GetRequiredService<IPackagingService>();
+
+        var channels = await packagingService.GetChannelsAsync(requestedChannelName: PackageChannelNames.Staging).DefaultTimeout();
+
+        var stagingChannel = Assert.Single(channels, c => c.Name == PackageChannelNames.Staging);
+        Assert.Equal(PackageChannelQuality.Both, stagingChannel.Quality);
+        Assert.Contains(stagingChannel.Mappings!, m => m.PackageFilter == "Aspire*" && m.Source == stagingFeed);
+    }
+
+    private static string GetErrorString(string resourceName)
+    {
+        return resourceName switch
+        {
+            nameof(ErrorStrings.GlobalAppHostPathCannotBeSetWithConfigCommand) => ErrorStrings.GlobalAppHostPathCannotBeSetWithConfigCommand,
+            nameof(ErrorStrings.LegacyAppHostPathCannotBeSetWithConfigCommand) => ErrorStrings.LegacyAppHostPathCannotBeSetWithConfigCommand,
+            _ => throw new ArgumentOutOfRangeException(nameof(resourceName), resourceName, null)
+        };
+    }
+
+    [Fact]
+    public async Task ConfigSetCommand_LegacyAppHostPath_ReturnsInvalidCommand()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+        var result = command.Parse("config set appHostPath AppHost.csproj");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        Assert.False(File.Exists(configPath));
+    }
+
+    [Fact]
+    public async Task ConfigSetCommand_AppHostLanguage_RemainsAllowed()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+        var result = command.Parse("config set appHost.language typescript/nodejs");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var settingsPath = provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(isGlobal: false);
+        var json = await File.ReadAllTextAsync(settingsPath);
+        Assert.Contains("typescript/nodejs", json);
     }
 }
 
@@ -690,6 +965,11 @@ public class TestConfigurationService : IConfigurationService
     public Task<string?> GetConfigurationAsync(string key, CancellationToken cancellationToken = default)
     {
         return Task.FromResult<string?>(key);
+    }
+
+    public Task<string?> GetConfigurationFromDirectoryAsync(string key, DirectoryInfo startDirectory, bool continueSearchWhenKeyMissing = false, CancellationToken cancellationToken = default)
+    {
+        return GetConfigurationAsync(key, cancellationToken);
     }
 
     public string GetSettingsFilePath(bool isGlobal)

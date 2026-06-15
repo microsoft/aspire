@@ -20,6 +20,6 @@ void main() throws Exception {
         chainedFunc.withHttpEndpoint(new WithHttpEndpointOptions().port(7071.0));
         // ── 4. withReference from base builder - standard resource references ───────
         var anotherStorage = builder.addAzureStorage("appstorage");
-        funcApp.withReference(anotherStorage);
+        funcApp.withReference(anotherStorage, new WithReferenceOptions());
         builder.build().run();
     }

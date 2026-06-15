@@ -3,13 +3,13 @@
   <file datatype="xml" source-language="en" target-language="pl" original="../RestoreCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Restore dependencies and generate SDK code for an apphost</source>
-        <target state="new">Restore dependencies and generate SDK code for an apphost</target>
+        <source>Restore dependencies and generate SDK code for an AppHost</source>
+        <target state="new">Restore dependencies and generate SDK code for an AppHost</target>
         <note />
       </trans-unit>
       <trans-unit id="UnrecognizedAppHostType">
-        <source>Unrecognized app host type.</source>
-        <target state="new">Unrecognized app host type.</target>
+        <source>Unrecognized AppHost type.</source>
+        <target state="new">Unrecognized AppHost type.</target>
         <note />
       </trans-unit>
       <trans-unit id="RestoringSdkCode">

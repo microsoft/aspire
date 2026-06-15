@@ -1,4 +1,5 @@
 #pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREINTERACTION001
 
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
@@ -19,6 +20,7 @@ using Microsoft.Extensions.Logging;
 
 // Core types (from Aspire.Hosting namespace)
 [assembly: AspireExport(typeof(IDistributedApplicationBuilder))]
+[assembly: AspireExport(typeof(IDistributedApplicationPipeline))]
 [assembly: AspireExport(typeof(DistributedApplication))]
 
 // Note: DistributedApplicationExecutionContext has [AspireExport(ExposeProperties = true)] on the type itself
@@ -26,6 +28,9 @@ using Microsoft.Extensions.Logging;
 // Reference types (from Aspire.Hosting.ApplicationModel namespace)
 [assembly: AspireExport(typeof(EndpointReference))]
 [assembly: AspireExport(typeof(ReferenceExpression))]
+[assembly: AspireExport(typeof(IAspireStore), ExposeProperties = true)]
+[assembly: AspireExport(typeof(IExecutionConfigurationBuilder))]
+[assembly: AspireExport(typeof(IExecutionConfigurationResult))]
 
 // Note: EnvironmentCallbackContext has [AspireExport(ExposeProperties = true)] on the type itself
 
@@ -43,11 +48,16 @@ using Microsoft.Extensions.Logging;
 [assembly: AspireExport(typeof(ExecutableResource))]
 [assembly: AspireExport(typeof(ProjectResource))]
 [assembly: AspireExport(typeof(ParameterResource))]
+[assembly: AspireExport(typeof(ContainerMountAnnotation), ExposeProperties = true)]
+[assembly: AspireExport(typeof(ContainerImageReference), ExposeProperties = true)]
+[assembly: AspireExport(typeof(ContainerPortReference), ExposeProperties = true)]
 
 // Service types
 [assembly: AspireExport(typeof(IServiceProvider))]
 [assembly: AspireExport(typeof(ResourceNotificationService))]
 [assembly: AspireExport(typeof(ResourceLoggerService))]
+[assembly: AspireExport(typeof(ResourceCommandService))]
+[assembly: AspireExport(typeof(IInteractionService))]
 
 // Additional framework and hosting types we reference
 [assembly: AspireExport(typeof(IConfiguration))]

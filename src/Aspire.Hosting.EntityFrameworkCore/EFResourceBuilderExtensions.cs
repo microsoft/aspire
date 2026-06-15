@@ -5,10 +5,12 @@
 #pragma warning disable ASPIREDOTNETTOOL
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.EntityFrameworkCore;
 using Aspire.Hosting.Pipelines;
+using System.Diagnostics;
+using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting;
 
@@ -28,76 +30,65 @@ public static class EFResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Adds EF Core migration management for a specific DbContext type identified by name.
+    /// Adds EF Core migration management for a specific DbContext type.
     /// </summary>
     /// <param name="builder">The resource builder for the project.</param>
     /// <param name="name">The name of the migration resource.</param>
-    /// <param name="contextTypeName">The fully qualified name of the DbContext type to manage migrations for.</param>
+    /// <param name="dbContextTypeName">The fully qualified name of the DbContext type to manage migrations for.</param>
     /// <returns>An EF migration resource builder for chaining additional configuration.</returns>
     /// <exception cref="InvalidOperationException">Thrown if migrations for this context type have already been added.</exception>
     /// <remarks>
-    /// <para>
     /// Multiple calls to this method with different context types are supported, allowing you to manage
     /// migrations for multiple DbContexts in the same project.
-    /// </para>
-    /// <para>
-    /// This overload is useful when the DbContext type is not available at compile time, such as when
-    /// using runtime-discovered context types.
-    /// </para>
     /// </remarks>
-    [AspireExport]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addEFMigrations dispatcher export.")]
     public static IResourceBuilder<EFMigrationResource> AddEFMigrations(
         this IResourceBuilder<ProjectResource> builder,
         [ResourceName] string name,
-        string contextTypeName)
+        string dbContextTypeName)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
-        ArgumentException.ThrowIfNullOrEmpty(contextTypeName);
+        ArgumentException.ThrowIfNullOrEmpty(dbContextTypeName);
 
-        return AddEFMigrationsCore(builder, name, contextTypeName, configureToolResource: null);
+        return AddEFMigrationsCore(builder, name, dbContextTypeName, configureToolResource: null);
     }
 
     /// <summary>
-    /// Adds EF Core migration management for a specific DbContext type identified by name.
+    /// Adds EF Core migration management for a specific DbContext type.
     /// </summary>
     /// <param name="builder">The resource builder for the project.</param>
     /// <param name="name">The name of the migration resource.</param>
-    /// <param name="contextTypeName">The fully qualified name of the DbContext type to manage migrations for.</param>
+    /// <param name="dbContextTypeName">The fully qualified name of the DbContext type to manage migrations for.</param>
     /// <param name="configureToolResource">Optional callback to configure the dotnet-ef tool resource used for migrations.</param>
     /// <returns>An EF migration resource builder for chaining additional configuration.</returns>
     /// <exception cref="InvalidOperationException">Thrown if migrations for this context type have already been added.</exception>
     /// <remarks>
-    /// <para>
     /// Multiple calls to this method with different context types are supported, allowing you to manage
     /// migrations for multiple DbContexts in the same project.
-    /// </para>
-    /// <para>
-    /// This overload is useful when the DbContext type is not available at compile time, such as when
-    /// using runtime-discovered context types.
-    /// </para>
     /// </remarks>
     [AspireExportIgnore(Reason = "Action<IResourceBuilder<DotnetToolResource>> callbacks are not ATS-compatible.")]
     public static IResourceBuilder<EFMigrationResource> AddEFMigrations(
         this IResourceBuilder<ProjectResource> builder,
         [ResourceName] string name,
-        string contextTypeName,
+        string dbContextTypeName,
         Action<IResourceBuilder<DotnetToolResource>>? configureToolResource)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
-        ArgumentException.ThrowIfNullOrEmpty(contextTypeName);
+        ArgumentException.ThrowIfNullOrEmpty(dbContextTypeName);
 
-        return AddEFMigrationsCore(builder, name, contextTypeName, configureToolResource);
+        return AddEFMigrationsCore(builder, name, dbContextTypeName, configureToolResource);
     }
 
     /// <summary>
-    /// Adds EF Core migration management for auto-detected DbContext types.
+    /// Adds EF Core migration management for the only DbContext type in the target project.
     /// </summary>
     /// <param name="builder">The resource builder for the project.</param>
     /// <param name="name">The name of the migration resource.</param>
     /// <returns>An EF migration resource builder for chaining additional configuration.</returns>
-    [AspireExport]
+    /// <exception cref="InvalidOperationException">Thrown if migrations have already been added for any DbContext type on this project.</exception>
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addEFMigrations dispatcher export.")]
     public static IResourceBuilder<EFMigrationResource> AddEFMigrations(
         this IResourceBuilder<ProjectResource> builder,
         [ResourceName] string name)
@@ -105,16 +96,37 @@ public static class EFResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
 
-        return AddEFMigrationsCore(builder, name, contextTypeName: null, configureToolResource: null);
+        return AddEFMigrationsCore(builder, name, dbContextTypeName: null, configureToolResource: null);
     }
 
     /// <summary>
-    /// Adds EF Core migration management for auto-detected DbContext types.
+    /// Adds EF Core migration management for polyglot app hosts.
+    /// </summary>
+    [AspireExport("addEFMigrations")]
+    internal static IResourceBuilder<EFMigrationResource> AddEFMigrationsForPolyglot(
+        this IResourceBuilder<ProjectResource> builder,
+        [ResourceName] string name,
+        string? dbContextTypeName = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        if (dbContextTypeName is not null)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(dbContextTypeName);
+        }
+
+        return AddEFMigrationsCore(builder, name, dbContextTypeName, configureToolResource: null);
+    }
+
+    /// <summary>
+    /// Adds EF Core migration management for the only DbContext type in the target project.
     /// </summary>
     /// <param name="builder">The resource builder for the project.</param>
     /// <param name="name">The name of the migration resource.</param>
     /// <param name="configureToolResource">Optional callback to configure the dotnet-ef tool resource used for migrations.</param>
     /// <returns>An EF migration resource builder for chaining additional configuration.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if migrations have already been added for any DbContext type on this project.</exception>
     [AspireExportIgnore(Reason = "Action<IResourceBuilder<DotnetToolResource>> callbacks are not ATS-compatible.")]
     public static IResourceBuilder<EFMigrationResource> AddEFMigrations(
         this IResourceBuilder<ProjectResource> builder,
@@ -124,45 +136,47 @@ public static class EFResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
 
-        return AddEFMigrationsCore(builder, name, contextTypeName: null, configureToolResource);
+        return AddEFMigrationsCore(builder, name, dbContextTypeName: null, configureToolResource);
     }
 
     private static IResourceBuilder<EFMigrationResource> AddEFMigrationsCore(
         IResourceBuilder<ProjectResource> builder,
         string name,
-        string? contextTypeName,
+        string? dbContextTypeName,
         Action<IResourceBuilder<DotnetToolResource>>? configureToolResource)
     {
-        // Check for duplicate context types and null/non-null conflicts
-        var existingMigrations = builder.ApplicationBuilder.Resources
+        var existingMigrationResources = builder.ApplicationBuilder.Resources
             .OfType<EFMigrationResource>()
             .Where(r => r.ProjectResource == builder.Resource)
             .ToList();
 
-        if (contextTypeName != null)
+        if (dbContextTypeName != null)
         {
-            if (existingMigrations.Any(r => r.ContextTypeName == contextTypeName))
+            if (existingMigrationResources.Any(r => r.DbContextTypeName == dbContextTypeName))
             {
                 throw new InvalidOperationException(
-                    $"The DbContext type '{GetShortTypeName(contextTypeName)}' has already been registered for EF migrations on resource '{builder.Resource.Name}'.");
+                    $"The DbContext type '{GetShortTypeName(dbContextTypeName)}' has already been registered for EF migrations on resource '{builder.Resource.Name}'.");
             }
 
-            if (existingMigrations.Any(r => r.ContextTypeName == null))
+            if (existingMigrationResources.Any(r => r.DbContextTypeName == null))
             {
                 throw new InvalidOperationException(
-                    $"Cannot add migrations for a specific DbContext type when auto-detected migrations have already been registered on resource '{builder.Resource.Name}'.");
+                    $"Cannot register a specific DbContext type for migrations when they have already been registered without a context type on resource '{builder.Resource.Name}'.");
             }
         }
-        else
+        else if (existingMigrationResources.Count != 0)
         {
-            if (existingMigrations.Any())
+            if (existingMigrationResources.Any(r => r.DbContextTypeName == null))
             {
                 throw new InvalidOperationException(
-                    $"Cannot add auto-detected migrations when migrations for specific DbContext types have already been registered on resource '{builder.Resource.Name}'.");
+                     $"Cannot register migrations without a context type when they have already been registered without a context type on resource '{builder.Resource.Name}'.");
             }
+            
+            throw new InvalidOperationException(
+                $"Cannot register migrations without a context type when they have already been registered for specific DbContext types on resource '{builder.Resource.Name}'.");
         }
 
-        var migrationResource = new EFMigrationResource(name, builder.Resource, contextTypeName)
+        var migrationResource = new EFMigrationResource(name, builder.Resource, dbContextTypeName)
         {
             ConfigureToolResource = configureToolResource
         };
@@ -179,28 +193,60 @@ public static class EFResourceBuilderExtensions
             .WithIconName("Database")
             .WithPipelineStepFactory(CreateMigrationPipelineStep);
 
-        AddEFMigrationCommands(innerBuilder, migrationResource, contextTypeName);
+        AddEFMigrationCommands(innerBuilder, migrationResource, dbContextTypeName);
 
         return innerBuilder;
     }
 
-    private static IEnumerable<PipelineStep> CreateMigrationPipelineStep(PipelineStepFactoryContext context)
+    internal static IEnumerable<PipelineStep> CreateMigrationPipelineStep(PipelineStepFactoryContext context)
     {
-        if (context.Resource is not EFMigrationResource migrationResource
-            || !migrationResource.PublishAsMigrationScript && !migrationResource.PublishAsMigrationBundle)
+        if (context.PipelineContext.ExecutionContext.IsRunMode
+            || context.Resource is not EFMigrationResource migrationResource
+            || (!migrationResource.PublishAsMigrationScript && !migrationResource.PublishAsMigrationBundle))
         {
-            yield break;
+            return [];
         }
+
+        var steps = new List<PipelineStep>();
+
+        var scriptStepName = migrationResource.PublishAsMigrationScript
+            ? $"{migrationResource.Name}-generate-migration-script"
+            : null;
+
+        var bundleStepName = migrationResource.PublishAsMigrationBundle
+            ? $"{migrationResource.Name}-generate-migration-bundle"
+            : null;
+
+        // Serialize publish-time generate steps across every EFMigrationResource in the model.
+        // Each `dotnet-ef` invocation triggers a `dotnet build` (the bundle step explicitly runs
+        // without `--no-build` because the bundle command needs the build to target a specific
+        // runtime). Two concurrent `dotnet-ef` runs can race on:
+        //   - the shared obj/bin output when two migrations target the same startup project,
+        //   - the per-user `dotnet tool exec` cache (NuGet install + extract) used by every
+        //     DotnetToolResource regardless of project, and
+        //   - the per-user MSBuild node-reuse / NuGet restore caches under %USERPROFILE%.
+        // None of those are safe under concurrent `dotnet-ef` invocations, so we chain ALL
+        // migration generate steps in the model — not just the ones sharing a startup project.
+        //
+        // The chain is built by deterministically ordering sibling migrations by name and pointing
+        // the first step of each migration at the last step of the previous migration. The
+        // graph is therefore: <m1>-script -> <m1>-bundle -> <m2>-script -> <m2>-bundle -> ...
+        // which is acyclic (the per-migration script -> bundle edge already exists and the
+        // cross-migration edge only flows forward in the deterministic ordering).
+        var crossMigrationPredecessor = GetPreviousMigrationLastStepName(context.PipelineContext.Model, migrationResource);
 
         if (migrationResource.PublishAsMigrationScript)
         {
-            yield return new PipelineStep
+            List<string> scriptDependsOn = crossMigrationPredecessor is not null ? [crossMigrationPredecessor] : [];
+
+            steps.Add(new PipelineStep
             {
-                Name = $"{migrationResource.Name}-generate-migration-script",
+                Name = scriptStepName!,
                 Description = $"Generate EF Core migration SQL script for {migrationResource.Name}",
                 Resource = migrationResource,
+                DependsOnSteps = scriptDependsOn,
                 RequiredBySteps = [WellKnownPipelineSteps.Publish],
-                Action = stepContext => ExecutePipelineOperationAsync(
+                Action = stepContext => ExecutePublishPipelineOperationAsync(
                     stepContext, migrationResource, "migration script",
                     (executor, outputDir) =>
                     {
@@ -212,65 +258,129 @@ public static class EFResourceBuilderExtensions
                             migrationResource.ScriptIdempotent,
                             migrationResource.ScriptNoTransactions);
                     })
-            };
+            });
         }
 
         if (migrationResource.PublishAsMigrationBundle)
         {
-            yield return new PipelineStep
+            var publishesContainer = migrationResource.PublishBundleContainer
+                && context.PipelineContext.ExecutionContext.IsPublishMode;
+
+            List<string> requiredBy = publishesContainer
+                ? [WellKnownPipelineSteps.Publish, $"build-{migrationResource.Name}"]
+                : [WellKnownPipelineSteps.Publish];
+
+            // Prefer the per-migration script step as the dependency when present (the cross-migration
+            // edge is already attached to the script step in that case). Only attach the cross-migration
+            // edge directly to the bundle step when this migration produces no script step.
+            List<string> bundleDependsOn = [];
+            if (scriptStepName is not null)
             {
-                Name = $"{migrationResource.Name}-generate-migration-bundle",
+                bundleDependsOn.Add(scriptStepName);
+            }
+            else if (crossMigrationPredecessor is not null)
+            {
+                bundleDependsOn.Add(crossMigrationPredecessor);
+            }
+
+            steps.Add(new PipelineStep
+            {
+                Name = bundleStepName!,
                 Description = $"Generate EF Core migration bundle for {migrationResource.Name}",
                 Resource = migrationResource,
-                RequiredBySteps = [WellKnownPipelineSteps.Publish],
-                Action = stepContext => ExecutePipelineOperationAsync(
+                DependsOnSteps = bundleDependsOn,
+                RequiredBySteps = requiredBy,
+                Action = stepContext => ExecutePublishPipelineOperationAsync(
                     stepContext, migrationResource, "migration bundle",
                     (executor, outputDir) =>
                     {
-                        string? outputPath = null;
-                        if (outputDir is not null)
-                        {
-                            var bundleName = migrationResource.Name;
-                            bundleName += OperatingSystem.IsWindows() ? ".exe" : "";
-                            outputPath = Path.Combine(outputDir, bundleName);
-                        }
+                        var outputPath = outputDir is not null
+                            ? Path.Combine(outputDir, GetBundleFileName(migrationResource))
+                            : null;
                         return executor.GenerateMigrationBundleAsync(
                             outputPath,
                             migrationResource.BundleTargetRuntime,
                             migrationResource.BundleSelfContained);
                     })
-            };
+            });
         }
+
+        return steps;
     }
 
-    private static async Task ExecutePipelineOperationAsync(
+    // Returns the name of the last publish-time step produced by the migration that immediately
+    // precedes <paramref name="current"/> in a stable ordering of all migrations in the model.
+    // Returns null when <paramref name="current"/> is the first such migration (no predecessor)
+    // or the only one.
+    private static string? GetPreviousMigrationLastStepName(DistributedApplicationModel model, EFMigrationResource current)
+    {
+        EFMigrationResource? predecessor = null;
+        foreach (var sibling in model.Resources.OfType<EFMigrationResource>())
+        {
+            if (ReferenceEquals(sibling, current) ||
+                (!sibling.PublishAsMigrationScript && !sibling.PublishAsMigrationBundle))
+            {
+                continue;
+            }
+
+            // Stable ordinal ordering by resource name keeps the chain deterministic regardless
+            // of model traversal order. Only siblings whose name sorts before this one can
+            // possibly act as a predecessor.
+            if (StringComparer.Ordinal.Compare(sibling.Name, current.Name) >= 0)
+            {
+                continue;
+            }
+
+            if (predecessor is null || StringComparer.Ordinal.Compare(sibling.Name, predecessor.Name) > 0)
+            {
+                predecessor = sibling;
+            }
+        }
+
+        if (predecessor is null)
+        {
+            return null;
+        }
+
+        // The bundle step always follows the script step within the same migration, so it is the
+        // last step when present.
+        return predecessor.PublishAsMigrationBundle
+            ? $"{predecessor.Name}-generate-migration-bundle"
+            : $"{predecessor.Name}-generate-migration-script";
+    }
+
+    private static async Task ExecutePublishPipelineOperationAsync(
         PipelineStepContext stepContext,
         EFMigrationResource migrationResource,
         string operationName,
         Func<EFCoreOperationExecutor, string?, Task<EFOperationResult>> executeOperation)
     {
-        var loggerFactory = stepContext.Services.GetRequiredService<ILoggerFactory>();
-        var logger = loggerFactory.CreateLogger<EFMigrationResource>();
-        var pipelineOptions = stepContext.Services.GetRequiredService<IOptions<PipelineOptions>>();
+        var logger = stepContext.Logger;
+#pragma warning disable ASPIREPIPELINES004 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+        var pipelineOutputService = stepContext.Services.GetRequiredService<IPipelineOutputService>();
+#pragma warning restore ASPIREPIPELINES004 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
         using var executor = new EFCoreOperationExecutor(
             migrationResource.ProjectResource,
             migrationResource.MigrationsProjectPath,
-            migrationResource.ContextTypeName,
+            migrationResource.DbContextTypeName,
             logger,
             stepContext.CancellationToken,
             stepContext.Services,
             migrationResource.ToolResource);
 
-        string? outputDir = null;
-        if (!string.IsNullOrEmpty(pipelineOptions.Value.OutputPath))
-        {
-            outputDir = Path.Combine(pipelineOptions.Value.OutputPath, "efmigrations");
-            Directory.CreateDirectory(outputDir);
-        }
+        var outputDir = Path.Combine(pipelineOutputService.GetOutputDirectory(), "efmigrations");
+        Directory.CreateDirectory(outputDir);
 
         logger.LogInformation("Generating {Operation} for '{ResourceName}'...", operationName, migrationResource.Name);
         var result = await executeOperation(executor, outputDir).ConfigureAwait(false);
+
+        // Flow the resolved target framework back to the resource so the Dockerfile generation
+        // step can pick the matching base image tag without re-parsing the project file.
+        if (executor.ResolvedFramework is not null && migrationResource.ResolvedFramework is null)
+        {
+            migrationResource.ResolvedFramework = executor.ResolvedFramework;
+        }
 
         if (result.Success)
         {
@@ -282,14 +392,230 @@ public static class EFResourceBuilderExtensions
         }
     }
 
+    internal static string GetBundleFileName(EFMigrationResource migrationResource)
+    {
+        // The bundle is produced for a specific target runtime, so its extension follows that
+        // runtime's conventions — not the host OS running `aspire publish`. When no explicit
+        // runtime was requested the runtime defaults to the host, so fall back to the OS check.
+        var runtime = migrationResource.BundleTargetRuntime;
+        var isWindowsBundle = runtime is not null
+            ? runtime.StartsWith("win", StringComparison.OrdinalIgnoreCase)
+            : OperatingSystem.IsWindows();
+
+        return migrationResource.Name + (isWindowsBundle ? ".exe" : string.Empty);
+    }
+
+    private static async Task<ExecuteCommandResult> StartEfToolResourceAsync(ExecuteCommandContext context, DotnetToolResource toolResource)
+    {
+        var notificationService = context.Services.GetRequiredService<ResourceNotificationService>();
+        var resourceStarted = false;
+        Process? process = null;
+
+        try
+        {
+            var executableAnnotation = toolResource.Annotations.OfType<ExecutableAnnotation>().LastOrDefault();
+            if (executableAnnotation is null)
+            {
+                return new ExecuteCommandResult
+                {
+                    Success = false,
+                    Message = $"Executable configuration was not found for EF tool resource '{context.ResourceName}'."
+                };
+            }
+
+            var executionContext = context.Services.GetService<DistributedApplicationExecutionContext>()
+                ?? new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+
+            var executionConfiguration = await ExecutionConfigurationBuilder.Create(toolResource)
+                .WithEnvironmentVariablesConfig()
+                .BuildAsync(executionContext, context.Logger, context.CancellationToken).ConfigureAwait(false);
+
+            if (executionConfiguration.Exception is not null)
+            {
+                await notificationService.PublishUpdateAsync(toolResource, s => s with
+                {
+                    State = KnownResourceStates.FailedToStart
+                }).ConfigureAwait(false);
+
+                return new ExecuteCommandResult
+                {
+                    Success = false,
+                    Message = executionConfiguration.Exception.Message
+                };
+            }
+
+            var startInfo = new ProcessStartInfo(executableAnnotation.Command)
+            {
+                WorkingDirectory = executableAnnotation.WorkingDirectory,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            // Build command-line arguments by directly invoking each annotation's Callback.
+            // We intentionally bypass ExecutionConfigurationBuilder.WithArgumentsConfig() here
+            // because it uses EvaluateOnceAsync which caches callback results. When the tool
+            // resource is reused across sequential EF commands (e.g., script then bundle),
+            // the cached BuildToolExecArguments callback does not re-populate the shared
+            // callbackContext.Args list, so later annotations (the per-command EF args) run
+            // against an empty list.
+            if (toolResource.TryGetAnnotationsOfType<CommandLineArgsCallbackAnnotation>(out var cmdLineAnnotations))
+            {
+                IList<object> args = [];
+                var callbackContext = new CommandLineArgsCallbackContext(args, toolResource, context.CancellationToken)
+                {
+                    Logger = context.Logger,
+                    ExecutionContext = executionContext
+                };
+
+                foreach (var ann in cmdLineAnnotations)
+                {
+                    await ann.Callback(callbackContext).ConfigureAwait(false);
+                }
+
+                foreach (var arg in callbackContext.Args)
+                {
+                    startInfo.ArgumentList.Add(arg.ToString()!);
+                }
+            }
+
+            foreach (var kvp in executionConfiguration.EnvironmentVariables)
+            {
+                startInfo.Environment[kvp.Key] = kvp.Value;
+            }
+
+            await notificationService.PublishUpdateAsync(toolResource, s => s with
+            {
+                State = KnownResourceStates.Starting,
+                StartTimeStamp = DateTime.UtcNow,
+                StopTimeStamp = null
+            }).ConfigureAwait(false);
+
+            resourceStarted = true;
+
+            process = Process.Start(startInfo);
+            if (process is null)
+            {
+                await notificationService.PublishUpdateAsync(toolResource, s => s with
+                {
+                    State = KnownResourceStates.FailedToStart
+                }).ConfigureAwait(false);
+
+                return new ExecuteCommandResult
+                {
+                    Success = false,
+                    Message = $"Failed to start EF tool resource '{context.ResourceName}'."
+                };
+            }
+
+            await notificationService.PublishUpdateAsync(toolResource, s => s with
+            {
+                State = KnownResourceStates.Running
+            }).ConfigureAwait(false);
+
+            var resourceLoggerService = context.Services.GetRequiredService<ResourceLoggerService>();
+            var resourceLogger = resourceLoggerService.GetLogger(toolResource);
+
+            var stderrBuilder = new StringBuilder();
+            var stdoutTask = EFCoreOperationExecutor.StreamOutputAsync(
+                process.StandardOutput, resourceLogger, isErrorOutput: false, captureBuilder: null, context.CancellationToken);
+            var stderrTask = EFCoreOperationExecutor.StreamOutputAsync(
+                process.StandardError, resourceLogger, isErrorOutput: true, captureBuilder: stderrBuilder, context.CancellationToken);
+
+            await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
+            await process.WaitForExitAsync(context.CancellationToken).ConfigureAwait(false);
+
+            var finalState = process.ExitCode == 0 ? KnownResourceStates.Finished : KnownResourceStates.FailedToStart;
+            await notificationService.PublishUpdateAsync(toolResource, s => s with
+            {
+                State = finalState,
+                StopTimeStamp = DateTime.UtcNow,
+                ExitCode = process.ExitCode
+            }).ConfigureAwait(false);
+
+            if (process.ExitCode != 0)
+            {
+                var errorMessage = stderrBuilder.ToString();
+                return new ExecuteCommandResult
+                {
+                    Success = false,
+                    Message = string.IsNullOrWhiteSpace(errorMessage)
+                        ? $"EF tool resource '{context.ResourceName}' exited with code {process.ExitCode}."
+                        : errorMessage
+                };
+            }
+
+            return CommandResults.Success();
+        }
+        catch (OperationCanceledException)
+        {
+            if (resourceStarted)
+            {
+                try
+                {
+                    if (process is not null && !process.HasExited)
+                    {
+                        process.Kill(entireProcessTree: true);
+                    }
+                }
+                catch (InvalidOperationException)
+                {
+                    // The process has already exited or has not started; continue publishing the terminal state.
+                }
+
+                await notificationService.PublishUpdateAsync(toolResource, s => s with
+                {
+                    State = KnownResourceStates.FailedToStart,
+                    StopTimeStamp = DateTime.UtcNow
+                }).ConfigureAwait(false);
+            }
+
+            return CommandResults.Canceled();
+        }
+        catch (Exception ex)
+        {
+            if (resourceStarted)
+            {
+                try
+                {
+                    if (process is not null && !process.HasExited)
+                    {
+                        process.Kill(entireProcessTree: true);
+                    }
+                }
+                catch (InvalidOperationException)
+                {
+                    // The process has already exited or has not started; continue publishing the terminal state.
+                }
+
+                await notificationService.PublishUpdateAsync(toolResource, s => s with
+                {
+                    State = KnownResourceStates.FailedToStart,
+                    StopTimeStamp = DateTime.UtcNow
+                }).ConfigureAwait(false);
+            }
+
+            return new ExecuteCommandResult
+            {
+                Success = false,
+                Message = ex.Message
+            };
+        }
+        finally
+        {
+            process?.Dispose();
+        }
+    }
+
     private const string EFToolPackageId = "dotnet-ef";
 
     private static void AddEFMigrationCommands(
         IResourceBuilder<EFMigrationResource> migrationBuilder,
         EFMigrationResource migrationResource,
-        string? contextTypeName)
+        string? dbContextTypeName)
     {
-        var contextShortName = GetShortTypeName(contextTypeName);
+        var contextShortName = GetShortTypeName(dbContextTypeName);
 
         // Create hidden DotnetToolResource for running EF commands
         var toolName = $"ef-tool-{migrationResource.Name}";
@@ -298,12 +624,20 @@ public static class EFResourceBuilderExtensions
             .WithParentRelationship(migrationBuilder)
             .WithWorkingDirectory(startupProjectDir)
             .WithExplicitStart()
+            .WithHidden()
             .WithInitialState(new CustomResourceSnapshot
             {
                 ResourceType = "Tool",
-                Properties = [],
-                IsHidden = true
+                Properties = []
             });
+
+        // Register the EF-specific start command. The tool resource is captured by the closure
+        // so it works in both run mode (via resource commands) and publish mode (via pipeline steps).
+        var toolResource = toolBuilder.Resource;
+        toolBuilder.WithCommand(
+            name: EFCoreOperationExecutor.ToolStartCommandName,
+            displayName: "Start",
+            executeCommand: context => StartEfToolResourceAsync(context, toolResource));
 
         migrationResource.ConfigureToolResource?.Invoke(toolBuilder);
 
@@ -377,7 +711,18 @@ public static class EFResourceBuilderExtensions
                 Description = "Create a new migration. Note: The target project will need to be recompiled after adding a migration.",
                 IconName = "Add",
                 IconVariant = IconVariant.Regular,
-                UpdateState = context => GetCommandState(context, migrationResource)
+                UpdateState = context => GetCommandState(context, migrationResource),
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "name",
+                        InputType = InputType.Text,
+                        Label = "Migration Name",
+                        Required = true,
+                        Placeholder = "e.g. InitialCreate"
+                    }
+                ]
             });
 
         migrationBuilder.WithCommand(
@@ -439,7 +784,6 @@ public static class EFResourceBuilderExtensions
                 return CommandResults.Failure(result.ErrorMessage);
             });
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only
     /// <summary>
     /// Common wrapper that handles state management and exception handling for EF commands.
     /// </summary>
@@ -450,9 +794,9 @@ public static class EFResourceBuilderExtensions
         bool waitForDependencies,
         Func<EFCoreOperationExecutor, ILogger, IInteractionService?, Task<ExecuteCommandResult>> executeOperation)
     {
-        var resourceLoggerService = context.ServiceProvider.GetRequiredService<ResourceLoggerService>();
-        var resourceNotificationService = context.ServiceProvider.GetRequiredService<ResourceNotificationService>();
-        var interactionService = context.ServiceProvider.GetService<IInteractionService>();
+        var resourceLoggerService = context.Services.GetRequiredService<ResourceLoggerService>();
+        var resourceNotificationService = context.Services.GetRequiredService<ResourceNotificationService>();
+        var interactionService = context.Services.GetService<IInteractionService>();
         var logger = resourceLoggerService.GetLogger(migrationResource);
 
         if (migrationResource.IsExecutingCommand)
@@ -477,10 +821,10 @@ public static class EFResourceBuilderExtensions
             using var executor = new EFCoreOperationExecutor(
                 migrationResource.ProjectResource,
                 migrationResource.MigrationsProjectPath,
-                migrationResource.ContextTypeName,
+                migrationResource.DbContextTypeName,
                 logger,
                 context.CancellationToken,
-                context.ServiceProvider,
+                context.Services,
                 migrationResource.ToolResource);
 
             var result = await executeOperation(executor, logger, interactionService).ConfigureAwait(false);
@@ -533,28 +877,7 @@ public static class EFResourceBuilderExtensions
             waitForDependencies: false,
             async (executor, logger, interaction) =>
             {
-                string migrationName;
-                if (interaction == null || !interaction.IsAvailable)
-                {
-                    migrationName = $"Migration_{DateTime.UtcNow:yyyyMMddHHmmss}";
-                }
-                else
-                {
-                    var inputResult = await interaction.PromptInputAsync(
-                        title: "Add Migration",
-                        message: "Enter the name for the new migration.",
-                        inputLabel: "Migration Name",
-                        placeHolder: "e.g. InitialCreate",
-                        cancellationToken: context.CancellationToken).ConfigureAwait(false);
-
-                    if (inputResult.Canceled || string.IsNullOrWhiteSpace(inputResult.Data?.Value))
-                    {
-                        // Throwing OperationCanceledException lets the wrapper handle state update
-                        throw new OperationCanceledException();
-                    }
-
-                    migrationName = inputResult.Data.Value;
-                }
+                var migrationName = context.Arguments.GetString("name")!;
 
                 var result = await executor.AddMigrationAsync(
                     migrationName,
@@ -671,5 +994,4 @@ public static class EFResourceBuilderExtensions
                 logger.LogError("Get Database Status command failed: {Error}", result.ErrorMessage);
                 return CommandResults.Failure(result.ErrorMessage);
             });
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only
 }

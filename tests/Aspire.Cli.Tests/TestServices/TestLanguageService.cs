@@ -11,6 +11,7 @@ internal sealed class TestLanguageService : ILanguageService
     public Func<IAppHostProject, bool, CancellationToken, Task>? SetLanguageAsyncCallback { get; set; }
     public Func<CancellationToken, Task<IAppHostProject>>? PromptForProjectAsyncCallback { get; set; }
     public Func<string?, bool, CancellationToken, Task<IAppHostProject>>? GetOrPromptForProjectAsyncCallback { get; set; }
+    public Func<string?, bool, CancellationToken, Task<AppHostProjectSelection>>? GetOrPromptForProjectSelectionAsyncCallback { get; set; }
 
     /// <summary>
     /// The default project to return when no callback is set.
@@ -46,11 +47,11 @@ internal sealed class TestLanguageService : ILanguageService
         return Task.FromResult(DefaultProject);
     }
 
-    public Task<IAppHostProject> GetOrPromptForProjectAsync(string? explicitLanguageId = null, bool saveSelection = true, CancellationToken cancellationToken = default)
+    public Task<IAppHostProject> GetOrPromptForProjectAsync(string? explicitLanguageId = null, bool saveLanguageSelection = true, CancellationToken cancellationToken = default)
     {
         if (GetOrPromptForProjectAsyncCallback is not null)
         {
-            return GetOrPromptForProjectAsyncCallback(explicitLanguageId, saveSelection, cancellationToken);
+            return GetOrPromptForProjectAsyncCallback(explicitLanguageId, saveLanguageSelection, cancellationToken);
         }
 
         if (DefaultProject is null)
@@ -59,5 +60,16 @@ internal sealed class TestLanguageService : ILanguageService
         }
 
         return Task.FromResult(DefaultProject);
+    }
+
+    public async Task<AppHostProjectSelection> GetOrPromptForProjectSelectionAsync(string? explicitLanguageId = null, bool saveLanguageSelection = true, CancellationToken cancellationToken = default)
+    {
+        if (GetOrPromptForProjectSelectionAsyncCallback is not null)
+        {
+            return await GetOrPromptForProjectSelectionAsyncCallback(explicitLanguageId, saveLanguageSelection, cancellationToken);
+        }
+
+        var project = await GetOrPromptForProjectAsync(explicitLanguageId, saveLanguageSelection, cancellationToken);
+        return new AppHostProjectSelection(project, ShouldPersistSelection: false);
     }
 }

@@ -1,9 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Threading.Channels;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,7 +21,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("logs --help");
@@ -26,7 +29,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Help should return success
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -120,7 +123,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"logs --tail {tailValue}");
@@ -128,7 +131,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Should fail validation
-        Assert.NotEqual(ExitCodeConstants.Success, exitCode);
+        Assert.NotEqual(CliExitCodes.Success, exitCode);
     }
 
     [Theory]
@@ -140,7 +143,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         // Use --help to avoid needing a running AppHost
@@ -149,7 +152,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Help should succeed (validation passed)
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -157,7 +160,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         // Without --follow and no running AppHost, should succeed (like Unix ps with no processes)
@@ -166,7 +169,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Should succeed - no running AppHost is not an error
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Theory]
@@ -177,7 +180,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         // Use --help to verify the option is parsed correctly
@@ -185,7 +188,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Theory]
@@ -196,14 +199,14 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"logs --format {format} --help");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -211,7 +214,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("logs --format invalid");
@@ -219,7 +222,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Invalid format should cause parsing error
-        Assert.NotEqual(ExitCodeConstants.Success, exitCode);
+        Assert.NotEqual(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -227,14 +230,14 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("logs --follow --tail 50 --help");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -242,14 +245,14 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("logs myresource --follow --tail 100 --format json --help");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -257,7 +260,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         // -f is short for --follow, -n is short for --tail
@@ -265,7 +268,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -372,14 +375,14 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = CreateLogsTestServices(workspace, outputWriter);
+        using var provider = CreateLogsTestServices(workspace, outputWriter);
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("logs --format json");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
         Assert.NotNull(jsonOutput);
@@ -402,14 +405,14 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true);
+        using var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true);
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("logs");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         // Plain text output uses "[resourceName] content" format
         // Replicas share the same DisplayName, so the unique Name should be used instead
@@ -429,7 +432,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = CreateLogsTestServices(workspace, outputWriter);
+        using var provider = CreateLogsTestServices(workspace, outputWriter);
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"logs {resourceName} --format json");
@@ -438,11 +441,11 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         if (expectError)
         {
-            Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+            Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         }
         else
         {
-            Assert.Equal(ExitCodeConstants.Success, exitCode);
+            Assert.Equal(CliExitCodes.Success, exitCode);
         }
     }
 
@@ -451,14 +454,14 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = CreateLogsTestServices(workspace, outputWriter);
+        using var provider = CreateLogsTestServices(workspace, outputWriter);
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("logs --format json --timestamps");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
         Assert.NotNull(jsonOutput);
@@ -489,14 +492,14 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = CreateLogsTestServices(workspace, outputWriter);
+        using var provider = CreateLogsTestServices(workspace, outputWriter);
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("logs --format json");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
         Assert.NotNull(jsonOutput);
@@ -528,14 +531,14 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true);
+        using var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true);
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("logs --timestamps");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         // Logs are sorted by timestamp, timestamp prefix is ISO 8601 round-trip format
         var logLines = outputWriter.Logs.Where(l => l.StartsWith("2025-", StringComparison.Ordinal)).ToList();
@@ -550,14 +553,14 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true);
+        using var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true);
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("logs");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         // Without --timestamps, log lines start with "[resourceName]" with no timestamp prefix
         // Logs are sorted by timestamp
@@ -568,11 +571,973 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("[apiservice-def456] Hello from replica 2", logLines[2]);
     }
 
+    [Fact]
+    public async Task LogsCommand_TextOutput_StripsAnsiControlSequences_WhenAnsiDisabled()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateLogsTestServices(
+            workspace,
+            outputWriter,
+            disableAnsi: true,
+            logLines:
+            [
+                new ResourceLogLine
+                {
+                    ResourceName = "redis",
+                    LineNumber = 1,
+                    Content = "2025-01-15T10:30:00Z \u001b[38;5;252mReady\u001b[0m to accept connections",
+                    IsError = false
+                }
+            ]);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var logLine = Assert.Single(outputWriter.Logs, l => l.StartsWith("[", StringComparison.Ordinal));
+        Assert.Equal("[redis] Ready to accept connections", logLine);
+        Assert.DoesNotContain("\u001b", logLine, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task LogsCommand_JsonOutput_PreservesAnsiControlSequences()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateLogsTestServices(
+            workspace,
+            outputWriter,
+            disableAnsi: true,
+            logLines:
+            [
+                new ResourceLogLine
+                {
+                    ResourceName = "redis",
+                    LineNumber = 1,
+                    Content = "2025-01-15T10:30:00Z \u001b[38;5;252mReady\u001b[0m to accept connections",
+                    IsError = false
+                }
+            ]);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var jsonOutput = outputWriter.Logs.First(l => l.Contains("\"logs\"", StringComparison.Ordinal));
+        var logsOutput = JsonSerializer.Deserialize(jsonOutput, LogsCommandJsonContext.Snapshot.LogsOutput);
+
+        Assert.NotNull(logsOutput);
+        var log = Assert.Single(logsOutput.Logs);
+        Assert.Equal("\u001b[38;5;252mReady\u001b[0m to accept connections", log.Content);
+    }
+
+    [Fact]
+    public async Task LogsCommand_HiddenResources_AreExcludedByDefault()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateLogsTestServicesWithHidden(workspace, outputWriter);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
+        Assert.NotNull(jsonOutput);
+
+        var logsOutput = JsonSerializer.Deserialize(jsonOutput, LogsCommandJsonContext.Snapshot.LogsOutput);
+        Assert.NotNull(logsOutput);
+
+        // Only visible resource logs should be present
+        Assert.All(logsOutput.Logs, l => Assert.Equal("redis", l.ResourceName));
+        Assert.DoesNotContain(logsOutput.Logs, l => l.ResourceName == "aspire-dashboard");
+    }
+
+    [Fact]
+    public async Task LogsCommand_IncludeHidden_ShowsHiddenResourceLogs()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateLogsTestServicesWithHidden(workspace, outputWriter);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs --format json --include-hidden");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
+        Assert.NotNull(jsonOutput);
+
+        var logsOutput = JsonSerializer.Deserialize(jsonOutput, LogsCommandJsonContext.Snapshot.LogsOutput);
+        Assert.NotNull(logsOutput);
+
+        // Both visible and hidden resource logs should be present
+        Assert.Contains(logsOutput.Logs, l => l.ResourceName == "redis");
+        Assert.Contains(logsOutput.Logs, l => l.ResourceName == "aspire-dashboard");
+    }
+
+    [Fact]
+    public async Task LogsCommand_SpecificHiddenResource_WorksWithoutFlag()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateLogsTestServicesWithHidden(workspace, outputWriter);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs aspire-dashboard --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
+        Assert.NotNull(jsonOutput);
+
+        var logsOutput = JsonSerializer.Deserialize(jsonOutput, LogsCommandJsonContext.Snapshot.LogsOutput);
+        Assert.NotNull(logsOutput);
+
+        Assert.All(logsOutput.Logs, l => Assert.Equal("aspire-dashboard", l.ResourceName));
+    }
+
+    [Fact]
+    public async Task LogsCommand_NewResourceAfterInitialSnapshot_LogsAreIncluded()
+    {
+        // Verifies that logs from a resource not present in the initial snapshot
+        // (e.g. a resource that came online after streaming started) are still shown.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            IsInScope = true,
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "TestAppHost", "TestAppHost.csproj"),
+                ProcessId = 1234
+            },
+            ResourceSnapshots =
+            [
+                new ResourceSnapshot
+                {
+                    Name = "redis",
+                    DisplayName = "redis",
+                    ResourceType = "Container",
+                    State = "Running"
+                },
+                new ResourceSnapshot
+                {
+                    Name = "aspire-dashboard",
+                    DisplayName = "aspire-dashboard",
+                    ResourceType = "Executable",
+                    State = "Hidden"
+                }
+            ],
+            LogLines =
+            [
+                new ResourceLogLine
+                {
+                    ResourceName = "redis",
+                    LineNumber = 1,
+                    Content = "2025-01-15T10:30:00Z Ready to accept connections",
+                    IsError = false
+                },
+                new ResourceLogLine
+                {
+                    ResourceName = "aspire-dashboard",
+                    LineNumber = 1,
+                    Content = "2025-01-15T10:30:01Z Dashboard started",
+                    IsError = false
+                },
+                new ResourceLogLine
+                {
+                    ResourceName = "webapi",
+                    LineNumber = 1,
+                    Content = "2025-01-15T10:30:02Z Webapi started",
+                    IsError = false
+                }
+            ]
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = false;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
+        Assert.NotNull(jsonOutput);
+
+        var logsOutput = JsonSerializer.Deserialize(jsonOutput, LogsCommandJsonContext.Snapshot.LogsOutput);
+        Assert.NotNull(logsOutput);
+
+        // redis logs should be present (visible resource in initial snapshot)
+        Assert.Contains(logsOutput.Logs, l => l.ResourceName == "redis");
+        // webapi logs should be present even though it was not in the initial snapshot
+        Assert.Contains(logsOutput.Logs, l => l.ResourceName == "webapi");
+        // aspire-dashboard logs should still be excluded (hidden)
+        Assert.DoesNotContain(logsOutput.Logs, l => l.ResourceName == "aspire-dashboard");
+    }
+
+    [Fact]
+    public async Task LogsCommand_HiddenResourceAfterInitialSnapshot_IsExcludedInFollowMode()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var snapshotsCallCount = 0;
+
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            IsInScope = true,
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "TestAppHost", "TestAppHost.csproj"),
+                ProcessId = 1234
+            },
+            ResourceSnapshots =
+            [
+                new ResourceSnapshot
+                {
+                    Name = "redis",
+                    DisplayName = "redis",
+                    ResourceType = "Container",
+                    State = "Running"
+                }
+            ],
+            LogLines =
+            [
+                new ResourceLogLine
+                {
+                    ResourceName = "redis",
+                    LineNumber = 1,
+                    Content = "2025-01-15T10:30:00Z Ready to accept connections",
+                    IsError = false
+                },
+                new ResourceLogLine
+                {
+                    ResourceName = "late-hidden",
+                    LineNumber = 1,
+                    Content = "2025-01-15T10:30:01Z Hidden resource log",
+                    IsError = false
+                }
+            ],
+            GetResourceSnapshotsHandler = _ =>
+            {
+                snapshotsCallCount++;
+                return Task.FromResult(snapshotsCallCount == 1
+                    ? new List<ResourceSnapshot>
+                    {
+                        new()
+                        {
+                            Name = "redis",
+                            DisplayName = "redis",
+                            ResourceType = "Container",
+                            State = "Running"
+                        }
+                    }
+                    : new List<ResourceSnapshot>
+                    {
+                        new()
+                        {
+                            Name = "redis",
+                            DisplayName = "redis",
+                            ResourceType = "Container",
+                            State = "Running"
+                        },
+                        new()
+                        {
+                            Name = "late-hidden",
+                            DisplayName = "late-hidden",
+                            ResourceType = "Executable",
+                            State = "Hidden"
+                        }
+                    });
+            },
+            WatchResourceSnapshotsHandler = (_, cancellationToken) => WatchWithLateHidden(cancellationToken)
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = true;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs --follow");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Contains(outputWriter.Logs, l => l.Contains("[redis] Ready to accept connections", StringComparison.Ordinal));
+        Assert.DoesNotContain(outputWriter.Logs, l => l.Contains("late-hidden", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task LogsCommand_Follow_WhenBackchannelIsDisposed_ExitsSuccessfully()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var errorWriter = new StringWriter();
+        using var provider = CreateLogsTestServices(workspace, outputWriter, configureConnection: connection =>
+        {
+            connection.AppHostInfo = CreateAppHostInfo(workspace, Environment.ProcessId);
+            connection.GetResourceLogsHandler = static (_, _, cancellationToken) => ThrowObjectDisposedAfterLogAsync(cancellationToken);
+        }, errorTextWriter: errorWriter);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs --follow --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Single(outputWriter.Logs, l => l.TrimStart().StartsWith("{", StringComparison.Ordinal));
+        Assert.DoesNotContain(outputWriter.Logs, l => l.Contains("unexpected error occurred", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(InteractionServiceStrings.AppHostConnectionLostGeneric, errorWriter.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task LogsCommand_Follow_WhenAppHostHasExited_WritesShutdownMessageToStderr()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var errorWriter = new StringWriter();
+        using var provider = CreateLogsTestServices(workspace, outputWriter, configureConnection: connection =>
+        {
+            connection.AppHostInfo = CreateAppHostInfo(workspace, int.MaxValue);
+            connection.GetResourceLogsHandler = static (_, _, cancellationToken) => ThrowObjectDisposedAfterLogAsync(cancellationToken);
+        }, errorTextWriter: errorWriter);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs --follow --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Single(outputWriter.Logs, l => l.TrimStart().StartsWith("{", StringComparison.Ordinal));
+        Assert.Contains(InteractionServiceStrings.AppHostShutDown, errorWriter.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task LogsCommand_Follow_WhenCanceledAndBackchannelIsDisposed_DoesNotWriteStatusToStderr()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var errorWriter = new StringWriter();
+        using var provider = CreateLogsTestServices(workspace, outputWriter, configureConnection: connection =>
+        {
+            connection.AppHostInfo = CreateAppHostInfo(workspace, Environment.ProcessId);
+            connection.GetResourceLogsHandler = static (_, _, cancellationToken) => ThrowObjectDisposedAfterCancellationAsync(cancellationToken);
+        }, errorTextWriter: errorWriter);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs --follow --format json");
+
+        using var cts = new CancellationTokenSource();
+        var pendingRun = result.InvokeAsync(cancellationToken: cts.Token);
+        await Task.Yield();
+        cts.Cancel();
+
+        var exitCode = await pendingRun.DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.DoesNotContain(InteractionServiceStrings.AppHostConnectionLostGeneric, errorWriter.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(InteractionServiceStrings.AppHostShutDown, errorWriter.ToString(), StringComparison.Ordinal);
+    }
+
+    private ServiceProvider CreateLogsTestServicesWithHidden(
+        TemporaryWorkspace workspace,
+        TestOutputTextWriter outputWriter,
+        bool disableAnsi = false)
+    {
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            IsInScope = true,
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "TestAppHost", "TestAppHost.csproj"),
+                ProcessId = 1234
+            },
+            ResourceSnapshots =
+            [
+                new ResourceSnapshot
+                {
+                    Name = "redis",
+                    DisplayName = "redis",
+                    ResourceType = "Container",
+                    State = "Running"
+                },
+                new ResourceSnapshot
+                {
+                    Name = "aspire-dashboard",
+                    DisplayName = "aspire-dashboard",
+                    ResourceType = "Executable",
+                    State = "Hidden"
+                }
+            ],
+            LogLines =
+            [
+                new ResourceLogLine
+                {
+                    ResourceName = "redis",
+                    LineNumber = 1,
+                    Content = "2025-01-15T10:30:00Z Ready to accept connections",
+                    IsError = false
+                },
+                new ResourceLogLine
+                {
+                    ResourceName = "aspire-dashboard",
+                    LineNumber = 1,
+                    Content = "2025-01-15T10:30:01Z Dashboard started",
+                    IsError = false
+                }
+            ]
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = disableAnsi;
+        });
+
+        return services.BuildServiceProvider();
+    }
+
+    [Fact]
+    public async Task LogsCommand_WithSearchOption_FiltersLogsByContent()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+
+        using var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true,
+            logLines:
+            [
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 1, Content = "Ready to accept connections", IsError = false },
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 2, Content = "Connection timeout error", IsError = true },
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 3, Content = "Client connected from 127.0.0.1", IsError = false }
+            ]);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs redis --search timeout --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
+        Assert.NotNull(jsonOutput);
+
+        var logsOutput = JsonSerializer.Deserialize(jsonOutput, LogsCommandJsonContext.Snapshot.LogsOutput);
+        Assert.NotNull(logsOutput);
+
+        // Only the log containing "timeout" should be returned
+        Assert.Single(logsOutput.Logs);
+        Assert.Contains("timeout", logsOutput.Logs[0].Content, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task LogsCommand_WithSearchOption_MatchesAnsiStrippedContent()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+
+        using var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true,
+            logLines:
+            [
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 1, Content = "Re\u001b[31mady", IsError = false },
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 2, Content = "haystack", IsError = false }
+            ]);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs redis --search Ready --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
+        Assert.NotNull(jsonOutput);
+
+        var logsOutput = JsonSerializer.Deserialize(jsonOutput, LogsCommandJsonContext.Snapshot.LogsOutput);
+        Assert.NotNull(logsOutput);
+
+        var log = Assert.Single(logsOutput.Logs);
+        Assert.Equal("Re\u001b[31mady", log.Content);
+    }
+
+    [Fact]
+    public async Task LogsCommand_WithSearchOption_NoMatch_ReturnsEmptyLogs()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+
+        using var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true,
+            logLines:
+            [
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 1, Content = "Ready to accept connections", IsError = false }
+            ]);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs redis --search nonexistent --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
+        Assert.NotNull(jsonOutput);
+
+        var logsOutput = JsonSerializer.Deserialize(jsonOutput, LogsCommandJsonContext.Snapshot.LogsOutput);
+        Assert.NotNull(logsOutput);
+        Assert.Empty(logsOutput.Logs);
+    }
+
+    [Fact]
+    public async Task LogsCommand_WithSearchOption_MultipleWords_MatchesEachFragmentSeparately()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+
+        using var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true,
+            logLines:
+            [
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 1, Content = "Connection timeout error on port 6379", IsError = true },
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 2, Content = "Connection established successfully", IsError = false },
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 3, Content = "Timeout waiting for response", IsError = true },
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 4, Content = "Ready to accept connections", IsError = false }
+            ]);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        // Two words: both "Connection" AND "timeout" must appear in the same log line
+        var result = command.Parse("logs redis --search \"Connection timeout\" --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
+        Assert.NotNull(jsonOutput);
+
+        var logsOutput = JsonSerializer.Deserialize(jsonOutput, LogsCommandJsonContext.Snapshot.LogsOutput);
+        Assert.NotNull(logsOutput);
+
+        // Only the line containing BOTH fragments should match
+        Assert.Single(logsOutput.Logs);
+        Assert.Contains("Connection timeout error", logsOutput.Logs[0].Content);
+    }
+
+    [Fact]
+    public async Task LogsCommand_WithSearchOption_QualifierSyntaxTreatedAsFreeText()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+
+        using var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true,
+            logLines:
+            [
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 1, Content = "level:error something failed", IsError = true },
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 2, Content = "Normal operation", IsError = false }
+            ]);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        // Qualifier-like syntax "level:error" should be treated as free text for logs
+        var result = command.Parse("logs redis --search level:error --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
+        Assert.NotNull(jsonOutput);
+
+        var logsOutput = JsonSerializer.Deserialize(jsonOutput, LogsCommandJsonContext.Snapshot.LogsOutput);
+        Assert.NotNull(logsOutput);
+
+        // The qualifier value "error" is treated as a text fragment and matches
+        Assert.Single(logsOutput.Logs);
+        Assert.Contains("level:error", logsOutput.Logs[0].Content);
+    }
+
+    [Fact]
+    public async Task LogsCommand_PassesSnapshotFiltersToConsoleLogsRequest()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var requests = new List<GetConsoleLogsRequest>();
+
+        using var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true,
+            configureConnection: connection =>
+            {
+                connection.GetConsoleLogsHandler = (request, cancellationToken) =>
+                {
+                    requests.Add(request);
+                    return connection.GetResourceLogsAsync(request.ResourceName, request.Follow, cancellationToken);
+                };
+            });
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs redis --search Ready --tail 2 --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var request = Assert.Single(requests);
+        Assert.Equal("redis", request.ResourceName);
+        Assert.False(request.Follow);
+        Assert.Equal("Ready", request.Search);
+        Assert.Equal(2, request.Tail);
+        Assert.True(request.IncludeHidden);
+    }
+
+    [Fact]
+    public async Task LogsCommand_PrefersBatchedConsoleLogsWhenAvailable()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var batchRequests = new List<GetConsoleLogsRequest>();
+        var consoleRequests = new List<GetConsoleLogsRequest>();
+
+        using var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true,
+            configureConnection: connection =>
+            {
+                connection.SupportsV3 = true;
+                connection.GetConsoleLogBatchesHandler = (request, cancellationToken) =>
+                {
+                    batchRequests.Add(request);
+                    return EnumerateLogBatchesAsync(
+                    [
+                        new ResourceLogBatch
+                        {
+                            Lines =
+                            [
+                                new ResourceLogLine { ResourceName = "redis", LineNumber = 1, Content = "Ready to accept connections", IsError = false }
+                            ]
+                        }
+                    ], cancellationToken);
+                };
+                connection.GetConsoleLogsHandler = (request, _) =>
+                {
+                    consoleRequests.Add(request);
+                    throw new InvalidOperationException("The line-based console logs RPC should not be used when batched logs are available.");
+                };
+            });
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs redis --search Ready --tail 2 --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(consoleRequests);
+
+        var request = Assert.Single(batchRequests);
+        Assert.Equal("redis", request.ResourceName);
+        Assert.False(request.Follow);
+        Assert.Equal("Ready", request.Search);
+        Assert.Equal(2, request.Tail);
+        Assert.True(request.IncludeHidden);
+    }
+
+    [Fact]
+    public async Task LogsCommand_WithOldAppHost_FallsBackToClientSideSearchAndTail()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+
+        using var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true,
+            logLines:
+            [
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 1, Content = "2025-01-15T10:30:00Z Ready to accept connections", IsError = false },
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 2, Content = "2025-01-15T10:30:01Z First timeout error", IsError = true },
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 3, Content = "2025-01-15T10:30:02Z Client connected from 127.0.0.1", IsError = false },
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 4, Content = "2025-01-15T10:30:03Z Second timeout error", IsError = true }
+            ],
+            configureConnection: connection =>
+            {
+                connection.SupportsV2 = false;
+                connection.GetConsoleLogsHandler = static (_, _) => throw new InvalidOperationException("Old AppHosts should use the legacy console log RPC.");
+            });
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs redis --search timeout --tail 1 --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\"", StringComparison.Ordinal));
+        Assert.NotNull(jsonOutput);
+
+        var logsOutput = JsonSerializer.Deserialize(jsonOutput, LogsCommandJsonContext.Snapshot.LogsOutput);
+        Assert.NotNull(logsOutput);
+        var log = Assert.Single(logsOutput.Logs);
+        Assert.Equal("Second timeout error", log.Content);
+    }
+
+    [Fact]
+    public async Task LogsCommand_AllResourcesSnapshot_UsesLegacyLogsRpc()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var legacyRequests = new List<(string? ResourceName, bool Follow)>();
+        var consoleRequests = new List<GetConsoleLogsRequest>();
+        var logLines = new[]
+        {
+            new ResourceLogLine { ResourceName = "redis", LineNumber = 1, Content = "2025-01-15T10:30:00Z Ready to accept connections", IsError = false },
+            new ResourceLogLine { ResourceName = "apiservice-abc123", LineNumber = 1, Content = "2025-01-15T10:30:01Z First timeout error", IsError = true },
+            new ResourceLogLine { ResourceName = "apiservice-def456", LineNumber = 1, Content = "2025-01-15T10:30:02Z Second timeout error", IsError = true }
+        };
+
+        using var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true,
+            configureConnection: connection =>
+            {
+                connection.GetConsoleLogsHandler = (request, _) =>
+                {
+                    consoleRequests.Add(request);
+                    throw new InvalidOperationException("All-resource logs should use the legacy logs RPC.");
+                };
+                connection.GetResourceLogsHandler = (resourceName, follow, cancellationToken) =>
+                {
+                    legacyRequests.Add((resourceName, follow));
+                    return EnumerateLogLinesAsync(logLines, cancellationToken);
+                };
+            });
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs --search timeout --tail 1 --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(consoleRequests);
+
+        var legacyRequest = Assert.Single(legacyRequests);
+        Assert.Null(legacyRequest.ResourceName);
+        Assert.False(legacyRequest.Follow);
+
+        var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\"", StringComparison.Ordinal));
+        Assert.NotNull(jsonOutput);
+
+        var logsOutput = JsonSerializer.Deserialize(jsonOutput, LogsCommandJsonContext.Snapshot.LogsOutput);
+        Assert.NotNull(logsOutput);
+        var log = Assert.Single(logsOutput.Logs);
+        Assert.Equal("Second timeout error", log.Content);
+    }
+
+    [Fact]
+    public async Task LogsCommand_AllResourcesFollow_UsesLegacyLogsRpc()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var legacyRequests = new List<(string? ResourceName, bool Follow)>();
+        var consoleRequests = new List<GetConsoleLogsRequest>();
+        var logLines = new[]
+        {
+            new ResourceLogLine { ResourceName = "redis", LineNumber = 1, Content = "Ready to accept connections", IsError = false },
+            new ResourceLogLine { ResourceName = "apiservice-abc123", LineNumber = 1, Content = "Connection timeout error", IsError = true }
+        };
+
+        using var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true,
+            configureConnection: connection =>
+            {
+                connection.GetConsoleLogsHandler = (request, _) =>
+                {
+                    consoleRequests.Add(request);
+                    throw new InvalidOperationException("All-resource logs should use the legacy logs RPC.");
+                };
+                connection.GetResourceLogsHandler = (resourceName, follow, cancellationToken) =>
+                {
+                    legacyRequests.Add((resourceName, follow));
+                    return EnumerateLogLinesAsync(logLines, cancellationToken);
+                };
+            });
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs --follow --search timeout");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(consoleRequests);
+
+        var legacyRequest = Assert.Single(legacyRequests);
+        Assert.Null(legacyRequest.ResourceName);
+        Assert.True(legacyRequest.Follow);
+        Assert.DoesNotContain(outputWriter.Logs, l => l.Contains("Ready to accept connections", StringComparison.Ordinal));
+        Assert.Contains(outputWriter.Logs, l => l.Contains("Connection timeout error", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task LogsCommand_FollowWithTailAndSearch_FiltersTailOutput()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+
+        using var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true,
+            configureConnection: connection =>
+            {
+                connection.AppHostInfo = CreateAppHostInfo(workspace, Environment.ProcessId);
+                connection.GetResourceLogsHandler = (resourceName, follow, cancellationToken) =>
+                    FollowTailSearchLogsAsync(follow, cancellationToken);
+            });
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs redis --follow --tail 10 --search timeout");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        // The tail output should only contain lines matching the search
+        Assert.DoesNotContain(outputWriter.Logs, l => l.Contains("Ready to accept connections", StringComparison.Ordinal));
+        Assert.Contains(outputWriter.Logs, l => l.Contains("Connection timeout error", StringComparison.Ordinal));
+        Assert.DoesNotContain(outputWriter.Logs, l => l.Contains("Client connected", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task LogsCommand_FollowWithSearch_FiltersExistingAndStreamedLogs()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var allowFollowLogsTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allowExitTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var logLines = Channel.CreateUnbounded<string>();
+        var outputWriter = new TestOutputTextWriter(outputHelper, line =>
+        {
+            if (line.StartsWith("[", StringComparison.Ordinal))
+            {
+                logLines.Writer.TryWrite(line);
+            }
+        });
+
+        using var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true,
+            configureConnection: connection =>
+            {
+                connection.AppHostInfo = CreateAppHostInfo(workspace, Environment.ProcessId);
+                connection.GetResourceLogsHandler = (resourceName, follow, cancellationToken) =>
+                {
+                    if (!follow)
+                    {
+                        return InitialLogsForFollowSearchAsync(cancellationToken);
+                    }
+
+                    return StreamedLogsForFollowSearchAsync(allowFollowLogsTcs.Task, allowExitTcs.Task, cancellationToken);
+                };
+            });
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs redis --follow --tail 10 --search timeout");
+
+        var commandTask = result.InvokeAsync();
+
+        // Read initial tail log from channel and assert
+        var initialLog = await logLines.Reader.ReadAsync().AsTask().DefaultTimeout();
+        Assert.Equal("[redis] Connection timeout error", initialLog);
+
+        // Allow follow logs to flow
+        allowFollowLogsTcs.SetResult();
+
+        // Read streamed follow log from channel and assert
+        var followLog = await logLines.Reader.ReadAsync().AsTask().DefaultTimeout();
+        Assert.Equal("[redis] Another timeout occurred", followLog);
+
+        // Allow the stream to exit
+        allowExitTcs.SetResult();
+
+        var exitCode = await commandTask.DefaultTimeout();
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        logLines.Writer.Complete();
+
+        // Verify no additional log lines were written
+        await logLines.Reader.Completion.DefaultTimeout();
+        Assert.False(logLines.Reader.TryRead(out _));
+    }
+
+    private static async IAsyncEnumerable<ResourceLogLine> InitialLogsForFollowSearchAsync(
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        yield return new ResourceLogLine { ResourceName = "redis", LineNumber = 1, Content = "Ready to accept connections", IsError = false };
+        yield return new ResourceLogLine { ResourceName = "redis", LineNumber = 2, Content = "Connection timeout error", IsError = true };
+        yield return new ResourceLogLine { ResourceName = "redis", LineNumber = 3, Content = "Client connected from 127.0.0.1", IsError = false };
+        await Task.CompletedTask;
+        cancellationToken.ThrowIfCancellationRequested();
+    }
+
+    private static async IAsyncEnumerable<ResourceLogLine> StreamedLogsForFollowSearchAsync(
+        Task allowLogs,
+        Task allowExit,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        // Wait until the test allows follow logs to flow
+        await allowLogs.WaitAsync(cancellationToken);
+
+        yield return new ResourceLogLine { ResourceName = "redis", LineNumber = 4, Content = "Processing request", IsError = false };
+        yield return new ResourceLogLine { ResourceName = "redis", LineNumber = 5, Content = "Another timeout occurred", IsError = true };
+
+        // Wait until the test allows the stream to terminate
+        await allowExit.WaitAsync(cancellationToken);
+        throw new ObjectDisposedException("StreamJsonRpc.JsonRpc");
+    }
+
+    private static async IAsyncEnumerable<ResourceLogLine> FollowTailSearchLogsAsync(
+        bool follow,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        if (!follow)
+        {
+            // Non-follow: return the initial set of logs (used for --tail)
+            yield return new ResourceLogLine { ResourceName = "redis", LineNumber = 1, Content = "Ready to accept connections", IsError = false };
+            yield return new ResourceLogLine { ResourceName = "redis", LineNumber = 2, Content = "Connection timeout error", IsError = true };
+            yield return new ResourceLogLine { ResourceName = "redis", LineNumber = 3, Content = "Client connected from 127.0.0.1", IsError = false };
+            yield break;
+        }
+
+        // Follow: simulate the stream ending via disposal (no new logs)
+        await Task.Yield();
+        cancellationToken.ThrowIfCancellationRequested();
+        throw new ObjectDisposedException("StreamJsonRpc.JsonRpc");
+    }
+
     private ServiceProvider CreateLogsTestServices(
         TemporaryWorkspace workspace,
         TestOutputTextWriter outputWriter,
         Action<Dictionary<string, string?>>? configureOptions = null,
-        bool disableAnsi = false)
+        bool disableAnsi = false,
+        IEnumerable<ResourceLogLine>? logLines = null,
+        Action<TestAppHostAuxiliaryBackchannel>? configureConnection = null,
+        StringWriter? errorTextWriter = null)
     {
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var connection = new TestAppHostAuxiliaryBackchannel
@@ -609,7 +1574,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
                     State = "Running"
                 }
             ],
-            LogLines =
+            LogLines = logLines is not null ? [.. logLines] :
             [
                 // Log lines are intentionally out of timestamp order to verify sorting
                 new ResourceLogLine
@@ -635,12 +1600,14 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
                 }
             ]
         };
+        configureConnection?.Invoke(connection);
         monitor.AddConnection("hash1", "socket.hash1", connection);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
             options.OutputTextWriter = outputWriter;
+            options.ErrorTextWriter = errorTextWriter;
             options.DisableAnsi = disableAnsi;
 
             if (configureOptions is not null)
@@ -650,5 +1617,91 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         });
 
         return services.BuildServiceProvider();
+    }
+
+    private static AppHostInformation CreateAppHostInfo(TemporaryWorkspace workspace, int processId)
+    {
+        return new AppHostInformation
+        {
+            AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "TestAppHost", "TestAppHost.csproj"),
+            ProcessId = processId
+        };
+    }
+
+    private static async IAsyncEnumerable<ResourceSnapshot> WatchWithLateHidden([EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        yield return new ResourceSnapshot
+        {
+            Name = "late-hidden",
+            DisplayName = "late-hidden",
+            ResourceType = "Executable",
+            State = "Hidden"
+        };
+
+        // Keep the enumerable alive until cancelled so the watcher stays running.
+        var tcs = new TaskCompletionSource();
+        await using (cancellationToken.Register(() => tcs.TrySetResult()))
+        {
+            await tcs.Task.ConfigureAwait(false);
+        }
+    }
+
+    private static async IAsyncEnumerable<ResourceLogLine> EnumerateLogLinesAsync(
+        IEnumerable<ResourceLogLine> logLines,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        foreach (var logLine in logLines)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return logLine;
+        }
+
+        await Task.CompletedTask;
+    }
+
+    private static async IAsyncEnumerable<ResourceLogBatch> EnumerateLogBatchesAsync(
+        IEnumerable<ResourceLogBatch> logBatches,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        foreach (var logBatch in logBatches)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return logBatch;
+        }
+
+        await Task.CompletedTask;
+    }
+
+    private static async IAsyncEnumerable<ResourceLogLine> ThrowObjectDisposedAfterLogAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        yield return new ResourceLogLine
+        {
+            ResourceName = "redis",
+            LineNumber = 1,
+            Content = "2025-01-15T10:30:00Z Ready to accept connections",
+            IsError = false
+        };
+
+        await Task.Yield();
+        cancellationToken.ThrowIfCancellationRequested();
+
+        throw new ObjectDisposedException("StreamJsonRpc.JsonRpc");
+    }
+
+    private static async IAsyncEnumerable<ResourceLogLine> ThrowObjectDisposedAfterCancellationAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        yield return new ResourceLogLine
+        {
+            ResourceName = "redis",
+            LineNumber = 1,
+            Content = "2025-01-15T10:30:00Z Ready to accept connections",
+            IsError = false
+        };
+
+        var waitForCancellation = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var registration = cancellationToken.Register(() => waitForCancellation.TrySetResult());
+        await waitForCancellation.Task;
+
+        throw new ObjectDisposedException("StreamJsonRpc.JsonRpc");
     }
 }

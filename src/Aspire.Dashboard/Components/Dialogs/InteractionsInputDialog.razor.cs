@@ -211,7 +211,7 @@ public partial class InteractionsInputDialog : IAsyncDisposable
     private static Icon GetSecretTextIcon(InputViewModel inputModel)
     {
         return inputModel.IsSecretTextVisible
-            ? new Icons.Regular.Size16.EyeOff() 
+            ? new Icons.Regular.Size16.EyeOff()
             : new Icons.Regular.Size16.Eye();
     }
 

@@ -31,7 +31,7 @@ internal class CertificateTrustExecutionConfigurationGatherer : IExecutionConfig
     public async ValueTask GatherAsync(IExecutionConfigurationGathererContext context, IResource resource, ILogger resourceLogger, DistributedApplicationExecutionContext executionContext, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var developerCertificateService = executionContext.ServiceProvider.GetRequiredService<IDeveloperCertificateService>();
+        var developerCertificateService = executionContext.Services.GetRequiredService<IDeveloperCertificateService>();
         var trustDevCert = developerCertificateService.TrustCertificate;
 
         // Add additional certificate trust configuration metadata
@@ -152,6 +152,7 @@ public class CertificateTrustExecutionConfigurationData : IExecutionConfiguratio
 /// Context for configuring certificate trust configuration properties.
 /// </summary>
 [Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireDto]
 public class CertificateTrustExecutionConfigurationContext
 {
     /// <summary>

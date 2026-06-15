@@ -3,8 +3,18 @@
   <file datatype="xml" source-language="en" target-language="de" original="../PsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>List running apphosts</source>
-        <target state="needs-review-translation">Listet die laufenden Aspire-Apphosts auf.</target>
+        <source>List running AppHosts</source>
+        <target state="needs-review-translation">Listet die laufenden Aspire-AppHosts auf.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FollowOptionDescription">
+        <source>Keep running and emit updates as running AppHosts change. JSON output is emitted as newline-delimited full snapshots.</source>
+        <target state="new">Keep running and emit updates as running AppHosts change. JSON output is emitted as newline-delimited full snapshots.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FollowRequiresJson">
+        <source>The --follow option only supports JSON output. Use --format json.</source>
+        <target state="new">The --follow option only supports JSON output. Use --format json.</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderCliPid">
@@ -27,14 +37,14 @@
         <target state="translated">PID</target>
         <note />
       </trans-unit>
+      <trans-unit id="HeaderSdk">
+        <source>SDK</source>
+        <target state="new">SDK</target>
+        <note />
+      </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
         <target state="needs-review-translation">Ausgabe im JSON-Format.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcesOptionDescription">
-        <source>Include resource details for each running apphost. Only applies to JSON output.</source>
-        <target state="new">Include resource details for each running apphost. Only applies to JSON output.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnknownPath">

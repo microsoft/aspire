@@ -7,7 +7,7 @@
   "symbols/Framework/choices/net9.0/description": "Target net9.0",
   "symbols/Framework/choices/net10.0/description": "Net10.0 de destino",
   "symbols/UseRedisCache/displayName": "_Usar o Redis para cache (requer um tempo de execução de contêiner compatível)",
-  "symbols/UseRedisCache/description": "Configura se o aplicativo deve ser configurado para usar o Redis para cache. Requer um runtime contêiner compatível para ser executado localmente; consulte https://aka.ms/dotnet/aspire/containers para obter mais detalhes.",
+  "symbols/UseRedisCache/description": "Configura se o aplicativo deve ser configurado para usar o Redis para cache. Requer um runtime contêiner compatível para ser executado localmente; consulte https://aka.ms/aspire/containers para obter mais detalhes.",
   "symbols/appHostHttpPort/description": "Número da porta a ser usado para o ponto de extremidade HTTP launchSettings.json do projeto AppHost.",
   "symbols/appHostOtlpHttpPort/description": "Número da porta a ser usado para o ponto de extremidade HTTP OTLP launchSettings.json do projeto AppHost.",
   "symbols/appHostResourceHttpPort/description": "Número da porta a ser usado para o ponto de extremidade HTTP do serviço de recurso launchSettings.json do projeto AppHost.",

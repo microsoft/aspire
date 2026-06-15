@@ -2,7 +2,7 @@ import aspire.*;
 
 void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
-        var password = builder.addParameter("valkey-password", true);
+        var password = builder.addParameter("valkey-password", new AddParameterOptions().secret(true));
         var valkey = builder.addValkey("cache", new AddValkeyOptions().port(6380.0));
         valkey
             .withDataVolume(new WithDataVolumeOptions().name("valkey-data"))

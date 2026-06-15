@@ -117,7 +117,7 @@ public sealed class ResourceViewModelTests
             CreatedAt = Timestamp.FromDateTime(s_dateTime),
             Properties =
             {
-                new ResourceProperty { Name = "Property1", Value = Value.ForString("Value1"), IsSensitive = false },
+                new ResourceProperty { Name = "Property1", Value = Value.ForString("Value1"), IsSensitive = false, DisplayName = "Property one", IsHighlighted = true },
                 new ResourceProperty { Name = "Property2", Value = Value.ForString("Value2"), IsSensitive = true }
             }
         };
@@ -137,6 +137,8 @@ public sealed class ResourceViewModelTests
                 Assert.Equal("Value1", p.Value.Value.StringValue);
                 Assert.Equal(123, p.Value.Priority);
                 Assert.Same(kp, p.Value.KnownProperty);
+                Assert.Equal("Property one", p.Value.DisplayName);
+                Assert.True(p.Value.IsHighlighted);
                 Assert.False(p.Value.IsValueMasked);
                 Assert.False(p.Value.IsValueSensitive);
             },
@@ -147,6 +149,8 @@ public sealed class ResourceViewModelTests
                 Assert.Equal("Value2", p.Value.Value.StringValue);
                 Assert.Equal(123, p.Value.Priority);
                 Assert.Same(kp, p.Value.KnownProperty);
+                Assert.Null(p.Value.DisplayName);
+                Assert.False(p.Value.IsHighlighted);
                 Assert.True(p.Value.IsValueMasked);
                 Assert.True(p.Value.IsValueSensitive);
             });

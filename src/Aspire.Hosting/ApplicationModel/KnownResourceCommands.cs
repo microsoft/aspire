@@ -33,14 +33,16 @@ public static class KnownResourceCommands
     /// <summary>
     /// The command name for setting a parameter value.
     /// </summary>
-    public static readonly string SetParameterCommand = "parameter-set";
+    public static readonly string SetParameterCommand = "set-parameter";
 
     /// <summary>
     /// The command name for deleting a parameter value.
     /// </summary>
-    public static readonly string DeleteParameterCommand = "parameter-delete";
+    public static readonly string DeleteParameterCommand = "delete-parameter";
 
     internal const string LegacyStartCommand = "resource-start";
     internal const string LegacyStopCommand = "resource-stop";
     internal const string LegacyRestartCommand = "resource-restart";
+    internal const string LegacySetParameterCommand = "parameter-set";
+    internal const string LegacyDeleteParameterCommand = "parameter-delete";
 }

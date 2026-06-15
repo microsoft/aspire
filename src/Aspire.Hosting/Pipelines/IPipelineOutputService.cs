@@ -14,7 +14,8 @@ public interface IPipelineOutputService
 {
     /// <summary>
     /// Gets the output directory for deployment artifacts.
-    /// If no output path is configured, defaults to <c>{CurrentDirectory}/aspire-output</c>.
+    /// If no output path is configured, defaults to the AppHost directory's <c>aspire-output</c> folder.
+    /// Falls back to the current directory when the AppHost directory is unavailable.
     /// </summary>
     /// <returns>The path to the output directory for deployment artifacts.</returns>
     string GetOutputDirectory();

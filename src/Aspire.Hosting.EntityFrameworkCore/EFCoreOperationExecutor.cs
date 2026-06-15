@@ -32,16 +32,32 @@ internal sealed class EFCoreOperationExecutor : IDisposable
 
     private string? _startupProjectPath;
     private string? _resolvedTargetProjectPath;
-    private string? _framework;
     private string? _configuration;
     private bool _initialized;
+    internal const string ToolStartCommandName = "ef-tool-start";
+    internal string? ResolvedFramework { get; private set;}
 
-    // EF Core CLI output prefixes (used with --prefix-output)
+    // EF Core CLI output prefixes (used with --prefix-output). All are exactly 9 characters.
+    private const int PrefixLength = 9;
     private const string ErrorPrefix = "error:   ";
     private const string WarningPrefix = "warn:    ";
     private const string InfoPrefix = "info:    ";
     private const string DataPrefix = "data:    ";
     private const string VerbosePrefix = "verbose: ";
+
+    // Process-wide fallback that serializes every `dotnet-ef` invocation driven by this AppHost.
+    // The pipeline-step factory already chains migration generate steps via DependsOnSteps so two
+    // dotnet-ef processes won't run concurrently during `aspire publish`. This semaphore is a
+    // defense-in-depth backstop for:
+    //   - run-mode resource commands (Update Database / Reset Database / ...) that the user can
+    //     trigger from the dashboard on different migration resources at the same time, each on
+    //     its own DotnetToolResource,
+    //   - shared per-user state every dotnet-ef invocation touches: the `dotnet tool exec` cache,
+    //     NuGet restore caches, and MSBuild node-reuse state under %USERPROFILE%, which are not
+    //     safe under concurrent `dotnet ef` runs even when the projects don't overlap.
+    // Held only for the duration of a single dotnet-ef execution; never awaits any other pipeline
+    // step or command, so it cannot deadlock with the pipeline scheduler.
+    private static readonly SemaphoreSlim s_globalDotnetEfLock = new(1, 1);
 
     public EFCoreOperationExecutor(
         ProjectResource startupProjectResource,
@@ -93,7 +109,7 @@ internal sealed class EFCoreOperationExecutor : IDisposable
                 if (versionIndex >= 0)
                 {
                     var version = frameworkName.Substring(versionIndex + versionPrefix.Length);
-                    _framework = $"net{version}";
+                    ResolvedFramework = $"net{version}";
                 }
             }
 
@@ -159,12 +175,12 @@ internal sealed class EFCoreOperationExecutor : IDisposable
             }
         }
 
-        if (_framework == null && frameworkIndex < segments.Length)
+        if (ResolvedFramework == null && frameworkIndex < segments.Length)
         {
             var frameworkCandidate = segments[frameworkIndex];
             if (frameworkCandidate.StartsWith("net", StringComparison.OrdinalIgnoreCase))
             {
-                _framework = frameworkCandidate;
+                ResolvedFramework = frameworkCandidate;
             }
         }
     }
@@ -178,7 +194,7 @@ internal sealed class EFCoreOperationExecutor : IDisposable
         return null;
     }
 
-    private async Task<EFOperationResult> ExecuteEfCommandAsync(string command, string subCommand, Dictionary<string, string?>? additionalArgs = null)
+    private async Task<EFOperationResult> ExecuteEfCommandAsync(string command, string subCommand, Dictionary<string, string?>? additionalArgs = null, bool noBuild = true)
     {
         var initResult = EnsurePathsInitialized();
         if (!initResult.Success)
@@ -186,8 +202,24 @@ internal sealed class EFCoreOperationExecutor : IDisposable
             return initResult;
         }
 
-        // Build the EF command arguments (these go after the -- in dotnet tool exec)
-        var efArgs = new List<string> { command, subCommand, "--no-build", "--no-color", "--prefix-output", "--verbose" };
+        // Build the EF command arguments (these go after the -- in dotnet tool exec).
+        // `--no-build` is normally added because all interactive run-mode commands assume the
+        // project was already built by the AppHost. Bundle generation during `aspire publish`
+        // intentionally omits it: the publish pipeline doesn't pre-build the startup project,
+        // and `dotnet ef migrations bundle` needs the migrations and startup projects compiled
+        // (and matching the requested target runtime) before it can package the bundle.
+        var efArgs = new List<string> { command, subCommand };
+        if (noBuild)
+        {
+            efArgs.Add("--no-build");
+        }
+        efArgs.Add("--no-color");
+        efArgs.Add("--prefix-output");
+
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            efArgs.Add("--verbose");
+        }
 
         // Add project paths
         efArgs.Add("--project");
@@ -207,10 +239,10 @@ internal sealed class EFCoreOperationExecutor : IDisposable
         }
 
         // Add framework if available
-        if (!string.IsNullOrEmpty(_framework))
+        if (!string.IsNullOrEmpty(ResolvedFramework))
         {
             efArgs.Add("--framework");
-            efArgs.Add(_framework);
+            efArgs.Add(ResolvedFramework);
         }
 
         // Add context if specified
@@ -235,13 +267,20 @@ internal sealed class EFCoreOperationExecutor : IDisposable
 
         _logger.LogDebug("Executing dotnet tool exec dotnet-ef --yes -- {Args}", string.Join(" ", efArgs));
 
+        // Acquire the global dotnet-ef lock outside the try/catch that maps exceptions to a failed
+        // EFOperationResult: an OperationCanceledException from WaitAsync must propagate so the
+        // caller observes cancellation rather than a generic failure result. Released in `finally`
+        // only when we actually acquired it (lockAcquired is set true after WaitAsync returns).
+        var lockAcquired = false;
+        await s_globalDotnetEfLock.WaitAsync(_cancellationToken).ConfigureAwait(false);
+        lockAcquired = true;
         try
         {
             // Get required services
             var resourceCommandService = _serviceProvider.GetRequiredService<ResourceCommandService>();
             var notificationService = _serviceProvider.GetRequiredService<ResourceNotificationService>();
             var loggerService = _serviceProvider.GetRequiredService<ResourceLoggerService>();
-            
+
             var argsAnnotation = new CommandLineArgsCallbackAnnotation(args =>
             {
                 foreach (var arg in efArgs)
@@ -252,23 +291,33 @@ internal sealed class EFCoreOperationExecutor : IDisposable
             _toolResource.Annotations.Add(argsAnnotation);
 
             // Capture output before starting
-            var outputBuilder = new StringBuilder();
-            var errorBuilder = new StringBuilder();
             var dataBuilder = new StringBuilder();
             using var logCancellation = CancellationTokenSource.CreateLinkedTokenSource(_cancellationToken);
 
             try
             {
                 // Start a background task to capture logs
-                var logTask = CaptureLogsAsync(loggerService.WatchAsync(_toolResource), outputBuilder, errorBuilder, dataBuilder, logCancellation.Token);
+                var logTask = CaptureLogsAsync(loggerService.WatchAsync(_toolResource), _logger, dataBuilder, logCancellation.Token);
 
-                // Start the resource using ResourceCommandService
-                await resourceCommandService.ExecuteCommandAsync(_toolResource, KnownResourceCommands.StartCommand, _cancellationToken).ConfigureAwait(false);
+                // Start the hidden tool resource using the explicitly configured command when present,
+                // otherwise choose the available start-like command from the resource annotations.
+                var startCommandName = GetToolStartCommandName(_toolResource);
+                var startResult = await resourceCommandService.ExecuteCommandAsync(_toolResource, startCommandName, _cancellationToken).ConfigureAwait(false);
+                if (!startResult.Success)
+                {
+                    return new EFOperationResult
+                    {
+                        Success = false,
+                        ErrorMessage = startResult.Canceled
+                            ? "dotnet-ef command was canceled."
+                            : string.IsNullOrWhiteSpace(startResult.Message) ? "dotnet-ef command failed" : startResult.Message
+                    };
+                }
 
                 // Wait for the resource to finish
                 await notificationService.WaitForResourceAsync(
                     _toolResource.Name,
-                    r => r.Snapshot.State?.Text == KnownResourceStates.Finished || 
+                    r => r.Snapshot.State?.Text == KnownResourceStates.Finished ||
                          r.Snapshot.State?.Text == KnownResourceStates.Exited ||
                          r.Snapshot.State?.Text == KnownResourceStates.FailedToStart,
                     _cancellationToken).ConfigureAwait(false);
@@ -290,19 +339,7 @@ internal sealed class EFCoreOperationExecutor : IDisposable
                     // Log drain took too long, proceed with what we have
                 }
 
-                var stdout = outputBuilder.ToString();
-                var stderr = errorBuilder.ToString();
                 var data = dataBuilder.ToString();
-
-                // Log output
-                if (!string.IsNullOrWhiteSpace(stdout))
-                {
-                    _logger.LogDebug("dotnet-ef output: {Output}", stdout);
-                }
-                if (!string.IsNullOrWhiteSpace(stderr))
-                {
-                    _logger.LogDebug("dotnet-ef errors: {Output}", stderr);
-                }
 
                 // Get final state
                 var resourceEvent = await notificationService.WaitForResourceAsync(
@@ -312,14 +349,13 @@ internal sealed class EFCoreOperationExecutor : IDisposable
 
                 // Check if the command succeeded
                 var snapshot = resourceEvent.Snapshot;
-                var exitCode = snapshot.Properties.FirstOrDefault(p => p.Name == "ExitCode")?.Value?.ToString();
-                if ((exitCode != null && exitCode != "0") || snapshot.State?.Text == KnownResourceStates.FailedToStart)
+                var exitCode = snapshot.ExitCode;
+                if ((exitCode != null && exitCode.Value != 0) || snapshot.State?.Text == KnownResourceStates.FailedToStart)
                 {
-                    var errorMessage = !string.IsNullOrWhiteSpace(stderr) ? stderr : stdout;
                     return new EFOperationResult
                     {
                         Success = false,
-                        ErrorMessage = string.IsNullOrWhiteSpace(errorMessage) ? "dotnet-ef command failed" : errorMessage
+                        ErrorMessage = "dotnet-ef command failed"
                     };
                 }
 
@@ -335,12 +371,30 @@ internal sealed class EFCoreOperationExecutor : IDisposable
         {
             return new EFOperationResult { Success = false, ErrorMessage = $"dotnet-ef command failed: {ex.Message}" };
         }
+        finally
+        {
+            if (lockAcquired)
+            {
+                s_globalDotnetEfLock.Release();
+            }
+        }
     }
 
-    private static async Task CaptureLogsAsync(
+    private static string GetToolStartCommandName(DotnetToolResource toolResource)
+    {
+        // In run mode the DCP lifecycle wiring adds a standard start command — prefer that.
+        // In publish mode no lifecycle commands are added, so fall back to the EF-specific one.
+        if (toolResource.Annotations.OfType<ResourceCommandAnnotation>().Any(a => a.Name == KnownResourceCommands.StartCommand))
+        {
+            return KnownResourceCommands.StartCommand;
+        }
+
+        return ToolStartCommandName;
+    }
+
+    internal static async Task CaptureLogsAsync(
         IAsyncEnumerable<IReadOnlyList<LogLine>> logChannel,
-        StringBuilder outputBuilder,
-        StringBuilder errorBuilder,
+        ILogger logger,
         StringBuilder dataBuilder,
         CancellationToken cancellationToken)
     {
@@ -350,39 +404,15 @@ internal sealed class EFCoreOperationExecutor : IDisposable
             {
                 foreach (var entry in entries)
                 {
-                    var content = entry.Content;
+                    var (logLevel, normalizedContent, isData) = ParsePrefixedOutput(entry.Content, entry.IsErrorMessage);
 
-                    // Strip datetime prefix if present
-                    content = StripDateTimePrefix(content);
-
-                    // Parse EF Core prefixed output and route appropriately
-                    if (content.StartsWith(ErrorPrefix, StringComparison.Ordinal))
+                    if (isData)
                     {
-                        errorBuilder.AppendLine(content[ErrorPrefix.Length..]);
-                    }
-                    else if (content.StartsWith(WarningPrefix, StringComparison.Ordinal))
-                    {
-                        outputBuilder.AppendLine(content[WarningPrefix.Length..]);
-                    }
-                    else if (content.StartsWith(InfoPrefix, StringComparison.Ordinal))
-                    {
-                        outputBuilder.AppendLine(content[InfoPrefix.Length..]);
-                    }
-                    else if (content.StartsWith(DataPrefix, StringComparison.Ordinal))
-                    {
-                        dataBuilder.AppendLine(content[DataPrefix.Length..]);
-                    }
-                    else if (content.StartsWith(VerbosePrefix, StringComparison.Ordinal))
-                    {
-                        outputBuilder.AppendLine(content[VerbosePrefix.Length..]);
-                    }
-                    else if (entry.IsErrorMessage)
-                    {
-                        errorBuilder.AppendLine(content);
+                        dataBuilder.AppendLine(normalizedContent);
                     }
                     else
                     {
-                        outputBuilder.AppendLine(content);
+                        logger.Log(logLevel, "{Output}", normalizedContent);
                     }
                 }
             }
@@ -391,6 +421,66 @@ internal sealed class EFCoreOperationExecutor : IDisposable
         {
             // Expected when cancellation is requested
         }
+    }
+
+    internal static async Task StreamOutputAsync(
+        StreamReader reader,
+        ILogger logger,
+        bool isErrorOutput,
+        StringBuilder? captureBuilder,
+        CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            var line = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false);
+            if (line is null)
+            {
+                break;
+            }
+
+            var (logLevel, normalizedContent, isData) = ParsePrefixedOutput(line, isErrorOutput);
+            if (!isData)
+            {
+                logger.Log(logLevel, "{Output}", normalizedContent);
+                captureBuilder?.AppendLine(normalizedContent);
+            }
+        }
+    }
+
+    private static (LogLevel LogLevel, string Content, bool IsData) ParsePrefixedOutput(string content, bool isErrorMessage)
+    {
+        content = StripDateTimePrefix(content);
+        if (content.Length >= PrefixLength)
+        {
+            var prefix = content.AsSpan(0, PrefixLength);
+            var remainder = content[PrefixLength..];
+
+            if (prefix.SequenceEqual(ErrorPrefix))
+            {
+                return (LogLevel.Error, remainder, false);
+            }
+            if (prefix.SequenceEqual(WarningPrefix))
+            {
+                return (LogLevel.Warning, remainder, false);
+            }
+            if (prefix.SequenceEqual(InfoPrefix))
+            {
+                return (LogLevel.Information, remainder, false);
+            }
+            if (prefix.SequenceEqual(DataPrefix))
+            {
+                return (LogLevel.Debug, remainder, true);
+            }
+            if (prefix.SequenceEqual(VerbosePrefix))
+            {
+                return (LogLevel.Trace, remainder, false);
+            }
+        }
+
+        // Lines without a recognized prefix (e.g., raw subprocess output from MSBuild
+        // evaluation) are treated as trace-level so they don't clutter normal output.
+        // Error stream lines without a prefix are still treated as errors.
+        return (isErrorMessage ? LogLevel.Error : LogLevel.Trace, content, false);
     }
 
     /// <summary>
@@ -648,7 +738,7 @@ internal sealed class EFCoreOperationExecutor : IDisposable
 
         if (!string.IsNullOrEmpty(targetRuntime))
         {
-            args["--runtime"] = targetRuntime;
+            args["--target-runtime"] = targetRuntime;
         }
 
         if (selfContained)
@@ -656,7 +746,12 @@ internal sealed class EFCoreOperationExecutor : IDisposable
             args["--self-contained"] = null;
         }
 
-        return await ExecuteEfCommandAsync("migrations", "bundle", args).ConfigureAwait(false);
+        // Overwrite existing bundle
+        args["--force"] = null;
+
+        // The bundle command compiles the migrations + startup project for the target runtime,
+        // so `--no-build` would defeat the purpose; let dotnet-ef drive the build itself.
+        return await ExecuteEfCommandAsync("migrations", "bundle", args, noBuild: false).ConfigureAwait(false);
     }
 
     public void Dispose()
