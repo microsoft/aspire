@@ -663,14 +663,16 @@ public class Program
         var channel = identityResolver.ResolveChannel();
         var version = identityResolver.ResolveVersion();
         var commit = identityResolver.ResolveCommit();
-        var nugetOverride = identityResolver.ResolveNuGetServiceIndexOverride().Value;
+        var nugetServiceIndexOverride = identityResolver.ResolveNuGetServiceIndexOverride();
         var packagesOverride = identityResolver.ResolvePackagesDirectory();
 
         // The CLI is "emulating" another build whenever any identity field was supplied by an
         // ASPIRE_CLI_* env var or the install sidecar rather than the assembly's build-time stamp.
         // This drives the startup override notice so a diagnostic run is never mistaken for a real one.
+        // Every override source participates — including the NuGet service-index override — so a run
+        // that sets only ASPIRE_CLI_NUGET_SERVICE_INDEX is still flagged as a diagnostic emulation.
         static bool IsOverride(IdentitySource source) => source is IdentitySource.Environment or IdentitySource.Sidecar;
-        var identityOverridden = IsOverride(channel.Source) || IsOverride(version.Source) || IsOverride(commit.Source) || IsOverride(packagesOverride.Source);
+        var identityOverridden = IsOverride(channel.Source) || IsOverride(version.Source) || IsOverride(commit.Source) || IsOverride(nugetServiceIndexOverride.Source) || IsOverride(packagesOverride.Source);
 
         // A null/whitespace value means "no override"; only materialize a DirectoryInfo when a real
         // path was supplied. PackagingService validates existence + uniqueness when it consumes this.
@@ -691,7 +693,7 @@ public class Program
             aspireHomeDirectory: aspireHomeDirectory,
             identityVersion: version.Value,
             identityCommit: commit.Value,
-            nugetServiceIndexOverride: nugetOverride,
+            nugetServiceIndexOverride: nugetServiceIndexOverride.Value,
             identityOverridden: identityOverridden,
             identityPackagesDirectory: identityPackagesDirectory);
     }

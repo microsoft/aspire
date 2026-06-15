@@ -108,11 +108,11 @@ def key(v):
     if not m:
         return None
     major, minor, patch, pre = m.groups()
-    base = (int(major), int(minor), int(patch))
+    ver_tuple = (int(major), int(minor), int(patch))
     if pre is None:
-        return base + (1, ())  # stable
+        return ver_tuple + (1, ())  # stable
     ids = tuple((0, int(p)) if p.isdigit() else (1, p) for p in pre.split("."))
-    return base + (0, ids)
+    return ver_tuple + (0, ids)
 
 parsed = [(key(v), v) for v in versions]
 parsed = [(k, v) for k, v in parsed if k is not None]

@@ -7,8 +7,8 @@ namespace Aspire.Shared;
 /// The canonical set of <c>ASPIRE_CLI_*</c> identity-override environment
 /// variable names recognised by the CLI's <c>IdentityResolver</c>. Shared
 /// between the CLI (which reads them and strips them at child-process spawn)
-/// and external tools like <c>tools/Dogfooder</c> (which writes them into
-/// the embedded child shell to coerce a chosen identity).
+/// and any external tooling that needs to author them into a child shell to
+/// coerce a chosen identity.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -21,11 +21,10 @@ namespace Aspire.Shared;
 /// </para>
 /// <para>
 /// This file is link-included from <c>src/Aspire.Cli/Aspire.Cli.csproj</c>
-/// and <c>tools/Dogfooder/Dogfooder.csproj</c> (and any future host that
-/// needs to author these env vars) rather than exposed via a runtime
-/// dependency, because both consumers ship as standalone executables and
-/// neither can afford a NuGet package round-trip just to share these string
-/// constants.
+/// (and any future host that needs to author these env vars) rather than
+/// exposed via a runtime dependency, because the CLI ships as a standalone
+/// executable and cannot afford a NuGet package round-trip just to share
+/// these string constants.
 /// </para>
 /// </remarks>
 internal static class AspireCliIdentityEnvVars

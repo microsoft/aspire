@@ -29,10 +29,10 @@ namespace Aspire.Cli.Acquisition;
 /// </remarks>
 internal sealed class IdentityResolver : IIdentityResolver
 {
-    // Env var name constants live in the shared file so external tooling
-    // (tools/Dogfooder) can author the same vars without taking a project
-    // reference on the CLI. The aliases below preserve the resolver's
-    // previous public surface so existing callers and tests compile unchanged.
+    // Env var name constants live in the shared file so external tooling can
+    // author the same vars without taking a project reference on the CLI. The
+    // aliases below preserve the resolver's previous public surface so existing
+    // callers and tests compile unchanged.
     internal const string ChannelEnvVar = AspireCliIdentityEnvVars.Channel;
     internal const string VersionEnvVar = AspireCliIdentityEnvVars.Version;
     internal const string CommitEnvVar = AspireCliIdentityEnvVars.Commit;
