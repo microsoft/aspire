@@ -52,6 +52,8 @@ internal sealed class ProcessInvocationOptions
     public Action<string>? StandardErrorCallback { get; set; }
     public Dictionary<string, string> MSBuildProperties { get; } = [];
 
+    public HashSet<string> EnvironmentVariablesToRemove { get; } = [];
+
     public bool NoLaunchProfile { get; set; }
     public bool StartDebugSession { get; set; }
     public bool Debug { get; set; }

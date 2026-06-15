@@ -298,11 +298,13 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
 
         runner.BuildAsyncCallback = (_, _, _, _) => 0;
         runner.GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => throw new InvalidOperationException("CLI-managed file-based AppHosts should not query SDK AppHost metadata.");
-        runner.RunAsyncCallback = (_, _, _, _, _, env, _, _, _) =>
+        runner.RunAsyncCallback = (_, _, _, _, _, env, _, options, _) =>
         {
             Assert.NotNull(env);
             Assert.False(env.ContainsKey(KnownConfigNames.IntegrationProbeManifestPath));
             Assert.False(env.ContainsKey(KnownConfigNames.IntegrationLibsPath));
+            Assert.Contains(KnownConfigNames.IntegrationProbeManifestPath, options.EnvironmentVariablesToRemove);
+            Assert.Contains(KnownConfigNames.IntegrationLibsPath, options.EnvironmentVariablesToRemove);
             return Task.FromResult(0);
         };
 

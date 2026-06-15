@@ -37,6 +37,12 @@ internal sealed class ProcessExecutionFactory(
             RedirectStandardError = true,
         };
 
+        foreach (var envVar in options.EnvironmentVariablesToRemove)
+        {
+            effectiveLogger.LogDebug("{FileName} env remove: {EnvKey}", fileName, envVar);
+            startInfo.EnvironmentVariables.Remove(envVar);
+        }
+
         if (env is not null)
         {
             foreach (var envKvp in env)

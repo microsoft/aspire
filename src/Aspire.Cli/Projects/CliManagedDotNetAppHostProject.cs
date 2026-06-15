@@ -10,6 +10,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Hosting;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
@@ -111,7 +112,11 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
         => await _cliManagedModuleGenerator.TryGenerateAsync(appHostFile, cancellationToken);
 
     protected override void ConfigureAppHostInvocationOptions(FileInfo appHostFile, ProcessInvocationOptions options)
-        => CSharpCliManagedAppHostModuleGenerator.AddAppHostBuildProperties(appHostFile, options);
+    {
+        CSharpCliManagedAppHostModuleGenerator.AddAppHostBuildProperties(appHostFile, options);
+        options.EnvironmentVariablesToRemove.Add(KnownConfigNames.IntegrationProbeManifestPath);
+        options.EnvironmentVariablesToRemove.Add(KnownConfigNames.IntegrationLibsPath);
+    }
 
     protected override async Task<BundleLayoutLease?> ConfigureCliBundleEnvironmentForRunAsync(
         FileInfo appHostFile,
