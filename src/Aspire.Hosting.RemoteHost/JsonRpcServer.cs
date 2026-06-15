@@ -13,7 +13,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using StreamJsonRpc;
+using JsonRpcNet;
+using System.Text.Json;
 
 namespace Aspire.Hosting.RemoteHost;
 
@@ -214,13 +215,22 @@ internal sealed class JsonRpcServer : BackgroundService
 
         try
         {
-            // Use System.Text.Json formatter instead of the default Newtonsoft.Json formatter
-            var formatter = new SystemTextJsonFormatter();
-            var handler = new HeaderDelimitedMessageHandler(clientStream, clientStream, formatter);
-            using var jsonRpc = new JsonRpc(handler, clientService)
+            // Replicate StreamJsonRpc's SystemTextJsonFormatter default serialization behavior
+            // (PascalCase property names, case-sensitive) so the wire payload for user data is
+            // byte-for-byte compatible with the previous formatter. The JSON-RPC envelope itself
+            // (method/params/result/error) is handled internally by JsonRpcNet and is unaffected by
+            // these options. RemoteHost is not AOT-compiled, so reflection-based serialization is fine.
+            var serializerOptions = new JsonSerializerOptions();
+            var handler = new HeaderDelimitedMessageHandler(clientStream, clientStream);
+            using var jsonRpc = new JsonRpc(handler, new JsonRpcOptions
             {
-                ActivityTracingStrategy = new ActivityTracingStrategy()
-            };
+                SerializerOptions = serializerOptions
+            });
+
+            // The RemoteAppHostService hosts authenticate/ping/invokeCapability; it was previously
+            // passed as the JsonRpc constructor target. JsonRpcNet has no (handler, target) ctor,
+            // so register it explicitly alongside the additional targets below.
+            jsonRpc.AddLocalRpcTarget(clientService);
 
             // Add the shared CodeGenerationService as an additional target for generateCode method
             jsonRpc.AddLocalRpcTarget(codeGenerationService);

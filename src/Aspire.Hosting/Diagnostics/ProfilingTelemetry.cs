@@ -576,9 +576,10 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
         }
         else if (TryGetAmbientRemoteParentContext(out var ambientParent))
         {
-            // StreamJsonRpc's ActivityTracingStrategy creates an unexported server activity
-            // from the caller's W3C traceparent. Parent profiling spans to the remote caller
-            // instead of that hidden activity so exported CLI and Hosting spans are adjacent.
+            // Fall back to an ambient server activity that already carries a remote parent
+            // (for example one the JSON-RPC library created from the caller's W3C traceparent).
+            // Parent profiling spans to the remote caller instead of that hidden activity so
+            // exported CLI and Hosting spans are adjacent.
             activity = s_activitySource.StartActivity(name, activityKind, ambientParent);
         }
         else if ((Activity.Current is null || Activity.Current.Source.Name != ActivitySourceName) &&

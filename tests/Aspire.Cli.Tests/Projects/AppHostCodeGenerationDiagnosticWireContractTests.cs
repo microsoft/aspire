@@ -59,7 +59,7 @@ public class AppHostCodeGenerationDiagnosticWireContractTests
     [Fact]
     public void Roundtrip_UsingRpcFormatterOptions_PreservesAllFields()
     {
-        // Use the exact same JsonSerializerOptions the StreamJsonRpc formatter uses on the CLI
+        // Use the exact same JsonSerializerOptions the JsonRpcNet serializer uses on the CLI
         // side. This catches the case where the wire-level deserializer differs from the typed
         // JsonTypeInfo<T> deserializer used by TryReadDiagnostic.
         var options = BackchannelJsonSerializerContext.CreateJsonSerializerOptions();

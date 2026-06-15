@@ -6,7 +6,7 @@ using Aspire.Shared.TerminalHost;
 namespace Aspire.TerminalHost;
 
 /// <summary>
-/// StreamJsonRpc target exposed over the terminal host's control UDS. Handles
+/// JSON-RPC target exposed over the terminal host's control UDS. Handles
 /// status queries and shutdown requests from the AppHost.
 /// </summary>
 /// <remarks>
@@ -37,12 +37,12 @@ internal sealed class TerminalHostControlRpcTarget
     /// negotiate future protocol upgrades.
     /// </summary>
     /// <remarks>
-    /// Kept as an instance method (not static) so that StreamJsonRpc's
-    /// <c>AddLocalRpcTarget(this)</c> enumeration discovers it alongside the other
-    /// session-bound methods. CA1822 is suppressed for this reason.
+    /// Kept as an instance method (not static) so it can be registered as a method-group delegate
+    /// (<c>_target.GetInfoAsync</c>) bound to the target instance via JsonRpcNet's
+    /// <c>AddLocalRpcMethod</c>. CA1822 is suppressed for this reason.
     /// </remarks>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:Mark members as static",
-        Justification = "Must remain an instance method so StreamJsonRpc.AddLocalRpcTarget(this) registers it as an RPC method.")]
+        Justification = "Must remain an instance method so it can be registered as an instance-bound delegate via JsonRpcNet AddLocalRpcMethod.")]
     public Task<TerminalHostInfoResponse> GetInfoAsync(CancellationToken cancellationToken = default)
     {
         _ = cancellationToken;

@@ -5,7 +5,7 @@ using System.Diagnostics;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
-using StreamJsonRpc;
+using JsonRpcNet;
 
 namespace Aspire.Cli.Commands;
 

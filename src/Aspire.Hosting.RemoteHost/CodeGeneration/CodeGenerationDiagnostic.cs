@@ -3,7 +3,7 @@
 
 using System.Reflection;
 using Microsoft.Extensions.Logging;
-using StreamJsonRpc;
+using JsonRpcNet;
 
 namespace Aspire.Hosting.RemoteHost.CodeGeneration;
 
@@ -30,7 +30,7 @@ internal static class CodeGenerationErrorCodes
 /// <remarks>
 /// Carried as <see cref="LocalRpcException.ErrorData"/> from the server to the CLI so that the
 /// CLI can render an actionable diagnostic. The shape is intentionally flat and JSON-serializable
-/// so it survives the StreamJsonRpc <c>SystemTextJsonFormatter</c> round-trip without requiring
+/// so it survives the JSON-RPC serializer's <c>System.Text.Json</c> round-trip without requiring
 /// shared types between the server and the CLI.
 /// </remarks>
 internal sealed class CodeGenerationDiagnostic
@@ -102,8 +102,8 @@ internal sealed class CodeGenerationLoadedAssemblyInfo
 
 /// <summary>
 /// Builds <see cref="CodeGenerationDiagnostic"/> payloads from caught reflection-load
-/// exceptions and converts them into <see cref="LocalRpcException"/> instances that StreamJsonRpc
-/// will propagate to the CLI with structured error data.
+/// exceptions and converts them into <see cref="LocalRpcException"/> instances that the JSON-RPC
+/// library will propagate to the CLI with structured error data.
 /// </summary>
 internal static class CodeGenerationDiagnosticBuilder
 {
@@ -129,11 +129,7 @@ internal static class CodeGenerationDiagnosticBuilder
 
         var diagnostic = BuildDiagnostic(loadException, assemblyLoader, logger);
 
-        return new LocalRpcException(SafeMessage)
-        {
-            ErrorCode = CodeGenerationErrorCodes.IncompatibleAspireSdk,
-            ErrorData = diagnostic
-        };
+        return new LocalRpcException(SafeMessage, CodeGenerationErrorCodes.IncompatibleAspireSdk, diagnostic);
     }
 
     /// <summary>

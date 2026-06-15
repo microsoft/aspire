@@ -3,7 +3,7 @@
 
 using System.Net.Sockets;
 using Aspire.Shared.TerminalHost;
-using StreamJsonRpc;
+using JsonRpcNet;
 
 namespace Aspire.Hosting.Backchannel;
 
@@ -45,10 +45,13 @@ internal static class TerminalHostControlClient
 
         using var rpc = await ConnectWithRetryAsync(socketPath, timeoutCts.Token).ConfigureAwait(false);
 
-        return await rpc.InvokeWithCancellationAsync<TerminalHostSessionInfo>(
+        // The control surface always returns a session snapshot; a null result indicates a
+        // protocol violation by the host, so surface it as an error rather than a null deref later.
+        return await rpc.InvokeAsync<TerminalHostSessionInfo>(
             TerminalHostControlProtocol.GetSessionMethod,
             arguments: null,
-            timeoutCts.Token).ConfigureAwait(false);
+            timeoutCts.Token).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Terminal host control returned a null session.");
     }
 
     private static async Task<JsonRpc> ConnectWithRetryAsync(string socketPath, CancellationToken cancellationToken)
@@ -64,9 +67,16 @@ internal static class TerminalHostControlClient
             {
                 await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath), cancellationToken).ConfigureAwait(false);
                 var stream = new NetworkStream(socket, ownsSocket: true);
-                var formatter = new SystemTextJsonFormatter();
-                var handler = new HeaderDelimitedMessageHandler(stream, stream, formatter);
-                var rpc = new JsonRpc(handler);
+                var handler = new HeaderDelimitedMessageHandler(stream, stream);
+                // Replicate StreamJsonRpc's SystemTextJsonFormatter default serialization
+                // (PascalCase property names, case-sensitive) so the terminal-host control wire stays
+                // byte-for-byte compatible with hosts that have not yet migrated off StreamJsonRpc.
+                // The protocol DTOs (TerminalHostSessionInfo, TerminalHostInfoResponse) are PascalCase
+                // with no [JsonPropertyName], so changing the casing would break version-skewed peers.
+                var rpc = new JsonRpc(handler, new JsonRpcOptions
+                {
+                    SerializerOptions = new System.Text.Json.JsonSerializerOptions()
+                });
                 rpc.StartListening();
                 return rpc;
             }

@@ -4,13 +4,14 @@
 using System.Net.Sockets;
 using Aspire.Shared.TerminalHost;
 using Microsoft.Extensions.Logging;
-using StreamJsonRpc;
+using JsonRpcNet;
+using System.Text.Json;
 
 namespace Aspire.TerminalHost;
 
 /// <summary>
 /// Listens on the control UDS and serves a <see cref="TerminalHostControlRpcTarget"/>
-/// over StreamJsonRpc to each connecting client (typically the Aspire AppHost).
+/// over JSON-RPC to each connecting client (typically the Aspire AppHost).
 /// </summary>
 internal sealed class TerminalHostControlListener : IAsyncDisposable
 {
@@ -208,22 +209,27 @@ internal sealed class TerminalHostControlListener : IAsyncDisposable
         {
             await using var stream = new NetworkStream(client, ownsSocket: true);
 
-            var formatter = new SystemTextJsonFormatter();
-            var handler = new HeaderDelimitedMessageHandler(stream, stream, formatter);
+            // Replicate StreamJsonRpc's SystemTextJsonFormatter default serialization (PascalCase
+            // property names, case-sensitive) so the control wire stays byte-for-byte compatible with
+            // clients that have not yet migrated off StreamJsonRpc. See TerminalHostControlClient for
+            // the matching client-side options.
+            var handler = new HeaderDelimitedMessageHandler(stream, stream);
 
-            rpc = new JsonRpc(handler);
+            rpc = new JsonRpc(handler, new JsonRpcOptions
+            {
+                SerializerOptions = new JsonSerializerOptions()
+            });
+            // JsonRpcNet's AddLocalRpcMethod takes a delegate rather than (name, MethodInfo, target),
+            // so register each handler as a method-group delegate bound to the target instance.
             rpc.AddLocalRpcMethod(
                 TerminalHostControlProtocol.GetSessionMethod,
-                _target.GetType().GetMethod(nameof(TerminalHostControlRpcTarget.GetSessionAsync))!,
-                _target);
+                _target.GetSessionAsync);
             rpc.AddLocalRpcMethod(
                 TerminalHostControlProtocol.GetInfoMethod,
-                _target.GetType().GetMethod(nameof(TerminalHostControlRpcTarget.GetInfoAsync))!,
-                _target);
+                _target.GetInfoAsync);
             rpc.AddLocalRpcMethod(
                 TerminalHostControlProtocol.ShutdownMethod,
-                _target.GetType().GetMethod(nameof(TerminalHostControlRpcTarget.ShutdownAsync))!,
-                _target);
+                _target.ShutdownAsync);
 
             // Convert the accept-site reservation to an _activeRpcs entry under
             // the same lock, or release the reservation if we're already

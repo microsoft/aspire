@@ -5,7 +5,7 @@ using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Microsoft.Extensions.Configuration;
 using Spectre.Console;
-using StreamJsonRpc;
+using JsonRpcNet;
 
 namespace Aspire.Cli.Backchannel;
 

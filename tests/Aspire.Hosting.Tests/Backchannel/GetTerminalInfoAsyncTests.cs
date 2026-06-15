@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net.Sockets;
+using System.Text.Json;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Shared.TerminalHost;
@@ -9,7 +10,7 @@ using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using StreamJsonRpc;
+using JsonRpcNet;
 
 namespace Aspire.Hosting.Tests.Backchannel;
 
@@ -417,9 +418,13 @@ public class GetTerminalInfoAsyncTests : IAsyncDisposable
                 _ = Task.Run(async () =>
                 {
                     var stream = new NetworkStream(client, ownsSocket: true);
-                    var formatter = new SystemTextJsonFormatter();
-                    var handler = new HeaderDelimitedMessageHandler(stream, stream, formatter);
-                    var rpc = new JsonRpc(handler);
+                    // Match TerminalHostControlClient's wire casing (default PascalCase JsonSerializerOptions)
+                    // so this fake terminal-host server round-trips with the production client under JsonRpcNet.
+                    var handler = new HeaderDelimitedMessageHandler(stream, stream);
+                    var rpc = new JsonRpc(handler, new JsonRpcOptions
+                    {
+                        SerializerOptions = new JsonSerializerOptions()
+                    });
 
                     rpc.AddLocalRpcMethod(
                         TerminalHostControlProtocol.GetSessionMethod,

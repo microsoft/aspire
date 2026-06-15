@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -14,7 +13,7 @@ using Aspire.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
-using StreamJsonRpc;
+using JsonRpcNet;
 
 namespace Aspire.Cli.Backchannel;
 
@@ -202,25 +201,35 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
                     ClientCertificates = [GetCertificate()],
                 }, cancellationToken);
 
-                [UnconditionalSuppressMessage("AotAnalysis", "IL3050:RequiresDynamicCode",
-                    Justification = "AddLocalRpcTarget closes on generic types if there are events on the target, which is explicitly disabled.")]
-                static void AddLocalRpcTarget(JsonRpc rpc, IExtensionRpcTarget target)
+                var rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream), new JsonRpcOptions
                 {
-                    // We don't want to notify the client of events because we are not using the
-                    // event system in the extension.
-                    rpc.AddLocalRpcTarget(target, new JsonRpcTargetOptions() { NotifyClientOfEvents = false });
-                }
-
-                var rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream, BackchannelJsonSerializerContext.CreateRpcMessageFormatter()));
-                AddLocalRpcTarget(rpc, _target);
+                    SerializerOptions = BackchannelJsonSerializerContext.CreateJsonSerializerOptions()
+                });
+                // JsonRpcNet's reflection-based AddLocalRpcTarget is annotated [RequiresUnreferencedCode]/
+                // [RequiresDynamicCode], so it cannot be used from this AOT-published CLI. Instead, register
+                // each method on the target individually using the strongly-typed, trim/AOT-safe
+                // AddLocalRpcMethod<...>(string, Func<...>) overloads (no Requires* attributes). The RPC method
+                // names are authoritative and must match the wire names the VS Code extension uses (rpcClient.ts);
+                // they correspond to the [JsonRpcMethod] attribute values on IExtensionRpcTarget.
+                //
+                // The zero-parameter method groups bind to the generic Func overloads by overload resolution
+                // (return type inferred from the single candidate). validatePromptInputString has one value
+                // parameter, so a bare method group can't infer T1 — pass explicit type args. The extension
+                // sends it by-name as { "input": ... }, and the single-value typed overload binds that params
+                // object member to the parameter value.
+                rpc.AddLocalRpcMethod("getCliVersion", _target.GetCliVersionAsync);
+                rpc.AddLocalRpcMethod("getDebugSessionId", _target.GetDebugSessionIdAsync);
+                rpc.AddLocalRpcMethod("getCliCapabilities", _target.GetCliCapabilitiesAsync);
+                rpc.AddLocalRpcMethod("stopCli", _target.StopCliAsync);
+                rpc.AddLocalRpcMethod<string, ValidationResult?>("validatePromptInputString", _target.ValidatePromptInputStringAsync);
                 rpc.StartListening();
 
-                var capabilities = await rpc.InvokeWithCancellationAsync<string[]>(
+                var capabilities = await rpc.InvokeAsync<string[]>(
                     "getCapabilities",
                     [_token],
                     cancellationToken);
 
-                if (!capabilities.Any(s => s == KnownCapabilities.Baseline))
+                if (capabilities is null || !capabilities.Any(s => s == KnownCapabilities.Baseline))
                 {
                     throw new ExtensionIncompatibleException(
                         string.Format(CultureInfo.CurrentCulture, ErrorStrings.ExtensionIncompatibleWithCli,
@@ -257,7 +266,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         _logger.LogDebug("Sent message {Message}", message);
 
-        await rpc.InvokeWithCancellationAsync(
+        await rpc.InvokeAsync(
             "displayMessage",
             [_token, emojiName, message],
             cancellationToken);
@@ -273,7 +282,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         _logger.LogDebug("Sent success message {Message}", message);
 
-        await rpc.InvokeWithCancellationAsync(
+        await rpc.InvokeAsync(
             "displaySuccess",
             [_token, message],
             cancellationToken);
@@ -289,7 +298,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         _logger.LogDebug("Sent subtle message {Message}", message);
 
-        await rpc.InvokeWithCancellationAsync(
+        await rpc.InvokeAsync(
             "displaySubtleMessage",
             [_token, message],
             cancellationToken);
@@ -305,7 +314,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         _logger.LogDebug("Sent error message {Error}", error);
 
-        await rpc.InvokeWithCancellationAsync(
+        await rpc.InvokeAsync(
             "displayError",
             [_token, error],
             cancellationToken);
@@ -321,7 +330,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         _logger.LogDebug("Sent empty line");
 
-        await rpc.InvokeWithCancellationAsync(
+        await rpc.InvokeAsync(
             "displayEmptyLine",
             [_token],
             cancellationToken);
@@ -338,7 +347,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
         _logger.LogDebug("Sent incompatible version error for capability {RequiredCapability} with hosting SDK version {AppHostHostingSdkVersion}",
             requiredCapability, appHostHostingSdkVersion);
 
-        await rpc.InvokeWithCancellationAsync(
+        await rpc.InvokeAsync(
             "displayIncompatibleVersionError",
             [_token, requiredCapability, appHostHostingSdkVersion],
             cancellationToken);
@@ -354,7 +363,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         _logger.LogDebug("Sent cancellation message");
 
-        await rpc.InvokeWithCancellationAsync(
+        await rpc.InvokeAsync(
             "displayCancellationMessage",
             [_token],
             cancellationToken);
@@ -370,7 +379,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         _logger.LogDebug("Sent lines for display");
 
-        await rpc.InvokeWithCancellationAsync(
+        await rpc.InvokeAsync(
             "displayLines",
             [_token, lines],
             cancellationToken);
@@ -386,7 +395,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         _logger.LogDebug("Sent dashboard URLs for display");
 
-        await rpc.InvokeWithCancellationAsync(
+        await rpc.InvokeAsync(
             "displayDashboardUrls",
             [_token, dashboardUrls],
             cancellationToken);
@@ -402,7 +411,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         _logger.LogDebug("Sent status update: {Status}", status);
 
-        await rpc.InvokeWithCancellationAsync(
+        await rpc.InvokeAsync(
             "showStatus",
             [_token, status],
             cancellationToken);
@@ -424,7 +433,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
         _logger.LogDebug("Prompting for selection with text: {PromptText}, choices: {Choices}", promptText, choicesByFormattedValue.Keys);
 
         var choicesArray = choicesByFormattedValue.Keys.ToArray();
-        var result = await rpc.InvokeWithCancellationAsync<string?>(
+        var result = await rpc.InvokeAsync<string?>(
             "promptForSelection",
             [_token, promptText, choicesArray],
             cancellationToken);
@@ -454,7 +463,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
         _logger.LogDebug("Prompting for multiple selections with text: {PromptText}, choices: {Choices}", promptText, choicesByFormattedValue.Keys);
 
         var choicesArray = choicesByFormattedValue.Keys.ToArray();
-        var result = await rpc.InvokeWithCancellationAsync<string[]?>(
+        var result = await rpc.InvokeAsync<string[]?>(
             "promptForSelections",
             [_token, promptText, choicesArray],
             cancellationToken);
@@ -478,7 +487,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         _logger.LogDebug("Prompting for confirmation with text: {PromptText}, default value: {DefaultValue}", promptText, defaultValue);
 
-        var result = await rpc.InvokeWithCancellationAsync<bool?>(
+        var result = await rpc.InvokeAsync<bool?>(
             "confirm",
             [_token, promptText, defaultValue],
             cancellationToken);
@@ -504,7 +513,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         _logger.LogDebug("Prompting for string with text: {PromptText}, default value: {DefaultValue}, required: {Required}", promptText, defaultValue, required);
 
-        var result = await rpc.InvokeWithCancellationAsync<string?>(
+        var result = await rpc.InvokeAsync<string?>(
             "promptForString",
             [_token, promptText, defaultValue, required],
             cancellationToken);
@@ -530,7 +539,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         _logger.LogDebug("Prompting for secret string with text: {PromptText}, required: {Required}", promptText, required);
 
-        var result = await rpc.InvokeWithCancellationAsync<string?>(
+        var result = await rpc.InvokeAsync<string?>(
             "promptForSecretString",
             [_token, promptText, required],
             cancellationToken);
@@ -554,7 +563,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         _logger.LogDebug("Prompting for file path with text: {PromptText}, default value: {DefaultValue}, directory: {Directory}", promptText, defaultValue, directory);
 
-        var result = await rpc.InvokeWithCancellationAsync<string?>(
+        var result = await rpc.InvokeAsync<string?>(
             "promptForFilePath",
             [_token, promptText, defaultValue, directory],
             cancellationToken);
@@ -572,7 +581,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         _logger.LogDebug("Opening path: {Path}", path);
 
-        await rpc.InvokeWithCancellationAsync(
+        await rpc.InvokeAsync(
             "openEditor",
             [_token, path],
             cancellationToken);
@@ -591,7 +600,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         var rpc = await _rpcTaskCompletionSource.Task;
 
-        await rpc.InvokeWithCancellationAsync(
+        await rpc.InvokeAsync(
             "logMessage",
             [_token, logLevel.ToString(), message],
             cancellationToken);
@@ -607,7 +616,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         _logger.LogDebug("Sent plain text message {Message}", text);
 
-        await rpc.InvokeWithCancellationAsync(
+        await rpc.InvokeAsync(
             "displayPlainText",
             [_token, text],
             cancellationToken);
@@ -623,7 +632,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         _logger.LogDebug("Sent debug session message {Message}", message);
 
-        await rpc.InvokeWithCancellationAsync(
+        await rpc.InvokeAsync(
             "writeDebugSessionMessage",
             [_token, message, stdout, textStyle],
             cancellationToken);
@@ -645,12 +654,12 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         _logger.LogDebug("Requesting capabilities from the extension");
 
-        var capabilities = await rpc.InvokeWithCancellationAsync<string[]>(
+        var capabilities = await rpc.InvokeAsync<string[]>(
             "getCapabilities",
             [_token],
             cancellationToken);
 
-        return capabilities;
+        return capabilities ?? [];
     }
 
     public async Task LaunchAppHostAsync(string projectFile, List<string> arguments, List<EnvVar> environment, bool debug, CancellationToken cancellationToken)
@@ -663,7 +672,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         _logger.LogDebug("Running project at {ProjectFile} with arguments: {Arguments}", projectFile, string.Join(" ", arguments));
 
-        await rpc.InvokeWithCancellationAsync(
+        await rpc.InvokeAsync(
             "launchAppHost",
             [_token, projectFile, arguments, environment, debug],
             cancellationToken);
@@ -679,7 +688,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         _logger.LogDebug("Notifying that app host startup is completed");
 
-        await rpc.InvokeWithCancellationAsync(
+        await rpc.InvokeAsync(
             "notifyAppHostStartupCompleted",
             [_token],
             cancellationToken);
@@ -697,7 +706,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
         _logger.LogDebug("Starting extension debugging session in directory {WorkingDirectory} for project file {ProjectFile} with command={Command} debug={Debug}",
             workingDirectory, projectFile ?? "<none>", options?.Command ?? "<none>", debug);
 
-        await rpc.InvokeWithCancellationAsync(
+        await rpc.InvokeAsync(
             "startDebugSession",
             [_token, workingDirectory, projectFile, debug, options],
             cancellationToken);
@@ -713,7 +722,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         _logger.LogDebug("Stopping extension debugging session");
 
-        await rpc.InvokeWithCancellationAsync(
+        await rpc.InvokeAsync(
             "stopDebugging",
             [_token],
             CancellationToken.None);
