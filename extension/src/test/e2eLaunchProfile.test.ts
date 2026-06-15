@@ -235,8 +235,13 @@ suite('E2E launch profile', () => {
 
     test('avoids integrated-browser editor title waits when HTTP probes cover readiness', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
+        const extension = fs.readFileSync(path.join(extensionRoot, 'src', 'extension.ts'), 'utf8');
+        const appHostTreeProvider = fs.readFileSync(path.join(extensionRoot, 'src', 'views', 'AspireAppHostTreeProvider.ts'), 'utf8');
         const treeActions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'treeActions.e2e.test.ts'), 'utf8');
 
+        assert.ok(extension.includes('return { url: endpointUrl };'));
+        assert.ok(appHostTreeProvider.includes("await vscode.commands.executeCommand('simpleBrowser.show', element.url);"));
+        assert.ok(treeActions.includes("assert.strictEqual((openedEndpoint.result as { url?: string }).url, endpointUrl);"));
         assert.ok(treeActions.includes("waitForHttpText(endpointUrl, 'ok')"));
         assert.ok(!treeActions.includes('waitForEditorTitle(new URL(endpointUrl).host'));
     });

@@ -823,9 +823,11 @@ async function executeE2eControlCommand(
     }
     case 'openInIntegratedBrowser': {
       const element = getEndpointElement(appHostTreeProvider, command);
+      const endpointUrl = getEndpointUrl(element);
       const commandPromise = vscode.commands.executeCommand('aspire-vscode.openInIntegratedBrowser', element);
       markStarted();
-      return await commandPromise;
+      await commandPromise;
+      return { url: endpointUrl };
     }
     case 'stopResource': {
       const element = getResourceElement(appHostTreeProvider, command.resourceName, command.appHostPath);
@@ -1080,6 +1082,14 @@ function getEndpointElement(
   }
 
   return element;
+}
+
+function getEndpointUrl(element: unknown): string {
+  if (!element || typeof element !== 'object' || typeof (element as { url?: unknown }).url !== 'string') {
+    throw new Error('Aspire extension E2E endpoint command resolved an endpoint without a URL.');
+  }
+
+  return (element as { url: string }).url;
 }
 
 function getResourceCommandElement(
