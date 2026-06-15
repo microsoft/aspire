@@ -63,12 +63,12 @@ parameters:
     default: false
 
   - name: NpmPublishOwners
-    displayName: '[Advanced] npm ESRP owners (comma-separated Microsoft aliases or emails; must include joperezr or ankj)'
+    displayName: '[Advanced] npm ESRP owner (single Microsoft alias or email; must be joperezr or ankj)'
     type: string
-    default: 'joperezr,ankj'
+    default: 'joperezr'
 
   - name: NpmPublishApprovers
-    displayName: '[Advanced] npm ESRP approver (single Microsoft alias or email; must differ from the owners)'
+    displayName: '[Advanced] npm ESRP approver (single Microsoft alias or email; must differ from the owner)'
     type: string
     default: 'adamratzman'
 
@@ -829,6 +829,9 @@ extends:
                         exit 1
                       }
 
+                      # ESRP accepts multiple owners, but the release process requires exactly one so that
+                      # ownership of the @microsoft/aspire-cli package maps to a single accountable alias.
+                      Assert-SingleNpmReleaseAlias $normalizedOwners 'NpmPublishOwners'
                       Assert-ContainsAnyRequiredNpmOwnerAlias $normalizedOwners $requiredNpmOwners 'NpmPublishOwners'
                       Assert-SingleNpmReleaseAlias $normalizedApprovers 'NpmPublishApprovers'
 

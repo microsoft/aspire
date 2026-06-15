@@ -141,8 +141,8 @@ public sealed class ReleasePublishNugetPipelineTests
         Assert.Contains("value: joperezr,ankj", pipeline);
         Assert.DoesNotContain("NPM_PUBLISH_DEFAULT_APPROVER", commonVariables);
         Assert.DoesNotContain("NPM_PUBLISH_REQUIRED_APPROVERS", commonVariables);
-        Assert.Contains("displayName: '[Advanced] npm ESRP owners (comma-separated Microsoft aliases or emails; must include joperezr or ankj)'", pipeline);
-        Assert.Contains("displayName: '[Advanced] npm ESRP approver (single Microsoft alias or email; must differ from the owners)'", pipeline);
+        Assert.Contains("displayName: '[Advanced] npm ESRP owner (single Microsoft alias or email; must be joperezr or ankj)'", pipeline);
+        Assert.Contains("displayName: '[Advanced] npm ESRP approver (single Microsoft alias or email; must differ from the owner)'", pipeline);
         Assert.Contains("$requiredNpmOwnersValue = $env:NPM_PUBLISH_REQUIRED_OWNERS", pipeline);
         Assert.DoesNotContain("NPM_PUBLISH_DEFAULT_APPROVER", pipeline);
         Assert.DoesNotContain("NPM_PUBLISH_REQUIRED_APPROVERS", pipeline);
@@ -157,6 +157,7 @@ public sealed class ReleasePublishNugetPipelineTests
     {
         var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
 
+        Assert.Contains("Assert-SingleNpmReleaseAlias $normalizedOwners 'NpmPublishOwners'", pipeline);
         Assert.Contains("Assert-ContainsAnyRequiredNpmOwnerAlias $normalizedOwners $requiredNpmOwners 'NpmPublishOwners'", pipeline);
         Assert.DoesNotContain("Assert-ContainsRequiredNpmAliases $normalizedOwners $requiredNpmOwners 'NpmPublishOwners'", pipeline);
         Assert.Contains("Assert-SingleNpmReleaseAlias $normalizedApprovers 'NpmPublishApprovers'", pipeline);
@@ -215,13 +216,13 @@ public sealed class ReleasePublishNugetPipelineTests
         var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
 
         // Defaults let an unattended queue submission pass validation without operator input:
-        // owners include a required owner alias, the approver is a single distinct alias, and the
-        // per-run override parameters are marked advanced.
+        // the owner is a single required owner alias, the approver is a single distinct alias, and
+        // the per-run override parameters are marked advanced.
         Assert.Contains("- name: NpmPublishOwners", pipeline);
-        Assert.Contains("default: 'joperezr,ankj'", pipeline);
+        Assert.Contains("default: 'joperezr'", pipeline);
         Assert.Contains("- name: NpmPublishApprovers", pipeline);
         Assert.Contains("default: 'adamratzman'", pipeline);
-        Assert.Contains("[Advanced] npm ESRP owners", pipeline);
+        Assert.Contains("[Advanced] npm ESRP owner", pipeline);
         Assert.Contains("[Advanced] npm ESRP approver", pipeline);
         Assert.Contains("[Advanced] Minutes to wait between npm RID and pointer package submissions", pipeline);
     }

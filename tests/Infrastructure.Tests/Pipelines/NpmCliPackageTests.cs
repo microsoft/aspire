@@ -327,7 +327,7 @@ public sealed class NpmCliPackageTests : IDisposable
         Assert.DoesNotContain("NPM_PUBLISH_REQUIRED_APPROVERS", commonVariables);
         Assert.DoesNotContain("NPM_PUBLISH_REQUIRED_APPROVERS", releasePipeline);
         Assert.DoesNotContain("requiredNpmApprovers", releasePipeline);
-        Assert.Contains("default: 'joperezr,ankj'", releasePipeline);
+        Assert.Contains("default: 'joperezr'", releasePipeline);
         Assert.Contains("default: 'adamratzman'", releasePipeline);
         Assert.Contains("NpmPublishOwnersEffective", releasePipeline);
         Assert.Contains("NpmPublishApproversEffective", releasePipeline);
