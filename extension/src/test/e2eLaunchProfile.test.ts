@@ -305,6 +305,8 @@ suite('E2E launch profile', () => {
         assert.ok(extensionRenameRetry.includes("error.code === 'EBUSY'"));
         assert.ok(renameRetry.includes("error.code === 'EBUSY'"));
         assert.ok(fixtures.includes('writeFileWithRetry(settingsPath'));
+        assert.ok(fixtures.includes('removePath(getWorkspaceAppHostConfigPath(), { force: true });'));
+        assert.ok(fixtures.includes("removePath(path.join(getWorkspaceRoot(), '.aspire'), { recursive: true, force: true });"));
         assert.ok(fixtures.includes("code === 'EBUSY'"));
         assert.ok(fixtures.includes("code === 'EPERM'"));
         assert.ok(fixtures.includes("code === 'EACCES'"));
@@ -335,9 +337,11 @@ suite('E2E launch profile', () => {
         const stopAppHost = fixtures.slice(stopAppHostStart, stopAppHostEnd);
 
         assert.ok(stopAppHost.includes('await waitForRunningAppHostProcessExitFromState(appHostPath, 5000).catch(() => undefined);'));
-        assert.ok(stopAppHost.includes('if (!await isAppHostRunningAccordingToCli(appHostPath))'));
-        assert.ok(stopAppHost.includes('await waitForRunningAppHostProcessExitFromState(appHostPath, 30000);'));
+        assert.ok(stopAppHost.includes('const runningAppHost = await getRunningAppHostAccordingToCli(appHostPath);'));
+        assert.ok(stopAppHost.includes('await waitForProcessExit(runningAppHost.appHostPid, 30000);'));
+        assert.ok(stopAppHost.includes('if (!await getRunningAppHostAccordingToCli(appHostPath))'));
         assert.ok(fixtures.includes("['ps', '--format', 'json']"));
+        assert.ok(fixtures.includes('Number.isInteger(candidate.appHostPid)'));
         assert.ok(!fixtures.includes('terminateProcessTree(runningAppHost.appHostPid'));
         assert.ok(fixtures.includes('async function waitForProcessExit(pid: number, timeoutMs: number): Promise<void>'));
         assert.ok(fixtures.includes('process.kill(pid, 0);'));

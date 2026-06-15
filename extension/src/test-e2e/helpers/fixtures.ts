@@ -170,7 +170,7 @@ export async function restoreWorkspaceCliPath(): Promise<void> {
 }
 
 export function removeWorkspaceAppHostConfig(): void {
-    fs.rmSync(getWorkspaceAppHostConfigPath(), { force: true });
+    removePath(getWorkspaceAppHostConfigPath(), { force: true });
 }
 
 export function writeWorkspaceAppHostConfig(value: unknown): void {
@@ -212,7 +212,7 @@ export function writeLegacyAspireSettings(appHostPath = path.join('..', 'AspireE
 }
 
 export function removeLegacyAspireSettings(): void {
-    fs.rmSync(path.join(getWorkspaceRoot(), '.aspire'), { recursive: true, force: true });
+    removePath(path.join(getWorkspaceRoot(), '.aspire'), { recursive: true, force: true });
 }
 
 export function createAdditionalAppHostCandidate(projectName = 'AspireE2E.SecondAppHost', kind: 'project' | 'single-file' = 'project'): string {
@@ -279,12 +279,17 @@ export async function stopAppHostIfRunning(appHostPath: string): Promise<void> {
 
         if (/timed out|Failed to stop/i.test(error.message)) {
             try {
-                if (!await isAppHostRunningAccordingToCli(appHostPath)) {
+                const runningAppHost = await getRunningAppHostAccordingToCli(appHostPath);
+                if (!runningAppHost) {
                     return;
                 }
 
-                await waitForRunningAppHostProcessExitFromState(appHostPath, 30000);
-                return;
+                await waitForProcessExit(runningAppHost.appHostPid, 30000);
+                if (!await getRunningAppHostAccordingToCli(appHostPath)) {
+                    return;
+                }
+
+                throw new Error(`AppHost is still running according to aspire ps: ${appHostPath}`);
             }
             catch {
                 throw error;
@@ -295,7 +300,13 @@ export async function stopAppHostIfRunning(appHostPath: string): Promise<void> {
     }
 }
 
-async function isAppHostRunningAccordingToCli(appHostPath: string): Promise<boolean> {
+interface PsAppHost {
+    appHostPath: string;
+    appHostPid: number;
+    status?: string;
+}
+
+async function getRunningAppHostAccordingToCli(appHostPath: string): Promise<PsAppHost | undefined> {
     const result = await runProcess(getCliPath(), ['ps', '--format', 'json'], {
         cwd: getWorkspaceRoot(),
         timeoutMs: 30000,
@@ -306,7 +317,7 @@ async function isAppHostRunningAccordingToCli(appHostPath: string): Promise<bool
         throw new Error(`Unexpected aspire ps JSON output: ${result.stdout}`);
     }
 
-    return appHosts.some(candidate => {
+    return appHosts.find(candidate => {
         if (!isPsAppHost(candidate)) {
             return false;
         }
@@ -315,16 +326,18 @@ async function isAppHostRunningAccordingToCli(appHostPath: string): Promise<bool
     });
 }
 
-function isPsAppHost(value: unknown): value is { appHostPath: string; status?: string } {
+function isPsAppHost(value: unknown): value is PsAppHost {
     if (typeof value !== 'object' || value === null) {
         return false;
     }
 
-    const candidate = value as { appHostPath?: unknown; status?: unknown };
+    const candidate = value as { appHostPath?: unknown; appHostPid?: unknown; status?: unknown };
     return typeof candidate.appHostPath === 'string'
+        && typeof candidate.appHostPid === 'number'
+        && Number.isInteger(candidate.appHostPid)
+        && candidate.appHostPid > 0
         && (candidate.status === undefined || typeof candidate.status === 'string');
 }
-
 async function waitForRunningAppHostProcessExitFromState(appHostPath: string, timeoutMs: number): Promise<void> {
     const runningAppHost = getRunningAppHostFromState(appHostPath);
     if (runningAppHost) {
@@ -520,7 +533,7 @@ function removePath(targetPath: string, options: fs.RmOptions): void {
     });
 }
 
-function writeFileWithRetry(filePath: string, content: string): void {
+export function writeFileWithRetry(filePath: string, content: string): void {
     const maxAttempts = process.platform === 'win32' ? 20 : 1;
     for (let attempt = 1; ; attempt++) {
         try {

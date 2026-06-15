@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getCommandInvocationCount, getTreeAppHostLabel, waitForAppHostLaunching, waitForCommandOutcome, waitForDebugConsoleOutput, waitForDebugDashboardUrl, waitForDebugSessionStartup, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForWorkspaceAppHost } from './helpers/assertions';
-import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setShowStatusDelayForE2E, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
+import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setShowStatusDelayForE2E, stopPrimaryAppHostIfRunning, writeFileWithRetry } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { openAspireView, waitForEditorTitle, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
 
@@ -76,7 +76,7 @@ suite('Aspire debug dashboard E2E', function () {
                 'builder.Build().Run();',
                 '__AspireE2EFlushRegressionMissingSymbol__();\n\nbuilder.Build().Run();');
             assert.notStrictEqual(brokenSource, originalSource, 'Expected AppHost fixture to contain builder.Build().Run().');
-            fs.writeFileSync(appHostSourcePath, brokenSource);
+            writeFileWithRetry(appHostSourcePath, brokenSource);
             await setShowStatusDelayForE2E(2500);
 
             const before = getCommandInvocationCount('aspire-vscode.debugAppHost');
@@ -90,10 +90,12 @@ suite('Aspire debug dashboard E2E', function () {
             await waitForLogFileText(logPath, '__AspireE2EFlushRegressionMissingSymbol__');
         }
         finally {
-            await setShowStatusDelayForE2E(undefined);
-            fs.writeFileSync(appHostSourcePath, originalSource);
-            await executeE2eControlCommand({ name: 'stopDebugging' });
-            await waitForNoDebugSessions().catch(() => undefined);
+            await runE2eTeardown([
+                () => setShowStatusDelayForE2E(undefined),
+                () => writeFileWithRetry(appHostSourcePath, originalSource),
+                () => executeE2eControlCommand({ name: 'stopDebugging' }),
+                () => waitForNoDebugSessions().catch(() => undefined),
+            ], 'Debug dashboard build failure cleanup failed.');
         }
     });
 });
