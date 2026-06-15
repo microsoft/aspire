@@ -1273,7 +1273,7 @@ public class ParameterProcessorTests
         Assert.Equal(isSensitive, property.IsSensitive);
         Assert.Equal(MessageStrings.ResourcePropertyParameterValueDisplayName, property.DisplayName);
         Assert.True(property.IsHighlighted);
-        Assert.Equal(KnownResourcePropertySortOrder.ProducerDefinedStart, property.SortOrder);
+        Assert.Equal(0, property.SortOrder);
     }
 
     private static ParameterResource CreateParameterWithMissingValue(string name, bool secret = false)

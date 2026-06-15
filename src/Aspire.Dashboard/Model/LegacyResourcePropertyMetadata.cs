@@ -17,20 +17,20 @@ internal static class LegacyResourcePropertyMetadata
     {
         var metadata = (resourceType, propertyName) switch
         {
-            (KnownResourceTypes.Container, KnownProperties.Container.Image) => Create(KnownProperties.Container.Image, nameof(ResourcesDetailsContainerImageProperty), KnownResourcePropertySortOrder.ProducerDefinedStart),
-            (KnownResourceTypes.Container, KnownProperties.Container.Id) => Create(KnownProperties.Container.Id, nameof(ResourcesDetailsContainerIdProperty), KnownResourcePropertySortOrder.ProducerDefinedStart + 1),
-            (KnownResourceTypes.Container, KnownProperties.Container.Command) => Create(KnownProperties.Container.Command, nameof(ResourcesDetailsContainerCommandProperty), KnownResourcePropertySortOrder.ProducerDefinedStart + 2),
-            (KnownResourceTypes.Container, KnownProperties.Container.Args) => Create(KnownProperties.Container.Args, nameof(ResourcesDetailsContainerArgumentsProperty), KnownResourcePropertySortOrder.ProducerDefinedStart + 3),
-            (KnownResourceTypes.Container, KnownProperties.Container.Ports) => Create(KnownProperties.Container.Ports, nameof(ResourcesDetailsContainerPortsProperty), KnownResourcePropertySortOrder.ProducerDefinedStart + 4),
-            (KnownResourceTypes.Container, KnownProperties.Container.Lifetime) => Create(KnownProperties.Container.Lifetime, nameof(ResourcesDetailsContainerLifetimeProperty), KnownResourcePropertySortOrder.ProducerDefinedStart + 5),
-            (KnownResourceTypes.Executable, KnownProperties.Executable.Path) => Create(KnownProperties.Executable.Path, nameof(ResourcesDetailsExecutablePathProperty), KnownResourcePropertySortOrder.ProducerDefinedStart),
-            (KnownResourceTypes.Executable, KnownProperties.Executable.WorkDir) => Create(KnownProperties.Executable.WorkDir, nameof(ResourcesDetailsExecutableWorkingDirectoryProperty), KnownResourcePropertySortOrder.ProducerDefinedStart + 1),
-            (KnownResourceTypes.Executable, KnownProperties.Executable.Args) => Create(KnownProperties.Executable.Args, nameof(ResourcesDetailsExecutableArgumentsProperty), KnownResourcePropertySortOrder.ProducerDefinedStart + 2),
-            (KnownResourceTypes.Executable, KnownProperties.Executable.Pid) => Create(KnownProperties.Executable.Pid, nameof(ResourcesDetailsExecutableProcessIdProperty), KnownResourcePropertySortOrder.ProducerDefinedStart + 3),
-            (KnownResourceTypes.Project, KnownProperties.Project.Path) => Create(KnownProperties.Project.Path, nameof(ResourcesDetailsProjectPathProperty), KnownResourcePropertySortOrder.ProducerDefinedStart),
-            (KnownResourceTypes.Project, KnownProperties.Project.LaunchProfile) => Create(KnownProperties.Project.LaunchProfile, nameof(ResourcesDetailsProjectLaunchProfileProperty), KnownResourcePropertySortOrder.ProducerDefinedStart + 1),
-            (KnownResourceTypes.Project, KnownProperties.Executable.Pid) => Create(KnownProperties.Executable.Pid, nameof(ResourcesDetailsExecutableProcessIdProperty), KnownResourcePropertySortOrder.ProducerDefinedStart + 2),
-            (KnownResourceTypes.Parameter, KnownProperties.Parameter.Value) => Create(KnownProperties.Parameter.Value, nameof(ResourcesDetailsParameterValueProperty), KnownResourcePropertySortOrder.ProducerDefinedStart),
+            (KnownResourceTypes.Container, KnownProperties.Container.Image) => Create(KnownProperties.Container.Image, nameof(ResourcesDetailsContainerImageProperty), 0),
+            (KnownResourceTypes.Container, KnownProperties.Container.Id) => Create(KnownProperties.Container.Id, nameof(ResourcesDetailsContainerIdProperty), 1),
+            (KnownResourceTypes.Container, KnownProperties.Container.Command) => Create(KnownProperties.Container.Command, nameof(ResourcesDetailsContainerCommandProperty), 2),
+            (KnownResourceTypes.Container, KnownProperties.Container.Args) => Create(KnownProperties.Container.Args, nameof(ResourcesDetailsContainerArgumentsProperty), 3),
+            (KnownResourceTypes.Container, KnownProperties.Container.Ports) => Create(KnownProperties.Container.Ports, nameof(ResourcesDetailsContainerPortsProperty), 4),
+            (KnownResourceTypes.Container, KnownProperties.Container.Lifetime) => Create(KnownProperties.Container.Lifetime, nameof(ResourcesDetailsContainerLifetimeProperty), 5),
+            (KnownResourceTypes.Executable, KnownProperties.Executable.Path) => Create(KnownProperties.Executable.Path, nameof(ResourcesDetailsExecutablePathProperty), 0),
+            (KnownResourceTypes.Executable, KnownProperties.Executable.WorkDir) => Create(KnownProperties.Executable.WorkDir, nameof(ResourcesDetailsExecutableWorkingDirectoryProperty), 1),
+            (KnownResourceTypes.Executable, KnownProperties.Executable.Args) => Create(KnownProperties.Executable.Args, nameof(ResourcesDetailsExecutableArgumentsProperty), 2),
+            (KnownResourceTypes.Executable, KnownProperties.Executable.Pid) => Create(KnownProperties.Executable.Pid, nameof(ResourcesDetailsExecutableProcessIdProperty), 3),
+            (KnownResourceTypes.Project, KnownProperties.Project.Path) => Create(KnownProperties.Project.Path, nameof(ResourcesDetailsProjectPathProperty), 0),
+            (KnownResourceTypes.Project, KnownProperties.Project.LaunchProfile) => Create(KnownProperties.Project.LaunchProfile, nameof(ResourcesDetailsProjectLaunchProfileProperty), 1),
+            (KnownResourceTypes.Project, KnownProperties.Executable.Pid) => Create(KnownProperties.Executable.Pid, nameof(ResourcesDetailsExecutableProcessIdProperty), 2),
+            (KnownResourceTypes.Parameter, KnownProperties.Parameter.Value) => Create(KnownProperties.Parameter.Value, nameof(ResourcesDetailsParameterValueProperty), 0),
             _ => ((int SortOrder, KnownProperty KnownProperty)?)null
         };
 

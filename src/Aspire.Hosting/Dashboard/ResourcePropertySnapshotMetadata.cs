@@ -17,10 +17,6 @@ namespace Aspire.Hosting.Dashboard;
 /// </remarks>
 internal static class ResourcePropertySnapshotMetadata
 {
-    // Generic resource properties are still ordered first by the dashboard. Producer-defined
-    // properties start after those values to preserve the previous details grid order.
-    private const int ProducerDefinedSortOrderStart = KnownResourcePropertySortOrder.ProducerDefinedStart;
-
     internal static ResourcePropertySnapshot Create(string resourceType, string name, object? value, bool isSensitive = false)
     {
         var (displayName, isHighlighted, sortOrder) = Get(resourceType, name);
@@ -41,19 +37,19 @@ internal static class ResourcePropertySnapshotMetadata
     {
         return (resourceType, name) switch
         {
-            (KnownResourceTypes.Container, KnownProperties.Container.Image) => (ResourcePropertyContainerImageDisplayName, true, ProducerDefinedSortOrderStart),
-            (KnownResourceTypes.Container, KnownProperties.Container.Id) => (ResourcePropertyContainerIdDisplayName, true, ProducerDefinedSortOrderStart + 1),
-            (KnownResourceTypes.Container, KnownProperties.Container.Command) => (ResourcePropertyContainerCommandDisplayName, true, ProducerDefinedSortOrderStart + 2),
-            (KnownResourceTypes.Container, KnownProperties.Container.Args) => (ResourcePropertyContainerArgumentsDisplayName, true, ProducerDefinedSortOrderStart + 3),
-            (KnownResourceTypes.Container, KnownProperties.Container.Ports) => (ResourcePropertyContainerPortsDisplayName, true, ProducerDefinedSortOrderStart + 4),
-            (KnownResourceTypes.Container, KnownProperties.Container.Lifetime) => (ResourcePropertyContainerLifetimeDisplayName, true, ProducerDefinedSortOrderStart + 5),
-            (KnownResourceTypes.Executable, KnownProperties.Executable.Path) => (ResourcePropertyExecutablePathDisplayName, true, ProducerDefinedSortOrderStart),
-            (KnownResourceTypes.Executable, KnownProperties.Executable.WorkDir) => (ResourcePropertyExecutableWorkingDirectoryDisplayName, true, ProducerDefinedSortOrderStart + 1),
-            (KnownResourceTypes.Executable, KnownProperties.Executable.Args) => (ResourcePropertyExecutableArgumentsDisplayName, true, ProducerDefinedSortOrderStart + 2),
-            (KnownResourceTypes.Executable, KnownProperties.Executable.Pid) => (ResourcePropertyExecutableProcessIdDisplayName, true, ProducerDefinedSortOrderStart + 3),
-            (KnownResourceTypes.Project, KnownProperties.Project.Path) => (ResourcePropertyProjectPathDisplayName, true, ProducerDefinedSortOrderStart),
-            (KnownResourceTypes.Project, KnownProperties.Project.LaunchProfile) => (ResourcePropertyProjectLaunchProfileDisplayName, true, ProducerDefinedSortOrderStart + 1),
-            (KnownResourceTypes.Project, KnownProperties.Executable.Pid) => (ResourcePropertyExecutableProcessIdDisplayName, true, ProducerDefinedSortOrderStart + 2),
+            (KnownResourceTypes.Container, KnownProperties.Container.Image) => (ResourcePropertyContainerImageDisplayName, true, 0),
+            (KnownResourceTypes.Container, KnownProperties.Container.Id) => (ResourcePropertyContainerIdDisplayName, true, 1),
+            (KnownResourceTypes.Container, KnownProperties.Container.Command) => (ResourcePropertyContainerCommandDisplayName, true, 2),
+            (KnownResourceTypes.Container, KnownProperties.Container.Args) => (ResourcePropertyContainerArgumentsDisplayName, true, 3),
+            (KnownResourceTypes.Container, KnownProperties.Container.Ports) => (ResourcePropertyContainerPortsDisplayName, true, 4),
+            (KnownResourceTypes.Container, KnownProperties.Container.Lifetime) => (ResourcePropertyContainerLifetimeDisplayName, true, 5),
+            (KnownResourceTypes.Executable, KnownProperties.Executable.Path) => (ResourcePropertyExecutablePathDisplayName, true, 0),
+            (KnownResourceTypes.Executable, KnownProperties.Executable.WorkDir) => (ResourcePropertyExecutableWorkingDirectoryDisplayName, true, 1),
+            (KnownResourceTypes.Executable, KnownProperties.Executable.Args) => (ResourcePropertyExecutableArgumentsDisplayName, true, 2),
+            (KnownResourceTypes.Executable, KnownProperties.Executable.Pid) => (ResourcePropertyExecutableProcessIdDisplayName, true, 3),
+            (KnownResourceTypes.Project, KnownProperties.Project.Path) => (ResourcePropertyProjectPathDisplayName, true, 0),
+            (KnownResourceTypes.Project, KnownProperties.Project.LaunchProfile) => (ResourcePropertyProjectLaunchProfileDisplayName, true, 1),
+            (KnownResourceTypes.Project, KnownProperties.Executable.Pid) => (ResourcePropertyExecutableProcessIdDisplayName, true, 2),
             _ => (null, false, null)
         };
     }

@@ -98,7 +98,7 @@ public class ParameterResource : Resource, IExpressionValue
             IsSensitive = Secret,
             DisplayName = ResourcePropertyParameterValueDisplayName,
             IsHighlighted = true,
-            SortOrder = KnownResourcePropertySortOrder.ProducerDefinedStart
+            SortOrder = 0
         };
     }
 

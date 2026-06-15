@@ -170,7 +170,7 @@ partial class Resource
                 value: ValidateNotNull(property.Value),
                 isValueSensitive: property.IsSensitive,
                 knownProperty: knownProperty ?? legacyMetadata?.KnownProperty,
-                sortOrder: property.HasSortOrder ? property.SortOrder : legacyMetadata?.SortOrder ?? sortOrder,
+                sortOrder: GetDisplaySortOrder(property, knownProperty, legacyMetadata?.SortOrder, sortOrder),
                 displayName: property.HasDisplayName ? property.DisplayName : null,
                 isHighlighted: property.IsHighlighted)
             {
@@ -186,6 +186,35 @@ partial class Resource
         }
 
         return builder.ToImmutable();
+    }
+
+    private static int GetDisplaySortOrder(ResourceProperty property, KnownProperty? knownProperty, int? legacySortOrder, int knownSortOrder)
+    {
+        if (legacySortOrder is { } legacyOrder)
+        {
+            return ToProducerDefinedDisplaySortOrder(legacyOrder);
+        }
+
+        if (knownProperty is not null)
+        {
+            return knownSortOrder;
+        }
+
+        return property.HasSortOrder ? ToProducerDefinedDisplaySortOrder(property.SortOrder) : knownSortOrder;
+    }
+
+    private static int ToProducerDefinedDisplaySortOrder(int producerSortOrder)
+    {
+        // Producers use local sort orders for their own resource-specific properties. The
+        // dashboard normalizes those values after the generic dashboard-owned properties.
+        var producerDefinedStart = KnownResourcePropertySortOrder.ConnectionString + 1;
+        if (producerSortOrder <= 0)
+        {
+            return producerDefinedStart;
+        }
+
+        var sortOrder = producerDefinedStart + (long)producerSortOrder;
+        return sortOrder > int.MaxValue ? int.MaxValue : (int)sortOrder;
     }
 
     private static bool ShouldUseLegacyResourcePropertyMetadata(string resourceType, RepeatedField<ResourceProperty> properties)

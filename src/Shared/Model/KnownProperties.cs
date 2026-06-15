@@ -90,6 +90,4 @@ internal static class KnownResourcePropertySortOrder
     public const int StopTime = 4;
     public const int ExitCode = 5;
     public const int ConnectionString = 6;
-
-    public const int ProducerDefinedStart = ConnectionString + 1;
 }

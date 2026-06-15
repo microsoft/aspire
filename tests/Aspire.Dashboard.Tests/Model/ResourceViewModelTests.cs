@@ -175,7 +175,7 @@ public sealed class ResourceViewModelTests
                     Value = Value.ForString("redis:latest"),
                     DisplayName = "Container image",
                     IsHighlighted = true,
-                    SortOrder = KnownResourcePropertySortOrder.ProducerDefinedStart
+                    SortOrder = 0
                 }
             }
         };
@@ -187,26 +187,26 @@ public sealed class ResourceViewModelTests
         var property = vm.Properties[KnownProperties.Container.Image];
         Assert.Equal("Container image", property.DisplayName);
         Assert.True(property.IsHighlighted);
-        Assert.Equal(KnownResourcePropertySortOrder.ProducerDefinedStart, property.SortOrder);
+        Assert.Equal(ProducerDefinedDisplaySortOrder(0), property.SortOrder);
         Assert.Null(property.KnownProperty);
     }
 
     [Theory]
-    [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Image, nameof(DashboardResources.ResourcesDetailsContainerImageProperty), KnownResourcePropertySortOrder.ProducerDefinedStart)]
-    [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Id, nameof(DashboardResources.ResourcesDetailsContainerIdProperty), KnownResourcePropertySortOrder.ProducerDefinedStart + 1)]
-    [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Command, nameof(DashboardResources.ResourcesDetailsContainerCommandProperty), KnownResourcePropertySortOrder.ProducerDefinedStart + 2)]
-    [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Args, nameof(DashboardResources.ResourcesDetailsContainerArgumentsProperty), KnownResourcePropertySortOrder.ProducerDefinedStart + 3)]
-    [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Ports, nameof(DashboardResources.ResourcesDetailsContainerPortsProperty), KnownResourcePropertySortOrder.ProducerDefinedStart + 4)]
-    [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Lifetime, nameof(DashboardResources.ResourcesDetailsContainerLifetimeProperty), KnownResourcePropertySortOrder.ProducerDefinedStart + 5)]
-    [InlineData(KnownResourceTypes.Executable, KnownProperties.Executable.Path, nameof(DashboardResources.ResourcesDetailsExecutablePathProperty), KnownResourcePropertySortOrder.ProducerDefinedStart)]
-    [InlineData(KnownResourceTypes.Executable, KnownProperties.Executable.WorkDir, nameof(DashboardResources.ResourcesDetailsExecutableWorkingDirectoryProperty), KnownResourcePropertySortOrder.ProducerDefinedStart + 1)]
-    [InlineData(KnownResourceTypes.Executable, KnownProperties.Executable.Args, nameof(DashboardResources.ResourcesDetailsExecutableArgumentsProperty), KnownResourcePropertySortOrder.ProducerDefinedStart + 2)]
-    [InlineData(KnownResourceTypes.Executable, KnownProperties.Executable.Pid, nameof(DashboardResources.ResourcesDetailsExecutableProcessIdProperty), KnownResourcePropertySortOrder.ProducerDefinedStart + 3)]
-    [InlineData(KnownResourceTypes.Project, KnownProperties.Project.Path, nameof(DashboardResources.ResourcesDetailsProjectPathProperty), KnownResourcePropertySortOrder.ProducerDefinedStart)]
-    [InlineData(KnownResourceTypes.Project, KnownProperties.Project.LaunchProfile, nameof(DashboardResources.ResourcesDetailsProjectLaunchProfileProperty), KnownResourcePropertySortOrder.ProducerDefinedStart + 1)]
-    [InlineData(KnownResourceTypes.Project, KnownProperties.Executable.Pid, nameof(DashboardResources.ResourcesDetailsExecutableProcessIdProperty), KnownResourcePropertySortOrder.ProducerDefinedStart + 2)]
-    [InlineData(KnownResourceTypes.Parameter, KnownProperties.Parameter.Value, nameof(DashboardResources.ResourcesDetailsParameterValueProperty), KnownResourcePropertySortOrder.ProducerDefinedStart)]
-    public void ToViewModel_LegacyBuiltInResourceSpecificPropertyMetadata_AppliesFallback(string resourceType, string propertyName, string expectedDisplayNameResourceName, int expectedSortOrder)
+    [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Image, nameof(DashboardResources.ResourcesDetailsContainerImageProperty), 0)]
+    [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Id, nameof(DashboardResources.ResourcesDetailsContainerIdProperty), 1)]
+    [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Command, nameof(DashboardResources.ResourcesDetailsContainerCommandProperty), 2)]
+    [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Args, nameof(DashboardResources.ResourcesDetailsContainerArgumentsProperty), 3)]
+    [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Ports, nameof(DashboardResources.ResourcesDetailsContainerPortsProperty), 4)]
+    [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Lifetime, nameof(DashboardResources.ResourcesDetailsContainerLifetimeProperty), 5)]
+    [InlineData(KnownResourceTypes.Executable, KnownProperties.Executable.Path, nameof(DashboardResources.ResourcesDetailsExecutablePathProperty), 0)]
+    [InlineData(KnownResourceTypes.Executable, KnownProperties.Executable.WorkDir, nameof(DashboardResources.ResourcesDetailsExecutableWorkingDirectoryProperty), 1)]
+    [InlineData(KnownResourceTypes.Executable, KnownProperties.Executable.Args, nameof(DashboardResources.ResourcesDetailsExecutableArgumentsProperty), 2)]
+    [InlineData(KnownResourceTypes.Executable, KnownProperties.Executable.Pid, nameof(DashboardResources.ResourcesDetailsExecutableProcessIdProperty), 3)]
+    [InlineData(KnownResourceTypes.Project, KnownProperties.Project.Path, nameof(DashboardResources.ResourcesDetailsProjectPathProperty), 0)]
+    [InlineData(KnownResourceTypes.Project, KnownProperties.Project.LaunchProfile, nameof(DashboardResources.ResourcesDetailsProjectLaunchProfileProperty), 1)]
+    [InlineData(KnownResourceTypes.Project, KnownProperties.Executable.Pid, nameof(DashboardResources.ResourcesDetailsExecutableProcessIdProperty), 2)]
+    [InlineData(KnownResourceTypes.Parameter, KnownProperties.Parameter.Value, nameof(DashboardResources.ResourcesDetailsParameterValueProperty), 0)]
+    public void ToViewModel_LegacyBuiltInResourceSpecificPropertyMetadata_AppliesFallback(string resourceType, string propertyName, string expectedDisplayNameResourceName, int expectedProducerSortOrder)
     {
         var resource = new Resource
         {
@@ -229,7 +229,7 @@ public sealed class ResourceViewModelTests
         var property = vm.Properties[propertyName];
         Assert.Null(property.DisplayName);
         Assert.False(property.IsHighlighted);
-        Assert.Equal(expectedSortOrder, property.SortOrder);
+        Assert.Equal(ProducerDefinedDisplaySortOrder(expectedProducerSortOrder), property.SortOrder);
         Assert.NotNull(property.KnownProperty);
         Assert.Equal(propertyName, property.KnownProperty.Key);
 
@@ -289,7 +289,7 @@ public sealed class ResourceViewModelTests
         }
         if (hasSortOrder)
         {
-            imageProperty.SortOrder = KnownResourcePropertySortOrder.ProducerDefinedStart;
+            imageProperty.SortOrder = 0;
         }
 
         var resource = new Resource
@@ -314,7 +314,7 @@ public sealed class ResourceViewModelTests
         var image = vm.Properties[KnownProperties.Container.Image];
         Assert.Equal(hasDisplayName ? "Producer container image" : null, image.DisplayName);
         Assert.Equal(isHighlighted, image.IsHighlighted);
-        Assert.Equal(hasSortOrder ? KnownResourcePropertySortOrder.ProducerDefinedStart : int.MaxValue, image.SortOrder);
+        Assert.Equal(hasSortOrder ? ProducerDefinedDisplaySortOrder(0) : int.MaxValue, image.SortOrder);
         Assert.Null(image.KnownProperty);
 
         var id = vm.Properties[KnownProperties.Container.Id];
@@ -322,6 +322,11 @@ public sealed class ResourceViewModelTests
         Assert.False(id.IsHighlighted);
         Assert.Equal(int.MaxValue, id.SortOrder);
         Assert.Null(id.KnownProperty);
+    }
+
+    private static int ProducerDefinedDisplaySortOrder(int producerSortOrder)
+    {
+        return KnownResourcePropertySortOrder.ConnectionString + 1 + producerSortOrder;
     }
 
     [Fact]

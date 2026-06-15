@@ -550,7 +550,6 @@ public class ResourceDetailsTests : DashboardTestContext
     public void Render_ProducerSuppliedSortOrder_OrdersUnknownHighlightedProperties()
     {
         ResourceSetupHelpers.SetupResourceDetails(this);
-        var producerDefinedSortOrderStart = KnownResourcePropertySortOrder.ProducerDefinedStart;
 
         var properties = new Dictionary<string, ResourcePropertyViewModel>
         {
@@ -561,7 +560,7 @@ public class ResourceDetailsTests : DashboardTestContext
                 knownProperty: null,
                 displayName: "Container command",
                 isHighlighted: true,
-                sortOrder: producerDefinedSortOrderStart + 2),
+                sortOrder: ProducerDefinedDisplaySortOrder(2)),
             [KnownProperties.Container.Image] = new(
                 KnownProperties.Container.Image,
                 Value.ForString("redis:latest"),
@@ -569,7 +568,7 @@ public class ResourceDetailsTests : DashboardTestContext
                 knownProperty: null,
                 displayName: "Container image",
                 isHighlighted: true,
-                sortOrder: producerDefinedSortOrderStart),
+                sortOrder: ProducerDefinedDisplaySortOrder(0)),
             [KnownProperties.Container.Id] = new(
                 KnownProperties.Container.Id,
                 Value.ForString("1234567890abcdef"),
@@ -577,7 +576,7 @@ public class ResourceDetailsTests : DashboardTestContext
                 knownProperty: null,
                 displayName: "Container ID",
                 isHighlighted: true,
-                sortOrder: producerDefinedSortOrderStart + 1),
+                sortOrder: ProducerDefinedDisplaySortOrder(1)),
             ["provider.diagnostic"] = new(
                 "provider.diagnostic",
                 Value.ForString("diagnostic"),
@@ -603,6 +602,11 @@ public class ResourceDetailsTests : DashboardTestContext
             name => Assert.Equal("Container ID", name),
             name => Assert.Equal("Container command", name),
             name => Assert.Equal("AAA provider diagnostic", name));
+    }
+
+    private static int ProducerDefinedDisplaySortOrder(int producerSortOrder)
+    {
+        return KnownResourcePropertySortOrder.ConnectionString + 1 + producerSortOrder;
     }
 
     [Fact]
