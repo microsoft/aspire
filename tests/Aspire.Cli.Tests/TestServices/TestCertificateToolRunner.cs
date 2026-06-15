@@ -33,18 +33,18 @@ internal sealed class TestCertificateToolRunner : ICertificateToolRunner
         };
     }
 
+    public EnsureCertificateResult EnsureHttpCertificateExists()
+    {
+        return EnsureHttpCertificateExistsCallback is not null
+            ? EnsureHttpCertificateExistsCallback()
+            : EnsureCertificateResult.Succeeded;
+    }
+
     public EnsureCertificateResult TrustHttpCertificate()
     {
         return TrustHttpCertificateCallback is not null
             ? TrustHttpCertificateCallback()
             : EnsureCertificateResult.ExistingHttpsCertificateTrusted;
-    }
-
-    public EnsureCertificateResult EnsureHttpCertificateExists()
-    {
-        return EnsureHttpCertificateExistsCallback is not null
-            ? EnsureHttpCertificateExistsCallback()
-            : EnsureCertificateResult.ValidCertificatePresent;
     }
 
     public CertificateCleanResult CleanHttpCertificate()

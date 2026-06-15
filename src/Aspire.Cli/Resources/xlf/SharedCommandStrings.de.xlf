@@ -2,19 +2,84 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="de" original="../SharedCommandStrings.resx">
     <body>
+      <trans-unit id="AgentInitOptionDescription">
+        <source>Suppress AI agent environment configuration after project creation</source>
+        <target state="new">Suppress AI agent environment configuration after project creation</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AppHostNotRunning">
         <source>No running AppHost found. Use 'aspire run' to start one first.</source>
         <target state="new">No running AppHost found. Use 'aspire run' to start one first.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="AppHostNotRunningAtPath">
+        <source>No AppHost is currently running for '{0}'. Use 'aspire run' to start it first.</source>
+        <target state="new">No AppHost is currently running for '{0}'. Use 'aspire run' to start it first.</target>
+        <note>{0} is the AppHost project path.</note>
       </trans-unit>
       <trans-unit id="FormatOptionDescription">
         <source>Output format for detached AppHost results</source>
         <target state="new">Output format for detached AppHost results</target>
         <note />
       </trans-unit>
+      <trans-unit id="HeaderLanguage">
+        <source>Language</source>
+        <target state="new">Language</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderPath">
+        <source>Path</source>
+        <target state="new">Path</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderStatus">
+        <source>Status</source>
+        <target state="new">Status</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="IncludeHiddenOptionDescription">
+        <source>Include hidden resources in the output</source>
+        <target state="new">Include hidden resources in the output</target>
+        <note />
+      </trans-unit>
       <trans-unit id="IsolatedOptionDescription">
         <source>Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously</source>
         <target state="new">Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LsAllOptionDescription">
+        <source>Include all candidate AppHosts, ignoring .gitignore and built-in directory filters</source>
+        <target state="new">Include all candidate AppHosts, ignoring .gitignore and built-in directory filters</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LsCommandDescription">
+        <source>List candidate AppHost project files in the workspace (use `aspire ps` for running resources)</source>
+        <target state="new">List candidate AppHost project files in the workspace (use `aspire ps` for running resources)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LsFormatOptionDescription">
+        <source>Output format (Table or Json)</source>
+        <target state="new">Output format (Table or Json)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LsNoCandidateAppHostsFound">
+        <source>No candidate AppHosts found.</source>
+        <target state="new">No candidate AppHosts found.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LsSearchingForAppHostsStatus">
+        <source>Searching for Aspire AppHosts. {0} directories searched. {1} AppHosts found...</source>
+        <target state="new">Searching for Aspire AppHosts. {0} directories searched. {1} AppHosts found...</target>
+        <note>{0} is the number of directories searched so far. {1} is the number of AppHost candidates found so far.</note>
+      </trans-unit>
+      <trans-unit id="LsStreamOptionDescription">
+        <source>Output discovered AppHosts as newline-delimited JSON. Requires --format json</source>
+        <target state="new">Output discovered AppHosts as newline-delimited JSON. Requires --format json</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LsStreamRequiresJson">
+        <source>The --stream option requires --format json.</source>
+        <target state="new">The --stream option requires --format json.</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleInScopeAppHosts">
@@ -28,9 +93,14 @@
         <note />
       </trans-unit>
       <trans-unit id="AppHostOptionDescription">
-        <source>The path to the Aspire AppHost project file</source>
-        <target state="new">The path to the Aspire AppHost project file</target>
+        <source>The path to the Aspire AppHost project file or a directory to search</source>
+        <target state="new">The path to the Aspire AppHost project file or a directory to search</target>
         <note />
+      </trans-unit>
+      <trans-unit id="NonInteractiveRequiresYesFormat">
+        <source>The {0} command requires --yes when the --non-interactive option is specified.</source>
+        <target state="new">The {0} command requires --yes when the --non-interactive option is specified.</target>
+        <note>{0} is the command name.</note>
       </trans-unit>
       <trans-unit id="PipelineEnvironmentOptionDescription">
         <source>The environment to use for the operation. The default is 'Production'.</source>

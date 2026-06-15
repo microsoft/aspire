@@ -2,10 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES003
+#pragma warning disable ASPIRECONTAINERRUNTIME001
 
+using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Docker.Resources.ComposeNodes;
 using Aspire.Hosting.Publishing;
+using Aspire.Hosting.Tests.Publishing;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -406,6 +409,36 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DockerComposeSetsServicePrivilegedManually()
+    {
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        builder.AddDockerComposeEnvironment("docker-compose")
+            .WithDashboard(false);
+
+        builder.AddContainer("api", "my-api:latest")
+            .PublishAsDockerComposeService((_, composeService) =>
+            {
+                composeService.Privileged = true;
+            });
+
+        var app = builder.Build();
+        app.Run();
+
+        var composePath = Path.Combine(tempDir.Path, "docker-compose.yaml");
+        Assert.True(File.Exists(composePath));
+
+        var composeContent = File.ReadAllText(composePath);
+
+        Assert.Contains("privileged: true", composeContent);
+
+        await Verify(composeContent, "yaml");
+    }
+
+    [Fact]
     public async Task PublishAsync_WithDashboardEnabled_IncludesDashboardService()
     {
         using var tempDir = new TestTempDirectory();
@@ -717,6 +750,92 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PrepareStep_ResolvesArbitraryIValueProviderSource()
+    {
+        using var tempDir = new TestTempDirectory();
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: "prepare-docker-compose");
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        builder.AddDockerComposeEnvironment("docker-compose");
+
+        builder.AddContainer("testapp", "testimage")
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables["MY_VAR"] = new TestConditionProvider("resolved-value");
+            });
+
+        var app = builder.Build();
+        app.Run();
+
+        // The compose file uses the user-specified container env var name; the .env file uses the
+        // name derived from the provider's ValueExpression. Docker Compose interpolates between them.
+        var composeContent = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, "docker-compose.yaml"));
+        var envFileContent = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, ".env.Production"));
+        await Verify(composeContent, "yaml")
+            .AppendContentAsFile(envFileContent, "env");
+    }
+
+    [Fact]
+    public async Task PrepareStep_SkipsParameterResolutionWhenStaticDefaultIsSet()
+    {
+        using var tempDir = new TestTempDirectory();
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: "prepare-docker-compose");
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        var environment = builder.AddDockerComposeEnvironment("docker-compose");
+
+        var param = builder.AddParameter("myparam", "dynamic-value");
+
+        builder.AddContainer("testapp", "testimage")
+            .WithEnvironment("MY_PARAM", param);
+
+        // Set a static default before PrepareAsync runs; parameter resolution should be skipped.
+        environment.ConfigureEnvFile(vars =>
+        {
+            if (vars.TryGetValue("MYPARAM", out var envVar))
+            {
+                envVar.DefaultValue = "static-override";
+            }
+        });
+
+        var app = builder.Build();
+        app.Run();
+
+        var envFileContent = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, ".env.Production"));
+        await Verify(envFileContent, "env");
+    }
+
+    [Fact]
+    public async Task PrepareStep_ResolvesContainerImageReferenceViaIValueProvider()
+    {
+        using var tempDir = new TestTempDirectory();
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: "prepare-docker-compose");
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IContainerRuntime, FakeContainerRuntime>();
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(sp => (IContainerRuntimeResolver)sp.GetRequiredService<IContainerRuntime>());
+
+        builder.AddDockerComposeEnvironment("docker-compose");
+
+        // ProjectResource triggers AsContainerImagePlaceholder, which creates a CapturedEnvironmentVariable
+        // with Source=ContainerImageReference and DefaultValue="project1:latest".
+        // PrepareAsync should call GetValueAsync() via the IValueProvider branch; with no registry
+        // configured in the test, GetValueAsync() returns null and the entry is written empty —
+        // not "project1:latest". If the IValueProvider branch were skipped, the static default would appear.
+        builder.AddProject<TestProjectWithLaunchSettings>("project1");
+
+        var app = builder.Build();
+        app.Run();
+
+        var envFileContent = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, ".env.Production"));
+        await Verify(envFileContent, "env")
+            // The image tag includes the current time (e.g. "aspire-deploy-20260525182406"); scrub it so the snapshot is stable across runs.
+            .ScrubLinesWithReplace(line => Regex.Replace(line, @"aspire-deploy-\d{14}", "aspire-deploy-TIMESTAMP"));
+    }
+
+    [Fact]
     public async Task PublishAsync_BindMounts_ReplacedWithEnvironmentPlaceholders()
     {
         using var tempDir = new TestTempDirectory();
@@ -857,8 +976,8 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
             .ConfigureEnvFile(envVars =>
             {
                 // Find and remove the auto-generated bind mount placeholder for yarp
-                var keysToRemove = envVars.Where(kv => 
-                    kv.Value.Resource?.Name == "yarp" && 
+                var keysToRemove = envVars.Where(kv =>
+                    kv.Value.Resource?.Name == "yarp" &&
                     kv.Value.Source is ContainerMountAnnotation).Select(kv => kv.Key).ToList();
 
                 foreach (var key in keysToRemove)

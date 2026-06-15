@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <!-- Do not run tests in Helix at all -->
+    <RunOnAzdoHelixWindows>false</RunOnAzdoHelixWindows>
+    <RunOnAzdoHelixLinux>false</RunOnAzdoHelixLinux>
+    <GithubActionsRunnerLinux>8-core-ubuntu-latest</GithubActionsRunnerLinux>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="$(TestsSharedDir)AsyncTestHelpers.cs" Link="shared/AsyncTestHelpers.cs" />
+    <Compile Include="$(TestsSharedDir)TestInteractionService.cs" LinkBase="shared" />
+    <Compile Include="..\..\src\Aspire.Hosting.Browsers\*.cs" LinkBase="Product" />
+    <Compile Include="..\..\src\Aspire.Hosting.Browsers\Resources\*.Designer.cs" LinkBase="Product\Resources" />
+    <Compile Include="$(SharedDir)CustomResourceSnapshotExtensions.cs" Link="Product\Utils\CustomResourceSnapshotExtensions.cs" />
+    <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Product\Utils\KnownConfigNames.cs" />
+    <Compile Include="$(SharedDir)PathLookupHelper.cs" Link="Product\Utils\PathLookupHelper.cs" />
+    <Compile Include="$(SharedDir)StringComparers.cs" Link="Product\Utils\StringComparers.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Aspire.Hosting" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\src\Aspire.Hosting.Browsers\Resources\BrowserCommandStrings.resx" LogicalName="Aspire.Hosting.Browsers.Resources.BrowserCommandStrings.resources" />
+    <EmbeddedResource Include="..\..\src\Aspire.Hosting.Browsers\Resources\BrowserMessageStrings.resx" LogicalName="Aspire.Hosting.Browsers.Resources.BrowserMessageStrings.resources" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Aspire.Hosting.AppHost\Aspire.Hosting.AppHost.csproj" IsAspireProjectResource="false" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Browsers\Aspire.Hosting.Browsers.csproj" IsAspireProjectResource="false" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Aspire.Hosting.Tests\Aspire.Hosting.Tests.csproj" IsAspireProjectResource="false" />
+    <ProjectReference Include="..\Aspire.TestUtilities\Aspire.TestUtilities.csproj" IsAspireProjectResource="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+  </ItemGroup>
+
+</Project>

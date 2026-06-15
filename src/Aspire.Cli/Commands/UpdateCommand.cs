@@ -11,10 +11,10 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Semver;
 using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
@@ -38,6 +38,15 @@ internal sealed class UpdateCommand : BaseCommand
     {
         Description = UpdateCommandStrings.SelfOptionDescription
     };
+    private static readonly Option<bool> s_yesOption = new("--yes")
+    {
+        Description = UpdateCommandStrings.YesOptionDescription,
+        Aliases = { "-y" }
+    };
+    private static readonly Option<string?> s_nugetConfigDirOption = new("--nuget-config-dir")
+    {
+        Description = UpdateCommandStrings.NuGetConfigDirOptionDescription
+    };
     private readonly Option<string?> _channelOption;
     private readonly Option<string?> _qualityOption;
 
@@ -47,30 +56,30 @@ internal sealed class UpdateCommand : BaseCommand
         IAppHostProjectFactory projectFactory,
         ILogger<UpdateCommand> logger,
         ICliDownloader? cliDownloader,
-        IInteractionService interactionService,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
         IConfigurationService configurationService,
-        AspireCliTelemetry telemetry,
-        IConfiguration configuration)
-        : base("update", UpdateCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
+        IConfiguration configuration,
+        CommonCommandServices services)
+        : base("update", UpdateCommandStrings.Description, services)
     {
         _projectLocator = projectLocator;
         _packagingService = packagingService;
         _projectFactory = projectFactory;
         _logger = logger;
         _cliDownloader = cliDownloader;
-        _updateNotifier = updateNotifier;
-        _features = features;
+        _updateNotifier = services.UpdateNotifier;
+        _features = services.Features;
         _configurationService = configurationService;
         _configuration = configuration;
 
         Options.Add(s_appHostOption);
         Options.Add(s_selfOption);
+        Options.Add(s_yesOption);
+        Options.Add(s_nugetConfigDirOption);
+
+        AddNonInteractiveRequiresYesValidator(this, s_yesOption);
 
         // Customize description based on whether staging channel is enabled
-        var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(_features, _configuration);
+        var isStagingEnabled = IsStagingChannelAvailable();
 
         _channelOption = new Option<string?>("--channel")
         {
@@ -91,23 +100,17 @@ internal sealed class UpdateCommand : BaseCommand
         Options.Add(_qualityOption);
     }
 
-    protected override bool UpdateNotificationsEnabled => false;
-
-    private static bool IsRunningAsDotNetTool()
+    private static string? GetDotNetToolUpdateCommand()
     {
-        // When running as a dotnet tool, the process path points to "dotnet" or "dotnet.exe"
-        // When running as a native binary, it points to "aspire" or "aspire.exe"
-        var processPath = Environment.ProcessPath;
-        if (string.IsNullOrEmpty(processPath))
-        {
-            return false;
-        }
-
-        var fileName = Path.GetFileNameWithoutExtension(processPath);
-        return string.Equals(fileName, "dotnet", StringComparison.OrdinalIgnoreCase);
+        return DotNetToolDetection.GetDotNetToolUpdateCommand();
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    private static string? GetNpmUpdateCommand()
+    {
+        return NpmInstallDetection.GetNpmUpdateCommand();
+    }
+
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var isSelfUpdate = parseResult.GetValue(s_selfOption);
 
@@ -115,17 +118,28 @@ internal sealed class UpdateCommand : BaseCommand
         if (isSelfUpdate)
         {
             // When running as a dotnet tool, print the update command instead of executing
-            if (IsRunningAsDotNetTool())
+            var dotNetToolUpdateCommand = GetDotNetToolUpdateCommand();
+            if (dotNetToolUpdateCommand is not null)
             {
                 InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.DotNetToolSelfUpdateMessage);
-                InteractionService.DisplayPlainText("  dotnet tool update -g Aspire.Cli");
-                return 0;
+                InteractionService.DisplayPlainText($"  {dotNetToolUpdateCommand}");
+                return CommandResult.FromExitCode(0);
+            }
+
+            // When running from a global npm install, defer to npm rather than overwriting
+            // npm-owned files with the GitHub-binary downloader. Detected via env vars the
+            // npm launcher (eng/clipack/npm/aspire.js) sets when spawning the native binary.
+            var npmUpdateCommand = GetNpmUpdateCommand();
+            if (npmUpdateCommand is not null)
+            {
+                InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.NpmSelfUpdateMessage);
+                InteractionService.DisplayPlainText($"  {npmUpdateCommand}");
+                return CommandResult.Success();
             }
 
             if (_cliDownloader is null)
             {
-                InteractionService.DisplayError("CLI self-update is not available in this environment.");
-                return ExitCodeConstants.InvalidCommand;
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, "CLI self-update is not available in this environment.");
             }
 
             try
@@ -134,8 +148,7 @@ internal sealed class UpdateCommand : BaseCommand
             }
             catch (OperationCanceledException)
             {
-                InteractionService.DisplayCancellationMessage();
-                return ExitCodeConstants.InvalidCommand;
+                return CommandResult.Cancelled();
             }
         }
 
@@ -143,28 +156,98 @@ internal sealed class UpdateCommand : BaseCommand
         try
         {
             var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
-            var projectFile = await _projectLocator.UseOrFindAppHostProjectFileAsync(passedAppHostProjectFile, createSettingsFile: true, cancellationToken);
+
+            // `aspire update` is a recovery tool: when the AppHost's pinned Aspire.AppHost.Sdk
+            // can no longer be resolved (e.g. updating from one PR build to another after the
+            // hive was refreshed) the configured AppHost path must still be locatable, because
+            // rewriting that pin is precisely what this command does. Prefer the settings
+            // lookup, which does not MSBuild-validate the path, and only fall through to the
+            // strict discovery path when no AppHost is recorded in settings.
+            FileInfo? projectFile;
+            if (passedAppHostProjectFile is not null)
+            {
+                projectFile = await _projectLocator.UseOrFindAppHostProjectFileAsync(passedAppHostProjectFile, createSettingsFile: true, cancellationToken);
+            }
+            else
+            {
+                projectFile = await _projectLocator.GetAppHostFromSettingsAsync(cancellationToken)
+                    ?? await _projectLocator.UseOrFindAppHostProjectFileAsync(null, createSettingsFile: true, cancellationToken);
+            }
             if (projectFile is null)
             {
-                return ExitCodeConstants.FailedToFindProject;
+                return CommandResult.Failure(CliExitCodes.FailedToFindProject);
             }
 
             var project = _projectFactory.GetProject(projectFile);
             var isProjectReferenceMode = project.IsUsingProjectReferences(projectFile);
 
-            // Check if channel or quality option was provided (channel takes precedence)
+            // Resolve the channel using the documented precedence:
+            //   1. explicit --channel / hidden --quality
+            //   2. nearest local app config "channel" (relative to the resolved AppHost project, NOT cwd)
+            //   3. global config "channel"
+            //   4. interactive channel prompt when appropriate (PR hives present)
+            //   5. implicit/default channel as the documented fallback
+            // The directory-scoped lookup is critical: `aspire update --apphost <elsewhere>`
+            // must consult the selected project's config tree, not the user's launch cwd.
+            // The process-wide IConfiguration is rooted at the launch cwd at startup, so
+            // using it here would silently read the wrong app's local config (issue #16650).
+            //
+            // Step 3 (global config "channel") is intentionally a read-only path: no CLI
+            // code path seeds the global "channel" config (neither the acquisition scripts
+            // nor `aspire update --self` write it), and the running CLI's channel is
+            // already discoverable via the AspireCliChannel assembly metadata. The global
+            // read remains so users who explicitly ran `aspire config set -g channel <x>`
+            // continue to have their preference honored.
+            // TODO: revisit removing the step-3 fallback once telemetry confirms global
+            // channel usage is negligible.
             var channelName = parseResult.GetValue(_channelOption) ?? parseResult.GetValue(_qualityOption);
+            var channelFromConfig = false;
+            if (string.IsNullOrWhiteSpace(channelName))
+            {
+                var configLookupDirectory = projectFile.Directory ?? ExecutionContext.WorkingDirectory;
+                channelName = await _configurationService.GetConfigurationFromDirectoryAsync("channel", configLookupDirectory, cancellationToken: cancellationToken);
+                channelFromConfig = !string.IsNullOrWhiteSpace(channelName);
+            }
+
             PackageChannel channel;
 
             var allChannels = await InteractionService.ShowStatusAsync(
                 UpdateCommandStrings.CheckingForUpdates,
-                async () => await _packagingService.GetChannelsAsync(cancellationToken));
+                async () => await _packagingService.GetChannelsAsync(cancellationToken, channelName));
 
-            if (!string.IsNullOrEmpty(channelName))
+            if (!string.IsNullOrWhiteSpace(channelName))
             {
                 // Try to find a channel matching the provided channel/quality
-                channel = allChannels.FirstOrDefault(c => string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase))
-                    ?? throw new ChannelNotFoundException($"No channel found matching '{channelName}'. Valid options are: {string.Join(", ", allChannels.Select(c => c.Name))}");
+                var matchedChannel = allChannels.FirstOrDefault(c => string.Equals(c.Name, channelName, StringComparisons.ChannelName));
+                if (matchedChannel is null)
+                {
+                    // When the user explicitly asked for the 'staging' channel and the packaging
+                    // service refused to synthesize it (daily/local/pr-N CLI without an override),
+                    // surface the packaging-service reason instead of the generic "no channel
+                    // matching" message — the generic message hides the actual fix from the user.
+                    // See https://github.com/microsoft/aspire/issues/16652.
+                    if (string.Equals(channelName, PackageChannelNames.Staging, StringComparisons.ChannelName))
+                    {
+                        var stagingUnavailableReason = _packagingService.GetStagingChannelUnavailableReason();
+                        if (stagingUnavailableReason is not null)
+                        {
+                            throw new ChannelNotFoundException(stagingUnavailableReason);
+                        }
+                    }
+
+                    throw new ChannelNotFoundException(string.Format(
+                        CultureInfo.CurrentCulture,
+                        UpdateCommandStrings.NoChannelFoundMatching,
+                        channelName,
+                        string.Join(", ", allChannels.Select(c => c.Name))));
+                }
+
+                channel = matchedChannel;
+
+                if (channelFromConfig)
+                {
+                    _logger.LogDebug("Using channel '{ChannelName}' from configuration.", channel.Name);
+                }
             }
             else if (isProjectReferenceMode)
             {
@@ -173,48 +256,109 @@ internal sealed class UpdateCommand : BaseCommand
             }
             else
             {
-                // If there are hives (PR build directories), prompt for channel selection.
-                // Otherwise, use the implicit/default channel automatically.
-                var hasHives = ExecutionContext.GetPrHiveCount() > 0;
-
-                if (hasHives)
+                // Before falling through to the hives prompt, default to the running CLI's
+                // identity channel (the value baked into the assembly via the
+                // AspireCliChannel metadata) when it matches a registered channel. Without
+                // this, a `pr-<N>` or `daily` CLI updating an AppHost that has no
+                // per-project `channel` and no global `channel` config would silently land
+                // on the Implicit ("default") channel, which resolves Aspire packages from
+                // public NuGet and effectively moves the project to daily even though the
+                // running CLI knows which channel it shipped from.
+                //
+                // `local` is intentionally skipped: a developer-built CLI must not silently
+                // pin a real project to a hive that only exists on that machine. We also
+                // require the identity to match an entry in `allChannels`, so a stale
+                // `pr-<N>` identity (e.g. the matching hive was deleted) falls through to
+                // the existing prompt/implicit logic instead of failing.
+                var identityChannel = ExecutionContext.IdentityChannel;
+                PackageChannel? identityMatch = null;
+                if (!string.IsNullOrWhiteSpace(identityChannel)
+                    && !string.Equals(identityChannel, PackageChannelNames.Local, StringComparisons.ChannelName))
                 {
-                    // Prompt for channel selection
-                    channel = await InteractionService.PromptForSelectionAsync(
-                        UpdateCommandStrings.SelectChannelPrompt,
-                        allChannels,
-                        (c) => $"{c.Name.EscapeMarkup()} ({c.SourceDetails.EscapeMarkup()})",
-                        cancellationToken);
+                    identityMatch = allChannels.FirstOrDefault(c => string.Equals(c.Name, identityChannel, StringComparisons.ChannelName));
+                }
+
+                if (identityMatch is not null)
+                {
+                    _logger.LogDebug("Defaulting to identity channel '{ChannelName}'.", identityMatch.Name);
+                    channel = identityMatch;
                 }
                 else
                 {
-                    // Use the default (implicit) channel
-                    channel = allChannels.FirstOrDefault(c => c.Type is PackageChannelType.Implicit)
-                        ?? allChannels.First();
+                    // If there are hives (PR build directories), prompt for channel selection.
+                    // Otherwise, use the implicit/default channel automatically.
+                    var hasHives = ExecutionContext.GetHiveCount() > 0;
+
+                    if (hasHives)
+                    {
+                        // Prompt for channel selection
+                        var channelBinding = PromptBinding.Create(parseResult, _channelOption);
+                        channel = await InteractionService.PromptForSelectionAsync(
+                            UpdateCommandStrings.SelectChannelPrompt,
+                            allChannels,
+                            (c) => $"{c.Name.EscapeMarkup()} ({c.SourceDetails.EscapeMarkup()})",
+                            binding: channelBinding,
+                            cancellationToken: cancellationToken);
+                    }
+                    else
+                    {
+                        // Use the default (implicit) channel
+                        channel = allChannels.FirstOrDefault(c => c.Type is PackageChannelType.Implicit)
+                            ?? allChannels.First();
+                    }
                 }
             }
 
             // Update packages using the appropriate project handler
+            // The validator ensures --yes is required when --non-interactive is specified,
+            // so by this point --yes is always explicitly provided in non-interactive mode.
+            // defaultValue: true means the interactive prompt defaults to "yes" (accept).
+            var confirmBinding = PromptBinding.Create(parseResult, s_yesOption, defaultValue: true);
+            var nugetConfigDirBinding = PromptBinding.Create(parseResult, s_nugetConfigDirOption);
             var updateContext = new UpdatePackagesContext
             {
                 AppHostFile = projectFile,
-                Channel = channel
+                Channel = channel,
+                ConfirmBinding = confirmBinding,
+                NuGetConfigDirBinding = nugetConfigDirBinding
             };
+            var cliUpdateResult = await TryUpdateCliBeforeGuestProjectUpdateAsync(project, projectFile, channel, confirmBinding, parseResult, cancellationToken);
+            if (cliUpdateResult is not null)
+            {
+                return cliUpdateResult;
+            }
+
             await project.UpdatePackagesAsync(updateContext, cancellationToken);
 
             // After successful project update, check if CLI update is available and prompt
             // Only prompt if the channel supports CLI downloads (has a non-null CliDownloadBaseUrl)
-            if (_cliDownloader is not null && 
-                _updateNotifier.IsUpdateAvailable() && 
+            if (_cliDownloader is not null &&
+                _updateNotifier.IsUpdateAvailable() &&
                 !string.IsNullOrEmpty(channel.CliDownloadBaseUrl))
             {
-                var shouldUpdateCli = await InteractionService.ConfirmAsync(
+                var shouldUpdateCli = await InteractionService.PromptConfirmAsync(
                     UpdateCommandStrings.UpdateCliAfterProjectUpdatePrompt,
-                    defaultValue: true,
-                    cancellationToken);
-                
+                    binding: confirmBinding,
+                    cancellationToken: cancellationToken);
+
                 if (shouldUpdateCli)
                 {
+                    var dotNetToolUpdateCommand = GetDotNetToolUpdateCommand();
+                    if (dotNetToolUpdateCommand is not null)
+                    {
+                        InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.DotNetToolSelfUpdateMessage);
+                        InteractionService.DisplayPlainText($"  {dotNetToolUpdateCommand}");
+                        return CommandResult.Success();
+                    }
+
+                    var npmUpdateCommand = GetNpmUpdateCommand();
+                    if (npmUpdateCommand is not null)
+                    {
+                        InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.NpmSelfUpdateMessage);
+                        InteractionService.DisplayPlainText($"  {npmUpdateCommand}");
+                        return CommandResult.Success();
+                    }
+
                     // Use the same channel that was selected for the project update
                     return await ExecuteSelfUpdateAsync(parseResult, cancellationToken, channel.Name);
                 }
@@ -224,65 +368,155 @@ internal sealed class UpdateCommand : BaseCommand
         {
             var message = Markup.Escape(ex.Message);
             Telemetry.RecordError(message, ex);
-            InteractionService.DisplayError(message);
-            return ExitCodeConstants.FailedToUpgradeProject;
+            return CommandResult.Failure(CliExitCodes.FailedToUpgradeProject, message);
         }
         catch (ChannelNotFoundException ex)
         {
             var message = Markup.Escape(ex.Message);
             Telemetry.RecordError(message, ex);
-            InteractionService.DisplayError(message);
-            return ExitCodeConstants.FailedToUpgradeProject;
+            return CommandResult.Failure(CliExitCodes.FailedToUpgradeProject, message);
         }
         catch (ProjectLocatorException ex)
         {
             // Check if this is a "no project found" error and prompt for self-update
             if (string.Equals(ex.Message, ErrorStrings.NoProjectFileFound, StringComparisons.CliInputOrOutput))
             {
-                // Only prompt for self-update if not running as dotnet tool and downloader is available
-                if (_cliDownloader is not null)
+                // Only prompt for self-update when we can actually perform it: not as a
+                // dotnet tool, not from an npm install, and the GitHub-binary downloader
+                // is wired up. Otherwise the downloader would overwrite package-manager-owned
+                // files instead of letting the package manager handle the update.
+                if (GetDotNetToolUpdateCommand() is null && GetNpmUpdateCommand() is null && _cliDownloader is not null)
                 {
-                    var shouldUpdateCli = await InteractionService.ConfirmAsync(
+                    var shouldUpdateCli = await InteractionService.PromptConfirmAsync(
                         UpdateCommandStrings.NoAppHostFoundUpdateCliPrompt,
-                        defaultValue: true,
-                        cancellationToken);
-                    
+                        binding: PromptBinding.Create(parseResult, s_yesOption, false),
+                        cancellationToken: cancellationToken);
+
                     if (shouldUpdateCli)
                     {
                         return await ExecuteSelfUpdateAsync(parseResult, cancellationToken);
                     }
                 }
             }
-            
+
             return HandleProjectLocatorException(ex, InteractionService, Telemetry);
         }
         catch (OperationCanceledException)
         {
-            InteractionService.DisplayCancellationMessage();
-            return ExitCodeConstants.FailedToUpgradeProject;
+            return CommandResult.Cancelled();
         }
 
-        return 0;
+        return CommandResult.FromExitCode(0);
     }
 
-    private async Task<int> ExecuteSelfUpdateAsync(ParseResult parseResult, CancellationToken cancellationToken, string? selectedChannel = null)
+    private async Task<CommandResult?> TryUpdateCliBeforeGuestProjectUpdateAsync(
+        IAppHostProject project,
+        FileInfo projectFile,
+        PackageChannel channel,
+        PromptBinding<bool> confirmBinding,
+        ParseResult parseResult,
+        CancellationToken cancellationToken)
+    {
+        if (_cliDownloader is null ||
+            string.IsNullOrEmpty(channel.CliDownloadBaseUrl) ||
+            project.LanguageId.Equals(KnownLanguageId.CSharp, StringComparison.OrdinalIgnoreCase) ||
+            projectFile.Directory is not { } projectDirectory)
+        {
+            return null;
+        }
+
+        var targetSdkVersion = await GetLatestGuestSdkVersionAsync(channel, projectDirectory, cancellationToken);
+        if (targetSdkVersion is null ||
+            !SemVersion.TryParse(VersionHelper.GetDefaultSdkVersion(), SemVersionStyles.Strict, out var currentCliVersion) ||
+            SemVersion.PrecedenceComparer.Compare(targetSdkVersion, currentCliVersion) <= 0)
+        {
+            return null;
+        }
+
+        var shouldUpdateCli = await InteractionService.PromptConfirmAsync(
+            UpdateCommandStrings.UpdateCliBeforeGuestProjectUpdatePrompt,
+            binding: confirmBinding,
+            cancellationToken: cancellationToken);
+
+        if (!shouldUpdateCli)
+        {
+            return null;
+        }
+
+        var dotNetToolUpdateCommand = GetDotNetToolUpdateCommand();
+        if (dotNetToolUpdateCommand is not null)
+        {
+            InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.DotNetToolSelfUpdateMessage);
+            InteractionService.DisplayPlainText($"  {dotNetToolUpdateCommand}");
+            InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.ProjectUpdateSkippedAfterCliUpdateMessage);
+            return CommandResult.Success();
+        }
+
+        var npmUpdateCommand = GetNpmUpdateCommand();
+        if (npmUpdateCommand is not null)
+        {
+            InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.NpmSelfUpdateMessage);
+            InteractionService.DisplayPlainText($"  {npmUpdateCommand}");
+            InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.ProjectUpdateSkippedAfterCliUpdateMessage);
+            return CommandResult.Success();
+        }
+
+        var selfUpdateResult = await ExecuteSelfUpdateAsync(parseResult, cancellationToken, channel.Name);
+        if (selfUpdateResult.ExitCode == CliExitCodes.Success)
+        {
+            InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.ProjectUpdateSkippedAfterCliUpdateMessage);
+        }
+
+        return selfUpdateResult;
+    }
+
+    private async Task<SemVersion?> GetLatestGuestSdkVersionAsync(PackageChannel channel, DirectoryInfo projectDirectory, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var sdkPackage = await channel.GetLatestGuestAppHostSdkPackageAsync(projectDirectory, cancellationToken);
+            return sdkPackage is not null && SemVersion.TryParse(sdkPackage.Version, SemVersionStyles.Strict, out var version)
+                ? version
+                : null;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to check target Aspire SDK version before project update");
+            return null;
+        }
+    }
+
+    private bool IsStagingChannelAvailable()
+    {
+        return KnownFeatures.IsStagingChannelEnabled(_features, _configuration)
+            || string.Equals(ExecutionContext.IdentityChannel, PackageChannelNames.Staging, StringComparisons.ChannelName);
+    }
+
+    private async Task<CommandResult> ExecuteSelfUpdateAsync(ParseResult parseResult, CancellationToken cancellationToken, string? selectedChannel = null)
     {
         var channel = selectedChannel ?? parseResult.GetValue(_channelOption) ?? parseResult.GetValue(_qualityOption);
 
-        // If channel is not specified, always prompt the user to select one.
-        // This ensures they consciously choose a channel that will be saved to global settings
-        // for future 'aspire new' and 'aspire init' commands.
+        // If channel is not specified, prompt the user to select one. The choice
+        // applies only to this self-update invocation; subsequent 'aspire new'
+        // and 'aspire init' commands resolve channel per-project from
+        // aspire.config.json, not from any global setting.
         if (string.IsNullOrEmpty(channel))
         {
-            var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(_features, _configuration);
+            var isStagingEnabled = IsStagingChannelAvailable();
             var channels = isStagingEnabled
                 ? new[] { PackageChannelNames.Stable, PackageChannelNames.Staging, PackageChannelNames.Daily }
                 : new[] { PackageChannelNames.Stable, PackageChannelNames.Daily };
+            var channelBinding = PromptBinding.Create(parseResult, _channelOption);
             channel = await InteractionService.PromptForSelectionAsync(
                 "Select the channel to update to:",
                 channels,
                 q => q,
-                cancellationToken);
+                binding: channelBinding,
+                cancellationToken: cancellationToken);
         }
 
         try
@@ -291,8 +525,7 @@ internal sealed class UpdateCommand : BaseCommand
             var currentExePath = Environment.ProcessPath;
             if (string.IsNullOrEmpty(currentExePath))
             {
-                InteractionService.DisplayError("Unable to determine the current executable path.");
-                return ExitCodeConstants.InvalidCommand;
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, "Unable to determine the current executable path.");
             }
 
             InteractionService.DisplayMessage(KnownEmojis.Package, $"Current CLI location: {currentExePath}");
@@ -304,33 +537,17 @@ internal sealed class UpdateCommand : BaseCommand
             // Extract and update to $HOME/.aspire/bin
             await ExtractAndUpdateAsync(archivePath, cancellationToken);
 
-            // Save the selected channel to global settings for future use with 'aspire new' and 'aspire init'
-            // For stable channel, clear the setting to leave it blank (like the install scripts do)
-            // For other channels (staging, daily), save the channel name
-            if (string.Equals(channel, PackageChannelNames.Stable, StringComparison.OrdinalIgnoreCase))
-            {
-                await _configurationService.DeleteConfigurationAsync("channel", isGlobal: true, cancellationToken);
-                _logger.LogDebug("Cleared global channel setting for stable channel");
-            }
-            else
-            {
-                await _configurationService.SetConfigurationAsync("channel", channel, isGlobal: true, cancellationToken);
-                _logger.LogDebug("Saved global channel setting: {Channel}", channel);
-            }
-
-            return 0;
+            return CommandResult.Success();
         }
         catch (OperationCanceledException)
         {
-            InteractionService.DisplayCancellationMessage();
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Cancelled();
         }
         catch (Exception ex)
         {
             Telemetry.RecordError("Failed to update CLI", ex);
             var errorMessage = $"Failed to update CLI: {ex.Message}";
-            InteractionService.DisplayError(errorMessage);
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, errorMessage);
         }
     }
 
@@ -461,11 +678,11 @@ internal sealed class UpdateCommand : BaseCommand
 
         var pathSeparator = Path.PathSeparator;
         var paths = pathEnv.Split(pathSeparator, StringSplitOptions.RemoveEmptyEntries);
-        
-        return paths.Any(p => 
-            string.Equals(Path.GetFullPath(p.Trim()), Path.GetFullPath(directory), 
-                RuntimeInformation.IsOSPlatform(OSPlatform.Windows) 
-                    ? StringComparison.OrdinalIgnoreCase 
+
+        return paths.Any(p =>
+            string.Equals(Path.GetFullPath(p.Trim()), Path.GetFullPath(directory),
+                RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                    ? StringComparison.OrdinalIgnoreCase
                     : StringComparison.Ordinal));
     }
 
@@ -507,14 +724,14 @@ internal sealed class UpdateCommand : BaseCommand
 
             var output = await process.StandardOutput.ReadToEndAsync(cancellationToken);
             await process.WaitForExitAsync(cancellationToken);
-            
+
             if (process.ExitCode == 0)
             {
                 var version = output.Trim();
                 InteractionService.DisplaySuccess($"Updated to version: {version}");
                 return version;
             }
-            
+
             return null;
         }
         catch

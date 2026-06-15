@@ -4,7 +4,6 @@
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.Provisioning;
 using Aspire.Hosting.Azure.Provisioning.Internal;
-using Aspire.Hosting.Lifecycle;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -21,7 +20,7 @@ public static class AzureProvisionerExtensions
     /// </summary>
     /// <param name="builder">The distributed application builder.</param>
     /// <returns>The distributed application builder.</returns>
-    [AspireExport(Description = "Adds Azure provisioning services to the distributed application builder")]
+    [AspireExport]
     public static IDistributedApplicationBuilder AddAzureProvisioning(this IDistributedApplicationBuilder builder)
     {
         // Always add the Azure environment, even if the user doesn't explicitly add it.
@@ -29,8 +28,8 @@ public static class AzureProvisionerExtensions
         builder.AddAzureEnvironment();
 #pragma warning restore ASPIREAZURE001
 
-        builder.Services.TryAddEventingSubscriber<AzureResourcePreparer>();
-        builder.Services.TryAddEventingSubscriber<AzureProvisioner>();
+        builder.Services.TryAddSingleton<AzureResourcePreparer>();
+        builder.Services.TryAddSingleton<AzureProvisioner>();
 
         // Attempt to read azure configuration from configuration
         builder.Services.AddOptions<AzureProvisionerOptions>()
@@ -65,8 +64,17 @@ public static class AzureProvisionerExtensions
         }
         else
         {
-            builder.Services.AddSingleton<IProvisioningContextProvider, RunModeProvisioningContextProvider>();
+            builder.Services.AddSingleton<RunModeProvisioningContextProvider>();
+            builder.Services.AddSingleton<IProvisioningContextProvider>(sp => sp.GetRequiredService<RunModeProvisioningContextProvider>());
+            builder.Services.AddSingleton<IAzureProvisioningOptionsManager>(sp => sp.GetRequiredService<RunModeProvisioningContextProvider>());
         }
+
+        // The controller is registered unconditionally because AzureProvisioner is resolved by the run-mode
+        // Azure environment initialization. In publish mode, the controller's interactive features
+        // (change-context, change-location) are never invoked, but it must be resolvable.
+        builder.Services.TryAddSingleton<IAzureProvisioningOptionsManager, NoOpAzureProvisioningOptionsManager>();
+        builder.Services.TryAddSingleton<AzureProvisioningController>();
+
         builder.Services.TryAddSingleton<IProcessRunner, DefaultProcessRunner>();
 
         return builder;

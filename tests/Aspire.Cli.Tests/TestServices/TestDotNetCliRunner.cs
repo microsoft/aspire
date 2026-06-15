@@ -17,11 +17,15 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
     public Func<FileInfo, ProcessInvocationOptions, CancellationToken, int>? RestoreAsyncCallback { get; set; }
     public Func<FileInfo, ProcessInvocationOptions, CancellationToken, (int ExitCode, bool IsAspireHost, string? AspireHostingVersion)>? GetAppHostInformationAsyncCallback { get; set; }
     public Func<DirectoryInfo, ProcessInvocationOptions, CancellationToken, (int ExitCode, string[] ConfigPaths)>? GetNuGetConfigPathsAsyncCallback { get; set; }
+    public Func<FileInfo, string[], string[], string[], ProcessInvocationOptions, CancellationToken, Task<(int ExitCode, JsonDocument? Output)>>? GetProjectItemsAndPropertiesAsyncCallbackWithTargetsAsync { get; set; }
+    public Func<FileInfo, string[], string[], string[], ProcessInvocationOptions, CancellationToken, (int ExitCode, JsonDocument? Output)>? GetProjectItemsAndPropertiesAsyncCallbackWithTargets { get; set; }
+    public Func<FileInfo, string[], string[], ProcessInvocationOptions, CancellationToken, Task<(int ExitCode, JsonDocument? Output)>>? GetProjectItemsAndPropertiesAsyncCallbackAsync { get; set; }
     public Func<FileInfo, string[], string[], ProcessInvocationOptions, CancellationToken, (int ExitCode, JsonDocument? Output)>? GetProjectItemsAndPropertiesAsyncCallback { get; set; }
-    public Func<string, string, string?, bool, ProcessInvocationOptions, CancellationToken, (int ExitCode, string? TemplateVersion)>? InstallTemplateAsyncCallback { get; set; }
+    public Func<string, string, FileInfo?, string?, bool, ProcessInvocationOptions, CancellationToken, (int ExitCode, string? TemplateVersion)>? InstallTemplateAsyncCallback { get; set; }
     public Func<string, string, string, ProcessInvocationOptions, CancellationToken, int>? NewProjectAsyncCallback { get; set; }
     public Func<FileInfo, bool, bool, bool, string[], IDictionary<string, string>?, TaskCompletionSource<IAppHostCliBackchannel>?, ProcessInvocationOptions, CancellationToken, Task<int>>? RunAsyncCallback { get; set; }
-    public Func<DirectoryInfo, string, bool, int, int, FileInfo?, bool, ProcessInvocationOptions, CancellationToken, (int ExitCode, NuGetPackage[]? Packages)>? SearchPackagesAsyncCallback { get; set; }
+    public Func<FileInfo, string, DirectoryInfo, string[], IDictionary<string, string>?, TaskCompletionSource<IAppHostCliBackchannel>?, ProcessInvocationOptions, CancellationToken, Task<int>>? RunAppHostCommandAsyncCallback { get; set; }
+    public Func<DirectoryInfo, string, bool, bool, int, int, FileInfo?, bool, ProcessInvocationOptions, CancellationToken, (int ExitCode, NuGetPackage[]? Packages)>? SearchPackagesAsyncCallback { get; set; }
     public Func<FileInfo, ProcessInvocationOptions, CancellationToken, (int ExitCode, IReadOnlyList<FileInfo> Projects)>? GetSolutionProjectsAsyncCallback { get; set; }
     public Func<FileInfo, FileInfo, ProcessInvocationOptions, CancellationToken, int>? AddProjectReferenceAsyncCallback { get; set; }
 
@@ -50,7 +54,7 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
     {
         return RestoreAsyncCallback != null
             ? Task.FromResult(RestoreAsyncCallback(projectFilePath, options, cancellationToken))
-            : throw new NotImplementedException();
+            : Task.FromResult(0); // If not overridden, just return success.
     }
 
     public Task<(int ExitCode, bool IsAspireHost, string? AspireHostingVersion)> GetAppHostInformationAsync(FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken)
@@ -68,7 +72,7 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
             ? Task.FromResult(GetNuGetConfigPathsAsyncCallback(workingDirectory, options, cancellationToken))
             : Task.FromResult((0, GetGlobalNuGetPaths())); // If not overridden, return success with no config paths which will blow up.
     }
-    
+
     private static string[] GetGlobalNuGetPaths()
     {
         return Environment.OSVersion.Platform switch
@@ -78,17 +82,68 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
         };
     }
 
-    public Task<(int ExitCode, JsonDocument? Output)> GetProjectItemsAndPropertiesAsync(FileInfo projectFile, string[] items, string[] properties, ProcessInvocationOptions options, CancellationToken cancellationToken)
+    public Task<(int ExitCode, JsonDocument? Output)> GetProjectItemsAndPropertiesAsync(FileInfo projectFile, string[] items, string[] properties, string[] targets, ProcessInvocationOptions options, CancellationToken cancellationToken)
     {
-        return GetProjectItemsAndPropertiesAsyncCallback != null
-            ? Task.FromResult(GetProjectItemsAndPropertiesAsyncCallback(projectFile, items, properties, options, cancellationToken))
-            : throw new NotImplementedException();
+        // Prefer the targets-aware callbacks when tests need to assert on the targets argument.
+        if (GetProjectItemsAndPropertiesAsyncCallbackWithTargetsAsync != null)
+        {
+            return GetProjectItemsAndPropertiesAsyncCallbackWithTargetsAsync(projectFile, items, properties, targets, options, cancellationToken);
+        }
+
+        if (GetProjectItemsAndPropertiesAsyncCallbackWithTargets != null)
+        {
+            return Task.FromResult(GetProjectItemsAndPropertiesAsyncCallbackWithTargets(projectFile, items, properties, targets, options, cancellationToken));
+        }
+
+        if (GetProjectItemsAndPropertiesAsyncCallbackAsync != null)
+        {
+            return GetProjectItemsAndPropertiesAsyncCallbackAsync(projectFile, items, properties, options, cancellationToken);
+        }
+
+        if (GetProjectItemsAndPropertiesAsyncCallback != null)
+        {
+            return Task.FromResult(GetProjectItemsAndPropertiesAsyncCallback(projectFile, items, properties, options, cancellationToken));
+        }
+
+        // DotNetAppHostProject collapsed its three legacy MSBuild round-trips into a single
+        // GetProjectItemsAndPropertiesAsync call (issue #17197). Tests that pre-date that
+        // change still configure GetAppHostInformationAsyncCallback to control compatibility
+        // gating, so honor it here by synthesizing the JSON shape the production code expects.
+        if (GetAppHostInformationAsyncCallback != null)
+        {
+            var (exitCode, isAspireHost, aspireHostingVersion) = GetAppHostInformationAsyncCallback(projectFile, options, cancellationToken);
+            var versionJson = aspireHostingVersion is null ? "null" : $"\"{aspireHostingVersion}\"";
+            var json = $$"""
+                {
+                  "Properties": {
+                    "IsAspireHost": "{{(isAspireHost ? "true" : "false")}}",
+                    "AspireHostingSDKVersion": {{versionJson}}
+                  },
+                  "Items": {}
+                }
+                """;
+            return Task.FromResult<(int, JsonDocument?)>((exitCode, JsonDocument.Parse(json)));
+        }
+
+        // Default response: shape it so DotNetAppHostProject treats the project as a valid
+        // Aspire host with the default template version. Most tests rely on the implicit
+        // "valid AppHost" default.
+        var defaultJson = $$"""
+            {
+              "Properties": {
+                "IsAspireHost": "true",
+                "AspireHostingSDKVersion": "{{VersionHelper.GetDefaultTemplateVersion()}}"
+              },
+              "Items": {}
+            }
+            """;
+        return Task.FromResult<(int, JsonDocument?)>((0, JsonDocument.Parse(defaultJson)));
     }
 
     public Task<(int ExitCode, string? TemplateVersion)> InstallTemplateAsync(string packageName, string version, FileInfo? nugetConfigFile, string? nugetSource, bool force, ProcessInvocationOptions options, CancellationToken cancellationToken)
     {
         return InstallTemplateAsyncCallback != null
-            ? Task.FromResult(InstallTemplateAsyncCallback(packageName, version, nugetSource, force, options, cancellationToken))
+            ? Task.FromResult(InstallTemplateAsyncCallback(packageName, version, nugetConfigFile, nugetSource, force, options, cancellationToken))
             : Task.FromResult<(int, string?)>((0, version)); // If not overridden, just return success for the version specified.
     }
 
@@ -106,10 +161,22 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
             : throw new NotImplementedException();
     }
 
-    public Task<(int ExitCode, NuGetPackage[]? Packages)> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken)
+    public Task<int> RunAppHostCommandAsync(FileInfo projectFile, string command, DirectoryInfo workingDirectory, string[] args, IDictionary<string, string>? env, TaskCompletionSource<IAppHostCliBackchannel>? backchannelCompletionSource, ProcessInvocationOptions options, CancellationToken cancellationToken)
+    {
+        if (RunAppHostCommandAsyncCallback is not null)
+        {
+            return RunAppHostCommandAsyncCallback(projectFile, command, workingDirectory, args, env, backchannelCompletionSource, options, cancellationToken);
+        }
+
+        return RunAsyncCallback is not null
+            ? RunAsyncCallback(projectFile, false, true, false, args, env, backchannelCompletionSource, options, cancellationToken)
+            : throw new NotImplementedException();
+    }
+
+    public Task<(int ExitCode, NuGetPackage[]? Packages)> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool exactMatch, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken)
     {
         return SearchPackagesAsyncCallback != null
-            ? Task.FromResult(SearchPackagesAsyncCallback(workingDirectory, query, prerelease, take, skip, nugetConfigFile, useCache, options, cancellationToken))
+            ? Task.FromResult(SearchPackagesAsyncCallback(workingDirectory, query, exactMatch, prerelease, take, skip, nugetConfigFile, useCache, options, cancellationToken))
             : throw new NotImplementedException();
     }
 

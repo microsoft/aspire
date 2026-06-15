@@ -73,17 +73,20 @@
     margin-bottom: 15px;
 }
 
-::deep .dimension-popup {
-    max-width: 500px;
+::deep .fluent-popover-content {
+    overflow-wrap: normal;
+    word-break: normal;
+    max-height: 300px;
+    overflow-y: auto;
+    max-width: 400px;
     min-width: 100px;
     overflow-x: hidden;
 }
 
-::deep .fluent-popover-content {
-    overflow-wrap: normal;
-    word-break: normal;
-    max-height: 400px;
-    overflow-y: auto;
+::deep .fluent-popover-content div[part="header"] {
+    font-size: 16px;
+    line-height: normal;
+    margin-bottom: 8px;
 }
 
 ::deep .metrics-tree {

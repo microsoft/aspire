@@ -10,6 +10,7 @@
 
 using System.Text;
 using System.Text.RegularExpressions;
+using Aspire.Hosting.Ats;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Testing;
@@ -388,6 +389,49 @@ public class ProjectResourceTests
                   .WithHttpEndpoint(port: 5003, name: "dontinjectme")
                   // Should not be included in ASPNETCORE_URLS
                   .WithEndpointsInEnvironment(filter: e => e.Name != "dontinjectme")
+                  .WithEndpoint("http", e =>
+                  {
+                      e.AllocatedEndpoint = new(e, "localhost", e.Port!.Value, targetPortExpression: "p0");
+                  })
+                  .WithEndpoint("https", e =>
+                  {
+                      e.AllocatedEndpoint = new(e, "localhost", e.Port!.Value, targetPortExpression: "p1");
+                  })
+                  .WithEndpoint("http2", e =>
+                  {
+                      e.AllocatedEndpoint = new(e, "localhost", e.Port!.Value, targetPortExpression: "p2");
+                  })
+                  .WithEndpoint("dontinjectme", e =>
+                  {
+                      e.AllocatedEndpoint = new(e, "localhost", e.Port!.Value, targetPortExpression: "p3");
+                  });
+
+        using var app = appBuilder.Build();
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var projectResources = appModel.GetProjectResources();
+
+        var resource = Assert.Single(projectResources);
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        Assert.Equal("http://localhost:p0;https://localhost:p1", config["ASPNETCORE_URLS"]);
+        Assert.Equal("5001", config["ASPNETCORE_HTTPS_PORT"]);
+        Assert.Equal("p2", config["SOME_ENV"]);
+    }
+
+    [Fact]
+    public async Task ExcludeLaunchProfileAddsHttpOrHttpsEndpointAddsToEnvWithEndpointNameFilter()
+    {
+        var appBuilder = CreateBuilder(operation: DistributedApplicationOperation.Run);
+
+        appBuilder.AddProject<Projects.ServiceA>("projectName", launchProfileName: null)
+                  .WithHttpEndpoint(port: 5000, name: "http")
+                  .WithHttpsEndpoint(port: 5001, name: "https")
+                  .WithHttpEndpoint(port: 5002, name: "http2", env: "SOME_ENV")
+                  .WithHttpEndpoint(port: 5003, name: "dontinjectme")
+                  .WithEndpointsInEnvironment(["http", "https", "http2"])
                   .WithEndpoint("http", e =>
                   {
                       e.AllocatedEndpoint = new(e, "localhost", e.Port!.Value, targetPortExpression: "p0");
@@ -842,6 +886,7 @@ public class ProjectResourceTests
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "build-projectName");
         builder.Services.AddSingleton<IContainerRuntime, FakeContainerRuntime>();
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(sp => (IContainerRuntimeResolver)sp.GetRequiredService<IContainerRuntime>());
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
         // Create a test container resource that implements IResourceWithContainerFiles
@@ -928,6 +973,21 @@ public class ProjectResourceTests
         var annotation = app.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
         Assert.NotNull(annotation);
         Assert.Equal("project", annotation.LaunchConfigurationType);
+    }
+
+    [Fact]
+    public void AddProjectCreatesRebuilderWithNameValidationPolicyAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        builder.AddProject<TestProject>("projectName", options => { options.ExcludeLaunchProfile = true; });
+
+        var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var rebuilder = appModel.Resources.OfType<ProjectRebuilderResource>().SingleOrDefault();
+        Assert.NotNull(rebuilder);
+        Assert.True(rebuilder.TryGetLastAnnotation<NameValidationPolicyAnnotation>(out var policy));
+        Assert.Same(NameValidationPolicyAnnotation.None, policy);
     }
 
     internal static IDistributedApplicationBuilder CreateBuilder(string[]? args = null, DistributedApplicationOperation operation = DistributedApplicationOperation.Publish)

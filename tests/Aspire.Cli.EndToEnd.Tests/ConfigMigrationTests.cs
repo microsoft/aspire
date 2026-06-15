@@ -38,7 +38,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
     /// </returns>
     private (string AspireHomeDir, Hex1bTerminal Terminal) CreateMigrationTerminal(
         string repoRoot,
-        CliE2ETestHelpers.DockerInstallMode installMode,
+        CliInstallStrategy strategy,
         TemporaryWorkspace workspace,
         [System.Runtime.CompilerServices.CallerMemberName] string testName = "")
     {
@@ -47,7 +47,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         Directory.CreateDirectory(aspireHomeDir);
 
         var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(
-            repoRoot, installMode, output,
+            repoRoot, strategy, output,
             workspace: workspace,
             additionalVolumes: [$"{aspireHomeDir}:/root/.aspire"],
             testName: testName);
@@ -101,25 +101,26 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
 
     /// <summary>
     /// Verifies that a legacy ~/.aspire/globalsettings.json is automatically migrated to
-    /// ~/.aspire/aspire.config.json when a CLI command is run, and that the legacy file
-    /// is preserved for backward compatibility with older CLI versions.
+    /// ~/.aspire/aspire.config.json when a CLI command is run, that the legacy file is
+    /// preserved for backward compatibility with older CLI versions, and that the
+    /// channel field is dropped during migration (channel is baked into the binary as
+    /// AspireCliChannel assembly metadata; it is not stored in global config).
     /// </summary>
     [Fact]
     public async Task GlobalSettings_MigratedFromLegacyFormat()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
-        var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, installMode, workspace);
+        var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, strategy, workspace);
         using var _ = terminal;
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Pre-populate legacy globalsettings.json on the host (visible in container via bind mount).
         var legacyPath = Path.Combine(aspireHomeDir, "globalsettings.json");
@@ -139,30 +140,28 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Verify aspire.config.json was created with migrated values (host-side).
-        AssertFileContains(newConfigPath, "staging", "polyglotSupportEnabled");
+        // Migrated aspire.config.json retains non-channel content (features, sdkVersion).
+        AssertFileContains(newConfigPath, "polyglotSupportEnabled");
 
-        // Verify the legacy file was preserved (intentional for backward compat).
-        AssertFileContains(legacyPath, "channel");
+        // Channel is intentionally dropped from the migrated global config.
+        AssertFileDoesNotContain(newConfigPath, "\"channel\"", "staging");
 
-        // Verify migrated values are accessible via aspire config get.
+        // Legacy file is preserved unchanged for backward compatibility, so it still
+        // contains the original channel value.
+        AssertFileContains(legacyPath, "channel", "staging");
+
+        // aspire config get channel returns the not-found error and a non-zero exit
+        // because the migrated global config has no channel key.
         await auto.ClearScreenAsync(counter);
         await auto.TypeAsync("aspire config get channel");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("staging", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitUntilTextAsync("not found", timeout: TimeSpan.FromSeconds(10));
+        await auto.WaitForAnyPromptAsync(counter);
 
         // Cleanup.
-        await auto.TypeAsync("aspire config delete channel -g");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
         await auto.TypeAsync("aspire config delete features.polyglotSupportEnabled -g");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     /// <summary>
@@ -173,18 +172,17 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
     public async Task GlobalMigration_SkipsWhenNewConfigExists()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
-        var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, installMode, workspace);
+        var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, strategy, workspace);
         using var _ = terminal;
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Pre-populate BOTH files on the host: aspire.config.json with "preview",
         // globalsettings.json with "staging".
@@ -209,10 +207,6 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire config delete channel -g");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     /// <summary>
@@ -223,18 +217,17 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
     public async Task GlobalMigration_HandlesMalformedLegacyJson()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
-        var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, installMode, workspace);
+        var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, strategy, workspace);
         using var _ = terminal;
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Write malformed JSON to the legacy file.
         var newConfigPath = Path.Combine(aspireHomeDir, "aspire.config.json");
@@ -268,32 +261,29 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire config delete channel -g");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     /// <summary>
     /// Verifies that legacy globalsettings.json containing JSON comments and trailing commas
-    /// (common when hand-edited) is correctly parsed and migrated to aspire.config.json.
+    /// (common when hand-edited) is correctly parsed and migrated to aspire.config.json,
+    /// and that the channel field is dropped during migration (channel is baked into the
+    /// binary as AspireCliChannel assembly metadata; it is not stored in global config).
     /// </summary>
     [Fact]
     public async Task GlobalMigration_HandlesCommentsAndTrailingCommas()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
-        var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, installMode, workspace);
+        var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, strategy, workspace);
         using var _ = terminal;
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Write legacy JSON with comments and trailing commas.
         var newConfigPath = Path.Combine(aspireHomeDir, "aspire.config.json");
@@ -320,27 +310,28 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Verify migration succeeded despite comments/trailing commas (host-side).
-        AssertFileContains(newConfigPath, "staging", "polyglotSupportEnabled");
+        // Migrated aspire.config.json retains non-channel content (features).
+        AssertFileContains(newConfigPath, "polyglotSupportEnabled");
 
-        // Verify value accessible via config get.
+        // Channel is intentionally dropped from the migrated global config.
+        AssertFileDoesNotContain(newConfigPath, "\"channel\"", "staging");
+
+        // Legacy file is preserved unchanged for backward compatibility, so it still
+        // contains the original channel value.
+        AssertFileContains(legacyPath, "channel", "staging");
+
+        // aspire config get channel returns the not-found error and a non-zero exit
+        // because the migrated global config has no channel key.
         await auto.ClearScreenAsync(counter);
         await auto.TypeAsync("aspire config get channel");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("staging", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitUntilTextAsync("not found", timeout: TimeSpan.FromSeconds(10));
+        await auto.WaitForAnyPromptAsync(counter);
 
         // Cleanup.
-        await auto.TypeAsync("aspire config delete channel -g");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
         await auto.TypeAsync("aspire config delete features.polyglotSupportEnabled -g");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     /// <summary>
@@ -352,18 +343,17 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
     public async Task ConfigSetGet_CreatesNestedJsonFormat()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
-        var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, installMode, workspace);
+        var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, strategy, workspace);
         using var _ = terminal;
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Ensure clean state.
         var newConfigPath = Path.Combine(aspireHomeDir, "aspire.config.json");
@@ -421,33 +411,29 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire config delete features.stagingChannelEnabled -g");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     /// <summary>
     /// Verifies that migration from globalsettings.json preserves all supported
-    /// value types: channel (string), features (dictionary of bools), and packages
-    /// (dictionary of strings).
+    /// value types: features (dictionary of bools) and packages (dictionary of strings),
+    /// and that the channel field is dropped during migration (channel is baked into the
+    /// binary as AspireCliChannel assembly metadata; it is not stored in global config).
     /// </summary>
     [Fact]
     public async Task GlobalMigration_PreservesAllValueTypes()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
-        var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, installMode, workspace);
+        var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, strategy, workspace);
         using var _ = terminal;
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Create a comprehensive legacy globalsettings.json with all value types.
         var newConfigPath = Path.Combine(aspireHomeDir, "aspire.config.json");
@@ -478,24 +464,28 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Verify all value types were migrated (host-side).
+        // Migrated aspire.config.json retains non-channel content (features, packages).
         AssertFileContains(newConfigPath,
-            "preview",
             "polyglotSupportEnabled",
             "stagingChannelEnabled",
             "Aspire.Hosting.Redis");
 
-        // Verify individual value via config get.
+        // Channel is intentionally dropped from the migrated global config.
+        AssertFileDoesNotContain(newConfigPath, "\"channel\"", "preview");
+
+        // Legacy file is preserved unchanged for backward compatibility, so it still
+        // contains the original channel value.
+        AssertFileContains(legacyPath, "channel", "preview");
+
+        // aspire config get channel returns the not-found error and a non-zero exit
+        // because the migrated global config has no channel key.
         await auto.ClearScreenAsync(counter);
         await auto.TypeAsync("aspire config get channel");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("preview", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitUntilTextAsync("not found", timeout: TimeSpan.FromSeconds(10));
+        await auto.WaitForAnyPromptAsync(counter);
 
         // Cleanup.
-        await auto.TypeAsync("aspire config delete channel -g");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
         await auto.TypeAsync("aspire config delete features.polyglotSupportEnabled -g");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
@@ -505,10 +495,6 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire config delete packages -g");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     /// <summary>
@@ -522,15 +508,14 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
     public async Task FullUpgrade_LegacyCliToNewCli_MigratesGlobalSettings()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
-        var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, installMode, workspace);
+        var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, strategy, workspace);
         using var _ = terminal;
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
@@ -566,7 +551,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 3: Install the new CLI (from this PR), overwriting the legacy CLI.
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Step 4: Run the new CLI to trigger global migration.
         await auto.TypeAsync("aspire --version");
@@ -592,9 +577,5 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire config delete features.polyglotSupportEnabled -g");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 }

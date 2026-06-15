@@ -124,7 +124,7 @@
     <value>Starter App (ASP.NET Core/Blazor)</value>
   </data>
   <data name="AspireJsFrontendStarter_Description" xml:space="preserve">
-    <value>Starter App (ASP.NET Core/React)</value>
+    <value>Starter App (ASP.NET Core/React, C# AppHost)</value>
   </data>
   <data name="AspireJavaStarter_Description" xml:space="preserve">
     <value>Starter App (Java AppHost/Express/React)</value>
@@ -140,9 +140,6 @@
   </data>
   <data name="AspireServiceDefaults_Description" xml:space="preserve">
     <value>Service defaults</value>
-  </data>
-  <data name="AspirePyStarter_Description" xml:space="preserve">
-    <value>Starter App (FastAPI/React)</value>
   </data>
   <data name="AspireAppHostSingleFile_Description" xml:space="preserve">
     <value>Empty AppHost</value>
@@ -205,8 +202,8 @@
     <value>Getting templates...</value>
   </data>
   <data name="TemplateInstallationFailed" xml:space="preserve">
-    <value>The template installation failed with exit code {0}. See logs at {1}</value>
-    <comment>{0} is a number, {1} is the log file path</comment>
+    <value>The template installation failed with exit code {0}.</value>
+    <comment>{0} is a number</comment>
   </data>
   <data name="UsingProjectTemplatesVersion" xml:space="preserve">
     <value>Using project templates version: {0}</value>
@@ -215,8 +212,8 @@
     <value>Creating new Aspire project...</value>
   </data>
   <data name="ProjectCreationFailed" xml:space="preserve">
-    <value>Project creation failed with exit code {0}. See logs at {1}</value>
-    <comment>{0} is a number, {1} is the log file path</comment>
+    <value>Project creation failed with exit code {0}.</value>
+    <comment>{0} is a number</comment>
   </data>
   <data name="ProjectCreatedSuccessfully" xml:space="preserve">
     <value>Project created successfully in {0}.</value>
@@ -268,5 +265,9 @@
   </data>
   <data name="RunAspireRun" xml:space="preserve">
     <value>Run 'aspire run' to start your AppHost.</value>
+  </data>
+  <data name="SourceOverrideNotPersistedWarning" xml:space="preserve">
+    <value>[yellow]--source was used for the initial scaffold restore only and is not persisted. Later 'aspire restore' / 'aspire add' will use the channel feeds configured for this project.[/]</value>
+    <comment>Do not translate [yellow] or [/]. Displayed after 'aspire new' (aspire-empty or aspire-starter) when --source was supplied for a non-C# language.</comment>
   </data>
 </root>

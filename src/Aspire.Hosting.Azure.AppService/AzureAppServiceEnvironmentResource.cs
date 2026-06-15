@@ -5,6 +5,7 @@
 #pragma warning disable ASPIREAZURE001
 
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.AppService;
@@ -13,7 +14,9 @@ using Azure.Provisioning;
 using Azure.Provisioning.AppService;
 using Azure.Provisioning.Expressions;
 using Azure.Provisioning.Primitives;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Azure;
 
@@ -41,6 +44,20 @@ public class AzureAppServiceEnvironmentResource :
             var model = factoryContext.PipelineContext.Model;
             var steps = new List<PipelineStep>();
 
+            // Add prepare-azure-app-service-{name} step that materializes deployment targets
+            // for compute resources targeted to this environment. Runs during BeforeStart so that
+            // BeforeStartEvent subscribers (and downstream code) can observe the deployment targets.
+            var prepareStep = new PipelineStep
+            {
+                Name = $"prepare-azure-app-service-{name}",
+                Description = $"Prepares Azure App Service deployment targets for {name}.",
+                Action = ctx => PrepareDeploymentTargetsAsync(ctx),
+                DependsOnSteps = [AzureEnvironmentResource.PrepareResourcesStepName, WellKnownPipelineSteps.ValidateComputeEnvironments],
+                RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
+            };
+
+            steps.Add(prepareStep);
+
             // Add validation step that checks for environment variable name issues
             // This runs early and provides user-friendly error messages through the activity reporter
             var validateStep = new PipelineStep
@@ -54,18 +71,23 @@ public class AzureAppServiceEnvironmentResource :
 
             steps.Add(validateStep);
 
-            // Add print-dashboard-url step
-            var printDashboardUrlStep = new PipelineStep
+            if (EnableDashboard)
             {
-                Name = $"print-dashboard-url-{name}",
-                Description = $"Prints the deployment summary and dashboard URL for {name}.",
-                Action = ctx => PrintDashboardUrlAsync(ctx),
-                Tags = ["print-summary"],
-                DependsOnSteps = [AzureEnvironmentResource.ProvisionInfrastructureStepName],
-                RequiredBySteps = [WellKnownPipelineSteps.Deploy]
-            };
+                // The dashboard output is only emitted when the dashboard is provisioned.
+                // Avoid registering the summary step when WithDashboard(false) is used,
+                // otherwise deploy succeeds and then fails while trying to read a missing output.
+                var printDashboardUrlStep = new PipelineStep
+                {
+                    Name = $"print-dashboard-url-{name}",
+                    Description = $"Prints the deployment summary and dashboard URL for {name}.",
+                    Action = ctx => PrintDashboardUrlAsync(ctx),
+                    Tags = ["print-summary"],
+                    DependsOnSteps = [AzureEnvironmentResource.ProvisionInfrastructureStepName],
+                    RequiredBySteps = [WellKnownPipelineSteps.Deploy]
+                };
 
-            steps.Add(printDashboardUrlStep);
+                steps.Add(printDashboardUrlStep);
+            }
 
             // Expand deployment target steps for all compute resources
             // This ensures the push/provision steps from deployment targets are included in the pipeline
@@ -139,6 +161,73 @@ public class AzureAppServiceEnvironmentResource :
             var provisionSteps = context.GetSteps(this, WellKnownPipelineTags.ProvisionInfrastructure);
             printSummarySteps.DependsOn(provisionSteps);
         }));
+    }
+
+    /// <summary>
+    /// Materializes Azure App Service deployment targets for compute resources targeted to this
+    /// environment. Invoked by the per-environment <c>prepare-azure-app-service-{name}</c>
+    /// pipeline step, which runs after <c>azure-prepare-resources</c> so role-assignment resources
+    /// are present in the model and can be referenced by the generated
+    /// <see cref="DeploymentTargetAnnotation"/> instances.
+    /// </summary>
+    private async Task PrepareDeploymentTargetsAsync(PipelineStepContext context)
+    {
+        var appModel = context.Model;
+        var executionContext = context.ExecutionContext;
+        var services = context.Services;
+        var cancellationToken = context.CancellationToken;
+
+        if (!executionContext.IsPublishMode)
+        {
+            return;
+        }
+
+        // Remove the default container registry from the model if an explicit registry is configured
+        if (this.HasAnnotationOfType<ContainerRegistryReferenceAnnotation>() &&
+            DefaultContainerRegistry is not null)
+        {
+            appModel.Resources.Remove(DefaultContainerRegistry);
+            DefaultContainerRegistry = null;
+        }
+
+        var logger = services.GetRequiredService<ILogger<AzureAppServiceEnvironmentResource>>();
+        var provisioningOptions = services.GetRequiredService<IOptions<AzureProvisioningOptions>>();
+
+        var appServiceEnvironmentContext = new AzureAppServiceEnvironmentContext(
+            logger,
+            executionContext,
+            this,
+            services);
+
+        // Annotate the environment with its context
+        Annotations.Add(new AzureAppServiceEnvironmentContextAnnotation(appServiceEnvironmentContext));
+
+        foreach (var resource in appModel.GetComputeResources())
+        {
+            // Support project resources and containers with Dockerfile
+            if (resource is not ProjectResource && !(resource.IsContainer() && resource.TryGetAnnotationsOfType<DockerfileBuildAnnotation>(out _)))
+            {
+                continue;
+            }
+
+            // Skip resources that are explicitly targeted to a different compute environment
+            var resourceComputeEnvironment = resource.GetComputeEnvironment();
+            if (resourceComputeEnvironment is not null && resourceComputeEnvironment != this)
+            {
+                continue;
+            }
+
+            var website = await appServiceEnvironmentContext.CreateAppServiceAsync(resource, provisioningOptions.Value, cancellationToken).ConfigureAwait(false);
+
+            resource.Annotations.Add(new DeploymentTargetAnnotation(website)
+            {
+                ContainerRegistry = this,
+                ComputeEnvironment = this
+            });
+        }
+
+        // Log once about all HTTP endpoints upgraded to HTTPS
+        appServiceEnvironmentContext.LogHttpsUpgradeIfNeeded();
     }
 
     private async Task PrintDashboardUrlAsync(PipelineStepContext context)
@@ -275,6 +364,11 @@ public class AzureAppServiceEnvironmentResource :
     internal BicepOutputReference WebSiteSuffix => new("webSiteSuffix", this);
 
     /// <summary>
+    /// When true, HTTP endpoints are not upgraded to HTTPS. Default is false (HTTP→HTTPS upgrade is enabled).
+    /// </summary>
+    internal bool PreserveHttpEndpoints { get; set; }
+
+    /// <summary>
     /// Gets or sets a value indicating whether the Aspire dashboard should be included in the container app environment.
     /// Default is true.
     /// </summary>
@@ -393,6 +487,35 @@ public class AzureAppServiceEnvironmentResource :
     {
         var resource = endpointReference.Resource;
         return ReferenceExpression.Create($"{resource.Name.ToLowerInvariant()}-{WebSiteSuffix}.azurewebsites.net");
+    }
+
+    /// <inheritdoc/>
+    [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public ReferenceExpression GetEndpointPropertyExpression(EndpointReferenceExpression endpointReferenceExpression)
+    {
+        ArgumentNullException.ThrowIfNull(endpointReferenceExpression);
+
+        var endpointReference = endpointReferenceExpression.Endpoint;
+        var property = endpointReferenceExpression.Property;
+        var endpoint = endpointReference.EndpointAnnotation;
+        var scheme = PreserveHttpEndpoints ? endpoint.UriScheme : "https";
+        var port = string.Equals(scheme, "http", StringComparison.OrdinalIgnoreCase) ? 80 : 443;
+        var tlsEnabled = string.Equals(scheme, "https", StringComparison.OrdinalIgnoreCase) || endpoint.TlsEnabled;
+        var host = GetHostAddressExpression(endpointReference);
+
+        return property switch
+        {
+            EndpointProperty.Url => ReferenceExpression.Create($"{scheme}://{host}"),
+            EndpointProperty.Host or EndpointProperty.IPV4Host => host,
+            EndpointProperty.Port => ReferenceExpression.Create($"{port.ToString(CultureInfo.InvariantCulture)}"),
+            EndpointProperty.TargetPort => endpoint.TargetPort is int targetPort
+                ? ReferenceExpression.Create($"{targetPort.ToString(CultureInfo.InvariantCulture)}")
+                : ReferenceExpression.Create($"{new ContainerPortReference(endpointReference.Resource)}"),
+            EndpointProperty.Scheme => ReferenceExpression.Create($"{scheme}"),
+            EndpointProperty.HostAndPort => host,
+            EndpointProperty.TlsEnabled => ReferenceExpression.Create($"{(tlsEnabled ? bool.TrueString : bool.FalseString)}"),
+            _ => throw new InvalidOperationException($"The property '{property}' is not supported for the endpoint '{endpoint.Name}'.")
+        };
     }
 
     /// <inheritdoc/>

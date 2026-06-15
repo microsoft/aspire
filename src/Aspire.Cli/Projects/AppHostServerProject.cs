@@ -2,8 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Bundles;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Utils;
@@ -26,10 +26,10 @@ internal interface IAppHostServerProjectFactory
 internal sealed class AppHostServerProjectFactory(
     IDotNetCliRunner dotNetCliRunner,
     IPackagingService packagingService,
-    IConfigurationService configurationService,
     IBundleService bundleService,
     BundleNuGetService bundleNuGetService,
     IDotNetSdkInstaller sdkInstaller,
+    CliExecutionContext executionContext,
     ILoggerFactory loggerFactory) : IAppHostServerProjectFactory
 {
     public async Task<IAppHostServerProject> CreateAsync(string appPath, CancellationToken cancellationToken = default)
@@ -46,15 +46,33 @@ internal sealed class AppHostServerProjectFactory(
                 repoRoot,
                 dotNetCliRunner,
                 packagingService,
-                configurationService,
-                loggerFactory.CreateLogger<DotNetBasedAppHostServerProject>());
+                loggerFactory.CreateLogger<DotNetBasedAppHostServerProject>(),
+                logFilePath: executionContext.LogFilePath);
         }
 
         // Priority 2: Ensure bundle is extracted and check for layout
-        var layout = await bundleService.EnsureExtractedAndGetLayoutAsync(cancellationToken);
+        var layoutLease = await bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "apphost-server", cancellationToken);
+        var layout = layoutLease?.Layout;
 
         // Priority 3: Check if we have a bundle layout with a pre-built AppHost server
         if (layout is not null && layout.GetManagedPath() is string serverPath && File.Exists(serverPath))
+        {
+            return CreatePrebuiltAppHostServer(appPath, socketPath, layout, layoutLease);
+        }
+
+        layoutLease?.Dispose();
+        throw new InvalidOperationException(
+            "No Aspire AppHost server is available. Ensure the Aspire CLI is installed " +
+            "with a valid bundle layout, or reinstall using 'aspire setup --force'.");
+    }
+
+    internal PrebuiltAppHostServer CreatePrebuiltAppHostServer(
+        string appPath,
+        string socketPath,
+        LayoutConfiguration layout,
+        BundleLayoutLease? layoutLease)
+    {
+        try
         {
             return new PrebuiltAppHostServer(
                 appPath,
@@ -64,12 +82,14 @@ internal sealed class AppHostServerProjectFactory(
                 dotNetCliRunner,
                 sdkInstaller,
                 packagingService,
-                configurationService,
-                loggerFactory.CreateLogger<PrebuiltAppHostServer>());
+                executionContext,
+                loggerFactory.CreateLogger<PrebuiltAppHostServer>(),
+                layoutLease);
         }
-
-        throw new InvalidOperationException(
-            "No Aspire AppHost server is available. Ensure the Aspire CLI is installed " +
-            "with a valid bundle layout, or reinstall using 'aspire setup --force'.");
+        catch
+        {
+            layoutLease?.Dispose();
+            throw;
+        }
     }
 }

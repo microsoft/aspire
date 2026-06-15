@@ -2,6 +2,93 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="fr" original="../Dialogs.resx">
     <body>
+      <trans-unit id="AIAgentsDialogAppHostDescription">
+        <source>Give AI agents deep observability into your app so they can diagnose issues faster and verify fixes with confidence 🚀
+
+- 📦 Resource state, health checks, and relationships
+- 🖥️ Console logs
+- 📊 Distributed traces
+- 🪵 Structured logs
+
+AI agents access dashboard telemetry through the Aspire CLI. If you haven’t installed it yet, [install the Aspire CLI]({1}).
+
+Initialize AI agent support in your project with:
+
+```bash
+aspire agent init
+```
+
+This command configures skill files for your AI agent. The skill files tell the agent how to use Aspire CLI commands like [`aspire logs`](https://aspire.dev/reference/cli/commands/aspire-logs/) and [`aspire otel traces`](https://aspire.dev/reference/cli/commands/aspire-otel-traces/).
+
+Once connected, agents can start your app, check resource health, fetch logs and traces, and more.
+
+For more information about using AI agents with Aspire, such as setting up skills, see [AI coding agents]({0}).</source>
+        <target state="new">Give AI agents deep observability into your app so they can diagnose issues faster and verify fixes with confidence 🚀
+
+- 📦 Resource state, health checks, and relationships
+- 🖥️ Console logs
+- 📊 Distributed traces
+- 🪵 Structured logs
+
+AI agents access dashboard telemetry through the Aspire CLI. If you haven’t installed it yet, [install the Aspire CLI]({1}).
+
+Initialize AI agent support in your project with:
+
+```bash
+aspire agent init
+```
+
+This command configures skill files for your AI agent. The skill files tell the agent how to use Aspire CLI commands like [`aspire logs`](https://aspire.dev/reference/cli/commands/aspire-logs/) and [`aspire otel traces`](https://aspire.dev/reference/cli/commands/aspire-otel-traces/).
+
+Once connected, agents can start your app, check resource health, fetch logs and traces, and more.
+
+For more information about using AI agents with Aspire, such as setting up skills, see [AI coding agents]({0}).</target>
+        <note>{0} is the learn more URL, {1} is the install CLI URL</note>
+      </trans-unit>
+      <trans-unit id="AIAgentsDialogStandaloneDescription">
+        <source>Give AI agents deep observability into your app so they can diagnose issues faster and verify fixes with confidence 🚀
+
+- 📊 Distributed traces
+- 🔗 Trace spans
+- 🪵 Structured logs
+- 🗂️ Zip file export
+
+AI agents access dashboard telemetry using the Aspire CLI. [Install the Aspire CLI]({2}) if you haven't already.
+
+Use Aspire CLI commands to retrieve telemetry data directly in your terminal:
+
+```bash
+aspire otel logs --dashboard-url {0}
+```
+
+This is one example of how AI agents can access telemetry for your app. See [`aspire otel`](https://aspire.dev/reference/cli/commands/aspire-otel/) and [`aspire export`](https://aspire.dev/reference/cli/commands/aspire-export/).
+
+For more information about using AI agents with the dashboard, including setting up skills, see [Standalone dashboard and AI coding agents]({1}).</source>
+        <target state="new">Give AI agents deep observability into your app so they can diagnose issues faster and verify fixes with confidence 🚀
+
+- 📊 Distributed traces
+- 🔗 Trace spans
+- 🪵 Structured logs
+- 🗂️ Zip file export
+
+AI agents access dashboard telemetry using the Aspire CLI. [Install the Aspire CLI]({2}) if you haven't already.
+
+Use Aspire CLI commands to retrieve telemetry data directly in your terminal:
+
+```bash
+aspire otel logs --dashboard-url {0}
+```
+
+This is one example of how AI agents can access telemetry for your app. See [`aspire otel`](https://aspire.dev/reference/cli/commands/aspire-otel/) and [`aspire export`](https://aspire.dev/reference/cli/commands/aspire-export/).
+
+For more information about using AI agents with the dashboard, including setting up skills, see [Standalone dashboard and AI coding agents]({1}).</target>
+        <note>{0} is the dashboard URL, {1} is the learn more URL, {2} is the install CLI URL</note>
+      </trans-unit>
+      <trans-unit id="AIAgentsDialogTitle">
+        <source>AI agents</source>
+        <target state="new">AI agents</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DialogCloseButtonText">
         <source>Close</source>
         <target state="translated">Fermer</target>
@@ -62,6 +149,16 @@
         <target state="translated">Condition</target>
         <note />
       </trans-unit>
+      <trans-unit id="FilterDialogDatePlaceholder">
+        <source>e.g. 2024-01-15T09:30:00</source>
+        <target state="new">e.g. 2024-01-15T09:30:00</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FilterDialogDateValueLabel">
+        <source>Date and time</source>
+        <target state="new">Date and time</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FilterDialogDisableAll">
         <source>Disable all</source>
         <target state="translated">Désactiver tout</target>
@@ -82,9 +179,19 @@
         <target state="translated">Champ</target>
         <note />
       </trans-unit>
+      <trans-unit id="FilterDialogInvalidDate">
+        <source>Invalid date format</source>
+        <target state="new">Invalid date format</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FilterDialogParameterInputLabel">
         <source>Parameter</source>
         <target state="translated">Paramètre</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FilterDialogPickDateButtonTitle">
+        <source>Pick date and time</source>
+        <target state="new">Pick date and time</target>
         <note />
       </trans-unit>
       <trans-unit id="FilterDialogRemoveFilterButtonText">
@@ -318,8 +425,8 @@
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGetHelpLinkText">
-        <source>Go to Microsoft Learn documentation</source>
-        <target state="translated">Accédez à la documentation Microsoft Learn</target>
+        <source>Go to aspire.dev documentation</source>
+        <target state="translated">Accédez à la documentation aspire.dev</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToConsoleLogs">

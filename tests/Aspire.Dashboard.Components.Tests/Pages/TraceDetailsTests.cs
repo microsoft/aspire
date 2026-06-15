@@ -385,6 +385,214 @@ public partial class TraceDetailsTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task Render_DurationFilter_FiltersShortSpans()
+    {
+        SetupTraceDetailsServices();
+
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
+        telemetryRepository.AddTraces(new AddContext(),
+            new RepeatedField<ResourceSpans>
+            {
+                new ResourceSpans
+                {
+                    Resource = CreateResource(),
+                    ScopeSpans =
+                    {
+                        new ScopeSpans
+                        {
+                            Scope = CreateScope(),
+                            Spans =
+                            {
+                                // Root is short (1ms) so it doesn't match the duration filter on its own.
+                                CreateSpan(traceId: "1", spanId: "1-1",
+                                    startTime: s_testTime,
+                                    endTime: s_testTime.AddMilliseconds(1)),
+                                // 1-2 is also short, but it is the parent of a long span (1-3),
+                                // so it stays visible as part of the parent chain.
+                                CreateSpan(traceId: "1", spanId: "1-2",
+                                    startTime: s_testTime.AddMilliseconds(1),
+                                    endTime: s_testTime.AddMilliseconds(1),
+                                    parentSpanId: "1-1"),
+                                CreateSpan(traceId: "1", spanId: "1-3",
+                                    startTime: s_testTime.AddMilliseconds(2),
+                                    endTime: s_testTime.AddMilliseconds(20),
+                                    parentSpanId: "1-2"),
+                                // Siblings of the matching chain do not match the filter and stay hidden.
+                                CreateSpan(traceId: "1", spanId: "1-4",
+                                    startTime: s_testTime.AddMilliseconds(8),
+                                    endTime: s_testTime.AddMilliseconds(9),
+                                    parentSpanId: "1-1"),
+                                CreateSpan(traceId: "1", spanId: "1-5",
+                                    startTime: s_testTime.AddMilliseconds(10),
+                                    endTime: s_testTime.AddMilliseconds(14),
+                                    parentSpanId: "1-1")
+                            }
+                        }
+                    }
+                }
+            });
+
+        var traceId = Convert.ToHexString(Encoding.UTF8.GetBytes("1"));
+        var cut = RenderComponent<TraceDetail>(builder =>
+        {
+            builder.Add(p => p.TraceId, traceId);
+            builder.AddCascadingValue(viewport);
+        });
+
+        var unfilteredData = await cut.Instance.GetData(new GridItemsProviderRequest<SpanWaterfallViewModel>());
+
+        // Duration >= 10ms only matches 1-3. Its parent chain (1-1, 1-2) stays visible
+        // as ancestors so the matching span remains navigable in the waterfall, even
+        // though they don't themselves satisfy the duration filter.
+        var filteredItems = TraceDetail.ApplySpanFilters(
+            unfilteredData.Items.ToList(),
+            filter: string.Empty,
+            typeFilter: null,
+            [
+                new FieldTelemetryFilter
+                {
+                    Field = KnownTraceFields.DurationField,
+                    Condition = FilterCondition.GreaterThanOrEqual,
+                    Value = "10"
+                }
+            ],
+            getResourceName: _ => string.Empty).ToList();
+
+        Assert.Collection(filteredItems,
+            item => Assert.Equal("Test span. Id: 1-1", item.Span.Name),
+            item => Assert.Equal("Test span. Id: 1-2", item.Span.Name),
+            item => Assert.Equal("Test span. Id: 1-3", item.Span.Name));
+
+        // Duration matches are per-span, so a visible ancestor does not automatically
+        // include its descendants. With Duration >= 2ms, only 1-3 (18ms) and 1-5 (4ms)
+        // match. 1-4 (1ms) is hidden even though its parent 1-1 is visible as an
+        // ancestor of 1-3 and 1-5.
+        // This is the per-span behavior expected for a "min duration" filter; otherwise
+        // a long root span would expose every short descendant in the waterfall.
+        var rootMatchFilteredItems = TraceDetail.ApplySpanFilters(
+            unfilteredData.Items.ToList(),
+            filter: string.Empty,
+            typeFilter: null,
+            [
+                new FieldTelemetryFilter
+                {
+                    Field = KnownTraceFields.DurationField,
+                    Condition = FilterCondition.GreaterThanOrEqual,
+                    Value = "2"
+                }
+            ],
+            getResourceName: _ => string.Empty).ToList();
+
+        Assert.Collection(rootMatchFilteredItems,
+            item => Assert.Equal("Test span. Id: 1-1", item.Span.Name),
+            item => Assert.Equal("Test span. Id: 1-2", item.Span.Name),
+            item => Assert.Equal("Test span. Id: 1-3", item.Span.Name),
+            item => Assert.Equal("Test span. Id: 1-5", item.Span.Name));
+
+        Assert.Collection(unfilteredData.Items,
+            item => Assert.Equal("Test span. Id: 1-1", item.Span.Name),
+            item => Assert.Equal("Test span. Id: 1-2", item.Span.Name),
+            item => Assert.Equal("Test span. Id: 1-3", item.Span.Name),
+            item => Assert.Equal("Test span. Id: 1-4", item.Span.Name),
+            item => Assert.Equal("Test span. Id: 1-5", item.Span.Name));
+    }
+
+    [Fact]
+    public async Task Render_DurationFilter_LongRoot_DoesNotExposeShortChildren()
+    {
+        // Regression test for the long-root / short-child case. Other structured filters
+        // expand context by walking the matched span's full subtree (so children stay
+        // visible when their parent matches). For "min duration" that expansion would
+        // make the filter useless: a long root span would unconditionally expose every
+        // short descendant. This test pins down the per-span behavior: when the root
+        // is long enough to satisfy the duration filter on its own, its short children
+        // must still be hidden unless they independently match.
+        SetupTraceDetailsServices();
+
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
+        telemetryRepository.AddTraces(new AddContext(),
+            new RepeatedField<ResourceSpans>
+            {
+                new ResourceSpans
+                {
+                    Resource = CreateResource(),
+                    ScopeSpans =
+                    {
+                        new ScopeSpans
+                        {
+                            Scope = CreateScope(),
+                            Spans =
+                            {
+                                // Long root (100ms) would auto-include every descendant
+                                // under tree-aware context expansion.
+                                CreateSpan(traceId: "2", spanId: "2-1",
+                                    startTime: s_testTime,
+                                    endTime: s_testTime.AddMilliseconds(100)),
+                                // Short children that don't satisfy the filter on their own.
+                                CreateSpan(traceId: "2", spanId: "2-2",
+                                    startTime: s_testTime.AddMilliseconds(1),
+                                    endTime: s_testTime.AddMilliseconds(3),
+                                    parentSpanId: "2-1"),
+                                CreateSpan(traceId: "2", spanId: "2-3",
+                                    startTime: s_testTime.AddMilliseconds(5),
+                                    endTime: s_testTime.AddMilliseconds(8),
+                                    parentSpanId: "2-1"),
+                                // A long descendant that independently matches the filter,
+                                // verifying duration filtering still surfaces deep matches.
+                                CreateSpan(traceId: "2", spanId: "2-4",
+                                    startTime: s_testTime.AddMilliseconds(10),
+                                    endTime: s_testTime.AddMilliseconds(90),
+                                    parentSpanId: "2-3")
+                            }
+                        }
+                    }
+                }
+            });
+
+        var traceId = Convert.ToHexString(Encoding.UTF8.GetBytes("2"));
+        var cut = RenderComponent<TraceDetail>(builder =>
+        {
+            builder.Add(p => p.TraceId, traceId);
+            builder.AddCascadingValue(viewport);
+        });
+
+        var unfilteredData = await cut.Instance.GetData(new GridItemsProviderRequest<SpanWaterfallViewModel>());
+
+        var filteredItems = TraceDetail.ApplySpanFilters(
+            unfilteredData.Items.ToList(),
+            filter: string.Empty,
+            typeFilter: null,
+            [
+                new FieldTelemetryFilter
+                {
+                    Field = KnownTraceFields.DurationField,
+                    Condition = FilterCondition.GreaterThanOrEqual,
+                    Value = "50"
+                }
+            ],
+            getResourceName: _ => string.Empty).ToList();
+
+        // Direct matches: 2-1 (100ms) and 2-4 (80ms). 2-3 (3ms) is kept as an ancestor
+        // of 2-4 so the waterfall stays navigable. 2-2 (2ms) has no matching descendant
+        // and does not satisfy the filter itself, so it remains hidden even though its
+        // long parent 2-1 matches.
+        Assert.Collection(filteredItems,
+            item => Assert.Equal("Test span. Id: 2-1", item.Span.Name),
+            item => Assert.Equal("Test span. Id: 2-3", item.Span.Name),
+            item => Assert.Equal("Test span. Id: 2-4", item.Span.Name));
+    }
+
+    [Fact]
     public void ToggleCollapse_SpanStateChanges()
     {
         // Arrange
@@ -632,6 +840,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentList(this);
 
         FluentUISetupHelpers.SetupFluentSearch(this);
+        FluentUISetupHelpers.SetupFluentTextField(this);
         FluentUISetupHelpers.SetupFluentKeyCode(this);
         FluentUISetupHelpers.SetupFluentToolbar(this);
         FluentUISetupHelpers.SetupFluentMenu(this);

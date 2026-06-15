@@ -10,7 +10,9 @@ using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Hosting.Tests;
 
@@ -199,6 +201,73 @@ public class ExecutionConfigurationGathererTests
         // Assert
         Assert.Single(context.EnvironmentVariables);
         Assert.Equal("async-value", context.EnvironmentVariables["ASYNC_KEY"]);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_FailingEnvironmentVariable_LogsErrorAndCollectsException()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var target = builder.AddContainer("api", "image")
+            .WithEndpoint(name: "http", scheme: "http")
+            .Resource;
+
+        var consumer = builder.AddContainer("consumer", "image")
+            .WithEnvironment("API_URL", new EndpointReference(target, "https"))
+            .Resource;
+
+        await builder.BuildAsync();
+
+        var context = new ExecutionConfigurationGathererContext();
+        var gatherer = new EnvironmentVariablesExecutionConfigurationGatherer();
+        await gatherer.GatherAsync(context, consumer, NullLogger.Instance, builder.ExecutionContext);
+
+        var fakeLogger = new FakeLogger();
+        var result = await context.ResolveAsync(consumer, fakeLogger, builder.ExecutionContext);
+
+        Assert.NotNull(result.Exception);
+        var aggregate = Assert.IsType<AggregateException>(result.Exception);
+        var inner = Assert.IsType<InvalidOperationException>(aggregate.InnerException);
+        Assert.Contains("`https`", inner.Message);
+        Assert.Contains("`api`", inner.Message);
+        Assert.Contains("Available endpoints", inner.Message);
+
+        var errorRecord = fakeLogger.Collector.GetSnapshot().FirstOrDefault(r => r.Level == LogLevel.Error);
+        Assert.NotNull(errorRecord);
+        Assert.Contains("API_URL", errorRecord.Message);
+        Assert.Contains("consumer", errorRecord.Message);
+        Assert.Same(inner, errorRecord.Exception);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_FailingArgument_LogsErrorAndCollectsException()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var target = builder.AddContainer("api", "image")
+            .WithEndpoint(name: "http", scheme: "http")
+            .Resource;
+
+        var consumer = builder.AddContainer("consumer", "image")
+            .WithArgs(ctx => ctx.Args.Add(new EndpointReference(target, "https")))
+            .Resource;
+
+        await builder.BuildAsync();
+
+        var context = new ExecutionConfigurationGathererContext();
+        var gatherer = new ArgumentsExecutionConfigurationGatherer();
+        await gatherer.GatherAsync(context, consumer, NullLogger.Instance, builder.ExecutionContext);
+
+        var fakeLogger = new FakeLogger();
+        var result = await context.ResolveAsync(consumer, fakeLogger, builder.ExecutionContext);
+
+        Assert.NotNull(result.Exception);
+        var aggregate = Assert.IsType<AggregateException>(result.Exception);
+        var inner = Assert.IsType<InvalidOperationException>(aggregate.InnerException);
+        Assert.Contains("`https`", inner.Message);
+
+        var errorRecord = fakeLogger.Collector.GetSnapshot().FirstOrDefault(r => r.Level == LogLevel.Error);
+        Assert.NotNull(errorRecord);
+        Assert.Contains("consumer", errorRecord.Message);
+        Assert.Same(inner, errorRecord.Exception);
     }
 
     #endregion

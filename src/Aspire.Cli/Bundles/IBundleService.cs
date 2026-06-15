@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Layout;
-
 namespace Aspire.Cli.Bundles;
 
 /// <summary>
@@ -32,13 +30,37 @@ internal interface IBundleService
     Task<BundleExtractResult> ExtractAsync(string destinationPath, bool force = false, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Ensures the bundle is extracted and returns the discovered layout.
-    /// Combines <see cref="EnsureExtractedAsync"/> and layout discovery into a single call
-    /// so callers cannot forget to extract before discovering the layout.
+    /// Ensures the bundle is extracted and returns a version-rooted layout with a lease that prevents cleanup.
+    /// Extraction, active-version resolution, and lease acquisition happen under the same bundle lock
+    /// so cleanup cannot delete the selected version before the lease protects it.
+    /// Callers that start bundle-owned processes should use this method and keep the returned lease alive
+    /// until the child process has exited or acquired its own lease.
     /// </summary>
+    /// <param name="holderKind">Diagnostic category for the lease holder.</param>
+    /// <param name="commandName">Optional command name for diagnostics.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The discovered layout, or <see langword="null"/> if no layout is found.</returns>
-    Task<LayoutConfiguration?> EnsureExtractedAndGetLayoutAsync(CancellationToken cancellationToken = default);
+    /// <returns>The leased layout, or <see langword="null"/> if no layout is found.</returns>
+    Task<BundleLayoutLease?> EnsureExtractedAndAcquireLayoutAsync(string holderKind, string? commandName = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Determines the default extraction directory for the supplied CLI binary path
+    /// by reading the <c>.aspire-install.json</c> sidecar (if any) next to the
+    /// resolved binary and switching on its <c>source</c> field. The resulting
+    /// directory is the parent of <c>versions/&lt;id&gt;/</c> and varies by source:
+    /// <list type="bullet">
+    /// <item><description>Script / PR sources (<c>source=script</c> or <c>source=pr</c>,
+    /// binary in <c>bin/</c>): the parent of the binary's directory (= the install
+    /// prefix root).</description></item>
+    /// <item><description>Packager-managed sources (<c>source=winget</c> /
+    /// <c>source=brew</c> / <c>source=dotnet-tool</c>): the directory containing the
+    /// binary (symlinks resolved first).</description></item>
+    /// <item><description>No sidecar / unmanaged installs: the default Aspire home
+    /// directory (<c>ASPIRE_HOME</c> when set, otherwise <c>~/.aspire</c>).</description></item>
+    /// </list>
+    /// </summary>
+    /// <param name="processPath">An absolute path to the CLI binary.</param>
+    /// <returns>The extraction directory, or <see langword="null"/> if it cannot be determined.</returns>
+    string? GetDefaultExtractDir(string processPath);
 }
 
 /// <summary>

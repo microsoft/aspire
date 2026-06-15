@@ -66,6 +66,7 @@ public class AgentMcpCommandTests(ITestOutputHelper outputHelper)
             services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
         }
 
+        // ServiceProvider lifetime is managed by McpTestContext.DisposeAsync, not this method.
         var serviceProvider = services.BuildServiceProvider();
         var agentMcpCommand = serviceProvider.GetRequiredService<AgentMcpCommand>();
         var rootCommand = serviceProvider.GetRequiredService<RootCommand>();
@@ -571,16 +572,15 @@ public class AgentMcpCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var serviceProvider = services.BuildServiceProvider();
-        await using var _ = serviceProvider;
+        using var serviceProvider = services.BuildServiceProvider();
 
         var agentMcpCommand = serviceProvider.GetRequiredService<AgentMcpCommand>();
         var rootCommand = serviceProvider.GetRequiredService<RootCommand>();
         var parseResult = rootCommand.Parse("agent mcp --dashboard-url not-a-url");
 
-        var exitCode = await agentMcpCommand.ExecuteCommandAsync(parseResult, CancellationToken.None).DefaultTimeout();
+        var result = await agentMcpCommand.ExecuteCommandAsync(parseResult, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, result.ExitCode);
     }
 
     private static string GetResultText(CallToolResult result)

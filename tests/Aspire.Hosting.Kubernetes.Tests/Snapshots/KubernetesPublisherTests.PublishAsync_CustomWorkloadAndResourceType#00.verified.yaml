@@ -1,4 +1,4 @@
-apiVersion: "v2"
+﻿apiVersion: "v2"
 name: "aspire-hosting-tests"
 version: "0.1.0"
 kubeVersion: ">= 1.18.0-0"

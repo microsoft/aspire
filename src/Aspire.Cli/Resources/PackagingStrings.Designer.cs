@@ -64,5 +64,14 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("BasedOnNuGetConfig", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The 'staging' channel cannot be resolved from a CLI with identity '{0}'. Daily, local, and per-PR CLI builds do not have a deterministic staging feed. Install a staging or stable Aspire CLI, or set 'overrideStagingFeed' (for example: aspire config set -g overrideStagingFeed &lt;feed-url&gt;) to point at the staging feed you want to use.
+        /// </summary>
+        internal static string StagingChannelUnavailableOnDailyCli {
+            get {
+                return ResourceManager.GetString("StagingChannelUnavailableOnDailyCli", resourceCulture);
+            }
+        }
     }
 }

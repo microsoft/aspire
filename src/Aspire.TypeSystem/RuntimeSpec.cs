@@ -40,6 +40,12 @@ public sealed class RuntimeSpec
     public CommandSpec? InstallDependencies { get; init; }
 
     /// <summary>
+    /// Gets the commands to run before executing or publishing the AppHost. Null if no pre-execution validation is needed.
+    /// Watch-mode validation should be part of <see cref="WatchExecute" /> when needed.
+    /// </summary>
+    public CommandSpec[]? PreExecute { get; init; }
+
+    /// <summary>
     /// Gets the command to execute the AppHost for run.
     /// </summary>
     public required CommandSpec Execute { get; init; }
@@ -60,6 +66,13 @@ public sealed class RuntimeSpec
     /// this capability. When null, the CLI always uses the default process-based launcher.
     /// </summary>
     public string? ExtensionLaunchCapability { get; init; }
+
+    /// <summary>
+    /// Gets files that must exist in the project directory before execution.
+    /// If a file in this dictionary is missing, the CLI will create it with the provided content.
+    /// This supports upgrade scenarios where new runtime requirements are introduced.
+    /// </summary>
+    public Dictionary<string, string>? MigrationFiles { get; init; }
 }
 
 /// <summary>

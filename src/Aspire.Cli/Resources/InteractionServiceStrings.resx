@@ -124,14 +124,20 @@
   <data name="AppHostNotCompatibleConsiderUpgrading" xml:space="preserve">
     <value>The AppHost version is not compatible. Please upgrade the AppHost or Aspire CLI.</value>
   </data>
+  <data name="AppHostNotCompatibleUpdateAppHost" xml:space="preserve">
+    <value>The AppHost is using an older Aspire version than the Aspire CLI. Update the AppHost's Aspire packages to continue.</value>
+  </data>
+  <data name="AppHostNotCompatibleUpdateCli" xml:space="preserve">
+    <value>The Aspire CLI is older than the Aspire version used by the AppHost. Update the Aspire CLI to continue.</value>
+  </data>
   <data name="AspireHostingSDKVersion" xml:space="preserve">
-    <value>Aspire.Hosting Version</value>
+    <value>Aspire.Hosting version</value>
   </data>
   <data name="AspireCLIVersion" xml:space="preserve">
-    <value>Aspire CLI Version</value>
+    <value>Aspire CLI version</value>
   </data>
   <data name="RequiredCapability" xml:space="preserve">
-    <value>Required Capability</value>
+    <value>Required capability</value>
   </data>
   <data name="Dashboard" xml:space="preserve">
     <value>Dashboard</value>
@@ -179,6 +185,15 @@
   <data name="ProjectOptionDoesntExist" xml:space="preserve">
     <value>The --apphost option specified a project that does not exist.</value>
   </data>
+  <data name="ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts" xml:space="preserve">
+    <value>The --apphost option specified a directory that contains multiple AppHost project files.</value>
+  </data>
+  <data name="ProjectOptionSpecifiedDirectoryContainsNoAppHosts" xml:space="preserve">
+    <value>The --apphost option specified a directory that does not contain any AppHost project files.</value>
+  </data>
+  <data name="NoSupportedAppHostsFound" xml:space="preserve">
+    <value>No supported app hosts were found.</value>
+  </data>
   <data name="ProjectOptionNotSpecifiedMultipleAppHostsFound" xml:space="preserve">
     <value>The --apphost option was not specified and multiple AppHost project files were detected.</value>
   </data>
@@ -186,10 +201,10 @@
     <value>The project argument was not specified and no AppHost project files were detected.</value>
   </data>
   <data name="ProjectCouldNotBeBuilt" xml:space="preserve">
-    <value>The project could not be built. See logs at {0}</value>
+    <value>The project could not be built.</value>
   </data>
   <data name="ProjectCouldNotBeCreated" xml:space="preserve">
-    <value>The app could not be created. See logs at {0}</value>
+    <value>The app could not be created.</value>
   </data>
   <data name="OperationCancelled" xml:space="preserve">
     <value>The operation was canceled.</value>
@@ -198,10 +213,16 @@
     <value>The specified project file is not an Aspire AppHost project.</value>
   </data>
   <data name="ErrorConnectingToAppHost" xml:space="preserve">
-    <value>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}.</value>
+    <value>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}</value>
   </data>
   <data name="AppHostConnectionLost" xml:space="preserve">
-    <value>The connection to the AppHost was lost: {0}.</value>
+    <value>The connection to the AppHost was lost: {0}</value>
+  </data>
+  <data name="AppHostConnectionLostGeneric" xml:space="preserve">
+    <value>The connection to the application was lost.</value>
+  </data>
+  <data name="AppHostShutDown" xml:space="preserve">
+    <value>The application shut down.</value>
   </data>
   <data name="UnexpectedErrorOccurred" xml:space="preserve">
     <value>An unexpected error occurred: {0}</value>
@@ -211,6 +232,10 @@
     <value>See logs at {0}</value>
     <comment>{0} is the log file path</comment>
   </data>
+  <data name="SeeAppHostLogsAt" xml:space="preserve">
+    <value>See AppHost logs at {0}</value>
+    <comment>{0} is the log file path of the CLI process managing the AppHost</comment>
+  </data>
   <data name="WaitingForDebuggerToAttachToAppHost" xml:space="preserve">
     <value>Waiting for debugger to attach to AppHost process</value>
   </data>
@@ -219,8 +244,8 @@
     <comment>Do not translate [yellow] and also leave [/] as-is. {0} is the version number</comment>
   </data>
   <data name="MoreInfoNewCliVersion" xml:space="preserve">
-    <value>[dim]For more information, see: [link]{0}[/][/]</value>
-    <comment>Do not translate [dim] and [link]. Also leave [/] as-is. {0} is a URL</comment>
+    <value>[dim]For more information, see: {0}[/]</value>
+    <comment>Do not translate [dim]. Also leave [/] as-is. {0} is a pre-formatted link</comment>
   </data>
   <data name="ToUpdateRunCommand" xml:space="preserve">
     <value>[dim]To update, run: {0}[/]</value>
@@ -233,6 +258,18 @@
     <value>Other (specify next)</value>
   </data>
   <data name="InteractiveInputNotSupported" xml:space="preserve">
-    <value>Interactive input is not supported in this environment. Use the --non-interactive flag or ensure the CLI is running in an interactive terminal.</value>
+    <value>This prompt requires interactive input but the CLI is running in non-interactive mode. This operation does not yet support non-interactive execution.</value>
+  </data>
+  <data name="NonInteractiveOptionRequired" xml:space="preserve">
+    <value>The {0} option must be specified when running in non-interactive mode.</value>
+    <comment>{0} is the option/argument display name like '--publisher' or '&lt;integration&gt;'</comment>
+  </data>
+  <data name="NonInteractiveInvalidValue" xml:space="preserve">
+    <value>The value '{0}' is not valid for {1}.</value>
+    <comment>{0} is the provided value. {1} is the option/argument display name.</comment>
+  </data>
+  <data name="NonInteractiveAvailableValues" xml:space="preserve">
+    <value>Available values: {0}</value>
+    <comment>{0} is a comma-separated list of valid values</comment>
   </data>
 </root>

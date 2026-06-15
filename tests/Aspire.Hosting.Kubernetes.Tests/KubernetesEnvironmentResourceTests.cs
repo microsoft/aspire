@@ -5,6 +5,7 @@
 using System.Runtime.CompilerServices;
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Utils;
 using Aspire.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
@@ -67,6 +68,26 @@ public class KubernetesEnvironmentResourceTests(ITestOutputHelper output)
             builder.AddExecutable("exe", "path/to/executable", ".")
                 .PublishAsDockerFile()
                 .PublishAsKubernetesService((_) => { }));
+    }
+
+    [Fact]
+    public async Task ValidateKubernetes_DoesNotThrowInRunMode()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/16940.
+        // In run mode, AddKubernetesEnvironment does not add the env resource to the model.
+        // If a compute resource still ends up with a KubernetesServiceCustomizationAnnotation
+        // (e.g. via WithAnnotation), the validation step should not throw at 'aspire run' time —
+        // PublishAs* customizations are only meaningful at publish/deploy time.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        builder.AddKubernetesEnvironment("env");
+
+        builder.AddContainer("api", "myimage")
+            .WithAnnotation(new KubernetesServiceCustomizationAnnotation((_) => { }));
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
     }
 
     [Fact]

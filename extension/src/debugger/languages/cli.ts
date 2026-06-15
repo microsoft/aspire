@@ -18,20 +18,36 @@ export interface SpawnProcessOptions {
     noExtensionVariables?: boolean;
 }
 
+export function getCliSpawnCommand(command: string, args?: string[]): { command: string; args: string[] } {
+    if (process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(command)) {
+        return {
+            command: process.env.ComSpec ?? 'cmd.exe',
+            args: ['/d', '/c', 'call', command, ...args ?? []],
+        };
+    }
+
+    return { command, args: args ?? [] };
+}
+
 export function spawnCliProcess(terminalProvider: AspireTerminalProvider, command: string, args?: string[], options?: SpawnProcessOptions): ChildProcessWithoutNullStreams {
     const workingDirectory = options?.workingDirectory ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
     const env = {};
+    const spawnCommand = getCliSpawnCommand(command, args);
 
     Object.assign(env, terminalProvider.createEnvironment(options?.debugSessionId, options?.noDebug, options?.noExtensionVariables));
     if (options?.env) {
         Object.assign(env, Object.fromEntries(options.env.map(e => [e.name, e.value])));
     }
 
-    const child = spawn(command, args ?? [], {
+    const child = spawn(spawnCommand.command, spawnCommand.args, {
         cwd: workingDirectory,
         env: env,
         shell: false
     });
+
+    // Set UTF-8 encoding so Node reassembles multi-byte characters across chunk boundaries instead of yielding broken bytes.
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
 
     if (options?.lineCallback) {
         const rl = readline.createInterface(child.stdout);
@@ -40,12 +56,12 @@ export function spawnCliProcess(terminalProvider: AspireTerminalProvider, comman
         });
     }
 
-    child.stdout.on("data", (data) => {
-        options?.stdoutCallback?.(new String(data).toString());
+    child.stdout.on("data", (data: string) => {
+        options?.stdoutCallback?.(data);
     });
 
-    child.stderr.on("data", (data) => {
-        options?.stderrCallback?.(new String(data).toString());
+    child.stderr.on("data", (data: string) => {
+        options?.stderrCallback?.(data);
     });
 
     child.on('error', (error) => {

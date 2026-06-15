@@ -27,4 +27,12 @@ internal sealed class AzureProvisionerOptions
         "AzureDeveloperCli", "InteractiveBrowser", "Default"
     ])]
     public string CredentialSource { get; set; } = "Default";
+
+    /// <summary>
+    /// Gets or sets the timeout in seconds for credential process operations (e.g., az CLI, PowerShell).
+    /// Increase this value if credential validation times out on machines where the Azure CLI is slow to respond.
+    /// When not set, the Azure SDK's default timeout is used.
+    /// </summary>
+    [Range(5, 600)]
+    public int? CredentialProcessTimeoutSeconds { get; set; }
 }

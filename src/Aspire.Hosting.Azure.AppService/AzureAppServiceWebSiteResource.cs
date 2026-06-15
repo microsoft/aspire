@@ -55,10 +55,14 @@ public class AzureAppServiceWebSiteResource : AzureProvisioningResource
                            await computerEnv.DeploymentSlotParameter.GetValueAsync(ctx.CancellationToken).ConfigureAwait(false);
                     }
 
-                    var hostName = await GetAppServiceWebsiteNameAsync(ctx, deploymentSlot).ConfigureAwait(false);
+                    var websiteName = await GetAppServiceWebsiteBaseNameAsync(ctx).ConfigureAwait(false);
+                    var hostName = GetAppServiceWebsiteName(websiteName, deploymentSlot);
                     var endpoint = $"https://{hostName}.azurewebsites.net";
-                    ctx.ReportingStep.Log(LogLevel.Information, new MarkdownString($"Successfully deployed **{targetResource.Name}** to [{endpoint}]({endpoint})"));
-                    ctx.Summary.Add(targetResource.Name, new MarkdownString($"[{endpoint}]({endpoint})"));
+                    var portalLink = await AppSvcUrls.GetPortalLinkAsync(computerEnv, websiteName, deploymentSlot, ctx.CancellationToken).ConfigureAwait(false);
+                    var summaryValue = $"[{endpoint}]({endpoint}) ({portalLink})";
+
+                    ctx.ReportingStep.Log(LogLevel.Information, new MarkdownString($"Successfully deployed **{targetResource.Name}** to {summaryValue}"));
+                    ctx.Summary.Add(targetResource.Name, new MarkdownString(summaryValue));
                 },
                 Tags = ["print-summary"],
                 RequiredBySteps = [WellKnownPipelineSteps.Deploy]
@@ -100,26 +104,28 @@ public class AzureAppServiceWebSiteResource : AzureProvisioningResource
     public IResource TargetResource { get; }
 
     /// <summary>
-    /// Gets the Azure App Service website name, optionally including the deployment slot suffix.
+    /// Gets the base Azure App Service website name without any deployment slot suffix.
     /// </summary>
     /// <param name="context">The pipeline step context.</param>
-    /// <param name="deploymentSlot">The optional deployment slot name to append to the website name.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains the website name.</returns>
-    private async Task<string> GetAppServiceWebsiteNameAsync(PipelineStepContext context, string? deploymentSlot = null)
+    private async Task<string> GetAppServiceWebsiteBaseNameAsync(PipelineStepContext context)
     {
         var computerEnv = (AzureAppServiceEnvironmentResource)TargetResource.GetDeploymentTargetAnnotation()!.ComputeEnvironment!;
         var websiteSuffix = await computerEnv.WebSiteSuffix.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
-        var websiteName = $"{TargetResource.Name.ToLowerInvariant()}-{websiteSuffix}";
+        return TruncateToMaxLength($"{TargetResource.Name.ToLowerInvariant()}-{websiteSuffix}", 60);
+    }
 
+    private static string GetAppServiceWebsiteName(string websiteName, string? deploymentSlot = null)
+    {
         if (string.IsNullOrWhiteSpace(deploymentSlot))
         {
-            return TruncateToMaxLength(websiteName, 60);
+            return websiteName;
         }
 
-        websiteName = TruncateToMaxLength(websiteName, MaxWebSiteNamePrefixLengthWithSlot);
-        websiteName += $"-{deploymentSlot}";
+        var slotHostName = TruncateToMaxLength(websiteName, MaxWebSiteNamePrefixLengthWithSlot);
+        slotHostName += $"-{deploymentSlot}";
 
-        return TruncateToMaxLength(websiteName, MaxHostPrefixLengthWithSlot);
+        return TruncateToMaxLength(slotHostName, MaxHostPrefixLengthWithSlot);
     }
 
     private static string TruncateToMaxLength(string value, int maxLength)

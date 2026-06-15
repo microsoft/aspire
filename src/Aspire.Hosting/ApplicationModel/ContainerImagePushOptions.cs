@@ -15,6 +15,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// to construct the complete image reference including registry endpoint and tag.
 /// </remarks>
 [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
+[AspireExport(ExposeProperties = true)]
 public sealed class ContainerImagePushOptions
 {
     /// <summary>

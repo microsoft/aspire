@@ -83,7 +83,7 @@ public class CommandLineArgsCallbackAnnotation : IResourceAnnotation, IArgCallba
 /// </summary>
 /// <param name="args"> The list of command-line arguments.</param>
 /// <param name="cancellationToken"> The cancellation token associated with this execution.</param>
-[AspireExport(ExposeProperties = true)]
+[AspireExport]
 public sealed class CommandLineArgsCallbackContext(IList<object> args, CancellationToken cancellationToken = default)
 {
     private readonly IResource? _resource;
@@ -118,11 +118,30 @@ public sealed class CommandLineArgsCallbackContext(IList<object> args, Cancellat
     public ILogger Logger { get; init; } = NullLogger.Instance;
 
     /// <summary>
+    /// Gets the editor used to manipulate command-line arguments in polyglot callbacks.
+    /// </summary>
+    [AspireExport("CommandLineArgsCallbackContext.args", MethodName = "args")]
+    internal CommandLineArgsEditor ArgsEditor => new(Args);
+
+    /// <summary>
+    /// Gets the logger facade used by polyglot callbacks.
+    /// </summary>
+    [AspireExport]
+    internal LogFacade Log => new(Logger);
+
+    /// <summary>
     /// The resource associated with this callback context.
     /// </summary>
     /// <remarks>
     /// This will be set to the resource in all cases where Aspire invokes the callback.
     /// </remarks>
-    /// <exception cref="InvalidOperationException">Thrown when the EnvironmentCallbackContext was created without a specified resource.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the CommandLineArgsCallbackContext was created without a specified resource.</exception>
+    [AspireExport]
     public IResource Resource => _resource ?? throw new InvalidOperationException($"{nameof(Resource)} is not set. This callback context is not associated with a resource.");
+
+    /// <summary>
+    /// Gets the execution context associated with this callback.
+    /// </summary>
+    [AspireExport(MethodName = "executionContext")]
+    internal DistributedApplicationExecutionContext ExportedExecutionContext => ExecutionContext;
 }

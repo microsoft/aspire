@@ -11,6 +11,9 @@ on:
       - main
       - 'release/**'
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
@@ -24,6 +27,7 @@ jobs:
     outputs:
       skip_workflow: ${{ (steps.check_for_changes.outputs.no_changes == 'true' || steps.check_for_changes.outputs.only_changed == 'true') && 'true' || 'false' }}
       VERSION_SUFFIX_OVERRIDE: ${{ steps.compute_version_suffix.outputs.VERSION_SUFFIX_OVERRIDE }}
+      EXTENSION_VERSION_OVERRIDE: ${{ steps.compute_version_suffix.outputs.EXTENSION_VERSION_OVERRIDE }}
 
     steps:
       - name: Checkout code
@@ -54,9 +58,13 @@ jobs:
             exit 1
           }
           $SHORT_SHA = $Env:PR_HEAD_SHA.Substring(0,8)
-          $VERSION_SUFFIX = "/p:VersionSuffix=pr.$($Env:PR_NUMBER).g$SHORT_SHA"
+          $VERSION_SUFFIX = "/p:VersionSuffix=pr.$($Env:PR_NUMBER).g$SHORT_SHA /p:DotNetFinalVersionKind=prerelease"
           Write-Host "Computed VERSION_SUFFIX_OVERRIDE=$VERSION_SUFFIX"
           "VERSION_SUFFIX_OVERRIDE=$VERSION_SUFFIX" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append -Encoding utf8
+
+          $EXTENSION_VERSION = "99.0.$($Env:PR_NUMBER)"
+          Write-Host "Computed EXTENSION_VERSION_OVERRIDE=$EXTENSION_VERSION"
+          "EXTENSION_VERSION_OVERRIDE=$EXTENSION_VERSION" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append -Encoding utf8
 
   tests:
     uses: ./.github/workflows/tests.yml
@@ -65,13 +73,112 @@ jobs:
     if: ${{ github.repository_owner == 'microsoft' && needs.prepare_for_ci.outputs.skip_workflow != 'true' }}
     with:
       versionOverrideArg: ${{ needs.prepare_for_ci.outputs.VERSION_SUFFIX_OVERRIDE }}
+      extensionVersionOverride: ${{ needs.prepare_for_ci.outputs.EXTENSION_VERSION_OVERRIDE }}
+
+  # Stabilization gate.
+  #
+  # PR CI runs unstable (DotNetFinalVersionKind=prerelease above) so that dogfood artifacts
+  # have unique versions and dynamic Helix versions line up cleanly. To compensate for the
+  # fact that we never normally exercise the "everything is stable" build shape on PRs, this
+  # job runs a parallel build with StabilizePackageVersion=true that:
+  #
+  #   1. Packs all shipping packages, which catches NU5104 (stable package depending on a
+  #      preview package whose csproj sets SuppressFinalPackageVersion=true). This is the
+  #      check that used to fire only on the official stabilization PR.
+  #   2. Runs the subset of Aspire.Cli.Tests classes that exercise version/channel/template
+  #      version pinning logic against the stably-built CLI assemblies. These are the code
+  #      paths most likely to behave differently when the CLI's own version label is stable.
+  #   3. Runs a small `aspire new aspire-empty` + `aspire restore` smoke script that
+  #      exercises the user-visible CLI flow against the locally-built stable feed,
+  #      which is the scenario that has historically broken on stabilization branches.
+  #
+  # The job is gated to PRs only. Push CI (including push to release branches with
+  # StabilizePackageVersion=true) doesn't need this check because that *is* the stabilized
+  # build shape already.
+  stabilization_check:
+    name: Stabilization Check
+    runs-on: 8-core-ubuntu-latest
+    needs: [prepare_for_ci]
+    if: ${{ github.repository_owner == 'microsoft' && needs.prepare_for_ci.outputs.skip_workflow != 'true' }}
+    steps:
+      # The actual stabilization work only makes sense for pull_request events. On push
+      # (including push to release branches with StabilizePackageVersion=true) the build is
+      # already running in the shape this job is meant to validate, so there's nothing to
+      # add. We still let the job *run* on push so the GitHub Actions result is 'success'
+      # rather than 'skipped' — otherwise the `results:` job's `contains(needs.*.result,
+      # 'skipped')` check would fail every push to main / release/**.
+      - name: Skip on push events
+        if: ${{ github.event_name != 'pull_request' }}
+        run: echo "Stabilization Check only runs on pull_request events. Skipping (job remains success)."
+
+      - name: Checkout code
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Build + pack with StabilizePackageVersion=true
+        if: ${{ github.event_name == 'pull_request' }}
+        # SkipNativeBuild=true keeps this job fast (~5min): pack-time NU5104 detection
+        # doesn't need NativeAOT CLI binaries, and the moderate smoke below invokes the
+        # CLI via `dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj`.
+        run: |
+          ./build.sh -restore -build -ci -pack \
+            -p:StabilizePackageVersion=true \
+            -p:SkipTestProjects=false \
+            -p:SkipPlaygroundProjects=true \
+            -p:SkipNativeBuild=true \
+            -p:InstallBrowsersForPlaywright=false
+
+      - name: Run version-sensitive Aspire.Cli.Tests classes under stabilization
+        if: ${{ github.event_name == 'pull_request' }}
+        # Classes that touch IsPrerelease / channel detection / template version pinning /
+        # update-notification logic. These are the code paths most likely to behave
+        # differently when the CLI's own assembly version label is stable.
+        # NOTE: we intentionally do NOT pass --no-build / --no-restore here. SDK 10's
+        # `dotnet test` driver needs to perform its own MSBuild evaluation pass to detect
+        # the Microsoft.Testing.Platform runner (which Aspire.Cli.Tests uses), and without
+        # restore that evaluation reports "All projects must use that test runner ... using
+        # VSTest test runner" and exits non-zero. The previous pack step's restore is keyed
+        # by a different global-property fingerprint and can't be reused. The cost of
+        # letting `dotnet test` re-restore here is small because nothing on disk actually
+        # changes — it's just an in-memory evaluation pass.
+        run: |
+          ./dotnet.sh test --project tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj \
+            --no-launch-profile \
+            -p:StabilizePackageVersion=true \
+            -- \
+            --filter-class "*.AssemblyMetadataChannelTests" \
+            --filter-class "*.IdentityChannelReaderTests" \
+            --filter-class "*.PackageChannelTests" \
+            --filter-class "*.PrebuiltAppHostServerChannelResolutionTests" \
+            --filter-class "*.DotNetBasedAppHostServerChannelResolutionTests" \
+            --filter-class "*.NewCommandChannelResolutionTests" \
+            --filter-class "*.ChannelReseedTests" \
+            --filter-class "*.VersionHelperTests" \
+            --filter-class "*.CliUpdateNotificationServiceTests" \
+            --filter-class "*.UpdateCommandTests" \
+            --filter-class "*.DotNetTemplateFactoryTests" \
+            --filter-not-trait "quarantined=true" \
+            --filter-not-trait "outerloop=true"
+
+      - name: aspire init + restore smoke against stable local feed
+        if: ${{ github.event_name == 'pull_request' }}
+        run: ./eng/scripts/stabilization-smoke-init-restore.sh
+
+      # Always upload logs, even if the build fails, to enable debugging
+      - name: Upload logs
+        if: ${{ always() && github.event_name == 'pull_request' }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: stabilization_check_logs
+          path: artifacts/log
+          retention-days: 5
 
   # This job is used for branch protection. It fails if any of the dependent jobs failed
   results:
     if: ${{ always() && github.repository_owner == 'microsoft' }}
     runs-on: ubuntu-latest
     name: Final Results
-    needs: [prepare_for_ci, tests]
+    needs: [prepare_for_ci, tests, stabilization_check]
 
     steps:
       - name: Fail if any of the dependent jobs failed

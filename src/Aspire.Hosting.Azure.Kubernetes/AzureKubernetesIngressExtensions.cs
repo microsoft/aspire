@@ -1,0 +1,215 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure.Kubernetes;
+using Aspire.Hosting.Kubernetes;
+
+namespace Aspire.Hosting;
+
+/// <summary>
+/// Provides extension methods for adding Kubernetes Ingress and Gateway resources to AKS environments.
+/// </summary>
+public static class AzureKubernetesIngressExtensions
+{
+    /// <summary>
+    /// Adds a Kubernetes Ingress resource to the application model, associated with the
+    /// inner Kubernetes environment of the specified AKS environment. The ingress generates
+    /// a <c>networking.k8s.io/v1 Ingress</c> resource in the Helm chart output at publish time.
+    /// </summary>
+    /// <param name="builder">The AKS environment resource builder.</param>
+    /// <param name="name">The name of the ingress resource.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <remarks>
+    /// <para>
+    /// This method delegates to the inner <see cref="KubernetesEnvironmentResource"/> of the AKS
+    /// environment. To use an AKS-specific ingress controller (e.g., Azure Application Gateway
+    /// for Containers), call <see cref="KubernetesIngressExtensions.WithIngressClass(IResourceBuilder{KubernetesIngressResource}, string)"/> with the
+    /// appropriate class name.
+    /// </para>
+    /// </remarks>
+    /// <ats-remarks />
+    /// <example>
+    /// <code>
+    /// var aks = builder.AddAzureKubernetesEnvironment("aks");
+    /// var ingress = aks.AddIngress("public")
+    ///     .WithIngressClass("azure-alb-external");
+    ///
+    /// var api = builder.AddProject&lt;MyApi&gt;("api");
+    /// ingress.WithPath("/api", api.GetEndpoint("http"));
+    /// </code>
+    /// </example>
+    [AspireExport]
+    public static IResourceBuilder<KubernetesIngressResource> AddIngress(
+        this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
+        [ResourceName] string name)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        var k8sEnvBuilder = builder.ApplicationBuilder.CreateResourceBuilder(builder.Resource.KubernetesEnvironment);
+        return k8sEnvBuilder.AddIngress(name);
+    }
+
+    /// <summary>
+    /// Adds a Kubernetes Gateway API Gateway resource to the application model, associated with the
+    /// inner Kubernetes environment of the specified AKS environment.
+    /// </summary>
+    /// <param name="builder">The AKS environment resource builder.</param>
+    /// <param name="name">The name of the gateway resource.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <example>
+    /// <code>
+    /// var aks = builder.AddAzureKubernetesEnvironment("aks");
+    /// var gateway = aks.AddGateway("public")
+    ///     .WithGatewayClass("azure-alb-external");
+    ///
+    /// var api = builder.AddProject&lt;MyApi&gt;("api");
+    /// gateway.WithRoute("/api", api.GetEndpoint("http"));
+    /// </code>
+    /// </example>
+    [AspireExport]
+    public static IResourceBuilder<KubernetesGatewayResource> AddGateway(
+        this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
+        [ResourceName] string name)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        var k8sEnvBuilder = builder.ApplicationBuilder.CreateResourceBuilder(builder.Resource.KubernetesEnvironment);
+        return k8sEnvBuilder.AddGateway(name);
+    }
+
+    /// <summary>
+    /// Adds an external Helm chart to be installed in the AKS environment's inner Kubernetes
+    /// environment. The chart is installed via <c>helm upgrade --install</c> as a pipeline step
+    /// after the main application Helm chart is deployed.
+    /// </summary>
+    /// <param name="builder">The AKS environment resource builder.</param>
+    /// <param name="name">The name of the Helm chart resource.</param>
+    /// <param name="chartReference">
+    /// The Helm chart reference. Can be an OCI registry URL (e.g., <c>oci://quay.io/jetstack/charts/cert-manager</c>)
+    /// or a chart name from an added repository.
+    /// </param>
+    /// <param name="chartVersion">The chart version to install.</param>
+    /// <returns>A resource builder for the Helm chart resource.</returns>
+    /// <remarks>
+    /// <para>
+    /// This method delegates to the inner <see cref="KubernetesEnvironmentResource"/> of the AKS
+    /// environment, so the returned <see cref="KubernetesHelmChartResource"/> can be configured
+    /// with the same <see cref="KubernetesHelmChartExtensions.WithHelmValue"/>,
+    /// <see cref="KubernetesHelmChartExtensions.WithNamespace"/>,
+    /// <see cref="KubernetesHelmChartExtensions.WithReleaseName"/>, and
+    /// <see cref="KubernetesHelmChartExtensions.WithDestroy"/> extensions used with
+    /// non-AKS Kubernetes environments.
+    /// </para>
+    /// <para>
+    /// External Helm charts are <em>not</em> uninstalled by <c>aspire destroy</c> by default,
+    /// because they may be shared with workloads outside the Aspire app. Opt in by chaining
+    /// <see cref="KubernetesHelmChartExtensions.WithDestroy"/>.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var aks = builder.AddAzureKubernetesEnvironment("aks");
+    ///
+    /// // Install cert-manager
+    /// aks.AddHelmChart("cert-manager", "oci://quay.io/jetstack/charts/cert-manager", "1.17.0")
+    ///     .WithHelmValue("crds.enabled", "true");
+    /// </code>
+    /// </example>
+    [AspireExport]
+    public static IResourceBuilder<KubernetesHelmChartResource> AddHelmChart(
+        this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
+        [ResourceName] string name,
+        string chartReference,
+        string chartVersion)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentException.ThrowIfNullOrEmpty(chartReference);
+        ArgumentException.ThrowIfNullOrEmpty(chartVersion);
+
+        var k8sEnvBuilder = builder.ApplicationBuilder.CreateResourceBuilder(builder.Resource.KubernetesEnvironment);
+        return k8sEnvBuilder.AddHelmChart(name, chartReference, chartVersion);
+    }
+
+    /// <summary>
+    /// Routes a Kubernetes <see cref="KubernetesGatewayResource"/> through the supplied
+    /// Azure Application Gateway for Containers (AGC) <see cref="AzureKubernetesLoadBalancerResource"/>.
+    /// </summary>
+    /// <ats-summary>Routes a Kubernetes Gateway through an AGC ApplicationLoadBalancer</ats-summary>
+    /// <param name="builder">The gateway resource builder.</param>
+    /// <param name="loadBalancer">The AGC load balancer to route through.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <remarks>
+    /// Writes the AGC routing annotations (<c>alb.networking.azure.io/alb-name</c> and
+    /// <c>alb.networking.azure.io/alb-namespace</c>) onto the rendered Gateway and defaults
+    /// the GatewayClass to <c>azure-alb-external</c> when one has not already been set via
+    /// <c>WithGatewayClass(...)</c>.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var lb = aks.AddLoadBalancer("lb", albSubnet);
+    /// var gateway = aks.AddGateway("public").WithLoadBalancer(lb);
+    /// </code>
+    /// </example>
+    [AspireExport]
+    public static IResourceBuilder<KubernetesGatewayResource> WithLoadBalancer(
+        this IResourceBuilder<KubernetesGatewayResource> builder,
+        IResourceBuilder<AzureKubernetesLoadBalancerResource> loadBalancer)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(loadBalancer);
+
+        var lb = loadBalancer.Resource;
+        // AGC discovers the target ApplicationLoadBalancer via these two annotations on
+        // the Gateway. See:
+        // https://learn.microsoft.com/azure/application-gateway/for-containers/quickstart-deploy-application-gateway-for-containers
+        builder.Resource.GatewayAnnotations["alb.networking.azure.io/alb-name"] =
+            ReferenceExpression.Create($"{lb.AlbName}");
+        builder.Resource.GatewayAnnotations["alb.networking.azure.io/alb-namespace"] =
+            ReferenceExpression.Create($"{AzureKubernetesLoadBalancerResource.AlbNamespace}");
+
+        // Default to the AGC GatewayClass only when one isn't already set so an explicit
+        // WithGatewayClass(...) call before WithLoadBalancer(...) wins.
+        builder.Resource.GatewayClassName ??= ReferenceExpression.Create($"azure-alb-external");
+        return builder;
+    }
+
+    /// <summary>
+    /// Routes a Kubernetes <see cref="KubernetesIngressResource"/> through the supplied
+    /// Azure Application Gateway for Containers (AGC) <see cref="AzureKubernetesLoadBalancerResource"/>.
+    /// </summary>
+    /// <ats-summary>Routes a Kubernetes Ingress through an AGC ApplicationLoadBalancer</ats-summary>
+    /// <param name="builder">The ingress resource builder.</param>
+    /// <param name="loadBalancer">The AGC load balancer to route through.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <remarks>
+    /// Writes the AGC routing annotations (<c>alb.networking.azure.io/alb-name</c> and
+    /// <c>alb.networking.azure.io/alb-namespace</c>) onto the rendered Ingress and defaults
+    /// the IngressClass to <c>azure-alb-external</c> when one has not already been set via
+    /// <c>WithIngressClass(...)</c>.
+    /// </remarks>
+    [AspireExport("withLoadBalancerOnIngress", MethodName = "withLoadBalancer")]
+    public static IResourceBuilder<KubernetesIngressResource> WithLoadBalancer(
+        this IResourceBuilder<KubernetesIngressResource> builder,
+        IResourceBuilder<AzureKubernetesLoadBalancerResource> loadBalancer)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(loadBalancer);
+
+        var lb = loadBalancer.Resource;
+        builder.Resource.IngressAnnotations["alb.networking.azure.io/alb-name"] =
+            ReferenceExpression.Create($"{lb.AlbName}");
+        builder.Resource.IngressAnnotations["alb.networking.azure.io/alb-namespace"] =
+            ReferenceExpression.Create($"{AzureKubernetesLoadBalancerResource.AlbNamespace}");
+
+        builder.Resource.IngressClassName ??= ReferenceExpression.Create($"azure-alb-external");
+        return builder;
+    }
+}

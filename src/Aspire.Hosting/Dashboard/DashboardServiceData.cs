@@ -2,13 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Runtime.CompilerServices;
+using Aspire.Dashboard.Model;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Dashboard;
-
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 /// <summary>
 /// Models the state for <see cref="DashboardService"/>, as that service is constructed
@@ -39,6 +38,45 @@ internal sealed class DashboardServiceData : IDisposable
         {
             static GenericResourceSnapshot CreateResourceSnapshot(IResource resource, string resourceId, DateTime creationTimestamp, CustomResourceSnapshot snapshot)
             {
+                // If the resource has a TerminalAnnotation, stamp the per-replica terminal
+                // properties onto the snapshot so the Dashboard can:
+                //   * detect that a terminal is available (HasTerminal),
+                //   * build a /api/terminal?resource=<name>&replica=<index> URL pointing
+                //     at the right replica (TryGetTerminalReplicaInfo).
+                //
+                // The dashboard never *follows* this path itself - it only displays it
+                // (masked) in the resource details panel and uses it via
+                // ITerminalConnectionResolver, which resolves replica -> UDS server-side
+                // so an authenticated browser cannot coerce the dashboard into
+                // connecting to arbitrary UDS endpoints by tampering with the path.
+                var terminalAnnotation = resource.Annotations.OfType<TerminalAnnotation>().FirstOrDefault();
+                if (terminalAnnotation is not null)
+                {
+                    var terminalHosts = terminalAnnotation.TerminalHosts;
+                    var replicaCount = terminalHosts.Count;
+                    var replicaIndex = ResolveReplicaIndex(resource, resourceId);
+                    var consumerUdsPath = (uint)replicaIndex < (uint)replicaCount
+                        ? terminalHosts[replicaIndex].Layout.ConsumerUdsPath
+                        : null;
+
+                    var properties = snapshot.Properties
+                        .Add(new ResourcePropertySnapshot(KnownProperties.Terminal.Enabled, "true") { IsSensitive = false })
+                        .Add(new ResourcePropertySnapshot(KnownProperties.Terminal.ReplicaIndex, replicaIndex.ToString(System.Globalization.CultureInfo.InvariantCulture)) { IsSensitive = false })
+                        .Add(new ResourcePropertySnapshot(KnownProperties.Terminal.ReplicaCount, replicaCount.ToString(System.Globalization.CultureInfo.InvariantCulture)) { IsSensitive = false });
+
+                    if (consumerUdsPath is not null)
+                    {
+                        // Mark the UDS path sensitive so the dashboard masks it in the
+                        // resource details panel. The path still flows through gRPC to
+                        // the dashboard process (which is intentional - it needs the
+                        // path to open the local socket on the user's behalf).
+                        properties = properties.Add(
+                            new ResourcePropertySnapshot(KnownProperties.Terminal.ConsumerUdsPath, consumerUdsPath) { IsSensitive = true });
+                    }
+
+                    snapshot = snapshot with { Properties = properties };
+                }
+
                 return new GenericResourceSnapshot(snapshot)
                 {
                     Uid = resourceId,
@@ -61,6 +99,30 @@ internal sealed class DashboardServiceData : IDisposable
                     IconName = snapshot.IconName,
                     IconVariant = snapshot.IconVariant
                 };
+            }
+
+            // Maps the per-replica DCP resourceId (e.g. "myapp-abc123") back to its
+            // stable 0-based replica index by consulting DcpInstancesAnnotation, which
+            // DcpNameGenerator populates at instance-allocation time. Falls back to 0
+            // for non-DCP resources or when the annotation isn't present yet (e.g.
+            // initial pre-DCP snapshots).
+            static int ResolveReplicaIndex(IResource resource, string resourceId)
+            {
+                var instances = resource.Annotations.OfType<DcpInstancesAnnotation>().FirstOrDefault();
+                if (instances is null)
+                {
+                    return 0;
+                }
+
+                foreach (var instance in instances.Instances)
+                {
+                    if (string.Equals(instance.Name, resourceId, StringComparison.Ordinal))
+                    {
+                        return instance.Index;
+                    }
+                }
+
+                return 0;
             }
 
             var timestamp = DateTime.UtcNow;
@@ -94,21 +156,32 @@ internal sealed class DashboardServiceData : IDisposable
         _cts.Dispose();
     }
 
-    internal async Task<(ExecuteCommandResultType result, string? message, ApplicationModel.CommandResultData? value)> ExecuteCommandAsync(string resourceId, string type, CancellationToken cancellationToken)
+    internal async Task<(ExecuteCommandResultType result, string? message, ApplicationModel.CommandResultData? value, InteractionInputCollection? invalidArguments)> ExecuteCommandAsync(string resourceId, string type, ExecuteResourceCommandOptions options, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(options);
+
         try
         {
-            var result = await _resourceCommandService.ExecuteCommandAsync(resourceId, type, cancellationToken).ConfigureAwait(false);
+            var result = await _resourceCommandService.ExecuteCommandAsync(
+                resourceId,
+                type,
+                new ResourceCommandExecutionOptions
+                {
+                    ArgumentValues = options.ArgumentValues,
+                    ArgumentsProvided = options.ArgumentValues is not null,
+                    NonInteractive = options.NonInteractive
+                },
+                cancellationToken).ConfigureAwait(false);
             if (result.Canceled)
             {
-                return (ExecuteCommandResultType.Canceled, result.Message, null);
+                return (ExecuteCommandResultType.Canceled, result.Message, null, null);
             }
-            return (result.Success ? ExecuteCommandResultType.Success : ExecuteCommandResultType.Failure, result.Message, result.Data);
+            return (result.Success ? ExecuteCommandResultType.Success : ExecuteCommandResultType.Failure, result.Message, result.Data, result.InvalidArguments);
         }
         catch
         {
             // Note: Exception is already logged in the command executor.
-            return (ExecuteCommandResultType.Failure, "Unhandled exception thrown while executing command.", null);
+            return (ExecuteCommandResultType.Failure, "Unhandled exception thrown while executing command.", null, null);
         }
     }
 
@@ -218,6 +291,11 @@ internal sealed class DashboardServiceData : IDisposable
                 // If we're processing updates because of a dependency change, check to see if this input is depended on.
                 if (dependencyChange)
                 {
+                    // Response updates are sent by the dashboard when an input marked
+                    // UpdateStateOnChange changes. Only queue dependents whose source value actually
+                    // changed; otherwise a validation/update roundtrip for one field could repeatedly
+                    // restart unrelated dynamic loads. Inputs that need an initial load before any user
+                    // change must opt into AlwaysLoadOnStart.
                     var dependentInputs = inputsInfo.Inputs.Where(
                         i => i.DynamicLoading is { } dynamic &&
                         (dynamic.DependsOnInputs?.Any(d => string.Equals(modelInput.Name, d, StringComparisons.InteractionInputName)) ?? false));
@@ -239,6 +317,13 @@ internal sealed class DashboardServiceData : IDisposable
     }
 }
 
+internal sealed class ExecuteResourceCommandOptions
+{
+    public IReadOnlyDictionary<string, string?>? ArgumentValues { get; init; }
+
+    public bool NonInteractive { get; init; }
+}
+
 internal enum ExecuteCommandResultType
 {
     Success,
@@ -246,4 +331,3 @@ internal enum ExecuteCommandResultType
     Canceled
 }
 
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

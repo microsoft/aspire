@@ -5,39 +5,34 @@ using System.CommandLine;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Backchannel;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
-using Aspire.Cli.Telemetry;
-using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Commands;
 
 internal sealed class ExtensionInternalCommand : BaseCommand
 {
-    public ExtensionInternalCommand(IFeatures features, ICliUpdateNotifier updateNotifier, IProjectLocator projectLocator, CliExecutionContext executionContext, IInteractionService interactionService, AspireCliTelemetry telemetry) : base("extension", "Hidden command for extension integration", features, updateNotifier, executionContext, interactionService, telemetry)
+    public ExtensionInternalCommand(IProjectLocator projectLocator, CommonCommandServices services) : base("extension", "Hidden command for extension integration", services)
     {
         this.Hidden = true;
-        this.Subcommands.Add(new GetAppHostCandidatesCommand(features, updateNotifier, projectLocator, executionContext, interactionService, telemetry));
+        this.Subcommands.Add(new GetAppHostCandidatesCommand(projectLocator, services));
     }
 
-    protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
-        return Task.FromResult(ExitCodeConstants.Success);
+        return Task.FromResult(CommandResult.FromExitCode(CliExitCodes.Success));
     }
 
     private sealed class GetAppHostCandidatesCommand : BaseCommand
     {
         private readonly IProjectLocator _projectLocator;
 
-        public GetAppHostCandidatesCommand(IFeatures features, ICliUpdateNotifier updateNotifier, IProjectLocator projectLocator, CliExecutionContext executionContext, IInteractionService interactionService, AspireCliTelemetry telemetry) : base("get-apphosts", "Get AppHosts in the specified directory", features, updateNotifier, executionContext, interactionService, telemetry)
+        public GetAppHostCandidatesCommand(IProjectLocator projectLocator, CommonCommandServices services) : base("get-apphosts", "Get AppHosts in the specified directory", services)
         {
             _projectLocator = projectLocator;
         }
 
-        protected override bool UpdateNotificationsEnabled => false;
-
-        protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+        protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
         {
             try
             {
@@ -50,16 +45,18 @@ internal sealed class ExtensionInternalCommand : BaseCommand
                 }, BackchannelJsonSerializerContext.Default.AppHostProjectSearchResultPoco);
                 // Structured output always goes to stdout.
                 InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
-                return ExitCodeConstants.Success;
+                return CommandResult.Success();
             }
             catch
             {
-                return ExitCodeConstants.FailedToFindProject;
+                return CommandResult.Failure(CliExitCodes.FailedToFindProject);
             }
         }
     }
 }
 
+// `aspire extension get-apphosts` is a hidden tooling output; keep
+// docs/specs/cli-output-formats.md in sync when changing this shape.
 internal class AppHostProjectSearchResultPoco
 {
     [JsonPropertyName("selected_project_file")]

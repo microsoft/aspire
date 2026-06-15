@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { EventEmitter } from "vscode";
 import * as fs from "fs";
-import { createDebugAdapterTracker, AppHostRestartHandler } from "./adapterTracker";
+import { createDebugAdapterTracker, AppHostOutputHandler, AppHostRestartHandler } from "./adapterTracker";
 import { AspireResourceExtendedDebugConfiguration, AspireResourceDebugSession, EnvVar, AspireExtendedDebugConfiguration, NodeLaunchConfiguration, ProjectLaunchConfiguration, StartAppHostOptions } from "../dcp/types";
 import { extensionLogOutputChannel } from "../utils/logging";
 import AspireDcpServer, { generateDcpIdPrefix } from "../dcp/AspireDcpServer";
@@ -19,12 +19,17 @@ import { ICliRpcClient } from "../server/rpcClient";
 import path from "path";
 import os from "os";
 import { EnvironmentVariables } from "../utils/environment";
+import { sendTelemetryEvent } from "../utils/telemetry";
+import { classifyAppHostPath, classifyAppHostDirectory } from "../utils/appHostLanguage";
+import type { AspireDebugConsoleOutputEvent } from "../types/extensionApi";
 
 export type DashboardBrowserType = 'openExternalBrowser' | 'integratedBrowser' | 'debugChrome' | 'debugEdge' | 'debugFirefox';
 
 export class AspireDebugSession implements vscode.DebugAdapter {
   private readonly _onDidSendMessage = new EventEmitter<any>();
+  private readonly _onDidSendDebugConsoleOutput = new EventEmitter<AspireDebugConsoleOutputEvent>();
   private _messageSeq = 1;
+  private readonly _appHostParentOutputFilter = new AppHostParentOutputFilter();
 
   private readonly _session: vscode.DebugSession;
   private readonly _rpcServer: AspireRpcServer;
@@ -36,12 +41,39 @@ export class AspireDebugSession implements vscode.DebugAdapter {
   private _trackedDebugAdapters: string[] = [];
   private _rpcClient?: ICliRpcClient;
   private _dashboardDebugSession: vscode.DebugSession | null = null;
+  private _dashboardUrl: string | undefined;
+  private _startupCompleted = false;
+  private readonly _onDidChangeState = new EventEmitter<void>();
   private readonly _disposables: vscode.Disposable[] = [];
   private _disposed = false;
+  // Timestamp for the `debug/apphost/end` duration measurement. Captured the first
+  // time we observe a `launch` request so it covers the actual user-visible session
+  // lifetime, not the moment the AspireDebugSession object was constructed.
+  private _appHostStartTimeMs: number | undefined = undefined;
+  // Tracks the AppHost-language classification of the launched program so it can
+  // be repeated on the matching end event without re-deriving from `configuration`.
+  private _appHostLanguageAtLaunch: 'csharp' | 'typescript' | 'unknown' = 'unknown';
+  // Mode the AppHost was launched with (`run` | `debug`) — captured for the
+  // matching end event.
+  private _appHostModeAtLaunch: 'run' | 'debug' = 'run';
 
   public readonly onDidSendMessage = this._onDidSendMessage.event;
+  public readonly onDidSendDebugConsoleOutput = this._onDidSendDebugConsoleOutput.event;
+  public readonly onDidChangeState = this._onDidChangeState.event;
   public readonly debugSessionId: string;
   public configuration: AspireExtendedDebugConfiguration;
+
+  get appHostPath(): string | undefined {
+    return typeof this.configuration.program === 'string' ? this.configuration.program : undefined;
+  }
+
+  get dashboardUrl(): string | undefined {
+    return this._dashboardUrl;
+  }
+
+  get startupCompleted(): boolean {
+    return this._startupCompleted;
+  }
 
   constructor(session: vscode.DebugSession, rpcServer: AspireRpcServer, dcpServer: AspireDcpServer, terminalProvider: AspireTerminalProvider, removeAspireDebugSession: (session: AspireDebugSession) => void) {
     this._session = session;
@@ -80,44 +112,74 @@ export class AspireDebugSession implements vscode.DebugAdapter {
         body: {}
       });
 
-      const appHostPath = this._session.configuration.program as string;
       const command = this.configuration.command ?? 'run';
       const noDebug = !!message.arguments?.noDebug && command === 'run';
 
-      const args: string[] = [command];
-
       // Append any additional command args forwarded from the CLI (e.g., step name for 'do', unmatched tokens)
-      const commandArgs = this.configuration.args;
-      if (commandArgs && commandArgs.length > 0) {
-        args.push(...commandArgs);
-      }
+      const commandArgs = this.configuration.args ?? [];
+      const appHostPath = this._session.configuration.program as string;
+      const appHostIsDirectory = isDirectory(appHostPath);
+      const extensionArgs: string[] = [];
+
+      // Telemetry: emit `debug/apphost/start` once per AppHost launch. We do it
+      // here (rather than in the constructor) because the constructor runs
+      // before VS Code's debug-launch UX completes; this branch is the single
+      // entry point that triggers an actual CLI spawn. The matching end event
+      // is emitted from dispose().
+      this._appHostStartTimeMs = Date.now();
+      this._appHostLanguageAtLaunch = appHostIsDirectory
+        ? classifyAppHostDirectory(appHostPath)
+        : classifyAppHostPath(appHostPath);
+      this._appHostModeAtLaunch = noDebug ? 'run' : 'debug';
+      // `command` originates in the user's launch.json and is typed in the
+      // contributing extension surface as AspireCommandType ('run'|'deploy'|
+      // 'publish'|'do'), but launch.json is freeform JSON — a typo or custom
+      // value would otherwise leak verbatim into telemetry. Clamp to the known
+      // set so the dimension stays bounded.
+      const knownCommands: ReadonlySet<string> = new Set(['run', 'deploy', 'publish', 'do']);
+      const commandForTelemetry = knownCommands.has(command) ? command : 'other';
+      sendTelemetryEvent('debug/apphost/start', {
+        mode: this._appHostModeAtLaunch,
+        apphost_language: this._appHostLanguageAtLaunch,
+        apphost_is_directory: appHostIsDirectory ? 'true' : 'false',
+        command: commandForTelemetry,
+      });
 
       // For 'do' with an explicit step (old CLI fallback), pass it as a positional argument
       const step = this.configuration.step;
-      if (command === 'do' && step && !commandArgs?.length) {
-        args.push(step);
+      if (command === 'do' && step && commandArgs.length === 0) {
+        extensionArgs.push(step);
       }
 
       // --start-debug-session tells the CLI to launch the AppHost via the extension with debugger attached
       if (!noDebug) {
-        args.push('--start-debug-session');
+        extensionArgs.push('--start-debug-session');
+      }
+
+      if (!commandArgs.includes('--nologo')) {
+        extensionArgs.push('--nologo');
       }
 
       if (process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true') {
-        args.push('--cli-wait-for-debugger');
+        extensionArgs.push('--cli-wait-for-debugger');
       }
 
       if (process.env[EnvironmentVariables.ASPIRE_APPHOST_STOP_ON_ENTRY] === 'true') {
-        args.push('--wait-for-debugger');
+        extensionArgs.push('--wait-for-debugger');
       }
 
       if (this._terminalProvider.isCliDebugLoggingEnabled()) {
-        args.push('--debug');
+        extensionArgs.push('--debug');
       }
 
+      if (!appHostIsDirectory) {
+        extensionArgs.push('--apphost', appHostPath);
+      }
+
+      const args = buildAspireCommandArgs(command, commandArgs, extensionArgs);
       const commandLabel = `aspire ${command}`;
 
-      if (isDirectory(appHostPath)) {
+      if (appHostIsDirectory) {
         this.sendMessageWithEmoji("📁", launchingWithDirectory(appHostPath));
 
         void this.spawnAspireCommand(args, appHostPath, noDebug, commandLabel);
@@ -126,7 +188,6 @@ export class AspireDebugSession implements vscode.DebugAdapter {
         this.sendMessageWithEmoji("📂", launchingWithAppHost(appHostPath));
 
         const workspaceFolder = path.dirname(appHostPath);
-        args.push('--apphost', appHostPath);
         void this.spawnAspireCommand(args, workspaceFolder, noDebug, commandLabel);
       }
     }
@@ -168,33 +229,73 @@ export class AspireDebugSession implements vscode.DebugAdapter {
       }
     });
 
+    const configuredEnv = this.configuration.env;
+    const env = configuredEnv
+      ? Object.entries(configuredEnv).map(([name, value]) => ({ name, value: String(value) }))
+      : undefined;
+
+    // Per-stream line buffers. CLI stdio chunks aren't guaranteed to arrive aligned to line
+    // boundaries; without buffering, partial lines (and split-point ANSI sequences) would be
+    // emitted as their own debug-console events, producing broken output like a bare emoji on
+    // one line followed by the rest of the message on the next.
+    let stdoutBuffer = '';
+    let stderrBuffer = '';
+
+    const flushBuffer = (buffer: string, category: 'stdout' | 'stderr') => {
+      const remainder = buffer.replace(/\r$/, '');
+      if (remainder.length > 0 && !isProgressEscapeSequence(remainder)) {
+        // Spectre's stderr is intentionally bare for non-error notifications (e.g. the version
+        // update banner). The DAP `'stderr'` category alone causes the debug console to render
+        // these lines in red; we don't add an extra `❌` because legitimate CLI errors are
+        // already emoji-prefixed by Spectre at the source.
+        this.sendMessage(remainder, true, category);
+      }
+    };
+
+    const handleChunk = (chunk: string, currentBuffer: string, category: 'stdout' | 'stderr'): string => {
+      const combined = currentBuffer + chunk;
+      const lines = combined.split('\n');
+      const partial = lines.pop() ?? '';
+      for (const line of lines) {
+        flushBuffer(line, category);
+      }
+      return partial;
+    };
+
     spawnCliProcess(
       this._terminalProvider,
       await this._terminalProvider.getAspireCliExecutablePath(),
       args,
       {
         stdoutCallback: (data) => {
-          for (const line of trimMessage(data)) {
-            this.sendMessage(line);
-          }
+          stdoutBuffer = handleChunk(data, stdoutBuffer, 'stdout');
         },
         stderrCallback: (data) => {
-          for (const line of trimMessage(data)) {
-            this.sendMessageWithEmoji("❌", line, false);
-          }
+          stderrBuffer = handleChunk(data, stderrBuffer, 'stderr');
         },
         errorCallback: (error) => {
           extensionLogOutputChannel.error(`Error spawning aspire process: ${error}`);
           vscode.window.showErrorMessage(processExceptionOccurred(error.message, commandLabel));
         },
         exitCallback: (code) => {
+          this._dcpServer.recordAppHostProcessExit(this.debugSessionId, code);
+          // Flush any partial line left in either buffer so trailing output isn't lost.
+          if (stdoutBuffer.length > 0) {
+            flushBuffer(stdoutBuffer, 'stdout');
+            stdoutBuffer = '';
+          }
+          if (stderrBuffer.length > 0) {
+            flushBuffer(stderrBuffer, 'stderr');
+            stderrBuffer = '';
+          }
           this.sendMessageWithEmoji("🔚", processExitedWithCode(code ?? '?'));
           // if the process failed, we want to stop the debug session
           this.dispose();
         },
         workingDirectory: workingDirectory,
         debugSessionId: this.debugSessionId,
-        noDebug: noDebug
+        noDebug: noDebug,
+        env: env
       },
     );
 
@@ -207,26 +308,23 @@ export class AspireDebugSession implements vscode.DebugAdapter {
       }
     });
 
-    function trimMessage(message: string): string[] {
-      return message
-        .replace('\r\n', '\n')
-        .split('\n')
-        .map(line => line.trim())
-        // Filter empty lines and terminal progress bar escape sequences
-        .filter(line => line.length > 0 && !line.match(/^\u001b\]9;4;\d+\u001b\\$/));
+    function isProgressEscapeSequence(line: string): boolean {
+      // ConEmu/iTerm2 progress-reporting OSC sequence (`OSC 9;4;<state>;<value> ST`).
+      return /^\u001b\]9;4;\d+\u001b\\$/.test(line.trim());
     }
   }
 
-  createDebugAdapterTrackerCore(debugAdapter: string, onAppHostRestartRequested?: AppHostRestartHandler) {
+  createDebugAdapterTrackerCore(debugAdapter: string, onAppHostRestartRequested?: AppHostRestartHandler, onAppHostOutput?: AppHostOutputHandler) {
     if (this._trackedDebugAdapters.includes(debugAdapter)) {
       return;
     }
 
     this._trackedDebugAdapters.push(debugAdapter);
-    this._disposables.push(createDebugAdapterTracker(this._dcpServer, debugAdapter, onAppHostRestartRequested));
+    this._disposables.push(createDebugAdapterTracker(this._dcpServer, debugAdapter, onAppHostRestartRequested, onAppHostOutput));
   }
 
   private static readonly _nodeAppHostExtensions = ['.js', '.ts', '.mjs', '.mts', '.cjs', '.cts'];
+  private static readonly _csharpAppHostExtensions = ['.cs', '.csproj'];
 
   private _appHostRestartRequested = false;
 
@@ -234,6 +332,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     try {
       const fileExtension = path.extname(projectFile).toLowerCase();
       const isNodeAppHost = AspireDebugSession._nodeAppHostExtensions.includes(fileExtension);
+      const isCSharpAppHost = AspireDebugSession._csharpAppHostExtensions.includes(fileExtension);
 
       const debuggerExtension = isNodeAppHost ? nodeDebuggerExtension : projectDebuggerExtension;
 
@@ -241,6 +340,15 @@ export class AspireDebugSession implements vscode.DebugAdapter {
       // When the user clicks "restart" on the app host child session,
       // we suppress VS Code's automatic child restart and restart the
       // entire Aspire debug session instead.
+      //
+      // The output filter is intentionally a positive opt-in for C# AppHosts only.
+      // The .NET debugger (`coreclr`) emits a lot of `console`-category chatter
+      // (module loads, exception-thrown notifications, the debugger banner, etc.)
+      // into the parent debug console, and structured `Microsoft.Extensions.Logging`
+      // lines need trce/dbug-level filtering. Other languages (Node, and future
+      // additions like Python/Go) use different debug adapters that don't produce
+      // that noise, so we pass their output through unmodified until/unless they
+      // explicitly opt in to filtering.
       this.createDebugAdapterTrackerCore(
         debuggerExtension.debugAdapter,
         (debugSessionId) => {
@@ -249,7 +357,10 @@ export class AspireDebugSession implements vscode.DebugAdapter {
             return true; // suppress VS Code's child restart
           }
           return false;
-        }
+        },
+        isCSharpAppHost
+          ? (output, category) => this.sendAppHostMessage(output, category)
+          : (output, category) => this.sendMessage(output, false, category === 'stderr' ? 'stderr' : 'stdout')
       );
 
       let appHostArgs: string[];
@@ -316,8 +427,13 @@ export class AspireDebugSession implements vscode.DebugAdapter {
       this._disposables.push(disposable);
     }
     catch (err) {
-      extensionLogOutputChannel.error(`Error starting AppHost debug session: ${err}`);
-      vscode.window.showErrorMessage(String(err));
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      const errorDetails = err instanceof Error ? (err.stack ?? err.message) : String(err);
+      extensionLogOutputChannel.error(`Error starting AppHost debug session: ${errorDetails}`);
+      if (!isErrorWithStreamedDebugConsoleOutput(err)) {
+        this.sendMessageWithEmoji("❌", errorDetails, true, 'stderr');
+      }
+      vscode.window.showErrorMessage(errorMessage);
       this.dispose();
     }
   }
@@ -376,7 +492,9 @@ export class AspireDebugSession implements vscode.DebugAdapter {
    * For debugChrome/debugEdge/debugFirefox, launches as a child debug session that auto-closes with the Aspire debug session.
    */
   async openDashboard(url: string, browserType: DashboardBrowserType): Promise<void> {
-    extensionLogOutputChannel.info(`Opening dashboard in browser: ${browserType}, URL: ${url}`);
+    extensionLogOutputChannel.info(`Opening dashboard in browser: ${browserType}.`);
+    this._dashboardUrl = url;
+    this._onDidChangeState.fire();
 
     switch (browserType) {
       case 'debugChrome':
@@ -454,9 +572,52 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     }
     this._disposed = true;
     extensionLogOutputChannel.info('Stopping the Aspire debug session');
-    vscode.debug.stopDebugging(this._session);
+    this._onDidChangeState.fire();
+
+    // Snapshot start-event metadata before we run disposables so the deferred
+    // `debug/apphost/end` callback has a stable view even if instance state
+    // mutates further (or the instance is reaped by VS Code before the timer
+    // fires).
+    const startMs = this._appHostStartTimeMs;
+    const mode = this._appHostModeAtLaunch;
+    const language = this._appHostLanguageAtLaunch;
+    const debugSessionId = this.debugSessionId;
+    const dcpServer = this._dcpServer;
+
+    // Stop child debug sessions first so their `sessionTerminated`
+    // notifications can flow back through `AspireDcpServer.sendNotification`
+    // and update the aggregate stats BEFORE we snapshot them for
+    // `debug/apphost/end`. Without this ordering, late nonzero exits (notably
+    // Windows' SIGTERM → 143 exit code which is not normalized to 0) would
+    // be missed and the summary would under-report failures.
     this._disposables.forEach(disposable => disposable.dispose());
     this._trackedDebugAdapters = [];
+    vscode.debug.stopDebugging(this._session);
+    this._onDidSendDebugConsoleOutput.dispose();
+
+    // Telemetry: emit `debug/apphost/end` after a short grace window so any
+    // pending `sessionTerminated` notifications kicked off by the child-stop
+    // disposables above have time to flow through the adapterTracker → DCP
+    // notification pipeline and update `anyNonZeroExit`. 500ms is enough for
+    // the common case under normal load while keeping the bound short enough
+    // to survive most extension teardown scenarios. We only fire the event if
+    // `launch` ever ran — otherwise we'd be reporting a phantom session for
+    // AppHosts that aborted before reaching the CLI spawn.
+    if (startMs !== undefined) {
+      setTimeout(() => {
+        const aggregate = dcpServer.takeDebugSessionAggregateStats(debugSessionId);
+        sendTelemetryEvent('debug/apphost/end', {
+          mode,
+          apphost_language: language,
+          ended_with_error: aggregate?.anyNonZeroExit ? 'true' : 'false',
+          distinct_resource_types: aggregate ? aggregate.distinctResourceTypes.join(',') : '',
+        }, {
+          duration_ms: Date.now() - startMs,
+          total_child_sessions: aggregate?.totalChildSessions ?? 0,
+          distinct_resource_type_count: aggregate?.distinctResourceTypes.length ?? 0,
+        });
+      }, 500);
+    }
   }
 
   /**
@@ -504,23 +665,208 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     this._onDidSendMessage.fire(event);
   }
 
-  sendMessageWithEmoji(emoji: string, message: string, addNewLine: boolean = true) {
-    this.sendMessage(`${emoji}  ${message}`, addNewLine);
+  sendMessageWithEmoji(emoji: string, message: string, addNewLine: boolean = true, category: 'stdout' | 'stderr' = 'stdout') {
+    this.sendMessage(`${emoji}  ${message}`, addNewLine, category);
+  }
+
+  private sendAppHostMessage(message: string, category: string | undefined) {
+    const filteredMessage = this._appHostParentOutputFilter.filter(message, category);
+    if (filteredMessage) {
+      this.sendMessage(filteredMessage.output, false, filteredMessage.category);
+    }
   }
 
   sendMessage(message: string, addNewLine: boolean = true, category: 'stdout' | 'stderr' = 'stdout') {
+    const output = `${message}${addNewLine ? '\n' : ''}`;
     this.sendEvent({
       type: 'event',
       seq: this._messageSeq++,
       event: 'output',
       body: {
         category: category,
-        output: `${message}${addNewLine ? '\n' : ''}`
+        output
       }
+    });
+    this._onDidSendDebugConsoleOutput.fire({
+      debugSessionId: this.debugSessionId,
+      appHostPath: this.appHostPath,
+      category,
+      output,
     });
   }
 
   notifyAppHostStartupCompleted() {
+    this._startupCompleted = true;
+    this._onDidChangeState.fire();
     extensionLogOutputChannel.info(`AppHost startup completed and dashboard is running.`);
   }
+}
+
+export function buildAspireCommandArgs(command: string, commandArgs: string[], extensionArgs: string[]): string[] {
+  const args = [command];
+  const separatorIndex = commandArgs.indexOf('--');
+  if (separatorIndex < 0) {
+    args.push(...commandArgs, ...extensionArgs);
+  }
+  else {
+    // Extension-owned CLI switches must stay before the `--` app-args separator.
+    // Otherwise commands delegated from the Aspire terminal, such as:
+    //   aspire start --apphost AppHost.csproj -- --custom-arg value
+    // would pass --apphost/--start-debug-session to the AppHost instead of the CLI.
+    args.push(...commandArgs.slice(0, separatorIndex), ...extensionArgs, ...commandArgs.slice(separatorIndex));
+  }
+
+  return args;
+}
+
+function isErrorWithStreamedDebugConsoleOutput(err: unknown): boolean {
+  return err instanceof Error && (err as Error & { debugConsoleOutputAlreadyWritten?: boolean }).debugConsoleOutputAlreadyWritten === true;
+}
+
+export interface AppHostParentOutput {
+  output: string;
+  category: 'stdout' | 'stderr';
+}
+
+export class AppHostParentOutputFilter {
+  private _continuingDroppedLog = false;
+  private _continuingErrorBlock = false;
+  private _lastCategory: string | undefined;
+
+  filter(output: string, category: string | undefined): AppHostParentOutput | undefined {
+    // Per the DAP spec the `category` field is optional; clients should treat a
+    // missing category as `'console'`. Normalize once at the boundary so state
+    // tracking and per-line classification see a consistent value, and so
+    // category-less debug-adapter output gets the same suppression as `'console'`
+    // instead of being mirrored to the parent debug console as stdout.
+    const normalizedCategory = category ?? 'console';
+
+    if (normalizedCategory === 'debug') {
+      this.resetState();
+      this._lastCategory = normalizedCategory;
+      return undefined;
+    }
+
+    // Continuation state (dropped log / error block) only makes sense within a single
+    // logical stream. When the DAP category changes (e.g. console -> stdout) we are
+    // looking at a different stream and previous indented-continuation context no
+    // longer applies.
+    if (normalizedCategory !== this._lastCategory) {
+      this.resetState();
+    }
+    this._lastCategory = normalizedCategory;
+
+    const segments = output.match(/[^\r\n]*(?:\r\n|\r|\n|$)/g)?.filter(segment => segment.length > 0) ?? [];
+    let filteredOutput = '';
+    // If the DAP delivered this chunk on stderr, keep the whole emitted message on
+    // stderr — the channel itself is authoritative regardless of per-line classification.
+    let hasErrorOutput = normalizedCategory === 'stderr';
+
+    for (const segment of segments) {
+      const outputCategory = this.getLineCategory(segment, normalizedCategory);
+      if (outputCategory) {
+        filteredOutput += segment;
+        hasErrorOutput ||= outputCategory === 'stderr';
+      }
+    }
+
+    if (filteredOutput.length === 0) {
+      return undefined;
+    }
+
+    return {
+      output: filteredOutput,
+      category: hasErrorOutput ? 'stderr' : 'stdout'
+    };
+  }
+
+  private getLineCategory(segment: string, category: string): 'stdout' | 'stderr' | undefined {
+    const line = segment.replace(/(?:\r\n|\r|\n)$/, '');
+    const trimmedLine = line.trim();
+
+    if (trimmedLine.length === 0) {
+      return !this._continuingDroppedLog && this.shouldMirrorConsoleOutput(category) ? this.getCurrentCategory(category) : undefined;
+    }
+
+    if (this._continuingDroppedLog && isIndentedContinuation(line)) {
+      return undefined;
+    }
+
+    if (this._continuingErrorBlock && isIndentedContinuation(line)) {
+      return 'stderr';
+    }
+
+    const logSeverity = getConsoleLogSeverity(trimmedLine);
+    if (logSeverity) {
+      this._continuingDroppedLog = logSeverity === 'low';
+      this._continuingErrorBlock = logSeverity === 'severe';
+
+      return logSeverity === 'low' ? undefined : this.getCurrentCategory(category);
+    }
+
+    const isSevereOutput = isSevereRuntimeOutputLine(trimmedLine);
+    this._continuingDroppedLog = false;
+    this._continuingErrorBlock = isSevereOutput;
+
+    if (category === 'console' && !isSevereOutput) {
+      return undefined;
+    }
+
+    return this.getCurrentCategory(category);
+  }
+
+  private shouldMirrorConsoleOutput(category: string): boolean {
+    return category !== 'console' || this._continuingErrorBlock;
+  }
+
+  private getCurrentCategory(category: string): 'stdout' | 'stderr' {
+    return category === 'stderr' || this._continuingErrorBlock ? 'stderr' : 'stdout';
+  }
+
+  private resetState() {
+    this._continuingDroppedLog = false;
+    this._continuingErrorBlock = false;
+  }
+}
+
+function getConsoleLogSeverity(line: string): 'low' | 'normal' | 'severe' | undefined {
+  const defaultConsoleLogLevel = /^(trce|dbug|info|warn|fail|crit):\s/.exec(line)?.[1];
+  if (defaultConsoleLogLevel) {
+    return defaultConsoleLogLevel === 'trce' || defaultConsoleLogLevel === 'dbug'
+      ? 'low'
+      : defaultConsoleLogLevel === 'fail' || defaultConsoleLogLevel === 'crit'
+        ? 'severe'
+        : 'normal';
+  }
+
+  // Microsoft.Extensions.Logging "simple" console formatter emits lines shaped like
+  // `<CategoryTypeName>[<EventId>]?: <Level>: <message>`. Real category names are
+  // namespaced .NET type names containing at least one dot (e.g.
+  // `Aspire.Hosting.Health.ResourceHealthCheckService`). Requiring a dot avoids
+  // matching arbitrary user stdout like `"Status: Error: connection refused"`.
+  const simpleConsoleLogLevel = /^[A-Za-z_]\w*(?:\.\w+)+(?:\[[^\]]+\])?:\s*(Trace|Debug|Information|Warning|Error|Critical):\s/.exec(line)?.[1];
+  if (simpleConsoleLogLevel) {
+    return simpleConsoleLogLevel === 'Trace' || simpleConsoleLogLevel === 'Debug'
+      ? 'low'
+      : simpleConsoleLogLevel === 'Error' || simpleConsoleLogLevel === 'Critical'
+        ? 'severe'
+        : 'normal';
+  }
+
+  return undefined;
+}
+
+function isIndentedContinuation(line: string): boolean {
+  return /^\s+\S/.test(line);
+}
+
+function isSevereRuntimeOutputLine(line: string): boolean {
+  // Typed exception — `Namespace.Type.NameException: message` (also matches plain `System.Exception:`).
+  return /(?:^|\s)(?:[A-Za-z_][\w`]*\.)+(?:[A-Za-z_][\w`]*Exception|Exception):/.test(line)
+    // JavaScript / Node.js error shapes — `Uncaught TypeError: ...`, `Error [CODE]: ...`.
+    || /^(?:Uncaught\s+)?(?:[A-Za-z_$][\w$]*Error|Error)(?:\s+\[[^\]]+\])?:/.test(line)
+    // Anchored fatal-marker prefixes only — bare word matches like `\bfailed\b` produced
+    // false positives on user stdout (`"Failed payment retry queued"`, file paths
+    // containing "error", etc.).
+    || /^(?:fatal|critical|panic|aborted|segmentation\s+fault|unhandled\s+exception)\b/i.test(line);
 }

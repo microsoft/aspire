@@ -5,8 +5,11 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
+using System.Threading.Channels;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Backchannel;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -20,24 +23,34 @@ namespace Aspire.Cli.Backchannel;
 internal sealed class AuxiliaryBackchannelMonitor(
     ILogger<AuxiliaryBackchannelMonitor> logger,
     CliExecutionContext executionContext,
-    TimeProvider timeProvider) : BackgroundService, IAuxiliaryBackchannelMonitor
+    TimeProvider timeProvider,
+    ProfilingTelemetry profilingTelemetry) : BackgroundService, IAuxiliaryBackchannelMonitor
 {
     private static readonly TimeSpan s_maxRetryElapsed = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan s_maxRetryDelay = TimeSpan.FromSeconds(1);
-    
+
+    // Compact socket file names have no prefix to reduce the path length as much as possible and avoid socket path length limits,
+    // which are much shorter than typical file path limits (e.g. 108 BYTES on Windows/Linux).
+    // But this means we need to watch for all files while keeping backchannel sockets in a directory separate 
+    // from other CLI-managed files.
+    private const string CompactSocketWatchPattern = "*";
+    private const string LegacySocketWatchPattern = "aux*.sock.*";
+
     // Outer key: hash (prefix), Inner key: socketPath, Value: connection
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, AppHostAuxiliaryBackchannel>> _connectionsByHash = new();
-    private readonly string _backchannelsDirectory = GetBackchannelsDirectory();
+    private readonly string _backchannelsDirectory = BackchannelConstants.GetBackchannelsDirectory(GetHomeDirectory());
+    private readonly string _legacyBackchannelsDirectory = BackchannelConstants.GetLegacyBackchannelsDirectory(GetHomeDirectory());
 
     // Track known socket files to detect additions and removals
     private readonly HashSet<string> _knownSocketFiles = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _scanLock = new(1, 1);
     private readonly TimeProvider _timeProvider = timeProvider;
+    private event Action? ConnectionsChanged;
 
     /// <summary>
     /// Gets all active AppHost connections, flattened from all hashes.
     /// </summary>
-    public IEnumerable<IAppHostAuxiliaryBackchannel> Connections => 
+    public IEnumerable<IAppHostAuxiliaryBackchannel> Connections =>
         _connectionsByHash.Values.SelectMany(d => d.Values);
 
     /// <summary>
@@ -47,6 +60,75 @@ internal sealed class AuxiliaryBackchannelMonitor(
     /// <returns>All connections for the given hash, or empty if none.</returns>
     public IEnumerable<IAppHostAuxiliaryBackchannel> GetConnectionsByHash(string hash) =>
         _connectionsByHash.TryGetValue(hash, out var connections) ? connections.Values : [];
+
+    public async IAsyncEnumerable<IReadOnlyList<IAppHostAuxiliaryBackchannel>> WatchConnectionsAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var connectionChanges = Channel.CreateUnbounded<bool>(new UnboundedChannelOptions
+        {
+            SingleReader = true
+        });
+        void QueueConnectionChange() => connectionChanges.Writer.TryWrite(true);
+
+        ConnectionsChanged += QueueConnectionChange;
+
+        try
+        {
+            Directory.CreateDirectory(_backchannelsDirectory);
+            Directory.CreateDirectory(_legacyBackchannelsDirectory);
+
+            await ProcessDirectoryChangesAsync(cancellationToken).ConfigureAwait(false);
+            yield return Connections.ToList();
+
+            using var fileProvider = new PhysicalFileProvider(_backchannelsDirectory);
+            fileProvider.UsePollingFileWatcher = true;
+            fileProvider.UseActivePolling = true;
+            using var legacyFileProvider = new PhysicalFileProvider(_legacyBackchannelsDirectory);
+            legacyFileProvider.UsePollingFileWatcher = true;
+            legacyFileProvider.UseActivePolling = true;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.WhenAll(
+                        WatchConnectionChangesAsync(fileProvider, CompactSocketWatchPattern, cancellationToken),
+                        WatchConnectionChangesAsync(legacyFileProvider, LegacySocketWatchPattern, cancellationToken)).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    // Expected when the follow command stops.
+                }
+                finally
+                {
+                    connectionChanges.Writer.TryComplete();
+                }
+            }, CancellationToken.None);
+
+            await foreach (var _ in connectionChanges.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            {
+                yield return Connections.ToList();
+            }
+        }
+        finally
+        {
+            ConnectionsChanged -= QueueConnectionChange;
+            connectionChanges.Writer.TryComplete();
+        }
+
+        async Task WatchConnectionChangesAsync(IFileProvider fileProvider, string watchPattern, CancellationToken cancellationToken)
+        {
+            await foreach (var _ in WatchForChangesAsync(fileProvider, watchPattern, cancellationToken).ConfigureAwait(false))
+            {
+                await ProcessDirectoryChangesAsync(cancellationToken).ConfigureAwait(false);
+                QueueConnectionChange();
+            }
+        }
+    }
+
+    private void NotifyConnectionsChanged()
+    {
+        ConnectionsChanged?.Invoke();
+    }
 
     /// <summary>
     /// Gets or sets the path to the selected AppHost. When set, this AppHost will be used for MCP operations.
@@ -138,7 +220,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
             // If timeout occurs or no command is set, monitoring is not needed
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(1));
             using var combined = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, timeout.Token);
-            
+
             var command = await executionContext.CommandSelected.Task.WaitAsync(combined.Token).ConfigureAwait(false);
 
             // Only monitor if the command is MCP start command (run --detach uses manual scanning)
@@ -150,11 +232,10 @@ internal sealed class AuxiliaryBackchannelMonitor(
 
             logger.LogInformation("Starting auxiliary backchannel monitor for {CommandType}", command.GetType().Name);
 
-            // Ensure the backchannels directory exists
-            if (!Directory.Exists(_backchannelsDirectory))
-            {
-                Directory.CreateDirectory(_backchannelsDirectory);
-            }
+            // Ensure both directories exist so the monitor can see compact sockets and
+            // sockets created by older AppHosts that still use the legacy location.
+            Directory.CreateDirectory(_backchannelsDirectory);
+            Directory.CreateDirectory(_legacyBackchannelsDirectory);
 
             // Scan for existing sockets on startup.
             await ProcessDirectoryChangesAsync(stoppingToken).ConfigureAwait(false);
@@ -163,9 +244,14 @@ internal sealed class AuxiliaryBackchannelMonitor(
             using var fileProvider = new PhysicalFileProvider(_backchannelsDirectory);
             fileProvider.UsePollingFileWatcher = true;
             fileProvider.UseActivePolling = true;
+            using var legacyFileProvider = new PhysicalFileProvider(_legacyBackchannelsDirectory);
+            legacyFileProvider.UsePollingFileWatcher = true;
+            legacyFileProvider.UseActivePolling = true;
 
             // Run the watcher loop until cancellation
-            var fileWatcherTask = RunFileWatcherLoopAsync(fileProvider, stoppingToken);
+            var fileWatcherTask = Task.WhenAll(
+                RunFileWatcherLoopAsync(fileProvider, CompactSocketWatchPattern, stoppingToken),
+                RunFileWatcherLoopAsync(legacyFileProvider, LegacySocketWatchPattern, stoppingToken));
 
             await fileWatcherTask.ConfigureAwait(false);
         }
@@ -200,19 +286,11 @@ internal sealed class AuxiliaryBackchannelMonitor(
     {
         var connectTasks = new List<Task>();
         var failedSockets = new ConcurrentBag<string>();
-        
+
         await _scanLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            // Support both "auxi.sock.*" (new) and "aux.sock.*" (old) for backward compatibility
-            // Note: "aux" is a reserved device name on Windows < 11, but we still scan for it
-            // to support connections from older CLI versions
-            // Using "aux*.sock.*" wildcard to match both patterns
-            var currentFiles = new HashSet<string>(
-                Directory.Exists(_backchannelsDirectory)
-                    ? Directory.GetFiles(_backchannelsDirectory, "aux*.sock.*")
-                    : [],
-                StringComparer.OrdinalIgnoreCase);
+            var currentFiles = new HashSet<string>(GetSocketFiles(), StringComparer.OrdinalIgnoreCase);
 
             // Find new files (files that exist now but weren't known before)
             var newFiles = currentFiles.Except(_knownSocketFiles, StringComparer.OrdinalIgnoreCase).ToList();
@@ -229,12 +307,12 @@ internal sealed class AuxiliaryBackchannelMonitor(
             {
                 logger.LogDebug("Socket deleted: {SocketPath}", removedFile);
                 var hash = AppHostHelper.ExtractHashFromSocketPath(removedFile);
-                if (!string.IsNullOrEmpty(hash) && 
+                if (!string.IsNullOrEmpty(hash) &&
                     _connectionsByHash.TryGetValue(hash, out var connectionsForHash) &&
                     connectionsForHash.TryRemove(removedFile, out var connection))
                 {
                     _ = Task.Run(async () => await DisconnectAsync(connection).ConfigureAwait(false), CancellationToken.None);
-                    
+
                     // Clean up empty hash entries
                     if (connectionsForHash.IsEmpty)
                     {
@@ -264,7 +342,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
         {
             await Task.WhenAll(connectTasks).ConfigureAwait(false);
         }
-        
+
         // Remove failed sockets from known files so they can be retried on next scan
         foreach (var failedSocket in failedSockets)
         {
@@ -288,7 +366,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
         }
 
         // Check if we're already connected to this specific socket
-        if (_connectionsByHash.TryGetValue(hash, out var existingConnections) && 
+        if (_connectionsByHash.TryGetValue(hash, out var existingConnections) &&
             existingConnections.ContainsKey(socketPath))
         {
             logger.LogDebug("Already connected to socket: {SocketPath}", socketPath);
@@ -406,7 +484,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
 
             // Use the centralized factory to create the connection
             // This ensures capabilities are always fetched
-            var connection = await AppHostAuxiliaryBackchannel.CreateFromSocketAsync(hash, socketPath, isInScope, socket, logger, cancellationToken).ConfigureAwait(false);
+            var connection = await AppHostAuxiliaryBackchannel.CreateFromSocketAsync(hash, socketPath, isInScope, logger, socket, cancellationToken, profilingTelemetry).ConfigureAwait(false);
 
             // Update isInScope based on actual appHostInfo now that we have it
             connection.IsInScope = IsAppHostInScope(connection.AppHostInfo?.AppHostPath);
@@ -419,18 +497,20 @@ internal sealed class AuxiliaryBackchannelMonitor(
                     connectionsForHash.TryRemove(socketPath, out var conn))
                 {
                     _ = Task.Run(async () => await DisconnectAsync(conn).ConfigureAwait(false));
-                    
+
                     // Clean up empty hash entries
                     if (connectionsForHash.IsEmpty)
                     {
                         _connectionsByHash.TryRemove(hash, out _);
                     }
+
+                    NotifyConnectionsChanged();
                 }
             };
 
             // Get or create the inner dictionary for this hash
             var connectionsDict = _connectionsByHash.GetOrAdd(hash, _ => new ConcurrentDictionary<string, AppHostAuxiliaryBackchannel>());
-            
+
             if (connectionsDict.TryAdd(socketPath, connection))
             {
                 logger.LogInformation(
@@ -448,6 +528,8 @@ internal sealed class AuxiliaryBackchannelMonitor(
                     connection.AppHostInfo?.CliProcessId?.ToString(CultureInfo.InvariantCulture) ?? "N/A",
                     connection.IsInScope,
                     connection.SupportsV2);
+
+                NotifyConnectionsChanged();
             }
             else
             {
@@ -493,20 +575,42 @@ internal sealed class AuxiliaryBackchannelMonitor(
         await Task.CompletedTask.ConfigureAwait(false);
     }
 
-    private static string GetBackchannelsDirectory()
+    private IEnumerable<string> GetSocketFiles()
     {
-        var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        return Path.Combine(homeDirectory, ".aspire", "cli", "backchannels");
+        if (Directory.Exists(_backchannelsDirectory))
+        {
+            foreach (var socketPath in Directory.GetFiles(_backchannelsDirectory))
+            {
+                if (AppHostHelper.ExtractHashFromSocketPath(socketPath) is not null)
+                {
+                    yield return socketPath;
+                }
+            }
+        }
+
+        if (Directory.Exists(_legacyBackchannelsDirectory))
+        {
+            // Support both "auxi.sock.*" and "aux.sock.*" for backward compatibility.
+            // Note: "aux" is a reserved device name on Windows < 11, but we still scan for it
+            // to support sockets created by older AppHost versions.
+            foreach (var socketPath in Directory.GetFiles(_legacyBackchannelsDirectory, "aux*.sock.*"))
+            {
+                yield return socketPath;
+            }
+        }
     }
+
+    private static string GetHomeDirectory()
+        => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
     /// <summary>
     /// Runs the file watcher loop that triggers scans when file changes are detected.
     /// </summary>
-    private async Task RunFileWatcherLoopAsync(IFileProvider fileProvider, CancellationToken cancellationToken)
+    private async Task RunFileWatcherLoopAsync(IFileProvider fileProvider, string watchPattern, CancellationToken cancellationToken)
     {
         try
         {
-            await foreach (var changed in WatchForChangesAsync(fileProvider, cancellationToken))
+            await foreach (var changed in WatchForChangesAsync(fileProvider, watchPattern, cancellationToken))
             {
                 await ProcessDirectoryChangesAsync(cancellationToken).ConfigureAwait(false);
             }
@@ -520,13 +624,11 @@ internal sealed class AuxiliaryBackchannelMonitor(
     /// <summary>
     /// Watches for file changes in the backchannels directory using change tokens.
     /// </summary>
-    private static async IAsyncEnumerable<bool> WatchForChangesAsync(IFileProvider fileProvider, [EnumeratorCancellation] CancellationToken cancellationToken)
+    private static async IAsyncEnumerable<bool> WatchForChangesAsync(IFileProvider fileProvider, string watchPattern, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested)
         {
-            // Watch for both "auxi.sock.*" (new) and "aux.sock.*" (old) patterns for backward compatibility
-            // Using "aux*.sock.*" wildcard to match both patterns
-            var changeToken = fileProvider.Watch("aux*.sock.*");
+            var changeToken = fileProvider.Watch(watchPattern);
             var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             using var registration = changeToken.RegisterChangeCallback(state => ((TaskCompletionSource<bool>)state!).TrySetResult(true), tcs);

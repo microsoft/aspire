@@ -129,11 +129,49 @@
   <data name="AppHostNotRunning" xml:space="preserve">
     <value>No running AppHost found. Use 'aspire run' to start one first.</value>
   </data>
+  <data name="AppHostNotRunningAtPath" xml:space="preserve">
+    <value>No AppHost is currently running for '{0}'. Use 'aspire run' to start it first.</value>
+    <comment>{0} is the AppHost project path.</comment>
+  </data>
   <data name="AppHostOptionDescription" xml:space="preserve">
-    <value>The path to the Aspire AppHost project file</value>
+    <value>The path to the Aspire AppHost project file or a directory to search</value>
+  </data>
+  <data name="IncludeHiddenOptionDescription" xml:space="preserve">
+    <value>Include hidden resources in the output</value>
   </data>
   <data name="FormatOptionDescription" xml:space="preserve">
     <value>Output format for detached AppHost results</value>
+  </data>
+  <data name="LsCommandDescription" xml:space="preserve">
+    <value>List candidate AppHost project files in the workspace (use `aspire ps` for running resources)</value>
+  </data>
+  <data name="LsFormatOptionDescription" xml:space="preserve">
+    <value>Output format (Table or Json)</value>
+  </data>
+  <data name="LsAllOptionDescription" xml:space="preserve">
+    <value>Include all candidate AppHosts, ignoring .gitignore and built-in directory filters</value>
+  </data>
+  <data name="LsStreamOptionDescription" xml:space="preserve">
+    <value>Output discovered AppHosts as newline-delimited JSON. Requires --format json</value>
+  </data>
+  <data name="LsStreamRequiresJson" xml:space="preserve">
+    <value>The --stream option requires --format json.</value>
+  </data>
+  <data name="LsNoCandidateAppHostsFound" xml:space="preserve">
+    <value>No candidate AppHosts found.</value>
+  </data>
+  <data name="LsSearchingForAppHostsStatus" xml:space="preserve">
+    <value>Searching for Aspire AppHosts. {0} directories searched. {1} AppHosts found...</value>
+    <comment>{0} is the number of directories searched so far. {1} is the number of AppHost candidates found so far.</comment>
+  </data>
+  <data name="HeaderPath" xml:space="preserve">
+    <value>Path</value>
+  </data>
+  <data name="HeaderLanguage" xml:space="preserve">
+    <value>Language</value>
+  </data>
+  <data name="HeaderStatus" xml:space="preserve">
+    <value>Status</value>
   </data>
   <data name="IsolatedOptionDescription" xml:space="preserve">
     <value>Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously</value>
@@ -146,6 +184,9 @@
   </data>
   <data name="PromptRunAgentInit" xml:space="preserve">
     <value>Would you like to configure AI agent environments for this project?</value>
+  </data>
+  <data name="AgentInitOptionDescription" xml:space="preserve">
+    <value>Suppress AI agent environment configuration after project creation</value>
   </data>
   <data name="PipelineLogLevelOptionDescription" xml:space="preserve">
     <value>Set the minimum log level for pipeline logging (trace, debug, information, warning, error, critical). The default is 'information'.</value>
@@ -161,5 +202,9 @@
   </data>
   <data name="PipelineStepsSummaryTitle" xml:space="preserve">
     <value>Steps Summary:</value>
+  </data>
+  <data name="NonInteractiveRequiresYesFormat" xml:space="preserve">
+    <value>The {0} command requires --yes when the --non-interactive option is specified.</value>
+    <comment>{0} is the command name.</comment>
   </data>
 </root>

@@ -24,16 +24,18 @@ public class SecretCommandTests(ITestOutputHelper outputHelper)
 
         await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
 
-        var command = CreateRootCommand(
+        using var provider = CreateSecretTestServices(
             workspace,
             outputWriter,
             appHostFile,
             userSecretsId);
 
+        var command = provider.GetRequiredService<RootCommand>();
+
         var result = command.Parse($"secret path --apphost \"{appHostFile.FullName}\"");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Contains(expectedPath, outputWriter.Logs);
     }
 
@@ -48,20 +50,22 @@ public class SecretCommandTests(ITestOutputHelper outputHelper)
 
         await File.WriteAllTextAsync(appHostFile.FullName, "export {};");
 
-        var command = CreateRootCommand(
+        using var provider = CreateSecretTestServices(
             workspace,
             outputWriter,
             appHostFile,
             userSecretsId);
 
+        var command = provider.GetRequiredService<RootCommand>();
+
         var result = command.Parse($"secret path --apphost \"{appHostFile.FullName}\"");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Contains(expectedPath, outputWriter.Logs);
     }
 
-    private RootCommand CreateRootCommand(
+    private ServiceProvider CreateSecretTestServices(
         TemporaryWorkspace workspace,
         TestOutputTextWriter outputWriter,
         FileInfo appHostFile,
@@ -77,11 +81,17 @@ public class SecretCommandTests(ITestOutputHelper outputHelper)
         services.Replace(ServiceDescriptor.Singleton<IAppHostProjectFactory>(
             new TestAppHostProjectFactory(new TestAppHostProject(userSecretsId))));
 
-        return services.BuildServiceProvider().GetRequiredService<RootCommand>();
+        return services.BuildServiceProvider();
     }
 
     private sealed class TestProjectLocator(FileInfo appHostFile) : IProjectLocator
     {
+        public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+            => Task.FromResult<List<AppHostProjectCandidate>>([new(appHostFile, "test")]);
+
+        public Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+            => Task.FromResult<List<FileInfo>>([appHostFile]);
+
         public Task<FileInfo?> GetAppHostFromSettingsAsync(CancellationToken cancellationToken = default)
             => Task.FromResult<FileInfo?>(appHostFile);
 
@@ -118,5 +128,6 @@ public class SecretCommandTests(ITestOutputHelper outputHelper)
         public Task<int> RunAsync(AppHostProjectContext context, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<UpdatePackagesResult> UpdatePackagesAsync(UpdatePackagesContext context, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<string?> GetAspireHostingVersionAsync(FileInfo appHostFile, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 }

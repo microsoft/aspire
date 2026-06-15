@@ -69,6 +69,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string AppHostIdentifierWithProcessId {
+            get {
+                return ResourceManager.GetString("AppHostIdentifierWithProcessId", resourceCulture);
+            }
+        }
+
         public static string MultipleAppHostsRunning {
             get {
                 return ResourceManager.GetString("MultipleAppHostsRunning", resourceCulture);
@@ -78,6 +84,18 @@ namespace Aspire.Cli.Resources {
         public static string FailedToStopAppHost {
             get {
                 return ResourceManager.GetString("FailedToStopAppHost", resourceCulture);
+            }
+        }
+
+        public static string FoundRunningAppHost {
+            get {
+                return ResourceManager.GetString("FoundRunningAppHost", resourceCulture);
+            }
+        }
+
+        public static string SendingStopSignal {
+            get {
+                return ResourceManager.GetString("SendingStopSignal", resourceCulture);
             }
         }
 

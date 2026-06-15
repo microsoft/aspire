@@ -282,8 +282,11 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("TestKey123!", app.DashboardOptionsMonitor.CurrentValue.Otlp.PrimaryApiKey);
     }
 
-    [Fact]
-    public async Task Configuration_OptionsMonitor_DebugSession()
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public async Task Configuration_OptionsMonitor_DebugSession(bool? aiDisabled, bool expectedAIDisabled)
     {
         // Arrange
         var testCert = TelemetryTestHelpers.GenerateDummyCertificate();
@@ -291,9 +294,11 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
             additionalConfiguration: initialData =>
             {
+                initialData[DashboardConfigNames.DashboardAIDisabledName.ConfigKey] = aiDisabled?.ToString().ToLower();
                 initialData[DashboardConfigNames.DebugSessionPortName.ConfigKey] = "8080";
                 initialData[DashboardConfigNames.DebugSessionServerCertificateName.ConfigKey] = Convert.ToBase64String(testCert.Export(X509ContentType.Cert));
                 initialData[DashboardConfigNames.DebugSessionTokenName.ConfigKey] = "token!";
+                initialData[DashboardConfigNames.DebugSessionDcpInstanceIdName.ConfigKey] = "aspire-extension-run-123-dashboard";
                 initialData[DashboardConfigNames.DebugSessionTelemetryOptOutName.ConfigKey] = "true";
             });
 
@@ -310,9 +315,11 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(testCert.Thumbprint, cert.Thumbprint);
 
         Assert.Equal("token!", app.DashboardOptionsMonitor.CurrentValue.DebugSession.Token);
+        Assert.Equal("aspire-extension-run-123-dashboard", app.DashboardOptionsMonitor.CurrentValue.DebugSession.DcpInstanceId);
         Assert.Equal(true, app.DashboardOptionsMonitor.CurrentValue.DebugSession.TelemetryOptOut);
 
-        Assert.True(aiContextProvider.Enabled, "AI enabled because debug session is present.");
+        Assert.Equal(expectedAIDisabled, app.DashboardOptionsMonitor.CurrentValue.AI.Disabled);
+        Assert.Equal(!expectedAIDisabled, aiContextProvider.Enabled);
     }
 
     [Fact]
@@ -487,12 +494,16 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
             {
                 data.Remove(DashboardConfigNames.DashboardOtlpAuthModeName.ConfigKey);
                 data.Remove(DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey);
+                data.Remove(DashboardConfigNames.DashboardApiAuthModeName.ConfigKey);
+                data.Remove(DashboardConfigNames.DashboardApiPrimaryApiKeyName.ConfigKey);
             });
 
         // Assert
         Assert.Equal(FrontendAuthMode.BrowserToken, app.DashboardOptionsMonitor.CurrentValue.Frontend.AuthMode);
         Assert.Equal(16, Convert.FromHexString(app.DashboardOptionsMonitor.CurrentValue.Frontend.BrowserToken!).Length);
         Assert.Equal(OtlpAuthMode.Unsecured, app.DashboardOptionsMonitor.CurrentValue.Otlp.AuthMode);
+        Assert.Equal(ApiAuthMode.ApiKey, app.DashboardOptionsMonitor.CurrentValue.Api.AuthMode);
+        Assert.False(string.IsNullOrEmpty(app.DashboardOptionsMonitor.CurrentValue.Api.PrimaryApiKey), "A primary API key should be auto-generated.");
         Assert.Empty(app.ValidationFailures);
     }
 
@@ -619,7 +630,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         Assert.Collection(l,
             w =>
             {
-                Assert.Equal("Aspire version: {Version}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
+                Assert.Equal("Aspire dashboard version: {Version}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
             },
             w =>
             {
@@ -651,6 +662,10 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
             {
                 Assert.Equal("Dashboard API is unsecured. Untrusted apps can access sensitive telemetry data.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
                 Assert.Equal(LogLevel.Warning, w.LogLevel);
+            },
+            w =>
+            {
+                Assert.StartsWith("Aspire Dashboard", (string)LogTestHelpers.GetValue(w, "{OriginalFormat}")!);
             });
     }
 
@@ -677,7 +692,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         Assert.Collection(l,
             w =>
             {
-                Assert.Equal("Aspire version: {Version}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
+                Assert.Equal("Aspire dashboard version: {Version}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
             },
             w =>
             {
@@ -687,14 +702,21 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
             {
                 Assert.Equal("Dashboard API is unsecured. Untrusted apps can access sensitive telemetry data.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
                 Assert.Equal(LogLevel.Warning, w.LogLevel);
+            },
+            w =>
+            {
+                Assert.StartsWith("Aspire Dashboard", (string)LogTestHelpers.GetValue(w, "{OriginalFormat}")!);
             });
     }
 
     [Theory]
-    [InlineData(null, HttpStatusCode.NotFound)]
-    [InlineData(true, HttpStatusCode.OK)]
-    [InlineData(false, HttpStatusCode.NotFound)]
-    public async Task ApiEnabled_ReturnsExpectedStatusAndWarning(bool? enabled, HttpStatusCode expectedStatusCode)
+    [InlineData("Dashboard:Api:Enabled", null, HttpStatusCode.OK, true)]
+    [InlineData("Dashboard:Api:Enabled", true, HttpStatusCode.OK, true)]
+    [InlineData("Dashboard:Api:Enabled", false, HttpStatusCode.NotFound, false)]
+    [InlineData("Dashboard:Api:Disabled", null, HttpStatusCode.OK, true)]
+    [InlineData("Dashboard:Api:Disabled", true, HttpStatusCode.NotFound, false)]
+    [InlineData("Dashboard:Api:Disabled", false, HttpStatusCode.OK, true)]
+    public async Task ApiEnabledDisabled_ReturnsExpectedStatusAndWarning(string configKey, bool? value, HttpStatusCode expectedStatusCode, bool expectWarning)
     {
         const string ApiUnsecuredWarning = "Dashboard API is unsecured. Untrusted apps can access sensitive telemetry data.";
 
@@ -703,13 +725,13 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
             additionalConfiguration: config =>
             {
-                if (enabled is not null)
+                if (value is not null)
                 {
-                    config[DashboardConfigNames.DashboardApiEnabledName.ConfigKey] = enabled.Value.ToString();
+                    config[configKey] = value.Value.ToString();
                 }
                 else
                 {
-                    config.Remove(DashboardConfigNames.DashboardApiEnabledName.ConfigKey);
+                    config.Remove(configKey);
                 }
             },
             testSink: testSink);
@@ -727,7 +749,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
             .Where(w => w.LoggerName == typeof(DashboardWebApplication).FullName && w.LogLevel >= LogLevel.Warning)
             .ToList();
 
-        if (enabled == true)
+        if (expectWarning)
         {
             Assert.Contains(warnings, w => LogTestHelpers.GetValue(w, "{OriginalFormat}")?.ToString() == ApiUnsecuredWarning);
         }
@@ -790,7 +812,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         Assert.Collection(l,
             w =>
             {
-                Assert.Equal("Aspire version: {Version}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
+                Assert.Equal("Aspire dashboard version: {Version}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
             },
             w =>
             {
@@ -824,6 +846,10 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
             {
                 Assert.Equal("Dashboard API is unsecured. Untrusted apps can access sensitive telemetry data.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
                 Assert.Equal(LogLevel.Warning, w.LogLevel);
+            },
+            w =>
+            {
+                Assert.StartsWith("Aspire Dashboard", (string)LogTestHelpers.GetValue(w, "{OriginalFormat}")!);
             });
     }
 
@@ -978,10 +1004,10 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    [InlineData(null)]
-    public async Task Configuration_DisableAI_EnsureValueSetOnOptions(bool? value)
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    [InlineData(null, true)]
+    public async Task Configuration_DisableAI_EnsureValueSetOnOptions(bool? value, bool expectedAIDisabled)
     {
         // Arrange & Act
         var testCert = TelemetryTestHelpers.GenerateDummyCertificate();
@@ -1001,8 +1027,8 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         var aiContextProvider = app.Services.GetRequiredService<IAIContextProvider>();
 
         // Assert
-        Assert.Equal(value, app.DashboardOptionsMonitor.CurrentValue.AI.Disabled);
-        Assert.Equal(!(value ?? false), aiContextProvider.Enabled);
+        Assert.Equal(expectedAIDisabled, app.DashboardOptionsMonitor.CurrentValue.AI.Disabled);
+        Assert.Equal(!expectedAIDisabled, aiContextProvider.Enabled);
     }
 
     [Fact]

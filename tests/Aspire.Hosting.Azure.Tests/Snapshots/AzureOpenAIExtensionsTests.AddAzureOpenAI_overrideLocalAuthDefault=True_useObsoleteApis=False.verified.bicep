@@ -58,3 +58,5 @@ output connectionString string = 'Endpoint=${openai.properties.endpoint}'
 output endpoint string = openai.properties.endpoint
 
 output name string = openai.name
+
+output id string = openai.id

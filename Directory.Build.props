@@ -32,6 +32,7 @@
     <SkipAspireWorkloadManifest>true</SkipAspireWorkloadManifest>
 
     <DashboardPublishedArtifactsOutputDir>$([MSBuild]::NormalizeDirectory('$(ArtifactsDir)', 'DashboardArtifacts', '$(Configuration)'))</DashboardPublishedArtifactsOutputDir>
+    <TerminalHostPublishedArtifactsOutputDir>$([MSBuild]::NormalizeDirectory('$(ArtifactsDir)', 'TerminalHostArtifacts', '$(Configuration)'))</TerminalHostPublishedArtifactsOutputDir>
     <WorkloadsPackageSource>$(ArtifactsShippingPackagesDir)</WorkloadsPackageSource>
 
     <!-- Issue: https://github.com/microsoft/aspire/issues/8488 -->
@@ -39,8 +40,7 @@
     <!-- Issue: https://github.com/microsoft/aspire/issues/10175 -->
     <!-- NU1510: The project does not reference any target framework and will not be restored. -->
     <!-- TODO: Re-enable and remove this. -->
-    <!-- ASPIREATS001: Aspire Type System APIs are experimental -->
-    <NoWarn>$(NoWarn);xUnit1051;NU1510;ASPIREATS001</NoWarn>
+    <NoWarn>$(NoWarn);xUnit1051;NU1510</NoWarn>
   </PropertyGroup>
 
   <!-- OS/Architecture properties for local development resources -->
@@ -56,6 +56,7 @@
     <!-- TODO: Need to figure out we can automatically detect target framework here. This property
                is specified to support dashboard path metadata generation on the inner loop. -->
     <AspireDashboardDir>$(MSBuildThisFileDirectory)/artifacts/bin/Aspire.Dashboard/$(Configuration)/net8.0/</AspireDashboardDir>
+    <AspireTerminalHostDir>$(MSBuildThisFileDirectory)/artifacts/bin/Aspire.TerminalHost/$(Configuration)/net8.0/</AspireTerminalHostDir>
   </PropertyGroup>
 
 </Project>

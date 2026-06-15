@@ -27,7 +27,7 @@ public class AzureNetworkSecurityGroupResource(string name, Action<AzureResource
     /// <summary>
     /// Gets the "name" output reference for the resource.
     /// </summary>
-    public BicepOutputReference NameOutput => new("name", this);
+    public BicepOutputReference NameOutputReference => new("name", this);
 
     internal bool IsImplicitlyCreated { get; set; }
 
@@ -50,7 +50,7 @@ public class AzureNetworkSecurityGroupResource(string name, Action<AzureResource
 
         if (!TryApplyExistingResourceAnnotation(this, infra, nsg))
         {
-            nsg.Name = NameOutput.AsProvisioningParameter(infra);
+            nsg.Name = NameOutputReference.AsProvisioningParameter(infra);
         }
 
         infra.Add(nsg);

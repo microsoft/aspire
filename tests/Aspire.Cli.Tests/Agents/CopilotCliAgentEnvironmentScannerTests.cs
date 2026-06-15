@@ -191,13 +191,8 @@ public class CopilotCliAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
 
     private static CliExecutionContext CreateExecutionContext(DirectoryInfo workingDirectory)
     {
-        return new CliExecutionContext(
-            workingDirectory: workingDirectory,
-            hivesDirectory: workingDirectory,
-            cacheDirectory: workingDirectory,
-            sdksDirectory: workingDirectory,
-            logsDirectory: workingDirectory,
-            logFilePath: "test.log",
+        return TestExecutionContextHelper.CreateExecutionContext(
+            workingDirectory,
             debugMode: false,
             environmentVariables: new Dictionary<string, string?>(),
             homeDirectory: workingDirectory);
@@ -209,14 +204,9 @@ public class CopilotCliAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
         {
             ["TERM_PROGRAM"] = "vscode"
         };
-        
-        return new CliExecutionContext(
-            workingDirectory: workingDirectory,
-            hivesDirectory: workingDirectory,
-            cacheDirectory: workingDirectory,
-            sdksDirectory: workingDirectory,
-            logsDirectory: workingDirectory,
-            logFilePath: "test.log",
+
+        return TestExecutionContextHelper.CreateExecutionContext(
+            workingDirectory,
             debugMode: false,
             environmentVariables: environmentVariables,
             homeDirectory: workingDirectory);

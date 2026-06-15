@@ -7,6 +7,6 @@ void main() throws Exception {
         // addAzureLogAnalyticsWorkspace
         var logAnalytics = builder.addAzureLogAnalyticsWorkspace("logs");
         // Fluent call on the returned resource builder
-        logAnalytics.withUrl("https://example.local/logs");
+        logAnalytics.withUrl("https://example.local/logs", null);
         builder.build().run();
     }

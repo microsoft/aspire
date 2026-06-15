@@ -30,6 +30,9 @@ void main() throws Exception {
         var web = builder.addContainer("web", "myregistry/web:latest");
         web.publishAsAzureContainerApp((infrastructure, app) -> {
             app.configureCustomDomain(customDomain, certificateName);
+            var scale = new AzureContainerAppScaleConfig();
+            scale.setMinReplicas(1.0);
+            app.configureScale(scale);
         });
         // Test publishAsAzureContainerAppJob on an executable resource
         var api = builder.addExecutable("api", "dotnet", ".", new String[] { "run" });
@@ -38,18 +41,16 @@ void main() throws Exception {
         // Test publishAsAzureContainerAppJob (parameterless - manual trigger)
         var worker = builder.addContainer("worker", "myregistry/worker:latest");
         worker.publishAsAzureContainerAppJob();
-        // Test publishAsConfiguredAzureContainerAppJob (with callback)
+        // Test publishAsAzureContainerAppJob (with callback)
         var processor = builder.addContainer("processor", "myregistry/processor:latest");
-        processor.publishAsConfiguredAzureContainerAppJob((infrastructure, job) -> {
-            // Configure the container app job here
+        processor.publishAsAzureContainerAppJob((infrastructure, job) -> {
         });
         // Test publishAsScheduledAzureContainerAppJob (simple - no callback)
         var scheduler = builder.addContainer("scheduler", "myregistry/scheduler:latest");
         scheduler.publishAsScheduledAzureContainerAppJob("0 0 * * *");
-        // Test publishAsConfiguredScheduledAzureContainerAppJob (with callback)
+        // Test publishAsScheduledAzureContainerAppJob (with callback)
         var reporter = builder.addContainer("reporter", "myregistry/reporter:latest");
-        reporter.publishAsConfiguredScheduledAzureContainerAppJob("0 */6 * * *", (infrastructure, job) -> {
-                // Configure the scheduled job here
+        reporter.publishAsScheduledAzureContainerAppJob("0 */6 * * *", (infrastructure, job) -> {
             });
         builder.build().run();
     }

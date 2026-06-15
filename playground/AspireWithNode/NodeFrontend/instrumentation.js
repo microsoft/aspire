@@ -7,7 +7,7 @@ import { SimpleLogRecordProcessor } from '@opentelemetry/sdk-logs';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
 import { ExpressInstrumentation } from '@opentelemetry/instrumentation-express';
-import { RedisInstrumentation } from '@opentelemetry/instrumentation-redis-4';
+import { RedisInstrumentation } from '@opentelemetry/instrumentation-redis';
 import { diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api';
 import { credentials } from '@grpc/grpc-js';
 

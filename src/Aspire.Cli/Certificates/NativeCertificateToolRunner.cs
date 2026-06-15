@@ -63,6 +63,15 @@ internal sealed class NativeCertificateToolRunner(CertificateManager certificate
         }
     }
 
+    public EnsureCertificateResult EnsureHttpCertificateExists()
+    {
+        var now = DateTimeOffset.Now;
+        return certificateManager.EnsureAspNetCoreHttpsDevelopmentCertificate(
+            now, now.Add(TimeSpan.FromDays(365)),
+            trust: false,
+            isInteractive: false);
+    }
+
     public EnsureCertificateResult TrustHttpCertificate()
     {
         if (_isLinux())
@@ -84,16 +93,6 @@ internal sealed class NativeCertificateToolRunner(CertificateManager certificate
         return certificateManager.EnsureAspNetCoreHttpsDevelopmentCertificate(
             now, now.Add(TimeSpan.FromDays(365)),
             trust: true);
-    }
-
-    public EnsureCertificateResult EnsureHttpCertificateExists()
-    {
-        var now = DateTimeOffset.Now;
-        return certificateManager.EnsureAspNetCoreHttpsDevelopmentCertificate(
-            now,
-            now.Add(TimeSpan.FromDays(365)),
-            trust: false,
-            isInteractive: false);
     }
 
     internal EnsureCertificateResult TrustHttpCertificateOnLinux(IEnumerable<X509Certificate2> availableCertificates, DateTimeOffset now)

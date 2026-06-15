@@ -108,8 +108,14 @@
   <data name="InitCommand_PlaywrightCliSkipped" xml:space="preserve">
     <value>Playwright CLI requires npm, which was not found on PATH. Skipping installation.</value>
   </data>
-  <data name="InitCommand_InstalledSkill" xml:space="preserve">
-    <value>Installed {0} skill ({1}).</value>
+  <data name="InitCommand_InstalledSkillsSummary" xml:space="preserve">
+    <value>Installed Aspire agent skills:</value>
+  </data>
+  <data name="InitCommand_InstalledSkillsSummarySkills" xml:space="preserve">
+    <value>Skills: {0}</value>
+  </data>
+  <data name="InitCommand_InstalledSkillsSummaryLocations" xml:space="preserve">
+    <value>Locations: {0}</value>
   </data>
   <data name="InitCommand_FailedToInstallSkill" xml:space="preserve">
     <value>Failed to install {0} skill at {1}: {2}</value>
@@ -120,11 +126,17 @@
   <data name="SkillDescription_Aspire" xml:space="preserve">
     <value>Aspire CLI commands and workflows for distributed apps</value>
   </data>
+  <data name="SkillDescription_AspireDeployment" xml:space="preserve">
+    <value>Aspire deployment target selection, preflight, publish, and deploy workflows</value>
+  </data>
   <data name="SkillDescription_PlaywrightCli" xml:space="preserve">
     <value>Browser automation and functional testing</value>
   </data>
   <data name="SkillDescription_DotnetInspect" xml:space="preserve">
     <value>Query .NET API surfaces across NuGet packages and platform libraries</value>
+  </data>
+  <data name="SkillDescription_Aspireify" xml:space="preserve">
+    <value>One-time setup: wire up AppHost with discovered projects</value>
   </data>
   <data name="SkillLocation_StandardName" xml:space="preserve">
     <value>Standard (.agents/skills/)</value>
@@ -150,6 +162,36 @@
   <data name="SkillLocation_OpenCodeDescription" xml:space="preserve">
     <value>Legacy location for OpenCode skills</value>
   </data>
+  <data name="AspireSkillsInstaller_InstallingStatus" xml:space="preserve">
+    <value>Installing Aspire skills...</value>
+  </data>
+  <data name="AspireSkillsInstaller_GitHubUnavailable" xml:space="preserve">
+    <value>Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</value>
+  </data>
+  <data name="AspireSkillsInstaller_InvalidBundle" xml:space="preserve">
+    <value>The Aspire skills bundle is invalid: {0}</value>
+  </data>
+  <data name="AspireSkillsInstaller_InvalidMetadata" xml:space="preserve">
+    <value>Embedded Aspire skills bundle metadata is invalid: {0}</value>
+  </data>
+  <data name="AspireSkillsInstaller_MissingMetadataVersion" xml:space="preserve">
+    <value>Embedded Aspire skills metadata must specify a version.</value>
+  </data>
+  <data name="AspireSkillsInstaller_MetadataRepositoryMismatch" xml:space="preserve">
+    <value>Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'.</value>
+  </data>
+  <data name="AspireSkillsInstaller_MissingMetadataTag" xml:space="preserve">
+    <value>Embedded Aspire skills metadata must specify a GitHub release tag.</value>
+  </data>
+  <data name="AspireSkillsInstaller_MissingMetadataAssetName" xml:space="preserve">
+    <value>Embedded Aspire skills metadata must specify a release asset name.</value>
+  </data>
+  <data name="AspireSkillsInstaller_MissingMetadataSha256" xml:space="preserve">
+    <value>Embedded Aspire skills metadata must specify the release asset SHA-256 hash.</value>
+  </data>
+  <data name="AspireSkillsInstaller_ArchiveHashVerificationFailed" xml:space="preserve">
+    <value>Embedded Aspire skills archive failed SHA-256 verification. Expected '{0}', got '{1}'.</value>
+  </data>
   <data name="PlaywrightCliInstaller_InstallingStatus" xml:space="preserve">
     <value>Installing Playwright CLI...</value>
   </data>
@@ -173,5 +215,14 @@
   </data>
   <data name="PlaywrightCliInstaller_InstalledWithMirrorWarnings" xml:space="preserve">
     <value>Installed Playwright CLI (some locations failed to mirror).</value>
+  </data>
+  <data name="InitCommand_WorkspaceRootOptionDescription" xml:space="preserve">
+    <value>Path to the workspace root directory</value>
+  </data>
+  <data name="InitCommand_SkillLocationsOptionDescription" xml:space="preserve">
+    <value>Comma-separated list of skill locations to install (e.g. {0}), '{1}', or '{2}'</value>
+  </data>
+  <data name="InitCommand_SkillsOptionDescription" xml:space="preserve">
+    <value>Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include {0}. Use '{1}' or '{2}'</value>
   </data>
 </root>

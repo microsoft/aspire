@@ -61,6 +61,14 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string DotNetSdkUnavailableAppHostDiscoveryWarning
+        {
+            get
+            {
+                return ResourceManager.GetString("DotNetSdkUnavailableAppHostDiscoveryWarning", resourceCulture);
+            }
+        }
+
         public static string InvalidLocaleProvided
         {
             get
@@ -101,11 +109,35 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string CertificateGenerationFailed
+        {
+            get
+            {
+                return ResourceManager.GetString("CertificateGenerationFailed", resourceCulture);
+            }
+        }
+
         public static string CertificatesMayNotBeFullyTrusted
         {
             get
             {
                 return ResourceManager.GetString("CertificatesMayNotBeFullyTrusted", resourceCulture);
+            }
+        }
+
+        public static string CertificatesNotTrustedNonInteractive
+        {
+            get
+            {
+                return ResourceManager.GetString("CertificatesNotTrustedNonInteractive", resourceCulture);
+            }
+        }
+
+        public static string CertificatesPartiallyTrustedNonInteractive
+        {
+            get
+            {
+                return ResourceManager.GetString("CertificatesPartiallyTrustedNonInteractive", resourceCulture);
             }
         }
 
@@ -130,6 +162,14 @@ namespace Aspire.Cli.Resources {
             get
             {
                 return ResourceManager.GetString("FailedToSearchForPackages", resourceCulture);
+            }
+        }
+
+        public static string FailedToParsePackageSearchResults
+        {
+            get
+            {
+                return ResourceManager.GetString("FailedToParsePackageSearchResults", resourceCulture);
             }
         }
 
@@ -253,6 +293,30 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string GlobalAppHostPathCannotBeSetWithConfigCommand
+        {
+            get
+            {
+                return ResourceManager.GetString("GlobalAppHostPathCannotBeSetWithConfigCommand", resourceCulture);
+            }
+        }
+
+        public static string LegacyAppHostPathCannotBeSetWithConfigCommand
+        {
+            get
+            {
+                return ResourceManager.GetString("LegacyAppHostPathCannotBeSetWithConfigCommand", resourceCulture);
+            }
+        }
+
+        public static string GlobalAppHostPathIgnored
+        {
+            get
+            {
+                return ResourceManager.GetString("GlobalAppHostPathIgnored", resourceCulture);
+            }
+        }
+
         public static string ConfigurationKeyNotFound
         {
             get
@@ -350,6 +414,69 @@ namespace Aspire.Cli.Resources {
         public static string InvalidJsonInConfigFile {
             get {
                 return ResourceManager.GetString("InvalidJsonInConfigFile", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The installed Aspire CLI version ({0}) differs from the configured Aspire SDK version ({1}). If you run into errors, run 'aspire update' to align them..
+        /// </summary>
+        public static string CodegenVersionSkewWarning {
+            get {
+                return ResourceManager.GetString("CodegenVersionSkewWarning", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} SDK code generation failed because the installed Aspire CLI appears to be incompatible with the configured Aspire SDK. Run 'aspire update' to align the CLI and SDK and try again..
+        /// </summary>
+        public static string CodegenIncompatibleSdkSummary {
+            get {
+                return ResourceManager.GetString("CodegenIncompatibleSdkSummary", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Run with '--debug' for full diagnostic details..
+        /// </summary>
+        public static string CodegenDebugHint {
+            get {
+                return ResourceManager.GetString("CodegenDebugHint", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Diagnostic details:.
+        /// </summary>
+        public static string CodegenDebugHeader {
+            get {
+                return ResourceManager.GetString("CodegenDebugHeader", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The configured AppHost path in '{0}' ('{1}') is empty or contains characters that are not allowed in a file path..
+        /// </summary>
+        public static string ConfiguredAppHostPathHasInvalidCharacters {
+            get {
+                return ResourceManager.GetString("ConfiguredAppHostPathHasInvalidCharacters", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The configured AppHost path in '{0}' ('{1}') must be a JSON string..
+        /// </summary>
+        public static string ConfiguredAppHostPathMustBeString {
+            get {
+                return ResourceManager.GetString("ConfiguredAppHostPathMustBeString", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The configuration file '{0}' must contain a JSON object..
+        /// </summary>
+        public static string ConfigurationFileMustBeJsonObject {
+            get {
+                return ResourceManager.GetString("ConfigurationFileMustBeJsonObject", resourceCulture);
             }
         }
     }

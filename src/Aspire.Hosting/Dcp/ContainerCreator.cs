@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREEXTENSION001
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIRECONTAINERSHELLEXECUTION001
 
@@ -29,8 +28,8 @@ internal record struct HostResourceWithEndpoints(
     {
         if (resource is IResourceWithEndpoints rwe && !resource.IsContainer())
         {
-            var endpoints = resource.Annotations.OfType<EndpointAnnotation>();
-            if (endpoints.Any())
+            var endpoints = resource.Annotations.OfType<EndpointAnnotation>().ToArray();
+            if (endpoints.Length > 0)
             {
                 return new HostResourceWithEndpoints(rwe, endpoints);
             }
@@ -44,8 +43,10 @@ internal record struct HostResourceWithEndpoints(
 /// Handles preparation and creation of Container, ContainerExec, ContainerNetwork,
 /// and ContainerNetworkTunnelProxy DCP resources.
 /// </summary>
-internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCreationContext>, IObjectCreator<ContainerExec, EmptyCreationContext>
+internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCreationContext>, IObjectCreator<ContainerExec, EmptyCreationContext>, IDisposable
 {
+    private const string ContainerTunnelContainerName = "aspire";
+
     private readonly IConfiguration _configuration;
     private readonly IOptions<DcpOptions> _options;
     private readonly DcpNameGenerator _nameGenerator;
@@ -56,6 +57,9 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
     private readonly ILogger<ContainerCreator> _logger;
     private readonly string _normalizedApplicationName;
     private readonly DcpAppResourceStore _appResources;
+    private readonly SemaphoreSlim _tunnelSemaphore = new(1, 1);
+    private readonly List<TunnelConfiguration> _tunnelConfigurations = [];
+    private Task<AppResource<ContainerNetworkTunnelProxy>>? _tunnelCreationTask;
 
     public ContainerCreator(
         IConfiguration configuration,
@@ -81,6 +85,11 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         _appResources = appResources;
     }
 
+    public void Dispose()
+    {
+        _tunnelSemaphore.Dispose();
+    }
+
     private async Task<string> GetContainerHostNameAsync(CancellationToken cancellationToken = default)
     {
         if (_configuration["AppHost:ContainerHostname"] is string hostname)
@@ -103,7 +112,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         if (!containerResources.Any()) { return; }
 
         var network = ContainerNetwork.Create(KnownNetworkIdentifiers.DefaultAspireContainerNetwork.Value);
-        if (containerResources.Any(cr => cr.GetContainerLifetimeType() == ContainerLifetime.Persistent))
+        if (containerResources.Any(cr => cr.GetLifetimeType() == Lifetime.Persistent))
         {
             network.Spec.Persistent = true;
             network.Spec.NetworkName = $"{DcpExecutor.DefaultAspirePersistentNetworkName}-{_nameGenerator.GetProjectHashSuffix()}";
@@ -124,7 +133,9 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
     public IEnumerable<RenderedModelResource<Container>> PrepareObjects()
     {
-        var modelContainerResources = _model.GetContainerResources();
+        var modelContainerResources = _model.GetContainerResources().ToArray();
+        ValidateContainerTunnelContainerNameConflicts(modelContainerResources);
+
         var result = new List<RenderedModelResource<Container>>();
 
         foreach (var container in modelContainerResources)
@@ -141,9 +152,10 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
             ctr.Spec.ContainerName = containerObjectInstance.Name;
 
-            if (container.GetContainerLifetimeType() == ContainerLifetime.Persistent)
+            if (container.GetLifetimeType() == Lifetime.Persistent)
             {
                 ctr.Spec.Persistent = true;
+                ApplyMonitorProcess(container, ctr.Spec);
             }
 
             if (container.TryGetContainerImagePullPolicy(out var pullPolicy))
@@ -160,7 +172,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
             ctr.Annotate(CustomResource.ResourceNameAnnotation, container.Name);
             ctr.Annotate(CustomResource.OtelServiceNameAnnotation, container.Name);
-            ctr.Annotate(CustomResource.OtelServiceInstanceIdAnnotation, containerObjectInstance.Suffix);
+            ctr.Annotate(CustomResource.OtelServiceInstanceIdAnnotation, container.GetOtelServiceInstanceId(containerObjectInstance));
             DcpExecutor.SetInitialResourceState(container, ctr);
 
             var aanns = container.Annotations.OfType<ContainerNetworkAliasAnnotation>().ToImmutableArray();
@@ -195,34 +207,64 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         return result;
     }
 
+    private static void ApplyMonitorProcess(IResource resource, ContainerSpec spec)
+    {
+        if (resource.TryGetParentProcessLifetime(out var parentProcessId, out var parentProcessTimestamp))
+        {
+            spec.MonitorPid = parentProcessId;
+            spec.MonitorTimestamp = parentProcessTimestamp;
+        }
+    }
+
+    private void ValidateContainerTunnelContainerNameConflicts(IEnumerable<IResource> modelContainerResources)
+    {
+        if (!_options.Value.EnableAspireContainerTunnel)
+        {
+            return;
+        }
+
+        foreach (var container in modelContainerResources)
+        {
+            if (IsContainerTunnelContainerName(container.Name))
+            {
+                throw new DistributedApplicationException($"Container resource name '{container.Name}' conflicts with the Aspire container tunnel container name '{ContainerTunnelContainerName}'. Rename the resource or disable the Aspire container tunnel.");
+            }
+
+            if (container.TryGetLastAnnotation<ContainerNameAnnotation>(out var containerNameAnnotation) &&
+                IsContainerTunnelContainerName(containerNameAnnotation.Name))
+            {
+                throw new DistributedApplicationException($"Container resource '{container.Name}' uses container name '{containerNameAnnotation.Name}', which conflicts with the Aspire container tunnel container name '{ContainerTunnelContainerName}'. Rename the container or disable the Aspire container tunnel.");
+            }
+
+            foreach (var aliasAnnotation in container.Annotations.OfType<ContainerNetworkAliasAnnotation>())
+            {
+                if (IsContainerTunnelContainerName(aliasAnnotation.Alias))
+                {
+                    throw new DistributedApplicationException($"Container resource '{container.Name}' uses network alias '{aliasAnnotation.Alias}', which conflicts with the Aspire container tunnel container name '{ContainerTunnelContainerName}'. Rename the alias or disable the Aspire container tunnel.");
+                }
+            }
+        }
+
+        static bool IsContainerTunnelContainerName(string name)
+            => string.Equals(name, ContainerTunnelContainerName, StringComparison.OrdinalIgnoreCase);
+    }
+
     public bool IsReadyToCreate(RenderedModelResource<Container> resource, ContainerCreationContext cctx)
     {
-        // Containers are always "created" (submitted to DCP), they just get Spec.Start = false initially
-        // if explicit startup is used.
-        return true;
+        return !DcpModelUtilities.ShouldDeferCreateForExplicitStart(resource.ModelResource, resource.DcpResource.Spec.Start);
     }
 
     public async Task CreateObjectAsync(RenderedModelResource<Container> cr, ContainerCreationContext cctx, ILogger logger, IDcpObjectFactory factory, CancellationToken cancellationToken)
     {
-        var signalServicesSpecReadyOnce = ConcurrencyUtils.Once(() => cctx.ContainerServicesSpecReady.Signal());
+        var hostDependencies = (await GetHostDependenciesAsync(cr.ModelResource, cancellationToken).ConfigureAwait(false)).ToImmutableArray();
 
-        try
+        if (hostDependencies.Any())
         {
-            var hostDependencies = (await GetHostDependenciesAsync(cr.ModelResource, cancellationToken).ConfigureAwait(false)).ToImmutableArray();
-
-            if (hostDependencies.Any())
-            {
-                await CreateTunnelDependentContainerAsync(cr, hostDependencies, cctx, signalServicesSpecReadyOnce, factory, cancellationToken).ConfigureAwait(false);
-            }
-            else
-            {
-                signalServicesSpecReadyOnce();
-                await BuildAndCreateContainerAsync(cr, logger, factory, cancellationToken).ConfigureAwait(false);
-            }
+            await CreateHostDependentContainerAsync(cr, hostDependencies, cctx, factory, cancellationToken).ConfigureAwait(false);
         }
-        finally
+        else
         {
-            signalServicesSpecReadyOnce();
+            await BuildAndCreateContainerAsync(cr, logger, factory, cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -244,7 +286,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                 workingDirectory: containerExecutable.WorkingDirectory);
 
             containerExec.Annotate(CustomResource.OtelServiceNameAnnotation, containerExecutable.Name);
-            containerExec.Annotate(CustomResource.OtelServiceInstanceIdAnnotation, exeInstance.Suffix);
+            containerExec.Annotate(CustomResource.OtelServiceInstanceIdAnnotation, containerExecutable.GetOtelServiceInstanceId(exeInstance));
             containerExec.Annotate(CustomResource.ResourceNameAnnotation, containerExecutable.Name);
             DcpExecutor.SetInitialResourceState(containerExecutable, containerExec);
 
@@ -260,14 +302,9 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         var dcpContainer = cr.DcpResource;
         var modelContainer = cr.ModelResource;
 
-        await ApplyBuildArgumentsAsync(dcpContainer, cr.ModelResource, _executionContext.ServiceProvider, cToken).ConfigureAwait(false);
+        await ApplyBuildArgumentsAsync(dcpContainer, cr.ModelResource, _executionContext, logger, cToken).ConfigureAwait(false);
 
         var spec = dcpContainer.Spec;
-
-        if (cr.ServicesProduced.Count > 0)
-        {
-            spec.Ports = BuildContainerPorts(cr);
-        }
 
         spec.VolumeMounts = BuildContainerMounts(cr.ModelResource);
 
@@ -279,21 +316,33 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         spec.RunArgs = runArgs;
 
         var (configuration, pemCertificates, createFiles) = await BuildContainerConfiguration(cr, logger, cToken).ConfigureAwait(false);
+
         if (configuration.Exception is not null)
         {
             throw new FailedToApplyEnvironmentException($"Failed to apply configuration to container {cr.ModelResource.Name}", configuration.Exception);
         }
 
-        var args = configuration.Arguments.Select(a => a.Value);
+        // Environment callbacks can resolve proxyless endpoint ports and commit a fallback host port,
+        // so build ports afterward.
+        if (cr.ServicesProduced.Count > 0)
+        {
+            spec.Ports = BuildContainerPorts(cr);
+        }
+
+        var args = configuration.Arguments.ToList();
         if (modelContainer is ContainerResource { ShellExecution: true })
         {
-            spec.Args = ["-c", $"{string.Join(' ', args)}"];
+            spec.Args = ["-c", $"{string.Join(' ', args.Select(a => a.Value))}"];
         }
         else
         {
-            spec.Args = args.ToList();
+            spec.Args = args.Select(a => a.Value).ToList();
         }
-        dcpContainer.SetAnnotationAsObjectList(CustomResource.ResourceAppArgsAnnotation, configuration.Arguments.Select(a => new AppLaunchArgumentAnnotation(a.Value, isSensitive: a.IsSensitive)));
+
+        var appLaunchArgumentAnnotations = modelContainer is ContainerResource { ShellExecution: true }
+            ? args.Select(a => new AppLaunchArgumentAnnotation(a.Value, isSensitive: a.IsSensitive))
+            : args.Select((a, index) => new AppLaunchArgumentAnnotation(a.Value, isSensitive: a.IsSensitive, effectiveArgumentIndex: index));
+        dcpContainer.SetAnnotationAsObjectList(CustomResource.ResourceAppArgsAnnotation, appLaunchArgumentAnnotations);
 
         spec.Env = configuration.EnvironmentVariables.Select(kvp => new EnvVar { Name = kvp.Key, Value = kvp.Value }).ToList();
         spec.CreateFiles = createFiles;
@@ -302,6 +351,38 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             spec.Command = containerResource.Entrypoint;
         }
         spec.PemCertificates = pemCertificates;
+
+        // Configure the terminal spec if the resource has a TerminalAnnotation.
+        // Containers are always single-replica, so we use the host at index 0
+        // (TerminalAnnotation always has at least one entry). PTY allocation
+        // is implemented by DCP for Windows (ConPTY), Linux, and macOS
+        // (Unix98 /dev/ptmx); the container runtime CLI's `attach` command
+        // is what actually gets PTY-attached, so behaviour is uniform across
+        // hosts that support docker/podman.
+        if (modelContainer.TryGetAnnotationsOfType<TerminalAnnotation>(out var terminalAnnotations))
+        {
+            var terminalAnnotation = terminalAnnotations.FirstOrDefault();
+            if (terminalAnnotation is not null)
+            {
+                if (terminalAnnotation.TerminalHosts.Count > 0)
+                {
+                    spec.Terminal = new TerminalSpec
+                    {
+                        UdsPath = terminalAnnotation.TerminalHosts[0].Layout.ProducerUdsPath,
+                        // The Aspire terminal host owns the listener at UdsPath; DCP must dial it.
+                        SocketMode = "connect",
+                        Cols = terminalAnnotation.Options.Columns,
+                        Rows = terminalAnnotation.Options.Rows
+                    };
+                }
+                else
+                {
+                    logger.LogWarning(
+                        "Could not determine a producer UDS path for container resource '{ResourceName}'; terminal will not be attached.",
+                        modelContainer.Name);
+                }
+            }
+        }
 
         var dcpInfo = await _dcpDependencyCheckService.GetDcpInfoAsync(cancellationToken: cToken).ConfigureAwait(false);
         if (dcpInfo is not null)
@@ -395,7 +476,10 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         return services;
     }
 
-    internal async Task<AppResource<ContainerNetworkTunnelProxy>> CreateTunnelProxyResourceAsync(List<TunnelConfiguration>? tunnels, CancellationToken cancellationToken = default)
+    private async Task<AppResource<ContainerNetworkTunnelProxy>> CreateTunnelProxyResourceAsync(
+        IDcpObjectFactory factory,
+        List<TunnelConfiguration>? tunnels,
+        CancellationToken cancellationToken = default)
     {
         Debug.Assert(_options.Value.EnableAspireContainerTunnel, "This method should only be called if the container tunnel feature is enabled.");
         Debug.Assert(!_appResources.Get().OfType<AppResource<ContainerNetworkTunnelProxy>>().Any(), "This method should only be called if a tunnel proxy resource hasn't already been created.");
@@ -406,37 +490,150 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         tunnelProxy.Spec.Tunnels = tunnels;
         var tunnelAppResource = new AppResource<ContainerNetworkTunnelProxy>(tunnelProxy);
         _appResources.Add(tunnelAppResource);
+
+        await factory.CreateDcpObjectsAsync([tunnelProxy], cancellationToken).ConfigureAwait(false);
+        await WaitForTunnelProxyAsync(tunnelProxy, factory, cancellationToken).ConfigureAwait(false);
+
         return tunnelAppResource;
     }
 
     /// <summary>
-    /// Creates the container tunnel: reads tunnel service specs from the container creation context,
-    /// creates the corresponding DCP service and tunnel proxy objects, and waits for their addresses.
+    /// Ensures that host resources referenced by a container are reachable.
     /// </summary>
-    internal async Task CreateTunnelAsync(ContainerCreationContext cctx, IDcpObjectFactory factory, CancellationToken cancellationToken)
+    internal async Task EnsureHostConnectivityAsync(ImmutableArray<HostResourceWithEndpoints> hostDependencies, ContainerCreationContext cctx, IDcpObjectFactory factory, CancellationToken cancellationToken)
     {
-        // Container creation tasks need to figure out dependencies of each container 
-        // and then create Service and TunnelConfiguration definitions for each of them.
-        cctx.ContainerServicesSpecReady.Wait(cancellationToken);
-        cctx.ContainerServicesChan.Writer.Complete();
+        if (!_options.Value.EnableAspireContainerTunnel)
+        {
+            // If we are not tunneling, regular container creation prerequisites are all we need.
+            await cctx.ContainerPrerequisitesReady.WaitAsync(cancellationToken).ConfigureAwait(false);
+            return;
+        }
 
-        // Now create the container network services for the host resources, update the tunnel, and advertise AllocatedEndpoints.
-        var containerNetworkServices = cctx.ContainerServicesChan.Reader.ReadAllAsync(cancellationToken).ToBlockingEnumerable(cancellationToken).ToArray();
-        _appResources.AddRange(containerNetworkServices.Select(cns => cns.ServiceResource));
+        ContainerNetworkService[] containerNetworkServices;
+
+        // While not strictly necessary from correctness perspective, it is better for performance if tunnel creation
+        // is as "chunky" as possible. That is why we serialize the discovery of host dependencies, 
+        // so concurrently-created containers that share host dependencies do not "split" these dependencies 
+        // (and associated tunnels) between themselves.
+        await _tunnelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            containerNetworkServices = hostDependencies.SelectMany(CreateContainerNetworkServicesForHostResource).ToArray();
+        }
+        finally
+        {
+            _tunnelSemaphore.Release();
+        }
+
+        if (containerNetworkServices.Length == 0)
+        {
+            // We have already set up tunnels for all currently-needed host dependencies.
+            return;
+        }
+
+        await Task.WhenAll([cctx.ContainerPrerequisitesReady, cctx.ContainerTunnelPrerequisitesReady]).WaitAsync(cancellationToken).ConfigureAwait(false);
+
         var serviceObjects = containerNetworkServices.Select(cns => cns.ServiceResource.DcpResource).ToArray();
         await factory.CreateDcpObjectsAsync(serviceObjects, cancellationToken).ConfigureAwait(false);
 
-        var tunnels = containerNetworkServices.Where(s => s.TunnelConfig is not null).Select(s => s.TunnelConfig!).ToList();
-        Debug.Assert(tunnels.Count == containerNetworkServices.Length, "Each tunneled service should have a tunnel config");
-        await CreateTunnelProxyResourceAsync(tunnels, cancellationToken).ConfigureAwait(false);
+        var newTunnels = containerNetworkServices.Where(s => s.TunnelConfig is not null).Select(s => s.TunnelConfig!).ToArray();
+        Debug.Assert(newTunnels.Length == containerNetworkServices.Length, "Each tunneled service should have a tunnel config");
+        bool tunnelConfigIsValid = false;
 
-        // Create all ContainerNetworkTunnelProxy objects that have been prepared.
-        var tunnelProxies = _appResources.Get().OfType<AppResource<ContainerNetworkTunnelProxy>>().Select(r => r.DcpResource);
-        await factory.CreateDcpObjectsAsync(tunnelProxies, cancellationToken).ConfigureAwait(false);
+        await _tunnelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            _tunnelConfigurations.AddRange(newTunnels);
+            if (_tunnelCreationTask is null)
+            {
+                _tunnelCreationTask = CreateTunnelProxyResourceAsync(factory, _tunnelConfigurations.ToList(), cctx.ApplicationRunCancellationToken);
+                tunnelConfigIsValid = true; // .. because the tunnel proxy will be created with "our" current tunnel configuration.
+            }
+        }
+        finally
+        {
+            _tunnelSemaphore.Release();
+        }
 
+        var tunnelProxyResource = await _tunnelCreationTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        if (!tunnelConfigIsValid)
+        {
+            // Nothing good will come from patching the tunnel proxy concurrently, and with different tunnel configurations.
+            await _tunnelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await factory.PatchDcpObjectAsync(tunnelProxyResource.DcpResource,
+                    p => p.Spec.Tunnels = _tunnelConfigurations.ToList(),
+                    cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                _tunnelSemaphore.Release();
+            };
+        }
+
+        await factory.UpdateWithEffectiveAddressInfo(serviceObjects, cancellationToken, TimeSpan.FromMinutes(1)).ConfigureAwait(false);
+        _appResources.AddRange(containerNetworkServices.Select(cns => cns.ServiceResource));
+        DcpModelUtilities.AddContainerTunnelAllocatedEndpoints(
+            hostDependencies.Select(hd => hd.Resource),
+            _appResources,
+            await GetContainerHostNameAsync(cancellationToken).ConfigureAwait(false));
+    }
+
+    private async Task WaitForTunnelProxyAsync(
+        ContainerNetworkTunnelProxy tunnelProxy,
+        IDcpObjectFactory factory,
+        CancellationToken cancellationToken)
+    {
         // Container tunnel initialization can take a while if the container tunnel image needs to be built,
         // especially if the required image pull is slow, hence 10 minute timeout here.
-        await factory.UpdateWithEffectiveAddressInfo(serviceObjects, cancellationToken, TimeSpan.FromMinutes(10)).ConfigureAwait(false);
+        var observedProxies = await factory.WaitForStateAsync(
+            [tunnelProxy],
+            p =>
+            {
+                var status = p.Status;
+                if (string.Equals(status?.State, ContainerNetworkTunnelProxyState.Failed, StringComparison.Ordinal))
+                {
+                    return ContainerNetworkTunnelProxyState.Failed;
+                }
+
+                if (status is not null && string.Equals(status.State, ContainerNetworkTunnelProxyState.Running, StringComparison.Ordinal))
+                {
+                    return ContainerNetworkTunnelProxyState.Running;
+                }
+
+                return null;
+            },
+            [ContainerNetworkTunnelProxyState.Running, ContainerNetworkTunnelProxyState.Failed],
+            TimeSpan.FromMinutes(10),
+            cancellationToken).ConfigureAwait(false);
+
+        var observedProxy = observedProxies.Single();
+        tunnelProxy.Status = observedProxy.Status;
+
+        var failed = string.Equals(observedProxy.Status?.State, ContainerNetworkTunnelProxyState.Failed, StringComparison.Ordinal);
+        var observedStatus = observedProxy.Status;
+        var running = observedStatus is not null &&
+            string.Equals(observedStatus.State, ContainerNetworkTunnelProxyState.Running, StringComparison.Ordinal);
+
+        const string noDetailsAvailable = "(no additional error details available)";
+        if (failed)
+        {
+            _logger.LogError(
+                "Container network tunnel proxy '{Name}' failed: {Details}",
+                observedProxy.Metadata.Name,
+                observedProxy.Status?.Message ?? noDetailsAvailable);
+        }
+
+        if (failed || !running)
+        {
+            var details = failed
+                ? $"'{observedProxy.Metadata.Name}': {observedProxy.Status?.Message ?? noDetailsAvailable}"
+                : $"'{observedProxy.Metadata.Name}': did not reach a stable state (current state: '{observedProxy.Status?.State ?? "(unknown)"}')";
+            throw new DistributedApplicationException(
+                $"One or more container network tunnel proxies did not start successfully: {details}");
+        }
     }
 
     internal async Task<IEnumerable<HostResourceWithEndpoints>> GetHostDependenciesAsync(IResource resource, CancellationToken cancellationToken)
@@ -456,37 +653,28 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
         if (resource.TryGetAnnotationsOfType<OtlpExporterAnnotation>(out _))
         {
-            var maybeDashboard = _model.Resources.Where(r => StringComparers.ResourceName.Equals(r.Name, KnownResourceNames.AspireDashboard))
-                    .Select(HostResourceWithEndpoints.Create).FirstOrDefault();
-            if (maybeDashboard is HostResourceWithEndpoints dashboardResource)
+            if (_model.Resources.TryGetByName(KnownResourceNames.AspireDashboard, out var dashboardResource)
+                && HostResourceWithEndpoints.Create(dashboardResource) is HostResourceWithEndpoints dashboard)
             {
-                hostDependencies.Add(dashboardResource);
+                hostDependencies.Add(dashboard);
             }
         }
 
         return hostDependencies;
     }
 
-    internal async Task CreateTunnelDependentContainerAsync(RenderedModelResource<Container> cr, ImmutableArray<HostResourceWithEndpoints> hostDependencies, ContainerCreationContext cctx, Action signalServicesSpecReadyOnce, IDcpObjectFactory factory, CancellationToken cToken)
+    internal async Task CreateHostDependentContainerAsync(RenderedModelResource<Container> cr, ImmutableArray<HostResourceWithEndpoints> hostDependencies, ContainerCreationContext cctx, IDcpObjectFactory factory, CancellationToken cToken)
     {
         cToken.ThrowIfCancellationRequested();
 
-        List<ContainerNetworkService> newServices = [];
-        foreach (var dep in hostDependencies)
-        {
-            var cnetServices = CreateContainerNetworkServicesForHostResource(dep);
-            newServices.AddRange(cnetServices);
-        }
-        if (newServices.Count > 0)
-        {
-            foreach (var s in newServices)
-            {
-                await cctx.ContainerServicesChan.Writer.WriteAsync(s, cToken).ConfigureAwait(false);
-            }
-        }
+        await EnsureHostConnectivityAsync(hostDependencies, cctx, factory, cToken).ConfigureAwait(false);
 
-        signalServicesSpecReadyOnce();
-        await cctx.CreateTunnel.ConfigureAwait(false);
+        var hostEndpointAllocatedTasks = hostDependencies
+            .SelectMany(h => h.Endpoints)
+            .Where(e => e.Protocol == ProtocolType.Tcp)
+            .Select(e => e.AllAllocatedEndpoints.GetAllocatedEndpointAsync(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, cToken))
+            .ToArray();
+        await Task.WhenAll(hostEndpointAllocatedTasks).ConfigureAwait(false);
 
         await BuildAndCreateContainerAsync(cr, _loggerService.GetLogger(cr.ModelResource), factory, cToken).ConfigureAwait(false);
     }
@@ -538,7 +726,6 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                 KeyPath = ReferenceExpression.Create($"{serverAuthCertificatesBasePath}/{cert.Thumbprint}.key"),
                 PfxPath = ReferenceExpression.Create($"{serverAuthCertificatesBasePath}/{cert.Thumbprint}.pfx"),
             })
-            .AddExecutionConfigurationGatherer(new OtlpEndpointReferenceGatherer())
             .BuildAsync(_executionContext, resourceLogger, cancellationToken)
             .ConfigureAwait(false);
 
@@ -680,7 +867,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                     new()
                     {
                         Model = context.Resource,
-                        ServiceProvider = _executionContext.ServiceProvider,
+                        Services = _executionContext.Services,
                         HttpsCertificateContext = context.HttpsCertificateContext,
                     },
                     cancellationToken).ConfigureAwait(false);
@@ -730,11 +917,11 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         return (runArgs, failedToApplyArgs);
     }
 
-    private static async Task ApplyBuildArgumentsAsync(Container dcpContainerResource, IResource modelContainerResource, IServiceProvider serviceProvider, CancellationToken cancellationToken)
+    private static async Task ApplyBuildArgumentsAsync(Container dcpContainerResource, IResource modelContainerResource, DistributedApplicationExecutionContext executionContext, ILogger logger, CancellationToken cancellationToken)
     {
         if (modelContainerResource.Annotations.OfType<DockerfileBuildAnnotation>().SingleOrDefault() is { } dockerfileBuildAnnotation)
         {
-            await DockerfileHelper.ExecuteDockerfileFactoryAsync(dockerfileBuildAnnotation, modelContainerResource, serviceProvider, cancellationToken).ConfigureAwait(false);
+            await DockerfileHelper.ExecuteDockerfileFactoryAsync(dockerfileBuildAnnotation, modelContainerResource, executionContext.Services, cancellationToken).ConfigureAwait(false);
 
             var dcpBuildArgs = new List<EnvVar>();
 
@@ -781,8 +968,44 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                 Args = dcpBuildArgs,
                 Secrets = dcpBuildSecrets
             };
+
+#pragma warning disable ASPIREPIPELINES003 // ContainerBuildOptions APIs are experimental.
+            var buildOptionsContext = await modelContainerResource.ProcessContainerBuildOptionsCallbackAsync(
+                executionContext.Services,
+                logger,
+                executionContext,
+                cancellationToken).ConfigureAwait(false);
+
+            if (buildOptionsContext.TargetPlatform is { } targetPlatform)
+            {
+                dcpContainerResource.Spec.Build.Platform = ToDcpPlatformString(targetPlatform);
+            }
+#pragma warning restore ASPIREPIPELINES003
         }
     }
+
+    // Maps the publishing-side ContainerTargetPlatform enum to DCP-native ContainerPlatform string
+    // constants. The publishing type is fully qualified so the DCP layer doesn't carry a
+    // `using Aspire.Hosting.Publishing` directive.
+#pragma warning disable ASPIREPIPELINES003 // ContainerTargetPlatform is experimental.
+    private static string ToDcpPlatformString(Publishing.ContainerTargetPlatform platform)
+    {
+        var parts = new List<string>();
+        if (platform.HasFlag(Publishing.ContainerTargetPlatform.LinuxAmd64)) { parts.Add(ContainerPlatform.LinuxAmd64); }
+        if (platform.HasFlag(Publishing.ContainerTargetPlatform.LinuxArm64)) { parts.Add(ContainerPlatform.LinuxArm64); }
+        if (platform.HasFlag(Publishing.ContainerTargetPlatform.LinuxArm)) { parts.Add(ContainerPlatform.LinuxArm); }
+        if (platform.HasFlag(Publishing.ContainerTargetPlatform.Linux386)) { parts.Add(ContainerPlatform.Linux386); }
+        if (platform.HasFlag(Publishing.ContainerTargetPlatform.WindowsAmd64)) { parts.Add(ContainerPlatform.WindowsAmd64); }
+        if (platform.HasFlag(Publishing.ContainerTargetPlatform.WindowsArm64)) { parts.Add(ContainerPlatform.WindowsArm64); }
+
+        if (parts.Count == 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(platform), platform, "Unknown container target platform");
+        }
+
+        return string.Join(",", parts);
+    }
+#pragma warning restore ASPIREPIPELINES003
 
     private static List<ContainerPortSpec> BuildContainerPorts(RenderedModelResource<Container> cr)
     {
@@ -797,12 +1020,13 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                 ContainerPort = ea.TargetPort,
             };
 
-            if (!ea.IsProxied && ea.Port is int)
+            if (!ea.IsProxied && ea.SpecifiedPort is int hostPort)
             {
-                portSpec.HostPort = ea.Port;
+                sp.Service.Spec.Port ??= hostPort;
+                portSpec.HostPort = hostPort;
             }
 
-            switch (sp.EndpointAnnotation.Protocol)
+            switch (ea.Protocol)
             {
                 case ProtocolType.Tcp:
                     portSpec.Protocol = PortProtocol.TCP;
@@ -812,9 +1036,9 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                     break;
             }
 
-            if (sp.EndpointAnnotation.TargetHost != KnownHostNames.Localhost)
+            if (ea.TargetHost != KnownHostNames.Localhost)
             {
-                portSpec.HostIP = sp.EndpointAnnotation.TargetHost;
+                portSpec.HostIP = ea.TargetHost;
             }
 
             ports.Add(portSpec);

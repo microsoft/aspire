@@ -150,10 +150,19 @@
   <data name="TimestampsOptionDescription" xml:space="preserve">
     <value>Show timestamps for each log line</value>
   </data>
+  <data name="IncludeHiddenOptionDescription" xml:space="preserve">
+    <value>Include hidden resources in the output</value>
+  </data>
   <data name="SelectAppHostAction" xml:space="preserve">
     <value>stream logs from</value>
   </data>
   <data name="GettingLogs" xml:space="preserve">
     <value>Getting logs...</value>
+  </data>
+  <data name="NoLogsFound" xml:space="preserve">
+    <value>No logs found.</value>
+  </data>
+  <data name="SearchOptionDescription" xml:space="preserve">
+    <value>Full-text search to filter log content. See https://aka.ms/aspire/cli-search for more details</value>
   </data>
 </root>

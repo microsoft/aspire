@@ -35,7 +35,8 @@ else if (DisplayedUrls.Count > 1)
                 var items = overflow.ItemsOverflow.ToList();
             }
             <div @onclick:stopPropagation="true">
-                <FluentPopover AnchorId="@overflow.IdMoreButton" @bind-Open="_popoverVisible" VerticalThreshold="200" AutoFocus="false">
+                @* Each item is approximately 36px tall, plus 48px for the header and container padding. The popover body has a CSS max-height of 300px. *@
+                <FluentPopover AnchorId="@overflow.IdMoreButton" @bind-Open="_popoverVisible" VerticalThreshold="@(Math.Min(items.Count * 36 + 48, 300))" AutoFocus="false">
                     <Header>
                         @Loc[nameof(Resources.Columns.UrlsColumnDisplayOverflowTitle)]
                     </Header>

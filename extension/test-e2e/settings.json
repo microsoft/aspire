@@ -1,0 +1,16 @@
+{
+  "aspire.closeDashboardOnDebugEnd": true,
+  "aspire.dashboardBrowser": "integratedBrowser",
+  "aspire.enableAspireDashboardAutoLaunch": "launch",
+  "aspire.enableAutoRestore": false,
+  "aspire.enableSettingsFileCreationPromptOnStartup": false,
+  "aspire.appHostDiscoveryTimeoutMs": 120000,
+  "aspire.globalAppHostsPollingInterval": 1000,
+  "telemetry.telemetryLevel": "off",
+  "update.mode": "none",
+  "extensions.ignoreRecommendations": true,
+  "extensions.showRecommendationsOnlyOnDemand": true,
+  "workbench.startupEditor": "none",
+  "workbench.welcomePage.experimentalOnboarding": false,
+  "workbench.welcomePage.walkthroughs.openOnInstall": false
+}

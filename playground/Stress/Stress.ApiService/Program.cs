@@ -161,6 +161,36 @@ app.MapGet("/http-client-requests", async (HttpClient client) =>
     return $"Sent requests to {string.Join(';', urls)}";
 });
 
+app.MapGet("/http-command-json-result", () =>
+{
+    return Results.Json(new
+    {
+        token = Convert.ToBase64String(Guid.NewGuid().ToByteArray()),
+        issuedAt = DateTimeOffset.UtcNow,
+        expiresIn = 3600
+    });
+});
+
+app.MapGet("/http-command-auto-result", () =>
+{
+    if (Random.Shared.Next(2) == 0)
+    {
+        return Results.Json(new
+        {
+            token = Convert.ToBase64String(Guid.NewGuid().ToByteArray()),
+            issuedAt = DateTimeOffset.UtcNow,
+            expiresIn = 3600
+        });
+    }
+
+    return Results.Text($"Generated text token: {Convert.ToBase64String(Guid.NewGuid().ToByteArray())}");
+});
+
+app.MapGet("/http-command-text-result", () =>
+{
+    return Results.Text($"Generated text token: {Convert.ToBase64String(Guid.NewGuid().ToByteArray())}");
+});
+
 app.MapGet("/log-message-limit", async ([FromServices] ILogger<Program> logger) =>
 {
     const int LogCount = 10_000;

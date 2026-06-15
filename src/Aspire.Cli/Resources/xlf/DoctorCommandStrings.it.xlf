@@ -2,9 +2,84 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="it" original="../DoctorCommandStrings.resx">
     <body>
+      <trans-unit id="AppHostCategoryHeader">
+        <source>AppHost</source>
+        <target state="new">AppHost</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostVersionCheckFailedMessage">
+        <source>Could not determine AppHost version</source>
+        <target state="new">Could not determine AppHost version</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostVersionMessageFormat">
+        <source>AppHost version {0} ({1})</source>
+        <target state="new">AppHost version {0} ({1})</target>
+        <note>{0} is the AppHost Aspire.Hosting version. {1} is the AppHost project path.</note>
+      </trans-unit>
+      <trans-unit id="AppHostVersionUnknownMessageFormat">
+        <source>Could not determine AppHost version ({0})</source>
+        <target state="new">Could not determine AppHost version ({0})</target>
+        <note>{0} is the AppHost project path.</note>
+      </trans-unit>
+      <trans-unit id="AspireCategoryHeader">
+        <source>Aspire</source>
+        <target state="new">Aspire</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ChannelSuffixFormat">
+        <source> (channel: {0})</source>
+        <target state="new"> (channel: {0})</target>
+        <note>{0} is the Aspire channel name (e.g., "stable", "staging", "daily", "local", "pr-1234"). Appended to CLI / AppHost version messages.</note>
+      </trans-unit>
       <trans-unit id="CheckingPrerequisites">
         <source>Checking Aspire environment...</source>
         <target state="translated">Verifica dell'ambiente Aspire in corso...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CliVersionMessageFormat">
+        <source>Aspire CLI version {0}</source>
+        <target state="new">Aspire CLI version {0}</target>
+        <note>{0} is the current Aspire CLI version.</note>
+      </trans-unit>
+      <trans-unit id="CliVersionOutOfDateFixFormat">
+        <source>Run '{0}' to update Aspire CLI.</source>
+        <target state="new">Run '{0}' to update Aspire CLI.</target>
+        <note>{0} is the command to update Aspire CLI.</note>
+      </trans-unit>
+      <trans-unit id="CliVersionOutOfDateMessageFormat">
+        <source>Aspire CLI version {0} is out of date. Latest version is {1}</source>
+        <target state="new">Aspire CLI version {0} is out of date. Latest version is {1}</target>
+        <note>{0} is the current Aspire CLI version. {1} is the latest available Aspire CLI version.</note>
+      </trans-unit>
+      <trans-unit id="CliVersionUpdateCheckFailedMessage">
+        <source>Could not check for Aspire CLI updates</source>
+        <target state="new">Could not check for Aspire CLI updates</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ColumnChannel">
+        <source>Channel</source>
+        <target state="new">Channel</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ColumnPath">
+        <source>Path</source>
+        <target state="new">Path</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ColumnPathStatus">
+        <source>PATH status</source>
+        <target state="new">PATH status</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ColumnRoute">
+        <source>Route</source>
+        <target state="new">Route</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ColumnVersion">
+        <source>Version</source>
+        <target state="new">Version</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerCategoryHeader">
@@ -122,6 +197,16 @@
         <target state="translated">Verifica ambiente Aspire</target>
         <note />
       </trans-unit>
+      <trans-unit id="HeaderInstallations">
+        <source>Aspire CLI Installations</source>
+        <target state="new">Aspire CLI Installations</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InstallationDiscoveryFailedReason">
+        <source>Install discovery failed. See the Aspire CLI logs for details.</source>
+        <target state="new">Install discovery failed. See the Aspire CLI logs for details.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
         <target state="needs-review-translation">Esporta i risultati in formato JSON per l'integrazione con gli strumenti</target>
@@ -135,6 +220,46 @@
       <trans-unit id="SummaryFormat">
         <source>Summary: {0} passed, {1} warnings, {2} failed</source>
         <target state="translated">Riepilogo: {0} superati, {1} avvisi, {2} non superati</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ValueCurrentMarker">
+        <source>(current)</source>
+        <target state="new">(current)</target>
+        <note>Suffix appended to the running CLI's path so the user can identify which install is themselves.</note>
+      </trans-unit>
+      <trans-unit id="ValueNotProbed">
+        <source>(not probed)</source>
+        <target state="new">(not probed)</target>
+        <note>Placeholder shown in the table when an install was found but not asked to self-describe (e.g., trust gate).</note>
+      </trans-unit>
+      <trans-unit id="ValuePathActive">
+        <source>active</source>
+        <target state="new">active</target>
+        <note>Shown when an install is the first Aspire CLI resolved from PATH.</note>
+      </trans-unit>
+      <trans-unit id="ValuePathNotOnPath">
+        <source>not on PATH</source>
+        <target state="new">not on PATH</target>
+        <note>Shown when an install was not discovered from PATH.</note>
+      </trans-unit>
+      <trans-unit id="ValuePathShadowed">
+        <source>shadowed</source>
+        <target state="new">shadowed</target>
+        <note>Shown when an install is on PATH but an earlier Aspire CLI entry shadows it.</note>
+      </trans-unit>
+      <trans-unit id="ValueProbeFailed">
+        <source>(probe failed)</source>
+        <target state="new">(probe failed)</target>
+        <note>Placeholder shown in the table when an install was probed but did not return usable data.</note>
+      </trans-unit>
+      <trans-unit id="ValueUnknown">
+        <source>(unknown)</source>
+        <target state="new">(unknown)</target>
+        <note>Placeholder shown in the table when a field could not be determined for a discovered install.</note>
+      </trans-unit>
+      <trans-unit id="VersionUnknown">
+        <source>unknown</source>
+        <target state="new">unknown</target>
         <note />
       </trans-unit>
     </body>

@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <Compile Include="$(RepoRoot)src\Shared\AzureRoleAssignmentUtils.cs" />
+    <Compile Include="..\Aspire.Hosting\ApplicationModel\ModelName.cs" Link="ModelName.cs" />
   </ItemGroup>
 
   <ItemGroup>

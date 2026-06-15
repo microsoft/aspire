@@ -13,6 +13,7 @@ using Aspire.Shared;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Projects;
@@ -49,7 +50,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             {
                 return new TestDotNetCliRunner()
                 {
-                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _) =>
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
                     {
                         var packages = new List<NuGetPackageCli>();
 
@@ -109,7 +110,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         // Services we need for project updater.
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
@@ -125,7 +126,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         // If this throws then it means that the updater prompted
         // for confirmation to do an update when no update was required!
         var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
-        var updateResult = await projectUpdater.UpdateProjectAsync(appHostProjectFile, selectedChannel).DefaultTimeout();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
         Assert.False(updateResult.UpdatedApplied);
     }
 
@@ -153,6 +154,19 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             </Project>
             """);
 
+        // Pre-existing aspire.config.json pinned to a (stale) channel — the updater should
+        // rewrite the channel to match the resolved explicit channel after the update completes.
+        // See https://github.com/microsoft/aspire/issues/17295.
+        var aspireConfigFile = new FileInfo(Path.Combine(appHostFolder.FullName, "aspire.config.json"));
+        await File.WriteAllTextAsync(
+            aspireConfigFile.FullName,
+            """
+            {
+              "appHost": { "path": "UpdateTester.AppHost.csproj" },
+              "channel": "stable"
+            }
+            """);
+
         var packagesAddsExecuted = new List<(FileInfo ProjectFile, string PackageId, string PackageVersion, string? PackageSource, bool NoRestore)>();
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
         {
@@ -160,7 +174,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             {
                 return new TestDotNetCliRunner()
                 {
-                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _) =>
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
                     {
                         var packages = new List<NuGetPackageCli>();
 
@@ -221,7 +235,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         // Services we need for project updater.
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
@@ -237,7 +251,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         // If this throws then it means that the updater prompted
         // for confirmation to do an update when no update was required!
         var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
-        var updateResult = await projectUpdater.UpdateProjectAsync(appHostProjectFile, selectedChannel).DefaultTimeout();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
 
         Assert.True(updateResult.UpdatedApplied);
         // Note: Aspire.Hosting.AppHost is not updated because it's removed during SDK migration
@@ -247,17 +261,142 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             {
                 Assert.Equal("Aspire.Hosting.Redis", item.PackageId);
                 Assert.Equal("9.5.0-preview.1", item.PackageVersion);
-                Assert.Null(item.PackageSource); // Should be null because of --no-restore behavior.
+                // PackageSource is null because ProjectUpdater passes nugetSource: null to AddPackageAsync.
+                Assert.Null(item.PackageSource);
+                // Per-package 'dotnet package add' must use --no-restore so the deferred final restore
+                // sees a fully-updated reference graph (regression guard for https://github.com/dotnet/aspire/issues/15891).
+                Assert.True(item.NoRestore);
                 Assert.Equal(appHostProjectFile.FullName, item.ProjectFile.FullName);
             },
             item =>
             {
                 Assert.Equal("Aspire.StackExchange.Redis.OutputCaching", item.PackageId);
                 Assert.Equal("9.5.0-preview.1", item.PackageVersion);
-                Assert.Null(item.PackageSource); // Should be null because of --no-restore behavior.
+                // PackageSource is null because ProjectUpdater passes nugetSource: null to AddPackageAsync.
+                Assert.Null(item.PackageSource);
+                // Per-package 'dotnet package add' must use --no-restore so the deferred final restore
+                // sees a fully-updated reference graph (regression guard for https://github.com/dotnet/aspire/issues/15891).
+                Assert.True(item.NoRestore);
                 Assert.Equal(webAppProjectFile.FullName, item.ProjectFile.FullName);
             }
         );
+
+        // Channel pin in aspire.config.json should have been rewritten from the pre-existing
+        // "stable" value to the resolved explicit channel ("daily") that we just updated to.
+        // Regression guard for https://github.com/microsoft/aspire/issues/17295.
+        var updatedConfig = await File.ReadAllTextAsync(aspireConfigFile.FullName);
+        using var configDoc = JsonDocument.Parse(updatedConfig);
+        Assert.Equal("daily", configDoc.RootElement.GetProperty("channel").GetString());
+    }
+
+    [Fact]
+    public async Task UpdateProjectFileAsync_DoesNotCreateAspireConfigJsonWhenAbsent()
+    {
+        // Sibling of UpdateProjectFileAsync_CanUpdateFromStableToDaily covering the case where
+        // the AppHost project predates aspire.config.json (legacy split layouts, pre-init projects).
+        // `aspire update` must not fabricate a fresh aspire.config.json — that's `aspire init`'s job.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var srcFolder = workspace.CreateDirectory("src");
+
+        var serviceDefaultsFolder = workspace.CreateDirectory("UpdateTester.ServiceDefaults");
+        var serviceDefaultsProjectFile = new FileInfo(Path.Combine(serviceDefaultsFolder.FullName, "UpdateTester.ServiceDefaults.csproj"));
+
+        var webAppFolder = workspace.CreateDirectory("UpdateTester.WebApp");
+        var webAppProjectFile = new FileInfo(Path.Combine(webAppFolder.FullName, "UpdateTester.WebApp.csproj"));
+
+        var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
+        var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
+
+        await File.WriteAllTextAsync(
+            appHostProjectFile.FullName,
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+                <Sdk Name="Aspire.AppHost.Sdk" Version="9.4.1" />
+            </Project>
+            """);
+
+        // Intentionally do NOT pre-create aspire.config.json. The post-update assertion below
+        // verifies the file is still absent.
+        var aspireConfigFile = new FileInfo(Path.Combine(appHostFolder.FullName, "aspire.config.json"));
+        Assert.False(aspireConfigFile.Exists, "Pre-condition: aspire.config.json should not exist before the update.");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
+        {
+            config.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner()
+                {
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
+                    {
+                        var packages = new List<NuGetPackageCli>
+                        {
+                            query switch
+                            {
+                                "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0-preview.1", Source = "daily" },
+                                "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0-preview.1", Source = "daily" },
+                                "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0-preview.1", Source = "daily" },
+                                "Aspire.StackExchange.Redis.OutputCaching" => new NuGetPackageCli { Id = "Aspire.StackExchange.Redis.OutputCaching", Version = "9.5.0-preview.1", Source = "daily" },
+                                "Microsoft.Extensions.ServiceDiscovery" => new NuGetPackageCli { Id = "Microsoft.Extensions.ServiceDiscovery", Version = "9.5.0-preview.1", Source = "daily" },
+                                _ => throw new InvalidOperationException("Unexpected package query."),
+                            }
+                        };
+
+                        return (0, packages.ToArray());
+                    },
+
+                    GetProjectItemsAndPropertiesAsyncCallback = (projectFile, _, _, _, _) =>
+                    {
+                        var itemsAndProperties = new JsonObject();
+
+                        if (projectFile.FullName == appHostProjectFile.FullName)
+                        {
+                            itemsAndProperties.WithSdkVersion("9.4.1");
+                            itemsAndProperties.WithPackageReference("Aspire.Hosting.AppHost", "9.4.1");
+                            itemsAndProperties.WithPackageReference("Aspire.Hosting.Redis", "9.4.1");
+                            itemsAndProperties.WithProjectReference(webAppProjectFile.FullName);
+                        }
+                        else if (projectFile.FullName == webAppProjectFile.FullName)
+                        {
+                            itemsAndProperties.WithPackageReference("Aspire.StackExchange.Redis.OutputCaching", "9.4.1");
+                            itemsAndProperties.WithProjectReference(serviceDefaultsProjectFile.FullName);
+                        }
+                        else if (projectFile.FullName == serviceDefaultsProjectFile.FullName)
+                        {
+                            itemsAndProperties.WithPackageReference("Microsoft.Extensions.ServiceDiscovery", "9.4.1");
+                        }
+                        else
+                        {
+                            throw new InvalidOperationException("Unexpected project file.");
+                        }
+
+                        var json = itemsAndProperties.ToJsonString();
+                        var document = JsonDocument.Parse(json);
+                        return (0, document);
+                    },
+                    AddPackageAsyncCallback = (_, _, _, _, _, _, _) => 0,
+                };
+            };
+
+            config.InteractionServiceFactory = (s) => new TestInteractionService();
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var packagingService = provider.GetRequiredService<IPackagingService>();
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+        var selectedChannel = channels.Single(c => c.Name == "daily");
+
+        var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
+
+        Assert.True(updateResult.UpdatedApplied);
+
+        // Post-condition: the updater MUST NOT have created aspire.config.json. Creating one
+        // would silently introduce config the user never asked for and contradict the comment
+        // in ProjectUpdater.GetUpdateStepsAsync claiming the rewrite is skipped when the file
+        // is absent.
+        aspireConfigFile.Refresh();
+        Assert.False(aspireConfigFile.Exists, "aspire update must not create aspire.config.json for projects that never had one.");
     }
 
     [Fact]
@@ -284,6 +423,16 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             </Project>
             """);
 
+        var aspireConfigFile = new FileInfo(Path.Combine(appHostFolder.FullName, "aspire.config.json"));
+        await File.WriteAllTextAsync(
+            aspireConfigFile.FullName,
+            """
+            {
+              "appHost": { "path": "UpdateTester.AppHost.csproj" },
+              "channel": "daily"
+            }
+            """);
+
         var packagesAddsExecuted = new List<(FileInfo ProjectFile, string PackageId, string PackageVersion, string? PackageSource, bool NoRestore)>();
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
         {
@@ -291,7 +440,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             {
                 return new TestDotNetCliRunner()
                 {
-                    SearchPackagesAsyncCallback = (_, query, prerelease, _, _, _, _, _, _) =>
+                    SearchPackagesAsyncCallback = (_, query, _, prerelease, _, _, _, _, _, _) =>
                     {
                         var packages = new List<NuGetPackageCli>();
 
@@ -360,7 +509,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         // Services we need for project updater.
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
@@ -376,7 +525,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         // If this throws then it means that the updater prompted
         // for confirmation to do an update when no update was required!
         var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
-        var updateResult = await projectUpdater.UpdateProjectAsync(appHostProjectFile, selectedChannel).DefaultTimeout();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
 
         Assert.True(updateResult.UpdatedApplied);
         // Note: Aspire.Hosting.AppHost is not updated because it's removed during SDK migration
@@ -386,24 +535,154 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             {
                 Assert.Equal("Aspire.Hosting.Redis", item.PackageId);
                 Assert.Equal("9.4.1", item.PackageVersion);
-                Assert.Null(item.PackageSource); // Should be null because of --no-restore behavior.
+                // PackageSource is null because ProjectUpdater passes nugetSource: null to AddPackageAsync.
+                Assert.Null(item.PackageSource);
+                // Per-package 'dotnet package add' must use --no-restore so the deferred final restore
+                // sees a fully-updated reference graph (regression guard for https://github.com/dotnet/aspire/issues/15891).
+                Assert.True(item.NoRestore);
                 Assert.Equal(appHostProjectFile.FullName, item.ProjectFile.FullName);
             },
             item =>
             {
                 Assert.Equal("Aspire.Hosting.Docker", item.PackageId);
                 Assert.Equal("9.4.1-preview.1", item.PackageVersion);
-                Assert.Null(item.PackageSource); // Should be null because of --no-restore behavior.
+                // PackageSource is null because ProjectUpdater passes nugetSource: null to AddPackageAsync.
+                Assert.Null(item.PackageSource);
+                // Per-package 'dotnet package add' must use --no-restore so the deferred final restore
+                // sees a fully-updated reference graph (regression guard for https://github.com/dotnet/aspire/issues/15891).
+                Assert.True(item.NoRestore);
                 Assert.Equal(appHostProjectFile.FullName, item.ProjectFile.FullName);
             },
             item =>
             {
                 Assert.Equal("Aspire.StackExchange.Redis.OutputCaching", item.PackageId);
                 Assert.Equal("9.4.1", item.PackageVersion);
-                Assert.Null(item.PackageSource); // Should be null because of --no-restore behavior.
+                // PackageSource is null because ProjectUpdater passes nugetSource: null to AddPackageAsync.
+                Assert.Null(item.PackageSource);
+                // Per-package 'dotnet package add' must use --no-restore so the deferred final restore
+                // sees a fully-updated reference graph (regression guard for https://github.com/dotnet/aspire/issues/15891).
+                Assert.True(item.NoRestore);
                 Assert.Equal(webAppProjectFile.FullName, item.ProjectFile.FullName);
             }
         );
+
+        var updatedConfig = await File.ReadAllTextAsync(aspireConfigFile.FullName);
+        using var configDoc = JsonDocument.Parse(updatedConfig);
+        Assert.Equal("daily", configDoc.RootElement.GetProperty("channel").GetString());
+    }
+
+    [Fact]
+    public async Task UpdateProjectFileAsync_PackageNotInChannel_LogsWarningAndContinues()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
+        var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
+
+        await File.WriteAllTextAsync(
+            appHostProjectFile.FullName,
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+                <Sdk Name="Aspire.AppHost.Sdk" Version="9.4.1" />
+            </Project>
+            """);
+
+        var packagesAddsExecuted = new List<(FileInfo ProjectFile, string PackageId, string PackageVersion, string? PackageSource, bool NoRestore)>();
+        var testSink = new TestSink();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
+        {
+            config.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner()
+                {
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
+                    {
+                        var packages = new List<NuGetPackageCli>();
+
+                        var matchedPackage = query switch
+                        {
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0-preview.1", Source = "daily" },
+                            "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0-preview.1", Source = "daily" },
+                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0-preview.1", Source = "daily" },
+                            // Third-party or otherwise unpublished Aspire.Hosting.* package - returns nothing.
+                            "Aspire.Hosting.ThirdParty" => null,
+                            _ => throw new InvalidOperationException($"Unexpected package query: {query}."),
+                        };
+
+                        if (matchedPackage is not null)
+                        {
+                            packages.Add(matchedPackage);
+                        }
+
+                        return (0, packages.ToArray());
+                    },
+
+                    GetProjectItemsAndPropertiesAsyncCallback = (projectFile, _, _, _, _) =>
+                    {
+                        var itemsAndProperties = new JsonObject();
+
+                        if (projectFile.FullName == appHostProjectFile.FullName)
+                        {
+                            itemsAndProperties.WithSdkVersion("9.4.1");
+                            itemsAndProperties.WithPackageReference("Aspire.Hosting.AppHost", "9.4.1");
+                            itemsAndProperties.WithPackageReference("Aspire.Hosting.Redis", "9.4.1");
+                            itemsAndProperties.WithPackageReference("Aspire.Hosting.ThirdParty", "1.0.0");
+                        }
+                        else
+                        {
+                            throw new InvalidOperationException("Unexpected project file.");
+                        }
+
+                        var json = itemsAndProperties.ToJsonString();
+                        var document = JsonDocument.Parse(json);
+                        return (0, document);
+                    },
+                    AddPackageAsyncCallback = (projectFile, packageId, packageVersion, source, noRestore, _, _) =>
+                    {
+                        packagesAddsExecuted.Add((projectFile, packageId, packageVersion, source!, noRestore));
+                        return 0;
+                    }
+                };
+            };
+
+            config.InteractionServiceFactory = (s) =>
+            {
+                var interactionService = new TestInteractionService();
+                return interactionService;
+            };
+        });
+        services.AddLogging(logging => logging.AddProvider(new TestLoggerProvider(testSink)));
+        using var provider = services.BuildServiceProvider();
+
+        var packagingService = provider.GetRequiredService<IPackagingService>();
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+        var selectedChannel = channels.Single(c => c.Name == "daily");
+
+        var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
+        // Should NOT throw even though Aspire.Hosting.ThirdParty is not in the channel.
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
+
+        Assert.True(updateResult.UpdatedApplied);
+        // Aspire.Hosting.Redis should still be updated; Aspire.Hosting.ThirdParty should be skipped with a warning.
+        // Aspire.Hosting.AppHost is not updated because it's removed during SDK migration.
+        Assert.Collection(
+            packagesAddsExecuted,
+            item =>
+            {
+                Assert.Equal("Aspire.Hosting.Redis", item.PackageId);
+                Assert.Equal("9.5.0-preview.1", item.PackageVersion);
+                Assert.Equal(appHostProjectFile.FullName, item.ProjectFile.FullName);
+            }
+        );
+
+        // A warning should have been logged for the missing package.
+        Assert.Contains(
+            testSink.Writes,
+            w => w.LogLevel == LogLevel.Warning
+                && w.Message is not null
+                && w.Message.Contains("Aspire.Hosting.ThirdParty")
+                && w.Message.Contains("daily"));
     }
 
     [Fact]
@@ -444,7 +723,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             {
                 return new TestDotNetCliRunner()
                 {
-                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _) =>
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
                     {
                         var packages = new List<NuGetPackageCli>();
 
@@ -513,7 +792,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -526,7 +805,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var selectedChannel = channels.Single(c => c.Name == "default");
 
         var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
-        var updateResult = await projectUpdater.UpdateProjectAsync(appHostProjectFile, selectedChannel).DefaultTimeout();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
 
         Assert.True(updateResult.UpdatedApplied);
 
@@ -604,7 +883,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             {
                 return new TestDotNetCliRunner()
                 {
-                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _) =>
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
                     {
                         var packages = new List<NuGetPackageCli>();
 
@@ -656,7 +935,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -669,7 +948,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var selectedChannel = channels.Single(c => c.Name == "default");
 
         var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
-        var updateResult = await projectUpdater.UpdateProjectAsync(appHostProjectFile, selectedChannel).DefaultTimeout();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
 
         Assert.True(updateResult.UpdatedApplied);
 
@@ -723,7 +1002,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             {
                 return new TestDotNetCliRunner()
                 {
-                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _) =>
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
                     {
                         var packages = new List<NuGetPackageCli>();
 
@@ -761,7 +1040,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -774,7 +1053,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var selectedChannel = channels.Single(c => c.Name == "default");
 
         var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
-        var updateResult = await projectUpdater.UpdateProjectAsync(appHostProjectFile, selectedChannel).DefaultTimeout();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
 
         Assert.True(updateResult.UpdatedApplied);
 
@@ -825,7 +1104,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             {
                 return new TestDotNetCliRunner()
                 {
-                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _) =>
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
                     {
                         var packages = new List<NuGetPackageCli>();
 
@@ -864,7 +1143,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -877,7 +1156,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var selectedChannel = channels.Single(c => c.Name == "default");
 
         var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
-        var updateResult = await projectUpdater.UpdateProjectAsync(appHostProjectFile, selectedChannel).DefaultTimeout();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
 
         Assert.False(updateResult.UpdatedApplied);
 
@@ -886,14 +1165,394 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain("Aspire.Hosting.Redis", content);
     }
 
+    [Fact]
+    public async Task UpdateProjectFileAsync_CpmOrphanAppHostPackageVersion_RemovedEvenWhenSdkAlreadyCurrent()
+    {
+        // Reproduces https://github.com/microsoft/aspire/issues/15476.
+        //
+        // PR #14585 fixed the migration path (old <Sdk Name="..."/> element ->
+        // inline <Project Sdk="Aspire.AppHost.Sdk/x"> attribute) by removing any
+        // orphan PackageVersion entry for Aspire.Hosting.AppHost from
+        // Directory.Packages.props as part of the SDK update step.
+        //
+        // But that cleanup only runs when AnalyzeAppHostSdkAsync decides the SDK
+        // version itself needs to change. When the AppHost is already on the
+        // latest stable SDK using the new format, the analyzer early-returns and
+        // the orphan PackageVersion is left in place - which then breaks
+        // dotnet restore with NU1009 because the new SDK implicitly defines the
+        // matching PackageReference.
+        //
+        // This test pins the SDK version to the same value the search returns,
+        // so AnalyzeAppHostSdkAsync sees "App Host SDK is up to date" and skips
+        // the SDK update step. The updater must still detect the orphan
+        // PackageVersion and remove it.
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
+        var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
+
+        var directoryPackagesPropsFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Directory.Packages.props"));
+
+        // AppHost is already on the new SDK format pinned to the latest stable
+        // version (matches what SearchPackagesAsyncCallback returns below).
+        await File.WriteAllTextAsync(
+            appHostProjectFile.FullName,
+            """
+            <Project Sdk="Aspire.AppHost.Sdk/9.5.0">
+              <PropertyGroup>
+                <OutputType>Exe</OutputType>
+                <TargetFramework>net9.0</TargetFramework>
+                <IsAspireHost>true</IsAspireHost>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        // Directory.Packages.props with CPM enabled and an orphan PackageVersion
+        // entry for Aspire.Hosting.AppHost. NuGet rejects this with NU1009 when
+        // the new SDK implicitly adds the matching PackageReference.
+        await File.WriteAllTextAsync(
+            directoryPackagesPropsFile.FullName,
+            """
+            <Project>
+              <PropertyGroup>
+                <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+              </PropertyGroup>
+              <ItemGroup>
+                <PackageVersion Include="Aspire.Hosting.AppHost" Version="9.5.0" />
+              </ItemGroup>
+            </Project>
+            """);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
+        {
+            config.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner()
+                {
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
+                    {
+                        var packages = new List<NuGetPackageCli>
+                        {
+                            query switch
+                            {
+                                "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = "nuget.org" },
+                                "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0", Source = "nuget.org" },
+                                _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
+                            }
+                        };
+
+                        return (0, packages.ToArray());
+                    },
+                    GetProjectItemsAndPropertiesAsyncCallback = (projectFile, _, _, _, _) =>
+                    {
+                        var itemsAndProperties = new JsonObject();
+
+                        if (projectFile.FullName == appHostProjectFile.FullName)
+                        {
+                            // SDK version already matches latest -> AnalyzeAppHostSdkAsync
+                            // will log "App Host SDK is up to date" and skip the SDK
+                            // update step.
+                            itemsAndProperties.WithSdkVersion("9.5.0");
+                        }
+                        else
+                        {
+                            throw new InvalidOperationException("Unexpected project file.");
+                        }
+
+                        var json = itemsAndProperties.ToJsonString();
+                        var document = JsonDocument.Parse(json);
+                        return (0, document);
+                    }
+                };
+            };
+
+            config.InteractionServiceFactory = (sp) =>
+            {
+                var interactionService = new TestInteractionService();
+                interactionService.ConfirmCallback = (_, _) => true;
+                return interactionService;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var packagingService = provider.GetRequiredService<IPackagingService>();
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+        var selectedChannel = channels.Single(c => c.Name == "default");
+
+        var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
+        await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
+
+        // The orphan PackageVersion for Aspire.Hosting.AppHost must be removed
+        // even when the SDK version itself was already current.
+        var updatedContent = await File.ReadAllTextAsync(directoryPackagesPropsFile.FullName);
+        Assert.DoesNotContain("Aspire.Hosting.AppHost", updatedContent);
+    }
+
+    [Fact]
+    public async Task UpdateProjectFileAsync_StaleAppHostPackageReference_RemovedEvenWhenSdkAlreadyCurrent()
+    {
+        // Companion to UpdateProjectFileAsync_CpmOrphanAppHostPackageVersion_RemovedEvenWhenSdkAlreadyCurrent.
+        // The new SDK implicitly defines Aspire.Hosting.AppHost, so an explicit
+        // PackageReference is now redundant and must be removed even when no
+        // SDK version bump is required. No CPM is involved here.
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
+        var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
+
+        await File.WriteAllTextAsync(
+            appHostProjectFile.FullName,
+            """
+            <Project Sdk="Aspire.AppHost.Sdk/9.5.0">
+              <PropertyGroup>
+                <OutputType>Exe</OutputType>
+                <TargetFramework>net9.0</TargetFramework>
+                <IsAspireHost>true</IsAspireHost>
+              </PropertyGroup>
+              <ItemGroup>
+                <PackageReference Include="Aspire.Hosting.AppHost" Version="9.5.0" />
+              </ItemGroup>
+            </Project>
+            """);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
+        {
+            config.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner()
+                {
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
+                    {
+                        var packages = new List<NuGetPackageCli>
+                        {
+                            query switch
+                            {
+                                "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = "nuget.org" },
+                                "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0", Source = "nuget.org" },
+                                _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
+                            }
+                        };
+
+                        return (0, packages.ToArray());
+                    },
+                    GetProjectItemsAndPropertiesAsyncCallback = (projectFile, _, _, _, _) =>
+                    {
+                        var itemsAndProperties = new JsonObject();
+                        itemsAndProperties.WithSdkVersion("9.5.0");
+                        var json = itemsAndProperties.ToJsonString();
+                        var document = JsonDocument.Parse(json);
+                        return (0, document);
+                    }
+                };
+            };
+
+            config.InteractionServiceFactory = (sp) =>
+            {
+                var interactionService = new TestInteractionService();
+                interactionService.ConfirmCallback = (_, _) => true;
+                return interactionService;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var packagingService = provider.GetRequiredService<IPackagingService>();
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+        var selectedChannel = channels.Single(c => c.Name == "default");
+
+        var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
+        await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
+
+        var updatedContent = await File.ReadAllTextAsync(appHostProjectFile.FullName);
+        Assert.DoesNotContain("Aspire.Hosting.AppHost", updatedContent);
+    }
+
+    [Fact]
+    public async Task UpdateProjectFileAsync_NoLegacyAppHostReferences_NoChangesWhenSdkAlreadyCurrent()
+    {
+        // Negative case: a clean, fully-migrated AppHost on the latest SDK with
+        // no orphan references must not be touched. Guards against the new
+        // cleanup path enqueuing spurious update steps.
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
+        var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
+
+        const string ProjectContent = """
+            <Project Sdk="Aspire.AppHost.Sdk/9.5.0">
+              <PropertyGroup>
+                <OutputType>Exe</OutputType>
+                <TargetFramework>net9.0</TargetFramework>
+                <IsAspireHost>true</IsAspireHost>
+              </PropertyGroup>
+            </Project>
+            """;
+        await File.WriteAllTextAsync(appHostProjectFile.FullName, ProjectContent);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
+        {
+            config.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner()
+                {
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
+                    {
+                        var packages = new List<NuGetPackageCli>
+                        {
+                            query switch
+                            {
+                                "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = "nuget.org" },
+                                _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
+                            }
+                        };
+
+                        return (0, packages.ToArray());
+                    },
+                    GetProjectItemsAndPropertiesAsyncCallback = (projectFile, _, _, _, _) =>
+                    {
+                        var itemsAndProperties = new JsonObject();
+                        itemsAndProperties.WithSdkVersion("9.5.0");
+                        var json = itemsAndProperties.ToJsonString();
+                        var document = JsonDocument.Parse(json);
+                        return (0, document);
+                    }
+                };
+            };
+
+            config.InteractionServiceFactory = (sp) =>
+            {
+                var interactionService = new TestInteractionService();
+                interactionService.ConfirmCallback = (_, _) => true;
+                return interactionService;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var packagingService = provider.GetRequiredService<IPackagingService>();
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+        var selectedChannel = channels.Single(c => c.Name == "default");
+
+        var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
+        await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
+
+        var unchangedContent = await File.ReadAllTextAsync(appHostProjectFile.FullName);
+        Assert.Equal(ProjectContent, unchangedContent);
+    }
+
+    [Fact]
+    public async Task UpdateProjectFileAsync_LegacyAppHostReferencesWithMixedCasing_StillRemoved()
+    {
+        // NuGet package IDs are case-insensitive, so `aspire.hosting.apphost` and
+        // `Aspire.Hosting.AppHost` refer to the same package. The cleanup XPaths
+        // must match the @Include attribute case-insensitively or differently
+        // cased entries authored by users (or generated by external tooling)
+        // will silently survive the cleanup and break the next restore with
+        // NU1009.
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
+        var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
+        var directoryPackagesPropsFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Directory.Packages.props"));
+
+        await File.WriteAllTextAsync(
+            appHostProjectFile.FullName,
+            """
+            <Project Sdk="Aspire.AppHost.Sdk/9.5.0">
+              <PropertyGroup>
+                <OutputType>Exe</OutputType>
+                <TargetFramework>net9.0</TargetFramework>
+                <IsAspireHost>true</IsAspireHost>
+              </PropertyGroup>
+              <ItemGroup>
+                <PackageReference Include="aspire.hosting.apphost" />
+              </ItemGroup>
+            </Project>
+            """);
+
+        await File.WriteAllTextAsync(
+            directoryPackagesPropsFile.FullName,
+            """
+            <Project>
+              <PropertyGroup>
+                <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+              </PropertyGroup>
+              <ItemGroup>
+                <PackageVersion Include="ASPIRE.HOSTING.APPHOST" Version="9.5.0" />
+              </ItemGroup>
+            </Project>
+            """);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
+        {
+            config.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner()
+                {
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
+                    {
+                        var packages = new List<NuGetPackageCli>
+                        {
+                            query switch
+                            {
+                                "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = "nuget.org" },
+                                "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0", Source = "nuget.org" },
+                                _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
+                            }
+                        };
+
+                        return (0, packages.ToArray());
+                    },
+                    GetProjectItemsAndPropertiesAsyncCallback = (projectFile, _, _, _, _) =>
+                    {
+                        var itemsAndProperties = new JsonObject();
+                        itemsAndProperties.WithSdkVersion("9.5.0");
+                        var json = itemsAndProperties.ToJsonString();
+                        var document = JsonDocument.Parse(json);
+                        return (0, document);
+                    }
+                };
+            };
+
+            config.InteractionServiceFactory = (sp) =>
+            {
+                var interactionService = new TestInteractionService();
+                interactionService.ConfirmCallback = (_, _) => true;
+                return interactionService;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var packagingService = provider.GetRequiredService<IPackagingService>();
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+        var selectedChannel = channels.Single(c => c.Name == "default");
+
+        var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
+        await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
+
+        var updatedProject = await File.ReadAllTextAsync(appHostProjectFile.FullName);
+        var updatedProps = await File.ReadAllTextAsync(directoryPackagesPropsFile.FullName);
+        Assert.DoesNotContain("<PackageReference", updatedProject, StringComparison.Ordinal);
+        Assert.DoesNotContain("<PackageVersion", updatedProps, StringComparison.Ordinal);
+    }
+
+    private static UpdatePackagesContext CreateUpdateContext(FileInfo appHostFile, PackageChannel channel) =>
+        new()
+        {
+            AppHostFile = appHostFile,
+            Channel = channel,
+            ConfirmBinding = PromptBinding.CreateDefault(true),
+            NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(null),
+        };
+
     private static Aspire.Cli.CliExecutionContext CreateExecutionContext(DirectoryInfo workingDirectory)
     {
-        // NOTE: This would normally be in the users home directory, but for tests we create
-        //       it in the temporary workspace directory.
-        var settingsDirectory = workingDirectory.CreateSubdirectory(".aspire");
-        var hivesDirectory = settingsDirectory.CreateSubdirectory("hives");
-        var cacheDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "cache"));
-        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        return TestExecutionContextHelper.CreateExecutionContext(workingDirectory);
     }
 
     [Fact]
@@ -914,6 +1573,35 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
         // Assert
         Assert.Equal("[bold yellow]Aspire.Hosting.Redis[/] [bold green]9.0.0[/] to [bold green]9.1.0[/]", formattedText);
+    }
+
+    [Fact]
+    public void ChannelUpdateStep_GetFormattedDisplayText_ReturnsFormattedString_WithExistingChannel()
+    {
+        var step = new ChannelUpdateStep(
+            "Update aspire.config.json channel from 'pr-17452' to 'stable'",
+            () => Task.CompletedTask,
+            "pr-17452",
+            "stable");
+
+        Assert.Equal(
+            "[bold yellow]aspire.config.json#channel[/] [bold green]pr-17452[/] to [bold green]stable[/]",
+            step.GetFormattedDisplayText());
+    }
+
+    [Fact]
+    public void ChannelUpdateStep_GetFormattedDisplayText_ReturnsFormattedString_WhenChannelAbsent()
+    {
+        var step = new ChannelUpdateStep(
+            "Update aspire.config.json channel from '(none)' to 'stable'",
+            () => Task.CompletedTask,
+            CurrentChannel: null,
+            NewChannel: "stable");
+
+        // Markup-escaped grey placeholder for absent channel value.
+        Assert.Equal(
+            "[bold yellow]aspire.config.json#channel[/] [grey](none)[/] to [bold green]stable[/]",
+            step.GetFormattedDisplayText());
     }
 
     [Fact]
@@ -959,7 +1647,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             {
                 return new TestDotNetCliRunner()
                 {
-                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _) =>
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
                     {
                         var packages = new List<NuGetPackageCli>();
 
@@ -1007,7 +1695,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1020,7 +1708,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var selectedChannel = channels.Single(c => c.Name == "default");
 
         var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
-        var updateResult = await projectUpdater.UpdateProjectAsync(appHostProjectFile, selectedChannel).DefaultTimeout();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
 
         Assert.True(updateResult.UpdatedApplied);
 
@@ -1075,7 +1763,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             {
                 return new TestDotNetCliRunner()
                 {
-                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _) =>
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
                     {
                         var packages = new List<NuGetPackageCli>();
 
@@ -1130,7 +1818,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1143,7 +1831,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var selectedChannel = channels.Single(c => c.Name == "default");
 
         var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
-        var updateResult = await projectUpdater.UpdateProjectAsync(appHostProjectFile, selectedChannel).DefaultTimeout();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
 
         Assert.True(updateResult.UpdatedApplied);
 
@@ -1196,7 +1884,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             {
                 return new TestDotNetCliRunner()
                 {
-                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _) =>
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
                     {
                         var packages = new List<NuGetPackageCli>();
 
@@ -1244,7 +1932,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1261,7 +1949,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         // This should throw a ProjectUpdaterException
         var exception = await Assert.ThrowsAsync<ProjectUpdaterException>(async () =>
         {
-            await projectUpdater.UpdateProjectAsync(appHostProjectFile, selectedChannel).DefaultTimeout();
+            await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
         });
 
         Assert.Contains("Unable to resolve MSBuild property 'InvalidVersionProperty' to a valid semantic version", exception.Message);
@@ -1309,7 +1997,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             {
                 return new TestDotNetCliRunner()
                 {
-                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _) =>
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
                     {
                         var packages = new List<NuGetPackageCli>();
 
@@ -1354,7 +2042,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1371,7 +2059,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         // This should throw a ProjectUpdaterException
         var exception = await Assert.ThrowsAsync<ProjectUpdaterException>(async () =>
         {
-            await projectUpdater.UpdateProjectAsync(appHostProjectFile, selectedChannel).DefaultTimeout();
+            await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
         });
 
         Assert.Contains("Unable to resolve MSBuild property 'NonExistentProperty' to a valid semantic version", exception.Message);
@@ -1405,7 +2093,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             {
                 return new TestDotNetCliRunner()
                 {
-                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _) =>
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
                     {
                         var packages = new List<NuGetPackageCli>();
 
@@ -1452,7 +2140,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1466,7 +2154,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var selectedChannel = channels.Single(c => c.Name == "default");
 
         var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser);
-        var updateResult = await projectUpdater.UpdateProjectAsync(appHostProjectFile, selectedChannel).DefaultTimeout();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
 
         // Should not throw ProjectUpdaterException; should produce update steps including AppHost SDK
         Assert.True(updateResult.UpdatedApplied);
@@ -1514,7 +2202,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             {
                 return new TestDotNetCliRunner()
                 {
-                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _) =>
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
                     {
                         var packages = new List<NuGetPackageCli>();
 
@@ -1554,7 +2242,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1568,7 +2256,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var selectedChannel = channels.Single(c => c.Name == "default");
 
         var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser);
-        var updateResult = await projectUpdater.UpdateProjectAsync(appHostProjectFile, selectedChannel).DefaultTimeout();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
 
         // Should discover package reference (version may be absent) and not crash
         Assert.True(updateResult.UpdatedApplied);
@@ -1599,7 +2287,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             {
                 return new TestDotNetCliRunner()
                 {
-                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _) =>
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
                     {
                         var packages = new List<NuGetPackageCli>();
 
@@ -1633,7 +2321,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1650,7 +2338,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
         // Should throw ProjectUpdaterException due to invalid XML
         await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
-            projectUpdater.UpdateProjectAsync(appHostProjectFile, selectedChannel).DefaultTimeout());
+            projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout());
     }
 
     [Fact]
@@ -1675,7 +2363,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             {
                 return new TestDotNetCliRunner()
                 {
-                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _) =>
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
                     {
                         var packages = new List<NuGetPackageCli>();
 
@@ -1715,7 +2403,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1729,7 +2417,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var selectedChannel = channels.Single(c => c.Name == "default");
 
         var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser);
-        var updateResult = await projectUpdater.UpdateProjectAsync(appHostProjectFile, selectedChannel).DefaultTimeout();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
 
         // Normal path unaffected - no updates needed since version is already current
         Assert.False(updateResult.UpdatedApplied);
@@ -1759,7 +2447,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             {
                 return new TestDotNetCliRunner()
                 {
-                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _) =>
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
                     {
                         var packages = new List<NuGetPackageCli>();
 
@@ -1794,7 +2482,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1808,7 +2496,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var selectedChannel = channels.Single(c => c.Name == "default");
 
         var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser);
-        var updateResult = await projectUpdater.UpdateProjectAsync(appHostFile, selectedChannel).DefaultTimeout();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostFile, selectedChannel)).DefaultTimeout();
 
         Assert.True(updateResult.UpdatedApplied);
 
@@ -1816,6 +2504,186 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var updatedContent = await File.ReadAllTextAsync(appHostFile.FullName);
         Assert.Contains("#:sdk Aspire.AppHost.Sdk@9.5.0", updatedContent);
         Assert.DoesNotContain("9.4.1", updatedContent);
+    }
+
+    [Fact]
+    public async Task UpdateProjectFileAsync_SingleFileAppHost_RemovesLegacyAppHostPackageDirectiveDuringSdkBump()
+    {
+        // Companion to the .csproj path covered by
+        // UpdateProjectFileAsync_StaleAppHostPackageReference_RemovedEvenWhenSdkAlreadyCurrent.
+        // Aspire.AppHost.Sdk pulls Aspire.Hosting.AppHost in implicitly, so an
+        // explicit `#:package Aspire.Hosting.AppHost@<version>` directive in a
+        // single-file AppHost is redundant. After a channel switch rewrites
+        // nuget.config to pin Aspire* to the channel feed, the deferred restore
+        // would otherwise hit NU1103 because the pinned channel does not carry
+        // the user's stable version.
+        // See https://github.com/dotnet/aspire/issues/15891.
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostFolder.FullName, "apphost.cs"));
+
+        await File.WriteAllTextAsync(
+            appHostFile.FullName,
+            """
+            #:sdk Aspire.AppHost.Sdk@9.4.1
+            #:package Aspire.Hosting.AppHost@9.4.1
+            #:package Aspire.Hosting.Redis@9.4.1
+            using Aspire.Hosting;
+            var builder = DistributedApplication.CreateBuilder(args);
+            builder.AddRedis("redis");
+            builder.Build().Run();
+            """);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
+        {
+            config.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner()
+                {
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
+                    {
+                        var packages = new List<NuGetPackageCli>
+                        {
+                            query switch
+                            {
+                                "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = "nuget.org" },
+                                "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0", Source = "nuget.org" },
+                                _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
+                            }
+                        };
+                        return (0, packages.ToArray());
+                    },
+                    GetProjectItemsAndPropertiesAsyncCallback = (projectFile, _, _, _, _) =>
+                    {
+                        var itemsAndProperties = new JsonObject();
+                        itemsAndProperties.WithSdkVersion("9.4.1");
+                        // Surface the explicit Aspire.Hosting.AppHost / Aspire.Hosting.Redis
+                        // directives the way MSBuild would for an apphost.cs file.
+                        var items = new JsonObject
+                        {
+                            ["PackageReference"] = new JsonArray
+                            {
+                                new JsonObject { ["Identity"] = "Aspire.Hosting.AppHost", ["Version"] = "9.4.1" },
+                                new JsonObject { ["Identity"] = "Aspire.Hosting.Redis", ["Version"] = "9.4.1" },
+                            },
+                        };
+                        itemsAndProperties["Items"] = items;
+                        var json = itemsAndProperties.ToJsonString();
+                        var document = JsonDocument.Parse(json);
+                        return (0, document);
+                    },
+                    AddPackageAsyncCallback = (_, _, _, _, _, _, _) => 0,
+                };
+            };
+
+            config.InteractionServiceFactory = (sp) =>
+            {
+                var interactionService = new TestInteractionService();
+                interactionService.ConfirmCallback = (_, _) => true;
+                return interactionService;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var packagingService = provider.GetRequiredService<IPackagingService>();
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+        var selectedChannel = channels.Single(c => c.Name == "default");
+
+        var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostFile, selectedChannel)).DefaultTimeout();
+
+        Assert.True(updateResult.UpdatedApplied);
+
+        var updatedContent = await File.ReadAllTextAsync(appHostFile.FullName);
+        Assert.Contains("#:sdk Aspire.AppHost.Sdk@9.5.0", updatedContent);
+        Assert.DoesNotContain("Aspire.Hosting.AppHost", updatedContent);
+        // Aspire.Hosting.Redis directive is preserved (and bumped via dotnet package add,
+        // which is mocked here, so the source text still shows 9.4.1; the important
+        // assertion is that the directive line itself was not removed).
+        Assert.Contains("#:package Aspire.Hosting.Redis@", updatedContent);
+    }
+
+    [Fact]
+    public async Task UpdateProjectFileAsync_SingleFileAppHost_RemovesLegacyAppHostPackageDirectiveWhenSdkAlreadyCurrent()
+    {
+        // SDK is already on the latest version, so AnalyzeAppHostSdkAsync
+        // early-returns. The cleanup step path must still strip the redundant
+        // `#:package Aspire.Hosting.AppHost@<version>` directive so a re-run of
+        // `aspire update` after a partial migration recovers cleanly.
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostFolder.FullName, "apphost.cs"));
+
+        await File.WriteAllTextAsync(
+            appHostFile.FullName,
+            """
+            #:sdk Aspire.AppHost.Sdk@9.5.0
+            #:package Aspire.Hosting.AppHost@9.5.0
+            using Aspire.Hosting;
+            var builder = DistributedApplication.CreateBuilder(args);
+            builder.Build().Run();
+            """);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
+        {
+            config.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner()
+                {
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
+                    {
+                        var packages = new List<NuGetPackageCli>
+                        {
+                            query switch
+                            {
+                                "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = "nuget.org" },
+                                _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
+                            }
+                        };
+                        return (0, packages.ToArray());
+                    },
+                    GetProjectItemsAndPropertiesAsyncCallback = (projectFile, _, _, _, _) =>
+                    {
+                        var itemsAndProperties = new JsonObject();
+                        itemsAndProperties.WithSdkVersion("9.5.0");
+                        var items = new JsonObject
+                        {
+                            ["PackageReference"] = new JsonArray
+                            {
+                                new JsonObject { ["Identity"] = "Aspire.Hosting.AppHost", ["Version"] = "9.5.0" },
+                            },
+                        };
+                        itemsAndProperties["Items"] = items;
+                        var json = itemsAndProperties.ToJsonString();
+                        var document = JsonDocument.Parse(json);
+                        return (0, document);
+                    }
+                };
+            };
+
+            config.InteractionServiceFactory = (sp) =>
+            {
+                var interactionService = new TestInteractionService();
+                interactionService.ConfirmCallback = (_, _) => true;
+                return interactionService;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var packagingService = provider.GetRequiredService<IPackagingService>();
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+        var selectedChannel = channels.Single(c => c.Name == "default");
+
+        var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
+        await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostFile, selectedChannel)).DefaultTimeout();
+
+        var updatedContent = await File.ReadAllTextAsync(appHostFile.FullName);
+        Assert.DoesNotContain("Aspire.Hosting.AppHost", updatedContent);
+        Assert.Contains("#:sdk Aspire.AppHost.Sdk@9.5.0", updatedContent);
     }
 
     [Fact]
@@ -1842,7 +2710,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             {
                 return new TestDotNetCliRunner()
                 {
-                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _) =>
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
                     {
                         var packages = new List<NuGetPackageCli>();
 
@@ -1877,7 +2745,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1891,7 +2759,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var selectedChannel = channels.Single(c => c.Name == "default");
 
         var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser);
-        var updateResult = await projectUpdater.UpdateProjectAsync(appHostFile, selectedChannel).DefaultTimeout();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostFile, selectedChannel)).DefaultTimeout();
 
         Assert.True(updateResult.UpdatedApplied);
 
@@ -1922,7 +2790,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             {
                 return new TestDotNetCliRunner()
                 {
-                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _) =>
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
                     {
                         var packages = new List<NuGetPackageCli>();
 
@@ -1965,7 +2833,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1981,7 +2849,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser);
 
         // This should not throw and should handle the * version gracefully
-        var updateResult = await projectUpdater.UpdateProjectAsync(appHostProjectFile, selectedChannel).DefaultTimeout();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
 
         Assert.True(updateResult.UpdatedApplied);
     }
@@ -2012,7 +2880,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             {
                 return new TestDotNetCliRunner()
                 {
-                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _) =>
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
                     {
                         var packages = new List<NuGetPackageCli>();
 
@@ -2047,14 +2915,14 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var packagingService = provider.GetRequiredService<IPackagingService>();
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         var selectedChannel = channels.Single(c => c.Name == "default");
 
         var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
-        var updateResult = await projectUpdater.UpdateProjectAsync(appHostProjectFile, selectedChannel).DefaultTimeout();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
 
         Assert.True(updateResult.UpdatedApplied);
 
@@ -2091,7 +2959,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             {
                 return new TestDotNetCliRunner()
                 {
-                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _) =>
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
                     {
                         var packages = new List<NuGetPackageCli>();
 
@@ -2126,14 +2994,14 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var packagingService = provider.GetRequiredService<IPackagingService>();
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         var selectedChannel = channels.Single(c => c.Name == "default");
 
         var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
-        var updateResult = await projectUpdater.UpdateProjectAsync(appHostProjectFile, selectedChannel).DefaultTimeout();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
 
         Assert.True(updateResult.UpdatedApplied);
 
@@ -2169,7 +3037,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             {
                 return new TestDotNetCliRunner()
                 {
-                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _) =>
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
                     {
                         var packages = new List<NuGetPackageCli>();
 
@@ -2217,14 +3085,14 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var packagingService = provider.GetRequiredService<IPackagingService>();
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         var selectedChannel = channels.Single(c => c.Name == "default");
 
         var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
-        var updateResult = await projectUpdater.UpdateProjectAsync(appHostProjectFile, selectedChannel).DefaultTimeout();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
 
         // Both packages should be updated - range expression is treated like wildcard
         Assert.True(updateResult.UpdatedApplied);
@@ -2247,6 +3115,23 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var match = regex.IsMatch(directive);
 
         Assert.Equal(shouldMatch, match);
+    }
+
+    [Theory]
+    [InlineData("#:package Aspire.Hosting.AppHost@13.2.1", true)]
+    [InlineData("  #:package Aspire.Hosting.AppHost@13.2.1", true)]
+    [InlineData("#:package aspire.hosting.apphost@13.2.1", true)]
+    [InlineData("#:package Aspire.Hosting.AppHost@*", true)]
+    [InlineData("#:package Aspire.Hosting.AppHost@10.0.0-preview.1.26264.14", true)]
+    [InlineData("#:package Aspire.Hosting.Redis@13.2.1", false)]
+    [InlineData("#:sdk Aspire.AppHost.Sdk@13.2.1", false)]
+    [InlineData("// #:package Aspire.Hosting.AppHost@13.2.1", false)]
+    [InlineData("#:package Aspire.Hosting.AppHost", false)]
+    [InlineData("#:package Aspire.Hosting.AppHost@", false)]
+    public void LegacyAppHostPackageDirectiveRegex_MatchesOnlyAppHostDirective(string line, bool shouldMatch)
+    {
+        var regex = ProjectUpdater.LegacyAppHostPackageDirectiveRegex();
+        Assert.Equal(shouldMatch, regex.IsMatch(line));
     }
 
     [Fact]
@@ -2297,7 +3182,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             {
                 return new TestDotNetCliRunner()
                 {
-                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _) =>
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
                     {
                         var packages = new List<NuGetPackageCli>();
 
@@ -2344,7 +3229,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -2357,7 +3242,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var selectedChannel = channels.Single(c => c.Name == "default");
 
         var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
-        var updateResult = await projectUpdater.UpdateProjectAsync(appHostProjectFile, selectedChannel).DefaultTimeout();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
 
         Assert.True(updateResult.UpdatedApplied);
 
@@ -2374,12 +3259,15 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain("Aspire.Hosting.Redis", directoryPackagesContent);
     }
 
-    [Fact]
-    public async Task UpdateSdkVersionInCsprojAppHostAsync_MigratesFromOldFormatToNewFormat()
+    [Theory]
+    [InlineData(".csproj")]
+    [InlineData(".fsproj")]
+    [InlineData(".vbproj")]
+    public async Task UpdateSdkVersionInCsprojAppHostAsync_MigratesFromOldFormatToNewFormat(string projectExtension)
     {
         // Arrange - tests migration from old <Sdk Name="..."> to new <Project Sdk="..."> format
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj");
+        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, $"AppHost{projectExtension}");
         var originalContent = """
             <Project Sdk="Microsoft.NET.Sdk">
                 <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0" />
@@ -2395,19 +3283,24 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var package = new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.0.2", Source = "nuget.org" };
 
         // Act
-        await ProjectUpdater.UpdateSdkVersionInCsprojAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
+        await ProjectUpdater.UpdateSdkVersionInProjectAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
 
         // Assert
         var updatedContent = await File.ReadAllTextAsync(projectFile);
-        await Verify(updatedContent, extension: "xml");
+        await Verify(updatedContent, extension: "xml")
+            .UseFileName($"ProjectUpdaterTests.{nameof(UpdateSdkVersionInCsprojAppHostAsync_MigratesFromOldFormatToNewFormat)}")
+            .DisableRequireUniquePrefix();
     }
 
-    [Fact]
-    public async Task UpdateSdkVersionInCsprojAppHostAsync_UpdatesExistingNewFormat()
+    [Theory]
+    [InlineData(".csproj")]
+    [InlineData(".fsproj")]
+    [InlineData(".vbproj")]
+    public async Task UpdateSdkVersionInCsprojAppHostAsync_UpdatesExistingNewFormat(string projectExtension)
     {
         // Arrange - tests updating a project already using the new format
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj");
+        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, $"AppHost{projectExtension}");
         var originalContent = """
             <Project Sdk="Aspire.AppHost.Sdk/13.0.1">
                 <PropertyGroup>
@@ -2422,19 +3315,24 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var package = new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.0.2", Source = "nuget.org" };
 
         // Act
-        await ProjectUpdater.UpdateSdkVersionInCsprojAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
+        await ProjectUpdater.UpdateSdkVersionInProjectAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
 
         // Assert
         var updatedContent = await File.ReadAllTextAsync(projectFile);
-        await Verify(updatedContent, extension: "xml");
+        await Verify(updatedContent, extension: "xml")
+            .UseFileName($"ProjectUpdaterTests.{nameof(UpdateSdkVersionInCsprojAppHostAsync_UpdatesExistingNewFormat)}")
+            .DisableRequireUniquePrefix();
     }
 
-    [Fact]
-    public async Task UpdateSdkVersionInCsprojAppHostAsync_RemovesAspireHostingAppHostPackageReference()
+    [Theory]
+    [InlineData(".csproj")]
+    [InlineData(".fsproj")]
+    [InlineData(".vbproj")]
+    public async Task UpdateSdkVersionInCsprojAppHostAsync_RemovesAspireHostingAppHostPackageReference(string projectExtension)
     {
         // Arrange - tests removal of obsolete Aspire.Hosting.AppHost package reference
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj");
+        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, $"AppHost{projectExtension}");
         var originalContent = """
             <Project Sdk="Microsoft.NET.Sdk">
                 <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0" />
@@ -2454,19 +3352,24 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var package = new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.0.2", Source = "nuget.org" };
 
         // Act
-        await ProjectUpdater.UpdateSdkVersionInCsprojAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
+        await ProjectUpdater.UpdateSdkVersionInProjectAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
 
         // Assert
         var updatedContent = await File.ReadAllTextAsync(projectFile);
-        await Verify(updatedContent, extension: "xml");
+        await Verify(updatedContent, extension: "xml")
+            .UseFileName($"ProjectUpdaterTests.{nameof(UpdateSdkVersionInCsprojAppHostAsync_RemovesAspireHostingAppHostPackageReference)}")
+            .DisableRequireUniquePrefix();
     }
 
-    [Fact]
-    public async Task UpdateSdkVersionInCsprojAppHostAsync_RemovesEmptyItemGroupAfterPackageRemoval()
+    [Theory]
+    [InlineData(".csproj")]
+    [InlineData(".fsproj")]
+    [InlineData(".vbproj")]
+    public async Task UpdateSdkVersionInCsprojAppHostAsync_RemovesEmptyItemGroupAfterPackageRemoval(string projectExtension)
     {
         // Arrange - tests that empty ItemGroup is removed after Aspire.Hosting.AppHost removal
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj");
+        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, $"AppHost{projectExtension}");
         var originalContent = """
             <Project Sdk="Microsoft.NET.Sdk">
                 <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0" />
@@ -2485,19 +3388,24 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var package = new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.0.2", Source = "nuget.org" };
 
         // Act
-        await ProjectUpdater.UpdateSdkVersionInCsprojAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
+        await ProjectUpdater.UpdateSdkVersionInProjectAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
 
         // Assert
         var updatedContent = await File.ReadAllTextAsync(projectFile);
-        await Verify(updatedContent, extension: "xml");
+        await Verify(updatedContent, extension: "xml")
+            .UseFileName($"ProjectUpdaterTests.{nameof(UpdateSdkVersionInCsprojAppHostAsync_RemovesEmptyItemGroupAfterPackageRemoval)}")
+            .DisableRequireUniquePrefix();
     }
 
-    [Fact]
-    public async Task UpdateSdkVersionInCsprojAppHostAsync_PreservesOtherSdksInAttribute()
+    [Theory]
+    [InlineData(".csproj")]
+    [InlineData(".fsproj")]
+    [InlineData(".vbproj")]
+    public async Task UpdateSdkVersionInCsprojAppHostAsync_PreservesOtherSdksInAttribute(string projectExtension)
     {
         // Arrange - tests that other SDKs in the attribute are preserved
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj");
+        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, $"AppHost{projectExtension}");
         var originalContent = """
             <Project Sdk="Aspire.AppHost.Sdk/13.0.1;Microsoft.NET.Sdk.Web">
                 <PropertyGroup>
@@ -2512,20 +3420,25 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var package = new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.0.2", Source = "nuget.org" };
 
         // Act
-        await ProjectUpdater.UpdateSdkVersionInCsprojAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
+        await ProjectUpdater.UpdateSdkVersionInProjectAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
 
         // Assert
         var updatedContent = await File.ReadAllTextAsync(projectFile);
-        await Verify(updatedContent, extension: "xml");
+        await Verify(updatedContent, extension: "xml")
+            .UseFileName($"ProjectUpdaterTests.{nameof(UpdateSdkVersionInCsprojAppHostAsync_PreservesOtherSdksInAttribute)}")
+            .DisableRequireUniquePrefix();
     }
 
-    [Fact]
-    public async Task UpdateSdkVersionInCsprojAppHostAsync_DoesNotMatchSimilarSdkName()
+    [Theory]
+    [InlineData(".csproj")]
+    [InlineData(".fsproj")]
+    [InlineData(".vbproj")]
+    public async Task UpdateSdkVersionInCsprojAppHostAsync_DoesNotMatchSimilarSdkName(string projectExtension)
     {
         // Arrange - tests that Aspire.AppHost.SdkFoo doesn't match as the Aspire SDK
         // In this case, the old <Sdk Name="..."> element is used, so it's a migration scenario
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj");
+        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, $"AppHost{projectExtension}");
         var originalContent = """
             <Project Sdk="Aspire.AppHost.SdkFoo/1.0.0">
                 <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0" />
@@ -2540,14 +3453,20 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var package = new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.0.2", Source = "nuget.org" };
 
         // Act
-        await ProjectUpdater.UpdateSdkVersionInCsprojAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
+        await ProjectUpdater.UpdateSdkVersionInProjectAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
 
         // Assert
         var updatedContent = await File.ReadAllTextAsync(projectFile);
-        await Verify(updatedContent, extension: "xml");
+        await Verify(updatedContent, extension: "xml")
+            .UseFileName($"ProjectUpdaterTests.{nameof(UpdateSdkVersionInCsprojAppHostAsync_DoesNotMatchSimilarSdkName)}")
+            .DisableRequireUniquePrefix();
     }
-    [Fact]
-    public async Task UpdateSdkVersionInCsprojAppHostAsync_RemovesPackageVersionFromDirectoryPackagesPropsForCpm()
+
+    [Theory]
+    [InlineData(".csproj")]
+    [InlineData(".fsproj")]
+    [InlineData(".vbproj")]
+    public async Task UpdateSdkVersionInCsprojAppHostAsync_RemovesPackageVersionFromDirectoryPackagesPropsForCpm(string projectExtension)
     {
         // Arrange - simulates a CPM project with an old-format AppHost that has
         // Aspire.Hosting.AppHost in both csproj (as PackageReference) and
@@ -2556,7 +3475,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         // must also be removed to avoid NU1009.
         // See: https://github.com/microsoft/aspire/issues/14550
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj");
+        var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, $"AppHost{projectExtension}");
         var originalContent = """
             <Project Sdk="Microsoft.NET.Sdk">
                 <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0" />
@@ -2590,7 +3509,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var package = new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.0.2", Source = "nuget.org" };
 
         // Act
-        await ProjectUpdater.UpdateSdkVersionInCsprojAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
+        await ProjectUpdater.UpdateSdkVersionInProjectAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
 
         // Assert - PackageVersion for Aspire.Hosting.AppHost should be removed from Directory.Packages.props
         var updatedPropsContent = await File.ReadAllTextAsync(directoryPackagesPropsFile);
@@ -2603,6 +3522,136 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain("Aspire.Hosting.AppHost", updatedCsprojContent);
         Assert.Contains("Aspire.Hosting.Redis", updatedCsprojContent);
         Assert.Contains("Aspire.AppHost.Sdk/13.0.2", updatedCsprojContent);
+    }
+
+    // Regression guard for https://github.com/dotnet/aspire/issues/15891.
+    //
+    // Repro shape: project on a stable channel referencing two or more Aspire integration
+    // packages whose stable versions are not carried by the daily-style Explicit channel
+    // being switched to. The bug was that ProjectUpdater rewrote nuget.config (adding a
+    // packageSourceMapping pinning Aspire* to the daily feed) and then ran 'dotnet package add'
+    // for each package one at a time *with restore enabled*. The first restore happened against
+    // a half-updated reference graph: the just-bumped package existed in the daily feed but the
+    // others were still on stable versions that didn't, and the new mapping blocked fallback
+    // to nuget.org -> NU1103.
+    //
+    // The fix passes --no-restore to per-package adds and runs a single deferred restore at the
+    // end. This test pins both halves of that contract:
+    //   1. every per-package add was invoked with noRestore=true, and
+    //   2. exactly one restore was invoked, and
+    //   3. the restore came after all the package adds (not interleaved with them).
+    [Fact]
+    public async Task UpdateProjectFileAsync_AppliesAllPackageEditsBeforeFinalRestore()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostFolder = workspace.CreateDirectory("Issue15891.AppHost");
+        var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "Issue15891.AppHost.csproj"));
+
+        await File.WriteAllTextAsync(
+            appHostProjectFile.FullName,
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+                <Sdk Name="Aspire.AppHost.Sdk" Version="9.4.1" />
+            </Project>
+            """);
+
+        // Use a single shared list so we can assert that all 'add's happened before the 'restore'.
+        // Recording entries as strings keeps the assertion readable when it fails.
+        var calls = new List<string>();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
+        {
+            config.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner()
+                {
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
+                    {
+                        var package = query switch
+                        {
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0-preview.1", Source = "daily" },
+                            "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0-preview.1", Source = "daily" },
+                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0-preview.1", Source = "daily" },
+                            "Aspire.Hosting.PostgreSQL" => new NuGetPackageCli { Id = "Aspire.Hosting.PostgreSQL", Version = "9.5.0-preview.1", Source = "daily" },
+                            "Aspire.Hosting.Kafka" => new NuGetPackageCli { Id = "Aspire.Hosting.Kafka", Version = "9.5.0-preview.1", Source = "daily" },
+                            _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
+                        };
+
+                        return (0, new[] { package });
+                    },
+
+                    GetProjectItemsAndPropertiesAsyncCallback = (projectFile, _, _, _, _) =>
+                    {
+                        var itemsAndProperties = new JsonObject();
+
+                        if (projectFile.FullName == appHostProjectFile.FullName)
+                        {
+                            itemsAndProperties.WithSdkVersion("9.4.1");
+                            itemsAndProperties.WithPackageReference("Aspire.Hosting.AppHost", "9.4.1");
+                            // Three integration packages on the prior stable version - this is the
+                            // shape that fails in the original issue: the first per-package restore
+                            // would resolve the new daily Redis but reject the still-stable PostgreSQL
+                            // and Kafka because the new packageSourceMapping prevents fallback to
+                            // nuget.org for Aspire*.
+                            itemsAndProperties.WithPackageReference("Aspire.Hosting.Redis", "9.4.1");
+                            itemsAndProperties.WithPackageReference("Aspire.Hosting.PostgreSQL", "9.4.1");
+                            itemsAndProperties.WithPackageReference("Aspire.Hosting.Kafka", "9.4.1");
+                        }
+                        else
+                        {
+                            throw new InvalidOperationException($"Unexpected project file: {projectFile.FullName}");
+                        }
+
+                        var json = itemsAndProperties.ToJsonString();
+                        var document = JsonDocument.Parse(json);
+                        return (0, document);
+                    },
+
+                    AddPackageAsyncCallback = (projectFile, packageId, packageVersion, source, noRestore, _, _) =>
+                    {
+                        calls.Add($"add:{packageId}@{packageVersion}:noRestore={noRestore}");
+                        return 0;
+                    },
+
+                    RestoreAsyncCallback = (projectFilePath, _, _) =>
+                    {
+                        calls.Add($"restore:{projectFilePath.Name}");
+                        return 0;
+                    },
+                };
+            };
+
+            config.InteractionServiceFactory = (s) => new TestInteractionService();
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var packagingService = provider.GetRequiredService<IPackagingService>();
+
+        // 'daily' is an Explicit channel (see PackagingService.CreateExplicitChannel), which is
+        // the trigger condition for the NuGetConfigMerger path that surfaces the original bug.
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+        var dailyChannel = channels.Single(c => c.Name == "daily");
+
+        var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, dailyChannel)).DefaultTimeout();
+
+        Assert.True(updateResult.UpdatedApplied);
+
+        // Every 'dotnet package add' must have been invoked with --no-restore so that NuGet
+        // never sees a half-updated reference graph against the new packageSourceMapping.
+        var addCalls = calls.Where(c => c.StartsWith("add:", StringComparison.Ordinal)).ToList();
+        Assert.NotEmpty(addCalls);
+        Assert.All(addCalls, c => Assert.EndsWith(":noRestore=True", c));
+
+        // Exactly one restore should have been invoked - the deferred final restore.
+        var restoreCalls = calls.Where(c => c.StartsWith("restore:", StringComparison.Ordinal)).ToList();
+        var restore = Assert.Single(restoreCalls);
+        Assert.Equal($"restore:{appHostProjectFile.Name}", restore);
+
+        // The restore must come after every package add. If anyone re-enables per-package
+        // restore (or moves the final restore back into / before the loop) this fails.
+        Assert.Equal(calls.Count - 1, calls.IndexOf(restore));
     }
 }
 
