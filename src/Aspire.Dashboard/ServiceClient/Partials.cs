@@ -192,14 +192,19 @@ partial class Resource
     {
         if (legacySortOrder is { } legacyOrder)
         {
+            // Legacy fallback metadata represents built-in producer-specific properties from
+            // older resource servers, so treat its order as producer-local.
             return ToProducerDefinedDisplaySortOrder(legacyOrder);
         }
 
         if (knownProperty is not null)
         {
+            // Generic dashboard-known properties keep their fixed dashboard sort order.
             return knownSortOrder;
         }
 
+        // Unknown properties with producer metadata use producer-local ordering. Unknown
+        // properties without metadata keep the default "sort last" order from the caller.
         return property.HasSortOrder ? ToProducerDefinedDisplaySortOrder(property.SortOrder) : knownSortOrder;
     }
 

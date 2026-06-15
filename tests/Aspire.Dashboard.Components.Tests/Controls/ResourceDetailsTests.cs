@@ -942,7 +942,7 @@ public class ResourceDetailsTests : DashboardTestContext
             knownProperty: null,
             displayName: "Value",
             isHighlighted: true,
-            sortOrder: 0);
+            sortOrder: ProducerDefinedDisplaySortOrder(0));
     }
 
 }

@@ -238,6 +238,9 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
                     }
                 };
 
+                // Parameter value is producer metadata for new resource servers, but legacy
+                // fallback metadata exposes the same property as an unknown property key.
+                // Register both keys so the unset-value renderer works in both cases.
                 _valueComponents[KnownProperties.Parameter.Value] = metadata;
                 _valueComponents[DisplayedResourcePropertyViewModel.GetUnknownKey(KnownProperties.Parameter.Value)] = metadata;
             }
@@ -399,6 +402,8 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
                 value: Value.ForString(stateDescription),
                 isValueSensitive: false,
                 knownProperty: new KnownProperty(StateDescriptionPropertyKey, _ => ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsStateDescriptionHeader)]),
+                // The description explains the current state, so keep it in the same generic
+                // sort group as State rather than treating it as producer-defined metadata.
                 sortOrder: KnownResourcePropertySortOrder.State,
                 displayName: null,
                 isHighlighted: false),
