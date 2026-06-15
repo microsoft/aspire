@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { AspireExtensionE2EControlCommand, AspireExtensionE2EControlStatus } from '../../types/extensionApi';
-import { applyE2eControl, isSamePath, readStateFile, sleepSynchronously, waitForExtensionState, waitForNoRunningAppHost } from './assertions';
+import { applyE2eControl, isSamePath, readStateFile, sleepSynchronously, waitForExtensionState } from './assertions';
 import { getCliPath, getPrimaryAppHostProjectPath, getRepoRoot, getWorkspaceRoot } from './paths';
 import { runProcess, terminateProcessTree } from './process';
 
@@ -265,7 +265,7 @@ export async function stopAppHostIfRunning(appHostPath: string): Promise<void> {
             cwd: getWorkspaceRoot(),
             timeoutMs: 60000,
         });
-        await waitForNoRunningAppHost(90000, appHostPath);
+        await waitForOrTerminateRunningAppHostProcessFromState(appHostPath);
     }
     catch (error) {
         if (!(error instanceof Error)) {
@@ -273,16 +273,13 @@ export async function stopAppHostIfRunning(appHostPath: string): Promise<void> {
         }
 
         if (/not running|No running AppHost|No AppHost/i.test(error.message)) {
+            await waitForOrTerminateRunningAppHostProcessFromState(appHostPath);
             return;
         }
 
         if (/timed out|Failed to stop/i.test(error.message)) {
             try {
-                // Debug-session shutdown can race with the CLI's fallback stop command. If the CLI
-                // had to force-terminate the AppHost (or the stop process timed out), teardown should
-                // only fail when the extension still observes this specific AppHost afterward.
-                terminateRunningAppHostFromState(appHostPath);
-                await waitForNoRunningAppHost(30000, appHostPath);
+                await terminateRunningAppHostFromState(appHostPath);
                 return;
             }
             catch {
@@ -294,14 +291,68 @@ export async function stopAppHostIfRunning(appHostPath: string): Promise<void> {
     }
 }
 
-function terminateRunningAppHostFromState(appHostPath: string): void {
-    const state = readStateFile().state;
-    const runningAppHost = state.workspaceAppHost && isSamePath(state.workspaceAppHost.appHostPath, appHostPath)
-        ? state.workspaceAppHost
-        : state.appHosts.find(candidate => isSamePath(candidate.appHostPath, appHostPath));
+async function waitForOrTerminateRunningAppHostProcessFromState(appHostPath: string): Promise<void> {
+    try {
+        // The extension can keep stale AppHost state after debug teardown closes the RPC
+        // connection. Use the OS process table as the cleanup source of truth so stale
+        // state does not fail teardown, while still protecting Windows fixture deletion
+        // from a genuinely live AppHost process.
+        await waitForRunningAppHostProcessExitFromState(appHostPath, 5000);
+    }
+    catch {
+        await terminateRunningAppHostFromState(appHostPath);
+    }
+}
+
+async function terminateRunningAppHostFromState(appHostPath: string): Promise<void> {
+    const runningAppHost = getRunningAppHostFromState(appHostPath);
 
     if (runningAppHost) {
         terminateProcessTree(runningAppHost.appHostPid, 'SIGTERM');
+        await waitForProcessExit(runningAppHost.appHostPid, 5000).catch(() => {
+            terminateProcessTree(runningAppHost.appHostPid, 'SIGKILL');
+        });
+        await waitForProcessExit(runningAppHost.appHostPid, 5000);
+    }
+}
+
+async function waitForRunningAppHostProcessExitFromState(appHostPath: string, timeoutMs: number): Promise<void> {
+    const runningAppHost = getRunningAppHostFromState(appHostPath);
+    if (runningAppHost) {
+        await waitForProcessExit(runningAppHost.appHostPid, timeoutMs);
+    }
+}
+
+function getRunningAppHostFromState(appHostPath: string) {
+    const state = readStateFile().state;
+    return state.workspaceAppHost && isSamePath(state.workspaceAppHost.appHostPath, appHostPath)
+        ? state.workspaceAppHost
+        : state.appHosts.find(candidate => isSamePath(candidate.appHostPath, appHostPath));
+}
+
+async function waitForProcessExit(pid: number, timeoutMs: number): Promise<void> {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+        if (!isProcessRunning(pid)) {
+            return;
+        }
+
+        await delay(250);
+    }
+
+    throw new Error(`Timed out after ${timeoutMs}ms waiting for process ${pid} to exit.`);
+}
+
+function isProcessRunning(pid: number): boolean {
+    if (!Number.isInteger(pid) || pid <= 0) {
+        return false;
+    }
+
+    try {
+        process.kill(pid, 0);
+        return true;
+    } catch (error) {
+        return error instanceof Error && 'code' in error && error.code === 'EPERM';
     }
 }
 

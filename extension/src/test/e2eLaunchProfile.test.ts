@@ -325,16 +325,20 @@ suite('E2E launch profile', () => {
         assert.ok(discoveryConfiguration.includes('restored primary AppHost without stale secondary candidate'));
     });
 
-    test('waits for running AppHosts to stop before deleting E2E fixture directories', () => {
+    test('waits for running AppHost processes to exit before deleting E2E fixture directories', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
         const stopAppHostStart = fixtures.indexOf('export async function stopAppHostIfRunning');
-        const stopAppHostEnd = fixtures.indexOf('function terminateRunningAppHostFromState');
+        const stopAppHostEnd = fixtures.indexOf('async function terminateRunningAppHostFromState');
         assert.ok(stopAppHostStart >= 0);
         assert.ok(stopAppHostEnd > stopAppHostStart);
         const stopAppHost = fixtures.slice(stopAppHostStart, stopAppHostEnd);
 
-        assert.ok(stopAppHost.includes('await waitForNoRunningAppHost(90000, appHostPath);'));
+        assert.ok(stopAppHost.includes('await waitForOrTerminateRunningAppHostProcessFromState(appHostPath);'));
+        assert.ok(fixtures.includes('stale AppHost state after debug teardown closes the RPC'));
+        assert.ok(fixtures.includes('async function waitForProcessExit(pid: number, timeoutMs: number): Promise<void>'));
+        assert.ok(fixtures.includes('process.kill(pid, 0);'));
+        assert.ok(fixtures.includes("error.code === 'EPERM'"));
         assert.ok(fixtures.includes('maxRetries: process.platform === \'win32\' ? 40 : 0'));
     });
 });
