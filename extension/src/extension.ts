@@ -74,8 +74,9 @@ export async function activate(context: vscode.ExtensionContext) {
     {
       onRunSessionAccepted: () => engagement?.recordDebugSession(),
     },
-    testRunSessionManager,
   );
+
+  testRunSessionManager.initializeConnectionInfo(dcpServer.connectionInfo);
 
   terminalProvider.rpcServerConnectionInfo = rpcServer.connectionInfo;
   terminalProvider.dcpServerConnectionInfo = dcpServer.connectionInfo;
@@ -379,7 +380,7 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(e2eStateFileBridge);
   
   // Return exported API for tests or other extensions
-  const api = createExtensionApi(context, rpcServer, dcpServer, dataRepository, appHostLaunchService, appHostTreeProvider, onDidChangeStateEmitter.event);
+  const api = createExtensionApi(context, rpcServer, dcpServer, testRunSessionManager, dataRepository, appHostLaunchService, appHostTreeProvider, onDidChangeStateEmitter.event);
 
   return Object.freeze(api);
 }
@@ -428,6 +429,7 @@ function createExtensionApi(
   context: vscode.ExtensionContext,
   rpcServer: AspireRpcServer,
   dcpServer: AspireDcpServer,
+  testRunSessionManager: TestRunSessionManager,
   dataRepository: AppHostDataRepository,
   appHostLaunchService: AppHostLaunchService,
   appHostTreeProvider: AspireAppHostTreeProvider,
@@ -481,8 +483,8 @@ function createExtensionApi(
     async startResource(resourceName: string, appHostPath: string): Promise<void> {
       return dataRepository.runResourceCommand(resourceName, appHostPath, 'start');
     },
-    acquireTestRunSession: (options) => dcpServer.acquireTestRunSession(options),
-    releaseTestRunSession: (id) => dcpServer.releaseTestRunSession(id),
+    acquireTestRunSession: (options) => testRunSessionManager.acquireTestRunSession(options),
+    releaseTestRunSession: (id) => testRunSessionManager.releaseTestRunSession(id),
   };
   if (context.extensionMode === vscode.ExtensionMode.Test) {
     api.__testOnlyRpcServerInfo = rpcServer.connectionInfo;

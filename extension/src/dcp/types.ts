@@ -173,7 +173,7 @@ export interface StartAppHostOptions {
 export interface AspireResourceDebugSession {
     id: string;
     session: vscode.DebugSession;
-    stopSession(): Thenable<void> | void;
+    stopSession(): void;
 }
 
 export interface AspireResourceExtendedDebugConfiguration extends vscode.DebugConfiguration {

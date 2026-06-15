@@ -13,7 +13,6 @@ import { getRunSessionInfo, getSupportedCapabilities } from '../capabilities';
 import { authorizationAndDcpHeadersRequired, authorizationHeaderMustStartWithBearer, authorizationHeaderRequired, encounteredErrorStartingResource, invalidOrMissingToken, invalidTokenLength } from '../loc/strings';
 import { DashboardTelemetryPassthrough } from './DashboardTelemetryPassthrough';
 import { sendTelemetryErrorEvent, sendTelemetryEvent } from '../utils/telemetry';
-import { AcquiredTestRunSession, TestRunSessionAcquireOptions, TestRunSessionLease, TestRunSessionManager } from './TestRunSessionManager';
 
 /**
  * Callbacks the DCP server invokes for cross-cutting telemetry concerns.
@@ -36,35 +35,18 @@ type DebugSessionAggregateStats = {
     anyNonZeroExit: boolean;
 };
 
-type AuthorizedDcpRequest = {
-    dcpId: string;
-    token: string;
-    testRunSessionLease?: TestRunSessionLease;
-};
-
-type RunTelemetryEntry = {
-    startTimeMs: number;
-    resourceType: string;
-    mode: string;
-    debugSessionId: string;
-    isTestRunSession: boolean;
-};
-
 export default class AspireDcpServer {
+    private readonly app: express.Express;
     private server: https.Server;
     private wss: WebSocketServer;
     private wsBySession: Map<string, WebSocket> = new Map();
-    private runsBySession: Map<string, AspireResourceDebugSession[]> = new Map();
-    private testRunSessionLeaseIdByRunId: Map<string, string> = new Map();
-    private testRunSessionStartByRunId: Map<string, Promise<void>> = new Map();
     private pendingNotificationQueueByDcpId: Map<string, RunSessionNotification[]> = new Map();
-    private testRunSessionManager: TestRunSessionManager;
     private readonly _dashboardTelemetry: DashboardTelemetryPassthrough;
     // Per-runId metadata for telemetry correlation between PUT /run_session and
     // the subsequent sessionTerminated WebSocket notification. We need to look
     // up the original event timing/labels when the session terminates, since
     // the WebSocket notification arrives without that context.
-    private readonly _runTelemetryById: Map<string, RunTelemetryEntry>;
+    private readonly _runTelemetryById: Map<string, { startTimeMs: number; resourceType: string; mode: string; debugSessionId: string }>;
     // Per AppHost debug-session aggregate stats accumulated across the lifetime of the
     // session. Used to emit the `debug/apphost/end` summary when an AppHost debug session
     // terminates. Entries are added on first run_session for a debugSessionId and removed
@@ -75,29 +57,23 @@ export default class AspireDcpServer {
 
     private constructor(
         info: DcpServerConnectionInfo,
+        app: express.Express,
         server: https.Server,
         wss: WebSocketServer,
-        runsBySession: Map<string, AspireResourceDebugSession[]>,
-        testRunSessionLeaseIdByRunId: Map<string, string>,
-        testRunSessionStartByRunId: Map<string, Promise<void>>,
         wsBySession: Map<string, WebSocket>,
         pendingNotificationQueueByDcpId: Map<string, RunSessionNotification[]>,
         dashboardTelemetry: DashboardTelemetryPassthrough,
-        runTelemetryById: Map<string, RunTelemetryEntry>,
-        debugSessionStats: Map<string, DebugSessionAggregateStats>,
-        testRunSessionManager: TestRunSessionManager) {
+        runTelemetryById: Map<string, { startTimeMs: number; resourceType: string; mode: string; debugSessionId: string }>,
+        debugSessionStats: Map<string, DebugSessionAggregateStats>) {
         this.connectionInfo = info;
+        this.app = app;
         this.server = server;
         this.wss = wss;
-        this.runsBySession = runsBySession;
-        this.testRunSessionLeaseIdByRunId = testRunSessionLeaseIdByRunId;
-        this.testRunSessionStartByRunId = testRunSessionStartByRunId;
         this.wsBySession = wsBySession;
         this.pendingNotificationQueueByDcpId = pendingNotificationQueueByDcpId;
         this._dashboardTelemetry = dashboardTelemetry;
         this._runTelemetryById = runTelemetryById;
         this._debugSessionStats = debugSessionStats;
-        this.testRunSessionManager = testRunSessionManager;
     }
 
     /**
@@ -138,9 +114,9 @@ export default class AspireDcpServer {
         return stats;
     }
 
-    static async create(getDebugSession: (debugSessionId: string) => AspireDebugSession | null, hooks: DcpTelemetryHooks = {}, testRunSessionManager: TestRunSessionManager = new TestRunSessionManager()): Promise<AspireDcpServer> {
+    static async create(getDebugSession: (debugSessionId: string) => AspireDebugSession | null, hooks: DcpTelemetryHooks = {}): Promise<AspireDcpServer> {
         const runsBySession = new Map<string, AspireResourceDebugSession[]>();
-        const runTelemetryById = new Map<string, RunTelemetryEntry>();
+        const runTelemetryById = new Map<string, { startTimeMs: number; resourceType: string; mode: string; debugSessionId: string }>();
         const debugSessionStats = new Map<string, DebugSessionAggregateStats>();
         const getOrCreateDebugSessionStats = (debugSessionId: string): DebugSessionAggregateStats => {
             let aggregate = debugSessionStats.get(debugSessionId);
@@ -154,9 +130,6 @@ export default class AspireDcpServer {
         const wsBySession = new Map<string, WebSocket>();
         const pendingNotificationQueueByDcpId = new Map<string, RunSessionNotification[]>();
         const dashboardTelemetry = new DashboardTelemetryPassthrough();
-        const testRunSessionLeaseIdByRunId = new Map<string, string>();
-        const testRunSessionStartByRunId = new Map<string, Promise<void>>();
-        let dcpServerInstance: AspireDcpServer | undefined;
 
         return new Promise(async (resolve, reject) => {
             const token = generateToken();
@@ -227,39 +200,13 @@ export default class AspireDcpServer {
                     return;
                 }
 
-                const authorization = authorizeDcpRequest(auth, dcpId);
-                if (typeof authorization === 'string') {
-                    respondToBearerFailure(res, authorization);
+                const result = validateBearerToken(auth);
+                if (result.kind !== 'ok') {
+                    respondToBearerFailure(res, result.kind);
                     return;
                 }
 
-                (req as Request & { aspireDcpAuthorization?: AuthorizedDcpRequest }).aspireDcpAuthorization = authorization;
                 next();
-            }
-
-            function authorizeDcpRequest(auth: string, dcpId: string): AuthorizedDcpRequest | 'missing' | 'invalid_scheme' | 'invalid_length' | 'invalid_token' {
-                if (!auth.startsWith(BEARER_PREFIX) || auth.length === BEARER_PREFIX.length) {
-                    return 'invalid_scheme';
-                }
-
-                const bearerToken = auth.slice(BEARER_PREFIX.length);
-                const matchingTestRunSessionLease = testRunSessionManager?.tryGetLeaseForDcpId(dcpId);
-                if (matchingTestRunSessionLease) {
-                    const testRunSessionLease = testRunSessionManager?.tryAuthorizeDcpRequest(dcpId, bearerToken);
-                    if (!testRunSessionLease) {
-                        return 'invalid_token';
-                    }
-
-                    return { dcpId, token: bearerToken, testRunSessionLease };
-                }
-                else {
-                    const result = validateBearerToken(auth);
-                    if (result.kind !== 'ok') {
-                        return result.kind;
-                    }
-
-                    return { dcpId, token: bearerToken };
-                }
             }
 
             function respondWithTelemetryAuthError(res: Response, statusCode: number, code: string, message: string): void {
@@ -291,18 +238,13 @@ export default class AspireDcpServer {
                     return;
                 }
 
-                const authorization = authorizeDcpRequest(auth, dcpId);
-                if (typeof authorization === 'string') {
-                    respondToTelemetryBearerFailure(res, authorization);
+                const result = validateBearerToken(auth);
+                if (result.kind !== 'ok') {
+                    respondToTelemetryBearerFailure(res, result.kind);
                     return;
                 }
 
-                if (authorization.testRunSessionLease) {
-                    next();
-                    return;
-                }
-
-                const debugSessionId = getDcpIdPrefix(authorization.dcpId);
+                const debugSessionId = getDcpIdPrefix(dcpId);
                 if (!debugSessionId || !getDebugSession(debugSessionId)) {
                     respondWithTelemetryAuthError(res, 401, 'InvalidDcpInstanceId', 'Missing valid DCP prefix corresponding to an Aspire debug session.');
                     return;
@@ -329,11 +271,9 @@ export default class AspireDcpServer {
             app.put('/run_session', requireHeaders, async (req: Request, res: Response) => {
                 const payload: RunSessionPayload = req.body;
                 const runId = generateRunId();
-                const authorization = (req as Request & { aspireDcpAuthorization: AuthorizedDcpRequest }).aspireDcpAuthorization;
-                const dcpId = authorization.dcpId;
-                const debugSessionId = getDcpIdPrefix(dcpId) ?? authorization.testRunSessionLease?.sessionId;
+                const dcpId = req.header('microsoft-developer-dcp-instance-id') as string;
+                const debugSessionId = getDcpIdPrefix(dcpId);
                 const processes: AspireResourceDebugSession[] = [];
-                let completeTestRunSessionStart: (() => void) | undefined;
 
                 if (!debugSessionId) {
                     const error: ErrorDetails = {
@@ -433,14 +373,6 @@ export default class AspireDcpServer {
                 }
 
                 try {
-                    if (authorization.testRunSessionLease) {
-                        testRunSessionLeaseIdByRunId.set(runId, authorization.testRunSessionLease.id);
-                        const testRunSessionStart = new Promise<void>(resolve => {
-                            completeTestRunSessionStart = resolve;
-                        });
-                        testRunSessionStartByRunId.set(runId, testRunSessionStart);
-                    }
-
                     const config = await createDebugSessionConfiguration(
                         aspireDebugSession.configuration,
                         launchConfig,
@@ -451,10 +383,8 @@ export default class AspireDcpServer {
                     );
 
                     const resourceDebugSession = await aspireDebugSession.startAndGetDebugSession(config);
-                    completeTestRunSessionStart?.();
 
                     if (!resourceDebugSession) {
-                        completeTestRunSessionStart?.();
                         emitRunSessionFailureEnd('debugger_did_not_start');
 
                         // Clean up any processes associated with this run (registered by resource-type extensions)
@@ -472,19 +402,11 @@ export default class AspireDcpServer {
                         return;
                     }
 
-                    if (authorization.testRunSessionLease && !testRunSessionManager.isActive(authorization.testRunSessionLease.id)) {
-                        await resourceDebugSession.stopSession();
-                        testRunSessionLeaseIdByRunId.delete(runId);
-                        testRunSessionStartByRunId.delete(runId);
-                        res.status(410).end();
-                        return;
-                    }
-
                     processes.push(resourceDebugSession);
                     extensionLogOutputChannel.info(`Debugging session created with ID: ${runId}`);
 
                     runsBySession.set(runId, processes);
-                    runTelemetryById.set(runId, { startTimeMs: runSessionStartTimeMs, resourceType: supportedResourceType, mode, debugSessionId, isTestRunSession: authorization.testRunSessionLease !== undefined });
+                    runTelemetryById.set(runId, { startTimeMs: runSessionStartTimeMs, resourceType: supportedResourceType, mode, debugSessionId });
 
                     // Track aggregate stats for the parent AppHost debug session so we can
                     // emit a single `debug/apphost/end` summary when the AppHost terminates.
@@ -495,7 +417,6 @@ export default class AspireDcpServer {
                     res.status(201).set('Location', `https://${req.get('host')}/run_session/${runId}`).end();
                     extensionLogOutputChannel.info(`New run session created with ID: ${runId}`);
                 } catch (err) {
-                    completeTestRunSessionStart?.();
                     extensionLogOutputChannel.error(`Error creating debug session ${runId}: ${err}`);
 
                     // Synchronous launch failure — emit the matching end event and update
@@ -537,14 +458,20 @@ export default class AspireDcpServer {
 
             app.delete('/run_session/:id', requireHeaders, async (req: Request, res: Response) => {
                 const runId = req.params.id as string;
-                const authorization = (req as Request & { aspireDcpAuthorization: AuthorizedDcpRequest }).aspireDcpAuthorization;
-                if (authorization.testRunSessionLease && testRunSessionLeaseIdByRunId.get(runId) !== authorization.testRunSessionLease.id) {
-                    res.status(404).end();
-                    return;
-                }
+                if (runsBySession.has(runId)) {
+                    const baseDebugSessions = runsBySession.get(runId);
+                    for (const debugSession of baseDebugSessions || []) {
+                        debugSession.stopSession();
+                    }
 
-                const stopped = await dcpServerInstance?.stopRunSession(runId);
-                res.status(stopped ? 200 : 204).end();
+                    runsBySession.delete(runId);
+                    // Map cleanup happens when the corresponding sessionTerminated
+                    // notification is sent; don't pre-delete here or we'd miss the
+                    // end event.
+                    res.status(200).end();
+                } else {
+                    res.status(204).end();
+                }
             });
 
 
@@ -577,8 +504,8 @@ export default class AspireDcpServer {
                         socket.destroy();
                         return;
                     }
-                    const authorization = authorizeDcpRequest(authHeader ?? '', dcpId);
-                    if (typeof authorization === 'string') {
+                    const authResult = validateBearerToken(authHeader);
+                    if (authResult.kind !== 'ok') {
                         socket.write('HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n');
                         socket.destroy();
                         return;
@@ -623,9 +550,7 @@ export default class AspireDcpServer {
                         token: token,
                         certificate: certBase64
                     };
-                    testRunSessionManager.initializeConnectionInfo(info);
-                    dcpServerInstance = new AspireDcpServer(info, server, wss, runsBySession, testRunSessionLeaseIdByRunId, testRunSessionStartByRunId, wsBySession, pendingNotificationQueueByDcpId, dashboardTelemetry, runTelemetryById, debugSessionStats, testRunSessionManager);
-                    resolve(dcpServerInstance);
+                    resolve(new AspireDcpServer(info, app, server, wss, wsBySession, pendingNotificationQueueByDcpId, dashboardTelemetry, runTelemetryById, debugSessionStats));
                 } else {
                     reject(new Error('Failed to get server address'));
                 }
@@ -633,69 +558,6 @@ export default class AspireDcpServer {
 
             server.on('error', reject);
         });
-    }
-
-    acquireTestRunSession(options: TestRunSessionAcquireOptions): AcquiredTestRunSession {
-        return this.testRunSessionManager.acquire(options);
-    }
-
-    async releaseTestRunSession(id: string): Promise<void> {
-        const lease = this.testRunSessionManager.release(id);
-        if (!lease) {
-            return;
-        }
-
-        const runIds = Array.from(this.testRunSessionLeaseIdByRunId.entries())
-            .filter(([, leaseId]) => leaseId === id)
-            .map(([runId]) => runId);
-        for (const runId of runIds) {
-            await this.stopRunSession(runId);
-        }
-
-        this.closeLeaseNotificationConnections(lease);
-    }
-
-    private async stopRunSession(runId: string): Promise<boolean> {
-        const startup = this.testRunSessionStartByRunId.get(runId);
-        if (startup) {
-            await startup;
-        }
-
-        const debugSessions = this.runsBySession.get(runId);
-        if (!debugSessions) {
-            this.testRunSessionLeaseIdByRunId.delete(runId);
-            this.testRunSessionStartByRunId.delete(runId);
-            return false;
-        }
-
-        for (const debugSession of debugSessions) {
-            try {
-                await debugSession.stopSession();
-            }
-            catch (error) {
-                extensionLogOutputChannel.error(`Error stopping debug session ${debugSession.id}: ${error}`);
-            }
-        }
-
-        this.runsBySession.delete(runId);
-        this.testRunSessionLeaseIdByRunId.delete(runId);
-        this.testRunSessionStartByRunId.delete(runId);
-        return true;
-    }
-
-    private closeLeaseNotificationConnections(lease: TestRunSessionLease): void {
-        for (const [dcpId, ws] of this.wsBySession) {
-            if (dcpId.startsWith(`${lease.sessionId}-`)) {
-                ws.close(1000, 'Test run session released');
-                this.wsBySession.delete(dcpId);
-            }
-        }
-
-        for (const dcpId of this.pendingNotificationQueueByDcpId.keys()) {
-            if (dcpId.startsWith(`${lease.sessionId}-`)) {
-                this.pendingNotificationQueueByDcpId.delete(dcpId);
-            }
-        }
     }
 
     sendNotification(notification: RunSessionNotification) {
@@ -783,20 +645,6 @@ export default class AspireDcpServer {
     }
 
     public dispose(): void {
-        for (const debugSessions of this.runsBySession.values()) {
-            for (const debugSession of debugSessions) {
-                try {
-                    void debugSession.stopSession();
-                }
-                catch (error) {
-                    extensionLogOutputChannel.error(`Error stopping debug session ${debugSession.id}: ${error}`);
-                }
-            }
-        }
-        this.runsBySession.clear();
-        this.testRunSessionLeaseIdByRunId.clear();
-        this.testRunSessionStartByRunId.clear();
-
         // Send WebSocket close message to all clients before shutting down
         if (this.wss) {
             this.wss.clients.forEach(client => {

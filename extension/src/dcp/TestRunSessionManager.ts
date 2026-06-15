@@ -1,4 +1,4 @@
-import { randomBytes, timingSafeEqual } from 'crypto';
+import { randomBytes } from 'crypto';
 import * as vscode from 'vscode';
 import { getRunSessionInfo, getSupportedCapabilities } from '../capabilities';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
@@ -94,7 +94,7 @@ export class TestRunSessionManager {
         return this.tryGetLeaseForSessionId(dcpInstanceIdPrefix.replace(/-$/, ''));
     }
 
-    acquire(options: TestRunSessionAcquireOptions): AcquiredTestRunSession {
+    acquireTestRunSession(options: TestRunSessionAcquireOptions): AcquiredTestRunSession {
         if (!this.connectionInfo) {
             throw new Error('Test run session manager has not been initialized with DCP server connection information.');
         }
@@ -125,7 +125,14 @@ export class TestRunSessionManager {
         };
     }
 
-    release(id: string): TestRunSessionLease | undefined {
+    async releaseTestRunSession(id: string): Promise<void> {
+        const lease = this.releaseLease(id);
+        if (!lease) {
+            return;
+        }
+    }
+
+    private releaseLease(id: string): TestRunSessionLease | undefined {
         const lease = this.leases.get(id);
         this.leases.delete(id);
         this.removeLeasedDebugSession(id);
@@ -149,25 +156,6 @@ export class TestRunSessionManager {
         }
 
         return true;
-    }
-
-    tryAuthorizeDcpRequest(dcpId: string, token: string): TestRunSessionLease | undefined {
-        const lease = this.tryGetLeaseForDcpId(dcpId);
-        if (!lease) {
-            return undefined;
-        }
-
-        const bearerTokenBuffer = Buffer.from(token);
-        const expectedTokenBuffer = Buffer.from(lease.token);
-        if (bearerTokenBuffer.length !== expectedTokenBuffer.length) {
-            return undefined;
-        }
-
-        if (timingSafeEqual(bearerTokenBuffer, expectedTokenBuffer) === false) {
-            return undefined;
-        }
-
-        return lease;
     }
 
     tryGetLeaseForDcpId(dcpId: string): TestRunSessionLease | undefined {
