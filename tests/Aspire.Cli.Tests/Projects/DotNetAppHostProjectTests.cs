@@ -8,7 +8,6 @@ using Aspire.Cli.Packaging;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
-using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
@@ -334,7 +333,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         {
             Assert.Equal("staging", packagingService.LastRequestedChannelName);
             AssertRegeneratedModuleNuGetConfig(modulesDirectory, nuGetConfigPath, oldSource, currentSource);
-            WriteEmptyIntegrationClosureFiles(appHostFile);
+            TestHelpers.WriteEmptyIntegrationClosureFiles(appHostFile);
             return 0;
         };
 
@@ -422,7 +421,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.False(File.Exists(Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.targets")));
             Assert.Contains("Aspire.Hosting.Redis", File.ReadAllText(moduleProjectPath));
 
-            WriteEmptyIntegrationClosureFiles(appHostFile);
+            TestHelpers.WriteEmptyIntegrationClosureFiles(appHostFile);
             return 0;
         };
 
@@ -2157,29 +2156,6 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             .ToArray();
         Assert.Contains(currentSource, packageSources);
         Assert.DoesNotContain(oldSource, packageSources);
-    }
-
-    private static void WriteEmptyIntegrationClosureFiles(FileInfo appHostFile)
-    {
-        WriteEmptyIntegrationClosureFilesCore(appHostFile);
-
-        var canonicalAppHostFile = new FileInfo(PathNormalizer.ResolveToFilesystemPath(appHostFile.FullName));
-        var pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-        if (!pathComparer.Equals(appHostFile.FullName, canonicalAppHostFile.FullName))
-        {
-            WriteEmptyIntegrationClosureFilesCore(canonicalAppHostFile);
-        }
-
-        static void WriteEmptyIntegrationClosureFilesCore(FileInfo appHostFile)
-        {
-            var workingDir = IntegrationClosureRestorer.GetOrCreateWorkingDirectory(appHostFile);
-            var restoreDir = Path.Combine(workingDir.FullName, IntegrationClosureBuilder.IntegrationRestoreFolderName);
-            Directory.CreateDirectory(restoreDir);
-            File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureBuilder.ClosureSourcesFileName), string.Empty);
-            File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureBuilder.ClosureMetadataFileName), string.Empty);
-            File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureBuilder.ClosureTargetsFileName), string.Empty);
-            File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureBuilder.ProjectRefAssemblyNamesFileName), string.Empty);
-        }
     }
 
     private static void WriteAspireConfigJson(string directory, string content)

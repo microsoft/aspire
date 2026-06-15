@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Configuration;
@@ -157,7 +156,7 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper)
 
                     // Stub out the closure-manifest files MSBuild would emit so the restorer
                     // post-processes them into a probe manifest.
-                    WriteEmptyIntegrationClosureFiles(appHostFile);
+                    TestHelpers.WriteEmptyIntegrationClosureFiles(appHostFile);
 
                     return (int)Aspire.Cli.CliExitCodes.Success;
                 }
@@ -172,29 +171,6 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(Aspire.Cli.CliExitCodes.Success, exitCode);
         Assert.True(buildCalled);
-    }
-
-    private static void WriteEmptyIntegrationClosureFiles(FileInfo appHostFile)
-    {
-        WriteEmptyIntegrationClosureFilesCore(appHostFile);
-
-        var canonicalAppHostFile = new FileInfo(PathNormalizer.ResolveToFilesystemPath(appHostFile.FullName));
-        var pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-        if (!pathComparer.Equals(appHostFile.FullName, canonicalAppHostFile.FullName))
-        {
-            WriteEmptyIntegrationClosureFilesCore(canonicalAppHostFile);
-        }
-
-        static void WriteEmptyIntegrationClosureFilesCore(FileInfo appHostFile)
-        {
-            var workingDir = IntegrationClosureRestorer.GetOrCreateWorkingDirectory(appHostFile);
-            var restoreDir = Path.Combine(workingDir.FullName, IntegrationClosureBuilder.IntegrationRestoreFolderName);
-            Directory.CreateDirectory(restoreDir);
-            File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureBuilder.ClosureSourcesFileName), string.Empty);
-            File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureBuilder.ClosureMetadataFileName), string.Empty);
-            File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureBuilder.ClosureTargetsFileName), string.Empty);
-            File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureBuilder.ProjectRefAssemblyNamesFileName), string.Empty);
-        }
     }
 
     [Fact]
