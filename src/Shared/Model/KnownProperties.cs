@@ -77,3 +77,19 @@ internal static class KnownProperties
         public const string ExecArgs = "tool.execArgs";
     }
 }
+
+/// <summary>
+/// Defines dashboard sort order values for known resource properties.
+/// </summary>
+internal static class KnownResourcePropertySortOrder
+{
+    public const int DisplayName = 0;
+    public const int State = 1;
+    public const int HealthState = 2;
+    public const int StartTime = 3;
+    public const int StopTime = 4;
+    public const int ExitCode = 5;
+    public const int ConnectionString = 6;
+
+    public const int FirstResourceSpecific = ConnectionString + 1;
+}

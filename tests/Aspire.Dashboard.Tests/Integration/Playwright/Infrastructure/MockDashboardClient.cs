@@ -25,7 +25,9 @@ public sealed class MockDashboardClient : IDashboardClient
                     },
                     isValueSensitive: false,
                     knownProperty: new(KnownProperties.Project.Path, loc => "Path"),
-                    priority: 0))
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false))
         }.ToDictionary(),
         state: KnownResourceState.Running);
 

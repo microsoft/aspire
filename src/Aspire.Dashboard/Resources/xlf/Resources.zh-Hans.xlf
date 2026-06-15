@@ -112,59 +112,9 @@
         <target state="translated">连接字符串</target>
         <note />
       </trans-unit>
-      <trans-unit id="ResourcesDetailsContainerArgumentsProperty">
-        <source>Container arguments</source>
-        <target state="translated">容器参数</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcesDetailsContainerCommandProperty">
-        <source>Container command</source>
-        <target state="translated">容器命令</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcesDetailsContainerIdProperty">
-        <source>Container ID</source>
-        <target state="translated">容器 ID</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcesDetailsContainerImageProperty">
-        <source>Container image</source>
-        <target state="translated">容器映像</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcesDetailsContainerLifetimeProperty">
-        <source>Container lifetime</source>
-        <target state="translated">容器生存期</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcesDetailsContainerPortsProperty">
-        <source>Container ports</source>
-        <target state="translated">容器端口</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ResourcesDetailsDisplayNameProperty">
         <source>Display name</source>
         <target state="translated">显示名称</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcesDetailsExecutableArgumentsProperty">
-        <source>Executable arguments</source>
-        <target state="translated">可执行参数</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcesDetailsExecutablePathProperty">
-        <source>Executable path</source>
-        <target state="translated">可执行路径</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcesDetailsExecutableProcessIdProperty">
-        <source>Process ID</source>
-        <target state="translated">进程 ID</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcesDetailsExecutableWorkingDirectoryProperty">
-        <source>Working directory</source>
-        <target state="translated">工作目录</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsExitCodeProperty">
@@ -175,21 +125,6 @@
       <trans-unit id="ResourcesDetailsHealthStateProperty">
         <source>Health state</source>
         <target state="translated">运行状况状态</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcesDetailsParameterValueProperty">
-        <source>Value</source>
-        <target state="translated">值</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcesDetailsProjectPathProperty">
-        <source>Project path</source>
-        <target state="translated">项目路径</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcesDetailsProjectLaunchProfileProperty">
-        <source>Launch profile</source>
-        <target state="translated">启动配置文件</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsStartTimeProperty">

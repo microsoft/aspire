@@ -112,59 +112,9 @@
         <target state="translated">Parametry połączenia</target>
         <note />
       </trans-unit>
-      <trans-unit id="ResourcesDetailsContainerArgumentsProperty">
-        <source>Container arguments</source>
-        <target state="translated">Argumenty kontenera</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcesDetailsContainerCommandProperty">
-        <source>Container command</source>
-        <target state="translated">Polecenie kontenera</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcesDetailsContainerIdProperty">
-        <source>Container ID</source>
-        <target state="translated">Identyfikator kontenera</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcesDetailsContainerImageProperty">
-        <source>Container image</source>
-        <target state="translated">Obraz kontenera</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcesDetailsContainerLifetimeProperty">
-        <source>Container lifetime</source>
-        <target state="translated">Okres istnienia kontenera</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcesDetailsContainerPortsProperty">
-        <source>Container ports</source>
-        <target state="translated">Porty kontenerów</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ResourcesDetailsDisplayNameProperty">
         <source>Display name</source>
         <target state="translated">Nazwa wyświetlana</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcesDetailsExecutableArgumentsProperty">
-        <source>Executable arguments</source>
-        <target state="translated">Argumenty pliku wykonywalnego</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcesDetailsExecutablePathProperty">
-        <source>Executable path</source>
-        <target state="translated">Ścieżka pliku wykonywalnego</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcesDetailsExecutableProcessIdProperty">
-        <source>Process ID</source>
-        <target state="translated">Identyfikator procesu</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcesDetailsExecutableWorkingDirectoryProperty">
-        <source>Working directory</source>
-        <target state="translated">Katalog roboczy</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsExitCodeProperty">
@@ -175,21 +125,6 @@
       <trans-unit id="ResourcesDetailsHealthStateProperty">
         <source>Health state</source>
         <target state="translated">Stan kondycji</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcesDetailsParameterValueProperty">
-        <source>Value</source>
-        <target state="translated">Wartość</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcesDetailsProjectPathProperty">
-        <source>Project path</source>
-        <target state="translated">Ścieżka projektu</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcesDetailsProjectLaunchProfileProperty">
-        <source>Launch profile</source>
-        <target state="translated">Uruchom profil</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsStartTimeProperty">

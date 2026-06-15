@@ -163,44 +163,8 @@
   <data name="ResourcesNoParameters" xml:space="preserve">
     <value>No parameters found</value>
   </data>
-  <data name="ResourcesDetailsContainerArgumentsProperty" xml:space="preserve">
-    <value>Container arguments</value>
-  </data>
-  <data name="ResourcesDetailsContainerCommandProperty" xml:space="preserve">
-    <value>Container command</value>
-  </data>
-  <data name="ResourcesDetailsContainerIdProperty" xml:space="preserve">
-    <value>Container ID</value>
-  </data>
-  <data name="ResourcesDetailsContainerImageProperty" xml:space="preserve">
-    <value>Container image</value>
-  </data>
-  <data name="ResourcesDetailsContainerPortsProperty" xml:space="preserve">
-    <value>Container ports</value>
-  </data>
-  <data name="ResourcesDetailsContainerLifetimeProperty" xml:space="preserve">
-    <value>Container lifetime</value>
-  </data>
   <data name="ResourcesDetailsDisplayNameProperty" xml:space="preserve">
     <value>Display name</value>
-  </data>
-  <data name="ResourcesDetailsExecutableArgumentsProperty" xml:space="preserve">
-    <value>Executable arguments</value>
-  </data>
-  <data name="ResourcesDetailsExecutablePathProperty" xml:space="preserve">
-    <value>Executable path</value>
-  </data>
-  <data name="ResourcesDetailsExecutableProcessIdProperty" xml:space="preserve">
-    <value>Process ID</value>
-  </data>
-  <data name="ResourcesDetailsExecutableWorkingDirectoryProperty" xml:space="preserve">
-    <value>Working directory</value>
-  </data>
-  <data name="ResourcesDetailsProjectPathProperty" xml:space="preserve">
-    <value>Project path</value>
-  </data>
-  <data name="ResourcesDetailsProjectLaunchProfileProperty" xml:space="preserve">
-    <value>Launch profile</value>
   </data>
   <data name="ResourcesDetailsStartTimeProperty" xml:space="preserve">
     <value>Start time</value>
@@ -301,9 +265,6 @@
   </data>
   <data name="ResourcesShowTypes" xml:space="preserve">
     <value>Show resource types</value>
-  </data>
-  <data name="ResourcesDetailsParameterValueProperty" xml:space="preserve">
-    <value>Value</value>
   </data>
   <data name="TotalItemsFooterSingularText" xml:space="preserve">
     <value>Showing &lt;strong&gt;{0} resource&lt;/strong&gt;</value>

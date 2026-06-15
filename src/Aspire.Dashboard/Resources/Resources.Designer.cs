@@ -259,101 +259,11 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Container arguments.
-        /// </summary>
-        public static string ResourcesDetailsContainerArgumentsProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsContainerArgumentsProperty", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Container command.
-        /// </summary>
-        public static string ResourcesDetailsContainerCommandProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsContainerCommandProperty", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Container ID.
-        /// </summary>
-        public static string ResourcesDetailsContainerIdProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsContainerIdProperty", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Container image.
-        /// </summary>
-        public static string ResourcesDetailsContainerImageProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsContainerImageProperty", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Container lifetime.
-        /// </summary>
-        public static string ResourcesDetailsContainerLifetimeProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsContainerLifetimeProperty", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Container ports.
-        /// </summary>
-        public static string ResourcesDetailsContainerPortsProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsContainerPortsProperty", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Display name.
         /// </summary>
         public static string ResourcesDetailsDisplayNameProperty {
             get {
                 return ResourceManager.GetString("ResourcesDetailsDisplayNameProperty", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Executable arguments.
-        /// </summary>
-        public static string ResourcesDetailsExecutableArgumentsProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsExecutableArgumentsProperty", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Executable path.
-        /// </summary>
-        public static string ResourcesDetailsExecutablePathProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsExecutablePathProperty", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Process ID.
-        /// </summary>
-        public static string ResourcesDetailsExecutableProcessIdProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsExecutableProcessIdProperty", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Working directory.
-        /// </summary>
-        public static string ResourcesDetailsExecutableWorkingDirectoryProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsExecutableWorkingDirectoryProperty", resourceCulture);
             }
         }
         
@@ -372,33 +282,6 @@ namespace Aspire.Dashboard.Resources {
         public static string ResourcesDetailsHealthStateProperty {
             get {
                 return ResourceManager.GetString("ResourcesDetailsHealthStateProperty", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Value.
-        /// </summary>
-        public static string ResourcesDetailsParameterValueProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsParameterValueProperty", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Project path.
-        /// </summary>
-        public static string ResourcesDetailsProjectPathProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsProjectPathProperty", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Launch profile.
-        /// </summary>
-        public static string ResourcesDetailsProjectLaunchProfileProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsProjectLaunchProfileProperty", resourceCulture);
             }
         }
         

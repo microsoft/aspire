@@ -19,9 +19,7 @@ namespace Aspire.Hosting.ApplicationModel;
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Tool = {ToolConfiguration?.PackageId}")]
 public class DotnetToolResource : ExecutableResource
 {
-    // Generic resource properties are still ordered by the dashboard as 0-6. Tool-specific
-    // properties start after those values so they appear after state/health/timing details.
-    private const int FirstToolSpecificSortOrder = 7;
+    private const int FirstToolSpecificSortOrder = KnownResourcePropertySortOrder.FirstResourceSpecific;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DotnetToolResource"/> class.

@@ -159,16 +159,15 @@ partial class Resource
 
         foreach (var property in properties)
         {
-            var (priority, knownProperty) = knownPropertyLookup.FindProperty(ResourceType, property.Name);
+            var (sortOrder, knownProperty) = knownPropertyLookup.FindProperty(property.Name);
             var propertyViewModel = new ResourcePropertyViewModel(
                 name: ValidateNotNull(property.Name),
                 value: ValidateNotNull(property.Value),
                 isValueSensitive: property.IsSensitive,
                 knownProperty: knownProperty,
-                priority: priority,
+                sortOrder: property.HasSortOrder ? property.SortOrder : sortOrder,
                 displayName: property.HasDisplayName ? property.DisplayName : null,
-                isHighlighted: property.IsHighlighted,
-                sortOrder: property.HasSortOrder ? property.SortOrder : null)
+                isHighlighted: property.IsHighlighted)
             {
                 IsValueMasked = property.IsSensitive
             };

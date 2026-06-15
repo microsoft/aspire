@@ -13,25 +13,34 @@ public class KnownPropertyLookupTests
     {
         var lookup = new KnownPropertyLookup();
 
-        var (priority, knownProperty) = lookup.FindProperty(KnownResourceTypes.Container, KnownProperties.Resource.State);
+        var (sortOrder, knownProperty) = lookup.FindProperty(KnownProperties.Resource.State);
 
-        Assert.NotEqual(int.MaxValue, priority);
+        Assert.NotEqual(int.MaxValue, sortOrder);
         Assert.NotNull(knownProperty);
         Assert.Equal(KnownProperties.Resource.State, knownProperty.Key);
     }
 
     [Theory]
-    [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Image)]
-    [InlineData(KnownResourceTypes.Executable, KnownProperties.Executable.Path)]
-    [InlineData(KnownResourceTypes.Project, KnownProperties.Project.Path)]
-    [InlineData(KnownResourceTypes.Parameter, KnownProperties.Parameter.Value)]
-    public void FindProperty_ProducerSuppliedPropertyMetadata_ReturnsUnknownProperty(string resourceType, string propertyName)
+    [InlineData(KnownProperties.Project.Path)]
+    [InlineData(KnownProperties.Project.LaunchProfile)]
+    [InlineData(KnownProperties.Executable.Path)]
+    [InlineData(KnownProperties.Executable.WorkDir)]
+    [InlineData(KnownProperties.Executable.Args)]
+    [InlineData(KnownProperties.Executable.Pid)]
+    [InlineData(KnownProperties.Container.Image)]
+    [InlineData(KnownProperties.Container.Id)]
+    [InlineData(KnownProperties.Container.Command)]
+    [InlineData(KnownProperties.Container.Args)]
+    [InlineData(KnownProperties.Container.Ports)]
+    [InlineData(KnownProperties.Container.Lifetime)]
+    [InlineData(KnownProperties.Parameter.Value)]
+    public void FindProperty_ProducerSuppliedPropertyMetadata_ReturnsUnknownProperty(string propertyName)
     {
         var lookup = new KnownPropertyLookup();
 
-        var (priority, knownProperty) = lookup.FindProperty(resourceType, propertyName);
+        var (sortOrder, knownProperty) = lookup.FindProperty(propertyName);
 
-        Assert.Equal(int.MaxValue, priority);
+        Assert.Equal(int.MaxValue, sortOrder);
         Assert.Null(knownProperty);
     }
 }

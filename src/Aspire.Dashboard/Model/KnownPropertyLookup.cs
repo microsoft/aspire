@@ -7,35 +7,34 @@ namespace Aspire.Dashboard.Model;
 
 public interface IKnownPropertyLookup
 {
-    (int priority, KnownProperty? knownProperty) FindProperty(string resourceType, string uid);
+    (int SortOrder, KnownProperty? KnownProperty) FindProperty(string uid);
 }
 
 public sealed class KnownPropertyLookup : IKnownPropertyLookup
 {
-    private readonly List<KnownProperty> _resourceProperties;
+    private readonly List<(KnownProperty Property, int SortOrder)> _resourceProperties;
 
     public KnownPropertyLookup()
     {
         _resourceProperties =
         [
-            new(KnownProperties.Resource.DisplayName, loc => loc[nameof(ResourcesDetailsDisplayNameProperty)]),
-            new(KnownProperties.Resource.State, loc => loc[nameof(ResourcesDetailsStateProperty)]),
-            new(KnownProperties.Resource.HealthState, loc => loc[nameof(ResourcesDetailsHealthStateProperty)]),
-            new(KnownProperties.Resource.StartTime, loc => loc[nameof(ResourcesDetailsStartTimeProperty)]),
-            new(KnownProperties.Resource.StopTime, loc => loc[nameof(ResourcesDetailsStopTimeProperty)]),
-            new(KnownProperties.Resource.ExitCode, loc => loc[nameof(ResourcesDetailsExitCodeProperty)]),
-            new(KnownProperties.Resource.ConnectionString, loc => loc[nameof(ResourcesDetailsConnectionStringProperty)])
+            new(new(KnownProperties.Resource.DisplayName, loc => loc[nameof(ResourcesDetailsDisplayNameProperty)]), KnownResourcePropertySortOrder.DisplayName),
+            new(new(KnownProperties.Resource.State, loc => loc[nameof(ResourcesDetailsStateProperty)]), KnownResourcePropertySortOrder.State),
+            new(new(KnownProperties.Resource.HealthState, loc => loc[nameof(ResourcesDetailsHealthStateProperty)]), KnownResourcePropertySortOrder.HealthState),
+            new(new(KnownProperties.Resource.StartTime, loc => loc[nameof(ResourcesDetailsStartTimeProperty)]), KnownResourcePropertySortOrder.StartTime),
+            new(new(KnownProperties.Resource.StopTime, loc => loc[nameof(ResourcesDetailsStopTimeProperty)]), KnownResourcePropertySortOrder.StopTime),
+            new(new(KnownProperties.Resource.ExitCode, loc => loc[nameof(ResourcesDetailsExitCodeProperty)]), KnownResourcePropertySortOrder.ExitCode),
+            new(new(KnownProperties.Resource.ConnectionString, loc => loc[nameof(ResourcesDetailsConnectionStringProperty)]), KnownResourcePropertySortOrder.ConnectionString)
         ];
     }
 
-    public (int priority, KnownProperty? knownProperty) FindProperty(string resourceType, string uid)
+    public (int SortOrder, KnownProperty? KnownProperty) FindProperty(string uid)
     {
-        for (var i = 0; i < _resourceProperties.Count; i++)
+        foreach (var property in _resourceProperties)
         {
-            var kp = _resourceProperties[i];
-            if (kp.Key == uid)
+            if (property.Property.Key == uid)
             {
-                return (i, kp);
+                return (property.SortOrder, property.Property);
             }
         }
 

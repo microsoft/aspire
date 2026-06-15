@@ -430,7 +430,9 @@ public class ResourceDetailsTests : DashboardTestContext
                     Value.ForList(Value.ForString("nginx-abcxyz"), Value.ForString("redis")),
                     isValueSensitive: false,
                     knownProperty: null,
-                    priority: 0)
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false)
             });
 
         var cut = RenderComponent<ResourceDetails>(builder =>
@@ -463,7 +465,9 @@ public class ResourceDetailsTests : DashboardTestContext
                 Value.ForNull(),
                 isValueSensitive: false,
                 knownProperty: new KnownProperty(KnownProperties.Resource.State, _ => Aspire.Dashboard.Resources.Resources.ResourcesDetailsStateProperty),
-                priority: 0)
+                sortOrder: 0,
+                displayName: null,
+                isHighlighted: false)
         };
 
         var resource = ModelTestHelpers.CreateResource(
@@ -493,7 +497,7 @@ public class ResourceDetailsTests : DashboardTestContext
                 Value.ForString("The provider reported a recoverable deployment error."),
                 isValueSensitive: false,
                 knownProperty: null,
-                priority: int.MaxValue,
+                sortOrder: int.MaxValue,
                 displayName: "Provider diagnostic",
                 isHighlighted: true),
             ["provider.diagnostic.secret"] = new(
@@ -501,7 +505,7 @@ public class ResourceDetailsTests : DashboardTestContext
                 Value.ForString("Sensitive provider diagnostic detail."),
                 isValueSensitive: true,
                 knownProperty: null,
-                priority: int.MaxValue,
+                sortOrder: int.MaxValue,
                 displayName: "Provider secret",
                 isHighlighted: true),
             ["provider.diagnostic.hidden"] = new(
@@ -509,7 +513,9 @@ public class ResourceDetailsTests : DashboardTestContext
                 Value.ForString("This should require show all."),
                 isValueSensitive: false,
                 knownProperty: null,
-                priority: int.MaxValue)
+                sortOrder: int.MaxValue,
+                displayName: null,
+                isHighlighted: false)
         };
 
         var resource = ModelTestHelpers.CreateResource(
@@ -544,6 +550,7 @@ public class ResourceDetailsTests : DashboardTestContext
     public void Render_ProducerSuppliedSortOrder_OrdersUnknownHighlightedProperties()
     {
         ResourceSetupHelpers.SetupResourceDetails(this);
+        var firstResourceSpecificSortOrder = KnownResourcePropertySortOrder.FirstResourceSpecific;
 
         var properties = new Dictionary<string, ResourcePropertyViewModel>
         {
@@ -552,34 +559,31 @@ public class ResourceDetailsTests : DashboardTestContext
                 Value.ForString("redis-server"),
                 isValueSensitive: false,
                 knownProperty: null,
-                priority: int.MaxValue,
                 displayName: "Container command",
                 isHighlighted: true,
-                sortOrder: 9),
+                sortOrder: firstResourceSpecificSortOrder + 2),
             [KnownProperties.Container.Image] = new(
                 KnownProperties.Container.Image,
                 Value.ForString("redis:latest"),
                 isValueSensitive: false,
                 knownProperty: null,
-                priority: int.MaxValue,
                 displayName: "Container image",
                 isHighlighted: true,
-                sortOrder: 7),
+                sortOrder: firstResourceSpecificSortOrder),
             [KnownProperties.Container.Id] = new(
                 KnownProperties.Container.Id,
                 Value.ForString("1234567890abcdef"),
                 isValueSensitive: false,
                 knownProperty: null,
-                priority: int.MaxValue,
                 displayName: "Container ID",
                 isHighlighted: true,
-                sortOrder: 8),
+                sortOrder: firstResourceSpecificSortOrder + 1),
             ["provider.diagnostic"] = new(
                 "provider.diagnostic",
                 Value.ForString("diagnostic"),
                 isValueSensitive: false,
                 knownProperty: null,
-                priority: int.MaxValue,
+                sortOrder: int.MaxValue,
                 displayName: "AAA provider diagnostic",
                 isHighlighted: true)
         };
@@ -932,7 +936,6 @@ public class ResourceDetailsTests : DashboardTestContext
             Value.ForString(value),
             isValueSensitive,
             knownProperty: null,
-            priority: int.MaxValue,
             displayName: "Value",
             isHighlighted: true,
             sortOrder: 0);

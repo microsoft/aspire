@@ -175,10 +175,9 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
                         value: property.Value,
                         isValueSensitive: false,
                         knownProperty: property.KnownProperty,
-                        priority: property.Priority,
+                        sortOrder: property.SortOrder,
                         displayName: property.DisplayName,
-                        isHighlighted: property.IsHighlighted,
-                        sortOrder: property.SortOrder);
+                        isHighlighted: property.IsHighlighted);
                 }
 
                 _displayedResourcePropertyViewModels.Add(new DisplayedResourcePropertyViewModel(displayedProperty, Loc, TimeProvider));
@@ -400,7 +399,9 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
                 value: Value.ForString(stateDescription),
                 isValueSensitive: false,
                 knownProperty: new KnownProperty(StateDescriptionPropertyKey, _ => ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsStateDescriptionHeader)]),
-                priority: 1),
+                sortOrder: KnownResourcePropertySortOrder.State,
+                displayName: null,
+                isHighlighted: false),
             Loc,
             TimeProvider));
     }

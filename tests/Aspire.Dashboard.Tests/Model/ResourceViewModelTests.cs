@@ -135,7 +135,7 @@ public sealed class ResourceViewModelTests
                 Assert.Equal("Property1", p.Key);
                 Assert.Equal("Property1", p.Value.Name);
                 Assert.Equal("Value1", p.Value.Value.StringValue);
-                Assert.Equal(123, p.Value.Priority);
+                Assert.Equal(123, p.Value.SortOrder);
                 Assert.Same(kp, p.Value.KnownProperty);
                 Assert.Equal("Property one", p.Value.DisplayName);
                 Assert.True(p.Value.IsHighlighted);
@@ -147,7 +147,7 @@ public sealed class ResourceViewModelTests
                 Assert.Equal("Property2", p.Key);
                 Assert.Equal("Property2", p.Value.Name);
                 Assert.Equal("Value2", p.Value.Value.StringValue);
-                Assert.Equal(123, p.Value.Priority);
+                Assert.Equal(123, p.Value.SortOrder);
                 Assert.Same(kp, p.Value.KnownProperty);
                 Assert.Null(p.Value.DisplayName);
                 Assert.False(p.Value.IsHighlighted);
@@ -174,7 +174,7 @@ public sealed class ResourceViewModelTests
                     Value = Value.ForString("redis:latest"),
                     DisplayName = "Container image",
                     IsHighlighted = true,
-                    SortOrder = 7
+                    SortOrder = KnownResourcePropertySortOrder.FirstResourceSpecific
                 }
             }
         };
@@ -186,8 +186,7 @@ public sealed class ResourceViewModelTests
         var property = vm.Properties[KnownProperties.Container.Image];
         Assert.Equal("Container image", property.DisplayName);
         Assert.True(property.IsHighlighted);
-        Assert.Equal(int.MaxValue, property.Priority);
-        Assert.Equal(7, property.SortOrder);
+        Assert.Equal(KnownResourcePropertySortOrder.FirstResourceSpecific, property.SortOrder);
         Assert.Null(property.KnownProperty);
     }
 

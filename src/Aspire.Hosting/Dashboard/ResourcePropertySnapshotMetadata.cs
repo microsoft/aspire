@@ -17,9 +17,9 @@ namespace Aspire.Hosting.Dashboard;
 /// </remarks>
 internal static class ResourcePropertySnapshotMetadata
 {
-    // Generic resource properties are still ordered by the dashboard as 0-6. Resource-specific
+    // Generic resource properties are still ordered first by the dashboard. Resource-specific
     // properties start after those values to preserve the previous details grid order.
-    private const int FirstResourceSpecificSortOrder = 7;
+    private const int FirstResourceSpecificSortOrder = KnownResourcePropertySortOrder.FirstResourceSpecific;
 
     internal static ResourcePropertySnapshot Create(string resourceType, string name, object? value, bool isSensitive = false)
     {
