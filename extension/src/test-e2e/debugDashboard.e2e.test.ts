@@ -59,7 +59,7 @@ suite('Aspire debug dashboard E2E', function () {
         await waitForNoDebugSessions();
     });
 
-    test('keeps AppHost build diagnostics in the debug console when the CLI exits after a build failure', async function () {
+    test('surfaces AppHost build failure logs in the debug console when the CLI exits after a build failure', async function () {
         if (process.env.ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS === 'true') {
             return;
         }
@@ -82,7 +82,7 @@ suite('Aspire debug dashboard E2E', function () {
             const before = getCommandInvocationCount('aspire-vscode.debugAppHost');
             await executeE2eControlCommand({ name: 'debugAppHost', appHostPath }, { waitFor: 'started' });
             await waitForCommandOutcome('aspire-vscode.debugAppHost', 'success', 60000, before);
-            await waitForDebugConsoleOutput('__AspireE2EFlushRegressionMissingSymbol__', appHostPath, 120000);
+            await waitForDebugConsoleOutput('The project could not be built', appHostPath, 120000);
             const logOutput = await waitForDebugConsoleOutput('See logs at', appHostPath, 120000);
             const logPath = getLogPathFromDebugConsoleOutput(logOutput.output);
             await waitForLogFileText(logPath, '__AspireE2EFlushRegressionMissingSymbol__');
