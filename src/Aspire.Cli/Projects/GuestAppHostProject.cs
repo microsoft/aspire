@@ -35,6 +35,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     private readonly IInteractionService _interactionService;
     private readonly IAppHostCliBackchannel _backchannel;
     private readonly IAppHostServerProjectFactory _appHostServerProjectFactory;
+    private readonly IAppHostServerSessionFactory _appHostServerSessionFactory;
     private readonly ICertificateService _certificateService;
     private readonly IDotNetCliRunner _runner;
     private readonly IPackagingService _packagingService;
@@ -57,6 +58,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         IInteractionService interactionService,
         IAppHostCliBackchannel backchannel,
         IAppHostServerProjectFactory appHostServerProjectFactory,
+        IAppHostServerSessionFactory appHostServerSessionFactory,
         ICertificateService certificateService,
         IDotNetCliRunner runner,
         IPackagingService packagingService,
@@ -73,6 +75,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         _interactionService = interactionService;
         _backchannel = backchannel;
         _appHostServerProjectFactory = appHostServerProjectFactory;
+        _appHostServerSessionFactory = appHostServerSessionFactory;
         _certificateService = certificateService;
         _runner = runner;
         _packagingService = packagingService;
@@ -267,12 +270,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         }
 
         // Step 2: Start the AppHost server temporarily for code generation
-        await using var serverSession = AppHostServerSession.Start(
+        await using var serverSession = _appHostServerSessionFactory.Start(
             appHostServerProject,
             environmentVariables: null,
-            debug: false,
-            _logger,
-            _profilingTelemetry);
+            debug: false);
 
         // Step 3: Connect to server
         var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
@@ -285,6 +286,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             appHostFile: null,
             rpcClient,
             integrations,
+            targetSdkVersion: config.SdkVersion,
             cancellationToken);
 
         // Step 5: Install dependencies using GuestRuntime (best effort - don't block code generation)
@@ -419,16 +421,14 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             var enableHotReload = _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
 
             // Start the AppHost server process
-            AppHostServerSession serverSession;
+            IAppHostServerSession serverSession;
             IAppHostRpcClient rpcClient;
             using (_profilingTelemetry.StartRunAppHostStartAppHostServer())
             {
-                serverSession = AppHostServerSession.Start(
+                serverSession = _appHostServerSessionFactory.Start(
                     appHostServerProject,
                     launchSettingsEnvVars,
-                    context.Debug,
-                    _logger,
-                    _profilingTelemetry);
+                    context.Debug);
                 try
                 {
                     // Step 5: Connect to server for RPC calls. The connection helper retries until
@@ -446,7 +446,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                             appHostFile,
                             rpcClient,
                             integrations,
-                            cancellationToken);
+                            cancellationToken: cancellationToken);
                     }
 
                     await EnsureRuntimeCreatedAsync(directory, rpcClient, cancellationToken);
@@ -998,16 +998,14 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             launchSettingsEnvVars[KnownConfigNames.AspireUserSecretsId] = UserSecretsPathHelper.ComputeSyntheticUserSecretsId(appHostFile.FullName);
 
             // Step 2: Start the AppHost server process(it opens the backchannel for progress reporting)
-            AppHostServerSession serverSession;
+            IAppHostServerSession serverSession;
             IAppHostRpcClient rpcClient;
             using (_profilingTelemetry.StartRunAppHostStartAppHostServer())
             {
-                serverSession = AppHostServerSession.Start(
+                serverSession = _appHostServerSessionFactory.Start(
                     appHostServerProject,
                     launchSettingsEnvVars,
-                    context.Debug,
-                    _logger,
-                    _profilingTelemetry);
+                    context.Debug);
 
                 try
                 {
@@ -1026,7 +1024,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                             appHostFile,
                             rpcClient,
                             integrations,
-                            cancellationToken);
+                            cancellationToken: cancellationToken);
                     }
 
                     await EnsureRuntimeCreatedAsync(directory, rpcClient, cancellationToken);
@@ -1516,7 +1514,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         FileInfo? appHostFile,
         IAppHostRpcClient rpcClient,
         IEnumerable<IntegrationReference> integrations,
-        CancellationToken cancellationToken)
+        string? targetSdkVersion = null,
+        CancellationToken cancellationToken = default)
     {
         var integrationsList = integrations.ToList();
 
@@ -1524,7 +1523,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         // The code generator is registered by its Language property, not the runtime ID
         var codeGenerator = _resolvedLanguage.CodeGenerator;
 
-        WarnIfCliSdkVersionSkew(appPath);
+        WarnIfCliSdkVersionSkew(appPath, targetSdkVersion);
 
         _logger.LogDebug("Generating {CodeGenerator} code via RPC for {Count} packages", codeGenerator, integrationsList.Count);
 
@@ -1617,10 +1616,19 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     /// purely informational and let code-generation try first so that benign skew (e.g. a
     /// daily-build CLI against a stable SDK) doesn't block valid scenarios.
     /// </summary>
-    private void WarnIfCliSdkVersionSkew(string appPath)
+    private void WarnIfCliSdkVersionSkew(string appPath, string? targetSdkVersion = null)
     {
         try
         {
+            var cliVersion = VersionHelper.GetDefaultSdkVersion();
+
+            // When the caller is actively updating TO a version that matches the CLI,
+            // the on-disk config is stale and about to be overwritten — skip the warning.
+            if (targetSdkVersion is not null && !IsKnownIncompatibleSkew(cliVersion, targetSdkVersion))
+            {
+                return;
+            }
+
             var configDir = ConfigurationHelper.GetConfigRootDirectory(new DirectoryInfo(appPath));
             var config = AspireConfigFile.Load(configDir.FullName);
             var configuredSdkVersion = config?.SdkVersion;
@@ -1629,7 +1637,6 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 return;
             }
 
-            var cliVersion = VersionHelper.GetDefaultSdkVersion();
             if (!IsKnownIncompatibleSkew(cliVersion, configuredSdkVersion))
             {
                 return;
