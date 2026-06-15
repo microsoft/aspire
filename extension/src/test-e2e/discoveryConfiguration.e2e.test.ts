@@ -36,7 +36,7 @@ suite('Aspire workspace discovery and configuration E2E', function () {
             60000);
         assert.ok(primaryCandidate.state.workspaceAppHostCandidatePaths.length >= 1);
 
-        const secondaryAppHostPath = createAdditionalAppHostCandidate();
+        const secondaryAppHostPath = createAdditionalAppHostCandidate('AspireE2E.SecondAppHost', 'single-file');
         const refreshWithSecondCandidateBefore = getCommandInvocationCount('aspire-vscode.refreshAppHosts');
         await executeE2eControlCommand({ name: 'refreshAppHosts' });
         await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 60000, refreshWithSecondCandidateBefore);

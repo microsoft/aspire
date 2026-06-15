@@ -215,9 +215,21 @@ export function removeLegacyAspireSettings(): void {
     fs.rmSync(path.join(getWorkspaceRoot(), '.aspire'), { recursive: true, force: true });
 }
 
-export function createAdditionalAppHostCandidate(projectName = 'AspireE2E.SecondAppHost'): string {
+export function createAdditionalAppHostCandidate(projectName = 'AspireE2E.SecondAppHost', kind: 'project' | 'single-file' = 'project'): string {
     const projectDirectory = path.join(getWorkspaceRoot(), projectName);
     fs.mkdirSync(projectDirectory, { recursive: true });
+
+    if (kind === 'single-file') {
+        const appHostPath = path.join(projectDirectory, 'apphost.cs');
+        fs.writeFileSync(appHostPath, `${csharpFileHeader}#:sdk Aspire.AppHost.Sdk@${getAppHostSdkVersion()}
+
+var builder = DistributedApplication.CreateBuilder(args);
+
+builder.Build().Run();
+`);
+
+        return appHostPath;
+    }
 
     fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), `<Project Sdk="Aspire.AppHost.Sdk/${getAppHostSdkVersion()}">
 
@@ -253,6 +265,7 @@ export async function stopAppHostIfRunning(appHostPath: string): Promise<void> {
             cwd: getWorkspaceRoot(),
             timeoutMs: 60000,
         });
+        await waitForNoRunningAppHost(90000, appHostPath);
     }
     catch (error) {
         if (!(error instanceof Error)) {
@@ -438,7 +451,7 @@ function delay(ms: number): Promise<void> {
 
 function removePath(targetPath: string, options: fs.RmOptions): void {
     fs.rmSync(targetPath, {
-        maxRetries: process.platform === 'win32' ? 20 : 0,
+        maxRetries: process.platform === 'win32' ? 40 : 0,
         retryDelay: 250,
         ...options,
     });

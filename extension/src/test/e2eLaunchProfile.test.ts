@@ -301,4 +301,30 @@ suite('E2E launch profile', () => {
         assert.ok(fixtures.includes("code === 'EBUSY'"));
         assert.ok(fixtures.includes("code === 'EPERM'"));
     });
+
+    test('uses lightweight secondary AppHost candidates for discovery-only E2E coverage', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const commandPalette = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'commandPalette.e2e.test.ts'), 'utf8');
+        const discoveryConfiguration = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'discoveryConfiguration.e2e.test.ts'), 'utf8');
+
+        assert.ok(fixtures.includes("kind: 'project' | 'single-file' = 'project'"));
+        assert.ok(fixtures.includes("path.join(projectDirectory, 'apphost.cs')"));
+        assert.ok(fixtures.includes('#:sdk Aspire.AppHost.Sdk@${getAppHostSdkVersion()}'));
+        assert.ok(commandPalette.includes("createAdditionalAppHostCandidate('AspireE2E.SecondAppHost', 'single-file')"));
+        assert.ok(discoveryConfiguration.includes("createAdditionalAppHostCandidate('AspireE2E.SecondAppHost', 'single-file')"));
+    });
+
+    test('waits for running AppHosts to stop before deleting E2E fixture directories', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const stopAppHostStart = fixtures.indexOf('export async function stopAppHostIfRunning');
+        const stopAppHostEnd = fixtures.indexOf('function terminateRunningAppHostFromState');
+        assert.ok(stopAppHostStart >= 0);
+        assert.ok(stopAppHostEnd > stopAppHostStart);
+        const stopAppHost = fixtures.slice(stopAppHostStart, stopAppHostEnd);
+
+        assert.ok(stopAppHost.includes('await waitForNoRunningAppHost(90000, appHostPath);'));
+        assert.ok(fixtures.includes('maxRetries: process.platform === \'win32\' ? 40 : 0'));
+    });
 });
