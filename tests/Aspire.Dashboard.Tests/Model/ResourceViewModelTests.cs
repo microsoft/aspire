@@ -7,6 +7,7 @@ using Aspire.DashboardService.Proto.V1;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
+using DashboardResources = Aspire.Dashboard.Resources.Resources;
 using DiagnosticsHealthStatus = Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus;
 
 namespace Aspire.Dashboard.Tests.Model;
@@ -191,13 +192,22 @@ public sealed class ResourceViewModelTests
     }
 
     [Theory]
-    [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Image, KnownResourcePropertySortOrder.FirstResourceSpecific)]
-    [InlineData(KnownResourceTypes.Executable, KnownProperties.Executable.Path, KnownResourcePropertySortOrder.FirstResourceSpecific)]
-    [InlineData(KnownResourceTypes.Project, KnownProperties.Project.Path, KnownResourcePropertySortOrder.FirstResourceSpecific)]
-    [InlineData(KnownResourceTypes.Parameter, KnownProperties.Parameter.Value, KnownResourcePropertySortOrder.FirstResourceSpecific)]
-    public void ToViewModel_LegacyResourceSpecificPropertyMetadata_AppliesFallback(string resourceType, string propertyName, int expectedSortOrder)
+    [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Image, nameof(DashboardResources.ResourcesDetailsContainerImageProperty), KnownResourcePropertySortOrder.FirstResourceSpecific)]
+    [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Id, nameof(DashboardResources.ResourcesDetailsContainerIdProperty), KnownResourcePropertySortOrder.FirstResourceSpecific + 1)]
+    [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Command, nameof(DashboardResources.ResourcesDetailsContainerCommandProperty), KnownResourcePropertySortOrder.FirstResourceSpecific + 2)]
+    [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Args, nameof(DashboardResources.ResourcesDetailsContainerArgumentsProperty), KnownResourcePropertySortOrder.FirstResourceSpecific + 3)]
+    [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Ports, nameof(DashboardResources.ResourcesDetailsContainerPortsProperty), KnownResourcePropertySortOrder.FirstResourceSpecific + 4)]
+    [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Lifetime, nameof(DashboardResources.ResourcesDetailsContainerLifetimeProperty), KnownResourcePropertySortOrder.FirstResourceSpecific + 5)]
+    [InlineData(KnownResourceTypes.Executable, KnownProperties.Executable.Path, nameof(DashboardResources.ResourcesDetailsExecutablePathProperty), KnownResourcePropertySortOrder.FirstResourceSpecific)]
+    [InlineData(KnownResourceTypes.Executable, KnownProperties.Executable.WorkDir, nameof(DashboardResources.ResourcesDetailsExecutableWorkingDirectoryProperty), KnownResourcePropertySortOrder.FirstResourceSpecific + 1)]
+    [InlineData(KnownResourceTypes.Executable, KnownProperties.Executable.Args, nameof(DashboardResources.ResourcesDetailsExecutableArgumentsProperty), KnownResourcePropertySortOrder.FirstResourceSpecific + 2)]
+    [InlineData(KnownResourceTypes.Executable, KnownProperties.Executable.Pid, nameof(DashboardResources.ResourcesDetailsExecutableProcessIdProperty), KnownResourcePropertySortOrder.FirstResourceSpecific + 3)]
+    [InlineData(KnownResourceTypes.Project, KnownProperties.Project.Path, nameof(DashboardResources.ResourcesDetailsProjectPathProperty), KnownResourcePropertySortOrder.FirstResourceSpecific)]
+    [InlineData(KnownResourceTypes.Project, KnownProperties.Project.LaunchProfile, nameof(DashboardResources.ResourcesDetailsProjectLaunchProfileProperty), KnownResourcePropertySortOrder.FirstResourceSpecific + 1)]
+    [InlineData(KnownResourceTypes.Project, KnownProperties.Executable.Pid, nameof(DashboardResources.ResourcesDetailsExecutableProcessIdProperty), KnownResourcePropertySortOrder.FirstResourceSpecific + 2)]
+    [InlineData(KnownResourceTypes.Parameter, KnownProperties.Parameter.Value, nameof(DashboardResources.ResourcesDetailsParameterValueProperty), KnownResourcePropertySortOrder.FirstResourceSpecific)]
+    public void ToViewModel_LegacyBuiltInResourceSpecificPropertyMetadata_AppliesFallback(string resourceType, string propertyName, string expectedDisplayNameResourceName, int expectedSortOrder)
     {
-        // Arrange
         var resource = new Resource
         {
             Name = "resource-abc",
@@ -214,22 +224,74 @@ public sealed class ResourceViewModelTests
             }
         };
 
-        // Act
         var vm = ToViewModel(resource, new KnownPropertyLookup());
 
-        // Assert
         var property = vm.Properties[propertyName];
         Assert.Null(property.DisplayName);
         Assert.False(property.IsHighlighted);
         Assert.Equal(expectedSortOrder, property.SortOrder);
         Assert.NotNull(property.KnownProperty);
         Assert.Equal(propertyName, property.KnownProperty.Key);
+
+        var displayedProperty = new DisplayedResourcePropertyViewModel(
+            property,
+            new TestStringLocalizer<DashboardResources>(),
+            new BrowserTimeProvider(NullLoggerFactory.Instance));
+        Assert.Equal($"Localized:{expectedDisplayNameResourceName}", displayedProperty.DisplayName);
     }
 
     [Fact]
-    public void ToViewModel_ProducerMetadataPresent_DisablesLegacyFallbackForResource()
+    public void ToViewModel_LegacyBuiltInPropertyNameOnCustomResource_DoesNotApplyFallback()
     {
-        // Arrange
+        var resource = new Resource
+        {
+            Name = "resource-abc",
+            DisplayName = "resource",
+            ResourceType = "custom",
+            CreatedAt = Timestamp.FromDateTime(s_dateTime),
+            Properties =
+            {
+                new ResourceProperty
+                {
+                    Name = KnownProperties.Container.Image,
+                    Value = Value.ForString("redis:latest")
+                }
+            }
+        };
+
+        var vm = ToViewModel(resource, new KnownPropertyLookup());
+
+        var property = vm.Properties[KnownProperties.Container.Image];
+        Assert.Null(property.DisplayName);
+        Assert.False(property.IsHighlighted);
+        Assert.Equal(int.MaxValue, property.SortOrder);
+        Assert.Null(property.KnownProperty);
+    }
+
+    [Theory]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(false, false, true)]
+    public void ToViewModel_ProducerMetadataPresent_DisablesLegacyFallbackForResource(bool hasDisplayName, bool isHighlighted, bool hasSortOrder)
+    {
+        var imageProperty = new ResourceProperty
+        {
+            Name = KnownProperties.Container.Image,
+            Value = Value.ForString("redis:latest")
+        };
+        if (hasDisplayName)
+        {
+            imageProperty.DisplayName = "Producer container image";
+        }
+        if (isHighlighted)
+        {
+            imageProperty.IsHighlighted = true;
+        }
+        if (hasSortOrder)
+        {
+            imageProperty.SortOrder = KnownResourcePropertySortOrder.FirstResourceSpecific;
+        }
+
         var resource = new Resource
         {
             Name = "container-abc",
@@ -238,14 +300,7 @@ public sealed class ResourceViewModelTests
             CreatedAt = Timestamp.FromDateTime(s_dateTime),
             Properties =
             {
-                new ResourceProperty
-                {
-                    Name = KnownProperties.Container.Image,
-                    Value = Value.ForString("redis:latest"),
-                    DisplayName = "Producer container image",
-                    IsHighlighted = true,
-                    SortOrder = KnownResourcePropertySortOrder.FirstResourceSpecific
-                },
+                imageProperty,
                 new ResourceProperty
                 {
                     Name = KnownProperties.Container.Id,
@@ -254,13 +309,12 @@ public sealed class ResourceViewModelTests
             }
         };
 
-        // Act
         var vm = ToViewModel(resource, new KnownPropertyLookup());
 
-        // Assert
         var image = vm.Properties[KnownProperties.Container.Image];
-        Assert.Equal("Producer container image", image.DisplayName);
-        Assert.True(image.IsHighlighted);
+        Assert.Equal(hasDisplayName ? "Producer container image" : null, image.DisplayName);
+        Assert.Equal(isHighlighted, image.IsHighlighted);
+        Assert.Equal(hasSortOrder ? KnownResourcePropertySortOrder.FirstResourceSpecific : int.MaxValue, image.SortOrder);
         Assert.Null(image.KnownProperty);
 
         var id = vm.Properties[KnownProperties.Container.Id];
