@@ -68,6 +68,8 @@ await builder.build().run();
 
 `addPostgres` and `addRedis` become available once the matching integrations are installed with `aspire add postgresql` and `aspire add redis`.
 
+## Install
+
 This package requires Node.js 20 or later.
 
 ```bash
