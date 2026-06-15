@@ -190,6 +190,86 @@ public sealed class ResourceViewModelTests
         Assert.Null(property.KnownProperty);
     }
 
+    [Theory]
+    [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Image, KnownResourcePropertySortOrder.FirstResourceSpecific)]
+    [InlineData(KnownResourceTypes.Executable, KnownProperties.Executable.Path, KnownResourcePropertySortOrder.FirstResourceSpecific)]
+    [InlineData(KnownResourceTypes.Project, KnownProperties.Project.Path, KnownResourcePropertySortOrder.FirstResourceSpecific)]
+    [InlineData(KnownResourceTypes.Parameter, KnownProperties.Parameter.Value, KnownResourcePropertySortOrder.FirstResourceSpecific)]
+    public void ToViewModel_LegacyResourceSpecificPropertyMetadata_AppliesFallback(string resourceType, string propertyName, int expectedSortOrder)
+    {
+        // Arrange
+        var resource = new Resource
+        {
+            Name = "resource-abc",
+            DisplayName = "resource",
+            ResourceType = resourceType,
+            CreatedAt = Timestamp.FromDateTime(s_dateTime),
+            Properties =
+            {
+                new ResourceProperty
+                {
+                    Name = propertyName,
+                    Value = Value.ForString("value")
+                }
+            }
+        };
+
+        // Act
+        var vm = ToViewModel(resource, new KnownPropertyLookup());
+
+        // Assert
+        var property = vm.Properties[propertyName];
+        Assert.Null(property.DisplayName);
+        Assert.False(property.IsHighlighted);
+        Assert.Equal(expectedSortOrder, property.SortOrder);
+        Assert.NotNull(property.KnownProperty);
+        Assert.Equal(propertyName, property.KnownProperty.Key);
+    }
+
+    [Fact]
+    public void ToViewModel_ProducerMetadataPresent_DisablesLegacyFallbackForResource()
+    {
+        // Arrange
+        var resource = new Resource
+        {
+            Name = "container-abc",
+            DisplayName = "container",
+            ResourceType = KnownResourceTypes.Container,
+            CreatedAt = Timestamp.FromDateTime(s_dateTime),
+            Properties =
+            {
+                new ResourceProperty
+                {
+                    Name = KnownProperties.Container.Image,
+                    Value = Value.ForString("redis:latest"),
+                    DisplayName = "Producer container image",
+                    IsHighlighted = true,
+                    SortOrder = KnownResourcePropertySortOrder.FirstResourceSpecific
+                },
+                new ResourceProperty
+                {
+                    Name = KnownProperties.Container.Id,
+                    Value = Value.ForString("abc123")
+                }
+            }
+        };
+
+        // Act
+        var vm = ToViewModel(resource, new KnownPropertyLookup());
+
+        // Assert
+        var image = vm.Properties[KnownProperties.Container.Image];
+        Assert.Equal("Producer container image", image.DisplayName);
+        Assert.True(image.IsHighlighted);
+        Assert.Null(image.KnownProperty);
+
+        var id = vm.Properties[KnownProperties.Container.Id];
+        Assert.Null(id.DisplayName);
+        Assert.False(id.IsHighlighted);
+        Assert.Equal(int.MaxValue, id.SortOrder);
+        Assert.Null(id.KnownProperty);
+    }
+
     [Fact]
     public void ToViewModel_WithCustomIcon_SetsIconProperties()
     {

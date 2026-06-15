@@ -20,17 +20,19 @@ partial class Resource
     {
         try
         {
+            var resourceType = ValidateNotNull(ResourceType);
+
             return new()
             {
                 Name = ValidateNotNull(Name),
-                ResourceType = ValidateNotNull(ResourceType),
+                ResourceType = resourceType,
                 DisplayName = ValidateNotNull(DisplayName),
                 Uid = ValidateNotNull(Uid),
                 ReplicaIndex = replicaIndex,
                 CreationTimeStamp = ValidateNotNull(CreatedAt).ToDateTime(),
                 StartTimeStamp = StartedAt?.ToDateTime(),
                 StopTimeStamp = StoppedAt?.ToDateTime(),
-                Properties = CreatePropertyViewModels(Properties, knownPropertyLookup, logger),
+                Properties = CreatePropertyViewModels(resourceType, Properties, knownPropertyLookup, logger),
                 Environment = GetEnvironment(),
                 Urls = GetUrls(),
                 Volumes = GetVolumes(),
@@ -153,19 +155,22 @@ partial class Resource
         }
     }
 
-    private ImmutableDictionary<string, ResourcePropertyViewModel> CreatePropertyViewModels(RepeatedField<ResourceProperty> properties, IKnownPropertyLookup knownPropertyLookup, ILogger logger)
+    private ImmutableDictionary<string, ResourcePropertyViewModel> CreatePropertyViewModels(string resourceType, RepeatedField<ResourceProperty> properties, IKnownPropertyLookup knownPropertyLookup, ILogger logger)
     {
         var builder = ImmutableDictionary.CreateBuilder<string, ResourcePropertyViewModel>(StringComparers.ResourcePropertyName);
+        var useLegacyMetadata = ShouldUseLegacyResourcePropertyMetadata(resourceType, properties);
 
         foreach (var property in properties)
         {
             var (sortOrder, knownProperty) = knownPropertyLookup.FindProperty(property.Name);
+            var legacyMetadata = useLegacyMetadata ? LegacyResourcePropertyMetadata.Get(resourceType, property.Name) : null;
+
             var propertyViewModel = new ResourcePropertyViewModel(
                 name: ValidateNotNull(property.Name),
                 value: ValidateNotNull(property.Value),
                 isValueSensitive: property.IsSensitive,
-                knownProperty: knownProperty,
-                sortOrder: property.HasSortOrder ? property.SortOrder : sortOrder,
+                knownProperty: knownProperty ?? legacyMetadata?.KnownProperty,
+                sortOrder: property.HasSortOrder ? property.SortOrder : legacyMetadata?.SortOrder ?? sortOrder,
                 displayName: property.HasDisplayName ? property.DisplayName : null,
                 isHighlighted: property.IsHighlighted)
             {
@@ -181,6 +186,32 @@ partial class Resource
         }
 
         return builder.ToImmutable();
+    }
+
+    private static bool ShouldUseLegacyResourcePropertyMetadata(string resourceType, RepeatedField<ResourceProperty> properties)
+    {
+        // Compatibility shim for dashboards connected to resource servers that predate
+        // ResourceProperty.DisplayName/IsHighlighted/SortOrder. If any resource-specific
+        // property already carries producer metadata, trust the producer and do not apply
+        // dashboard fallback metadata to the rest of the resource.
+        var hasLegacyResourceSpecificProperty = false;
+
+        foreach (var property in properties)
+        {
+            if (LegacyResourcePropertyMetadata.Get(resourceType, property.Name) is null)
+            {
+                continue;
+            }
+
+            hasLegacyResourceSpecificProperty = true;
+
+            if (property.HasDisplayName || property.IsHighlighted || property.HasSortOrder)
+            {
+                return false;
+            }
+        }
+
+        return hasLegacyResourceSpecificProperty;
     }
 
     private T ValidateNotNull<T>(T value, [CallerArgumentExpression(nameof(value))] string? expression = null) where T : class
