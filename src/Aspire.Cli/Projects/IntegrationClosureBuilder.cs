@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Xml.Linq;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Projects;
@@ -135,7 +136,7 @@ internal static class IntegrationClosureBuilder
     {
         ArgumentNullException.ThrowIfNull(appHostDirectory);
 
-        var appHostFullPath = Path.GetFullPath(appHostDirectory.FullName);
+        var appHostFullPath = PathNormalizer.ResolveToFilesystemPath(appHostDirectory.FullName);
         var normalizedAppHostDirectory = new DirectoryInfo(appHostFullPath);
         var integrationCacheDirectory = ConfigurationHelper.GetIntegrationCacheDirectory(normalizedAppHostDirectory);
         var hash = XxHash3.Hash(Encoding.UTF8.GetBytes(appHostFullPath));

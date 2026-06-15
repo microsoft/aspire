@@ -13,6 +13,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -282,7 +283,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 .GetField("_workingDirectory", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
                 .GetValue(server));
 
-        var rootDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "integrations", "apphosts");
+        var normalizedWorkspaceRoot = PathNormalizer.ResolveToFilesystemPath(workspace.WorkspaceRoot.FullName);
+        var rootDirectory = Path.Combine(normalizedWorkspaceRoot, ".aspire", "integrations", "apphosts");
         var isUnderRoot = workingDirectory.StartsWith(rootDirectory, StringComparison.OrdinalIgnoreCase);
         var parentDirectory = Path.GetDirectoryName(workingDirectory);
         var isDirectChildOfRoot = parentDirectory is not null &&
@@ -335,7 +337,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var firstWorkingDirectory = Assert.IsType<string>(workingDirectoryField.GetValue(firstServer));
         var secondWorkingDirectory = Assert.IsType<string>(workingDirectoryField.GetValue(secondServer));
 
-        var appHostsRoot = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "integrations", "apphosts");
+        var normalizedWorkspaceRoot = PathNormalizer.ResolveToFilesystemPath(workspace.WorkspaceRoot.FullName);
+        var appHostsRoot = Path.Combine(normalizedWorkspaceRoot, ".aspire", "integrations", "apphosts");
 
         try
         {
@@ -353,6 +356,22 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 }
             }
         }
+    }
+
+    [Fact]
+    public void GetAppHostIntegrationCacheDirectory_NormalizesSymlinkedAppHostDirectory()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix symlink canonicalization is covered by this test.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var realDirectory = workspace.WorkspaceRoot.CreateSubdirectory("real-apphost");
+        var linkDirectoryPath = Path.Combine(workspace.WorkspaceRoot.FullName, "linked-apphost");
+        TryCreateSymlink(linkDirectoryPath, realDirectory.FullName);
+
+        var realCacheDirectory = IntegrationClosureBuilder.GetAppHostIntegrationCacheDirectory(realDirectory);
+        var linkCacheDirectory = IntegrationClosureBuilder.GetAppHostIntegrationCacheDirectory(new DirectoryInfo(linkDirectoryPath));
+
+        Assert.Equal(realCacheDirectory.FullName, linkCacheDirectory.FullName);
     }
 
     // PSM-guard cross-product tests.
@@ -2672,6 +2691,24 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             typeof(PrebuiltAppHostServer)
                 .GetField("_workingDirectory", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
                 .GetValue(server));
+    }
+
+    private static void TryCreateSymlink(string linkPath, string targetPath)
+    {
+        try
+        {
+            Directory.CreateSymbolicLink(linkPath, targetPath);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            // Creating symlinks requires additional privileges in some environments. Skip
+            // cleanly rather than failing this cache-key regression for an environment reason.
+            Assert.Skip($"Cannot create symbolic links in this environment: {ex.Message}");
+        }
+        catch (IOException ex)
+        {
+            Assert.Skip($"Symbolic link creation failed in this environment: {ex.Message}");
+        }
     }
 
     private static string GetArgumentValue(IReadOnlyList<string> arguments, string optionName)
