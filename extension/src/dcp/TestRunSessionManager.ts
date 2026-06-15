@@ -1,7 +1,13 @@
 import { randomBytes, timingSafeEqual } from 'crypto';
+import * as vscode from 'vscode';
 import { getRunSessionInfo, getSupportedCapabilities } from '../capabilities';
+import { AspireDebugSession } from '../debugger/AspireDebugSession';
+import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
+import { extensionLogOutputChannel } from '../utils/logging';
+import type AspireRpcServer from '../server/AspireRpcServer';
 import { generateToken } from '../utils/security';
 import { DcpServerConnectionInfo, RunSessionInfo } from './types';
+import type AspireDcpServer from './AspireDcpServer';
 
 export interface TestRunSessionAcquireOptions {
     debug: boolean;
@@ -25,20 +31,74 @@ export interface TestRunSessionManagerOptions {
     now?: () => number;
 }
 
+export interface TestRunSessionDebugSessionOptions {
+    rpcServer: AspireRpcServer;
+    dcpServer: AspireDcpServer;
+    terminalProvider: AspireTerminalProvider;
+    addAspireDebugSession: (session: AspireDebugSession) => void;
+    removeAspireDebugSession: (session: AspireDebugSession) => void;
+    getAspireDebugSession: (debugSessionId: string | null) => AspireDebugSession | null;
+}
+
 export class TestRunSessionManager {
     private readonly leases = new Map<string, TestRunSessionLease>();
     private readonly leaseLifetimeMs?: number;
     private readonly now: () => number;
+    private connectionInfo?: Pick<DcpServerConnectionInfo, 'address' | 'certificate'>;
+    private debugSessionStartSubscription?: vscode.Disposable;
+    private readonly leasedDebugSessionRemovers = new Map<string, () => void>();
 
     constructor(
-        private readonly connectionInfo: Pick<DcpServerConnectionInfo, 'address' | 'certificate'>,
+        connectionInfo?: Pick<DcpServerConnectionInfo, 'address' | 'certificate'>,
         private readonly getSupportedLaunchConfigurations: () => string[] = getSupportedCapabilities,
         options: TestRunSessionManagerOptions = {}) {
+        this.connectionInfo = connectionInfo;
         this.leaseLifetimeMs = options.leaseLifetimeMs;
         this.now = options.now ?? Date.now;
     }
 
+    initializeConnectionInfo(connectionInfo: Pick<DcpServerConnectionInfo, 'address' | 'certificate'>): void {
+        this.connectionInfo = connectionInfo;
+    }
+
+    listenForLeasedDebugSessions(options: TestRunSessionDebugSessionOptions): vscode.Disposable {
+        this.debugSessionStartSubscription?.dispose();
+        this.debugSessionStartSubscription = vscode.debug.onDidStartDebugSession(session => {
+            const lease = this.tryGetLeaseForDebugSession(session);
+            if (!lease || options.getAspireDebugSession(lease.sessionId)) {
+                return;
+            }
+
+            const aspireDebugSession = new AspireDebugSession(
+                session,
+                options.rpcServer,
+                options.dcpServer,
+                options.terminalProvider,
+                options.removeAspireDebugSession,
+                lease.sessionId);
+
+            options.addAspireDebugSession(aspireDebugSession);
+            this.leasedDebugSessionRemovers.set(lease.id, () => options.removeAspireDebugSession(aspireDebugSession));
+            extensionLogOutputChannel.info(`Registered leased Aspire debug session ${lease.sessionId} for VS Code debug session ${session.id}.`);
+        });
+
+        return this.debugSessionStartSubscription;
+    }
+
+    private tryGetLeaseForDebugSession(session: vscode.DebugSession): TestRunSessionLease | undefined {
+        const dcpInstanceIdPrefix = session.configuration.env?.DCP_INSTANCE_ID_PREFIX;
+        if (typeof dcpInstanceIdPrefix !== 'string') {
+            return undefined;
+        }
+
+        return this.tryGetLeaseForSessionId(dcpInstanceIdPrefix.replace(/-$/, ''));
+    }
+
     acquire(options: TestRunSessionAcquireOptions): AcquiredTestRunSession {
+        if (!this.connectionInfo) {
+            throw new Error('Test run session manager has not been initialized with DCP server connection information.');
+        }
+
         this.removeExpiredLeases();
 
         const id = generateToken();
@@ -68,7 +128,13 @@ export class TestRunSessionManager {
     release(id: string): TestRunSessionLease | undefined {
         const lease = this.leases.get(id);
         this.leases.delete(id);
+        this.removeLeasedDebugSession(id);
         return lease;
+    }
+
+    removeLeasedDebugSession(id: string): void {
+        this.leasedDebugSessionRemovers.get(id)?.();
+        this.leasedDebugSessionRemovers.delete(id);
     }
 
     isActive(id: string): boolean {
@@ -107,6 +173,21 @@ export class TestRunSessionManager {
     tryGetLeaseForDcpId(dcpId: string): TestRunSessionLease | undefined {
         for (const lease of this.leases.values()) {
             if (dcpId.startsWith(`${lease.sessionId}-`)) {
+                if (this.isExpired(lease)) {
+                    this.leases.delete(lease.id);
+                    return undefined;
+                }
+
+                return lease;
+            }
+        }
+
+        return undefined;
+    }
+
+    private tryGetLeaseForSessionId(sessionId: string): TestRunSessionLease | undefined {
+        for (const lease of this.leases.values()) {
+            if (lease.sessionId === sessionId) {
                 if (this.isExpired(lease)) {
                     this.leases.delete(lease.id);
                     return undefined;

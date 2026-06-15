@@ -19,6 +19,7 @@ import { AspireDebugConfigurationProvider } from './debugger/AspireDebugConfigur
 import { AspireExtensionContext } from './AspireExtensionContext';
 import AspireRpcServer, { RpcServerConnectionInfo } from './server/AspireRpcServer';
 import AspireDcpServer from './dcp/AspireDcpServer';
+import { TestRunSessionManager } from './dcp/TestRunSessionManager';
 import { configureLaunchJsonCommand } from './commands/configureLaunchJson';
 import { AspireTerminalProvider, AspireTerminalCommandEvent, shellArg } from './utils/AspireTerminalProvider';
 import { MessageConnection } from 'vscode-jsonrpc';
@@ -55,6 +56,7 @@ export async function activate(context: vscode.ExtensionContext) {
   initializeTelemetry(context);
 
   const terminalProvider = new AspireTerminalProvider(context.subscriptions);
+  const testRunSessionManager = new TestRunSessionManager();
 
   const rpcServer = await AspireRpcServer.create(
     (rpcServerConnectionInfo: RpcServerConnectionInfo, connection: MessageConnection, token: string, debugSessionId: string | null) => {
@@ -72,6 +74,7 @@ export async function activate(context: vscode.ExtensionContext) {
     {
       onRunSessionAccepted: () => engagement?.recordDebugSession(),
     },
+    testRunSessionManager,
   );
 
   terminalProvider.rpcServerConnectionInfo = rpcServer.connectionInfo;
@@ -312,6 +315,14 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(vscode.debug.registerDebugAdapterDescriptorFactory('aspire', new AspireDebugAdapterDescriptorFactory(rpcServer, dcpServer, terminalProvider, aspireExtensionContext.addAspireDebugSession.bind(aspireExtensionContext), aspireExtensionContext.removeAspireDebugSession.bind(aspireExtensionContext))));
+  context.subscriptions.push(testRunSessionManager.listenForLeasedDebugSessions({
+    rpcServer,
+    dcpServer,
+    terminalProvider,
+    addAspireDebugSession: aspireExtensionContext.addAspireDebugSession.bind(aspireExtensionContext),
+    removeAspireDebugSession: aspireExtensionContext.removeAspireDebugSession.bind(aspireExtensionContext),
+    getAspireDebugSession: aspireExtensionContext.getAspireDebugSession.bind(aspireExtensionContext),
+  }));
 
   aspireExtensionContext.initialize(rpcServer, context, debugConfigProvider, dcpServer, terminalProvider, editorCommandProvider);
 

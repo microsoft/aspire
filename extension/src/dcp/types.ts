@@ -163,7 +163,7 @@ export interface LaunchOptions {
     runId: string;
     debugSessionId: string;
     isApphost: boolean;
-    debugSession?: AspireDebugSession;
+    debugSession: AspireDebugSession;
 };
 
 export interface StartAppHostOptions {

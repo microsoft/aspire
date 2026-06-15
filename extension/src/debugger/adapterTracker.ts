@@ -23,22 +23,24 @@ export type AppHostOutputHandler = (output: string, category: DapOutputCategory)
 export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapter: string, onAppHostRestartRequested?: AppHostRestartHandler, onAppHostOutput?: AppHostOutputHandler): vscode.Disposable {
     return vscode.debug.registerDebugAdapterTrackerFactory(debugAdapter, {
         createDebugAdapterTracker(session: vscode.DebugSession) {
+                const configuration = session.configuration;
+                if (!isDebugConfigurationWithId(configuration) || configuration.debugSessionId === null) {
+                    return undefined;
+                }
+                const debugSessionId = configuration.debugSessionId;
+
                 return {
                     onWillReceiveMessage: message => {
-                        if (!isDebugConfigurationWithId(session.configuration)) {
-                            return;
-                        }
-
                         // Detect restart requests on app host debug sessions.
                         // When the user clicks "restart" on the app host child session,
                         // suppress VS Code's automatic child restart so the Aspire debug
                         // session can restart entirely instead.
-                        if (session.configuration.isApphost
+                        if (configuration.isApphost
                             && (message.command === 'disconnect' || message.command === 'terminate')
                             && message.arguments?.restart
                             && onAppHostRestartRequested
-                            && session.configuration.debugSessionId) {
-                            const shouldSuppress = onAppHostRestartRequested(session.configuration.debugSessionId);
+                            && debugSessionId) {
+                            const shouldSuppress = onAppHostRestartRequested(debugSessionId);
                             if (shouldSuppress) {
                                 message.arguments.restart = false;
                             }
@@ -46,22 +48,17 @@ export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapt
                     },
                     onDidSendMessage: message => {
                         if (message.type === 'event' && message.event === 'output') {
-                            if (!isDebugConfigurationWithId(session.configuration) || session.configuration.debugSessionId === null) {
-                                extensionLogOutputChannel.warn(`Debug session ${session.id} does not have an attached run id.`);
-                                return;
-                            }
-
                             const { category, output } = message.body;
                             if (typeof output === 'string' && category !== 'telemetry') {
-                                if (session.configuration.isApphost) {
+                                if (configuration.isApphost) {
                                     onAppHostOutput?.(output, category);
                                     return;
                                 }
 
                                 const notification: ServiceLogsNotification = {
                                     notification_type: 'serviceLogs',
-                                    session_id: session.configuration.runId,
-                                    dcp_id: session.configuration.debugSessionId,
+                                    session_id: configuration.runId,
+                                    dcp_id: debugSessionId,
                                     is_std_err: category === 'stderr',
                                     log_message: removeTrailingNewline(output)
                                 };
@@ -77,19 +74,14 @@ export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapt
                                 return;
                             }
 
-                            if (!isDebugConfigurationWithId(session.configuration) || session.configuration.debugSessionId === null) {
-                                extensionLogOutputChannel.warn(`Debug session ${session.id} does not have an attached run id.`);
-                                return;
-                            }
-
                             if (!dcpServer) {
                                 extensionLogOutputChannel.warn(dcpServerNotInitialized);
                                 return;
                             }
                             const processNotification: ProcessRestartedNotification = {
                                 notification_type: 'processRestarted',
-                                session_id: session.configuration.runId,
-                                dcp_id: session.configuration.debugSessionId,
+                                session_id: configuration.runId,
+                                dcp_id: debugSessionId,
                                 pid: message.body.systemProcessId
                             };
 
@@ -97,11 +89,6 @@ export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapt
                         }
                     },
                     onExit(code: number | undefined) {
-                        if (!isDebugConfigurationWithId(session.configuration) || session.configuration.debugSessionId === null) {
-                            extensionLogOutputChannel.warn(`Debug session ${session.id} does not have an attached run id.`);
-                        return;
-                        }
-
                         // Exit code 143 should be treated as normal exit (SIGTERM) on macOS and Linux
                         if ((process.platform === 'darwin' || process.platform === 'linux') && code === 143) {
                             code = 0;
@@ -109,8 +96,8 @@ export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapt
 
                         const notification: SessionTerminatedNotification = {
                             notification_type: 'sessionTerminated',
-                            session_id: session.configuration.runId,
-                            dcp_id: session.configuration.debugSessionId,
+                            session_id: configuration.runId,
+                            dcp_id: debugSessionId,
                             exit_code: code ?? 0
                         };
 
