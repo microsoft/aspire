@@ -321,7 +321,8 @@ public sealed class DisplayedResourcePropertyViewModel : IPropertyGridItem
     public KnownProperty? KnownProperty => _propertyViewModel.KnownProperty;
     public int Priority => _propertyViewModel.Priority;
     public Value Value => _propertyViewModel.Value;
-    public string DisplayName => _propertyViewModel.KnownProperty?.GetDisplayName(_loc) ?? _propertyViewModel.Name;
+    public bool IsHighlighted => _propertyViewModel.IsHighlighted;
+    public string DisplayName => _propertyViewModel.DisplayName ?? _propertyViewModel.KnownProperty?.GetDisplayName(_loc) ?? _propertyViewModel.Name;
 
     string IPropertyGridItem.Name => DisplayName;
     string? IPropertyGridItem.Value => _displayValue.Value;
@@ -372,6 +373,7 @@ public sealed class DisplayedResourcePropertyViewModel : IPropertyGridItem
 
     public bool MatchesFilter(string filter) =>
         _propertyViewModel.Name.Contains(filter, StringComparison.CurrentCultureIgnoreCase) ||
+        DisplayName.Contains(filter, StringComparison.CurrentCultureIgnoreCase) ||
         ToolTip.Contains(filter, StringComparison.CurrentCultureIgnoreCase);
 }
 
@@ -381,19 +383,23 @@ public sealed class ResourcePropertyViewModel
     public string Name { get; }
     public Value Value { get; }
     public KnownProperty? KnownProperty { get; }
+    public string? DisplayName { get; }
     public bool IsValueSensitive { get; }
     public bool IsValueMasked { get; set; }
+    public bool IsHighlighted { get; }
     public int Priority { get; }
 
-    public ResourcePropertyViewModel(string name, Value value, bool isValueSensitive, KnownProperty? knownProperty, int priority)
+    public ResourcePropertyViewModel(string name, Value value, bool isValueSensitive, KnownProperty? knownProperty, int priority, string? displayName = null, bool isHighlighted = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
         Name = name;
         Value = value;
+        DisplayName = displayName;
         IsValueSensitive = isValueSensitive;
         KnownProperty = knownProperty;
         Priority = priority;
+        IsHighlighted = isHighlighted;
         IsValueMasked = isValueSensitive;
     }
 }

@@ -8,14 +8,11 @@ using System.Text.Json;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.Playwright;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
-using Aspire.Cli.Utils;
 using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
@@ -26,7 +23,6 @@ namespace Aspire.Cli.Commands;
 /// </summary>
 internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCommand
 {
-    private readonly IInteractionService _interactionService;
     private readonly IAgentEnvironmentDetector _agentEnvironmentDetector;
     private readonly IAspireSkillsInstaller _aspireSkillsInstaller;
     private readonly PlaywrightCliInstaller _playwrightCliInstaller;
@@ -44,19 +40,14 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
     public bool PrefetchesCliPackageMetadata => false;
 
     public AgentInitCommand(
-        IInteractionService interactionService,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
         IAgentEnvironmentDetector agentEnvironmentDetector,
         IAspireSkillsInstaller aspireSkillsInstaller,
         PlaywrightCliInstaller playwrightCliInstaller,
         IGitRepository gitRepository,
         ILanguageDiscovery languageDiscovery,
-        AspireCliTelemetry telemetry)
-        : base("init", AgentCommandStrings.InitCommand_Description, features, updateNotifier, executionContext, interactionService, telemetry)
+        CommonCommandServices services)
+        : base("init", AgentCommandStrings.InitCommand_Description, services)
     {
-        _interactionService = interactionService;
         _agentEnvironmentDetector = agentEnvironmentDetector;
         _aspireSkillsInstaller = aspireSkillsInstaller;
         _playwrightCliInstaller = playwrightCliInstaller;
@@ -73,20 +64,22 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         Description = AgentCommandStrings.InitCommand_WorkspaceRootOptionDescription
     };
 
-    private static readonly Option<string?> s_skillLocationsOption = new("--skill-locations")
+    internal static readonly Option<string?> s_skillLocationsOption = new("--skill-locations")
     {
         Description = string.Format(CultureInfo.InvariantCulture, AgentCommandStrings.InitCommand_SkillLocationsOptionDescription,
             string.Join(",", SkillLocation.All.Select(l => l.Id)),
             ConsoleInteractionService.AllChoice,
-            ConsoleInteractionService.NoneChoice)
+            ConsoleInteractionService.NoneChoice),
+        Recursive = true
     };
 
-    private static readonly Option<string?> s_skillsOption = new("--skills")
+    internal static readonly Option<string?> s_skillsOption = new("--skills")
     {
         Description = string.Format(CultureInfo.InvariantCulture, AgentCommandStrings.InitCommand_SkillsOptionDescription,
             string.Join(",", SkillDefinition.CliDefined.Select(s => s.Name)),
             ConsoleInteractionService.AllChoice,
-            ConsoleInteractionService.NoneChoice)
+            ConsoleInteractionService.NoneChoice),
+        Recursive = true
     };
 
     /// <summary>
@@ -105,14 +98,19 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
     /// pre-selected, which is what <c>aspire init</c> wants because aspireify is the natural follow-up.
     /// Other callers (e.g. <c>aspire new</c>) can pass a predicate to additionally filter out skills that
     /// don't fit their context (such as one-time setup skills after a template has already produced the AppHost).
+    /// Callers that expose <c>--skill-locations</c> and <c>--skills</c> can pass
+    /// <paramref name="skillLocationsBinding"/> and <paramref name="skillsBinding"/> so the chained
+    /// execution reuses the same non-interactive selection semantics as standalone <c>aspire agent init</c>.
     /// </summary>
     internal async Task<AgentInitExecutionResult> PromptAndChainAsync(
         IInteractionService interactionService,
         int previousResultExitCode,
         DirectoryInfo workspaceRoot,
         PromptBinding<bool> agentInitBinding,
-        CancellationToken cancellationToken,
-        Func<SkillDefinition, bool>? selectByDefault = null)
+        PromptBinding<string?> skillLocationsBinding,
+        PromptBinding<string?> skillsBinding,
+        Func<SkillDefinition, bool>? selectByDefault,
+        CancellationToken cancellationToken)
     {
         if (previousResultExitCode != CliExitCodes.Success)
         {
@@ -129,7 +127,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
 
         if (runAgentInit)
         {
-            return await ExecuteAgentInitAsync(workspaceRoot, parseResult: null, selectByDefault, cancellationToken);
+            return await ExecuteAgentInitAsync(workspaceRoot, selectByDefault, skillLocationsBinding, skillsBinding, cancellationToken);
         }
 
         return new(CliExitCodes.Success, [], []);
@@ -141,7 +139,9 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         // Standalone `aspire agent init` is typically run against an existing project, so don't
         // pre-select the one-time aspireify wiring skill even though every other bundle skill
         // is default-on. Users can still opt into it from the prompt or via --skills.
-        var result = await ExecuteAgentInitAsync(workspaceRoot, parseResult, ExcludeOneTimeSetupSkillsFromDefaults, cancellationToken);
+        var skillLocationsBinding = PromptBinding.Create(parseResult, s_skillLocationsOption);
+        var skillsBinding = PromptBinding.Create(parseResult, s_skillsOption);
+        var result = await ExecuteAgentInitAsync(workspaceRoot, ExcludeOneTimeSetupSkillsFromDefaults, skillLocationsBinding, skillsBinding, cancellationToken);
         return CommandResult.FromExitCode(result.ExitCode);
     }
 
@@ -178,7 +178,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         var defaultWorkspaceRoot = gitRoot ?? ExecutionContext.WorkingDirectory;
 
         // Prompt the user for the workspace root
-        var workspaceRootPath = await _interactionService.PromptForFilePathAsync(
+        var workspaceRootPath = await InteractionService.PromptForFilePathAsync(
             McpCommandStrings.InitCommand_WorkspaceRootPrompt,
             binding: PromptBinding.Create(parseResult, s_workspaceRootOption, defaultWorkspaceRoot.FullName),
             validator: path =>
@@ -201,7 +201,12 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         return new DirectoryInfo(workspaceRootPath);
     }
 
-    private async Task<AgentInitExecutionResult> ExecuteAgentInitAsync(DirectoryInfo workspaceRoot, ParseResult? parseResult, Func<SkillDefinition, bool>? selectByDefault, CancellationToken cancellationToken)
+    private async Task<AgentInitExecutionResult> ExecuteAgentInitAsync(
+        DirectoryInfo workspaceRoot,
+        Func<SkillDefinition, bool>? selectByDefault,
+        PromptBinding<string?> skillLocationsBinding,
+        PromptBinding<string?> skillsBinding,
+        CancellationToken cancellationToken)
     {
         var context = new AgentEnvironmentScanContext
         {
@@ -209,7 +214,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             RepositoryRoot = workspaceRoot
         };
 
-        var applicators = await _interactionService.ShowStatusAsync(
+        var applicators = await InteractionService.ShowStatusAsync(
             McpCommandStrings.InitCommand_DetectingAgentEnvironments,
             async () => await _agentEnvironmentDetector.DetectAsync(context, cancellationToken),
             emoji: KnownEmojis.Robot);
@@ -227,27 +232,25 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             try
             {
                 await update.ApplyAsync(cancellationToken);
-                _interactionService.DisplayMessage(KnownEmojis.Wrench, update.Description);
+                InteractionService.DisplayMessage(KnownEmojis.Wrench, update.Description);
             }
             catch (InvalidOperationException ex)
             {
-                _interactionService.DisplayError(ex.Message);
+                InteractionService.DisplayError(ex.Message);
             }
         }
 
         // --- Phase 1: Skill location selection ---
         var defaultLocationIds = string.Join(",", SkillLocation.All.Where(l => l.IsDefault).Select(l => l.Id));
-        var skillLocationsBinding = parseResult is not null
-            ? PromptBinding.Create(parseResult, s_skillLocationsOption, defaultLocationIds)
-            : PromptBinding.CreateDefault<string?>(defaultLocationIds);
+        var skillLocationsBindingWithDefault = skillLocationsBinding.WithDefault(defaultLocationIds);
 
-        var selectedLocations = await _interactionService.PromptForSelectionsAsync(
+        var selectedLocations = await InteractionService.PromptForSelectionsAsync(
             AgentCommandStrings.InitCommand_SelectSkillLocations,
             SkillLocation.All,
             loc => $"{loc.DisplayName} — {loc.Description}",
             preSelected: SkillLocation.All.Where(l => l.IsDefault),
             optional: true,
-            binding: skillLocationsBinding,
+            binding: skillLocationsBindingWithDefault,
             echoSelected: false,
             cancellationToken: cancellationToken);
 
@@ -261,7 +264,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         if (selectedLocations.Count > 0)
         {
             IReadOnlyList<SkillDefinition> availableSkills;
-            if (ShouldSkipBundleCatalogResolution(parseResult))
+            if (ShouldSkipBundleCatalogResolution(skillsBinding))
             {
                 availableSkills = SkillDefinition.CliDefined
                     .Where(s => s.IsApplicableToLanguage(detectedLanguage))
@@ -290,7 +293,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
                         foreach (var mcp in mcpApplicators)
                         {
                             await mcp.ApplyAsync(ct);
-                            _interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, mcp.Description);
+                            InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, mcp.Description);
                         }
                     },
                     promptGroup: McpInitPromptGroup.AdditionalOptions);
@@ -303,9 +306,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             // MCP is intentionally NOT pre-selected
 
             var defaultSkillNames = string.Join(",", defaultSkills.Select(s => s.Name));
-            var skillsBinding = parseResult is not null
-                ? PromptBinding.Create(parseResult, s_skillsOption, defaultSkillNames)
-                : PromptBinding.CreateDefault<string?>(defaultSkillNames);
+            var skillsBindingWithDefault = skillsBinding.WithDefault(defaultSkillNames);
 
             // When the bundle failed to install and the caller passed an explicit --skills value
             // that names a bundle-only skill, the upcoming MatchChoicesOrThrow will reject the
@@ -315,14 +316,14 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             // and not a CLI-defined skill, so happy-path runs stay silent.
             if (bundleInstallFailureMessage is not null)
             {
-                var (wasProvided, requestedSkills, _) = PromptBinding.Resolve(skillsBinding);
+                var (wasProvided, requestedSkills, _) = PromptBinding.Resolve(skillsBindingWithDefault);
                 if (wasProvided && requestedSkills is not null && HasUnknownBundleSkillCandidate(requestedSkills, availableSkills))
                 {
-                    _interactionService.DisplayError(bundleInstallFailureMessage);
+                    InteractionService.DisplayError(bundleInstallFailureMessage);
                 }
             }
 
-            var selectedItems = await _interactionService.PromptForSelectionsAsync(
+            var selectedItems = await InteractionService.PromptForSelectionsAsync(
                 AgentCommandStrings.InitCommand_SelectSkills,
                 skillChoices,
                 item => item switch
@@ -333,7 +334,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
                 },
                 preSelected: preSelectedItems,
                 optional: true,
-                binding: skillsBinding,
+                binding: skillsBindingWithDefault,
                 // The MCP applicator participates in the interactive multi-select prompt for UX,
                 // but it is not a skill and must not be addressable via `--skills`. Restrict
                 // non-interactive validation to the actual SkillDefinition catalog.
@@ -417,18 +418,18 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
                 switch (status)
                 {
                     case PlaywrightInstallStatus.Installed:
-                        _interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, AgentCommandStrings.InitCommand_InstalledPlaywrightCli);
+                        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, AgentCommandStrings.InitCommand_InstalledPlaywrightCli);
                         break;
                     case PlaywrightInstallStatus.InstalledWithWarnings:
-                        _interactionService.DisplayMessage(KnownEmojis.Warning, message!);
+                        InteractionService.DisplayMessage(KnownEmojis.Warning, message!);
                         break;
                     case PlaywrightInstallStatus.Failed:
-                        _interactionService.DisplayError(message!);
+                        InteractionService.DisplayError(message!);
                         hasErrors = true;
                         break;
                     case PlaywrightInstallStatus.Skipped:
                         // npm is not available — not an error, just informational.
-                        _interactionService.DisplaySubtleMessage(AgentCommandStrings.InitCommand_PlaywrightCliSkipped);
+                        InteractionService.DisplaySubtleMessage(AgentCommandStrings.InitCommand_PlaywrightCliSkipped);
                         break;
                     default:
                         throw new UnreachableException($"Unexpected PlaywrightInstallStatus: {status}");
@@ -436,7 +437,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             }
             catch (InvalidOperationException ex)
             {
-                _interactionService.DisplayError(ex.Message);
+                InteractionService.DisplayError(ex.Message);
                 hasErrors = true;
             }
         }
@@ -454,10 +455,10 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             // (e.g., invalid JSON in .copilot/mcp-config.json or .vscode/mcp.json).
             catch (InvalidOperationException ex)
             {
-                _interactionService.DisplayError(ex.Message);
+                InteractionService.DisplayError(ex.Message);
                 if (ex.InnerException is JsonException)
                 {
-                    _interactionService.DisplaySubtleMessage(
+                    InteractionService.DisplaySubtleMessage(
                         string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.SkippedMalformedConfigFile, combinedMcpApplicator.Description));
                 }
                 hasErrors = true;
@@ -466,11 +467,11 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
 
         if (hasErrors)
         {
-            _interactionService.DisplayMessage(KnownEmojis.Warning, AgentCommandStrings.ConfigurationCompletedWithErrors);
+            InteractionService.DisplayMessage(KnownEmojis.Warning, AgentCommandStrings.ConfigurationCompletedWithErrors);
         }
         else
         {
-            _interactionService.DisplaySuccess(McpCommandStrings.InitCommand_ConfigurationComplete);
+            InteractionService.DisplaySuccess(McpCommandStrings.InitCommand_ConfigurationComplete);
         }
 
         return new(
@@ -538,20 +539,19 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         return false;
     }
 
-    private static bool ShouldSkipBundleCatalogResolution(ParseResult? parseResult)
+    private static bool ShouldSkipBundleCatalogResolution(PromptBinding<string?> skillsBinding)
     {
-        if (parseResult is null)
+        var (wasProvided, optionValue, _) = PromptBinding.Resolve(skillsBinding);
+        if (!wasProvided)
         {
             return false;
         }
 
-        var optionResult = parseResult.GetResult(s_skillsOption);
-        if (optionResult is null || optionResult.Implicit)
-        {
-            return false;
-        }
+        return ShouldSkipBundleCatalogResolution(optionValue);
+    }
 
-        var value = parseResult.GetValue(s_skillsOption);
+    private static bool ShouldSkipBundleCatalogResolution(string? value)
+    {
         if (string.Equals(value, ConsoleInteractionService.NoneChoice, StringComparison.OrdinalIgnoreCase))
         {
             return true;
@@ -695,7 +695,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            _interactionService.DisplayError(
+            InteractionService.DisplayError(
                 string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_FailedToInstallSkill, skill.Name, fullSkillDirectoryPath, ex.Message));
             return new(Succeeded: false, UpdatedSkill: null);
         }
@@ -715,7 +715,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             $"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummarySkills, skillNames)}",
             $"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummaryLocations, locations)}");
 
-        _interactionService.DisplayMessage(KnownEmojis.Robot, message);
+        InteractionService.DisplayMessage(KnownEmojis.Robot, message);
     }
 
     private static IReadOnlyList<string> GetUniqueValues(IEnumerable<string> values)

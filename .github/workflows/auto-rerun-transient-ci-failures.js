@@ -1,4 +1,26 @@
 // Shared matcher, summary, and rerun helpers for the transient CI rerun workflow.
+//
+// TEMPORARY — FORCE_RERUN_ALL (revert when no longer needed):
+// When the YAML `FORCE_RERUN_ALL` env var is 'true', the workflow runs in force mode:
+// it is a plain short-circuit. If a CI run failed and has a currently-open associated
+// PR, it reruns the failed jobs — full stop. No job is fetched or classified, the
+// patterns config is not consulted, and there is no job-count cap.
+//
+// The two hard gates are already enforced by the YAML trigger `if`, so force mode does
+// not re-implement them:
+//   * "CI failed"      -> trigger only fires on `workflow_run.conclusion == 'failure'`,
+//                         which also means a run that was merely *cancelled* never
+//                         triggers a rerun (its conclusion is 'cancelled', not 'failure').
+//   * "max 3 reruns"   -> trigger gates on `run_attempt <= 3`; computeRerunEligibility
+//                         re-checks the same attempt cap for the manual-dispatch path.
+//
+// Force mode still KEEPS the open-PR requirement (no point spending CI on a run whose
+// PRs are all closed/merged). `forceRerunAll` defaults to false everywhere, so the
+// normal transient-failure classification/eligibility path — and its tests — are
+// unchanged when the flag is off.
+//
+// To disable: flip FORCE_RERUN_ALL to 'false' (or remove the env var) on both jobs in
+// the YAML. See docs/ci/auto-rerun-transient-ci-failures.md.
 const fs = require('node:fs');
 
 const failureConclusions = new Set(['failure', 'cancelled', 'timed_out', 'startup_failure']);
@@ -518,9 +540,23 @@ function computeRerunEligibility({
     retryableCount,
     maxRetryableJobs = defaultMaxRetryableJobs,
     runAttempt = 1,
-    maxRunAttempt = defaultMaxRunAttempt
+    maxRunAttempt = defaultMaxRunAttempt,
+    forceRerunAll = false
 }) {
-    if (retryableCount <= 0 || runAttempt > maxRunAttempt) {
+    // The attempt cap applies in every mode: never rerun past maxRunAttempt source
+    // attempts (up to 3 auto-reruns / 4 total attempts).
+    if (runAttempt > maxRunAttempt) {
+        return false;
+    }
+
+    // FORCE_RERUN_ALL short-circuit: the run failed (YAML trigger gate) and has an open
+    // PR (checked in the workflow), so it is eligible — only the attempt cap above
+    // matters. There is no job-count analysis. See the file-level comment to disable.
+    if (forceRerunAll) {
+        return true;
+    }
+
+    if (retryableCount <= 0) {
         return false;
     }
 
@@ -537,9 +573,10 @@ function computeRerunExecutionEligibility({
     retryableCount,
     maxRetryableJobs = defaultMaxRetryableJobs,
     runAttempt = 1,
-    maxRunAttempt = defaultMaxRunAttempt
+    maxRunAttempt = defaultMaxRunAttempt,
+    forceRerunAll = false
 }) {
-    return !dryRun && computeRerunEligibility({ retryableCount, maxRetryableJobs, runAttempt, maxRunAttempt });
+    return !dryRun && computeRerunEligibility({ retryableCount, maxRetryableJobs, runAttempt, maxRunAttempt, forceRerunAll });
 }
 
 function buildSummaryReference(url, text) {
@@ -663,6 +700,61 @@ async function writeAnalysisSummary({
     await summary.write();
 }
 
+// FORCE_RERUN_ALL summary. Force mode does not enumerate or classify jobs, so the
+// analyze-step summary is intentionally minimal: it records the eligibility decision
+// (the attempt cap is the only force-mode eligibility rule) and the analyzed run, with
+// no job/skip tables.
+async function writeForceRerunSummary({
+    summary,
+    rerunEligible,
+    dryRun,
+    sourceRunUrl,
+    sourceRunAttempt,
+    runAttempt,
+    maxRunAttempt = defaultMaxRunAttempt,
+    openPullRequestNumbers = [],
+}) {
+    const analyzedRunReference = buildSummaryReference(
+        buildWorkflowRunAttemptUrl(sourceRunUrl, sourceRunAttempt),
+        Number.isInteger(sourceRunAttempt) && sourceRunAttempt > 0
+            ? `workflow run attempt ${sourceRunAttempt}`
+            : 'workflow run'
+    );
+    const outcome = rerunEligible ? 'Rerun eligible' : 'Rerun skipped';
+    // In force mode the only way to be ineligible is the attempt cap: this summary runs
+    // after the open-PR gate (the zero-PR case returns earlier), and force-mode
+    // computeRerunEligibility returns false solely when runAttempt > maxRunAttempt. The
+    // skipped case is reachable only via a manual workflow_dispatch on a run past the cap
+    // (the workflow_run trigger gates run_attempt <= 3, so the auto path is always eligible).
+    const outcomeDetails = rerunEligible
+        ? dryRun
+            ? 'Force-rerun mode: the failed jobs would be rerun if dry run were disabled (transient-failure analysis bypassed).'
+            : 'Force-rerun mode: re-running the failed jobs (transient-failure analysis bypassed).'
+        : `Force-rerun mode: the attempt cap was reached (attempt ${runAttempt} > ${maxRunAttempt}); no rerun was requested.`;
+
+    const summaryRows = [
+        [{ data: 'Category', header: true }, { data: 'Value', header: true }],
+        ['Mode', 'Force rerun (transient-failure analysis bypassed)'],
+        ['Outcome', outcome],
+        ['Source run attempt', String(Number.isInteger(runAttempt) ? runAttempt : sourceRunAttempt ?? 'unknown')],
+        ['Max run attempt', String(maxRunAttempt)],
+        ['Associated pull requests', String(openPullRequestNumbers.length)],
+        ['Dry run', String(dryRun)],
+        ['Eligible to rerun', String(rerunEligible)],
+    ];
+
+    await summary
+        .addHeading(outcome)
+        .addTable(summaryRows);
+
+    addSummaryReference(summary, 'Analyzed run', analyzedRunReference)
+        .addRaw(outcomeDetails)
+        .addBreak()
+        .addBreak();
+
+    await summary.write();
+}
+
 async function getOpenPullRequestNumbers({ github, owner, repo, pullRequestNumbers }) {
     const openPullRequestNumbers = [];
 
@@ -738,7 +830,15 @@ function buildPullRequestCommentBody({
     rerunAttemptUrl,
     retryableJobs,
     testPatternMatchedTests = [],
+    forceRerunAll = false,
 }) {
+    // FORCE_RERUN_ALL: force mode is a plain short-circuit — no jobs are fetched or
+    // classified, so there is no job list to show. Keep the comment to a single short
+    // line: the failed jobs are being retried. See the file-level comment.
+    if (forceRerunAll) {
+        return `Retrying the failed CI jobs for this pull request from ${formatMarkdownLink('the CI run attempt', failedAttemptUrl)}. The rerun is being tracked in ${formatMarkdownLink('the rerun attempt', rerunAttemptUrl)}.`;
+    }
+
     const lines = [
         `Re-running the failed jobs in the CI workflow for this pull request because ${retryableJobs.length} job${retryableJobs.length === 1 ? ' was' : 's were'} identified as retry-safe transient failures in ${formatMarkdownLink('the CI run attempt', failedAttemptUrl)}.`,
         `GitHub was asked to rerun all failed jobs for that attempt, and the rerun is being tracked in ${formatMarkdownLink('the rerun attempt', rerunAttemptUrl)}.`,
@@ -803,8 +903,12 @@ async function rerunMatchedJobs({
     sourceRunUrl,
     sourceRunAttempt,
     testPatternMatchedTests = [],
+    forceRerunAll = false,
 }) {
-    if (retryableJobs.length === 0) {
+    // Normal mode lists retry-safe jobs first; an empty list means nothing to rerun.
+    // Force mode is a short-circuit that does not enumerate jobs (retryableJobs is
+    // empty by design), so it must proceed to the rerun regardless.
+    if (!forceRerunAll && retryableJobs.length === 0) {
         return;
     }
 
@@ -815,6 +919,9 @@ async function rerunMatchedJobs({
         pullRequestNumbers,
     });
 
+    // The open-PR gate applies in all modes (including force mode): a rerun is
+    // skipped when every associated PR is closed. There is no value in spending CI on
+    // a closed/merged PR, so force mode does NOT bypass this.
     if (pullRequestNumbers.length > 0 && openPullRequestNumbers.length === 0) {
         const failedAttemptReference = buildWorkflowRunReference(sourceRunUrl, sourceRunAttempt);
         await summary
@@ -870,6 +977,7 @@ async function rerunMatchedJobs({
                 rerunAttemptUrl: rerunAttemptReference.url,
                 retryableJobs,
                 testPatternMatchedTests,
+                forceRerunAll,
             }),
         });
     }
@@ -879,7 +987,20 @@ async function rerunMatchedJobs({
 
     addSummaryReference(summaryBuilder, 'Failed attempt', failedAttemptReference);
     addSummaryReference(summaryBuilder, 'Rerun attempt', rerunAttemptReference);
-    addSummaryCommentReferences(summaryBuilder, postedComments)
+    addSummaryCommentReferences(summaryBuilder, postedComments);
+
+    // Force mode does not enumerate jobs, so there is no retry-safe job table to show.
+    if (forceRerunAll) {
+        summaryBuilder
+            .addBreak()
+            .addRaw('Force-rerun mode: the CI run failed, so GitHub was asked to rerun all failed jobs for the failed attempt. Transient-failure analysis was bypassed.')
+            .addBreak();
+
+        await summaryBuilder.write();
+        return;
+    }
+
+    summaryBuilder
         .addBreak()
         .addRaw('The matched jobs below made the run eligible for rerun. GitHub was asked to rerun all failed jobs for the failed attempt.')
         .addBreak()
@@ -1355,4 +1476,5 @@ module.exports = {
     testExecutionFailureStepPatterns,
     validateRetryPatternsConfig,
     writeAnalysisSummary,
+    writeForceRerunSummary,
 };

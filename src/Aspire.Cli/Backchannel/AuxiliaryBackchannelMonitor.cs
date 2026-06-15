@@ -35,7 +35,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
     // from other CLI-managed files.
     private const string CompactSocketWatchPattern = "*";
     private const string LegacySocketWatchPattern = "aux*.sock.*";
-    
+
     // Outer key: hash (prefix), Inner key: socketPath, Value: connection
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, AppHostAuxiliaryBackchannel>> _connectionsByHash = new();
     private readonly string _backchannelsDirectory = BackchannelConstants.GetBackchannelsDirectory(GetHomeDirectory());
@@ -50,7 +50,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
     /// <summary>
     /// Gets all active AppHost connections, flattened from all hashes.
     /// </summary>
-    public IEnumerable<IAppHostAuxiliaryBackchannel> Connections => 
+    public IEnumerable<IAppHostAuxiliaryBackchannel> Connections =>
         _connectionsByHash.Values.SelectMany(d => d.Values);
 
     /// <summary>
@@ -220,7 +220,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
             // If timeout occurs or no command is set, monitoring is not needed
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(1));
             using var combined = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, timeout.Token);
-            
+
             var command = await executionContext.CommandSelected.Task.WaitAsync(combined.Token).ConfigureAwait(false);
 
             // Only monitor if the command is MCP start command (run --detach uses manual scanning)
@@ -286,7 +286,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
     {
         var connectTasks = new List<Task>();
         var failedSockets = new ConcurrentBag<string>();
-        
+
         await _scanLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -307,12 +307,12 @@ internal sealed class AuxiliaryBackchannelMonitor(
             {
                 logger.LogDebug("Socket deleted: {SocketPath}", removedFile);
                 var hash = AppHostHelper.ExtractHashFromSocketPath(removedFile);
-                if (!string.IsNullOrEmpty(hash) && 
+                if (!string.IsNullOrEmpty(hash) &&
                     _connectionsByHash.TryGetValue(hash, out var connectionsForHash) &&
                     connectionsForHash.TryRemove(removedFile, out var connection))
                 {
                     _ = Task.Run(async () => await DisconnectAsync(connection).ConfigureAwait(false), CancellationToken.None);
-                    
+
                     // Clean up empty hash entries
                     if (connectionsForHash.IsEmpty)
                     {
@@ -342,7 +342,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
         {
             await Task.WhenAll(connectTasks).ConfigureAwait(false);
         }
-        
+
         // Remove failed sockets from known files so they can be retried on next scan
         foreach (var failedSocket in failedSockets)
         {
@@ -366,7 +366,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
         }
 
         // Check if we're already connected to this specific socket
-        if (_connectionsByHash.TryGetValue(hash, out var existingConnections) && 
+        if (_connectionsByHash.TryGetValue(hash, out var existingConnections) &&
             existingConnections.ContainsKey(socketPath))
         {
             logger.LogDebug("Already connected to socket: {SocketPath}", socketPath);

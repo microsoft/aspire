@@ -4,11 +4,9 @@
 using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
-using Aspire.Cli.Configuration;
-using Aspire.Cli.Interaction;
 using Aspire.Cli.Documentation.ApiDocs;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Spectre.Console;
 
@@ -34,20 +32,12 @@ internal sealed class ApiListCommand : BaseCommand
     /// <summary>
     /// Initializes a new instance of the <see cref="ApiListCommand"/> class.
     /// </summary>
-    /// <param name="interactionService">The interaction service.</param>
     /// <param name="apiDocsIndexService">The API docs index service.</param>
-    /// <param name="features">The feature flag service.</param>
-    /// <param name="updateNotifier">The update notifier.</param>
-    /// <param name="executionContext">The CLI execution context.</param>
-    /// <param name="telemetry">The telemetry service.</param>
+    /// <param name="services">Common command services.</param>
     public ApiListCommand(
-        IInteractionService interactionService,
         IApiDocsIndexService apiDocsIndexService,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        AspireCliTelemetry telemetry)
-        : base("list", ApiCommandStrings.ListDescription, features, updateNotifier, executionContext, interactionService, telemetry)
+        CommonCommandServices services)
+        : base("list", ApiCommandStrings.ListDescription, services)
     {
         _apiDocsIndexService = apiDocsIndexService;
 

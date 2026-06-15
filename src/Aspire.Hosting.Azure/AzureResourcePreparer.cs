@@ -7,6 +7,7 @@ using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Azure.Provisioning;
 using Azure.Provisioning.Authorization;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Azure;
@@ -20,6 +21,11 @@ internal sealed class AzureResourcePreparer(
     IOptions<AzureProvisioningOptions> options,
     DistributedApplicationExecutionContext executionContext)
 {
+    internal Task OnBeforeStartAsync(BeforeStartEvent @event, CancellationToken cancellationToken)
+    {
+        return PrepareResourcesAsync(@event.Model, cancellationToken);
+    }
+
     internal async Task PrepareResourcesAsync(DistributedApplicationModel model, CancellationToken cancellationToken)
     {
         var azureResources = GetAzureResourcesFromAppModel(model);
@@ -37,6 +43,11 @@ internal sealed class AzureResourcePreparer(
 
         await BuildRoleAssignmentAnnotations(model, azureResources, cancellationToken).ConfigureAwait(false);
 
+        if (executionContext.IsRunMode)
+        {
+            AddPerResourceCommands(azureResources);
+        }
+
         // set the ProvisioningBuildOptions on the resource, if necessary
         foreach (var r in azureResources)
         {
@@ -45,6 +56,71 @@ internal sealed class AzureResourcePreparer(
                 provisioningResource.ProvisioningBuildOptions = options.Value.ProvisioningBuildOptions;
             }
         }
+    }
+
+    private static void AddPerResourceCommands(List<(IResource Resource, IAzureResource AzureResource)> azureResources)
+    {
+        foreach (var resource in azureResources)
+        {
+            if (resource.AzureResource is not AzureBicepResource bicepResource ||
+                bicepResource.IsContainer() ||
+                bicepResource.IsEmulator())
+            {
+                continue;
+            }
+
+            foreach (var command in AzureProvisioningController.ResourceCommandDefinitions)
+            {
+                AddOrReplaceCommand(
+                    resource.Resource,
+                    command.Name,
+                    command.DisplayName,
+                    executeCommand: context => command.ExecuteCommand(context.Services.GetRequiredService<AzureProvisioningController>(), resource.Resource.Name, context),
+                    new CommandOptions
+                    {
+                        Description = command.Description,
+                        ConfirmationMessage = command.ConfirmationMessage,
+                        IconName = command.IconName,
+                        IconVariant = command.IconVariant,
+                        IsHighlighted = command.IsHighlighted,
+                        Arguments = command.Command == AzureProvisioningController.AzureResourceCommand.ChangeLocation
+                            ? AzureProvisioningController.CreateChangeLocationCommandArguments(GetDeploymentStateResourceName(resource))
+                            : command.Arguments ?? [],
+                        ValidateArguments = command.ValidateArguments,
+                        UpdateState = context => context.Services.GetRequiredService<AzureProvisioningController>().GetResourceCommandState(resource.Resource.Name, command.Command, context)
+                    });
+            }
+        }
+    }
+
+    private static string GetDeploymentStateResourceName((IResource Resource, IAzureResource AzureResource) resource)
+        => resource.AzureResource is AzureBicepResource bicepResource ? bicepResource.Name : resource.Resource.Name;
+
+    private static void AddOrReplaceCommand(
+        IResource resource,
+        string name,
+        string displayName,
+        Func<ExecuteCommandContext, Task<ExecuteCommandResult>> executeCommand,
+        CommandOptions commandOptions)
+    {
+        if (resource.Annotations.OfType<ResourceCommandAnnotation>().SingleOrDefault(annotation => annotation.Name == name) is { } existingAnnotation)
+        {
+            resource.Annotations.Remove(existingAnnotation);
+        }
+
+        resource.Annotations.Add(new ResourceCommandAnnotation(
+            name,
+            displayName,
+            commandOptions.UpdateState ?? (_ => ResourceCommandState.Enabled),
+            executeCommand,
+            commandOptions.Description,
+            commandOptions.Arguments,
+            commandOptions.ConfirmationMessage,
+            commandOptions.IconName,
+            commandOptions.IconVariant,
+            commandOptions.IsHighlighted,
+            commandOptions.Visibility,
+            commandOptions.ValidateArguments));
     }
 
     internal static List<(IResource Resource, IAzureResource AzureResource)> GetAzureResourcesFromAppModel(DistributedApplicationModel appModel)
@@ -346,12 +422,7 @@ internal sealed class AzureResourcePreparer(
                 ProvisioningBuildOptions = options.Value.ProvisioningBuildOptions,
             };
 
-            // existing resource role assignments need to be scoped to the resource's resource group
-            if (targetResource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAnnotation) &&
-                existingAnnotation.ResourceGroup is not null)
-            {
-                roleAssignmentResource.Scope = new(existingAnnotation.ResourceGroup);
-            }
+            ApplyExistingResourceScope(roleAssignmentResource, targetResource);
 
             roleAssignmentResources.Add(roleAssignmentResource);
         }
@@ -484,14 +555,18 @@ internal sealed class AzureResourcePreparer(
             ProvisioningBuildOptions = options.Value.ProvisioningBuildOptions,
         };
 
-        // existing resource role assignments need to be scoped to the resource's resource group
-        if (targetResource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAnnotation) &&
-            existingAnnotation.ResourceGroup is not null)
-        {
-            roleAssignmentResource.Scope = new(existingAnnotation.ResourceGroup);
-        }
+        ApplyExistingResourceScope(roleAssignmentResource, targetResource);
 
         return roleAssignmentResource;
+    }
+
+    private static void ApplyExistingResourceScope(AzureBicepResource roleAssignmentResource, AzureProvisioningResource targetResource)
+    {
+        if (targetResource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAnnotation) &&
+            AzureBicepResourceScope.FromExistingResourceAnnotation(existingAnnotation) is { } scope)
+        {
+            roleAssignmentResource.Scope = scope;
+        }
     }
 
     private void AddGlobalRoleAssignmentsInfrastructure(

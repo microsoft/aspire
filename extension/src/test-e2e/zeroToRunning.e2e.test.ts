@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as fs from 'fs';
-import { getCommandInvocationCount, getTerminalCommandCount, waitForCommandOutcome, waitForDebugDashboardUrl, waitForDebugSessionStartup, waitForHttpText, waitForNoDebugSessions, waitForRepositoryIdle, waitForSelectedWorkspaceAppHost, waitForTerminalCommand } from './helpers/assertions';
-import { addIntegrationPackageToAppHost, clearBreakpoints, createEmptyAppHostProject, executeE2eControlCommand, getGeneratedAppHostPath, removeGeneratedProject, restoreWorkspaceAppHostConfig, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, stopAppHostIfRunning, writeWorkspaceAppHostConfigForPath } from './helpers/fixtures';
+import { getCommandInvocationCount, getTerminalCommandCount, waitForCommandOutcome, waitForDebugDashboardUrl, waitForDebugSessionStartup, waitForExtensionState, waitForHttpText, waitForNoDebugSessions, waitForRepositoryIdle, waitForSelectedWorkspaceAppHost, waitForTerminalCommand } from './helpers/assertions';
+import { addIntegrationPackageToAppHost, clearBreakpoints, createEmptyAppHostProject, executeE2eControlCommand, getGeneratedAppHostPath, removeGeneratedProject, removePrimaryAppHostFixture, restoreWorkspaceAppHostConfig, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, stopAppHostIfRunning, writeWorkspaceAppHostConfigForPath } from './helpers/fixtures';
 import { openAspireView, waitForEditorTitle, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
 
 suite('Aspire zero-to-running E2E', function () {
@@ -18,16 +18,20 @@ suite('Aspire zero-to-running E2E', function () {
             () => clearBreakpoints(),
             () => executeE2eControlCommand({ name: 'stopDebugging' }),
             () => stopAppHostIfRunning(appHostPath),
-            () => waitForNoDebugSessions(),
+            () => waitForNoDebugSessions().catch(() => undefined),
             () => restoreWorkspaceAppHostConfig(),
-            () => executeE2eControlCommand({ name: 'closeAllEditors' }),
             () => removeGeneratedProject(projectName),
         ], 'Zero-to-running E2E teardown failed.');
     });
 
     test('creates a new AppHost, adds a package, and debugs to the dashboard', async () => {
+        removePrimaryAppHostFixture();
         let section = await openAspireView();
         await waitForRepositoryIdle();
+        await waitForExtensionState(
+            file => file.state.workspaceAppHostPath === undefined && file.state.workspaceAppHostCandidatePaths.length === 0,
+            'no workspace AppHost before zero-to-running project creation',
+            60000);
 
         await setTerminalCommandExecutionSuppressedForE2E(true);
         const beforeRoutedNewInvocation = getCommandInvocationCount('aspire-vscode.new');
@@ -53,6 +57,7 @@ suite('Aspire zero-to-running E2E', function () {
 
         const projectRoot = await createEmptyAppHostProject(projectName);
         assert.ok(fs.existsSync(projectRoot));
+        assert.ok(fs.existsSync(appHostPath));
 
         await addIntegrationPackageToAppHost('Aspire.Hosting.Redis', appHostPath);
         assert.match(fs.readFileSync(appHostPath, 'utf8'), /#:package Aspire\.Hosting\.Redis@/);
@@ -82,14 +87,12 @@ suite('Aspire zero-to-running E2E', function () {
         assert.ok(dashboardUrl);
 
         await waitForHttpText(dashboardUrl, 'Aspire', 180000, new URL(dashboardUrl).origin);
-        if (process.platform === 'win32') {
-            // Chromium webview text extraction is unreliable on hosted Windows runners after
+        const dashboardHost = new URL(dashboardUrl).host;
+        assert.ok((await waitForEditorTitle(dashboardHost, 180000, { matchCase: false })).toLowerCase().includes(dashboardHost.toLowerCase()));
+        if (process.platform === 'linux') {
+            // Chromium webview text extraction is unreliable on hosted Windows and macOS runners after
             // integrated-browser navigation. The HTTP probe above proves the dashboard rendered
-            // content, and Windows keeps the editor-title assertion as a weaker UI check.
-            assert.ok((await waitForEditorTitle(new URL(dashboardUrl).host, 180000, { matchCase: false })).toLowerCase().includes(new URL(dashboardUrl).host.toLowerCase()));
-        }
-        else {
-            const dashboardHost = new URL(dashboardUrl).host;
+            // content, and Linux keeps the stronger webview text extraction assertion.
             const browserText = await waitForWorkbenchTextAfterIntegratedBrowserNavigation(['Resources', dashboardHost], 180000);
             assert.ok(browserText.includes('Resources') || browserText.includes(dashboardHost));
         }

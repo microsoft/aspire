@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 import { yesLabel } from '../loc/strings';
 import { checkForExistingAppHostPathInWorkspace, getCommonExcludeGlob, findAspireSettingsFiles } from '../utils/workspace';
 import { AppHostDiscoveryService, getWorkspaceAppHostProjectSearchResult } from '../utils/appHostDiscovery';
+import { getAppHostDiscoveryExcludeGlob } from '../utils/workspaceFileSearch';
 
 suite('utils/workspace tests', () => {
     let sandbox: sinon.SinonSandbox;
@@ -72,8 +73,30 @@ suite('utils/workspace tests', () => {
         assert.ok(glob.includes('**/.vs/**'), 'Should exclude .vs');
         assert.ok(glob.includes('**/.vscode-test/**'), 'Should exclude .vscode-test');
         assert.ok(glob.includes('**/.worktrees/**'), 'Should exclude git worktrees');
+        assert.ok(glob.includes('**/.claude/**'), 'Should exclude agent worktrees');
         assert.ok(glob.includes('**/.idea/**'), 'Should exclude .idea');
         assert.ok(glob.includes('**/.git/**'), 'Should exclude .git');
+    });
+
+    test('getAppHostDiscoveryExcludeGlob skips user patterns that cannot be safely composed', () => {
+        sandbox.stub(vscode.workspace, 'getConfiguration').callsFake((section?: string) => ({
+            get: () => section === 'files'
+                ? {
+                    '**/safe-generated/**': true,
+                    '**/{generated,tmp}/**': true,
+                }
+                : {
+                    '**/safe-search/**': true,
+                    '**/coverage,dist/**': true,
+                },
+        } as unknown as vscode.WorkspaceConfiguration));
+
+        const glob = getAppHostDiscoveryExcludeGlob();
+
+        assert.ok(glob.includes('**/safe-generated/**'), 'Should include safe files.exclude pattern');
+        assert.ok(glob.includes('**/safe-search/**'), 'Should include safe search.exclude pattern');
+        assert.ok(!glob.includes('**/{generated,tmp}/**'), 'Should skip nested brace pattern');
+        assert.ok(!glob.includes('**/coverage,dist/**'), 'Should skip comma pattern');
     });
 
     test('AppHost selection quick pick shows aspire ls language and status metadata', async () => {

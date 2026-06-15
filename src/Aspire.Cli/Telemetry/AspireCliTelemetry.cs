@@ -3,9 +3,9 @@
 
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using Aspire.Hosting;
 using Aspire.Shared;
-using System.Runtime.InteropServices;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -46,6 +46,7 @@ internal sealed class AspireCliTelemetry : IHostedService
     private readonly ActivitySource _reportedActivitySource;
     private readonly IMachineInformationProvider _machineInformationProvider;
     private readonly ICIEnvironmentDetector _ciEnvironmentDetector;
+    private readonly ICodingAgentDetector _codingAgentDetector;
     private readonly ILogger<AspireCliTelemetry> _logger;
     private readonly List<KeyValuePair<string, object?>> _tagsList = [];
 
@@ -57,8 +58,9 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// <param name="logger">The logger instance for recording errors.</param>
     /// <param name="machineInformationProvider">The machine information provider.</param>
     /// <param name="ciEnvironmentDetector">The CI environment detector.</param>
-    public AspireCliTelemetry(ILogger<AspireCliTelemetry> logger, IMachineInformationProvider machineInformationProvider, ICIEnvironmentDetector ciEnvironmentDetector)
-        : this(logger, machineInformationProvider, ciEnvironmentDetector, ReportedActivitySourceName, DiagnosticsActivitySourceName)
+    /// <param name="codingAgentDetector">The coding agent detector.</param>
+    public AspireCliTelemetry(ILogger<AspireCliTelemetry> logger, IMachineInformationProvider machineInformationProvider, ICIEnvironmentDetector ciEnvironmentDetector, ICodingAgentDetector codingAgentDetector)
+        : this(logger, machineInformationProvider, ciEnvironmentDetector, codingAgentDetector, ReportedActivitySourceName, DiagnosticsActivitySourceName)
     {
     }
 
@@ -69,13 +71,15 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// <param name="logger">The logger instance for recording errors.</param>
     /// <param name="machineInformationProvider">The machine information provider.</param>
     /// <param name="ciEnvironmentDetector">The CI environment detector.</param>
+    /// <param name="codingAgentDetector">The coding agent detector.</param>
     /// <param name="reportedSourceName">The name for the reported activity source.</param>
     /// <param name="diagnosticsSourceName">The name for the diagnostics activity source.</param>
-    internal AspireCliTelemetry(ILogger<AspireCliTelemetry> logger, IMachineInformationProvider machineInformationProvider, ICIEnvironmentDetector ciEnvironmentDetector, string reportedSourceName, string diagnosticsSourceName)
+    internal AspireCliTelemetry(ILogger<AspireCliTelemetry> logger, IMachineInformationProvider machineInformationProvider, ICIEnvironmentDetector ciEnvironmentDetector, ICodingAgentDetector codingAgentDetector, string reportedSourceName, string diagnosticsSourceName)
     {
         _logger = logger;
         _machineInformationProvider = machineInformationProvider;
         _ciEnvironmentDetector = ciEnvironmentDetector;
+        _codingAgentDetector = codingAgentDetector;
         _reportedActivitySource = new ActivitySource(reportedSourceName);
         _diagnosticsActivitySource = new ActivitySource(diagnosticsSourceName);
     }
@@ -224,6 +228,12 @@ internal sealed class AspireCliTelemetry : IHostedService
             // This is consistent with dashboard version data.
             _tagsList.Add(new(TelemetryConstants.Tags.CliVersion, GetCliVersion()));
             _tagsList.Add(new(TelemetryConstants.Tags.CliBuildId, GetCliBuildId()));
+
+            var codingAgent = _codingAgentDetector.GetCodingAgent();
+            if (codingAgent is not null)
+            {
+                _tagsList.Add(new(TelemetryConstants.Tags.CodingAgent, codingAgent));
+            }
 
             _tagsList.Add(new(TelemetryConstants.Tags.DeploymentEnvironmentName, _ciEnvironmentDetector.IsCIEnvironment() ? "ci" : "local"));
 

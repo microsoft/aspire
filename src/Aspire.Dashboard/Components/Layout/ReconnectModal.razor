@@ -7,6 +7,7 @@
             <div></div>
             <div></div>
         </div>
+        @* Blazor circuit reconnection messages *@
         <p class="components-reconnect-first-attempt-visible">
             @((MarkupString)Loc[nameof(Layout.ReconnectFirstAttemptText)].Value)
         </p>
@@ -19,6 +20,15 @@
         <div class="components-reconnect-failed-visible">
             <FluentButton Id="components-reconnect-button" Appearance="Appearance.Accent">
                 @Loc[nameof(Layout.ReconnectRetryButtonText)]
+            </FluentButton>
+        </div>
+        @* Resource service connection messages *@
+        <p class="components-reconnect-resource-service-disconnected-visible">
+            @Loc[nameof(Layout.ResourceServiceReconnectDisconnectedText)]
+        </p>
+        <div class="components-reconnect-resource-service-retry-visible">
+            <FluentButton Id="components-reconnect-resource-service-button" Appearance="Appearance.Accent">
+                @Loc[nameof(Layout.ResourceServiceReconnectRetryButtonText)]
             </FluentButton>
         </div>
     </div>

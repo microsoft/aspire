@@ -468,8 +468,15 @@
   <data name="ManageDataDialogTitle" xml:space="preserve">
     <value>Manage logs and telemetry</value>
   </data>
+  <data name="ManageDataAllDataCheckboxLabel" xml:space="preserve">
+    <value>All data</value>
+  </data>
   <data name="ManageDataConsoleLogs" xml:space="preserve">
     <value>Console logs</value>
+  </data>
+  <data name="ManageDataDataTypeForResourceCheckboxLabel" xml:space="preserve">
+    <value>{0} for {1}</value>
+    <comment>{0} is the data type display name. {1} is the parent resource display name.</comment>
   </data>
   <data name="ManageDataExportButtonText" xml:space="preserve">
     <value>Export selected</value>

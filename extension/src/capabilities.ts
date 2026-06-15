@@ -16,6 +16,8 @@ export type Capability =
     | 'go' // Support for running Go projects
     | 'golang.go' // Older AppHost versions used this extension identifier instead of go
     | 'node' // Support for running Node.js projects
+    | 'bun' // Support for running Bun projects
+    | 'oven.bun-vscode' // Bun debug adapter extension identifier
     | 'browser' // Support for browser debugging (built-in to VS Code via js-debug)
     | 'azure-functions'; // Support for running Azure Functions projects
 
@@ -51,6 +53,10 @@ export function isNodeInstalled() {
     return true;
 }
 
+export function isBunInstalled() {
+    return isExtensionInstalled("oven.bun-vscode");
+}
+
 export function getSupportedCapabilities(): Capabilities {
     const capabilities: Capabilities = ['prompting', 'baseline.v1', 'secret-prompts.v1', 'file-pickers.v1', 'build-dotnet-using-cli'];
 
@@ -83,6 +89,11 @@ export function getSupportedCapabilities(): Capabilities {
     if (isNodeInstalled()) {
         capabilities.push("node");
         capabilities.push("browser");
+    }
+
+    if (isBunInstalled()) {
+        capabilities.push("bun");
+        capabilities.push("oven.bun-vscode");
     }
 
     return capabilities;

@@ -6,7 +6,6 @@ using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Foundry;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting;
 
@@ -202,30 +201,41 @@ public static class HostedAgentResourceBuilderExtensions
                 path: protocol.Path,
                 displayName: "Send Message",
                 endpointName: "http",
+                commandName: "send-message",
                 commandOptions: new()
                 {
                     Method = HttpMethod.Post,
                     IconName = "ChatSparkle",
                     IconVariant = IconVariant.Regular,
                     IsHighlighted = true,
-                    PrepareRequest = async ctx =>
-                    {
-                        var interactionService = ctx.ServiceProvider.GetRequiredService<IInteractionService>();
-                        var result = await interactionService.PromptInputAsync(
-                            title: protocol.PromptTitle,
-                            message: "Enter a message to send to the agent.",
-                            inputLabel: "Message",
-                            placeHolder: "I would like to know the weather today.",
-                            cancellationToken: ctx.CancellationToken
-                        ).ConfigureAwait(true);
-                        if (result.Canceled || string.IsNullOrWhiteSpace(result.Data.Value))
+                    Arguments =
+                    [
+                        new InteractionInput
                         {
-                            ctx.HttpClient.CancelPendingRequests();
-                            throw new OperationCanceledException("User canceled the input prompt.");
+                            Name = "message",
+                            InputType = InputType.Text,
+                            Label = "Message",
+                            Required = true,
+                            Placeholder = "I would like to know the weather today.",
+                            Description = "Enter a message to send to the agent."
                         }
+                    ],
+                    ValidateArguments = ctx =>
+                    {
+                        var message = ctx.Inputs["message"];
+                        if (string.IsNullOrWhiteSpace(message.Value))
+                        {
+                            ctx.AddValidationError(message, "Message is required.");
+                        }
+
+                        return Task.CompletedTask;
+                    },
+                    PrepareRequest = ctx =>
+                    {
+                        var input = ctx.Arguments.GetString("message")!;
                         var request = ctx.Request;
-                        var input = result.Data.Value;
                         request.Content = protocol.CreateRequestContent(input);
+                        return Task.CompletedTask;
                     },
                     GetCommandResult = async ctx =>
                     {

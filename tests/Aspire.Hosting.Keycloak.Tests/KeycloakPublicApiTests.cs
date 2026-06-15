@@ -162,7 +162,7 @@ public class KeycloakPublicApiTests
 
         var containerAnnotation = keycloak.Resource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>().Single();
 
-        var entries = await containerAnnotation.Callback(new() { Model = keycloakResource, ServiceProvider = app.Services }, CancellationToken.None);
+        var entries = await containerAnnotation.Callback(new() { Model = keycloakResource, Services = app.Services }, CancellationToken.None);
 
         Assert.Equal("/opt/keycloak/data/import", containerAnnotation.DestinationPath);
     }
@@ -187,7 +187,7 @@ public class KeycloakPublicApiTests
 
         var containerAnnotation = keycloak.Resource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>().Single();
 
-        var entries = await containerAnnotation.Callback(new() { Model = keycloakResource, ServiceProvider = app.Services }, CancellationToken.None);
+        var entries = await containerAnnotation.Callback(new() { Model = keycloakResource, Services = app.Services }, CancellationToken.None);
 
         Assert.Equal("/opt/keycloak/data/import", containerAnnotation.DestinationPath);
         var realmFile = Assert.IsType<ContainerFile>(Assert.Single(entries));

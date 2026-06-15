@@ -77,7 +77,7 @@ function runWithProcessTreeTimeout(command, args, extraEnv, timeout) {
         shell: false,
         stdio: 'inherit',
         detached: process.platform !== 'win32',
-      });
+      })
 
     let timedOut = false;
     let settled = false;
@@ -105,7 +105,7 @@ function runWithProcessTreeTimeout(command, args, extraEnv, timeout) {
 
       settle();
       reject(error);
-    });
+    })
 
     child.on('close', (exitCode, signal) => {
       if (settled) {
@@ -501,7 +501,6 @@ async function main() {
     cliPathForCleanup = cliPath;
     validateCliPath(cliPath);
     const appHostSdkVersion = resolveAppHostSdkVersion(cliPath);
-    const packageSource = getLocalPackageSourceDirectories()[0];
     prepareWorkspaceFixture(cliPath, appHostSdkVersion);
     restoreWorkspaceFixture();
     const vsixPath = process.env.ASPIRE_EXTENSION_E2E_VSIX
@@ -530,7 +529,6 @@ async function main() {
       ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS: process.env.ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS === 'true' ? 'true' : 'false',
       ASPIRE_EXTENSION_E2E_PRIMARY_APPHOST: primaryAppHostProject,
       ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION: appHostSdkVersion,
-      ...(packageSource ? { ASPIRE_EXTENSION_E2E_PACKAGE_SOURCE: packageSource } : {}),
       ASPIRE_EXTENSION_E2E_EXTESTER_MODULE: extesterModule,
       VSCODE_NLS_CONFIG: JSON.stringify({ locale: 'en', availableLanguages: {} }),
       LANG: 'C.UTF-8',
@@ -819,8 +817,7 @@ function writeAppHostProject(projectName, resolvedAppHostSdkVersion) {
 </Project>
 `);
 
-  fs.writeFileSync(path.join(projectDirectory, 'AppHost.cs'), `${csharpFileHeader}#pragma warning disable ASPIREINTERACTION001
-
+  fs.writeFileSync(path.join(projectDirectory, 'AppHost.cs'), `${csharpFileHeader}
 var builder = DistributedApplication.CreateBuilder(args);
 
 builder.AddProject<Projects.AspireE2E_Worker>("e2e-worker")
@@ -849,9 +846,49 @@ builder.AddProject<Projects.AspireE2E_Worker>("e2e-worker")
                 new InteractionInput { Name = "threshold", Label = "Threshold", InputType = InputType.Number },
                 new InteractionInput { Name = "token", Label = "Token", InputType = InputType.SecretText },
             ],
+        })
+    .WithCommand(
+        "disabled-e2e-command",
+        "disabled-e2e-command",
+        static _ => Task.FromResult(CommandResults.Success()),
+        new CommandOptions
+        {
+            Description = "Disabled command shown in the VS Code tree.",
+            UpdateState = _ => ResourceCommandState.Disabled,
+        })
+    .WithCommand(
+        "hidden-e2e-command",
+        "hidden-e2e-command",
+        static _ => Task.FromResult(CommandResults.Success()),
+        new CommandOptions
+        {
+            Description = "Hidden command excluded from the VS Code tree.",
+            UpdateState = _ => ResourceCommandState.Hidden,
+        })
+    .WithCommand(
+        "api-only-e2e-command",
+        "api-only-e2e-command",
+        static _ => Task.FromResult(CommandResults.Success()),
+        new CommandOptions
+        {
+            Description = "API-only command excluded from the VS Code tree.",
+            Visibility = ResourceCommandVisibility.Api,
+        })
+    .WithCommand(
+        "unknown-state-e2e-command",
+        "unknown-state-e2e-command",
+        static _ => Task.FromResult(CommandResults.Success()),
+        new CommandOptions
+        {
+            Description = "Unknown-state command excluded from the VS Code tree.",
+            UpdateState = _ => (ResourceCommandState)999,
         });
 
+builder.AddResource(new NoCommandsResource("e2e-no-commands"));
+
 builder.Build().Run();
+
+sealed class NoCommandsResource(string name) : Aspire.Hosting.ApplicationModel.Resource(name);
 `);
 }
 
@@ -920,7 +957,7 @@ function getAspireCliEnvironment(extraEnv = {}) {
     ...process.env,
     ASPIRE_HOME: process.env.ASPIRE_EXTENSION_E2E_ASPIRE_HOME || isolatedAspireHome,
     ASPIRE_CLI_START_TIMEOUT: process.env.ASPIRE_EXTENSION_E2E_CLI_START_TIMEOUT || '300',
-    ASPIRE_CLI_TELEMETRY_OPTOUT: '1',
+    ASPIRE_CLI_TELEMETRY_OPTOUT: 'true',
     ASPIRE_VERSION_CHECK_DISABLED: 'true',
     DOTNET_CLI_TELEMETRY_OPTOUT: '1',
     DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE: '1',
@@ -964,12 +1001,13 @@ function getApprovedFallbackPackageSources() {
   ];
 }
 
-function getAvailableAppHostSdkVersions() {
+function getAvailablePackageVersions(packageId) {
   const versions = [];
   for (const sourceDirectory of getLocalPackageSourceDirectories()) {
     for (const packagePath of getFilesRecursive(sourceDirectory)) {
       const packageName = path.basename(packagePath);
-      const match = packageName.match(/^Aspire\.AppHost\.Sdk\.(.+)\.nupkg$/);
+      const escapedPackageId = packageId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const match = packageName.match(new RegExp(`^${escapedPackageId}\\.(.+)\\.nupkg$`));
       if (match) {
         versions.push(match[1]);
       }
@@ -977,6 +1015,13 @@ function getAvailableAppHostSdkVersions() {
   }
 
   return Array.from(new Set(versions)).sort(comparePackageVersionsDescending);
+}
+
+function getAvailableAppHostSdkVersions() {
+  const appHostVersions = getAvailablePackageVersions('Aspire.AppHost.Sdk');
+  const redisVersions = new Set(getAvailablePackageVersions('Aspire.Hosting.Redis'));
+  const versionsWithRedis = appHostVersions.filter(version => redisVersions.has(version));
+  return versionsWithRedis.length > 0 ? versionsWithRedis : appHostVersions;
 }
 
 function getLocalPackageSourceDirectories() {
@@ -1343,16 +1388,7 @@ function printFailureDiagnosticsSummary() {
       workspaceResources: state.state.workspaceResources?.map(resource => `${resource.name}:${resource.state}`),
       appHosts: state.state.appHosts?.map(appHost => appHost.appHostPath),
       launchingPaths: state.state.launchingPaths,
-      stoppingPaths: state.state.stoppingPaths,
       debugSessions: state.state.debugSessions?.map(redactDebugSessionForDiagnostics),
-      commandInvocations: takeLast(state.commandInvocations, 10),
-      terminalCommands: takeLast(state.terminalCommands, 10),
-      debugLaunches: takeLast(state.debugLaunches, 10),
-      debugConsoleOutputs: takeLast(state.debugConsoleOutputs, 10).map(output => ({
-        ...output,
-        output: tailLines(output.output, 5),
-      })),
-      control: state.control,
     }, null, 2), '  '));
   }
 
@@ -1395,10 +1431,6 @@ function findLatestExtensionLogPath() {
 function tailLines(value, lineCount) {
   const lines = value.split(/\r?\n/);
   return lines.slice(Math.max(0, lines.length - lineCount)).join('\n');
-}
-
-function takeLast(value, count) {
-  return Array.isArray(value) ? value.slice(Math.max(0, value.length - count)) : [];
 }
 
 function indentBlock(value, prefix) {

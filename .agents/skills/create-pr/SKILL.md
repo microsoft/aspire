@@ -35,7 +35,34 @@ Before starting, verify:
 - **Title**: concise summary of the change.
 - **Labels**: add labels only when they are clearly applicable. Use the `breaking-change` label when the PR breaks public APIs or fundamentally changes the behavior of an existing scenario. Do not use it for every behavior change, additive feature, routine bug fix, or implementation-only change. Examples from existing `breaking-change` issues include API shape/semantics changes, obsoleting a public API, changing endpoint allocation/wait behavior, changing Docker Compose publish behavior, and disabling local auth for Azure resources.
 
-### 3. Build PR body from template
+### 3. Detect non-trivial UI changes
+
+Before building the PR body, check whether the diff includes **non-trivial UI changes** to any of these areas:
+
+- **Dashboard** (`src/Aspire.Dashboard/`): changes to `.razor`, `.razor.cs`, `.css`, `.js`, or UI assets under `src/Aspire.Dashboard/wwwroot/` (e.g., `img/**`, `favicon.ico`) that alter layout, add/remove components, change interactive behavior, or modify visual appearance beyond minor text or spacing tweaks.
+- **CLI** (`src/Aspire.Cli/`): changes to command output formatting, interactive prompts, table/list rendering, spinners, progress indicators, or colored output beyond simple message text changes.
+- **VS Code Extension** (`extension/`): changes to webview panels, tree views, status bar items, quick pick UIs, editor decorations, contributed view configuration (`package.json`), or UI assets (`resources/**`) beyond minor label text changes.
+
+A change is **non-trivial** if it does more than:
+- Fix a typo or update a string literal without altering layout
+- Adjust a single CSS property (e.g., margin, padding) without changing visual structure
+- Change a tooltip or aria-label
+
+If non-trivial UI changes are detected, add a prominent `### Screenshots / Recordings` subsection in the PR body (under `## Description`) with the following content:
+
+```markdown
+### Screenshots / Recordings
+
+> **This PR includes UI changes.** Please add screenshots or screen recordings so reviewers can evaluate the visual changes without running locally.
+>
+> - For before/after comparisons, place them side-by-side or label them clearly.
+> - For interactive changes (animations, transitions, new flows), prefer a short screen recording (GIF or video).
+> - If you cannot capture visuals now, note what scenario to test and mark this section as TODO.
+
+<!-- Add screenshots/recordings here -->
+```
+
+### 4. Build PR body from template
 
 - Read `.github/pull_request_template.md`.
 - Use the template structure as the PR body.
@@ -134,7 +161,7 @@ Before starting, verify:
 - Keep `Fixes # (issue)` unless a concrete issue number is provided.
 - Write the body to a temporary file named `pr-body.md` in the repo root.
 
-### 4. Create the PR
+### 5. Create the PR
 
 Set `GH_PAGER` to `cat` to prevent interactive paging, then create the PR. The syntax differs by shell:
 
@@ -163,7 +190,7 @@ gh pr create `
 
 > **Shell differences:** `VAR=val command` is bash syntax for setting an env var for a single command. PowerShell requires a separate `$env:VAR = "val"` statement (persists for the session, which is harmless here).
 
-### 5. Handle existing PRs
+### 6. Handle existing PRs
 
 If a PR already exists for the branch:
 - Do not create another.
@@ -177,9 +204,9 @@ If a PR already exists for the branch:
 
 - Return the existing PR URL.
 
-### 6. Clean up
+### 7. Clean up
 
-After you are completely finished creating or updating the PR (after step 4 and, if needed, step 5), delete the temporary body file:
+After you are completely finished creating or updating the PR (after step 5 and, if needed, step 6), delete the temporary body file:
 - **bash:** `rm pr-body.md`
 - **PowerShell:** `Remove-Item pr-body.md`
 
@@ -190,7 +217,7 @@ After you are completely finished creating or updating the PR (after step 4 and,
 | `gh: command not found` | Tell the user to install `gh` from https://cli.github.com/ |
 | `gh auth` not logged in | Tell the user to run `gh auth login` |
 | `git push` rejected | Inform the user; do not force-push without explicit permission |
-| PR already exists | Follow step 6 above |
+| PR already exists | Follow step 6 (Handle existing PRs) above |
 
 ## Notes
 
@@ -198,3 +225,4 @@ After you are completely finished creating or updating the PR (after step 4 and,
 - Keep the body aligned with `.github/pull_request_template.md`.
 - If the user asks to preview before creating, show the prepared PR body first, then create after confirmation.
 - For checklist sections with Yes/No alternatives, prefer selecting exactly one option per question when information is known.
+- **After creating the PR**, if non-trivial UI changes were detected in step 3, alert the user with a message like: "This PR includes non-trivial UI changes to [Dashboard/CLI/Extension]. Please add screenshots or screen recordings to the PR description so reviewers can evaluate the visual changes without running locally." Include the PR URL so the user can edit it directly.

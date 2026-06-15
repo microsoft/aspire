@@ -10,6 +10,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// when an HTTPS certificate is determined to be available for the resource.
 /// </summary>
 [Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport(ExposeProperties = true)]
 public sealed class HttpsEndpointUpdateCallbackContext
 {
     /// <summary>

@@ -1,6 +1,6 @@
-# Aspire.Hosting.Go library
+# Go app hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure Go applications.
+Use this integration to model, configure, and orchestrate Go applications in an Aspire solution.
 
 ## Getting started
 
@@ -9,17 +9,19 @@ Provides extension methods and resource definitions for an Aspire AppHost to con
 The **Go toolchain** (`go`) must be available on the PATH of the machine running the AppHost.
 For GoLand remote debugging, [Delve](https://github.com/go-delve/delve) (`dlv`) must also be on the PATH.
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire Go library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.Go` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Go
+```bash
+aspire add Aspire.Hosting.Go
 ```
 
 ## Usage example
 
-In the _AppHost.cs_ file of `AppHost`, add a Go application resource:
+In the AppHost, add a Go application resource:
+
+**C#**
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
@@ -30,6 +32,21 @@ var api = builder.AddGoApp("api", "../go-api")
     .WithOtlpExporter();
 
 builder.Build().Run();
+```
+
+**TypeScript**
+
+```typescript
+import { createBuilder } from "./.aspire/modules/aspire.mjs";
+
+const builder = await createBuilder();
+
+const api = await builder.addGoApp("api", "../go-api")
+    .withHttpEndpoint({ port: 8080 })
+    .withExternalHttpEndpoints()
+    .withOtlpExporter();
+
+await builder.build().run();
 ```
 
 The method executes the package as `go run .` from the directory containing `go.mod`.
@@ -103,9 +120,11 @@ See the [JetBrains docs](https://www.jetbrains.com/help/go/attach-to-running-go-
 
 ## Additional documentation
 
-- [.NET Aspire documentation](https://learn.microsoft.com/dotnet/aspire)
+- https://aspire.dev/integrations/gallery/
+- https://aspire.dev/integrations/frameworks/go/go-host/
+- [Aspire documentation](https://aspire.dev/)
 - [Delve debugger](https://github.com/go-delve/delve)
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

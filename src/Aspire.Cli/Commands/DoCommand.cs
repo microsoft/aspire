@@ -4,10 +4,8 @@
 using System.CommandLine;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
-using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -21,8 +19,9 @@ internal sealed class DoCommand : PipelineCommandBase
 
     private readonly Argument<string> _stepArgument;
 
-    public DoCommand(IDotNetCliRunner runner, IInteractionService interactionService, IProjectLocator projectLocator, AspireCliTelemetry telemetry, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfiguration configuration, ILogger<DoCommand> logger, IAnsiConsole ansiConsole)
-        : base("do", DoCommandStrings.Description, runner, interactionService, projectLocator, telemetry, features, updateNotifier, executionContext, hostEnvironment, projectFactory, configuration, logger, ansiConsole)
+    public DoCommand(IDotNetCliRunner runner, IProjectLocator projectLocator, IFeatures features, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfiguration configuration, ILogger<DoCommand> logger, IAnsiConsole ansiConsole,
+        CommonCommandServices services)
+        : base("do", DoCommandStrings.Description, runner, projectLocator, features, hostEnvironment, projectFactory, configuration, logger, ansiConsole, services)
     {
         _stepArgument = new Argument<string>("step")
         {
@@ -55,7 +54,7 @@ internal sealed class DoCommand : PipelineCommandBase
 
             // For a plain `aspire do` invocation, the extension host prompts the user for a step
             // later in GetRunArgumentsAsync, so don't add a validation error there.
-            if (!ExtensionHelper.IsExtensionHost(interactionService, out _, out _))
+            if (!ExtensionHelper.IsExtensionHost(InteractionService, out _, out _))
             {
                 result.AddError(DoCommandStrings.StepArgumentRequired);
             }

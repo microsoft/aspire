@@ -120,38 +120,13 @@ export function terminateProcessTree(pid: number | undefined, signal: NodeJS.Sig
         return;
     }
 
-    const descendantPids = getDescendantProcessIds(pid);
     try {
         process.kill(-pid, signal);
     } catch {
-        // External processes that VS Code starts are not guaranteed to be process-group leaders.
-    }
-
-    for (const descendantPid of descendantPids) {
         try {
-            process.kill(descendantPid, signal);
+            process.kill(pid, signal);
         } catch {
-            // The process may have exited between process discovery and cleanup.
+            // The process may have exited between timeout detection and cleanup.
         }
     }
-
-    try {
-        process.kill(pid, signal);
-    } catch {
-        // The process may have exited between timeout detection and cleanup.
-    }
-}
-
-function getDescendantProcessIds(pid: number): number[] {
-    const result = spawnSync('pgrep', ['-P', String(pid)], { encoding: 'utf8', timeout: 5000 });
-    if (result.status !== 0 || !result.stdout) {
-        return [];
-    }
-
-    const childPids = result.stdout
-        .split(/\r?\n/)
-        .map(line => Number.parseInt(line, 10))
-        .filter(childPid => Number.isInteger(childPid) && childPid > 0);
-
-    return childPids.flatMap(childPid => [...getDescendantProcessIds(childPid), childPid]);
 }

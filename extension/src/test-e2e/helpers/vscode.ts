@@ -65,6 +65,17 @@ export async function waitForTreeItem(section: TreeSection, label: string, timeo
     }, timeoutMs, `Timed out waiting for tree item '${label}'.`);
 }
 
+export async function waitForChildTreeItem(parent: TreeItem, label: string, timeoutMs = 30000): Promise<TreeItem> {
+    return await VSBrowser.instance.driver.wait(async () => {
+        try {
+            return await parent.findChildItem(label) ?? false;
+        }
+        catch {
+            return false;
+        }
+    }, timeoutMs, `Timed out waiting for child tree item '${label}' on '${await parent.getLabel()}'.`);
+}
+
 export async function waitForTreeItemDescription(section: TreeSection, label: string, expectedDescription: string, timeoutMs = 30000): Promise<TreeItem> {
     let lastDescription: string | undefined;
 
@@ -202,6 +213,28 @@ export async function chooseActiveQuickPick(label: string, timeoutMs = 30000): P
         }
     }, timeoutMs, `Timed out waiting for quick pick '${label}'. Visible labels: ${visibleLabels.join(', ') || '<none>'}.`);
     await item.select();
+}
+
+export async function getActiveQuickPickLabels(timeoutMs = 30000): Promise<string[]> {
+    const input = await VSBrowser.instance.driver.wait(async () => {
+        try {
+            return await InputBox.create();
+        }
+        catch {
+            return false;
+        }
+    }, timeoutMs, 'Timed out waiting for active quick pick to appear.');
+
+    return await VSBrowser.instance.driver.wait(async () => {
+        try {
+            const picks = await input.getQuickPicks();
+            const labels = await Promise.all(picks.map(pick => pick.getLabel()));
+            return labels.length > 0 ? labels : false;
+        }
+        catch {
+            return false;
+        }
+    }, timeoutMs, 'Timed out waiting for active quick pick labels.');
 }
 
 export async function waitForNotificationMessage(expectedText: string, timeoutMs = 30000): Promise<Notification> {

@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { getResources, getTerminalCommandCount, getTreeAppHostLabel, waitForCommandOutcome, waitForDashboardUrl, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForStoppingAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
+import { getResources, getTerminalCommandCount, getTreeAppHostLabel, waitForCommandOutcome, waitForDashboardUrl, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
 import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { cancelActiveInput, clickTreeItem, openAspireView, waitForTreeItem } from './helpers/vscode';
@@ -13,7 +13,7 @@ suite('Aspire AppHost tree E2E', function () {
             () => setTerminalCommandExecutionSuppressedForE2E(false),
             () => restoreWorkspaceCliPath(),
             () => stopPrimaryAppHostIfRunning(),
-            () => waitForNoRunningAppHost(),
+            () => waitForNoRunningAppHost().catch(() => undefined),
         ], 'AppHost tree E2E teardown failed.');
     });
 
@@ -61,16 +61,17 @@ suite('Aspire AppHost tree E2E', function () {
 
         await setTerminalCommandExecutionSuppressedForE2E(true);
         try {
-            const stopAppHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
-            const terminalBefore = getTerminalCommandCount();
-            await executeE2eControlCommand({ name: 'stopAppHost', appHostPath: stopAppHostPath });
-            await waitForCommandOutcome('aspire-vscode.stopAppHost', 'success');
+            const beforeTerminalCommand = getTerminalCommandCount();
+            await executeE2eControlCommand(
+                { name: 'stopAppHost', appHostPath: discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath() },
+                { waitFor: 'started' });
+
             await waitForTerminalCommand(
-                event => event.subcommand.includes('stop') && event.executionSuppressed,
-                'suppressed stop AppHost terminal command',
+                event => event.executionSuppressed && event.subcommand.startsWith('stop '),
+                'suppressed AppHost stop terminal routing',
                 60000,
-                terminalBefore);
-            await waitForStoppingAppHost(stopAppHostPath);
+                beforeTerminalCommand);
+            await waitForCommandOutcome('aspire-vscode.stopAppHost', 'success');
         } finally {
             await setTerminalCommandExecutionSuppressedForE2E(false);
         }

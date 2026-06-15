@@ -863,6 +863,15 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("InteractionButtonOk", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to All data.
+        /// </summary>
+        public static string ManageDataAllDataCheckboxLabel {
+            get {
+                return ResourceManager.GetString("ManageDataAllDataCheckboxLabel", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Console logs.
@@ -872,7 +881,16 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ManageDataConsoleLogs", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} for {1}.
+        /// </summary>
+        public static string ManageDataDataTypeForResourceCheckboxLabel {
+            get {
+                return ResourceManager.GetString("ManageDataDataTypeForResourceCheckboxLabel", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Manage logs and telemetry.
         /// </summary>
@@ -962,7 +980,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ManageDataResource", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Structured logs.
         /// </summary>

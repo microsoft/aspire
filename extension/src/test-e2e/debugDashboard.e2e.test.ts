@@ -16,8 +16,8 @@ suite('Aspire debug dashboard E2E', function () {
             () => restoreWorkspaceCliPath(),
             () => executeE2eControlCommand({ name: 'stopDebugging' }),
             () => stopPrimaryAppHostIfRunning(),
-            () => waitForNoDebugSessions(),
-            () => waitForNoRunningAppHost(),
+            () => waitForNoDebugSessions().catch(() => undefined),
+            () => waitForNoRunningAppHost().catch(() => undefined),
         ], 'Debug dashboard E2E teardown failed.');
     });
 
@@ -72,7 +72,11 @@ suite('Aspire debug dashboard E2E', function () {
         const originalSource = fs.readFileSync(appHostSourcePath, 'utf8');
 
         try {
-            fs.writeFileSync(appHostSourcePath, `${originalSource}\n__AspireE2EFlushRegressionMissingSymbol__();\n`);
+            const brokenSource = originalSource.replace(
+                'builder.Build().Run();',
+                '__AspireE2EFlushRegressionMissingSymbol__();\n\nbuilder.Build().Run();');
+            assert.notStrictEqual(brokenSource, originalSource, 'Expected AppHost fixture to contain builder.Build().Run().');
+            fs.writeFileSync(appHostSourcePath, brokenSource);
             await setShowStatusDelayForE2E(2500);
 
             const before = getCommandInvocationCount('aspire-vscode.debugAppHost');
@@ -86,7 +90,7 @@ suite('Aspire debug dashboard E2E', function () {
             await setShowStatusDelayForE2E(undefined);
             fs.writeFileSync(appHostSourcePath, originalSource);
             await executeE2eControlCommand({ name: 'stopDebugging' });
-            await waitForNoDebugSessions();
+            await waitForNoDebugSessions().catch(() => undefined);
         }
     });
 });

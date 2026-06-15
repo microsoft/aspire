@@ -17,8 +17,19 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     private readonly TemporaryWorkspace _workspace = TemporaryWorkspace.Create(outputHelper);
     private readonly List<ServiceProvider> _serviceProviders = [];
 
+    public DotNetAppHostProjectTests UseFakeRepoRoot()
+    {
+        // Tests that build their own fake bundle layout under a temp directory must opt out
+        // of the in-repo aspire-managed discovery; otherwise the repo's real built artifact
+        // shadows the fake bundle path the test pre-stamped into the layout.
+        DotNetAppHostProject.RepoLocalManagedPathProviderOverride = () => null;
+        return this;
+    }
+
     public void Dispose()
     {
+        DotNetAppHostProject.RepoLocalManagedPathProviderOverride = null;
+
         foreach (var serviceProvider in _serviceProviders)
         {
             serviceProvider.Dispose();
@@ -195,8 +206,43 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public async Task FindAndStopRunningInstanceAsync_CleansUpDeadPidSocketAndReturnsNoRunningInstance()
+    {
+        var appHostFile = CreateSingleFileAppHost();
+        var runner = new TestDotNetCliRunner();
+        var project = CreateDotNetAppHostProject(runner);
+        var socketPath = CreateMatchingSocketFile(appHostFile.FullName, int.MaxValue - 1);
+
+        var result = await project.FindAndStopRunningInstanceAsync(
+            appHostFile,
+            _workspace.WorkspaceRoot,
+            CancellationToken.None);
+
+        Assert.Equal(RunningInstanceResult.NoRunningInstance, result);
+        Assert.False(File.Exists(socketPath));
+    }
+
+    [Fact]
+    public async Task FindAndStopRunningInstanceAsync_KeepsLivePidSocketAndReportsStopFailureWhenConnectionFails()
+    {
+        var appHostFile = CreateSingleFileAppHost();
+        var runner = new TestDotNetCliRunner();
+        var project = CreateDotNetAppHostProject(runner);
+        var socketPath = CreateMatchingSocketFile(appHostFile.FullName, Environment.ProcessId);
+
+        var result = await project.FindAndStopRunningInstanceAsync(
+            appHostFile,
+            _workspace.WorkspaceRoot,
+            CancellationToken.None);
+
+        Assert.Equal(RunningInstanceResult.StopFailed, result);
+        Assert.True(File.Exists(socketPath));
+    }
+
+    [Fact]
     public async Task RunAsync_ProjectAppHostUsingCliBundlePassesBundleEnvironmentToRunner()
     {
+        UseFakeRepoRoot();
         var appHostFile = CreateProjectAppHost();
         var bundleRoot = CreateCliBundle(out var layout);
 
@@ -231,6 +277,13 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.Equal(
                 Path.Combine(bundleRoot.FullName, BundleDiscovery.ManagedDirectoryName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
                 env[BundleDiscovery.DashboardPathEnvVar]);
+            // Terminal host env vars are always injected when the bundle layout is available
+            // — see the comment in ConfigureCliBundleEnvironmentAsync. For CliBundle AppHosts
+            // they sit alongside the DCP/Dashboard vars; both point at aspire-managed.
+            Assert.Equal(
+                Path.Combine(bundleRoot.FullName, BundleDiscovery.ManagedDirectoryName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+                env[BundleDiscovery.TerminalHostPathEnvVar]);
+            Assert.Equal("terminalhost", env[BundleDiscovery.TerminalHostInvocationArgsEnvVar]);
             return Task.FromResult(0);
         };
 
@@ -241,6 +294,183 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             NoRestore = false,
             WorkingDirectory = _workspace.WorkspaceRoot,
             EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProjectAppHostNotUsingCliBundleStillReceivesTerminalHostEnvironment()
+    {
+        UseFakeRepoRoot();
+        // AppHosts created by `aspire new` default to per-RID NuGets (AspireUseCliBundle != true).
+        // Today no per-RID NuGet stamps the terminal host metadata path, so without env-var
+        // injection WithTerminal() resources fail at run time with <unresolved>. The CLI ships
+        // aspire-managed in its bundle and that binary exposes the `terminalhost` subcommand,
+        // so injecting ASPIRE_TERMINAL_HOST_PATH unconditionally lights up WithTerminal() for
+        // per-RID-NuGet AppHosts launched via `aspire run`.
+        var appHostFile = CreateProjectAppHost();
+        var bundleRoot = CreateCliBundle(out var layout);
+
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) =>
+            {
+                return (0, JsonDocument.Parse($$"""
+                    {
+                      "Properties": {
+                        "MSBuildVersion": "17.0.0",
+                        "IsAspireHost": "true",
+                        "AspireHostingSDKVersion": "{{VersionHelper.GetDefaultTemplateVersion()}}",
+                        "AspireUseCliBundle": "false"
+                      },
+                      "Items": {}
+                    }
+                    """));
+            }
+        };
+        var project = CreateDotNetAppHostProject(runner, layout);
+
+        runner.RunAsyncCallback = (projectFile, _, _, _, _, env, _, _, _) =>
+        {
+            Assert.Equal(appHostFile.FullName, projectFile.FullName);
+
+            // DCP/Dashboard env vars must NOT be injected for non-CliBundle AppHosts —
+            // they would clobber the per-RID NuGet metadata path the AppHost was built against.
+            Assert.False(env!.ContainsKey(BundleDiscovery.DcpPathEnvVar));
+            Assert.False(env.ContainsKey(BundleDiscovery.DashboardPathEnvVar));
+
+            // Terminal host env vars must be injected even though AspireUseCliBundle=false.
+            Assert.Equal(
+                Path.Combine(bundleRoot.FullName, BundleDiscovery.ManagedDirectoryName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+                env[BundleDiscovery.TerminalHostPathEnvVar]);
+            Assert.Equal("terminalhost", env[BundleDiscovery.TerminalHostInvocationArgsEnvVar]);
+            return Task.FromResult(0);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProjectAppHostNotUsingCliBundleUsesRepoLocalManagedWhenAvailable()
+    {
+        // When running `dotnet run --project src/Aspire.Cli` from inside the Aspire repo,
+        // the just-built aspire-managed under artifacts/ should be preferred over the bundle
+        // layout aspire-managed. The bundle layout points at the user's installed CLI cache
+        // (e.g. ~/.aspire/bundle/) whose aspire-managed predates the `terminalhost`
+        // subcommand and fails the AppHost launch.
+        var appHostFile = CreateProjectAppHost();
+        var bundleRoot = CreateCliBundle(out var layout);
+        var repoLocalManaged = Path.Combine(_workspace.WorkspaceRoot.FullName, "repo-local-aspire-managed");
+        File.WriteAllText(repoLocalManaged, "fake");
+        DotNetAppHostProject.RepoLocalManagedPathProviderOverride = () => repoLocalManaged;
+
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) =>
+            {
+                return (0, JsonDocument.Parse($$"""
+                    {
+                      "Properties": {
+                        "MSBuildVersion": "17.0.0",
+                        "IsAspireHost": "true",
+                        "AspireHostingSDKVersion": "{{VersionHelper.GetDefaultTemplateVersion()}}",
+                        "AspireUseCliBundle": "false"
+                      },
+                      "Items": {}
+                    }
+                    """));
+            }
+        };
+        var project = CreateDotNetAppHostProject(runner, layout);
+
+        runner.RunAsyncCallback = (_, _, _, _, _, env, _, _, _) =>
+        {
+            // Repo-local managed path wins over the bundle layout path.
+            Assert.Equal(repoLocalManaged, env![BundleDiscovery.TerminalHostPathEnvVar]);
+            Assert.NotEqual(
+                Path.Combine(bundleRoot.FullName, BundleDiscovery.ManagedDirectoryName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+                env[BundleDiscovery.TerminalHostPathEnvVar]);
+            // Args still synthesized — repo-local aspire-managed is the same dispatcher binary.
+            Assert.Equal("terminalhost", env[BundleDiscovery.TerminalHostInvocationArgsEnvVar]);
+            return Task.FromResult(0);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsync_PreservesExplicitTerminalHostEnvironmentVariables()
+    {
+        UseFakeRepoRoot();
+        // Users can side-load a custom terminal host binary by setting ASPIRE_TERMINAL_HOST_PATH
+        // themselves. The CLI must not overwrite either the path OR the invocation args in that
+        // case — a custom binary may not understand the "terminalhost" dispatcher arg that
+        // aspire-managed uses, so the path/args must be preserved together as a pair.
+        var appHostFile = CreateProjectAppHost();
+        _ = CreateCliBundle(out var layout);
+        var customTerminalHost = Path.Combine(_workspace.WorkspaceRoot.FullName, "my-custom-terminal-host");
+
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) =>
+            {
+                return (0, JsonDocument.Parse($$"""
+                    {
+                      "Properties": {
+                        "MSBuildVersion": "17.0.0",
+                        "IsAspireHost": "true",
+                        "AspireHostingSDKVersion": "{{VersionHelper.GetDefaultTemplateVersion()}}",
+                        "AspireUseCliBundle": "false"
+                      },
+                      "Items": {}
+                    }
+                    """));
+            }
+        };
+        var project = CreateDotNetAppHostProject(runner, layout);
+
+        runner.RunAsyncCallback = (_, _, _, _, _, env, _, _, _) =>
+        {
+            // User-provided path is preserved verbatim.
+            Assert.Equal(customTerminalHost, env![BundleDiscovery.TerminalHostPathEnvVar]);
+            // And the CLI must NOT synthesize invocation args for a binary it didn't choose —
+            // those args are bundle-binary-specific (today: "terminalhost" for aspire-managed).
+            Assert.False(env.ContainsKey(BundleDiscovery.TerminalHostInvocationArgsEnvVar));
+            return Task.FromResult(0);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>
+            {
+                [BundleDiscovery.TerminalHostPathEnvVar] = customTerminalHost
+            }
         }, CancellationToken.None);
 
         Assert.Equal(0, exitCode);
@@ -975,6 +1205,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     [Fact]
     public async Task RunAsync_SingleFileAppHostUsingCliBundlePassesBundleEnvironmentToRunner()
     {
+        UseFakeRepoRoot();
         var appHostFile = CreateSingleFileAppHost(useCliBundle: true);
         var bundleRoot = CreateCliBundle(out var layout);
 
@@ -1013,6 +1244,10 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.Equal(
                 Path.Combine(bundleRoot.FullName, BundleDiscovery.ManagedDirectoryName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
                 env[BundleDiscovery.DashboardPathEnvVar]);
+            Assert.Equal(
+                Path.Combine(bundleRoot.FullName, BundleDiscovery.ManagedDirectoryName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+                env[BundleDiscovery.TerminalHostPathEnvVar]);
+            Assert.Equal("terminalhost", env[BundleDiscovery.TerminalHostInvocationArgsEnvVar]);
             return Task.FromResult(0);
         };
 
@@ -1402,6 +1637,20 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             """.Replace("{0}", useCliBundleProperty, StringComparison.Ordinal));
 
         return new FileInfo(appHostPath);
+    }
+
+    private string CreateMatchingSocketFile(string appHostPath, int pid)
+    {
+        var backchannelsDir = Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "cli", "bch");
+        Directory.CreateDirectory(backchannelsDir);
+
+        var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(appHostPath, _workspace.WorkspaceRoot.FullName);
+        var appHostId = Path.GetFileName(prefix);
+        var socketPath = Path.Combine(
+            backchannelsDir,
+            $"{appHostId}a1b2C3d4.{pid.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+        File.WriteAllText(socketPath, "");
+        return socketPath;
     }
 
     private FileInfo CreateBuiltAppHostAssembly(string fileName)

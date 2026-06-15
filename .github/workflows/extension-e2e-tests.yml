@@ -445,9 +445,6 @@ jobs:
             extension/.test-storage/**/aspire-home/logs/**
             extension/.test-storage/**/aspire-home/cache/apphost-info/**
             extension/.test-workspaces/**/.aspire/**
-            extension/.test-workspaces/**/.vscode/settings.json
-            extension/.test-workspaces/**/*.cs
-            extension/.test-workspaces/**/*.csproj
             extension/.test-workspaces/**/*.log
             extension/.test-recordings/**
           if-no-files-found: ignore
