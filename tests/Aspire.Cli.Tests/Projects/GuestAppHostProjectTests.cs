@@ -956,13 +956,11 @@ public class GuestAppHostProjectTests : IDisposable
     /// </summary>
     /// <remarks>
     /// The test drives <see cref="GuestAppHostProject.UpdatePackagesAsync"/> to demonstrate
-    /// the update scenario (stale on-disk SDK version, update available to match CLI), then
-    /// directly exercises <c>WarnIfCliSdkVersionSkew</c> in the same state that would exist
-    /// inside <c>BuildAndGenerateSdkAsync</c> (in-memory config updated, disk still stale).
-    /// The <c>UpdatePackagesAsync</c> call itself will fail at the regeneration step because
-    /// the test uses <see cref="FakeFailingAppHostServerProject"/>, but that is expected —
-    /// the assertion validates that the skew-warning method does not emit a spurious warning
-    /// for the stale on-disk version.
+    /// the update scenario (stale on-disk SDK version, update available to match CLI). With
+    /// <see cref="FakeSucceedingAppHostServerProject"/> and <see cref="FakeAppHostServerSession"/>
+    /// (which returns empty results from <c>GenerateCodeAsync</c>), the full update flow
+    /// succeeds. The assertion validates that the skew-warning method does not emit a spurious
+    /// warning for the stale on-disk version when the update is aligning versions to the CLI.
     /// </remarks>
     [Fact]
     public async Task UpdatePackagesAsync_DoesNotEmitStaleVersionSkewWarningDuringUpdate()
