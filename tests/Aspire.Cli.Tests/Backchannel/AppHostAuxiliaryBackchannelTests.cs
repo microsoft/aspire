@@ -7,7 +7,7 @@ using System.Runtime.CompilerServices;
 using Aspire.Cli.Backchannel;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
-using JsonRpcNet;
+using CurlyRpc;
 
 namespace Aspire.Cli.Tests.Backchannel;
 
@@ -106,7 +106,7 @@ public class AppHostAuxiliaryBackchannelTests
             await clientSocket.ConnectAsync((IPEndPoint)_listener.LocalEndpoint).DefaultTimeout();
             var serverSocket = await acceptTask.DefaultTimeout();
             var serverStream = new NetworkStream(serverSocket, ownsSocket: true);
-            // JsonRpcNet has no (handler, target) constructor: construct with options carrying the wire
+            // CurlyRpc has no (handler, target) constructor: construct with options carrying the wire
             // casing, then register the target separately. Reflection-based AddLocalRpcTarget is fine in
             // tests (this project is not trimmed/AOT-published).
             var messageHandler = new HeaderDelimitedMessageHandler(serverStream, serverStream);

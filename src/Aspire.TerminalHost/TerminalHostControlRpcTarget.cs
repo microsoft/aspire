@@ -38,11 +38,11 @@ internal sealed class TerminalHostControlRpcTarget
     /// </summary>
     /// <remarks>
     /// Kept as an instance method (not static) so it can be registered as a method-group delegate
-    /// (<c>_target.GetInfoAsync</c>) bound to the target instance via JsonRpcNet's
+    /// (<c>_target.GetInfoAsync</c>) bound to the target instance via CurlyRpc's
     /// <c>AddLocalRpcMethod</c>. CA1822 is suppressed for this reason.
     /// </remarks>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:Mark members as static",
-        Justification = "Must remain an instance method so it can be registered as an instance-bound delegate via JsonRpcNet AddLocalRpcMethod.")]
+        Justification = "Must remain an instance method so it can be registered as an instance-bound delegate via CurlyRpc AddLocalRpcMethod.")]
     public Task<TerminalHostInfoResponse> GetInfoAsync(CancellationToken cancellationToken = default)
     {
         _ = cancellationToken;

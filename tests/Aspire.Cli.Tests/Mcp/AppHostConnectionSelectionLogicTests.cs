@@ -3,7 +3,7 @@
 
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Tests.TestServices;
-using JsonRpcNet;
+using CurlyRpc;
 
 namespace Aspire.Cli.Tests.Mcp;
 

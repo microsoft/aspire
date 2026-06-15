@@ -8,7 +8,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using JsonRpcNet;
+using CurlyRpc;
 
 namespace Aspire.Hosting.Backchannel;
 
@@ -172,7 +172,7 @@ internal sealed class AuxiliaryBackchannelService(
             };
 
             var handler = new HeaderDelimitedMessageHandler(stream, stream);
-            // JsonRpcNet emits OpenTelemetry Activity spans natively, so the SJR ActivityTracingStrategy is no longer required.
+            // CurlyRpc emits OpenTelemetry Activity spans natively, so the SJR ActivityTracingStrategy is no longer required.
             using var rpc = new JsonRpc(handler, new JsonRpcOptions { SerializerOptions = serializerOptions });
             rpc.AddLocalRpcTarget(rpcTarget);
             rpc.StartListening();

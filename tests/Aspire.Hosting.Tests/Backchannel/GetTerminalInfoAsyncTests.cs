@@ -10,7 +10,7 @@ using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using JsonRpcNet;
+using CurlyRpc;
 
 namespace Aspire.Hosting.Tests.Backchannel;
 
@@ -419,7 +419,7 @@ public class GetTerminalInfoAsyncTests : IAsyncDisposable
                 {
                     var stream = new NetworkStream(client, ownsSocket: true);
                     // Match TerminalHostControlClient's wire casing (default PascalCase JsonSerializerOptions)
-                    // so this fake terminal-host server round-trips with the production client under JsonRpcNet.
+                    // so this fake terminal-host server round-trips with the production client under CurlyRpc.
                     var handler = new HeaderDelimitedMessageHandler(stream, stream);
                     var rpc = new JsonRpc(handler, new JsonRpcOptions
                     {

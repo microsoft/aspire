@@ -28,7 +28,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Spectre.Console;
-using JsonRpcNet;
+using CurlyRpc;
 
 namespace Aspire.Cli.Tests.Commands;
 

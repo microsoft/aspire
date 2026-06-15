@@ -490,7 +490,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
             connection.IsInScope = IsAppHostInScope(connection.AppHostInfo?.AppHostPath);
 
             // Set up disconnect handler.
-            // JsonRpcNet signals disconnect via the Completion task instead of a Disconnected event;
+            // CurlyRpc signals disconnect via the Completion task instead of a Disconnected event;
             // it completes successfully on graceful close and faults on read-loop errors.
             _ = connection.Rpc!.Completion.ContinueWith(completion =>
             {

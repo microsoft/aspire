@@ -20,7 +20,7 @@ namespace Aspire.Cli.Backchannel;
 [JsonSerializable(typeof(long))]
 [JsonSerializable(typeof(DashboardUrlsState))]
 [JsonSerializable(typeof(JsonElement))]
-// JsonRpcNet streams plain IAsyncEnumerable<T>, serializing each element T directly (no
+// CurlyRpc streams plain IAsyncEnumerable<T>, serializing each element T directly (no
 // EnumeratorResults<T> wrapper type). The element types below were previously pulled in
 // transitively by the SJR MessageFormatterEnumerableTracker.EnumeratorResults<T> registrations,
 // so register them (and their batch collection shapes) explicitly for the AOT source generator.

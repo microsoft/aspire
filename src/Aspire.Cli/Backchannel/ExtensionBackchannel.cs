@@ -13,7 +13,7 @@ using Aspire.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
-using JsonRpcNet;
+using CurlyRpc;
 
 namespace Aspire.Cli.Backchannel;
 
@@ -205,7 +205,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
                 {
                     SerializerOptions = BackchannelJsonSerializerContext.CreateJsonSerializerOptions()
                 });
-                // JsonRpcNet's reflection-based AddLocalRpcTarget is annotated [RequiresUnreferencedCode]/
+                // CurlyRpc's reflection-based AddLocalRpcTarget is annotated [RequiresUnreferencedCode]/
                 // [RequiresDynamicCode], so it cannot be used from this AOT-published CLI. Instead, register
                 // each method on the target individually using the strongly-typed, trim/AOT-safe
                 // AddLocalRpcMethod<...>(string, Func<...>) overloads (no Requires* attributes). The RPC method

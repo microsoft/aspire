@@ -14,7 +14,7 @@
 
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" />
-    <PackageReference Include="JsonRpcNet" />
+    <PackageReference Include="CurlyRpc" />
   </ItemGroup>
 
   <ItemGroup>

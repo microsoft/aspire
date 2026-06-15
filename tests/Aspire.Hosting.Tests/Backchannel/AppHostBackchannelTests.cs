@@ -6,7 +6,7 @@
 using System.Net.Sockets;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
-using JsonRpcNet;
+using CurlyRpc;
 
 namespace Aspire.Hosting.Backchannel;
 
@@ -82,7 +82,7 @@ public class AppHostBackchannelTests(ITestOutputHelper outputHelper)
         using var stream = new NetworkStream(socket, true);
         using var rpc = JsonRpc.Attach(stream);
 
-        // JsonRpcNet streams plain IAsyncEnumerable<T> lazily via InvokeAsyncEnumerable, which returns the
+        // CurlyRpc streams plain IAsyncEnumerable<T> lazily via InvokeAsyncEnumerable, which returns the
         // enumerable directly (no Task to await). Drive enumeration under a timeout instead of awaiting the call.
         using var streamCts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var resourceEvents = rpc.InvokeAsyncEnumerable<RpcResourceState>(

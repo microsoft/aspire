@@ -1508,7 +1508,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         // Wait until the test allows the stream to terminate
         await allowExit.WaitAsync(cancellationToken);
-        throw new ObjectDisposedException("JsonRpcNet.JsonRpc");
+        throw new ObjectDisposedException("CurlyRpc.JsonRpc");
     }
 
     private static async IAsyncEnumerable<ResourceLogLine> FollowTailSearchLogsAsync(
@@ -1527,7 +1527,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         // Follow: simulate the stream ending via disposal (no new logs)
         await Task.Yield();
         cancellationToken.ThrowIfCancellationRequested();
-        throw new ObjectDisposedException("JsonRpcNet.JsonRpc");
+        throw new ObjectDisposedException("CurlyRpc.JsonRpc");
     }
 
     private ServiceProvider CreateLogsTestServices(
@@ -1685,7 +1685,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         await Task.Yield();
         cancellationToken.ThrowIfCancellationRequested();
 
-        throw new ObjectDisposedException("JsonRpcNet.JsonRpc");
+        throw new ObjectDisposedException("CurlyRpc.JsonRpc");
     }
 
     private static async IAsyncEnumerable<ResourceLogLine> ThrowObjectDisposedAfterCancellationAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -1702,6 +1702,6 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         using var registration = cancellationToken.Register(() => waitForCancellation.TrySetResult());
         await waitForCancellation.Task;
 
-        throw new ObjectDisposedException("JsonRpcNet.JsonRpc");
+        throw new ObjectDisposedException("CurlyRpc.JsonRpc");
     }
 }

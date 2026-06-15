@@ -10,7 +10,7 @@ using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Protocol;
-using JsonRpcNet;
+using CurlyRpc;
 
 namespace Aspire.Cli.Backchannel;
 
@@ -175,7 +175,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         // Create JSON-RPC connection with the source-generated serializer options.
         var stream = new NetworkStream(socket, ownsSocket: true);
-        // JsonRpcNet emits OpenTelemetry Activity spans natively, so the SJR ActivityTracingStrategy is no longer required.
+        // CurlyRpc emits OpenTelemetry Activity spans natively, so the SJR ActivityTracingStrategy is no longer required.
         var rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream), new JsonRpcOptions
         {
             SerializerOptions = BackchannelJsonSerializerContext.CreateJsonSerializerOptions()

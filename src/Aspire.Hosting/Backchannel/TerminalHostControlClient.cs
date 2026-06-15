@@ -3,7 +3,7 @@
 
 using System.Net.Sockets;
 using Aspire.Shared.TerminalHost;
-using JsonRpcNet;
+using CurlyRpc;
 
 namespace Aspire.Hosting.Backchannel;
 

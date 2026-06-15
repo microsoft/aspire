@@ -9,7 +9,7 @@ using Aspire.Hosting.RemoteHost.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using JsonRpcNet;
+using CurlyRpc;
 using Xunit;
 
 namespace Aspire.Hosting.RemoteHost.Tests;

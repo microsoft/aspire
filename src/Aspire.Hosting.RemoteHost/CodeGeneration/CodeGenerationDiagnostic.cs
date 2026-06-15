@@ -3,7 +3,7 @@
 
 using System.Reflection;
 using Microsoft.Extensions.Logging;
-using JsonRpcNet;
+using CurlyRpc;
 
 namespace Aspire.Hosting.RemoteHost.CodeGeneration;
 

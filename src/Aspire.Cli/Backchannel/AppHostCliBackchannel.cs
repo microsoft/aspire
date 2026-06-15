@@ -7,7 +7,7 @@ using System.Runtime.CompilerServices;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Microsoft.Extensions.Logging;
-using JsonRpcNet;
+using CurlyRpc;
 
 namespace Aspire.Cli.Backchannel;
 
@@ -357,7 +357,7 @@ internal sealed class AppHostCliBackchannel(
                         );
                 }
 
-                // JsonRpcNet has no Disconnected event; the Completion task signals the connection
+                // CurlyRpc has no Disconnected event; the Completion task signals the connection
                 // closing (successfully on graceful end-of-stream/disposal, faulted on read-loop error).
                 _ = rpc.Completion.ContinueWith(
                     OnRpcDisconnected,
@@ -439,7 +439,7 @@ internal sealed class AppHostCliBackchannel(
         }
     }
 
-    // JsonRpcNet's Completion faults with the read-loop error on abnormal disconnect and completes
+    // CurlyRpc's Completion faults with the read-loop error on abnormal disconnect and completes
     // successfully on graceful close; surface either as a short human-readable reason for logging.
     private static string DescribeDisconnect(Task completion)
         => completion.Exception?.GetBaseException().Message ?? "connection closed";

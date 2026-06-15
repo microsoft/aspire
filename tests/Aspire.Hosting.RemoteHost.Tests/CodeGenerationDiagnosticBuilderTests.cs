@@ -3,7 +3,7 @@
 
 using System.Reflection;
 using Aspire.Hosting.RemoteHost.CodeGeneration;
-using JsonRpcNet;
+using CurlyRpc;
 using Xunit;
 
 namespace Aspire.Hosting.RemoteHost.Tests;

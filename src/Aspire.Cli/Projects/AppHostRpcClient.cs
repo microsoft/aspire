@@ -7,7 +7,7 @@ using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Telemetry;
 using Aspire.TypeSystem;
-using JsonRpcNet;
+using CurlyRpc;
 
 namespace Aspire.Cli.Projects;
 
@@ -49,7 +49,7 @@ internal sealed class AppHostRpcClient : IAppHostRpcClient
         try
         {
             var handler = new HeaderDelimitedMessageHandler(stream, stream);
-            // JsonRpcNet emits OpenTelemetry Activity spans natively, so the SJR ActivityTracingStrategy is no longer required.
+            // CurlyRpc emits OpenTelemetry Activity spans natively, so the SJR ActivityTracingStrategy is no longer required.
             jsonRpc = new JsonRpc(handler, new JsonRpcOptions
             {
                 SerializerOptions = BackchannelJsonSerializerContext.CreateJsonSerializerOptions()
@@ -149,7 +149,7 @@ internal sealed class AppHostRpcClient : IAppHostRpcClient
     {
         try
         {
-            // JsonRpcNet exposes the raw error.data as a JsonElement and defers deserialization to
+            // CurlyRpc exposes the raw error.data as a JsonElement and defers deserialization to
             // GetErrorData<T>, using the same source-generated options the connection serializes with.
             return exception.GetErrorData<AppHostCodeGenerationDiagnostic>(BackchannelJsonSerializerContext.CreateJsonSerializerOptions());
         }

@@ -5,7 +5,7 @@ using System.Net.Sockets;
 using System.Text.Json;
 using Aspire.Shared.TerminalHost;
 using Microsoft.Extensions.Logging.Abstractions;
-using JsonRpcNet;
+using CurlyRpc;
 
 namespace Aspire.TerminalHost.Tests;
 
@@ -164,7 +164,7 @@ public class TerminalHostAppTests
 
                 // Drive an RPC over each socket and count the survivors. Refused
                 // sockets either close immediately (read returns 0) or fail the
-                // header-delimited read; the JsonRpcNet completion task surfaces
+                // header-delimited read; the CurlyRpc completion task surfaces
                 // either as a ConnectionLostException / IOException.
                 var results = await Task.WhenAll(rawSockets.Select(TryGetInfoAsync));
 
@@ -190,7 +190,7 @@ public class TerminalHostAppTests
         {
             // Each candidate gets a short window to either ack a GetInfo or be
             // refused. The refused side observes a zero-length read on its
-            // NetworkStream which JsonRpcNet raises as a ConnectionLostException.
+            // NetworkStream which CurlyRpc raises as a ConnectionLostException.
             try
             {
                 var stream = new NetworkStream(socket, ownsSocket: false);

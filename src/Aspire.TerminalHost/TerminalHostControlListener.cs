@@ -4,7 +4,7 @@
 using System.Net.Sockets;
 using Aspire.Shared.TerminalHost;
 using Microsoft.Extensions.Logging;
-using JsonRpcNet;
+using CurlyRpc;
 using System.Text.Json;
 
 namespace Aspire.TerminalHost;
@@ -219,7 +219,7 @@ internal sealed class TerminalHostControlListener : IAsyncDisposable
             {
                 SerializerOptions = new JsonSerializerOptions()
             });
-            // JsonRpcNet's AddLocalRpcMethod takes a delegate rather than (name, MethodInfo, target),
+            // CurlyRpc's AddLocalRpcMethod takes a delegate rather than (name, MethodInfo, target),
             // so register each handler as a method-group delegate bound to the target instance.
             rpc.AddLocalRpcMethod(
                 TerminalHostControlProtocol.GetSessionMethod,

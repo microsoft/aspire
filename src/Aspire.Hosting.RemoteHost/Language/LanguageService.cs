@@ -5,7 +5,7 @@ using System.Diagnostics;
 using Aspire.Hosting.RemoteHost.Diagnostics;
 using Aspire.TypeSystem;
 using Microsoft.Extensions.Logging;
-using JsonRpcNet;
+using CurlyRpc;
 
 namespace Aspire.Hosting.RemoteHost.Language;
 

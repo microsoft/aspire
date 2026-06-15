@@ -665,7 +665,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         await Task.Yield();
         cancellationToken.ThrowIfCancellationRequested();
 
-        throw new ObjectDisposedException("JsonRpcNet.JsonRpc");
+        throw new ObjectDisposedException("CurlyRpc.JsonRpc");
     }
 
     private static async IAsyncEnumerable<ResourceSnapshot> ThrowObjectDisposedAfterCancellationAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -682,6 +682,6 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         using var registration = cancellationToken.Register(() => waitForCancellation.TrySetResult());
         await waitForCancellation.Task;
 
-        throw new ObjectDisposedException("JsonRpcNet.JsonRpc");
+        throw new ObjectDisposedException("CurlyRpc.JsonRpc");
     }
 }

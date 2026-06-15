@@ -75,7 +75,7 @@
     <PackageReference Include="AspNetCore.HealthChecks.Uris" />
     <PackageReference Include="Semver" />
     <PackageReference Include="System.IO.Hashing" />
-    <PackageReference Include="JsonRpcNet" />
+    <PackageReference Include="CurlyRpc" />
   </ItemGroup>
 
   <ItemGroup>

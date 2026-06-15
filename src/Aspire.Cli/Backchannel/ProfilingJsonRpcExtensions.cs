@@ -3,7 +3,7 @@
 
 using System.Runtime.CompilerServices;
 using Aspire.Cli.Telemetry;
-using JsonRpcNet;
+using CurlyRpc;
 
 namespace Aspire.Cli.Backchannel;
 
@@ -102,7 +102,7 @@ internal static class ProfilingJsonRpcExtensions
 
         try
         {
-            // JsonRpcNet streams plain IAsyncEnumerable<T> lazily: InvokeAsyncEnumerable returns the
+            // CurlyRpc streams plain IAsyncEnumerable<T> lazily: InvokeAsyncEnumerable returns the
             // enumerable without a blocking round-trip, so request items are pulled during enumeration.
             var response = rpc.InvokeAsyncEnumerable<T>(methodName, arguments, cancellationToken);
             activity.AddJsonRpcResponseReceivedEvent();
@@ -123,7 +123,7 @@ internal static class ProfilingJsonRpcExtensions
         StreamingSpanLifetime spanLifetime,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        // JsonRpcNet returns the IAsyncEnumerable before any stream items are read. Long-lived
+        // CurlyRpc returns the IAsyncEnumerable before any stream items are read. Long-lived
         // startup streams can outlive readiness and dominate duration views, so callers that only
         // need setup timing can stop the client span as soon as the first item arrives.
         var itemCount = 0;
@@ -190,7 +190,7 @@ internal static class ProfilingJsonRpcExtensions
             return arguments;
         }
 
-        // JsonRpcNet accepts RPC parameters as an object array. The auxiliary backchannel
+        // CurlyRpc accepts RPC parameters as an object array. The auxiliary backchannel
         // contract uses a single request object parameter, so replace that one argument with
         // a copy carrying trace metadata instead of mutating the caller's instance.
         return arguments[0] is BackchannelRequest request
