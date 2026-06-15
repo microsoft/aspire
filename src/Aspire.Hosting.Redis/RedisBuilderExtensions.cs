@@ -128,6 +128,15 @@ public static class RedisBuilderExtensions
                     additionalArgs.Add(persistenceAnnotation.KeysChangedThreshold.ToString(CultureInfo.InvariantCulture));
                 }
 
+                if (redis.TryGetAnnotationsOfType<RedisModuleAnnotation>(out var moduleAnnotations))
+                {
+                    foreach (var moduleAnnotation in moduleAnnotations.Distinct())
+                    {
+                        additionalArgs.Add("--loadmodule");
+                        additionalArgs.Add(moduleAnnotation.Path);
+                    }
+                }
+
                 // This is a temporary workaround to allow the args list to be expanded dynamically at run time with additional server certificate arguments.
                 if (context.ExecutionContext.IsRunMode)
                 {
@@ -167,7 +176,7 @@ public static class RedisBuilderExtensions
 
                 if (ctx.Password is not null)
                 {
-                    var resourceLogger = ctx.ExecutionContext.ServiceProvider.GetRequiredService<ResourceLoggerService>();
+                    var resourceLogger = ctx.ExecutionContext.Services.GetRequiredService<ResourceLoggerService>();
                     var logger = resourceLogger.GetLogger(redis);
                     logger.LogError($"Cannot configure an encrypted certificate for redis resource '{redis.Name}'");
                 }
@@ -191,9 +200,9 @@ public static class RedisBuilderExtensions
                     .WithArgs(argsCtx =>
                     {
                         argsCtx.Args.Add("--tls-port");
-                        argsCtx.Args.Add(redis.GetEndpoint(RedisResource.PrimaryEndpointName).Property(EndpointProperty.Port));
+                        argsCtx.Args.Add(redis.GetEndpoint(RedisResource.PrimaryEndpointName).Property(EndpointProperty.TargetPort));
                         argsCtx.Args.Add("--port");
-                        argsCtx.Args.Add(redis.GetEndpoint(RedisResource.SecondaryEndpointName).Property(EndpointProperty.Port));
+                        argsCtx.Args.Add(redis.GetEndpoint(RedisResource.SecondaryEndpointName).Property(EndpointProperty.TargetPort));
                     });
             });
         }
@@ -365,7 +374,7 @@ public static class RedisBuilderExtensions
 
                     if (ctx.Password != null)
                     {
-                        var resourceLogger = ctx.ExecutionContext.ServiceProvider.GetRequiredService<ResourceLoggerService>();
+                        var resourceLogger = ctx.ExecutionContext.Services.GetRequiredService<ResourceLoggerService>();
                         var logger = resourceLogger.GetLogger(resource);
                         logger.LogError($"Cannot configure an encrypted certificate for redis insight resource '{resource.Name}'");
                     }
@@ -519,6 +528,46 @@ public static class RedisBuilderExtensions
         public TimeSpan? Interval => interval;
         public long KeysChangedThreshold => keysChangedThreshold;
     }
+
+    /// <summary>
+    /// Configures the Redis resource to use the specified Redis module by providing its path inside the container.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="path">The absolute path to the Redis module inside the Redis container.</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <remarks>
+    /// This method passes the module path to <c>redis-server</c> as a <c>--loadmodule</c> argument. Redis resolves the path inside the
+    /// container, not on the host. To load a module built on the host machine, mount it into the Redis container first and then use
+    /// the mounted container path. Use <see cref="RedisModules" /> for well-known module paths that are included in the default
+    /// Redis container image.
+    /// <code lang="csharp">
+    /// var cache = builder.AddRedis("cache")
+    ///                    .WithModule(RedisModules.Json)
+    ///                    .WithModule(RedisModules.Search);
+    ///
+    /// var customModuleCache = builder.AddRedis("custom-cache")
+    ///                                .WithBindMount("/host/redis/modules", "/redis/modules", isReadOnly: true)
+    ///                                .WithModule("/redis/modules/custom-module.so");
+    /// </code>
+    /// For more information, see the Redis module loading documentation at <see href="https://redis.io/docs/latest/develop/reference/modules/" />.
+    /// </remarks>
+    [AspireExport]
+    public static IResourceBuilder<RedisResource> WithModule(this IResourceBuilder<RedisResource> builder, string path)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(path);
+        if (path[0] is not '/')
+        {
+            throw new ArgumentException("The Redis module path must be an absolute container path.", nameof(path));
+        }
+
+        return builder.WithAnnotation(new RedisModuleAnnotation(path));
+    }
+
+    private record RedisModuleAnnotation(
+        string Path
+    ) : IResourceAnnotation;
 
     /// <summary>
     /// Adds a named volume for the data folder to a Redis Insight container resource.

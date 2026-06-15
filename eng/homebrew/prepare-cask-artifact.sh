@@ -16,25 +16,27 @@ Required:
 
 Optional:
   --version VERSION            Installer version in the cask and archive filename
-  --artifact-version VERSION   Version segment used in the ci.dot.net artifact path
   --archive-root PATH          Root directory containing locally built CLI archives
-  --validation-mode MODE       Full, Offline, or GenerateOnly (default: Full)
+  --validation-mode MODE       LiveRelease or LiveArchives (default: LiveArchives)
   --help                       Show this help message
 EOF
   exit 1
 }
 
 VERSION=""
-ARTIFACT_VERSION=""
 CHANNEL=""
 ARCHIVE_ROOT=""
 OUTPUT_DIR=""
-VALIDATION_MODE="Full"
+# LiveArchives is the default because prepare time means "the cask URL doesn't
+# resolve yet — the GH release for v#{version} hasn't been published". Callers
+# that want the full upstream-CI-equivalent audit + brew install/uninstall must
+# do so against an already-published cask via validate-cask-artifact.sh
+# directly, as HomebrewValidateJob does in release-publish-nuget.yml.
+VALIDATION_MODE="LiveArchives"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --version) VERSION="$2"; shift 2 ;;
-    --artifact-version) ARTIFACT_VERSION="$2"; shift 2 ;;
     --channel) CHANNEL="$2"; shift 2 ;;
     --archive-root) ARCHIVE_ROOT="$2"; shift 2 ;;
     --output-dir) OUTPUT_DIR="$2"; shift 2 ;;
@@ -50,13 +52,13 @@ case "$CHANNEL" in
   *) echo "Error: --channel must be 'stable' or 'prerelease'." >&2; exit 1 ;;
 esac
 
+shopt -s nocasematch
 case "$VALIDATION_MODE" in
-  Full|Offline|GenerateOnly) ;;
-  full) VALIDATION_MODE="Full" ;;
-  offline) VALIDATION_MODE="Offline" ;;
-  generateonly|generate-only) VALIDATION_MODE="GenerateOnly" ;;
-  *) echo "Error: --validation-mode must be Full, Offline, or GenerateOnly." >&2; exit 1 ;;
+  liverelease)  VALIDATION_MODE="LiveRelease" ;;
+  livearchives) VALIDATION_MODE="LiveArchives" ;;
+  *) echo "Error: --validation-mode must be LiveRelease or LiveArchives." >&2; exit 1 ;;
 esac
+shopt -u nocasematch
 
 if [[ -z "$OUTPUT_DIR" ]]; then
   echo "Error: --output-dir is required." >&2
@@ -99,23 +101,17 @@ if [[ -z "$VERSION" ]]; then
   VERSION="$(infer_version_from_archive "osx-arm64")"
 fi
 
-if [[ -z "$ARTIFACT_VERSION" ]]; then
-  ARTIFACT_VERSION="$VERSION"
-fi
-
 mkdir -p "$OUTPUT_DIR"
 OUTPUT_FILE="$OUTPUT_DIR/aspire.rb"
 
 echo "Preparing Homebrew cask"
 echo "  Version: $VERSION"
 echo "  Channel: $CHANNEL"
-echo "  Artifact version: $ARTIFACT_VERSION"
 echo "  Output dir: $OUTPUT_DIR"
 echo "  Validation mode: $VALIDATION_MODE"
 
 args=(
   --version "$VERSION"
-  --artifact-version "$ARTIFACT_VERSION"
   --output "$OUTPUT_FILE"
 )
 
@@ -123,7 +119,11 @@ if [[ -n "$ARCHIVE_ROOT" ]]; then
   args+=(--archive-root "$ARCHIVE_ROOT")
 fi
 
-if [[ "$VALIDATION_MODE" != "Full" ]]; then
+# In LiveRelease mode, generate-cask.sh fetches the published archive bytes
+# from the github.com release URL over the network to compute SHA256. In any
+# other mode, we either compute the SHA from a local archive (when
+# --archive-root is set) or skip the SHA fetch and emit placeholders.
+if [[ "$VALIDATION_MODE" != "LiveRelease" ]]; then
   args+=(--skip-url-validation)
 fi
 
@@ -138,14 +138,6 @@ validation_args=(
   --channel "$CHANNEL"
   --validation-mode "$VALIDATION_MODE"
 )
-
-if [[ -n "$ARCHIVE_ROOT" ]]; then
-  validation_args+=(--archive-root "$ARCHIVE_ROOT")
-fi
-
-if [[ "$VALIDATION_MODE" == "Full" ]]; then
-  validation_args+=(--summary-path "$OUTPUT_DIR/validation-summary.json")
-fi
 
 "$SCRIPT_DIR/validate-cask-artifact.sh" "${validation_args[@]}"
 

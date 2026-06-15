@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Bundles;
+using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Tests;
 
@@ -150,15 +151,13 @@ public class BundleServiceComputeDefaultExtractDirTests
     }
 
     [Fact]
-    public void ComputeDefaultExtractDir_UnmanagedFallback_PreservesLegacyParentOfBinaryDirHeuristic()
+    public void ComputeDefaultExtractDir_UnmanagedFallback_UsesDefaultAspireHome()
     {
-        // No sidecar anywhere → fall back to "parent of binary's directory" so
-        // installs that pre-date the sidecar continue to see the historical
-        // ~/.aspire/bin/aspire → ~/.aspire/ mapping. Without this backwards-compat
-        // path, existing CLI installs would silently move their extraction target
-        // on upgrade and re-extract into the binary's own dir.
+        // No sidecar anywhere means no install route opted in to writing next to
+        // the binary, so the fallback must be user-owned Aspire home rather than
+        // an arbitrary binary parent that may be read-only.
         using var temp = new TestTempDirectory();
-        var prefixDir = Path.Combine(temp.Path, ".aspire");
+        var prefixDir = Path.Combine(temp.Path, "nix", "store", "aspire");
         var binDir = Path.Combine(prefixDir, "bin");
         Directory.CreateDirectory(binDir);
 
@@ -168,7 +167,8 @@ public class BundleServiceComputeDefaultExtractDirTests
 
         var result = BundleService.ComputeDefaultExtractDir(binaryPath);
 
-        Assert.Equal(prefixDir, result);
+        Assert.Equal(CliPathHelper.GetDefaultAspireHomeDirectory(), result);
+        Assert.NotEqual(prefixDir, result);
     }
 
     [Fact]

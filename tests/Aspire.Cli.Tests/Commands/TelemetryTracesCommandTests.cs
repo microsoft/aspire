@@ -331,13 +331,13 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(2, dataRows.Length);
 
         Assert.Equal(FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime), dataRows[0][0]);
-        Assert.Equal("apiservice-11111111: GET /apiservice abc1234 (http://localhost:18888/traces/detail/abc1234567890def)", dataRows[0][1]);
+        Assert.Equal("apiservice-55555555: GET /apiservice abc1234 (http://localhost:18888/traces/detail/abc1234567890def)", dataRows[0][1]);
         Assert.Equal("1", dataRows[0][2]);
         Assert.Equal("75ms", dataRows[0][3]);
         Assert.Equal("OK", dataRows[0][4]);
 
         Assert.Equal(FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime.AddMilliseconds(10)), dataRows[1][0]);
-        Assert.Equal("apiservice-aaaaaaaa: GET /apiservice def9876 (http://localhost:18888/traces/detail/def9876543210abc)", dataRows[1][1]);
+        Assert.Equal("apiservice-eeeeeeee: GET /apiservice def9876 (http://localhost:18888/traces/detail/def9876543210abc)", dataRows[1][1]);
         Assert.Equal("1", dataRows[1][2]);
         Assert.Equal("50ms", dataRows[1][3]);
         Assert.Equal("ERR", dataRows[1][4]);
@@ -717,12 +717,11 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.NotNull(capturedUrl);
-        Assert.Contains("search=frontend", capturedUrl);
+        Assert.Equal("http://localhost:18888/api/telemetry/traces?search=frontend", capturedUrl);
     }
 
     [Fact]
-    public async Task TelemetryTracesCommand_WithMinimumDurationOption_PassesMinimumDurationToUrl()
+    public async Task TelemetryTracesCommand_WithDurationSearchFilter_PassesDurationFilterInSearchUrl()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
@@ -760,67 +759,11 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("otel traces --dashboard-url http://localhost:18888 --min-duration 50.5");
+        var result = command.Parse("otel traces --dashboard-url http://localhost:18888 --search \"duration:>=50.5\"");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.NotNull(capturedUrl);
-        Assert.Contains("minDurationMs=50.5", capturedUrl);
-    }
-
-    [Fact]
-    public async Task TelemetryTracesCommand_WithTraceIdAndMinimumDurationOption_PassesMinimumDurationToUrl()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var outputWriter = new TestOutputTextWriter(outputHelper);
-        string? capturedUrl = null;
-
-        var apiResponse = new TelemetryApiResponse
-        {
-            Data = new OtlpTelemetryDataJson { ResourceSpans = [] },
-            TotalCount = 0,
-            ReturnedCount = 0
-        };
-        var responseJson = JsonSerializer.Serialize(apiResponse, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
-
-        var handler = new MockHttpMessageHandler(request =>
-        {
-            var url = request.RequestUri!.ToString();
-            if (url.Contains("/api/telemetry/resources"))
-            {
-                return new HttpResponseMessage(HttpStatusCode.OK)
-                {
-                    Content = new StringContent("[]", System.Text.Encoding.UTF8, "application/json")
-                };
-            }
-            if (url.Contains("/api/telemetry/traces/abc1234567890def"))
-            {
-                capturedUrl = url;
-                return new HttpResponseMessage(HttpStatusCode.OK)
-                {
-                    Content = new StringContent(responseJson, System.Text.Encoding.UTF8, "application/json")
-                };
-            }
-            return new HttpResponseMessage(HttpStatusCode.NotFound);
-        });
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.OutputTextWriter = outputWriter;
-            options.DisableAnsi = true;
-        });
-        services.AddSingleton(handler);
-        services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
-
-        using var provider = services.BuildServiceProvider();
-        var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("otel traces --trace-id abc1234567890def --format json --dashboard-url http://localhost:18888 --min-duration 50.5");
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-
-        Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.NotNull(capturedUrl);
-        Assert.Contains("minDurationMs=50.5", capturedUrl);
+        Assert.Equal("http://localhost:18888/api/telemetry/traces?search=duration%3A>%3D50.5", capturedUrl);
     }
 }

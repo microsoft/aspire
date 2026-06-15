@@ -113,6 +113,12 @@ public static partial class KubernetesHelmChartExtensions
                     Action = ctx => UninstallHelmChartAsync(ctx, environment, resource, releaseName, @namespace),
                     DependsOnSteps = [WellKnownPipelineSteps.DestroyPrereq]
                 };
+                // The uninstall path shells out to `helm uninstall`, so it must observe the same
+                // Helm CLI / version preflight as the deploy path. Without this dep, a missing or
+                // too-old Helm during teardown would surface as the raw spawn / unknown-flag error
+                // the env-wide `check-helm-prereqs-{env}` step exists to convert into an actionable
+                // message. Install is already covered transitively via `helm-deploy-{env}`.
+                uninstallStep.DependsOn($"check-helm-prereqs-{environment.Name}");
                 uninstallStep.RequiredBy(WellKnownPipelineSteps.Destroy);
                 steps.Add(uninstallStep);
             }

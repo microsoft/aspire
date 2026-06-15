@@ -1,6 +1,6 @@
 # BlazorStandalone
 
-This sample demonstrates how to integrate a **standalone Blazor WebAssembly** application with .NET Aspire, enabling full observability (logs, traces) and service discovery without requiring a hosted Blazor Server backend.
+This sample demonstrates how to integrate a **standalone Blazor WebAssembly** application with Aspire, enabling full observability (logs, traces) and service discovery without requiring a hosted Blazor Server backend.
 
 ## Overview
 

@@ -3,8 +3,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
-
-#pragma warning disable ASPIREATS001 // AspireExportIgnore is experimental
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
 
@@ -91,6 +90,13 @@ public static class BlazorHostedExtensions
             // WASM clients use HTTP/protobuf (not gRPC), so we need the HTTP endpoint.
             var httpOtlpEndpointUrl = BlazorGatewayExtensions.ResolveHttpOtlpEndpointUrl(context, host.ApplicationBuilder.Configuration);
 
+            if (httpOtlpEndpointUrl is null && annotation.ProxyBlazorTelemetry)
+            {
+                context.Logger.LogWarning(
+                    "OTLP telemetry proxying was requested but no dashboard HTTP endpoint could be resolved. " +
+                    "WASM client telemetry will not be forwarded.");
+            }
+
             GatewayConfigurationBuilder.EmitHostedProxyConfiguration(
                 context.EnvironmentVariables,
                 hostEndpoint,
@@ -99,7 +105,6 @@ public static class BlazorHostedExtensions
                 annotation.Services,
                 annotation.ProxyBlazorTelemetry,
                 httpOtlpEndpointUrl,
-                context.Logger,
                 annotation.OtlpPrefix);
         });
     }

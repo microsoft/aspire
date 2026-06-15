@@ -115,7 +115,7 @@ public class StructuredLogsViewModel
 
             logs = _telemetryRepository.GetLogs(new GetLogsContext
             {
-                ResourceKey = ResourceKey,
+                ResourceKeys = ResourceKey is { } key ? [key] : [],
                 StartIndex = StartIndex,
                 Count = Count,
                 Filters = filters
@@ -154,7 +154,7 @@ public class StructuredLogsViewModel
 
         var errorLogs = _telemetryRepository.GetLogs(new GetLogsContext
         {
-            ResourceKey = ResourceKey,
+            ResourceKeys = ResourceKey is { } key ? [key] : [],
             StartIndex = 0,
             Count = count,
             Filters = filters

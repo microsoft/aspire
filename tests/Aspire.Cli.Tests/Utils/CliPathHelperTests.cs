@@ -3,6 +3,8 @@
 
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Backchannel;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Cli.Tests.Utils;
 
@@ -50,6 +52,94 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedDirectory, Path.GetDirectoryName(socketPath2));
         Assert.Matches("^h[A-Za-z0-9_-]{8}$", Path.GetFileName(socketPath1));
         Assert.Matches("^h[A-Za-z0-9_-]{8}$", Path.GetFileName(socketPath2));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("\t\n")]
+    public void ComputeStagingFeedCacheKey_ReturnsNull_ForNullOrWhitespace(string? feedUrl)
+    {
+        Assert.Null(CliPathHelper.ComputeStagingFeedCacheKey(feedUrl));
+    }
+
+    [Fact]
+    public void ComputeStagingFeedCacheKey_DefaultsToEightLowercaseHexChars()
+    {
+        var key = CliPathHelper.ComputeStagingFeedCacheKey("https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-deadbeef/nuget/v3/index.json");
+
+        Assert.NotNull(key);
+        Assert.Matches("^[0-9a-f]{8}$", key);
+    }
+
+    [Fact]
+    public void ComputeStagingFeedCacheKey_IsDeterministic_ForSameInput()
+    {
+        const string feedUrl = "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-deadbeef/nuget/v3/index.json";
+
+        var first = CliPathHelper.ComputeStagingFeedCacheKey(feedUrl);
+        var second = CliPathHelper.ComputeStagingFeedCacheKey(feedUrl);
+
+        Assert.Equal(first, second);
+    }
+
+    [Fact]
+    public void ComputeStagingFeedCacheKey_DifferentUrls_ProduceDifferentKeys()
+    {
+        var a = CliPathHelper.ComputeStagingFeedCacheKey("https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-deadbeef/nuget/v3/index.json");
+        var b = CliPathHelper.ComputeStagingFeedCacheKey("https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-cafef00d/nuget/v3/index.json");
+
+        Assert.NotEqual(a, b);
+    }
+
+    [Fact]
+    public void ComputeStagingFeedCacheKey_NormalizesWhitespaceAndCasing()
+    {
+        // Trim + lowercase normalization keeps the cache from fragmenting when the same feed
+        // shows up with stray whitespace from a config file or with a mixed-case hostname.
+        const string baseUrl = "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-deadbeef/nuget/v3/index.json";
+
+        var baseKey = CliPathHelper.ComputeStagingFeedCacheKey(baseUrl);
+        var spacedKey = CliPathHelper.ComputeStagingFeedCacheKey("  " + baseUrl + "\t\n");
+        var upperKey = CliPathHelper.ComputeStagingFeedCacheKey(baseUrl.ToUpperInvariant());
+
+        Assert.Equal(baseKey, spacedKey);
+        Assert.Equal(baseKey, upperKey);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(4)]
+    [InlineData(16)]
+    public void ComputeStagingFeedCacheKey_RespectsExplicitLength(int length)
+    {
+        var key = CliPathHelper.ComputeStagingFeedCacheKey(
+            "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-deadbeef/nuget/v3/index.json",
+            length);
+
+        Assert.NotNull(key);
+        Assert.Equal(length, key.Length);
+        Assert.Matches($"^[0-9a-f]{{{length}}}$", key);
+    }
+
+    [Fact]
+    public void ComputeStagingFeedCacheKey_LengthAboveHashWidth_ReturnsFullHash()
+    {
+        // XxHash3 is 64 bits -> 16 hex chars. Asking for more than 16 must not crash and must
+        // return all available hash chars rather than padding with garbage.
+        var key = CliPathHelper.ComputeStagingFeedCacheKey("https://example/index.json", length: 999);
+
+        Assert.NotNull(key);
+        Assert.Equal(16, key.Length);
+        Assert.Matches("^[0-9a-f]{16}$", key);
+    }
+
+    [Fact]
+    public void ComputeStagingFeedCacheKey_NonZeroLength_RejectsZeroOrNegative()
+    {
+        Assert.Null(CliPathHelper.ComputeStagingFeedCacheKey("https://example/index.json", length: 0));
+        Assert.Null(CliPathHelper.ComputeStagingFeedCacheKey("https://example/index.json", length: -1));
     }
 
     [Theory]
@@ -106,6 +196,25 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
         var result = CliPathHelper.GetAspireHomeDirectory(binaryPath);
 
         Assert.Equal(installPrefix, result);
+    }
+
+    [Fact]
+    public void GetDefaultAspireHomeDirectory_UsesConfiguredAspireHome()
+    {
+        var result = CliPathHelper.GetDefaultAspireHomeDirectory("/custom/aspire-home", "/home/user");
+
+        Assert.Equal("/custom/aspire-home", result);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void GetDefaultAspireHomeDirectory_WithoutConfiguredAspireHome_UsesUserProfile(string? configuredAspireHome)
+    {
+        var result = CliPathHelper.GetDefaultAspireHomeDirectory(configuredAspireHome, "/home/user");
+
+        Assert.Equal(Path.Combine("/home/user", ".aspire"), result);
     }
 
     [Fact]
@@ -276,5 +385,92 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
         File.WriteAllText(Path.Combine(binaryDir, InstallSidecarReader.SidecarFileName), $$"""{"source":"{{source}}"}""");
 
         return binaryPath;
+    }
+
+    [Fact]
+    public void CleanupStaleCliSockets_DeletesFilesOlderThanThreshold()
+    {
+        var tempRoot = Directory.CreateTempSubdirectory("aspire-cli-sockets-");
+        try
+        {
+            var staleFile = BackchannelConstants.ComputeCliSocketPath(tempRoot.FullName, "cli.sock");
+            Directory.CreateDirectory(Path.GetDirectoryName(staleFile)!);
+            File.WriteAllText(staleFile, string.Empty);
+            var freshFile = BackchannelConstants.ComputeCliSocketPath(tempRoot.FullName, "cli.sock");
+            File.WriteAllText(freshFile, string.Empty);
+
+            var fakeTime = new FakeTimeProvider(DateTimeOffset.UtcNow);
+            File.SetLastWriteTimeUtc(staleFile, fakeTime.GetUtcNow().UtcDateTime - TimeSpan.FromHours(48));
+            File.SetLastWriteTimeUtc(freshFile, fakeTime.GetUtcNow().UtcDateTime - TimeSpan.FromMinutes(5));
+
+            var socketDirectory = Path.GetDirectoryName(staleFile)!;
+            var deleted = CliPathHelper.CleanupStaleCliSockets(socketDirectory, TimeSpan.FromHours(24), fakeTime);
+
+            Assert.Equal(1, deleted);
+            Assert.False(File.Exists(staleFile));
+            Assert.True(File.Exists(freshFile));
+        }
+        finally
+        {
+            tempRoot.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void CleanupStaleCliSockets_OnlyMatchesCliSockPrefix()
+    {
+        var tempRoot = Directory.CreateTempSubdirectory("aspire-cli-sockets-");
+        try
+        {
+            var matching = BackchannelConstants.ComputeCliSocketPath(tempRoot.FullName, "cli.sock");
+            Directory.CreateDirectory(Path.GetDirectoryName(matching)!);
+            File.WriteAllText(matching, string.Empty);
+            var unrelated = BackchannelConstants.ComputeCliSocketPath(tempRoot.FullName, "apphost.sock");
+            File.WriteAllText(unrelated, string.Empty);
+
+            var fakeTime = new FakeTimeProvider(DateTimeOffset.UtcNow);
+            File.SetLastWriteTimeUtc(matching, fakeTime.GetUtcNow().UtcDateTime - TimeSpan.FromHours(48));
+            File.SetLastWriteTimeUtc(unrelated, fakeTime.GetUtcNow().UtcDateTime - TimeSpan.FromHours(48));
+
+            var socketDirectory = Path.GetDirectoryName(matching)!;
+            var deleted = CliPathHelper.CleanupStaleCliSockets(socketDirectory, TimeSpan.FromHours(24), fakeTime);
+
+            Assert.Equal(1, deleted);
+            Assert.False(File.Exists(matching));
+            Assert.True(File.Exists(unrelated));
+        }
+        finally
+        {
+            tempRoot.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void CleanupStaleCliSockets_MissingDirectoryIsNoOp()
+    {
+        // Create-then-delete to guarantee a unique path we know doesn't exist on disk.
+        var probe = Directory.CreateTempSubdirectory("aspire-cli-sockets-missing-");
+        var missingDir = probe.FullName;
+        probe.Delete();
+
+        var deleted = CliPathHelper.CleanupStaleCliSockets(missingDir, TimeSpan.FromHours(24));
+
+        Assert.Equal(0, deleted);
+    }
+
+    [Fact]
+    public void CleanupStaleCliSockets_EmptyDirectoryReturnsZero()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("aspire-cli-sockets-");
+        try
+        {
+            var deleted = CliPathHelper.CleanupStaleCliSockets(tempDir.FullName, TimeSpan.FromHours(24));
+
+            Assert.Equal(0, deleted);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
     }
 }

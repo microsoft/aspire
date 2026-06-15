@@ -202,8 +202,8 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
         yield return [MakeResource("apiservice", null), new IOtlpResource[] { new SimpleOtlpResource("apiservice", null) }, "apiservice"];
         // replicas with non-GUID instance id → name-instanceId
         yield return [MakeResource("frontend", "abc123"), new IOtlpResource[] { new SimpleOtlpResource("frontend", "abc123"), new SimpleOtlpResource("frontend", "xyz789") }, "frontend-abc123"];
-        // replicas with GUID instance id → name-shortened8chars
-        yield return [MakeResource("worker", guidStr), new IOtlpResource[] { new SimpleOtlpResource("worker", guidStr), new SimpleOtlpResource("worker", Guid.NewGuid().ToString()) }, $"worker-{guid:N}"[..15]];
+        // replicas with GUID instance id → name-last8chars
+        yield return [MakeResource("worker", guidStr), new IOtlpResource[] { new SimpleOtlpResource("worker", guidStr), new SimpleOtlpResource("worker", Guid.NewGuid().ToString()) }, $"worker-{guid.ToString("N")[^8..]}"];
     }
 
     [Theory]

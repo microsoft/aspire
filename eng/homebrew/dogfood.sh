@@ -133,23 +133,29 @@ cask_path = ARGV[0]
 local_url_prefix = ARGV[1]
 lines = File.readlines(cask_path, chomp: true)
 rewritten = []
-skip_verified = false
 
-lines.each do |line|
+# The cask has a 2-line url stanza:
+#   url "https://github.com/microsoft/aspire/...",
+#       verified: "github.com/microsoft/aspire/"
+# For dogfood install, replace the url with a file:// path and drop the
+# trailing verified line. file:// URLs are exempt from `audit_missing_verified`
+# (brew's `file_url?` short-circuits the check), and dogfood.sh only runs
+# `brew install` — not `brew audit` — so audit_no_match never fires either.
+i = 0
+while i < lines.length
+  line = lines[i]
   stripped = line.strip
-  if stripped.start_with?('url "https://ci.dot.net/public/aspire/')
+  if stripped.start_with?('url "https://github.com/microsoft/aspire/releases/download/')
     rewritten << "  url \"#{local_url_prefix}/aspire-cli-osx-\#{arch}-\#{version}.tar.gz\""
-    skip_verified = true
+    i += 1
+    if i < lines.length && lines[i].strip.start_with?('verified:')
+      i += 1
+    end
     next
   end
 
-  if skip_verified && stripped.start_with?('verified: "ci.dot.net/public/aspire/"')
-    skip_verified = false
-    next
-  end
-
-  skip_verified = false
   rewritten << line
+  i += 1
 end
 
 File.write(cask_path, rewritten.join("\n") + "\n")

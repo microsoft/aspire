@@ -66,7 +66,7 @@ const azFunc = await project.addAzureFunctionTool('az-func-tool', 'myFunction', 
 const funcTool = await project.addFunctionTool('func-tool', 'myFunc', '{}');
 
 // Prompt Agent
-const _promptAgent = await project.addPromptAgent(chat, 'prompt-agent');
+const _promptAgent = await project.addPromptAgent('prompt-agent', chat);
 await _promptAgent.withTool(codeInterpreter);
 await _promptAgent.withTool(fileSearch);
 await _promptAgent.withTool(webSearch);
@@ -103,6 +103,11 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({ output: 'hello from validation app host' }));
     return;
   }
+  if (req.url === '/invocations') {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ response: 'hello from validation app host' }));
+    return;
+  }
   res.writeHead(404);
   res.end();
 });
@@ -110,17 +115,13 @@ server.listen(port, '127.0.0.1');
 `
     ]);
 
-await hostedAgent.publishAsHostedAgent({
-    project,
-    configure: async (configuration) => {
-        await configuration.description.set('Validation hosted agent');
-        await configuration.cpu.set(1);
-        await configuration.memory.set(2);
-        const metadata = await configuration.metadata();
-        await metadata.set('scenario', 'validation');
-        const environmentVariables = await configuration.environmentVariables();
-        await environmentVariables.set('VALIDATION_MODE', 'true');
-    }
+await hostedAgent.asHostedAgent(project, {
+    description: 'Validation hosted agent',
+    cpu: 1,
+    memory: 2,
+    metadata: { scenario: 'validation' },
+    environmentVariables: { VALIDATION_MODE: 'true' },
+    protocols: [{ protocol: 'invocations', version: '1.0.0' }]
 });
 
 const api = await builder.addContainer('api', 'nginx');

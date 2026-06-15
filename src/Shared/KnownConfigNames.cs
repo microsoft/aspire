@@ -26,6 +26,7 @@ internal static class KnownConfigNames
 
     public const string ContainerRuntime = "ASPIRE_CONTAINER_RUNTIME";
     public const string DependencyCheckTimeout = "ASPIRE_DEPENDENCY_CHECK_TIMEOUT";
+    public const string ProxylessEndpointPortRange = "ASPIRE_PROXYLESS_ENDPOINT_PORT_RANGE";
     public const string ServiceStartupWatchTimeout = "ASPIRE_SERVICE_STARTUP_WATCH_TIMEOUT";
     public const string WaitForDebugger = "ASPIRE_WAIT_FOR_DEBUGGER";
     public const string WaitForDebuggerTimeout = "ASPIRE_DEBUGGER_TIMEOUT";
@@ -36,6 +37,7 @@ internal static class KnownConfigNames
     public const string CliLogFilePath = "ASPIRE_CLI_LOG_FILE";
     public const string CliRunDetached = "ASPIRE_CLI_RUN_DETACHED";
     public const string CliGenerateHttpsCertificate = "ASPIRE_CLI_GENERATE_HTTPS_CERTIFICATE";
+    public const string SuppressCliRunHook = "ASPIRE_SUPPRESS_CLI_RUN_HOOK";
     public const string IntegrationLibsPath = "ASPIRE_INTEGRATION_LIBS_PATH";
     public const string IntegrationProbeManifestPath = "ASPIRE_INTEGRATION_PROBE_MANIFEST_PATH";
     public const string ForceRichConsole = "ASPIRE_FORCE_RICH_CONSOLE";

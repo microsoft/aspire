@@ -43,17 +43,17 @@ var codeInterpreter = project.AddCodeInterpreterTool("code-interp");
 
 builder.AddPythonApp("weather-hosted-agent", "../app", "main.py")
     .WithUv()
-    .WithReference(project).WithReference(chat).WaitFor(chat)
-    .PublishAsHostedAgent(project);
+    .WithReference(chat).WaitFor(chat)
+    .AsHostedAgent(project);
 
 builder.AddProject<Projects.DotNetHostedAgent>("proj-dotnet-hosted-agent")
     .WithHttpEndpoint(targetPort: 9000)
-    .WithReference(project).WithReference(chat).WaitFor(chat)
-    .PublishAsHostedAgent(project);
+    .WithReference(chat).WaitFor(chat)
+    .AsHostedAgent(project);
 
 // --- Prompt Agents ---
 
-var researchAgent = project.AddPromptAgent(chat, "research-agent",
+var researchAgent = project.AddPromptAgent("research-agent", chat,
     instructions: """
         You are a research assistant. When asked a question:
         1. Use Bing grounding to search the web for current information
@@ -63,7 +63,7 @@ var researchAgent = project.AddPromptAgent(chat, "research-agent",
     .WithTool(aiSearchTool)
     .WithTool(codeInterpreter);
 
-var jokerAgent = project.AddPromptAgent(chat, "joker-agent",
+var jokerAgent = project.AddPromptAgent("joker-agent", chat,
     instructions: """
         You are a hilarious comedian. Tell jokes, be witty, and make people laugh.
         If someone asks you to analyze something, use the code interpreter to

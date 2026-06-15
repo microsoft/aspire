@@ -422,7 +422,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
             {
                 services.RemoveAll<IIdentityChannelReader>();
                 // Throws to simulate a misconfigured dev build with no AspireCliChannel metadata.
-                services.AddSingleton<IIdentityChannelReader>(_ => new FakeIdentityChannelReader(throwOnRead: true));
+                services.AddSingleton<IIdentityChannelReader>(_ => new FakeIdentityChannelReader(failOnRead: true));
             });
 
         // The channel lookup failing is informational; the rest of doctor should still complete.

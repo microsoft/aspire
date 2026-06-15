@@ -165,7 +165,9 @@ partial class Resource
                 value: ValidateNotNull(property.Value),
                 isValueSensitive: property.IsSensitive,
                 knownProperty: knownProperty,
-                priority: priority)
+                priority: priority,
+                displayName: property.HasDisplayName ? property.DisplayName : null,
+                isHighlighted: property.IsHighlighted)
             {
                 IsValueMasked = property.IsSensitive
             };

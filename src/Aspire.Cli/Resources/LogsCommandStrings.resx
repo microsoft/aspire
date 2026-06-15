@@ -163,6 +163,6 @@
     <value>No logs found.</value>
   </data>
   <data name="SearchOptionDescription" xml:space="preserve">
-    <value>Full-text search to filter log content</value>
+    <value>Full-text search to filter log content. See https://aka.ms/aspire/cli-search for more details</value>
   </data>
 </root>

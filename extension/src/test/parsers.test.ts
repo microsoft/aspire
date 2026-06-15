@@ -71,71 +71,83 @@ function createMockDocument(content: string, filePath: string): vscode.TextDocum
 // Parser Registry Tests
 // ============================================================
 suite('AppHostResourceParser registry', () => {
-    test('getAllParsers returns registered parsers', () => {
+    test('getAllParsers returns registered parsers', async () => {
         const parsers = getAllParsers();
         assert.ok(parsers.length >= 2, 'Should have at least the C# and JS/TS parsers');
     });
 
-    test('getSupportedLanguageIds returns expected languages', () => {
+    test('getSupportedLanguageIds returns expected languages', async () => {
         const ids = getSupportedLanguageIds();
         assert.ok(ids.includes('csharp'), 'Should support csharp');
         assert.ok(ids.includes('typescript'), 'Should support typescript');
         assert.ok(ids.includes('javascript'), 'Should support javascript');
     });
 
-    test('getParserForDocument returns C# parser for .cs AppHost file', () => {
+    test('getParserForDocument returns C# parser for .cs AppHost file', async () => {
         const doc = createMockDocument(
             'var builder = DistributedApplication.CreateBuilder(args);\nbuilder.AddRedis("cache");',
             '/test/AppHost.cs'
         );
-        const parser = getParserForDocument(doc);
+        const parser = await getParserForDocument(doc);
         assert.ok(parser, 'Should find a parser');
         assert.ok(parser!.getSupportedExtensions().includes('.cs'));
     });
 
-    test('getParserForDocument returns JS/TS parser for .ts AppHost file', () => {
+    test('getParserForDocument returns JS/TS parser for .ts AppHost file', async () => {
         const doc = createMockDocument(
             'import { createBuilder } from "@aspire/sdk";\nawait builder.addRedis("cache");',
             '/test/apphost.ts'
         );
-        const parser = getParserForDocument(doc);
+        const parser = await getParserForDocument(doc);
         assert.ok(parser, 'Should find a parser');
         assert.ok(parser!.getSupportedExtensions().includes('.ts'));
     });
 
-    test('getParserForDocument returns undefined for non-AppHost .cs file', () => {
+    test('getParserForDocument returns JS/TS parser for Node module AppHost files', async () => {
+        for (const extension of ['.mts', '.cts', '.mjs', '.cjs']) {
+            const doc = createMockDocument(
+                'import { createBuilder } from "@aspire/sdk";\nconst builder = await createBuilder();\nawait builder.addRedis("cache");',
+                `/test/apphost${extension}`
+            );
+            const parser = await getParserForDocument(doc);
+            assert.ok(parser, `Should find a parser for ${extension}`);
+            assert.ok(parser!.getSupportedExtensions().includes(extension));
+        }
+    });
+
+    test('getParserForDocument returns undefined for non-AppHost .cs file', async () => {
         const doc = createMockDocument(
             'using System;\nclass Program { static void Main() { } }',
             '/test/Program.cs'
         );
-        const parser = getParserForDocument(doc);
+        const parser = await getParserForDocument(doc);
         assert.strictEqual(parser, undefined, 'Should not find a parser for non-AppHost C# file');
     });
 
-    test('getParserForDocument returns undefined for non-AppHost .ts file', () => {
+    test('getParserForDocument returns undefined for non-AppHost .ts file', async () => {
         const doc = createMockDocument(
             'import express from "express";\nconst app = express();',
             '/test/server.ts'
         );
-        const parser = getParserForDocument(doc);
+        const parser = await getParserForDocument(doc);
         assert.strictEqual(parser, undefined, 'Should not find a parser for non-AppHost TS file');
     });
 
-    test('getParserForDocument returns undefined for unsupported extension', () => {
+    test('getParserForDocument returns undefined for unsupported extension', async () => {
         const doc = createMockDocument(
             'DistributedApplication.CreateBuilder(args);',
             '/test/file.py'
         );
-        const parser = getParserForDocument(doc);
+        const parser = await getParserForDocument(doc);
         assert.strictEqual(parser, undefined, 'Should not find a parser for .py file');
     });
 
-    test('getParserForDocument returns JS/TS parser for .js AppHost file', () => {
+    test('getParserForDocument returns JS/TS parser for .js AppHost file', async () => {
         const doc = createMockDocument(
             'const { createBuilder } = require("@aspire/sdk");\nbuilder.addRedis("cache");',
             '/test/apphost.js'
         );
-        const parser = getParserForDocument(doc);
+        const parser = await getParserForDocument(doc);
         assert.ok(parser, 'Should find a parser for .js file');
         assert.ok(parser!.getSupportedExtensions().includes('.js'));
     });
@@ -151,48 +163,61 @@ suite('CSharpAppHostParser', () => {
 
     // --- isAppHostFile ---
 
-    test('detects AppHost via #:sdk directive', () => {
+    test('detects AppHost via #:sdk directive', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             '#:sdk Aspire.AppHost.Sdk\n\nvar builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);',
             '/test/AppHost.cs'
         );
-        assert.strictEqual(parser.isAppHostFile(doc), true);
+        assert.strictEqual(await parser.isAppHostFile(doc), true);
     });
 
-    test('detects AppHost via DistributedApplication.CreateBuilder', () => {
+    test('detects AppHost via DistributedApplication.CreateBuilder', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             'using Aspire;\nvar builder = DistributedApplication.CreateBuilder(args);',
             '/test/Program.cs'
         );
-        assert.strictEqual(parser.isAppHostFile(doc), true);
+        assert.strictEqual(await parser.isAppHostFile(doc), true);
     });
 
-    test('rejects non-AppHost C# file', () => {
+    test('rejects C# file with AppHost markers only in comments and strings', async () => {
+        const parser = getCSharpParser();
+        const doc = createMockDocument(
+            [
+                '// #:sdk Aspire.AppHost.Sdk',
+                'var sample = "DistributedApplication.CreateBuilder(args)";',
+                'builder.AddContainer("cache", "redis");',
+            ].join('\n'),
+            '/test/Foo.cs'
+        );
+        assert.strictEqual(await parser.isAppHostFile(doc), false);
+    });
+
+    test('rejects non-AppHost C# file', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             'using System;\nclass Foo { void Bar() { } }',
             '/test/Foo.cs'
         );
-        assert.strictEqual(parser.isAppHostFile(doc), false);
+        assert.strictEqual(await parser.isAppHostFile(doc), false);
     });
 
     // --- parseResources: basic patterns ---
 
-    test('parses single AddRedis call', () => {
+    test('parses single AddRedis call', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             'var builder = DistributedApplication.CreateBuilder(args);\nbuilder.AddRedis("cache");',
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].name, 'cache');
         assert.strictEqual(resources[0].methodName, 'AddRedis');
     });
 
-    test('parses multiple resource calls', () => {
+    test('parses multiple resource calls', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -204,7 +229,7 @@ suite('CSharpAppHostParser', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 3);
         assert.strictEqual(resources[0].name, 'cache');
         assert.strictEqual(resources[0].methodName, 'AddRedis');
@@ -214,31 +239,31 @@ suite('CSharpAppHostParser', () => {
         assert.strictEqual(resources[2].methodName, 'AddProject');
     });
 
-    test('parses AddProject with generic type parameter', () => {
+    test('parses AddProject with generic type parameter', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             'var builder = DistributedApplication.CreateBuilder(args);\nbuilder.AddProject<Projects.WebFrontend>("webfrontend");',
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].name, 'webfrontend');
         assert.strictEqual(resources[0].methodName, 'AddProject');
     });
 
-    test('parses AddContainer call', () => {
+    test('parses AddContainer call', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             'var builder = DistributedApplication.CreateBuilder(args);\nbuilder.AddContainer("mycontainer", "myimage");',
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].name, 'mycontainer');
         assert.strictEqual(resources[0].methodName, 'AddContainer');
     });
 
-    test('parses calls with whitespace variations', () => {
+    test('parses calls with whitespace variations', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -250,19 +275,19 @@ suite('CSharpAppHostParser', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 2);
         assert.strictEqual(resources[0].name, 'spaced');
         assert.strictEqual(resources[1].name, 'multiline');
     });
 
-    test('parses chained calls', () => {
+    test('parses chained calls', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             'var builder = DistributedApplication.CreateBuilder(args);\nbuilder.AddRedis("cache").WithEndpoint(port: 6379);',
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         const addResources = resources.filter(r => r.kind === 'resource');
         assert.strictEqual(addResources.length, 1);
         assert.strictEqual(addResources[0].name, 'cache');
@@ -270,18 +295,18 @@ suite('CSharpAppHostParser', () => {
 
     // --- parseResources: range accuracy ---
 
-    test('range starts at dot before method name', () => {
+    test('range starts at dot before method name', async () => {
         const parser = getCSharpParser();
         const line = 'builder.AddRedis("cache");';
         const doc = createMockDocument(line, '/test/AppHost.cs');
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         // ".AddRedis("cache"" starts at index 7 (the dot)
         assert.strictEqual(resources[0].range.start.line, 0);
         assert.strictEqual(resources[0].range.start.character, 7);
     });
 
-    test('range is on correct line for multi-line file', () => {
+    test('range is on correct line for multi-line file', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -292,25 +317,25 @@ suite('CSharpAppHostParser', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].range.start.line, 3, 'Resource should be on line 3');
     });
 
     // --- parseResources: statementStartLine ---
 
-    test('statementStartLine equals range line for single-line call', () => {
+    test('statementStartLine equals range line for single-line call', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             'var builder = DistributedApplication.CreateBuilder(args);\nvar cache = builder.AddRedis("cache");',
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, resources[0].range.start.line);
     });
 
-    test('statementStartLine points to top of multi-line fluent chain', () => {
+    test('statementStartLine points to top of multi-line fluent chain', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -322,14 +347,14 @@ suite('CSharpAppHostParser', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         const addResources = resources.filter(r => r.kind === 'resource');
         assert.strictEqual(addResources.length, 1);
         assert.strictEqual(addResources[0].range.start.line, 3, '.AddRedis is on line 3');
         assert.strictEqual(addResources[0].statementStartLine, 2, 'statement starts on line 2 (var cache = builder)');
     });
 
-    test('statementStartLine works with multiple multi-line resources', () => {
+    test('statementStartLine works with multiple multi-line resources', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -345,12 +370,12 @@ suite('CSharpAppHostParser', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources[0].statementStartLine, 2, 'cache starts at var cache');
         assert.strictEqual(resources[1].statementStartLine, 6, 'postgres starts at var db');
     });
 
-    test('statementStartLine points to first line after opening brace', () => {
+    test('statementStartLine points to first line after opening brace', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -361,12 +386,12 @@ suite('CSharpAppHostParser', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, 2, 'statement starts after {');
     });
 
-    test('statementStartLine skips single-line comments above statement', () => {
+    test('statementStartLine skips single-line comments above statement', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -380,13 +405,13 @@ suite('CSharpAppHostParser', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         const addResources = resources.filter(r => r.kind === 'resource');
         assert.strictEqual(addResources.length, 1);
         assert.strictEqual(addResources[0].statementStartLine, 4, 'statement starts at var cache, skipping comments');
     });
 
-    test('statementStartLine skips block comments above statement', () => {
+    test('statementStartLine skips block comments above statement', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -400,53 +425,53 @@ suite('CSharpAppHostParser', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, 5, 'statement starts at var cache, skipping block comment');
     });
 
     // --- parseResources: empty / no matches ---
 
-    test('returns empty array for file with no Add* calls', () => {
+    test('returns empty array for file with no Add* calls', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             'var builder = DistributedApplication.CreateBuilder(args);\nbuilder.Build().Run();',
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 0);
     });
 
-    test('returns empty array for empty document', () => {
+    test('returns empty array for empty document', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument('', '/test/Empty.cs');
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 0);
     });
 
     // --- parseResources: edge cases ---
 
-    test('does not match non-Add methods', () => {
+    test('does not match non-Add methods', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             'builder.WithReference("notaresource");\nbuilder.ConfigureOpenTelemetry("otel");',
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 0);
     });
 
-    test('does not match lowercase add (C# is PascalCase)', () => {
+    test('does not match lowercase add (C# is PascalCase)', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             'builder.addRedis("cache");',
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 0, 'C# parser should only match PascalCase Add* methods');
     });
 
-    test('matches Add* calls in commented-out code (known regex limitation)', () => {
+    test('does not match Add* calls in commented-out C# code', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -456,43 +481,42 @@ suite('CSharpAppHostParser', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
-        // Regex-based parser cannot distinguish comments from code — all three match
-        assert.strictEqual(resources.length, 3);
-        assert.strictEqual(resources[2].name, 'real-cache');
+        const resources = await parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].name, 'real-cache');
     });
 
-    test('does not match string interpolation expressions', () => {
+    test('does not match string interpolation expressions', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             'builder.AddRedis($"cache-{env}");',
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         // $" prefix means the regex won't match (it expects .Add*("name" not .Add*($"name")
         assert.strictEqual(resources.length, 0, 'Interpolated strings should not match');
     });
 
-    test('range end position is correct', () => {
+    test('range end position is correct', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             'builder.AddRedis("cache");',
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         // .AddRedis("cache" = 17 chars starting at index 7, so end = 7 + 17 = 24
         assert.strictEqual(resources[0].range.end.line, 0);
         assert.strictEqual(resources[0].range.end.character, 24);
     });
 
-    test('parses AddDatabase chained off a resource variable', () => {
+    test('parses AddDatabase chained off a resource variable', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             'var postgres = builder.AddPostgres("pg");\nvar db = postgres.AddDatabase("mydb");',
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 2);
         assert.strictEqual(resources[0].name, 'pg');
         assert.strictEqual(resources[0].methodName, 'AddPostgres');
@@ -500,19 +524,19 @@ suite('CSharpAppHostParser', () => {
         assert.strictEqual(resources[1].methodName, 'AddDatabase');
     });
 
-    test('handles single-quotes inside resource name gracefully', () => {
+    test('handles single-quotes inside resource name gracefully', async () => {
         const parser = getCSharpParser();
         // C# uses double quotes for strings, single quotes in the name itself
         const doc = createMockDocument(
             'builder.AddRedis("my-cache");',
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].name, 'my-cache');
     });
 
-    test('parses resource names with hyphens and underscores', () => {
+    test('parses resource names with hyphens and underscores', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -522,26 +546,26 @@ suite('CSharpAppHostParser', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 3);
         assert.strictEqual(resources[0].name, 'my-cache');
         assert.strictEqual(resources[1].name, 'my_db');
         assert.strictEqual(resources[2].name, 'event-bus-01');
     });
 
-    test('parses AddXyz with complex generic parameters', () => {
+    test('parses AddXyz with complex generic parameters', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             'builder.AddProject<Projects.Services.Api>("api");',
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].name, 'api');
         assert.strictEqual(resources[0].methodName, 'AddProject');
     });
 
-    test('parses realistic full AppHost file', () => {
+    test('parses realistic full AppHost file', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -566,7 +590,7 @@ suite('CSharpAppHostParser', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         const addResources = resources.filter(r => r.kind === 'resource');
         assert.strictEqual(addResources.length, 5);
         assert.strictEqual(addResources[0].name, 'cache');
@@ -588,7 +612,7 @@ suite('CSharpAppHostParser', () => {
 
     // --- statementStartLine: preceding code blocks (issue #15618) ---
 
-    test('statementStartLine not affected by preceding if block with braces', () => {
+    test('statementStartLine not affected by preceding if block with braces', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -603,13 +627,13 @@ suite('CSharpAppHostParser', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].name, 'nginx');
         assert.strictEqual(resources[0].statementStartLine, 7, 'statement should start on builder.AddContainer line, not inside the if block');
     });
 
-    test('statementStartLine not affected by preceding nested braces', () => {
+    test('statementStartLine not affected by preceding nested braces', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -627,12 +651,12 @@ suite('CSharpAppHostParser', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, 10, 'statement should start on builder.AddContainer line, not inside nested blocks');
     });
 
-    test('statementStartLine not affected by preceding block with semicolons inside', () => {
+    test('statementStartLine not affected by preceding block with semicolons inside', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -648,12 +672,12 @@ suite('CSharpAppHostParser', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, 8, 'statement should start on builder.AddContainer line');
     });
 
-    test('statementStartLine with comment between block and resource call', () => {
+    test('statementStartLine with comment between block and resource call', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -669,12 +693,12 @@ suite('CSharpAppHostParser', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, 8, 'statement should start on builder.AddContainer line, skipping the comment');
     });
 
-    test('statementStartLine with block comment between block and resource call', () => {
+    test('statementStartLine with block comment between block and resource call', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -690,12 +714,12 @@ suite('CSharpAppHostParser', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, 8, 'statement should start on builder.AddContainer line, skipping block comment');
     });
 
-    test('statementStartLine with mixed comments between block and resource call', () => {
+    test('statementStartLine with mixed comments between block and resource call', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -714,12 +738,12 @@ suite('CSharpAppHostParser', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, 11, 'statement should start on builder.AddContainer line, skipping all comments');
     });
 
-    test('statementStartLine with comment between block and fluent chain', () => {
+    test('statementStartLine with comment between block and fluent chain', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -737,12 +761,12 @@ suite('CSharpAppHostParser', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, 8, 'statement should start at var nginx, skipping comment after block');
     });
 
-    test('statementStartLine with multi-line fluent chain after a block', () => {
+    test('statementStartLine with multi-line fluent chain after a block', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -759,12 +783,12 @@ suite('CSharpAppHostParser', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, 7, 'statement should start at var nginx = builder, not inside the if block');
     });
 
-    test('statementStartLine not affected by preceding try/catch block', () => {
+    test('statementStartLine not affected by preceding try/catch block', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -783,12 +807,12 @@ suite('CSharpAppHostParser', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, 11, 'statement should start on builder.AddContainer line, not inside try/catch');
     });
 
-    test('statementStartLine not affected by preceding single-line block', () => {
+    test('statementStartLine not affected by preceding single-line block', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -800,12 +824,12 @@ suite('CSharpAppHostParser', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, 4, 'statement should start on builder.AddContainer line, not inside single-line block');
     });
 
-    test('statementStartLine not affected by preceding empty block', () => {
+    test('statementStartLine not affected by preceding empty block', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -817,12 +841,12 @@ suite('CSharpAppHostParser', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, 4, 'statement should start on builder.AddContainer line, not inside empty block');
     });
 
-    test('statementStartLine not affected by preceding for loop', () => {
+    test('statementStartLine not affected by preceding for loop', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -837,12 +861,12 @@ suite('CSharpAppHostParser', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, 7, 'statement should start on builder.AddContainer line, not inside for loop');
     });
 
-    test('statementStartLine correct for multiple resources after blocks', () => {
+    test('statementStartLine correct for multiple resources after blocks', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -864,13 +888,13 @@ suite('CSharpAppHostParser', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 2);
         assert.strictEqual(resources[0].statementStartLine, 7, 'first resource should start on its own line');
         assert.strictEqual(resources[1].statementStartLine, 14, 'second resource should start on its own line');
     });
 
-    test('statementStartLine not affected by closing brace with trailing comment', () => {
+    test('statementStartLine not affected by closing brace with trailing comment', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -884,12 +908,12 @@ suite('CSharpAppHostParser', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, 6, 'statement should start on builder.AddContainer line, not on } // end if line');
     });
 
-    test('statementStartLine reaches top of fluent chain through callback lambda', () => {
+    test('statementStartLine reaches top of fluent chain through callback lambda', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -903,7 +927,7 @@ suite('CSharpAppHostParser', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 2);
         assert.strictEqual(resources[0].name, 'postgres');
         assert.strictEqual(resources[0].statementStartLine, 2, 'AddPostgres starts at var catalogDb');
@@ -911,7 +935,7 @@ suite('CSharpAppHostParser', () => {
         assert.strictEqual(resources[1].statementStartLine, 2, 'AddDatabase should also start at var catalogDb, not after callback }');
     });
 
-    test('statementStartLine reaches top of fluent chain through RunAsContainer callback', () => {
+    test('statementStartLine reaches top of fluent chain through RunAsContainer callback', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -925,13 +949,13 @@ suite('CSharpAppHostParser', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 2);
         assert.strictEqual(resources[1].name, 'db');
         assert.strictEqual(resources[1].statementStartLine, 2, 'AddDatabase should start at var db, not after callback }');
     });
 
-    test('statementStartLine not affected by } else { between block and resource', () => {
+    test('statementStartLine not affected by } else { between block and resource', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -948,38 +972,38 @@ suite('CSharpAppHostParser', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, 9, 'statement should start on builder.AddContainer line');
     });
 
     // --- Pipeline step classification ---
 
-    test('classifies AddStep as pipelineStep', () => {
+    test('classifies AddStep as pipelineStep', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             'builder.Pipeline.AddStep("assign-storage-role", async (context) => { });',
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].name, 'assign-storage-role');
         assert.strictEqual(resources[0].methodName, 'AddStep');
         assert.strictEqual(resources[0].kind, 'pipelineStep');
     });
 
-    test('classifies AddRedis as resource, not pipelineStep', () => {
+    test('classifies AddRedis as resource, not pipelineStep', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             'builder.AddRedis("cache");',
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].kind, 'resource');
     });
 
-    test('parses mixed resources and pipeline steps', () => {
+    test('parses mixed resources and pipeline steps', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -989,7 +1013,7 @@ suite('CSharpAppHostParser', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 3);
         assert.strictEqual(resources[0].kind, 'resource');
         assert.strictEqual(resources[0].name, 'cache');
@@ -1010,40 +1034,40 @@ suite('JsTsAppHostParser', () => {
 
     // --- isAppHostFile ---
 
-    test('detects AppHost via ES import from @aspire', () => {
+    test('detects AppHost via ES import from @aspire', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             'import { createBuilder } from "@aspire/sdk";\nconst builder = await createBuilder();',
             '/test/apphost.ts'
         );
-        assert.strictEqual(parser.isAppHostFile(doc), true);
+        assert.strictEqual(await parser.isAppHostFile(doc), true);
     });
 
-    test('detects AppHost via require from @aspire', () => {
+    test('detects AppHost via require from @aspire', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             'const { createBuilder } = require("@aspire/sdk");\nconst builder = createBuilder();',
             '/test/apphost.js'
         );
-        assert.strictEqual(parser.isAppHostFile(doc), true);
+        assert.strictEqual(await parser.isAppHostFile(doc), true);
     });
 
-    test('detects AppHost via single-quote import', () => {
+    test('detects AppHost via single-quote import', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             "import { createBuilder } from '@aspire/sdk';",
             '/test/apphost.ts'
         );
-        assert.strictEqual(parser.isAppHostFile(doc), true);
+        assert.strictEqual(await parser.isAppHostFile(doc), true);
     });
 
-    test('detects AppHost via local aspire module import', () => {
+    test('detects AppHost via local aspire module import', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             "import { createBuilder } from './.aspire/modules/aspire.js';\nconst builder = await createBuilder();",
             '/test/apphost.ts'
         );
-        assert.strictEqual(parser.isAppHostFile(doc), true);
+        assert.strictEqual(await parser.isAppHostFile(doc), true);
     });
 
     test('detects AppHost via legacy .modules aspire module import', async () => {
@@ -1052,62 +1076,75 @@ suite('JsTsAppHostParser', () => {
             "import { createBuilder } from './.modules/aspire.js';\nconst builder = await createBuilder();",
             '/test/apphost.ts'
         );
-        assert.strictEqual(parser.isAppHostFile(doc), true);
+        assert.strictEqual(await parser.isAppHostFile(doc), true);
     });
 
-    test('detects AppHost via createBuilder call without aspire import', () => {
+    test('detects AppHost via createBuilder call without aspire import', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             "const builder = await createBuilder();\nawait builder.build().run();",
             '/test/apphost.ts'
         );
-        assert.strictEqual(parser.isAppHostFile(doc), true);
+        assert.strictEqual(await parser.isAppHostFile(doc), true);
     });
 
-    test('rejects non-AppHost TS file', () => {
+    test('rejects JS/TS file with AppHost markers only in comments and strings', async () => {
+        const parser = getJsTsParser();
+        const doc = createMockDocument(
+            [
+                '// import { createBuilder } from "@aspire/sdk";',
+                'const sample = "createBuilder()";',
+                'await builder.addRedis("cache");',
+            ].join('\n'),
+            '/test/server.ts'
+        );
+        assert.strictEqual(await parser.isAppHostFile(doc), false);
+    });
+
+    test('rejects non-AppHost TS file', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             'import express from "express";\nconst app = express();',
             '/test/server.ts'
         );
-        assert.strictEqual(parser.isAppHostFile(doc), false);
+        assert.strictEqual(await parser.isAppHostFile(doc), false);
     });
 
-    test('rejects non-AppHost JS file', () => {
+    test('rejects non-AppHost JS file', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             'const http = require("http");\nhttp.createServer().listen(3000);',
             '/test/index.js'
         );
-        assert.strictEqual(parser.isAppHostFile(doc), false);
+        assert.strictEqual(await parser.isAppHostFile(doc), false);
     });
 
     // --- parseResources: basic patterns ---
 
-    test('parses single addRedis call with double quotes', () => {
+    test('parses single addRedis call with double quotes', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             'import { createBuilder } from "@aspire/sdk";\nawait builder.addRedis("cache");',
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].name, 'cache');
         assert.strictEqual(resources[0].methodName, 'addRedis');
     });
 
-    test('parses single addRedis call with single quotes', () => {
+    test('parses single addRedis call with single quotes', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             "import { createBuilder } from '@aspire/sdk';\nawait builder.addRedis('cache');",
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].name, 'cache');
     });
 
-    test('parses multiple resource calls', () => {
+    test('parses multiple resource calls', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1119,7 +1156,7 @@ suite('JsTsAppHostParser', () => {
             ].join('\n'),
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 3);
         assert.strictEqual(resources[0].name, 'cache');
         assert.strictEqual(resources[0].methodName, 'addRedis');
@@ -1129,18 +1166,18 @@ suite('JsTsAppHostParser', () => {
         assert.strictEqual(resources[2].methodName, 'addProject');
     });
 
-    test('parses chained calls', () => {
+    test('parses chained calls', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             'import { createBuilder } from "@aspire/sdk";\nawait builder.addRedis("cache").withEndpoint(6379);',
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].name, 'cache');
     });
 
-    test('parses calls with whitespace variations', () => {
+    test('parses calls with whitespace variations', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1152,7 +1189,7 @@ suite('JsTsAppHostParser', () => {
             ].join('\n'),
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 2);
         assert.strictEqual(resources[0].name, 'spaced');
         assert.strictEqual(resources[1].name, 'multiline');
@@ -1160,18 +1197,18 @@ suite('JsTsAppHostParser', () => {
 
     // --- parseResources: range accuracy ---
 
-    test('range starts at the dot before method name', () => {
+    test('range starts at the dot before method name', async () => {
         const parser = getJsTsParser();
         const line = 'await builder.addRedis("cache");';
         const doc = createMockDocument(line, '/test/apphost.ts');
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         // ".addRedis("cache"" starts at index 13 (the dot after "await builder")
         assert.strictEqual(resources[0].range.start.line, 0);
         assert.strictEqual(resources[0].range.start.character, 13);
     });
 
-    test('range is on correct line for multi-line file', () => {
+    test('range is on correct line for multi-line file', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1182,25 +1219,25 @@ suite('JsTsAppHostParser', () => {
             ].join('\n'),
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].range.start.line, 3, 'Resource should be on line 3');
     });
 
     // --- parseResources: statementStartLine ---
 
-    test('statementStartLine equals range line for single-line call', () => {
+    test('statementStartLine equals range line for single-line call', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             'import { createBuilder } from "@aspire/sdk";\nconst cache = await builder.addRedis("cache");',
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, resources[0].range.start.line);
     });
 
-    test('statementStartLine points to top of multi-line fluent chain', () => {
+    test('statementStartLine points to top of multi-line fluent chain', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1212,13 +1249,13 @@ suite('JsTsAppHostParser', () => {
             ].join('\n'),
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].range.start.line, 3, '.addRedis is on line 3');
         assert.strictEqual(resources[0].statementStartLine, 2, 'statement starts on line 2 (const cache = await builder)');
     });
 
-    test('statementStartLine works with multiple multi-line resources', () => {
+    test('statementStartLine works with multiple multi-line resources', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1232,12 +1269,12 @@ suite('JsTsAppHostParser', () => {
             ].join('\n'),
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources[0].statementStartLine, 2, 'cache starts at const cache');
         assert.strictEqual(resources[1].statementStartLine, 5, 'postgres starts at const db');
     });
 
-    test('statementStartLine skips single-line comments above statement', () => {
+    test('statementStartLine skips single-line comments above statement', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1251,12 +1288,12 @@ suite('JsTsAppHostParser', () => {
             ].join('\n'),
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, 4, 'statement starts at const pythonPlayer, skipping comments');
     });
 
-    test('statementStartLine skips block comments above statement', () => {
+    test('statementStartLine skips block comments above statement', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1270,43 +1307,43 @@ suite('JsTsAppHostParser', () => {
             ].join('\n'),
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, 5, 'statement starts at const cache, skipping block comment');
     });
 
     // --- parseResources: empty / no matches ---
 
-    test('returns empty array for file with no add* calls', () => {
+    test('returns empty array for file with no add* calls', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             'import { createBuilder } from "@aspire/sdk";\nconst builder = await createBuilder();',
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 0);
     });
 
-    test('returns empty array for empty document', () => {
+    test('returns empty array for empty document', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument('', '/test/empty.ts');
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 0);
     });
 
     // --- parseResources: edge cases ---
 
-    test('does not match non-add methods', () => {
+    test('does not match non-add methods', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             'builder.withReference("notaresource");\nbuilder.configureOpenTelemetry("otel");',
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 0);
     });
 
-    test('matches add* calls in commented-out code (known regex limitation)', () => {
+    test('does not match add* calls in commented-out JS/TS code', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1316,36 +1353,50 @@ suite('JsTsAppHostParser', () => {
             ].join('\n'),
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
-        // Regex-based parser cannot distinguish comments from code — all three match
-        assert.strictEqual(resources.length, 3);
-        assert.strictEqual(resources[2].name, 'real-cache');
+        const resources = await parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].name, 'real-cache');
     });
 
-    test('does not match template literal arguments', () => {
+    test('does not match add* calls inside JS/TS strings', async () => {
+        const parser = getJsTsParser();
+        const doc = createMockDocument(
+            [
+                'const sample = "await builder.addRedis(\\"string-cache\\");";',
+                'const template = `await builder.addRedis("template-cache");`;',
+                'await builder.addRedis("real-cache");',
+            ].join('\n'),
+            '/test/apphost.ts'
+        );
+        const resources = await parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].name, 'real-cache');
+    });
+
+    test('does not match template literal arguments', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             'await builder.addRedis(`cache`);',
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 0, 'Template literals should not match');
     });
 
-    test('range end position is correct', () => {
+    test('range end position is correct', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             'await builder.addRedis("cache"',
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         // .addRedis("cache" = 17 chars starting at index 13, so end = 13 + 17 = 30
         assert.strictEqual(resources[0].range.end.line, 0);
         assert.strictEqual(resources[0].range.end.character, 30);
     });
 
-    test('parses resource names with hyphens and underscores', () => {
+    test('parses resource names with hyphens and underscores', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1355,38 +1406,38 @@ suite('JsTsAppHostParser', () => {
             ].join('\n'),
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 3);
         assert.strictEqual(resources[0].name, 'my-cache');
         assert.strictEqual(resources[1].name, 'my_db');
         assert.strictEqual(resources[2].name, 'event-bus-01');
     });
 
-    test('case-insensitive match for add* methods', () => {
+    test('case-insensitive match for add* methods', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             'await builder.AddRedis("upper");\nawait builder.addRedis("lower");',
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         // Both should match because JS/TS regex uses /gi flag
         assert.strictEqual(resources.length, 2);
         assert.strictEqual(resources[0].name, 'upper');
         assert.strictEqual(resources[1].name, 'lower');
     });
 
-    test('does not match mismatched quotes', () => {
+    test('does not match mismatched quotes', async () => {
         const parser = getJsTsParser();
         // Mismatched quotes should NOT be parsed (the regex requires matching quote chars)
         const doc = createMockDocument(
             'await builder.addRedis("cache\');',
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 0);
     });
 
-    test('parses .js file correctly', () => {
+    test('parses .js file correctly', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1397,13 +1448,13 @@ suite('JsTsAppHostParser', () => {
             ].join('\n'),
             '/test/apphost.js'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 2);
         assert.strictEqual(resources[0].name, 'cache');
         assert.strictEqual(resources[1].name, 'db');
     });
 
-    test('parses realistic full AppHost TS file', () => {
+    test('parses realistic full AppHost TS file', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1428,7 +1479,7 @@ suite('JsTsAppHostParser', () => {
             ].join('\n'),
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 5);
         assert.strictEqual(resources[0].name, 'cache');
         assert.strictEqual(resources[1].name, 'postgres');
@@ -1444,7 +1495,7 @@ suite('JsTsAppHostParser', () => {
 
     // --- statementStartLine: preceding code blocks (issue #15618) ---
 
-    test('statementStartLine not affected by preceding if block with braces', () => {
+    test('statementStartLine not affected by preceding if block with braces', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1459,13 +1510,13 @@ suite('JsTsAppHostParser', () => {
             ].join('\n'),
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].name, 'nginx');
         assert.strictEqual(resources[0].statementStartLine, 7, 'statement should start on builder.addContainer line, not inside the if block');
     });
 
-    test('statementStartLine not affected by preceding nested braces', () => {
+    test('statementStartLine not affected by preceding nested braces', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1483,12 +1534,12 @@ suite('JsTsAppHostParser', () => {
             ].join('\n'),
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, 10, 'statement should start on builder.addContainer line, not inside nested blocks');
     });
 
-    test('statementStartLine not affected by preceding block with semicolons inside', () => {
+    test('statementStartLine not affected by preceding block with semicolons inside', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1504,12 +1555,12 @@ suite('JsTsAppHostParser', () => {
             ].join('\n'),
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, 8, 'statement should start on builder.addContainer line');
     });
 
-    test('statementStartLine with comment between block and resource call', () => {
+    test('statementStartLine with comment between block and resource call', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1525,12 +1576,12 @@ suite('JsTsAppHostParser', () => {
             ].join('\n'),
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, 8, 'statement should start on builder.addContainer line, skipping the comment');
     });
 
-    test('statementStartLine with block comment between block and resource call', () => {
+    test('statementStartLine with block comment between block and resource call', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1546,12 +1597,12 @@ suite('JsTsAppHostParser', () => {
             ].join('\n'),
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, 8, 'statement should start on builder.addContainer line, skipping block comment');
     });
 
-    test('statementStartLine with mixed comments between block and resource call', () => {
+    test('statementStartLine with mixed comments between block and resource call', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1570,12 +1621,12 @@ suite('JsTsAppHostParser', () => {
             ].join('\n'),
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, 11, 'statement should start on builder.addContainer line, skipping all comments');
     });
 
-    test('statementStartLine with comment between block and fluent chain', () => {
+    test('statementStartLine with comment between block and fluent chain', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1593,12 +1644,12 @@ suite('JsTsAppHostParser', () => {
             ].join('\n'),
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, 8, 'statement should start at const nginx, skipping comment after block');
     });
 
-    test('statementStartLine with multi-line fluent chain after a block', () => {
+    test('statementStartLine with multi-line fluent chain after a block', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1615,12 +1666,12 @@ suite('JsTsAppHostParser', () => {
             ].join('\n'),
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, 7, 'statement should start at const nginx = await builder, not inside the if block');
     });
 
-    test('statementStartLine not affected by preceding try/catch block', () => {
+    test('statementStartLine not affected by preceding try/catch block', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1639,12 +1690,12 @@ suite('JsTsAppHostParser', () => {
             ].join('\n'),
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, 11, 'statement should start on builder.addContainer line, not inside try/catch');
     });
 
-    test('statementStartLine not affected by preceding single-line block', () => {
+    test('statementStartLine not affected by preceding single-line block', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1656,12 +1707,12 @@ suite('JsTsAppHostParser', () => {
             ].join('\n'),
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, 4, 'statement should start on builder.addContainer line, not inside single-line block');
     });
 
-    test('statementStartLine not affected by preceding empty block', () => {
+    test('statementStartLine not affected by preceding empty block', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1673,12 +1724,12 @@ suite('JsTsAppHostParser', () => {
             ].join('\n'),
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, 4, 'statement should start on builder.addContainer line, not inside empty block');
     });
 
-    test('statementStartLine not affected by preceding for loop', () => {
+    test('statementStartLine not affected by preceding for loop', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1693,12 +1744,12 @@ suite('JsTsAppHostParser', () => {
             ].join('\n'),
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, 7, 'statement should start on builder.addContainer line, not inside for loop');
     });
 
-    test('statementStartLine correct for multiple resources after blocks', () => {
+    test('statementStartLine correct for multiple resources after blocks', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1720,13 +1771,13 @@ suite('JsTsAppHostParser', () => {
             ].join('\n'),
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 2);
         assert.strictEqual(resources[0].statementStartLine, 7, 'first resource should start on its own line');
         assert.strictEqual(resources[1].statementStartLine, 14, 'second resource should start on its own line');
     });
 
-    test('statementStartLine not affected by closing brace with trailing comment', () => {
+    test('statementStartLine not affected by closing brace with trailing comment', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1740,12 +1791,12 @@ suite('JsTsAppHostParser', () => {
             ].join('\n'),
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, 6, 'statement should start on builder.addContainer line, not on } // end if line');
     });
 
-    test('statementStartLine reaches top of fluent chain through callback arrow function', () => {
+    test('statementStartLine reaches top of fluent chain through callback arrow function', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1759,7 +1810,7 @@ suite('JsTsAppHostParser', () => {
             ].join('\n'),
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 2);
         assert.strictEqual(resources[0].name, 'postgres');
         assert.strictEqual(resources[0].statementStartLine, 2, 'addPostgres starts at const catalogDb');
@@ -1767,7 +1818,7 @@ suite('JsTsAppHostParser', () => {
         assert.strictEqual(resources[1].statementStartLine, 2, 'addDatabase should also start at const catalogDb, not after callback }');
     });
 
-    test('statementStartLine reaches top of fluent chain through runAsContainer callback', () => {
+    test('statementStartLine reaches top of fluent chain through runAsContainer callback', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1781,13 +1832,13 @@ suite('JsTsAppHostParser', () => {
             ].join('\n'),
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 2);
         assert.strictEqual(resources[1].name, 'db');
         assert.strictEqual(resources[1].statementStartLine, 2, 'addDatabase should start at const db, not after callback }');
     });
 
-    test('statementStartLine not affected by } else { between block and resource', () => {
+    test('statementStartLine not affected by } else { between block and resource', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1804,49 +1855,49 @@ suite('JsTsAppHostParser', () => {
             ].join('\n'),
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].statementStartLine, 9, 'statement should start on builder.addContainer line');
     });
 
     // --- Pipeline step classification ---
 
-    test('classifies addStep as pipelineStep', () => {
+    test('classifies addStep as pipelineStep', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             'import { createBuilder } from "@aspire/sdk";\nbuilder.pipeline.addStep("deploy-step", async (ctx) => { });',
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].name, 'deploy-step');
         assert.strictEqual(resources[0].methodName, 'addStep');
         assert.strictEqual(resources[0].kind, 'pipelineStep');
     });
 
-    test('classifies addRedis as resource, not pipelineStep', () => {
+    test('classifies addRedis as resource, not pipelineStep', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             'import { createBuilder } from "@aspire/sdk";\nawait builder.addRedis("cache");',
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].kind, 'resource');
     });
 
-    test('classifies AddStep case-insensitively as pipelineStep', () => {
+    test('classifies AddStep case-insensitively as pipelineStep', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             'import { createBuilder } from "@aspire/sdk";\nbuilder.pipeline.AddStep("my-step", async (ctx) => { });',
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].kind, 'pipelineStep');
     });
 
-    test('parses mixed resources and pipeline steps', () => {
+    test('parses mixed resources and pipeline steps', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1857,7 +1908,7 @@ suite('JsTsAppHostParser', () => {
             ].join('\n'),
             '/test/apphost.ts'
         );
-        const resources = parser.parseResources(doc);
+        const resources = await parser.parseResources(doc);
         assert.strictEqual(resources.length, 3);
         assert.strictEqual(resources[0].kind, 'resource');
         assert.strictEqual(resources[0].name, 'cache');
@@ -1880,7 +1931,7 @@ suite('findBuilderStatementLine', () => {
         return getAllParsers().find(p => p.getSupportedExtensions().includes('.ts'))!;
     }
 
-    test('C# parser finds builder line for var declaration', () => {
+    test('C# parser finds builder line for var declaration', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -1890,10 +1941,10 @@ suite('findBuilderStatementLine', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        assert.strictEqual(parser.findBuilderStatementLine?.(doc), 1);
+        assert.strictEqual(await parser.findBuilderStatementLine?.(doc), 1);
     });
 
-    test('C# parser finds builder line for #:sdk file with leading directives', () => {
+    test('C# parser finds builder line for #:sdk file with leading directives', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -1904,19 +1955,19 @@ suite('findBuilderStatementLine', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        assert.strictEqual(parser.findBuilderStatementLine?.(doc), 2);
+        assert.strictEqual(await parser.findBuilderStatementLine?.(doc), 2);
     });
 
-    test('C# parser returns undefined when no CreateBuilder is present', () => {
+    test('C# parser returns undefined when no CreateBuilder is present', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             'using System;\nclass Foo { }',
             '/test/Foo.cs'
         );
-        assert.strictEqual(parser.findBuilderStatementLine?.(doc), undefined);
+        assert.strictEqual(await parser.findBuilderStatementLine?.(doc), undefined);
     });
 
-    test('JS/TS parser finds builder line for createBuilder call', () => {
+    test('JS/TS parser finds builder line for createBuilder call', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1927,19 +1978,19 @@ suite('findBuilderStatementLine', () => {
             ].join('\n'),
             '/test/apphost.ts'
         );
-        assert.strictEqual(parser.findBuilderStatementLine?.(doc), 2);
+        assert.strictEqual(await parser.findBuilderStatementLine?.(doc), 2);
     });
 
-    test('JS/TS parser returns undefined when no createBuilder call is present', () => {
+    test('JS/TS parser returns undefined when no createBuilder call is present', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             'import express from "express";\nconst app = express();',
             '/test/server.ts'
         );
-        assert.strictEqual(parser.findBuilderStatementLine?.(doc), undefined);
+        assert.strictEqual(await parser.findBuilderStatementLine?.(doc), undefined);
     });
 
-    test('C# parser skips DistributedApplication.CreateBuilder occurrences in comments', () => {
+    test('C# parser skips DistributedApplication.CreateBuilder occurrences in comments', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -1950,10 +2001,10 @@ suite('findBuilderStatementLine', () => {
             ].join('\n'),
             '/test/AppHost.cs'
         );
-        assert.strictEqual(parser.findBuilderStatementLine?.(doc), 2);
+        assert.strictEqual(await parser.findBuilderStatementLine?.(doc), 2);
     });
 
-    test('C# parser returns undefined when only commented CreateBuilder is present', () => {
+    test('C# parser returns undefined when only commented CreateBuilder is present', async () => {
         const parser = getCSharpParser();
         const doc = createMockDocument(
             [
@@ -1962,10 +2013,10 @@ suite('findBuilderStatementLine', () => {
             ].join('\n'),
             '/test/Foo.cs'
         );
-        assert.strictEqual(parser.findBuilderStatementLine?.(doc), undefined);
+        assert.strictEqual(await parser.findBuilderStatementLine?.(doc), undefined);
     });
 
-    test('JS/TS parser skips createBuilder occurrences in comments', () => {
+    test('JS/TS parser skips createBuilder occurrences in comments', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1977,10 +2028,10 @@ suite('findBuilderStatementLine', () => {
             ].join('\n'),
             '/test/apphost.ts'
         );
-        assert.strictEqual(parser.findBuilderStatementLine?.(doc), 3);
+        assert.strictEqual(await parser.findBuilderStatementLine?.(doc), 3);
     });
 
-    test('JS/TS parser returns undefined when only commented createBuilder is present', () => {
+    test('JS/TS parser returns undefined when only commented createBuilder is present', async () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
@@ -1989,6 +2040,6 @@ suite('findBuilderStatementLine', () => {
             ].join('\n'),
             '/test/foo.ts'
         );
-        assert.strictEqual(parser.findBuilderStatementLine?.(doc), undefined);
+        assert.strictEqual(await parser.findBuilderStatementLine?.(doc), undefined);
     });
 });

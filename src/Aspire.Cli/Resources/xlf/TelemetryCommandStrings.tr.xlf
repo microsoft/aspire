@@ -162,19 +162,14 @@
         <target state="needs-review-translation">Pano telemetri API'sinden yapılandırılmış günlükleri görüntüleyin.</target>
         <note />
       </trans-unit>
-      <trans-unit id="MinimumDurationOptionDescription">
-        <source>Filter by minimum span duration in milliseconds</source>
-        <target state="new">Filter by minimum span duration in milliseconds</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>Filter by resource name</source>
         <target state="needs-review-translation">Kaynak adına göre filtreleyin.</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchOptionDescription">
-        <source>Full-text search across telemetry text fields, such as log messages, attribute values, names, source, and IDs</source>
-        <target state="new">Full-text search across telemetry text fields, such as log messages, attribute values, names, source, and IDs</target>
+        <source>Search and filter telemetry fields such as log messages, attribute values, names, source, and IDs. Supports full-text search and field filters. See https://aka.ms/aspire/cli-search for more details</source>
+        <target state="new">Search and filter telemetry fields such as log messages, attribute values, names, source, and IDs. Supports full-text search and field filters. See https://aka.ms/aspire/cli-search for more details</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">

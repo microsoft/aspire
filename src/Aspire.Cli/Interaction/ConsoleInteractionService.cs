@@ -9,6 +9,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.Markdown;
 using Microsoft.Extensions.Logging;
+using Semver;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
@@ -347,7 +348,7 @@ internal class ConsoleInteractionService : IInteractionService
         return result;
     }
 
-    public async Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
+    public async Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, IEnumerable<T>? bindingChoices = null, CancellationToken cancellationToken = default) where T : notnull
     {
         ArgumentNullException.ThrowIfNull(promptText, nameof(promptText));
         ArgumentNullException.ThrowIfNull(choices, nameof(choices));
@@ -356,10 +357,18 @@ internal class ConsoleInteractionService : IInteractionService
         // Materialize once to avoid re-enumerating the choices enumerable.
         var choicesList = choices as IReadOnlyList<T> ?? choices.ToList();
 
+        // The non-interactive validation set defaults to the visible choices, but callers
+        // can pass a narrower bindingChoices subset when some visible items should never
+        // be addressable from the command-line option (e.g., a UX-only "configure MCP
+        // server" entry that lives in the same multi-select prompt as the real catalog).
+        var bindingChoicesList = bindingChoices is null
+            ? choicesList
+            : bindingChoices as IReadOnlyList<T> ?? bindingChoices.ToList();
+
         var (wasProvided, value, defaultValue) = PromptBinding.Resolve(binding);
         if (wasProvided && value is not null)
         {
-            return MatchChoicesOrThrow(value, binding!, choicesList, choiceFormatter);
+            return MatchChoicesOrThrow(value, binding!, bindingChoicesList, choiceFormatter);
         }
 
         if (!_hostEnvironment.SupportsInteractiveInput)
@@ -368,7 +377,7 @@ internal class ConsoleInteractionService : IInteractionService
             {
                 if (binding.NonInteractiveDefaultValue != null)
                 {
-                    return MatchChoicesOrThrow(binding.NonInteractiveDefaultValue, binding, choicesList, choiceFormatter);
+                    return MatchChoicesOrThrow(binding.NonInteractiveDefaultValue, binding, bindingChoicesList, choiceFormatter);
                 }
 
                 ThrowNonInteractiveError(binding.SymbolDisplayName);
@@ -434,12 +443,52 @@ internal class ConsoleInteractionService : IInteractionService
     {
         var cliInformationalVersion = VersionHelper.GetDefaultTemplateVersion();
 
-        DisplayError(InteractionServiceStrings.AppHostNotCompatibleConsiderUpgrading);
+        // When both versions parse, tell the user which side is older and how to
+        // update it rather than the ambiguous "upgrade the AppHost or Aspire CLI".
+        var errorMessage = InteractionServiceStrings.AppHostNotCompatibleConsiderUpgrading;
+        string? updateCommand = null;
+
+        if (SemVersion.TryParse(appHostHostingVersion, SemVersionStyles.Any, out var hostingVersion) &&
+            SemVersion.TryParse(cliInformationalVersion, SemVersionStyles.Any, out var cliVersion))
+        {
+            var comparison = SemVersion.ComparePrecedence(hostingVersion, cliVersion);
+            if (comparison < 0)
+            {
+                errorMessage = InteractionServiceStrings.AppHostNotCompatibleUpdateAppHost;
+                updateCommand = "aspire update";
+            }
+            else if (comparison > 0)
+            {
+                errorMessage = InteractionServiceStrings.AppHostNotCompatibleUpdateCli;
+                updateCommand = DotNetToolDetection.GetDotNetToolUpdateCommand()
+                    ?? NpmInstallDetection.GetNpmUpdateCommand()
+                    ?? "aspire update";
+            }
+        }
+
+        DisplayError(errorMessage);
         MessageConsole.WriteLine();
-        MessageConsole.MarkupLine(
-            $"\t[bold]{InteractionServiceStrings.AspireHostingSDKVersion}[/]: {appHostHostingVersion.EscapeMarkup()}");
-        MessageConsole.MarkupLine($"\t[bold]{InteractionServiceStrings.AspireCLIVersion}[/]: {cliInformationalVersion.EscapeMarkup()}");
-        MessageConsole.MarkupLine($"\t[bold]{InteractionServiceStrings.RequiredCapability}[/]: {ex.RequiredCapability.EscapeMarkup()}");
+
+        var grid = new Grid();
+        grid.AddColumn(new GridColumn { Padding = new Padding(2, 0, 1, 0), NoWrap = true });
+        grid.AddColumn(new GridColumn { Padding = new Padding(0) });
+        grid.AddRow(
+            new Markup($"[bold]{InteractionServiceStrings.AspireHostingSDKVersion.EscapeMarkup()}[/]"),
+            new Markup(appHostHostingVersion.EscapeMarkup()));
+        grid.AddRow(
+            new Markup($"[bold]{InteractionServiceStrings.AspireCLIVersion.EscapeMarkup()}[/]"),
+            new Markup(cliInformationalVersion.EscapeMarkup()));
+        grid.AddRow(
+            new Markup($"[bold]{InteractionServiceStrings.RequiredCapability.EscapeMarkup()}[/]"),
+            new Markup(ex.RequiredCapability.EscapeMarkup()));
+        MessageConsole.Write(grid);
+
+        if (updateCommand is not null)
+        {
+            MessageConsole.WriteLine();
+            MessageConsole.MarkupLine(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ToUpdateRunCommand, updateCommand.EscapeMarkup()));
+        }
+
         MessageConsole.WriteLine();
         return CliExitCodes.AppHostIncompatible;
     }
@@ -792,7 +841,11 @@ internal class ConsoleInteractionService : IInteractionService
     internal void ThrowNonInteractiveInvalidValue<T>(string value, string symbolDisplayName, IEnumerable<T> choices, Func<T, string> choiceFormatter) where T : notnull
     {
         DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveInvalidValue, value, symbolDisplayName));
-        var availableChoices = string.Join(", ", choices.Select(c => choiceFormatter(c)));
+        // Strip Spectre markup from each formatted choice so non-interactive callers see plain
+        // text. Some choice formatters intentionally include [bold]/[dim]/etc. tokens for the
+        // interactive multi-select renderer; those tokens would otherwise leak verbatim through
+        // DisplaySubtleMessage and confuse anyone diagnosing a typoed --option value.
+        var availableChoices = string.Join(", ", choices.Select(c => choiceFormatter(c).RemoveSpectreFormatting()));
         DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveAvailableValues, availableChoices));
         throw new NonInteractiveException(symbolDisplayName);
     }

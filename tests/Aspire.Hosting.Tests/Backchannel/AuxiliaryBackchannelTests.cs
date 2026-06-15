@@ -452,21 +452,23 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
         var endpoint = new UnixDomainSocketEndPoint(service.SocketPath);
         await socket.ConnectAsync(endpoint).DefaultTimeout();
 
-        using var stream = new NetworkStream(socket, ownsSocket: true);
-        using var rpc = JsonRpc.Attach(stream);
+        {
+            using var stream = new NetworkStream(socket, ownsSocket: true);
+            using var rpc = JsonRpc.Attach(stream);
 
-        // Invoke the GetCapabilitiesAsync RPC method
-        var response = await rpc.InvokeAsync<GetCapabilitiesResponse>(
-            "GetCapabilitiesAsync",
-            new object?[] { null }
-        ).DefaultTimeout();
+            // Invoke the GetCapabilitiesAsync RPC method
+            var response = await rpc.InvokeAsync<GetCapabilitiesResponse>(
+                "GetCapabilitiesAsync",
+                new object?[] { null }
+            ).DefaultTimeout();
 
-        // Verify the current capability set.
-        Assert.NotNull(response);
-        Assert.NotNull(response.Capabilities);
-        Assert.Contains(AuxiliaryBackchannelCapabilities.V1, response.Capabilities);
-        Assert.Contains(AuxiliaryBackchannelCapabilities.V2, response.Capabilities);
-        Assert.Contains(AuxiliaryBackchannelCapabilities.V3, response.Capabilities);
+            // Verify the current capability set.
+            Assert.NotNull(response);
+            Assert.NotNull(response.Capabilities);
+            Assert.Contains(AuxiliaryBackchannelCapabilities.V1, response.Capabilities);
+            Assert.Contains(AuxiliaryBackchannelCapabilities.V2, response.Capabilities);
+            Assert.Contains(AuxiliaryBackchannelCapabilities.V3, response.Capabilities);
+        }
 
         await app.StopAsync().DefaultTimeout();
     }

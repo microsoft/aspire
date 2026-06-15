@@ -222,6 +222,15 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
         if (value is EndpointReference ep)
         {
+            // The referenced endpoint may belong to a resource deployed to a different compute
+            // environment (for example a Foundry hosted agent). In that case delegate to the owning
+            // compute environment instead of looking it up in this environment's local endpoint map.
+            if (ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
+                ep, [_containerAppEnvironmentContext.Environment], out var crossExpr))
+            {
+                return ProcessValue(crossExpr, secretType, parent);
+            }
+
             var context = ep.Resource == resource
                 ? this
                 : _containerAppEnvironmentContext.GetContainerAppContext(ep.Resource);
@@ -274,6 +283,12 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
         if (value is EndpointReferenceExpression epExpr)
         {
+            if (ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
+                epExpr, [_containerAppEnvironmentContext.Environment], out var crossExpr))
+            {
+                return ProcessValue(crossExpr, secretType, parent);
+            }
+
             var context = epExpr.Endpoint.Resource == resource
                 ? this
                 : _containerAppEnvironmentContext.GetContainerAppContext(epExpr.Endpoint.Resource);

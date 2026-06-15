@@ -10,18 +10,18 @@ namespace Aspire.Hosting
 {
     public static partial class AzureContainerRegistryExtensions
     {
-        [AspireExport(Description = "Adds an Azure Container Registry resource to the distributed application model.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureContainerRegistryResource> AddAzureContainerRegistry(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
-        [AspireExport(Description = "Gets the Azure Container Registry associated with a compute environment resource.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureContainerRegistryResource> GetAzureContainerRegistry<T>(this ApplicationModel.IResourceBuilder<T> builder)
             where T : ApplicationModel.IResource, Azure.IAzureComputeEnvironmentResource { throw null; }
 
-        [AspireExport("withContainerRegistryAzureContainerRegistry", MethodName = "withAzureContainerRegistry", Description = "Configures a compute environment resource to use an Azure Container Registry.")]
+        [AspireExport("withContainerRegistryAzureContainerRegistry", MethodName = "withAzureContainerRegistry")]
         public static ApplicationModel.IResourceBuilder<T> WithAzureContainerRegistry<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Azure.AzureContainerRegistryResource> registryBuilder)
             where T : ApplicationModel.IResource, ApplicationModel.IComputeEnvironmentResource { throw null; }
 
-        [AspireExport(Description = "Configures a purge task for the Azure Container Registry resource.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureContainerRegistryResource> WithPurgeTask(this ApplicationModel.IResourceBuilder<Azure.AzureContainerRegistryResource> builder, string schedule, string? filter = null, System.TimeSpan? ago = null, int keep = 3, string? taskName = null) { throw null; }
 
         [AspireExportIgnore(Reason = "ContainerRegistryBuiltInRole is an Azure.Provisioning type not compatible with ATS. Use the AzureContainerRegistryRole-based overload instead.")]

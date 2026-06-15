@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Globalization;
+using Aspire.Cli.Backchannel;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Processes;
@@ -10,6 +11,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Cli.Tests.Processes;
 
@@ -102,11 +104,51 @@ public class ProcessShutdownServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal(leasedDcpPath, executionFactory.LastFileName);
     }
 
+    [Fact]
+    public async Task StopAppHostAsync_CleansUpCliProcessWithoutWaitingForItAsSuccessCondition()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "The signal-ignoring shell process is Unix-specific.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var dcpDirectory = workspace.WorkspaceRoot.CreateSubdirectory("dcp");
+        File.WriteAllText(BundleDiscovery.GetDcpExecutablePath(dcpDirectory.FullName), string.Empty);
+
+        using var cliProcess = StartSignalIgnoringShellProcess();
+        try
+        {
+            var signaler = CreateService(
+                workspace,
+                dcpDirectory.FullName,
+                new TestProcessExecutionFactory(),
+                timeProvider: new FakeTimeProvider());
+
+            var result = await signaler.StopAppHostAsync(
+                new AppHostInformation
+                {
+                    AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs"),
+                    ProcessId = int.MaxValue,
+                    StartedAt = null,
+                    CliProcessId = cliProcess.Id,
+                    CliStartedAt = new DateTimeOffset(cliProcess.StartTime)
+                },
+                requestRpcStopAsync: null,
+                CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(2));
+
+            Assert.True(result);
+            await cliProcess.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(2));
+        }
+        finally
+        {
+            await StopProcessAsync(cliProcess);
+        }
+    }
+
     private static ProcessShutdownService CreateService(
         TemporaryWorkspace workspace,
         string dcpDirectory,
         TestProcessExecutionFactory executionFactory,
-        IBundleService? bundleService = null)
+        IBundleService? bundleService = null,
+        TimeProvider? timeProvider = null)
     {
         var executionContext = new CliExecutionContext(
             workspace.WorkspaceRoot,
@@ -122,7 +164,41 @@ public class ProcessShutdownServiceTests(ITestOutputHelper outputHelper)
             new LayoutProcessRunner(executionFactory),
             executionContext,
             NullLogger<ProcessShutdownService>.Instance,
-            TimeProvider.System);
+            timeProvider ?? TimeProvider.System);
+    }
+
+    private static Process StartSignalIgnoringShellProcess()
+    {
+        var startInfo = new ProcessStartInfo("/bin/sh")
+        {
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false
+        };
+        startInfo.ArgumentList.Add("-c");
+        startInfo.ArgumentList.Add("trap '' TERM; exec sleep 60");
+
+        var process = Process.Start(startInfo);
+        Assert.NotNull(process);
+        return process;
+    }
+
+    private static async Task StopProcessAsync(Process process)
+    {
+        if (process.HasExited)
+        {
+            return;
+        }
+
+        try
+        {
+            process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        catch (InvalidOperationException)
+        {
+            // The process exited between the HasExited check and Kill/WaitForExitAsync.
+        }
     }
 
     private sealed class FixedLayoutDiscovery(string dcpDirectory) : ILayoutDiscovery

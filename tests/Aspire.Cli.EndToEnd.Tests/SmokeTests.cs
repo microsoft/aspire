@@ -28,10 +28,9 @@ public sealed class SmokeTests(ITestOutputHelper output)
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
 
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         // Prepare Docker environment (prompt counting, umask, env vars)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
@@ -63,12 +62,48 @@ public sealed class SmokeTests(ITestOutputHelper output)
         // Stop the running apphost with Ctrl+C
         await auto.Ctrl().KeyAsync(Hex1bKey.C);
         await auto.WaitForSuccessPromptAsync(counter);
+    }
 
-        // Exit the shell
-        await auto.TypeAsync("exit");
+    [CaptureWorkspaceOnFailure]
+    [Fact]
+    public async Task CreateAndRunPolyglotAppHostWithDevLocalhostUrls()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        const string projectName = "PolyglotDevLocalhost";
+        await auto.AspireNewAsync(projectName, counter, template: AspireTemplate.ExpressReact, useDevLocalhost: true);
+
+        await auto.RunCommandAsync($"cd {projectName}", counter);
+        await auto.RunCommandAsync("grep -F 'ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL' aspire.config.json && grep -F 'polyglotdevlocalhost.dev.localhost' aspire.config.json", counter);
+
+        await auto.TypeAsync("aspire run");
         await auto.EnterAsync();
 
-        await pendingRun;
+        await auto.WaitUntilAsync(s =>
+        {
+            if (s.ContainsText("Capability Error") ||
+                s.ContainsText("ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL must contain a local loopback address"))
+            {
+                throw new InvalidOperationException("Polyglot AppHost failed to start with a *.dev.localhost resource service endpoint.");
+            }
+
+            return s.ContainsText("Press CTRL+C to stop the AppHost and exit.");
+        }, timeout: TimeSpan.FromMinutes(3), description: "Press CTRL+C message for polyglot AppHost with *.dev.localhost URLs");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.C);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     [CaptureWorkspaceOnFailure]
@@ -82,10 +117,9 @@ public sealed class SmokeTests(ITestOutputHelper output)
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
 
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -103,14 +137,9 @@ public sealed class SmokeTests(ITestOutputHelper output)
 
         output.WriteLine($"Stable AppHost SDK version: {appHostSdkVersion}");
 
-        await auto.RunCommandFailFastAsync($"cd {projectName}", counter);
+        await auto.RunCommandAsync($"cd {projectName}", counter);
         await auto.AspireStartAsync(counter);
         await auto.AspireStopAsync(counter);
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     [CaptureWorkspaceOnFailure]
@@ -124,10 +153,9 @@ public sealed class SmokeTests(ITestOutputHelper output)
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
 
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -146,14 +174,9 @@ public sealed class SmokeTests(ITestOutputHelper output)
 
         output.WriteLine("Stable TypeScript AppHost config verified.");
 
-        await auto.RunCommandFailFastAsync($"cd {projectName}", counter);
+        await auto.RunCommandAsync($"cd {projectName}", counter);
         await auto.AspireStartAsync(counter);
         await auto.AspireStopAsync(counter);
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     private static string GetAppHostSdkVersion(string appHostPath)

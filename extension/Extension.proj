@@ -2,6 +2,31 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <ExtensionSrcDir>$(MSBuildThisFileDirectory)</ExtensionSrcDir>
+    <!--
+      Scope Corepack's cache for the corepack <Exec> invocations below.
+      Resolution order:
+        1. Inherit COREPACK_HOME from the parent environment when set. The
+           AzDO pipelines (eng/pipelines/templates/install-corepack.yml)
+           seed the cache at $(Agent.TempDirectory)/corepack and export
+           COREPACK_HOME to that path; the GitHub Actions extension jobs
+           do the same via $GITHUB_ENV. If this target overrode COREPACK_HOME
+           unconditionally, the seed would never be read and corepack would
+           fall back to its default download (registry.yarnpkg.com), defeating
+           the registry lockdown that the bootstrap is meant to enforce.
+        2. Otherwise (local dev, root Arcade flow invoked directly), fall
+           back to a build-scoped cache inside the gitignored extension tree.
+           This is the documented recovery path: "run extension/build.sh once,
+           then `./build.sh -build-extension` or direct
+           `dotnet build extension/Extension.proj`". extension/build.sh and
+           build.ps1 export the same fallback path so subsequent direct
+           invocations reuse the cache they seeded.
+      The EnvironmentVariables attribute on every corepack <Exec> below is
+      still required so corepack receives _CorepackHome even when MSBuild was
+      launched from a shell whose COREPACK_HOME we inherited but child Exec
+      scope would otherwise lose.
+    -->
+    <_CorepackHome Condition="'$(COREPACK_HOME)' != ''">$(COREPACK_HOME)</_CorepackHome>
+    <_CorepackHome Condition="'$(_CorepackHome)' == ''">$([MSBuild]::NormalizePath($(ExtensionSrcDir), '.corepack-cache'))</_CorepackHome>
   </PropertyGroup>
 
   <Target Name="BuildAndPackageExtension" BeforeTargets="Build" DependsOnTargets="ValidateYarnLockRegistries;CheckYarnInstalled;CheckVsceInstalled">
@@ -26,24 +51,26 @@
       <_VscodeOutputDir>$(ArtifactsPackagesDir)vscode</_VscodeOutputDir>
       <_VsixPath>$(_VscodeOutputDir)\aspire-vscode-$(_EffectiveVersion).vsix</_VsixPath>
       <_ManifestPath>$(_VscodeOutputDir)\aspire-vscode-$(_EffectiveVersion).manifest</_ManifestPath>
+      <_VscePackagePreReleaseArg Condition="'$(PackageVSCodeExtensionAsPreRelease)' == 'true'">--pre-release</_VscePackagePreReleaseArg>
     </PropertyGroup>
 
     <!-- Override package.json version if ExtensionVersionOverride is set, saving original first -->
     <Copy SourceFiles="$(_PackageJsonPath)" DestinationFiles="$(_PackageJsonPath).bak"
           Condition="'$(ExtensionVersionOverride)' != ''" />
-    <Exec Command="yarn version --new-version &quot;$(ExtensionVersionOverride)&quot; --no-git-tag-version"
+    <Exec Command="corepack yarn version --new-version &quot;$(ExtensionVersionOverride)&quot; --no-git-tag-version"
           Condition="'$(ExtensionVersionOverride)' != ''"
+          EnvironmentVariables="COREPACK_HOME=$(_CorepackHome)"
           WorkingDirectory="$(ExtensionSrcDir)" />
 
     <!-- Install dependencies and compile -->
-    <Exec Command="yarn install --frozen-lockfile --non-interactive" WorkingDirectory="$(ExtensionSrcDir)" IgnoreStandardErrorWarningFormat="true" />
-    <Exec Command="yarn compile" WorkingDirectory="$(ExtensionSrcDir)" IgnoreStandardErrorWarningFormat="true" />
+    <Exec Command="corepack yarn install --frozen-lockfile --non-interactive" WorkingDirectory="$(ExtensionSrcDir)" EnvironmentVariables="COREPACK_HOME=$(_CorepackHome)" IgnoreStandardErrorWarningFormat="true" />
+    <Exec Command="corepack yarn compile" WorkingDirectory="$(ExtensionSrcDir)" EnvironmentVariables="COREPACK_HOME=$(_CorepackHome)" IgnoreStandardErrorWarningFormat="true" />
 
     <!-- Make extension directory -->
     <MakeDir Directories="$(_VscodeOutputDir)" />
 
     <!-- Package extension -->
-    <Exec Command="vsce package --out $(_VsixPath)"
+    <Exec Command="vsce package $(_VscePackagePreReleaseArg) --out $(_VsixPath)"
           IgnoreStandardErrorWarningFormat="true"
           WorkingDirectory="$(ExtensionSrcDir)" />
 
@@ -70,6 +97,14 @@
   <Target Name="ValidateYarnLockRegistries">
     <PropertyGroup>
       <_YarnLockPath>$([MSBuild]::NormalizePath($(ExtensionSrcDir), 'yarn.lock'))</_YarnLockPath>
+      <!-- Allowlist host: CONTRIBUTING.MD asks contributors to regenerate
+           yarn.lock through the internal dotnet-public-npm feed. The
+           allowlist catches drift to any other public mirror
+           (npmmirror.com, jsr.io, github.com tarballs, …) rather than only
+           a hand-maintained denylist of the most popular two. Scoped to
+           lines starting with "resolved" so `npm:` aliases (which carry no
+           URL) are ignored. -->
+      <_AllowedNpmRegistryHost>pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm</_AllowedNpmRegistryHost>
     </PropertyGroup>
 
     <Error Text="$(_YarnLockPath) not found. Cannot restore the extension with a frozen lockfile." Condition="!Exists('$(_YarnLockPath)')" />
@@ -79,21 +114,28 @@
     </ReadLinesFromFile>
 
     <ItemGroup>
-      <_PublicNpmRegistryLine Include="@(_YarnLockLine)" Condition="$([System.String]::Copy('%(_YarnLockLine.Identity)').Contains('registry.npmjs.org')) Or $([System.String]::Copy('%(_YarnLockLine.Identity)').Contains('registry.yarnpkg.com'))" />
+      <_YarnLockResolvedLine Include="@(_YarnLockLine)" Condition="$([System.String]::Copy('%(_YarnLockLine.Identity)').TrimStart().StartsWith('resolved &quot;'))" />
+      <_DisallowedRegistryLine Include="@(_YarnLockResolvedLine)" Condition="!$([System.String]::Copy('%(_YarnLockResolvedLine.Identity)').Contains('$(_AllowedNpmRegistryHost)'))" />
     </ItemGroup>
 
     <Error
-      Text="extension/yarn.lock contains public npm registry URLs. Regenerate it using the internal dotnet-public-npm feed before building. Offending lines: @(_PublicNpmRegistryLine, '; ')"
-      Condition="'@(_PublicNpmRegistryLine)' != ''" />
+      Text="extension/yarn.lock contains resolved entries outside the internal dotnet-public-npm feed. Regenerate it through the internal feed before building. Offending lines: @(_DisallowedRegistryLine, '; ')"
+      Condition="'@(_DisallowedRegistryLine)' != ''" />
   </Target>
 
   <Target Name="CheckYarnInstalled">
-    <Exec Command="yarn --version" ContinueOnError="true" ConsoleToMSBuild="true" IgnoreStandardErrorWarningFormat="true">
+    <!-- Resolves the Yarn release pinned in extension/package.json (the
+         packageManager field), via Corepack. WorkingDirectory must be the
+         extension directory or Corepack will fall back to its default.
+         COREPACK_HOME is set explicitly so the Exec inherits the build-scoped
+         cache the bootstrap scripts seeded, even if the parent shell did not
+         export it (e.g. when invoked through `./build.sh -build-extension`). -->
+    <Exec Command="corepack yarn --version" ContinueOnError="true" ConsoleToMSBuild="true" EnvironmentVariables="COREPACK_HOME=$(_CorepackHome)" IgnoreStandardErrorWarningFormat="true" WorkingDirectory="$(ExtensionSrcDir)">
       <Output TaskParameter="ExitCode" PropertyName="YarnExitCode" />
       <Output TaskParameter="ConsoleOutput" PropertyName="YarnVersion" />
     </Exec>
 
-    <Error Condition="'$(YarnExitCode)' != '0'" Text="yarn is not installed or not available in PATH. To build the extension, install yarn: https://yarnpkg.com/getting-started/install" />
+    <Error Condition="'$(YarnExitCode)' != '0'" Text="Corepack is not installed or cannot run the Yarn version pinned in extension/package.json. The extension's Corepack and Yarn bootstrap lives in extension/build.sh and extension/build.ps1: those scripts install a pinned Corepack via npm and seed Corepack's Yarn cache from the internal npm feed. Run one of them once before invoking the extension build, including before `./build.sh -build-extension` (the root Arcade flow) or direct `dotnet build extension/Extension.proj` — neither installs Corepack itself. See extension/CONTRIBUTING.MD for details." />
 
     <Message Importance="high" Text="yarn version: $(YarnVersion)" />
   </Target>

@@ -9,6 +9,7 @@ using System.Net.Sockets;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Ats;
@@ -17,6 +18,7 @@ using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SystemProcess = System.Diagnostics.Process;
@@ -812,7 +814,7 @@ public static class ResourceBuilderExtensions
             // Track per-scheme index for service discovery keys to handle multiple endpoints with the same scheme.
             var schemeIndexTracker = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var endpoint in annotation.Resource.GetEndpoints(annotation.ContextNetworkID))
+            foreach (var endpoint in annotation.Resource.GetEndpoints(annotation.ContextNetworkId))
             {
                 if (specificEndpointName != null && !string.Equals(endpoint.EndpointName, specificEndpointName, StringComparison.OrdinalIgnoreCase))
                 {
@@ -1407,7 +1409,7 @@ public static class ResourceBuilderExtensions
             endpointReferenceAnnotation = new EndpointReferenceAnnotation(resourceWithEndpoints);
             if (builder.Resource.IsContainer())
             {
-                endpointReferenceAnnotation.ContextNetworkID = KnownNetworkIdentifiers.DefaultAspireContainerNetwork;
+                endpointReferenceAnnotation.ContextNetworkId = KnownNetworkIdentifiers.DefaultAspireContainerNetwork;
             }
             builder.WithAnnotation(endpointReferenceAnnotation);
 
@@ -1482,7 +1484,7 @@ public static class ResourceBuilderExtensions
             // can also be resolved in the context of container-to-container communication by using the target port
             // and the container name as the host. This is why we only set the context network to localhost,
             // for both container and non-container resources.
-            endpoint = new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, networkID: KnownNetworkIdentifiers.LocalhostNetwork);
+            endpoint = new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, networkId: KnownNetworkIdentifiers.LocalhostNetwork);
             callback(endpoint);
             builder.Resource.Annotations.Add(endpoint);
         }
@@ -1612,7 +1614,7 @@ public static class ResourceBuilderExtensions
             targetPort: targetPort,
             isExternal: isExternal,
             isProxied: isProxied,
-            networkID: KnownNetworkIdentifiers.LocalhostNetwork);
+            networkId: KnownNetworkIdentifiers.LocalhostNetwork);
 
         ConfigureEndpointEnvironmentVariable(builder, annotation, env);
 
@@ -1885,15 +1887,15 @@ public static class ResourceBuilderExtensions
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The the resource builder.</param>
     /// <param name="name">The name of the endpoint.</param>
-    /// <param name="contextNetworkID">The network context in which to resolve the endpoint. If null, localhost (loopback) network context will be used.</param>
+    /// <param name="contextNetworkId">The network context in which to resolve the endpoint. If null, localhost (loopback) network context will be used.</param>
     /// <returns>An <see cref="EndpointReference"/> that can be used to resolve the address of the endpoint after resource allocation has occurred.</returns>
     /// <remarks>This method is not available in polyglot app hosts. Use the overload without NetworkIdentifier instead.</remarks>
     [AspireExportIgnore(Reason = "NetworkIdentifier is not ATS-compatible.")]
-    public static EndpointReference GetEndpoint<T>(this IResourceBuilder<T> builder, [EndpointName] string name, NetworkIdentifier contextNetworkID) where T : IResourceWithEndpoints
+    public static EndpointReference GetEndpoint<T>(this IResourceBuilder<T> builder, [EndpointName] string name, NetworkIdentifier contextNetworkId) where T : IResourceWithEndpoints
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        return builder.Resource.GetEndpoint(name, contextNetworkID);
+        return builder.Resource.GetEndpoint(name, contextNetworkId);
     }
 
     /// <summary>
@@ -2821,7 +2823,6 @@ public static class ResourceBuilderExtensions
 
         var endpointName = endpoint.EndpointName;
 
-        Uri? uri = null;
         builder.OnResourceEndpointsAllocated((_, @event, ct) =>
         {
             if (!endpoint.Exists)
@@ -2829,6 +2830,12 @@ public static class ResourceBuilderExtensions
                 throw new DistributedApplicationException($"The endpoint '{endpointName}' does not exist on the resource '{builder.Resource.Name}'.");
             }
 
+            return Task.CompletedTask;
+        });
+
+        Uri? uri = null;
+        builder.OnBeforeResourceStarted((_, @event, ct) =>
+        {
             var baseUri = new Uri(endpoint.Url, UriKind.Absolute);
             uri = new Uri(baseUri, path);
             return Task.CompletedTask;
@@ -2836,17 +2843,18 @@ public static class ResourceBuilderExtensions
 
         var healthCheckKey = $"{builder.Resource.Name}_{endpointName}_{path}_{statusCode}_check";
 
+        builder.ApplicationBuilder.Services.AddHttpClient();
         builder.ApplicationBuilder.Services.SuppressHealthCheckHttpClientLogging(healthCheckKey);
 
-        builder.ApplicationBuilder.Services.AddHealthChecks().AddUrlGroup(options =>
-        {
-            if (uri is null)
-            {
-                throw new DistributedApplicationException($"The URI for the health check on resource '{builder.Resource.Name}' is not set. Ensure that the resource has been allocated before the health check is executed.");
-            }
-
-            options.AddUri(uri, setup => setup.ExpectHttpCode(statusCode ?? 200));
-        }, healthCheckKey);
+        builder.ApplicationBuilder.Services.AddHealthChecks().Add(new HealthCheckRegistration(
+            healthCheckKey,
+            serviceProvider => new DeferredUriHealthCheck(
+                () => uri,
+                statusCode.Value,
+                () => serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(healthCheckKey)),
+            failureStatus: default,
+            tags: default,
+            timeout: default));
 
         builder.WithHealthCheck(healthCheckKey);
 
@@ -2925,7 +2933,6 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(executeCommand);
 
         commandOptions ??= CommandOptions.Default;
-#pragma warning disable ASPIREINTERACTION001 // Command arguments intentionally reuse the experimental interaction input model.
         ValidateCommandArguments(commandOptions.Arguments);
 
         // Replace existing annotation with the same name.
@@ -2938,7 +2945,6 @@ public static class ResourceBuilderExtensions
 #pragma warning disable CS0618 // Parameter is obsolete but still flowed for compatibility.
         return builder.WithAnnotation(new ResourceCommandAnnotation(name, displayName, commandOptions.UpdateState ?? (c => ResourceCommandState.Enabled), executeCommand, commandOptions.Description, commandOptions.Parameter, commandOptions.Arguments, commandOptions.ConfirmationMessage, commandOptions.IconName, commandOptions.IconVariant, commandOptions.IsHighlighted, commandOptions.Visibility, commandOptions.ValidateArguments));
 #pragma warning restore CS0618
-#pragma warning restore ASPIREINTERACTION001
     }
 
     /// <summary>
@@ -3003,17 +3009,29 @@ public static class ResourceBuilderExtensions
             builder.Resource.Annotations.Remove(existingAnnotation);
         }
 
-#pragma warning disable ASPIREINTERACTION001 // The obsolete overload still flows the obsolete parameter for compatibility.
         return builder.WithAnnotation(new ResourceCommandAnnotation(name, displayName, updateState ?? (c => ResourceCommandState.Enabled), executeCommand, displayDescription, parameter, confirmationMessage, iconName, iconVariant, isHighlighted));
-#pragma warning restore ASPIREINTERACTION001
     }
 
-#pragma warning disable ASPIREINTERACTION001 // Command arguments reuse interaction input metadata.
     private static void ValidateCommandArguments(IReadOnlyList<InteractionInput> arguments)
     {
         _ = new InteractionInputCollection(arguments);
     }
-#pragma warning restore ASPIREINTERACTION001
+
+    private static void ApplyCommandOptions(CommandOptions target, CommandOptions source)
+    {
+#pragma warning disable CS0618 // Parameter is obsolete but still flowed for command option compatibility.
+        target.Description = source.Description;
+        target.Parameter = source.Parameter;
+        target.Arguments = source.Arguments;
+        target.ValidateArguments = source.ValidateArguments;
+        target.Visibility = source.Visibility;
+        target.ConfirmationMessage = source.ConfirmationMessage;
+        target.IconName = source.IconName;
+        target.IconVariant = source.IconVariant;
+        target.IsHighlighted = source.IsHighlighted;
+        target.UpdateState = source.UpdateState;
+#pragma warning restore CS0618
+    }
 
     #pragma warning disable ASPIREPROCESSCOMMAND001 // Process command APIs are experimental.
 
@@ -3221,6 +3239,21 @@ public static class ResourceBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(options);
 
+        if (options.CreateProcessSpec is { } createProcessSpec)
+        {
+            return builder.WithProcessCommand(
+                commandName,
+                displayName,
+                async context =>
+                {
+                    var processCommandSpec = await createProcessSpec(context).ConfigureAwait(false)
+                        ?? throw new InvalidOperationException("The process command specification factory returned null.");
+
+                    return CreateProcessCommandSpec(processCommandSpec);
+                },
+                CreateProcessCommandOptions(options));
+        }
+
         return builder.WithProcessCommand(
             commandName,
             displayName,
@@ -3232,6 +3265,7 @@ public static class ResourceBuilderExtensions
     /// Adds a command to the resource that starts a local process created by a callback when invoked.
     /// </summary>
     [Experimental("ASPIREPROCESSCOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [Obsolete("Use withProcessCommand with createProcessSpec in the options object instead.")]
     [AspireExport("withProcessCommandFactory")]
     internal static IResourceBuilder<TResource> WithProcessCommandFactoryExport<TResource>(
         this IResourceBuilder<TResource> builder,
@@ -3259,7 +3293,7 @@ public static class ResourceBuilderExtensions
     internal static async Task<ExecuteCommandResult> ExecuteProcessCommandAsync(ExecuteCommandContext context, ProcessCommandSpec processCommandSpec, ProcessCommandOptions commandOptions)
     {
         var processSpec = CreateProcessSpec(context, processCommandSpec, commandOptions);
-        var processRunner = context.ServiceProvider.GetRequiredService<IProcessRunner>();
+        var processRunner = context.Services.GetRequiredService<IProcessRunner>();
         var (pendingProcessResult, processDisposable) = processRunner.Run(processSpec);
 
         await using (processDisposable.ConfigureAwait(false))
@@ -3297,20 +3331,7 @@ public static class ResourceBuilderExtensions
 
         if (exportOptions.CommandOptions is { } commonOptions)
         {
-#pragma warning disable ASPIREINTERACTION001 // Process command exports reuse command argument metadata.
-#pragma warning disable CS0618 // Parameter is obsolete but still flowed for command option compatibility.
-            commandOptions.Description = commonOptions.Description;
-            commandOptions.Parameter = commonOptions.Parameter;
-            commandOptions.Arguments = commonOptions.Arguments;
-            commandOptions.ValidateArguments = commonOptions.ValidateArguments;
-            commandOptions.Visibility = commonOptions.Visibility;
-            commandOptions.ConfirmationMessage = commonOptions.ConfirmationMessage;
-            commandOptions.IconName = commonOptions.IconName;
-            commandOptions.IconVariant = commonOptions.IconVariant;
-            commandOptions.IsHighlighted = commonOptions.IsHighlighted;
-            commandOptions.UpdateState = commonOptions.UpdateState;
-#pragma warning restore CS0618
-#pragma warning restore ASPIREINTERACTION001
+            ApplyCommandOptions(commandOptions, commonOptions);
         }
 
         if (exportOptions.MaxOutputLineCount is { } maxOutputLineCount)
@@ -3453,10 +3474,11 @@ public static class ResourceBuilderExtensions
         {
             var resultContext = new ProcessCommandResultContext
             {
-                ServiceProvider = context.ServiceProvider,
+                Services = context.Services,
                 ResourceName = context.ResourceName,
                 Logger = context.Logger,
                 CancellationToken = context.CancellationToken,
+                Arguments = context.Arguments,
                 ProcessCommandSpec = processCommandSpec,
                 ExitCode = processResult.ExitCode,
                 Output = processResult.ProcessOutput,
@@ -3699,17 +3721,18 @@ public static class ResourceBuilderExtensions
                     return new ExecuteCommandResult { Success = false, Message = "Endpoints are not yet allocated." };
                 }
                 var uri = new UriBuilder(endpoint.Url) { Path = path }.Uri;
-                var httpClient = context.ServiceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(commandOptions.HttpClientName ?? Options.DefaultName);
+                var httpClient = context.Services.GetRequiredService<IHttpClientFactory>().CreateClient(commandOptions.HttpClientName ?? Options.DefaultName);
                 var request = new HttpRequestMessage(commandOptions.Method, uri);
                 if (commandOptions.PrepareRequest is not null)
                 {
                     var requestContext = new HttpCommandRequestContext
                     {
-                        ServiceProvider = context.ServiceProvider,
+                        Services = context.Services,
                         ResourceName = context.ResourceName,
                         Endpoint = endpoint,
                         CancellationToken = context.CancellationToken,
                         HttpClient = httpClient,
+                        Arguments = context.Arguments,
                         Request = request
                     };
                     await commandOptions.PrepareRequest(requestContext).ConfigureAwait(false);
@@ -3722,11 +3745,12 @@ public static class ResourceBuilderExtensions
                     {
                         var resultContext = new HttpCommandResultContext
                         {
-                            ServiceProvider = context.ServiceProvider,
+                            Services = context.Services,
                             ResourceName = context.ResourceName,
                             Endpoint = endpoint,
                             CancellationToken = context.CancellationToken,
                             HttpClient = httpClient,
+                            Arguments = context.Arguments,
                             Response = response
                         };
                         return await commandOptions.GetCommandResult(resultContext).ConfigureAwait(false);
@@ -3772,16 +3796,74 @@ public static class ResourceBuilderExtensions
             return null;
         }
 
-        return new HttpCommandOptions
+        var commandOptions = new HttpCommandOptions();
+        if (exportOptions.CommandOptions is { } commonOptions)
         {
-            Description = exportOptions.Description,
-            ConfirmationMessage = exportOptions.ConfirmationMessage,
-            IconName = exportOptions.IconName,
-            IconVariant = exportOptions.IconVariant,
-            IsHighlighted = exportOptions.IsHighlighted,
-            Method = !string.IsNullOrWhiteSpace(exportOptions.MethodName) ? new HttpMethod(exportOptions.MethodName) : null,
-            ResultMode = exportOptions.ResultMode
-        };
+            ApplyCommandOptions(commandOptions, commonOptions);
+        }
+
+        commandOptions.Description = exportOptions.Description ?? commandOptions.Description;
+        commandOptions.ConfirmationMessage = exportOptions.ConfirmationMessage ?? commandOptions.ConfirmationMessage;
+        commandOptions.IconName = exportOptions.IconName ?? commandOptions.IconName;
+        commandOptions.IconVariant = exportOptions.IconVariant ?? commandOptions.IconVariant;
+        commandOptions.IsHighlighted = exportOptions.IsHighlighted || commandOptions.IsHighlighted;
+        commandOptions.Method = !string.IsNullOrWhiteSpace(exportOptions.MethodName) ? new HttpMethod(exportOptions.MethodName) : null;
+        commandOptions.ResultMode = exportOptions.ResultMode;
+        if (exportOptions.PrepareRequest is { } prepareRequest)
+        {
+            commandOptions.PrepareRequest = async context =>
+            {
+                var requestData = await prepareRequest(new HttpCommandPrepareRequestContext
+                {
+                    ResourceName = context.ResourceName,
+                    Endpoint = context.Endpoint,
+                    CancellationToken = context.CancellationToken,
+                    Arguments = context.Arguments
+                }).ConfigureAwait(false);
+
+                ApplyHttpCommandRequestExportData(context.Request, requestData);
+            };
+        }
+
+        return commandOptions;
+    }
+
+    private static void ApplyHttpCommandRequestExportData(HttpRequestMessage request, HttpCommandRequestExportData requestData)
+    {
+        if (requestData is null)
+        {
+            throw new InvalidOperationException("The HTTP command prepare-request callback returned null.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(requestData.MethodName))
+        {
+            request.Method = new HttpMethod(requestData.MethodName);
+        }
+
+        if (requestData.Content is not null)
+        {
+            request.Content = !string.IsNullOrWhiteSpace(requestData.ContentType)
+                ? new StringContent(requestData.Content, Encoding.UTF8, requestData.ContentType)
+                : new StringContent(requestData.Content, Encoding.UTF8);
+        }
+        else if (!string.IsNullOrWhiteSpace(requestData.ContentType))
+        {
+            throw new InvalidOperationException("HTTP command request content type cannot be specified without request content.");
+        }
+
+        if (requestData.Headers is null)
+        {
+            return;
+        }
+
+        foreach (var (name, value) in requestData.Headers)
+        {
+            if (!request.Headers.TryAddWithoutValidation(name, value) &&
+                request.Content?.Headers.TryAddWithoutValidation(name, value) != true)
+            {
+                throw new InvalidOperationException($"HTTP command request header '{name}' could not be applied.");
+            }
+        }
     }
 
     internal static async Task<ExecuteCommandResult> GetDefaultHttpCommandResultAsync(HttpResponseMessage response, HttpCommandOptions commandOptions, CancellationToken cancellationToken)
@@ -4188,10 +4270,9 @@ public static class ResourceBuilderExtensions
     ///     });
     /// </code>
     /// </example>
-    /// <para>This method is not available in polyglot app hosts.</para>
     /// </remarks>
     [Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "HttpsCertificateConfigurationCallbackAnnotationContext exposes IServiceProvider and IResource — not usable from polyglot hosts.")]
+    [AspireExport]
     public static IResourceBuilder<TResource> WithHttpsCertificateConfiguration<TResource>(this IResourceBuilder<TResource> builder, Func<HttpsCertificateConfigurationCallbackAnnotationContext, Task> callback)
         where TResource : IResourceWithEnvironment, IResourceWithArgs
     {
@@ -4229,10 +4310,9 @@ public static class ResourceBuilderExtensions
     /// });
     /// </code>
     /// </example>
-    /// <para>This method is not available in polyglot app hosts.</para>
     /// </remarks>
     [Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "HttpsEndpointUpdateCallbackContext exposes IServiceProvider and IResource — not usable from polyglot hosts.")]
+    [AspireExport]
     public static IResourceBuilder<TResource> SubscribeHttpsEndpointsUpdate<TResource>(this IResourceBuilder<TResource> builder, Action<HttpsEndpointUpdateCallbackContext> callback)
         where TResource : IResource
     {
@@ -4888,7 +4968,7 @@ public static class ResourceBuilderExtensions
     /// </summary>
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
-    /// <param name="exitCode">The completion exit code to treat as successful. Defaults to <c>0</c>.</param>
+    /// <param name="exitCode">The completion exit code to treat as successful.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// This method is useful for one-off resources such as setup scripts, migrations, or build steps that should remain visible while running
@@ -4896,7 +4976,7 @@ public static class ResourceBuilderExtensions
     /// Hidden resources can still be accessed directly by their name, by using <c>Show hidden resources</c> toggle in the dashboard or by using <c>aspire describe --include-hidden</c> from the CLI.
     /// </remarks>
     [AspireExportIgnore(Reason = "Use ATS-friendly overload that supports a single exit code or multiple exit codes.")]
-    public static IResourceBuilder<T> WithHiddenOnCompletion<T>(this IResourceBuilder<T> builder, int exitCode = 0) where T : IResource
+    public static IResourceBuilder<T> WithHiddenOnCompletion<T>(this IResourceBuilder<T> builder, int exitCode) where T : IResource
     {
         ArgumentNullException.ThrowIfNull(builder);
 

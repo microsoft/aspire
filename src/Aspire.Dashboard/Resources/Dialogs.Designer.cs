@@ -289,6 +289,42 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Date and time.
+        /// </summary>
+        public static string FilterDialogDateValueLabel {
+            get {
+                return ResourceManager.GetString("FilterDialogDateValueLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to e.g. 2024-01-15T09:30:00.
+        /// </summary>
+        public static string FilterDialogDatePlaceholder {
+            get {
+                return ResourceManager.GetString("FilterDialogDatePlaceholder", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Pick date and time.
+        /// </summary>
+        public static string FilterDialogPickDateButtonTitle {
+            get {
+                return ResourceManager.GetString("FilterDialogPickDateButtonTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Invalid date format.
+        /// </summary>
+        public static string FilterDialogInvalidDate {
+            get {
+                return ResourceManager.GetString("FilterDialogInvalidDate", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Details.
         /// </summary>
         public static string GenAIDetailsTabText {

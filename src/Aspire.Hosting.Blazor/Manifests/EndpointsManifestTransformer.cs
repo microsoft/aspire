@@ -21,7 +21,8 @@ internal static class EndpointsManifestTransformer
     {
         var manifest = JsonSerializer.Deserialize(
             await File.ReadAllTextAsync(manifestPath, ct).ConfigureAwait(false),
-            ManifestJsonContext.Default.EndpointsManifest)!;
+            ManifestJsonContext.Default.EndpointsManifest)
+            ?? throw new InvalidOperationException($"Failed to deserialize endpoints manifest from '{manifestPath}'.");
 
         var fallbackEndpoints = new List<EndpointEntry>();
 
@@ -33,7 +34,7 @@ internal static class EndpointsManifestTransformer
             // We skip compressed variants (those with Content-Encoding selectors) because the
             // ContentEncodingNegotiationMatcherPolicy would otherwise prefer the catch-all over
             // literal routes (like _blazor/_configuration) that lack encoding metadata.
-            if (ep.Route == "index.html")
+            if (string.Equals(ep.Route, "index.html", StringComparison.OrdinalIgnoreCase))
             {
                 var hasContentEncoding = ep.Selectors?.Any(s => s.Name == "Content-Encoding") == true;
 

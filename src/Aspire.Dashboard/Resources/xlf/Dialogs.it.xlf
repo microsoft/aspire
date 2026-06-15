@@ -149,6 +149,16 @@ For more information about using AI agents with the dashboard, including setting
         <target state="translated">Condizione</target>
         <note />
       </trans-unit>
+      <trans-unit id="FilterDialogDatePlaceholder">
+        <source>e.g. 2024-01-15T09:30:00</source>
+        <target state="new">e.g. 2024-01-15T09:30:00</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FilterDialogDateValueLabel">
+        <source>Date and time</source>
+        <target state="new">Date and time</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FilterDialogDisableAll">
         <source>Disable all</source>
         <target state="translated">Disabilita tutto</target>
@@ -169,9 +179,19 @@ For more information about using AI agents with the dashboard, including setting
         <target state="translated">Campo</target>
         <note />
       </trans-unit>
+      <trans-unit id="FilterDialogInvalidDate">
+        <source>Invalid date format</source>
+        <target state="new">Invalid date format</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FilterDialogParameterInputLabel">
         <source>Parameter</source>
         <target state="translated">Parametro</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FilterDialogPickDateButtonTitle">
+        <source>Pick date and time</source>
+        <target state="new">Pick date and time</target>
         <note />
       </trans-unit>
       <trans-unit id="FilterDialogRemoveFilterButtonText">

@@ -64,8 +64,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
     public bool IsReadyToCreate(RenderedModelResource<Executable> resource, EmptyCreationContext context)
     {
-        // Executables are always created. When explicit startup is used, DCP receives Spec.Start = false.
-        return true;
+        return !DcpModelUtilities.ShouldDeferCreateForExplicitStart(resource.ModelResource, resource.DcpResource.Spec.Start);
     }
 
     public async Task CreateObjectAsync(RenderedModelResource<Executable> er, EmptyCreationContext context, ILogger resourceLogger, IDcpObjectFactory factory, CancellationToken cancellationToken)
@@ -107,6 +106,47 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         er.DcpResource.SetAnnotationAsObjectList(CustomResource.ResourceAppArgsAnnotation, displayArgs.Select(a => new AppLaunchArgumentAnnotation(a.Value, isSensitive: a.IsSensitive, effectiveArgumentIndex: a.EffectiveArgumentIndex)));
 
         spec.Env = configuration.EnvironmentVariables.Select(kvp => new EnvVar { Name = kvp.Key, Value = kvp.Value }).ToList();
+
+        // Configure the per-replica terminal spec if the resource has a TerminalAnnotation.
+        // Each replica gets its own DCP UDS producer endpoint from the layout so the
+        // terminal host can multiplex viewers per (resource, replica).
+        //
+        // PTY allocation is implemented by DCP across all three desktop platforms:
+        //   * Windows  - ConPTY (the Win32 pseudo-console API; per-replica named pipe
+        //                bridged into a Unix domain socket facade on the DCP side).
+        //   * Linux    - Unix98 master/slave pair via /dev/ptmx + grantpt/unlockpt.
+        //   * macOS    - Same Unix98 surface, with the Darwin posix_openpt path.
+        // Container PTYs (interactive `docker exec`-style sessions) are not yet
+        // wired through this annotation — tracked as a follow-up. If the running
+        // DCP build pre-dates terminal allocation on this host (e.g. an older
+        // bundled DCP that ships with Aspire), the executable fails to start
+        // with termpty.ErrTerminalNotSupported surfaced through the reconciler.
+        if (er.ModelResource.TryGetAnnotationsOfType<TerminalAnnotation>(out var terminalAnnotations))
+        {
+            var terminalAnnotation = terminalAnnotations.FirstOrDefault();
+            if (terminalAnnotation is not null)
+            {
+                if (TryGetReplicaIndex(exe, out var replicaIndex)
+                    && replicaIndex >= 0
+                    && replicaIndex < terminalAnnotation.TerminalHosts.Count)
+                {
+                    spec.Terminal = new TerminalSpec
+                    {
+                        UdsPath = terminalAnnotation.TerminalHosts[replicaIndex].Layout.ProducerUdsPath,
+                        // The Aspire terminal host owns the listener at UdsPath; DCP must dial it.
+                        SocketMode = "connect",
+                        Cols = terminalAnnotation.Options.Columns,
+                        Rows = terminalAnnotation.Options.Rows
+                    };
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "Could not determine a producer UDS path for replica of resource '{ResourceName}'; terminal will not be attached for this replica.",
+                        er.ModelResource.Name);
+                }
+            }
+        }
 
         if (configuration.Exception is not null)
         {
@@ -308,6 +348,12 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             exe.Annotate(CustomResource.OtelServiceNameAnnotation, executable.Name);
             exe.Annotate(CustomResource.OtelServiceInstanceIdAnnotation, executable.GetOtelServiceInstanceId(exeInstance));
             exe.Annotate(CustomResource.ResourceNameAnnotation, executable.Name);
+            // Plain executables are always single-replica today, but the terminal wire-up
+            // (and any other replica-aware downstream logic) needs both annotations to be
+            // present. Without them WithTerminal() can't resolve the producer UDS for the
+            // replica and silently falls back to a no-op.
+            exe.Annotate(CustomResource.ResourceReplicaCount, "1");
+            exe.Annotate(CustomResource.ResourceReplicaIndex, "0");
 
             var persistent = executable.GetLifetimeType() == Lifetime.Persistent;
             if (persistent)
@@ -582,4 +628,20 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
     }
 
     private sealed record LaunchArgument(string Value, bool IsSensitive, bool Executable, bool Display, int? EffectiveArgumentIndex);
+
+    private static bool TryGetReplicaIndex(Executable exe, out int replicaIndex)
+    {
+        replicaIndex = -1;
+        if (exe.Metadata.Annotations is not { } annotations)
+        {
+            return false;
+        }
+
+        if (!annotations.TryGetValue(CustomResource.ResourceReplicaIndex, out var value))
+        {
+            return false;
+        }
+
+        return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out replicaIndex);
+    }
 }

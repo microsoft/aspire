@@ -15,29 +15,6 @@ namespace Aspire.Tests.Shared;
 internal static class Hex1bAutomatorTestHelpers
 {
     /// <summary>
-    /// Waits for a shell success prompt matching the current sequence counter value,
-    /// then increments the counter. Looks for the pattern: [N OK] $
-    /// </summary>
-    internal static async Task WaitForSuccessPromptAsync(
-        this Hex1bTerminalAutomator auto,
-        SequenceCounter counter,
-        TimeSpan? timeout = null)
-    {
-        var effectiveTimeout = timeout ?? TimeSpan.FromSeconds(500);
-
-        await auto.WaitUntilAsync(snapshot =>
-        {
-            var successPromptSearcher = new CellPatternSearcher()
-                .FindPattern(counter.Value.ToString())
-                .RightText(" OK] $ ");
-
-            return successPromptSearcher.Search(snapshot).Count > 0;
-        }, timeout: effectiveTimeout, description: $"success prompt [{counter.Value} OK] $");
-
-        counter.Increment();
-    }
-
-    /// <summary>
     /// Waits for any prompt (success or error) matching the current sequence counter.
     /// </summary>
     internal static async Task WaitForAnyPromptAsync(
@@ -241,7 +218,7 @@ internal static class Hex1bAutomatorTestHelpers
     /// <summary>
     /// Waits for a successful command prompt, but fails fast if an error prompt is detected.
     /// </summary>
-    internal static async Task WaitForSuccessPromptFailFastAsync(
+    internal static async Task WaitForSuccessPromptAsync(
         this Hex1bTerminalAutomator auto,
         SequenceCounter counter,
         TimeSpan? timeout = null)
@@ -294,20 +271,6 @@ internal static class Hex1bAutomatorTestHelpers
         await auto.TypeAsync(command);
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, timeout);
-    }
-
-    /// <summary>
-    /// Types a shell command, waits for it to complete successfully, and fails immediately on a shell error prompt.
-    /// </summary>
-    internal static async Task RunCommandFailFastAsync(
-        this Hex1bTerminalAutomator auto,
-        string command,
-        SequenceCounter counter,
-        TimeSpan? timeout = null)
-    {
-        await auto.TypeAsync(command);
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, timeout);
     }
 
     /// <summary>
@@ -435,12 +398,12 @@ internal static class Hex1bAutomatorTestHelpers
 
         if (!sawVersionPrompt)
         {
-            await auto.WaitForSuccessPromptFailFastAsync(counter, effectiveTimeout);
+            await auto.WaitForSuccessPromptAsync(counter, effectiveTimeout);
             return;
         }
 
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, effectiveTimeout);
+        await auto.WaitForSuccessPromptAsync(counter, effectiveTimeout);
     }
 
     /// <summary>
@@ -503,7 +466,7 @@ internal static class Hex1bAutomatorTestHelpers
         // Enter and executes a phantom blank command, advancing CMDCOUNT and desyncing
         // the test counter from the shell counter.
 
-        await auto.WaitForSuccessPromptFailFastAsync(counter, effectiveTimeout);
+        await auto.WaitForSuccessPromptAsync(counter, effectiveTimeout);
     }
 
     /// <summary>

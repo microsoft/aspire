@@ -1,10 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting;
 
@@ -23,8 +23,7 @@ internal static class GatewayConfigurationBuilder
         List<GatewayAppRegistration> apps,
         EndpointReference gatewayEndpoint,
         EndpointReference? httpGatewayEndpoint = null,
-        object? httpOtlpEndpoint = null,
-        ResourceLoggerService? resourceLoggerService = null)
+        object? httpOtlpEndpoint = null)
     {
         var addedClusters = new HashSet<string>();
         var httpClientEndpoint = httpGatewayEndpoint ?? (gatewayEndpoint.IsHttp ? gatewayEndpoint : null);
@@ -35,8 +34,6 @@ internal static class GatewayConfigurationBuilder
             var prefix = reg.PathPrefix;
             var envPrefix = $"ClientApps__{reg.Resource.Name}";
 
-            // Per-app client config: use an IValueProvider that resolves the gateway URL
-            // at startup and builds the final JSON response.
             // Flatten services: one HostedClientService per named endpoint so each gets
             // its own YARP cluster destination.
             var servicesList = new List<HostedClientService>();
@@ -56,8 +53,7 @@ internal static class GatewayConfigurationBuilder
             }
             var services = servicesList.ToArray();
 
-            env[$"{envPrefix}__ConfigResponse"] = new ClientConfigValueProvider(
-                gatewayEndpoint,
+            env[$"{envPrefix}__ConfigResponse"] = BuildConfigExpression(
                 httpClientEndpoint,
                 httpsClientEndpoint,
                 prefix,
@@ -65,7 +61,6 @@ internal static class GatewayConfigurationBuilder
                 services,
                 reg.ProxyBlazorTelemetry,
                 httpOtlpEndpoint,
-                resourceLoggerService?.GetLogger(reg.Resource) ?? NullLogger.Instance,
                 reg.OtlpPrefix);
 
             EmitYarpRoutes(env, prefix, reg.Resource.Name, services, reg.ProxyBlazorTelemetry, addedClusters,
@@ -90,14 +85,12 @@ internal static class GatewayConfigurationBuilder
         IReadOnlyList<HostedClientService> services,
         bool proxyBlazorTelemetry,
         object? httpOtlpEndpoint,
-        ILogger? logger = null,
         string otlpPrefix = DefaultOtlpPrefix)
     {
         var httpClientEndpoint = httpHostEndpoint ?? (hostEndpoint.IsHttp ? hostEndpoint : null);
         var httpsClientEndpoint = hostEndpoint.IsHttps ? hostEndpoint : null;
 
-        env["Client__ConfigResponse"] = new ClientConfigValueProvider(
-            hostEndpoint,
+        env["Client__ConfigResponse"] = BuildConfigExpression(
             httpClientEndpoint,
             httpsClientEndpoint,
             prefix: null,
@@ -105,7 +98,6 @@ internal static class GatewayConfigurationBuilder
             services,
             proxyBlazorTelemetry,
             httpOtlpEndpoint,
-            logger ?? NullLogger.Instance,
             otlpPrefix);
         env["Client__ConfigEndpointPath"] = "/_blazor/_configuration";
 
@@ -127,6 +119,12 @@ internal static class GatewayConfigurationBuilder
     /// Default URL path segment for proxying OTLP telemetry to the Aspire dashboard.
     /// </summary>
     internal const string DefaultOtlpPrefix = "_otlp";
+
+    private static readonly JsonSerializerOptions s_jsonOptions = new()
+    {
+        WriteIndented = false,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
 
     private static void EmitYarpRoutes(
         IDictionary<string, object> env,
@@ -197,15 +195,19 @@ internal static class GatewayConfigurationBuilder
         }
     }
 
+    // All string values placed into the JSON are constructed by us: a brace-free token
+    // (__ORIGIN__) concatenated with URL path segments (e.g. "/app/_api/weatherapi").
+    // Because none of these values contain { or }, the only literal braces in the
+    // serialized output are structural JSON. This invariant makes the Replace("{","{{")
+    // step below correct — if a future change introduces braces in values, the
+    // string.Format template would break and tests would catch it immediately.
+    private const string OriginToken = "__ORIGIN__";
+
     /// <summary>
-    /// An IValueProvider that resolves an endpoint URL and builds the
-    /// Blazor WASM configuration JSON response. At run time, the URL is
-    /// resolved from the EndpointReference. At publish time, ValueExpression emits
-    /// the JSON with manifest expression placeholders for the deployer to resolve.
-    /// Used by both the standalone gateway and hosted Blazor models.
+    /// Builds the ConfigResponse JSON as a <see cref="ReferenceExpression"/>. In dev mode the
+    /// gateway origin resolves to the actual URL; in publish mode publishers emit a placeholder.
     /// </summary>
-    internal sealed class ClientConfigValueProvider(
-        EndpointReference primaryEndpoint,
+    internal static ReferenceExpression BuildConfigExpression(
         EndpointReference? httpEndpoint,
         EndpointReference? httpsEndpoint,
         string? prefix,
@@ -213,118 +215,74 @@ internal static class GatewayConfigurationBuilder
         IReadOnlyList<HostedClientService> services,
         bool proxyBlazorTelemetry,
         object? httpOtlpEndpoint,
-        ILogger logger,
-        string otlpPrefix = DefaultOtlpPrefix) : IValueProvider, IManifestExpressionProvider
+        string otlpPrefix = DefaultOtlpPrefix)
     {
-        string IManifestExpressionProvider.ValueExpression =>
-            BuildJson(
-                ((IManifestExpressionProvider)primaryEndpoint).ValueExpression,
-                ResolveEndpointExpression(httpEndpoint),
-                ResolveEndpointExpression(httpsEndpoint));
+        var pathBase = prefix != null ? $"/{prefix}" : "";
 
-        async ValueTask<string?> IValueProvider.GetValueAsync(CancellationToken cancellationToken)
-        {
-            LogOtlpWarningIfNeeded();
-            var primaryUrl = await primaryEndpoint.GetValueAsync(cancellationToken).ConfigureAwait(false);
-            var httpUrl = await ResolveEndpointAsync(httpEndpoint, cancellationToken).ConfigureAwait(false);
-            var httpsUrl = await ResolveEndpointAsync(httpsEndpoint, cancellationToken).ConfigureAwait(false);
-            return BuildJson(primaryUrl, httpUrl, httpsUrl);
-        }
+        var environment = new JsonObject();
 
-        async ValueTask<string?> IValueProvider.GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken)
+        foreach (var svc in services)
         {
-            LogOtlpWarningIfNeeded();
-            var primaryUrl = await primaryEndpoint.GetValueAsync(context, cancellationToken).ConfigureAwait(false);
-            var httpUrl = await ResolveEndpointAsync(httpEndpoint, context, cancellationToken).ConfigureAwait(false);
-            var httpsUrl = await ResolveEndpointAsync(httpsEndpoint, context, cancellationToken).ConfigureAwait(false);
-            return BuildJson(primaryUrl, httpUrl, httpsUrl);
-        }
-
-        private void LogOtlpWarningIfNeeded()
-        {
-            if (proxyBlazorTelemetry && httpOtlpEndpoint is null)
+            if (httpsEndpoint is not null)
             {
-                logger.LogWarning(
-                    "OTLP telemetry proxying was requested but no dashboard HTTP endpoint could be resolved. " +
-                    "WASM client telemetry will not be forwarded.");
+                environment[$"services__{svc.ServiceName}__https__0"] = $"{OriginToken}{pathBase}/{svc.ApiPrefix}/{svc.ServiceName}";
+            }
+
+            if (httpEndpoint is not null)
+            {
+                environment[$"services__{svc.ServiceName}__http__0"] = $"{OriginToken}{pathBase}/{svc.ApiPrefix}/{svc.ServiceName}";
             }
         }
 
-        private static async ValueTask<string?> ResolveEndpointAsync(EndpointReference? endpoint, CancellationToken cancellationToken)
+        if (proxyBlazorTelemetry && httpOtlpEndpoint is not null)
         {
-            if (endpoint is null)
+            environment["OTEL_SERVICE_NAME"] = resourceName;
+
+            // Send only the OTLP path so the WASM client resolves it against its own
+            // page origin (HostEnvironment.BaseAddress). This avoids cross-origin issues
+            // when the user navigates via HTTP but the gateway also exposes HTTPS.
+            environment["OTEL_EXPORTER_OTLP_ENDPOINT"] = $"{pathBase}/{otlpPrefix}";
+            environment["OTEL_EXPORTER_OTLP_PROTOCOL"] = "http/protobuf";
+
+            // NOTE: OTEL_EXPORTER_OTLP_HEADERS is intentionally NOT sent to the WASM client.
+            // The headers contain the dashboard OTLP API key, and this config is delivered
+            // to browser-visible JSON. The YARP proxy injects the headers server-side when
+            // forwarding telemetry to the dashboard.
+        }
+
+        var config = new JsonObject
+        {
+            ["webAssembly"] = new JsonObject
             {
-                return null;
+                ["environment"] = environment
             }
+        };
 
-            return await endpoint.GetValueAsync(cancellationToken).ConfigureAwait(false);
-        }
+        var json = config.ToJsonString(s_jsonOptions);
 
-        private static async ValueTask<string?> ResolveEndpointAsync(EndpointReference? endpoint, ValueProviderContext context, CancellationToken cancellationToken)
+        // The only literal { } in the output are structural JSON braces (we control
+        // all string values and they contain no braces). Escape them for string.Format,
+        // then swap the origin token for {0}.
+        var format = json
+            .Replace("{", "{{")
+            .Replace("}", "}}")
+            .Replace(OriginToken, "{0}");
+
+        var originEndpoint = httpsEndpoint ?? httpEndpoint
+            ?? throw new InvalidOperationException("At least one gateway endpoint (HTTP or HTTPS) must be provided.");
+
+        var originRef = new GatewayOriginReference(originEndpoint);
+        var builder = new ReferenceExpressionBuilder();
+        var segments = format.Split("{0}");
+        for (var i = 0; i < segments.Length; i++)
         {
-            if (endpoint is null)
+            if (i > 0)
             {
-                return null;
+                builder.AppendFormatted(originRef);
             }
-
-            return await endpoint.GetValueAsync(context, cancellationToken).ConfigureAwait(false);
+            builder.AppendLiteral(segments[i]);
         }
 
-        private static string? ResolveEndpointExpression(EndpointReference? endpoint)
-        {
-            return endpoint is IManifestExpressionProvider manifestExpressionProvider
-                ? manifestExpressionProvider.ValueExpression
-                : null;
-        }
-
-        private string BuildJson(string? primaryBaseUrl, string? httpBaseUrl, string? httpsBaseUrl)
-        {
-            var pathBase = prefix != null ? $"/{prefix}" : "";
-            var environment = new Dictionary<string, string>();
-            var normalizedPrimaryBaseUrl = NormalizeUrl(primaryBaseUrl);
-            var normalizedHttpBaseUrl = NormalizeUrl(httpBaseUrl ?? (primaryEndpoint.IsHttp ? normalizedPrimaryBaseUrl : null));
-            var normalizedHttpsBaseUrl = NormalizeUrl(httpsBaseUrl ?? (primaryEndpoint.IsHttps ? normalizedPrimaryBaseUrl : null));
-
-            foreach (var svc in services)
-            {
-                if (normalizedHttpsBaseUrl is not null)
-                {
-                    environment[$"services__{svc.ServiceName}__https__0"] = $"{normalizedHttpsBaseUrl}{pathBase}/{svc.ApiPrefix}/{svc.ServiceName}";
-                }
-
-                if (normalizedHttpBaseUrl is not null)
-                {
-                    environment[$"services__{svc.ServiceName}__http__0"] = $"{normalizedHttpBaseUrl}{pathBase}/{svc.ApiPrefix}/{svc.ServiceName}";
-                }
-            }
-
-            if (proxyBlazorTelemetry && httpOtlpEndpoint is not null)
-            {
-                environment["OTEL_SERVICE_NAME"] = resourceName;
-
-                // Send only the OTLP path so the WASM client resolves it against its own
-                // page origin (HostEnvironment.BaseAddress). This avoids cross-origin issues
-                // when the user navigates via HTTP but the gateway also exposes HTTPS.
-                environment["ASPIRE_OTLP_PATH_BASE"] = $"{pathBase}/{otlpPrefix}";
-                environment["OTEL_EXPORTER_OTLP_PROTOCOL"] = "http/protobuf";
-
-                // NOTE: OTEL_EXPORTER_OTLP_HEADERS is intentionally NOT sent to the WASM client.
-                // The headers contain the dashboard OTLP API key, and this config is delivered
-                // to browser-visible JSON. The YARP proxy injects the headers server-side when
-                // forwarding telemetry to the dashboard.
-            }
-
-            return JsonSerializer.Serialize(
-                new ClientConfiguration
-                {
-                    WebAssembly = new WebAssemblyConfiguration { Environment = environment }
-                },
-                ManifestJsonContext.Relaxed.ClientConfiguration);
-        }
-
-        private static string? NormalizeUrl(string? url)
-        {
-            return string.IsNullOrEmpty(url) ? null : url.TrimEnd('/');
-        }
+        return builder.Build();
     }
 }

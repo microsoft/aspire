@@ -3,6 +3,7 @@
 
 using System.Reflection;
 using System.Runtime.Loader;
+using Aspire.Hosting.RemoteHost.CodeGeneration;
 using Aspire.Hosting.RemoteHost.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -66,6 +67,54 @@ internal sealed class AssemblyLoader
             activity.SetError(ex);
             throw;
         }
+    }
+
+    /// <summary>
+    /// Snapshots the currently loaded ATS integration assemblies as
+    /// <see cref="CodeGenerationLoadedAssemblyInfo"/> records suitable for inclusion in a
+    /// diagnostic payload. Returns an empty list when no assemblies have been loaded yet so the
+    /// caller can include the result unconditionally.
+    /// </summary>
+    /// <remarks>
+    /// This intentionally avoids forcing <see cref="GetAssemblies"/> to run if it hasn't already,
+    /// because we want to capture the actual state at the moment a failure occurred rather than
+    /// triggering the load (which may itself throw).
+    /// </remarks>
+    public IReadOnlyList<CodeGenerationLoadedAssemblyInfo> GetLoadedAssemblyDiagnostics()
+    {
+        var infos = new List<CodeGenerationLoadedAssemblyInfo>();
+        if (!_assemblies.IsValueCreated)
+        {
+            return infos;
+        }
+
+        foreach (var assembly in _assemblies.Value)
+        {
+            infos.Add(CreateAssemblyInfo(assembly));
+        }
+
+        return infos;
+    }
+
+    private static CodeGenerationLoadedAssemblyInfo CreateAssemblyInfo(Assembly assembly)
+    {
+        var name = assembly.GetName();
+        string? location;
+        try
+        {
+            location = string.IsNullOrEmpty(assembly.Location) ? null : assembly.Location;
+        }
+        catch
+        {
+            location = null;
+        }
+
+        return new CodeGenerationLoadedAssemblyInfo
+        {
+            Name = name.Name ?? assembly.FullName ?? "<unknown>",
+            InformationalVersion = CodeGenerationDiagnosticBuilder.GetInformationalVersion(assembly),
+            Location = location
+        };
     }
 
     internal static IReadOnlyList<string> GetAssemblyNamesToLoad(

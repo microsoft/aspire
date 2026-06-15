@@ -93,12 +93,6 @@ namespace Aspire.Cli.Resources {
             }
         }
 
-        public static string ResourcesOptionDescription {
-            get {
-                return ResourceManager.GetString("ResourcesOptionDescription", resourceCulture);
-            }
-        }
-
         public static string FollowOptionDescription {
             get {
                 return ResourceManager.GetString("FollowOptionDescription", resourceCulture);

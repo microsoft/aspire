@@ -32,7 +32,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     [AspireExportIgnore(Reason = "The configureProperties callback returns Azure provisioning types that are not ATS-compatible.")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
-        string name,
+        [ResourceName] string name,
         Func<AzureResourceInfrastructure, CognitiveServicesConnectionProperties> configureProperties)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -332,7 +332,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     [AspireExport]
     public static IResourceBuilder<BingGroundingConnectionResource> AddBingGroundingConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
-        string name,
+        [ResourceName] string name,
         string bingResourceId)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -386,7 +386,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     [AspireExport("addBingGroundingConnectionFromParameter")]
     public static IResourceBuilder<BingGroundingConnectionResource> AddBingGroundingConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
-        string name,
+        [ResourceName] string name,
         IResourceBuilder<ParameterResource> bingResourceId)
     {
         ArgumentNullException.ThrowIfNull(builder);

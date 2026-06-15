@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Aspire.Cli.Tests.Utils;
 using Hex1b;
+using Hex1b.Automation;
 using Xunit;
 
 namespace Aspire.Cli.EndToEnd.Tests.Helpers;
@@ -128,6 +129,22 @@ internal static class CliE2ETestHelpers
     }
 
     /// <summary>
+    /// Starts the terminal run and returns a <see cref="TerminalRun"/> that captures diagnostics
+    /// and exits the terminal on disposal.
+    /// </summary>
+    /// <param name="terminal">The Hex1b terminal to run.</param>
+    /// <param name="workspace">The workspace for diagnostic capture.</param>
+    /// <param name="automator">The automator used to drive the terminal.</param>
+    /// <param name="counter">The sequence counter for prompt tracking.</param>
+    /// <param name="cancellationToken">Cancellation token passed to <see cref="Hex1bTerminal.RunAsync"/>.</param>
+    /// <returns>A <see cref="TerminalRun"/> that ensures diagnostics capture and clean exit on disposal.</returns>
+    internal static TerminalRun StartRun(Hex1bTerminal terminal, TemporaryWorkspace workspace, Hex1bTerminalAutomator automator, SequenceCounter counter, ITestOutputHelper output, CancellationToken cancellationToken)
+    {
+        var pendingRun = terminal.RunAsync(cancellationToken);
+        return new TerminalRun(pendingRun, automator, counter, workspace, output);
+    }
+
+    /// <summary>
     /// Specifies which Dockerfile variant to use for the test container.
     /// </summary>
     internal enum DockerfileVariant
@@ -172,6 +189,7 @@ internal static class CliE2ETestHelpers
         bool mountDockerSocket = false,
         TemporaryWorkspace? workspace = null,
         IEnumerable<string>? additionalVolumes = null,
+        string? network = null,
         int width = 160,
         int height = 48,
         [CallerMemberName] string testName = "")
@@ -212,6 +230,11 @@ internal static class CliE2ETestHelpers
                 if (mountDockerSocket)
                 {
                     c.MountDockerSocket = true;
+                }
+
+                if (network is not null)
+                {
+                    c.Network = network;
                 }
 
                 if (workspace is not null)

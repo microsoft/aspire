@@ -486,6 +486,16 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
             if (value is EndpointReference ep)
             {
+                // The referenced endpoint may belong to a resource deployed to a different compute
+                // environment (for example a Foundry hosted agent). In that case delegate to the owning
+                // compute environment instead of looking it up in this environment's local endpoint map.
+                if (ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
+                    ep, [kubernetesEnvironmentResource, kubernetesEnvironmentResource.OwningComputeEnvironment], out var crossExpr))
+                {
+                    value = crossExpr;
+                    continue;
+                }
+
                 var referencedResource = ep.Resource == this
                     ? this
                     : await context.CreateKubernetesResourceAsync(ep.Resource, executionContext, default).ConfigureAwait(false);
@@ -516,6 +526,13 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
             if (value is EndpointReferenceExpression epExpr)
             {
+                if (ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
+                    epExpr, [kubernetesEnvironmentResource, kubernetesEnvironmentResource.OwningComputeEnvironment], out var crossExpr))
+                {
+                    value = crossExpr;
+                    continue;
+                }
+
                 var referencedResource = epExpr.Endpoint.Resource == this
                     ? this
                     : await context.CreateKubernetesResourceAsync(epExpr.Endpoint.Resource, executionContext, default).ConfigureAwait(false);
