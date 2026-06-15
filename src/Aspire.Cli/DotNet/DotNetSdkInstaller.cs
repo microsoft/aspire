@@ -10,7 +10,8 @@ using Semver;
 namespace Aspire.Cli.DotNet;
 
 /// <summary>
-/// Default implementation of <see cref="IDotNetSdkInstaller"/> that checks for dotnet on the system PATH.
+/// Default implementation of <see cref="IDotNetSdkInstaller"/> that checks for dotnet on the system PATH
+/// or, after <see cref="DotNetRuntimeSelector"/> initialization, the configured private or custom dotnet path.
 /// </summary>
 internal sealed class DotNetSdkInstaller(IFeatures features, IConfiguration configuration) : IDotNetSdkInstaller
 {
@@ -19,13 +20,26 @@ internal sealed class DotNetSdkInstaller(IFeatures features, IConfiguration conf
     /// </summary>
     public const string MinimumSdkVersion = "9.0.302";
 
+    // Defaults to the system dotnet; updated by DotNetRuntimeSelector when a private or custom SDK is configured.
+    private string _dotNetExecutablePath = "dotnet";
+
+    /// <summary>
+    /// Updates the dotnet executable path used for SDK checks.
+    /// Called by <see cref="DotNetRuntimeSelector"/> after it successfully initializes a private or custom SDK,
+    /// so that subsequent <see cref="CheckAsync"/> calls verify the configured SDK rather than the system one.
+    /// </summary>
+    internal void SetDotNetExecutablePath(string path)
+    {
+        _dotNetExecutablePath = path;
+    }
+
     /// <inheritdoc />
     public Task<bool> CheckAsync(CancellationToken cancellationToken = default)
     {
         // Check for configuration override first
         var overrideVersion = configuration["overrideMinimumSdkVersion"];
         var minimumVersion = !string.IsNullOrEmpty(overrideVersion) ? overrideVersion : MinimumSdkVersion;
-        
+
         return CheckAsync(minimumVersion, cancellationToken);
     }
 
@@ -48,7 +62,7 @@ internal sealed class DotNetSdkInstaller(IFeatures features, IConfiguration conf
             {
                 StartInfo = new ProcessStartInfo
                 {
-                    FileName = "dotnet",
+                    FileName = _dotNetExecutablePath,
                     Arguments = arguments,
                     UseShellExecute = false,
                     RedirectStandardOutput = true,

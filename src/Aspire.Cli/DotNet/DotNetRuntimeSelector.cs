@@ -100,6 +100,13 @@ internal sealed class DotNetRuntimeSelector(
                 {
                     _mode = DotNetRuntimeMode.Custom;
                     _dotNetExecutablePath = customPath;
+
+                    // Update the SDK installer so subsequent CheckAsync calls use the custom dotnet executable.
+                    if (sdkInstaller is DotNetSdkInstaller concreteInstaller)
+                    {
+                        concreteInstaller.SetDotNetExecutablePath(customPath);
+                    }
+
                     return true;
                 }
                 logger.LogError("Custom dotnet path not found: {Path}", customPath);
@@ -182,11 +189,17 @@ internal sealed class DotNetRuntimeSelector(
         {
             _mode = DotNetRuntimeMode.Private;
             _dotNetExecutablePath = privateDotNetPath;
-            
+
             // Set environment variables to isolate the private SDK
             _environmentVariables["DOTNET_ROOT"] = privateSdkPath;
             _environmentVariables["DOTNET_HOST_PATH"] = privateDotNetPath;
-            
+
+            // Update the SDK installer so subsequent CheckAsync calls use the private dotnet executable.
+            if (sdkInstaller is DotNetSdkInstaller concreteInstaller)
+            {
+                concreteInstaller.SetDotNetExecutablePath(privateDotNetPath);
+            }
+
             return true;
         }
 
@@ -218,11 +231,17 @@ internal sealed class DotNetRuntimeSelector(
         {
             _mode = DotNetRuntimeMode.Private;
             _dotNetExecutablePath = privateDotNetPath;
-            
+
             // Set environment variables to isolate the private SDK
             _environmentVariables["DOTNET_ROOT"] = privateSdkPath;
             _environmentVariables["DOTNET_HOST_PATH"] = privateDotNetPath;
-            
+
+            // Update the SDK installer so subsequent CheckAsync calls use the private dotnet executable.
+            if (sdkInstaller is DotNetSdkInstaller concreteInstaller)
+            {
+                concreteInstaller.SetDotNetExecutablePath(privateDotNetPath);
+            }
+
             return true;
         }
 
@@ -242,14 +261,20 @@ internal sealed class DotNetRuntimeSelector(
             if (File.Exists(privateDotNetPath))
             {
                 console.MarkupLine($"[green]Successfully installed private .NET SDK to {privateSdkPath}[/]");
-                
+
                 _mode = DotNetRuntimeMode.Private;
                 _dotNetExecutablePath = privateDotNetPath;
-                
+
                 // Set environment variables to isolate the private SDK
                 _environmentVariables["DOTNET_ROOT"] = privateSdkPath;
                 _environmentVariables["DOTNET_HOST_PATH"] = privateDotNetPath;
-                
+
+                // Update the SDK installer so subsequent CheckAsync calls use the private dotnet executable.
+                if (sdkInstaller is DotNetSdkInstaller concreteInstaller)
+                {
+                    concreteInstaller.SetDotNetExecutablePath(privateDotNetPath);
+                }
+
                 return true;
             }
             else

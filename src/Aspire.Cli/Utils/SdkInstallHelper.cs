@@ -31,20 +31,11 @@ internal static class SdkInstallHelper
         ArgumentNullException.ThrowIfNull(interactionService);
         ArgumentNullException.ThrowIfNull(runtimeSelector);
 
-        // First, try to initialize the runtime selector (which may install a private SDK)
+        // Initialize the runtime selector (which may install a private SDK and update the installer's dotnet path).
+        // If initialization succeeds the SDK is available; no additional check is needed.
         var isInitialized = await runtimeSelector.InitializeAsync(cancellationToken);
-        
+
         if (!isInitialized)
-        {
-            var sdkErrorMessage = string.Format(CultureInfo.InvariantCulture, ErrorStrings.MininumSdkVersionMissing, DotNetSdkInstaller.MinimumSdkVersion);
-            interactionService.DisplayError(sdkErrorMessage);
-            return false;
-        }
-
-        // Re-check the SDK after initialization
-        var isSdkAvailable = await sdkInstaller.CheckAsync(cancellationToken);
-
-        if (!isSdkAvailable)
         {
             var sdkErrorMessage = string.Format(CultureInfo.InvariantCulture, ErrorStrings.MininumSdkVersionMissing, DotNetSdkInstaller.MinimumSdkVersion);
             interactionService.DisplayError(sdkErrorMessage);
