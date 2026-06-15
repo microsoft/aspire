@@ -433,6 +433,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             {
                 CertificatePath = ReferenceExpression.Create($"{Path.Join(baseServerAuthOutputPath, $"{cert.Thumbprint}.crt")}"),
                 KeyPath = ReferenceExpression.Create($"{Path.Join(baseServerAuthOutputPath, $"{cert.Thumbprint}.key")}"),
+                CertificateWithKeyPath = ReferenceExpression.Create($"{Path.Join(baseServerAuthOutputPath, $"{cert.Thumbprint}.pem")}"),
                 PfxPath = ReferenceExpression.Create($"{Path.Join(baseServerAuthOutputPath, $"{cert.Thumbprint}.pfx")}"),
             })
             .BuildAsync(_executionContext, resourceLogger, cancellationToken)
@@ -469,10 +470,10 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             var thumbprint = tlsCertificateConfiguration.Certificate.Thumbprint;
             var publicCertificatePem = tlsCertificateConfiguration.Certificate.ExportCertificatePem();
             (var keyPem, var pfxBytes) = await DeveloperCertificateService.GetKeyMaterialAsync(
-                tlsCertificateConfiguration.Certificate,
-                tlsCertificateConfiguration.Password,
-                tlsCertificateConfiguration.IsKeyPathReferenced,
-                tlsCertificateConfiguration.IsPfxPathReferenced,
+                certificate: tlsCertificateConfiguration.Certificate,
+                password: tlsCertificateConfiguration.Password,
+                needKeyPem: tlsCertificateConfiguration.IsKeyPathReferenced || tlsCertificateConfiguration.IsCertificateWithKeyPathReferenced,
+                needPfx: tlsCertificateConfiguration.IsPfxPathReferenced,
                 cancellationToken
             ).ConfigureAwait(false);
 
@@ -493,6 +494,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
                 // Write each of the certificate, key, and PFX assets to the temp folder
                 File.WriteAllBytes(Path.Join(baseServerAuthOutputPath, $"{thumbprint}.key"), keyBytes);
+                File.WriteAllText(Path.Join(baseServerAuthOutputPath, $"{thumbprint}.pem"), new([.. publicCertificatePem, '\n', .. keyPem]));
 
                 Array.Clear(keyPem, 0, keyPem.Length);
                 Array.Clear(keyBytes, 0, keyBytes.Length);
