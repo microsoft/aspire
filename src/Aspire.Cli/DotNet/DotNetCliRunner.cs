@@ -271,7 +271,7 @@ internal sealed class DotNetCliRunner(
         ProfilingTelemetry.ActivityScope activity,
         ProcessOutputCounters outputCounters)
     {
-        return new ProcessInvocationOptions
+        var instrumentedOptions = new ProcessInvocationOptions
         {
             NoLaunchProfile = options.NoLaunchProfile,
             StartDebugSession = options.StartDebugSession,
@@ -296,6 +296,18 @@ internal sealed class DotNetCliRunner(
                 options.StandardErrorCallback?.Invoke(line);
             }
         };
+
+        foreach (var (key, value) in options.MSBuildProperties)
+        {
+            instrumentedOptions.MSBuildProperties[key] = value;
+        }
+
+        foreach (var variableName in options.EnvironmentVariablesToRemove)
+        {
+            instrumentedOptions.EnvironmentVariablesToRemove.Add(variableName);
+        }
+
+        return instrumentedOptions;
     }
 
     private sealed class ProcessOutputCounters

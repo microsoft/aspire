@@ -520,6 +520,47 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RunAsyncPreservesProcessInvocationOptionsForExecutionFactory()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var options = new ProcessInvocationOptions();
+        options.MSBuildProperties["AspireCliManagedAppHostBuild"] = "true";
+        options.EnvironmentVariablesToRemove.Add(KnownConfigNames.IntegrationProbeManifestPath);
+        options.EnvironmentVariablesToRemove.Add(KnownConfigNames.IntegrationLibsPath);
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var runner = DotNetCliRunnerTestHelper.Create(
+            provider,
+            executionContext,
+            (_, _, _, invocationOptions) =>
+            {
+                Assert.Equal("true", invocationOptions.MSBuildProperties["AspireCliManagedAppHostBuild"]);
+                Assert.Contains(KnownConfigNames.IntegrationProbeManifestPath, invocationOptions.EnvironmentVariablesToRemove);
+                Assert.Contains(KnownConfigNames.IntegrationLibsPath, invocationOptions.EnvironmentVariablesToRemove);
+            },
+            0);
+
+        var exitCode = await runner.RunAsync(
+            projectFile: projectFile,
+            watch: false,
+            noBuild: false,
+            noRestore: false,
+            args: ["--operation", "inspect"],
+            env: new Dictionary<string, string>(),
+            null,
+            options,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
     public async Task RunAsyncPropagatesProcessProfilingContextToChildEnvironment()
     {
         using var listener = CreateActivityListener(ProfilingTelemetry.ActivitySourceName);
