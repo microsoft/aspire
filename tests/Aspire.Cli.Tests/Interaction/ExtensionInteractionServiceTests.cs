@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using System.Text;
+using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
@@ -15,6 +16,49 @@ namespace Aspire.Cli.Tests.Interaction;
 
 public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task DisplayLines_PreservesRawCompilerOutputWithBracketedProjectPath()
+    {
+        var backchannel = new TestExtensionBackchannel();
+        DisplayLineState[]? capturedLines = null;
+        backchannel.DisplayLinesAsyncCallback = lines =>
+        {
+            capturedLines = lines.ToArray();
+            return Task.CompletedTask;
+        };
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var extensionInteractionService = CreateExtensionInteractionService(backchannel, workspace);
+        var compilerOutput = "Program.cs(10,5): error CS0103: The name '__AspireE2EFlushRegressionMissingSymbol__' does not exist in the current context [/tmp/AspireE2E.AppHost.csproj]";
+
+        extensionInteractionService.DisplayLines([(OutputLineStream.StdErr, compilerOutput)]);
+        await extensionInteractionService.FlushAsync();
+
+        Assert.NotNull(capturedLines);
+        var line = Assert.Single(capturedLines);
+        Assert.Equal("stderr", line.Stream);
+        Assert.Equal(compilerOutput, line.Line);
+    }
+
+    [Fact]
+    public async Task WriteDebugSessionMessage_PreservesRawOutputWithSquareBrackets()
+    {
+        var backchannel = new TestExtensionBackchannel();
+        string? capturedMessage = null;
+        backchannel.WriteDebugSessionMessageAsyncCallback = (message, _, _) =>
+        {
+            capturedMessage = message;
+            return Task.CompletedTask;
+        };
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var extensionInteractionService = CreateExtensionInteractionService(backchannel, workspace);
+        var debugOutput = "Path: $.values[0].Type | file [/tmp/AspireE2E.AppHost.csproj]";
+
+        extensionInteractionService.WriteDebugSessionMessage(debugOutput, stdout: false, textStyle: null);
+        await extensionInteractionService.FlushAsync();
+
+        Assert.Equal(debugOutput, capturedMessage);
+    }
+
     [Fact]
     public async Task DisplayMessage_DoesNotRenderTerminalHyperlinksToDebugConsoleCapturedOutput()
     {
@@ -55,5 +99,26 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
         Assert.Contains(logFilePath, outputString);
         Assert.DoesNotContain("\u001b]8;", outputString);
         Assert.DoesNotContain("file://", outputString);
+    }
+
+    private static ExtensionInteractionService CreateExtensionInteractionService(TestExtensionBackchannel backchannel, TemporaryWorkspace workspace)
+    {
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter())
+        });
+        var consoleInteractionService = new ConsoleInteractionService(
+            new ConsoleEnvironment(console, console),
+            workspace.CreateExecutionContext(),
+            TestHelpers.CreateInteractiveHostEnvironment(),
+            NullLoggerFactory.Instance,
+            new ConsoleLogBufferContext());
+
+        return new ExtensionInteractionService(
+            consoleInteractionService,
+            backchannel,
+            extensionPromptEnabled: false);
     }
 }

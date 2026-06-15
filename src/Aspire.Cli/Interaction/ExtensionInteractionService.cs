@@ -445,9 +445,10 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         // Materialize so we can iterate twice without re-enumerating a possibly lazy/one-shot source.
         var materialized = lines as IReadOnlyCollection<(OutputLineStream Stream, string Line)> ?? lines.ToList();
 
+        // DisplayLines carries raw process output, not Spectre markup.
         var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.DisplayLinesAsync(materialized.Select(line => new DisplayLineState(
             line.Stream == OutputLineStream.StdOut ? "stdout" : "stderr",
-            Markup.Remove(line.Line))), _cancellationToken));
+            line.Line)), _cancellationToken));
         Debug.Assert(result);
 
         // Intentionally do NOT also write to the local console here. Unlike most Display* methods
@@ -568,7 +569,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
 
     public void WriteDebugSessionMessage(string message, bool stdout, string? textStyle)
     {
-        var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.WriteDebugSessionMessageAsync(Markup.Remove(message), stdout, textStyle, _cancellationToken));
+        var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.WriteDebugSessionMessageAsync(message, stdout, textStyle, _cancellationToken));
         Debug.Assert(result);
     }
 }
