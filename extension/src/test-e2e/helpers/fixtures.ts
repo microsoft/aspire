@@ -33,7 +33,7 @@ export async function writeWorkspaceCliPath(cliPath: string): Promise<void> {
     const settingsPath = getWorkspaceSettingsPath();
     const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8')) as Record<string, unknown>;
     settings['aspire.aspireCliExecutablePath'] = cliPath;
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, undefined, 2));
+    writeFileWithRetry(settingsPath, JSON.stringify(settings, undefined, 2));
 
     await applyE2eControl({ aspireCliExecutablePath: cliPath });
 }
@@ -174,11 +174,11 @@ export function removeWorkspaceAppHostConfig(): void {
 }
 
 export function writeWorkspaceAppHostConfig(value: unknown): void {
-    fs.writeFileSync(getWorkspaceAppHostConfigPath(), JSON.stringify(value, undefined, 2));
+    writeFileWithRetry(getWorkspaceAppHostConfigPath(), JSON.stringify(value, undefined, 2));
 }
 
 export function writeWorkspaceAppHostConfigRaw(value: string): void {
-    fs.writeFileSync(getWorkspaceAppHostConfigPath(), value);
+    writeFileWithRetry(getWorkspaceAppHostConfigPath(), value);
 }
 
 export function restoreWorkspaceAppHostConfig(): void {
@@ -202,13 +202,13 @@ export function writeWorkspaceSetting(key: string, value: unknown): void {
     const settingsPath = getWorkspaceSettingsPath();
     const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8')) as Record<string, unknown>;
     settings[key] = value;
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, undefined, 2));
+    writeFileWithRetry(settingsPath, JSON.stringify(settings, undefined, 2));
 }
 
 export function writeLegacyAspireSettings(appHostPath = path.join('..', 'AspireE2E.AppHost', 'AspireE2E.AppHost.csproj')): void {
     const settingsPath = getLegacyAspireSettingsPath();
     fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
-    fs.writeFileSync(settingsPath, JSON.stringify({ appHostPath }, undefined, 2));
+    writeFileWithRetry(settingsPath, JSON.stringify({ appHostPath }, undefined, 2));
 }
 
 export function removeLegacyAspireSettings(): void {
@@ -442,4 +442,34 @@ function removePath(targetPath: string, options: fs.RmOptions): void {
         retryDelay: 250,
         ...options,
     });
+}
+
+function writeFileWithRetry(filePath: string, content: string): void {
+    const maxAttempts = process.platform === 'win32' ? 20 : 1;
+    for (let attempt = 1; ; attempt++) {
+        try {
+            fs.writeFileSync(filePath, content);
+            return;
+        }
+        catch (error) {
+            if (attempt >= maxAttempts || !isRetryableFileSystemError(error)) {
+                throw error;
+            }
+
+            sleepSynchronously(250);
+        }
+    }
+}
+
+function isRetryableFileSystemError(error: unknown): boolean {
+    if (process.platform !== 'win32' || !error || typeof error !== 'object') {
+        return false;
+    }
+
+    const code = (error as NodeJS.ErrnoException).code;
+    return code === 'EBUSY' || code === 'EPERM';
+}
+
+function sleepSynchronously(ms: number): void {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }

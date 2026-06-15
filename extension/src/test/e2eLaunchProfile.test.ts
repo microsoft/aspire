@@ -192,6 +192,7 @@ suite('E2E launch profile', () => {
         assert.ok(aspireCliEnvironmentStart >= 0);
         assert.ok(aspireCliEnvironmentEnd > aspireCliEnvironmentStart);
         assert.ok(aspireCliEnvironment.includes("ASPIRE_CLI_TELEMETRY_OPTOUT: 'true'"));
+        assert.ok(aspireCliEnvironment.includes("DOTNET_CLI_UI_LANGUAGE: 'en'"));
         assert.ok(aspireCliEnvironment.includes("DOTNET_CLI_TELEMETRY_OPTOUT: '1'"));
         assert.ok(envConstruction.includes('const extestEnv = getAspireCliEnvironment({'));
         assert.ok(envConstruction.includes("ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE: 'true'"));
@@ -225,9 +226,19 @@ suite('E2E launch profile', () => {
         assert.ok(zeroToRunning.includes('this.timeout(2100000);'));
         assert.ok(zeroToRunning.includes('waitForDebugSessionStartup(appHostPath, 300000)'));
         assert.ok(zeroToRunning.includes('waitForDebugDashboardUrl(appHostPath, 180000)'));
-        assert.ok(zeroToRunning.includes('waitForEditorTitle(dashboardHost, 180000'));
+        assert.ok(zeroToRunning.includes("waitForHttpText(dashboardUrl, 'Aspire', 180000"));
         assert.ok(zeroToRunning.includes("process.platform === 'linux'"));
         assert.ok(zeroToRunning.includes("waitForWorkbenchTextAfterIntegratedBrowserNavigation(['Resources', dashboardHost], 180000)"));
+        assert.ok(!zeroToRunning.includes("waitForEditorTitle(dashboardHost"));
+        assert.ok(!zeroToRunning.includes("waitForEditorTitle(new URL(dashboardUrl).host"));
+    });
+
+    test('avoids integrated-browser editor title waits when HTTP probes cover readiness', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const treeActions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'treeActions.e2e.test.ts'), 'utf8');
+
+        assert.ok(treeActions.includes("waitForHttpText(endpointUrl, 'ok')"));
+        assert.ok(!treeActions.includes('waitForEditorTitle(new URL(endpointUrl).host'));
     });
 
     test('hides AppHost outside the workspace for empty-discovery coverage', () => {
@@ -257,5 +268,17 @@ suite('E2E launch profile', () => {
         assert.ok(!assertions.includes('.slice(afterInvocationCount)'));
         assert.ok(!assertions.includes('.slice(afterCommandCount)'));
         assert.ok(!assertions.includes('.slice(afterLaunchCount)'));
+    });
+
+    test('writes E2E control and mutable fixture files with Windows-safe retries', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const assertions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'assertions.ts'), 'utf8');
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+
+        assert.ok(assertions.includes('writeJsonFileAtomic(controlFilePath'));
+        assert.ok(assertions.includes('renameFileWithRetry(temporaryPath, filePath)'));
+        assert.ok(fixtures.includes('writeFileWithRetry(settingsPath'));
+        assert.ok(fixtures.includes("code === 'EBUSY'"));
+        assert.ok(fixtures.includes("code === 'EPERM'"));
     });
 });

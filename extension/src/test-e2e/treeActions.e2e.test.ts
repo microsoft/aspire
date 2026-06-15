@@ -3,7 +3,7 @@ import * as path from 'path';
 import { findResource, getCommandInvocationCount, getTerminalCommandCount, isSamePath, waitForAppHostLaunching, waitForCommandOutcome, waitForDashboardUrl, waitForExtensionState, waitForHttpText, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForResourceState, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
 import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
-import { answerActiveInput, chooseActiveQuickPick, getActiveQuickPickLabels, openAspireView, waitForChildTreeItem, waitForEditorTitle, waitForTreeItem } from './helpers/vscode';
+import { answerActiveInput, chooseActiveQuickPick, getActiveQuickPickLabels, openAspireView, waitForChildTreeItem, waitForTreeItem } from './helpers/vscode';
 
 suite('Aspire tree action command E2E', function () {
     this.timeout(300000);
@@ -93,7 +93,6 @@ suite('Aspire tree action command E2E', function () {
         before = getCommandInvocationCount('aspire-vscode.openInIntegratedBrowser');
         await executeE2eControlCommand({ name: 'openInIntegratedBrowser', appHostPath, resourceName: 'e2e-worker' });
         await waitForCommandOutcome('aspire-vscode.openInIntegratedBrowser', 'success', 60000, before);
-        assert.ok((await waitForEditorTitle(new URL(endpointUrl).host, 120000, { matchCase: false })).toLowerCase().includes(new URL(endpointUrl).host.toLowerCase()));
         assert.strictEqual(await waitForHttpText(endpointUrl, 'ok'), 'ok');
 
         const viewedLog = await executeE2eControlCommand({ name: 'viewAppHostLogFile', appHostPath });

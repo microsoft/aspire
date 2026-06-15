@@ -12,6 +12,7 @@ interface Deadline {
 }
 
 let controlRevision = Date.now();
+let atomicWriteSequence = 0;
 let workspaceFolderOpened = false;
 
 export async function waitForRepositoryIdle(timeoutMs = 120000): Promise<ExtensionE2EStateFile> {
@@ -304,7 +305,7 @@ export async function applyE2eControl(payload: Record<string, unknown>, waitFor:
     }
 
     const revision = ++controlRevision;
-    fs.writeFileSync(controlFilePath, JSON.stringify({ revision, ...payload }, undefined, 2));
+    writeJsonFileAtomic(controlFilePath, { revision, ...payload });
     const stateFile = await waitForExtensionState(
         file => file.control?.revision === revision && (file.control.status === 'error' || file.control.status === 'applied' || (waitFor === 'started' && file.control.status === 'started')),
         `E2E control revision ${revision}`,
@@ -319,6 +320,34 @@ export async function applyE2eControl(payload: Record<string, unknown>, waitFor:
     }
 
     return stateFile.control;
+}
+
+function writeJsonFileAtomic(filePath: string, value: unknown): void {
+    const temporaryPath = `${filePath}.${process.pid}.${atomicWriteSequence++}.tmp`;
+    fs.writeFileSync(temporaryPath, JSON.stringify(value, undefined, 2));
+    try {
+        renameFileWithRetry(temporaryPath, filePath);
+    }
+    finally {
+        fs.rmSync(temporaryPath, { force: true });
+    }
+}
+
+function renameFileWithRetry(sourcePath: string, destinationPath: string): void {
+    const maxAttempts = process.platform === 'win32' ? 10 : 1;
+    for (let attempt = 1; ; attempt++) {
+        try {
+            fs.renameSync(sourcePath, destinationPath);
+            return;
+        }
+        catch (error) {
+            if (attempt >= maxAttempts || !isRetryableRenameError(error)) {
+                throw error;
+            }
+
+            sleepSynchronously(25);
+        }
+    }
 }
 
 function createDeadline(timeoutMs: number): Deadline {
@@ -368,6 +397,14 @@ function isRetryableStateFileReadError(error: unknown): boolean {
     }
 
     return error.code === 'EPERM' || error.code === 'EACCES' || error.code === 'EBUSY' || error.code === 'ENOENT';
+}
+
+function isRetryableRenameError(error: unknown): boolean {
+    if (process.platform !== 'win32' || !error || typeof error !== 'object' || !('code' in error)) {
+        return false;
+    }
+
+    return error.code === 'EPERM' || error.code === 'EACCES' || error.code === 'EEXIST';
 }
 
 function isDebugSessionForAppHost(session: AspireDebugSessionState, appHostPath: string): boolean {
