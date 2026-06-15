@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Fixes accessibility semantics in Manage Data dialog selection controls for screen reader users",
+  "mergedAt": "2026-06-15T18:59:37Z",
+  "number": 17928,
+  "runDate": "2026-06-15T19:17:59Z",
+  "status": "included",
+  "title": "Fix Manage Data selection accessibility semantics"
+}

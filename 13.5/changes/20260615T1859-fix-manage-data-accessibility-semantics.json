@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed accessibility semantics in the Manage Data dialog so screen reader users receive accessible names, checkbox roles, and aria-checked state for each selection control. Selection items now announce their name and checked state correctly.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "♿",
+  "firstMergedAt": "2026-06-15T18:59:37Z",
+  "lastMergedAt": "2026-06-15T18:59:37Z",
+  "name": "Fix Manage Data selection accessibility semantics",
+  "owner": "adamint",
+  "prs": [
+    17928
+  ]
+}
