@@ -116,23 +116,39 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 _ => throw new InvalidOperationException(UpdateCommandStrings.UnexpectedCodePath)
             };
 
-            interactionService.DisplayEmptyLine();
+            // For channels that don't require a project-level nuget.config (e.g. stable,
+            // whose mappings only point to nuget.org), only update an existing config to
+            // clean up old channel feeds — don't create a new one.
+            // See: https://github.com/microsoft/aspire/issues/18124
+            if (!channel.RequiresProjectNuGetConfig)
+            {
+                var candidateDirectory = new DirectoryInfo(recommendedNuGetConfigFileDirectory!);
+                if (NuGetConfigMerger.TryFindNuGetConfigInDirectory(candidateDirectory, out _))
+                {
+                    interactionService.DisplayEmptyLine();
+                    await NuGetConfigMerger.CreateOrUpdateAsync(candidateDirectory, channel, (_, orig, proposed, ct) => AnalyzeAndConfirmNuGetConfigChanges(context, orig, proposed, ct), cancellationToken: cancellationToken);
+                }
+            }
+            else
+            {
+                interactionService.DisplayEmptyLine();
 
-            // Carry the recommended directory as the default on the binding.
-            // The original binding (from UpdateCommand) may not have a default because
-            // the recommended directory is computed here, after NuGet config discovery.
-            var nugetConfigDirBinding = context.NuGetConfigDirBinding.WithDefault(recommendedNuGetConfigFileDirectory);
+                // Carry the recommended directory as the default on the binding.
+                // The original binding (from UpdateCommand) may not have a default because
+                // the recommended directory is computed here, after NuGet config discovery.
+                var nugetConfigDirBinding = context.NuGetConfigDirBinding.WithDefault(recommendedNuGetConfigFileDirectory);
 
-            var selectedPathForNewNuGetConfigFile = await interactionService.PromptForFilePathAsync(
-                promptText: UpdateCommandStrings.WhichDirectoryNuGetConfigPrompt,
-                binding: nugetConfigDirBinding,
-                validator: null,
-                directory: true,
-                required: true,
-                cancellationToken: cancellationToken);
+                var selectedPathForNewNuGetConfigFile = await interactionService.PromptForFilePathAsync(
+                    promptText: UpdateCommandStrings.WhichDirectoryNuGetConfigPrompt,
+                    binding: nugetConfigDirBinding,
+                    validator: null,
+                    directory: true,
+                    required: true,
+                    cancellationToken: cancellationToken);
 
-            var nugetConfigDirectory = new DirectoryInfo(selectedPathForNewNuGetConfigFile);
-            await NuGetConfigMerger.CreateOrUpdateAsync(nugetConfigDirectory, channel, (_, orig, proposed, ct) => AnalyzeAndConfirmNuGetConfigChanges(context, orig, proposed, ct), cancellationToken: cancellationToken);
+                var nugetConfigDirectory = new DirectoryInfo(selectedPathForNewNuGetConfigFile);
+                await NuGetConfigMerger.CreateOrUpdateAsync(nugetConfigDirectory, channel, (_, orig, proposed, ct) => AnalyzeAndConfirmNuGetConfigChanges(context, orig, proposed, ct), cancellationToken: cancellationToken);
+            }
         }
 
         interactionService.DisplayEmptyLine();
