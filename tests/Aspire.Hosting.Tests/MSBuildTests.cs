@@ -465,7 +465,7 @@ public class MSBuildTests
 
         Assert.Contains("ASPIRE009", output);
         Assert.Contains("the bundle could not be resolved", output);
-        Assert.Contains("Some new Aspire features require the Aspire CLI to be installed", output);
+        Assert.Contains("New features require the Aspire CLI to be installed.", output);
         Assert.Contains("https://get.aspire.dev", output);
         Assert.DoesNotContain("DCP path could not be resolved", output);
     }
