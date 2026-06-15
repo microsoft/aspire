@@ -98,8 +98,8 @@ Before starting a release:
    | `SkipReleaseAssets` | Set `true` to skip uploading `aspire-cli-*` assets to the GitHub release. | `false` |
    | `SkipHomebrewValidation` | Set `false` to run Homebrew cask validation against the live GitHub release. | `true` |
    | `SkipVSCodeExtensionPublish` | Set `false` to publish the signed `aspire-vscode-extension` artifact to the Visual Studio Marketplace. | `true` |
-   | `NpmPublishOwners` | Comma-separated ESRP owner aliases or emails. Overrides must include `joperezr` or `ankj`, matching the required owner aliases in `eng/pipelines/release-publish-nuget.yml`. | `joperezr,ankj` |
-   | `NpmPublishApprovers` | Single ESRP approver alias or email. The approver must be a Microsoft address and must not overlap owners. | `adamratzman` |
+   | `NpmPublishOwners` | Single ESRP owner alias or email. Overrides must be one of the required owner aliases in `eng/pipelines/release-publish-nuget.yml` (currently `joperezr` or `ankj`). | `joperezr` |
+   | `NpmPublishApprovers` | Single ESRP approver alias or email. The approver must be a Microsoft address and must not be the same alias as the owner. | `adamratzman` |
    | `NpmRegistryPropagationDelayMinutes` | Delay between npm RID package and pointer package submissions. | `10` |
    | `GitHubTasksWorkflowRef` | Ref to load `release-github-tasks.yml` from when dispatching. Only affects the workflow source; the release branch and commit are passed via inputs. Override only when testing pipeline changes on a topic branch. | `main` |
 
