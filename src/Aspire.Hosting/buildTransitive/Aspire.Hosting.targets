@@ -23,7 +23,7 @@
   -->
   <Target Name="_AspireRemoveStreamJsonRpcAnalyzer" BeforeTargets="CoreCompile">
     <ItemGroup>
-      <Analyzer Remove="@(Analyzer)" Condition="$([System.String]::Copy('%(Analyzer.Identity)').Contains('StreamJsonRpc.Analyzers'))" />
+      <Analyzer Remove="@(Analyzer)" Condition="'%(Filename)' == 'StreamJsonRpc.Analyzers' or '%(Filename)' == 'StreamJsonRpc.Analyzers.CodeFixes'" />
     </ItemGroup>
   </Target>
 
