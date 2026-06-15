@@ -8,6 +8,7 @@ using Aspire.Cli.Packaging;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Aspire.Hosting;
 using Aspire.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
@@ -283,6 +284,45 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public async Task RunAsync_CliManagedSingleFileAppHostClearsStaleIntegrationEnvironmentVariables()
+    {
+        var appHostFile = CreateCliManagedSingleFileAppHost();
+        var workingDirectory = IntegrationClosureRestorer.GetOrCreateWorkingDirectory(appHostFile);
+        File.WriteAllText(Path.Combine(workingDirectory.FullName, IntegrationPackageProbeManifest.FileName), "{}");
+
+        var runner = new TestDotNetCliRunner();
+        var project = CreateCliManagedDotNetAppHostProject(runner, configureServices: options =>
+        {
+            options.EnabledFeatures = [KnownFeatures.CSharpCliManagedAppHostEnabled];
+        });
+
+        runner.BuildAsyncCallback = (_, _, _, _) => 0;
+        runner.GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => throw new InvalidOperationException("CLI-managed file-based AppHosts should not query SDK AppHost metadata.");
+        runner.RunAsyncCallback = (_, _, _, _, _, env, _, _, _) =>
+        {
+            Assert.NotNull(env);
+            Assert.False(env.ContainsKey(KnownConfigNames.IntegrationProbeManifestPath));
+            Assert.False(env.ContainsKey(KnownConfigNames.IntegrationLibsPath));
+            return Task.FromResult(0);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>
+            {
+                [KnownConfigNames.IntegrationProbeManifestPath] = "/tmp/stale-probe-manifest.json",
+                [KnownConfigNames.IntegrationLibsPath] = "/tmp/stale-integration-libs"
+            }
+        }, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
     public async Task RunAsync_CliManagedSingleFileAppHostRegeneratesModuleNuGetConfigFromCurrentAspireConfig()
     {
         var appHostFile = CreateCliManagedSingleFileAppHost();
@@ -340,6 +380,33 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         var exitCode = await project.RestoreAsync(appHostFile, new OutputCollector(), CancellationToken.None);
 
         Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task RestoreAsync_CliManagedSingleFileAppHostDeletesStaleProbeManifestWhenPackageBackedIntegrationsAreRemoved()
+    {
+        var appHostFile = CreateCliManagedSingleFileAppHost();
+        var workingDirectory = IntegrationClosureRestorer.GetOrCreateWorkingDirectory(appHostFile);
+        var staleProbeManifestPath = Path.Combine(workingDirectory.FullName, IntegrationPackageProbeManifest.FileName);
+        Directory.CreateDirectory(workingDirectory.FullName);
+        File.WriteAllText(staleProbeManifestPath, "{}");
+
+        var runner = new TestDotNetCliRunner();
+        var project = CreateCliManagedDotNetAppHostProject(runner, configureServices: options =>
+        {
+            options.EnabledFeatures = [KnownFeatures.CSharpCliManagedAppHostEnabled];
+        });
+
+        runner.BuildAsyncCallback = (_, _, _, _) =>
+        {
+            TestHelpers.WriteEmptyIntegrationClosureFiles(appHostFile);
+            return 0;
+        };
+
+        var exitCode = await project.RestoreAsync(appHostFile, new OutputCollector(), CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+        Assert.False(File.Exists(staleProbeManifestPath));
     }
 
     [Fact]

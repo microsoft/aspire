@@ -185,6 +185,14 @@ internal sealed class IntegrationClosureRestorer(
                 closureManifest.CreatePackageProbeManifest(),
                 cancellationToken).ConfigureAwait(false);
         }
+        else
+        {
+            var staleProbeManifestPath = Path.Combine(workingDirectory.FullName, IntegrationPackageProbeManifest.FileName);
+            if (File.Exists(staleProbeManifestPath))
+            {
+                File.Delete(staleProbeManifestPath);
+            }
+        }
 
         string? integrationLibsPath = null;
         if (closureManifest.Entries.Any(static entry => !entry.IsPackageBacked))

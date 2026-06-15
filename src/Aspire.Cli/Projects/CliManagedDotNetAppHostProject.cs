@@ -193,14 +193,12 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
         // resolves integration assemblies from .aspire/integrations/apphosts/<hash>/ regardless of
         // whether we're in CLI-managed mode (this code path) or polyglot/prebuilt mode.
         var closureLayout = _integrationClosureRestorer.TryLoad(appHostFile);
-        if (closureLayout is not null)
-        {
-            IntegrationClosureEnvironment.Apply(
-                (key, value) => env[key] = value,
-                _ => { },
-                closureLayout.ProbeManifestPath,
-                closureLayout.IntegrationLibsPath);
-        }
+        var (hasPackageReferences, hasProjectReferences) = GetConfiguredIntegrationKinds(appHostFile);
+        IntegrationClosureEnvironment.Apply(
+            (key, value) => env[key] = value,
+            key => env.Remove(key),
+            hasPackageReferences || hasProjectReferences ? closureLayout?.ProbeManifestPath : null,
+            hasProjectReferences ? closureLayout?.IntegrationLibsPath : null);
 
         if (env.ContainsKey(BundleDiscovery.DcpPathEnvVar) &&
             env.ContainsKey(BundleDiscovery.DashboardPathEnvVar))
@@ -238,5 +236,43 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
         }
 
         return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget", "packages");
+    }
+
+    private static (bool HasPackageReferences, bool HasProjectReferences) GetConfiguredIntegrationKinds(FileInfo appHostFile)
+    {
+        if (appHostFile.Directory is not { } appHostDirectory)
+        {
+            return (false, false);
+        }
+
+        var configDirectory = ConfigurationHelper.GetConfigRootDirectory(appHostDirectory);
+        var config = AspireConfigFile.Load(configDirectory.FullName);
+        if (config?.Packages is null)
+        {
+            return (false, false);
+        }
+
+        var hasPackageReferences = false;
+        var hasProjectReferences = false;
+        foreach (var (name, value) in config.Packages)
+        {
+            if (string.Equals(name, "Aspire.Hosting", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(name, "Aspire.Hosting.AppHost", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var trimmedValue = value?.Trim();
+            if (trimmedValue?.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                hasProjectReferences = true;
+            }
+            else
+            {
+                hasPackageReferences = true;
+            }
+        }
+
+        return (hasPackageReferences, hasProjectReferences);
     }
 }
