@@ -3,7 +3,7 @@ import * as path from 'path';
 import type { AspireExtensionE2EControlCommand, AspireExtensionE2EControlStatus } from '../../types/extensionApi';
 import { applyE2eControl, isSamePath, readStateFile, sleepSynchronously, waitForExtensionState } from './assertions';
 import { getCliPath, getPrimaryAppHostProjectPath, getRepoRoot, getWorkspaceRoot } from './paths';
-import { runProcess, terminateProcessTree } from './process';
+import { runProcess } from './process';
 
 const csharpFileHeader = `// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
@@ -265,7 +265,7 @@ export async function stopAppHostIfRunning(appHostPath: string): Promise<void> {
             cwd: getWorkspaceRoot(),
             timeoutMs: 60000,
         });
-        await waitForOrTerminateRunningAppHostProcessFromState(appHostPath);
+        await waitForRunningAppHostProcessExitFromState(appHostPath, 5000).catch(() => undefined);
     }
     catch (error) {
         if (!(error instanceof Error)) {
@@ -273,13 +273,13 @@ export async function stopAppHostIfRunning(appHostPath: string): Promise<void> {
         }
 
         if (/not running|No running AppHost|No AppHost/i.test(error.message)) {
-            await waitForOrTerminateRunningAppHostProcessFromState(appHostPath);
+            await waitForRunningAppHostProcessExitFromState(appHostPath, 5000).catch(() => undefined);
             return;
         }
 
         if (/timed out|Failed to stop/i.test(error.message)) {
             try {
-                await terminateRunningAppHostFromState(appHostPath);
+                await waitForRunningAppHostProcessExitFromState(appHostPath, 30000);
                 return;
             }
             catch {
@@ -291,36 +291,14 @@ export async function stopAppHostIfRunning(appHostPath: string): Promise<void> {
     }
 }
 
-async function waitForOrTerminateRunningAppHostProcessFromState(appHostPath: string): Promise<void> {
-    try {
-        // The extension can keep stale AppHost state after debug teardown closes the RPC
-        // connection. Use the OS process table as the cleanup source of truth so stale
-        // state does not fail teardown, while still protecting Windows fixture deletion
-        // from a genuinely live AppHost process.
-        await waitForRunningAppHostProcessExitFromState(appHostPath, 5000);
-    }
-    catch {
-        await terminateRunningAppHostFromState(appHostPath);
-    }
-}
-
-async function terminateRunningAppHostFromState(appHostPath: string): Promise<void> {
-    const runningAppHost = getRunningAppHostFromState(appHostPath);
-
-    if (runningAppHost) {
-        terminateProcessTree(runningAppHost.appHostPid, 'SIGTERM');
-        await waitForProcessExit(runningAppHost.appHostPid, 5000).catch(() => {
-            terminateProcessTree(runningAppHost.appHostPid, 'SIGKILL');
-        });
-        await waitForProcessExit(runningAppHost.appHostPid, 5000);
-    }
-}
-
 async function waitForRunningAppHostProcessExitFromState(appHostPath: string, timeoutMs: number): Promise<void> {
     const runningAppHost = getRunningAppHostFromState(appHostPath);
     if (runningAppHost) {
         await waitForProcessExit(runningAppHost.appHostPid, timeoutMs);
+        return;
     }
+
+    throw new Error(`Unable to find running AppHost state for ${appHostPath}.`);
 }
 
 function getRunningAppHostFromState(appHostPath: string) {

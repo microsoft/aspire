@@ -329,13 +329,14 @@ suite('E2E launch profile', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
         const stopAppHostStart = fixtures.indexOf('export async function stopAppHostIfRunning');
-        const stopAppHostEnd = fixtures.indexOf('async function terminateRunningAppHostFromState');
+        const stopAppHostEnd = fixtures.indexOf('async function waitForRunningAppHostProcessExitFromState');
         assert.ok(stopAppHostStart >= 0);
         assert.ok(stopAppHostEnd > stopAppHostStart);
         const stopAppHost = fixtures.slice(stopAppHostStart, stopAppHostEnd);
 
-        assert.ok(stopAppHost.includes('await waitForOrTerminateRunningAppHostProcessFromState(appHostPath);'));
-        assert.ok(fixtures.includes('stale AppHost state after debug teardown closes the RPC'));
+        assert.ok(stopAppHost.includes('await waitForRunningAppHostProcessExitFromState(appHostPath, 5000).catch(() => undefined);'));
+        assert.ok(stopAppHost.includes('await waitForRunningAppHostProcessExitFromState(appHostPath, 30000);'));
+        assert.ok(!fixtures.includes('terminateProcessTree(runningAppHost.appHostPid'));
         assert.ok(fixtures.includes('async function waitForProcessExit(pid: number, timeoutMs: number): Promise<void>'));
         assert.ok(fixtures.includes('process.kill(pid, 0);'));
         assert.ok(fixtures.includes("error.code === 'EPERM'"));
