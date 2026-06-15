@@ -92,7 +92,7 @@ The native platform packages are installed through npm optional dependencies. Do
 
 ## Standalone dashboard
 
-The Aspire dashboard shows logs, traces, metrics, and health checks for any app that exports OpenTelemetry, even without an AppHost. Start one in a single command:
+The Aspire dashboard shows logs, traces, and metrics for any app that exports OpenTelemetry, even without an AppHost. Start one in a single command:
 
 ```bash
 aspire dashboard run
