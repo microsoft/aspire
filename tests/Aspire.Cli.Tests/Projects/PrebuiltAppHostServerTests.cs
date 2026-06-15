@@ -103,6 +103,33 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void GenerateIntegrationProjectFile_DoesNotSetEarlyOutputPathProperties()
+    {
+        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], [], "/custom/output/path");
+        var doc = XDocument.Parse(xml);
+
+        var ns = doc.Root!.GetDefaultNamespace();
+        Assert.Null(doc.Descendants(ns + "BaseOutputPath").FirstOrDefault());
+        Assert.Null(doc.Descendants(ns + "BaseIntermediateOutputPath").FirstOrDefault());
+        Assert.Null(doc.Descendants(ns + "MSBuildProjectExtensionsPath").FirstOrDefault());
+    }
+
+    [Fact]
+    public void CreateClosureDirectoryBuildProps_SetsEarlyOutputPathProperties()
+    {
+        var doc = IntegrationClosureBuilder.CreateClosureDirectoryBuildProps("/custom/output/path");
+
+        var ns = doc.Root!.GetDefaultNamespace();
+        Assert.Equal(
+            Path.Combine("/custom/output/path", "bin") + Path.DirectorySeparatorChar,
+            doc.Descendants(ns + "BaseOutputPath").FirstOrDefault()?.Value);
+        Assert.Equal(
+            Path.Combine("/custom/output/path", "obj") + Path.DirectorySeparatorChar,
+            doc.Descendants(ns + "BaseIntermediateOutputPath").FirstOrDefault()?.Value);
+        Assert.Equal("$(BaseIntermediateOutputPath)", doc.Descendants(ns + "MSBuildProjectExtensionsPath").FirstOrDefault()?.Value);
+    }
+
+    [Fact]
     public void GenerateIntegrationProjectFile_WritesClosureManifestFiles()
     {
         var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], [], "/tmp/work");

@@ -206,8 +206,8 @@ internal sealed class IntegrationClosureRestorer(
 
     private async Task<AppHostServerClosureManifest?> ReadClosureManifestAsync(string restoreDir, CancellationToken cancellationToken)
     {
-        // The generated module project sets BaseIntermediateOutputPath under the same
-        // integration-restore directory that receives the closure files, matching the
+        // The generated module's Directory.Build.props sets BaseIntermediateOutputPath under the
+        // same integration-restore directory that receives the closure files, matching the
         // polyglot/prebuilt generated-project layout even though Aspire.csproj itself lives under
         // .aspire/modules so file-based AppHosts can reference it with #:project.
         var assetsFilePath = Path.Combine(restoreDir, "obj", IntegrationClosureBuilder.ProjectAssetsFileName);

@@ -69,13 +69,9 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
         var restoreDir = Path.Combine(
             IntegrationClosureRestorer.GetOrCreateWorkingDirectory(appHostFile).FullName,
             IntegrationClosureBuilder.IntegrationRestoreFolderName);
-        Assert.Equal(
-            Path.Combine(restoreDir, "bin") + Path.DirectorySeparatorChar,
-            propertyGroup.Element("BaseOutputPath")?.Value);
-        Assert.Equal(
-            Path.Combine(restoreDir, "obj") + Path.DirectorySeparatorChar,
-            propertyGroup.Element("BaseIntermediateOutputPath")?.Value);
-        Assert.Equal("$(BaseIntermediateOutputPath)", propertyGroup.Element("MSBuildProjectExtensionsPath")?.Value);
+        Assert.Null(propertyGroup.Element("BaseOutputPath"));
+        Assert.Null(propertyGroup.Element("BaseIntermediateOutputPath"));
+        Assert.Null(propertyGroup.Element("MSBuildProjectExtensionsPath"));
         Assert.Equal("false", propertyGroup.Element("ProduceReferenceAssembly")?.Value);
         Assert.DoesNotContain(moduleProject.Root.Elements("Import"), e => e.Attribute("Project")?.Value == "Aspire.targets");
         Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.targets")));
@@ -108,14 +104,6 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
             e.Element("ProjectReference") is { } projectReference &&
             projectReference.Attribute("Update")?.Value == "@(ProjectReference)" &&
             projectReference.Attribute("GlobalPropertiesToRemove")?.Value == "%(ProjectReference.GlobalPropertiesToRemove);DirectoryBuildPropsPath;DirectoryBuildTargetsPath");
-        Assert.Contains(appHostBuildTargets.Root.Elements("ItemGroup"), e =>
-            e.Attribute("Condition")?.Value == projectCondition &&
-            e.Element("ProjectReference") is { } projectReference &&
-            projectReference.Attribute("Update")?.Value == "@(ProjectReference)" &&
-            projectReference.Attribute("Condition")?.Value == $"'%(ProjectReference.FullPath)' == '{moduleProjectFile.FullName}'" &&
-            projectReference.Element("ReferenceOutputAssembly")?.Value == "false" &&
-            projectReference.Element("Private")?.Value == "false" &&
-            projectReference.Element("BuildReference")?.Value == "false");
 
         var appHostPropertyGroup = appHostBuildProps.Root.Elements("PropertyGroup")
             .Single(e => e.Attribute("Condition")?.Value == projectCondition);
@@ -134,7 +122,17 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
             e.Attribute("Include")?.Value == projectReferenceFile.FullName &&
             e.Element("ReferenceOutputAssembly")?.Value == "true");
 
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Directory.Build.props")));
+        var moduleDirectoryBuildPropsPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Directory.Build.props");
+        Assert.True(File.Exists(moduleDirectoryBuildPropsPath));
+        var moduleDirectoryBuildProps = XDocument.Load(moduleDirectoryBuildPropsPath);
+        var moduleDirectoryBuildPropertyGroup = moduleDirectoryBuildProps.Root!.Element("PropertyGroup")!;
+        Assert.Equal(
+            Path.Combine(restoreDir, "bin") + Path.DirectorySeparatorChar,
+            moduleDirectoryBuildPropertyGroup.Element("BaseOutputPath")?.Value);
+        Assert.Equal(
+            Path.Combine(restoreDir, "obj") + Path.DirectorySeparatorChar,
+            moduleDirectoryBuildPropertyGroup.Element("BaseIntermediateOutputPath")?.Value);
+        Assert.Equal("$(BaseIntermediateOutputPath)", moduleDirectoryBuildPropertyGroup.Element("MSBuildProjectExtensionsPath")?.Value);
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Directory.Build.targets")));
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Directory.Packages.props")));
     }

@@ -52,10 +52,6 @@ internal static class IntegrationClosureBuilder
         projectFile.AddProperty("GenerateDocumentationFile", "false");
         projectFile.AddProperty("IsPackable", "false");
         projectFile.AddProperty("IsPublishable", "false");
-        projectFile.AddProperty("BaseOutputPath", EnsureTrailingSlash(Path.Combine(restoreDir, "bin")));
-        projectFile.AddProperty("BaseIntermediateOutputPath", EnsureTrailingSlash(Path.Combine(restoreDir, "obj")));
-        projectFile.AddProperty("MSBuildProjectExtensionsPath", "$(BaseIntermediateOutputPath)");
-
         // Closure output properties consumed by the post-build reader.
         projectFile.AddProperty("CopyLocalLockFileAssemblies", "true");
         projectFile.AddProperty("ProduceReferenceAssembly", "false");
@@ -114,11 +110,22 @@ internal static class IntegrationClosureBuilder
                     new XAttribute("WriteOnlyWhenDifferent", "true"))));
 
         return projectFile;
+    }
 
-        static string EnsureTrailingSlash(string path)
-            => path.EndsWith(Path.DirectorySeparatorChar)
-                ? path
-                : path + Path.DirectorySeparatorChar;
+    /// <summary>
+    /// Creates the early-imported props document that redirects generated integration project
+    /// outputs into the shared integration restore directory.
+    /// </summary>
+    public static XDocument CreateClosureDirectoryBuildProps(string restoreDir)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(restoreDir);
+
+        var propertyGroup = new XElement("PropertyGroup",
+            new XElement("BaseOutputPath", EnsureTrailingSlash(Path.Combine(restoreDir, "bin"))),
+            new XElement("BaseIntermediateOutputPath", EnsureTrailingSlash(Path.Combine(restoreDir, "obj"))),
+            new XElement("MSBuildProjectExtensionsPath", "$(BaseIntermediateOutputPath)"));
+
+        return new XDocument(new XElement("Project", propertyGroup));
     }
 
     /// <summary>
@@ -351,6 +358,11 @@ internal static class IntegrationClosureBuilder
         string? NuGetPackageVersion,
         string? PathInPackage,
         string? AssetType);
+
+    private static string EnsureTrailingSlash(string path)
+        => path.EndsWith(Path.DirectorySeparatorChar)
+            ? path
+            : path + Path.DirectorySeparatorChar;
 }
 
 /// <summary>

@@ -92,8 +92,15 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
             legacyModuleTargetsFile.Delete();
         }
 
-        // Write sentinel files to prevent upstream props/targets from overriding generated project behavior.
-        await File.WriteAllTextAsync(Path.Combine(modulesDirectory.FullName, "Directory.Build.props"), "<Project />", cancellationToken).ConfigureAwait(false);
+        // Directory.Build.props is where SDK-style projects require BaseIntermediateOutputPath
+        // and MSBuildProjectExtensionsPath to be set; assigning them in Aspire.csproj is too late
+        // because Microsoft.Common.props has already consumed them.
+        await File.WriteAllTextAsync(
+            Path.Combine(modulesDirectory.FullName, "Directory.Build.props"),
+            IntegrationClosureBuilder.CreateClosureDirectoryBuildProps(integrationRestoreDir).ToString(),
+            cancellationToken).ConfigureAwait(false);
+
+        // Write sentinel targets/packages files to prevent upstream imports from overriding generated project behavior.
         await File.WriteAllTextAsync(Path.Combine(modulesDirectory.FullName, "Directory.Build.targets"), "<Project />", cancellationToken).ConfigureAwait(false);
         await File.WriteAllTextAsync(
             Path.Combine(modulesDirectory.FullName, "Directory.Packages.props"),
@@ -212,7 +219,6 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         CancellationToken cancellationToken)
     {
         var generatedProjectPath = Path.ChangeExtension(appHostFile.FullName, ".csproj");
-        var moduleProjectPath = Path.Combine(appHostFile.Directory!.FullName, AspireJsonConfiguration.SettingsFolder, ModulesDirectoryName, ModuleProjectFileName);
         var projectCondition = $"'$(MSBuildProjectFullPath)' == '{generatedProjectPath}'";
 
         var root = new XElement("Project");
@@ -221,14 +227,6 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
             new XElement("ProjectReference",
                 new XAttribute("Update", "@(ProjectReference)"),
                 new XAttribute("GlobalPropertiesToRemove", "%(ProjectReference.GlobalPropertiesToRemove);DirectoryBuildPropsPath;DirectoryBuildTargetsPath"))));
-        root.Add(new XElement("ItemGroup",
-            new XAttribute("Condition", projectCondition),
-            new XElement("ProjectReference",
-                new XAttribute("Update", "@(ProjectReference)"),
-                new XAttribute("Condition", $"'%(ProjectReference.FullPath)' == '{moduleProjectPath}'"),
-                new XElement("ReferenceOutputAssembly", "false"),
-                new XElement("Private", "false"),
-                new XElement("BuildReference", "false"))));
 
         await using var stream = appHostBuildTargetsFile.Create();
         await new XDocument(root).SaveAsync(stream, SaveOptions.None, cancellationToken).ConfigureAwait(false);

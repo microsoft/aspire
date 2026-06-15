@@ -334,9 +334,14 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         await File.WriteAllTextAsync(
             Path.Combine(restoreDir, "Directory.Packages.props"), directoryPackagesProps, cancellationToken);
 
-        // Also write an empty Directory.Build.props/targets to prevent parent imports
+        // Directory.Build.props sets output paths before the SDK consumes them and also prevents
+        // parent props from affecting the generated project.
         await File.WriteAllTextAsync(
-            Path.Combine(restoreDir, "Directory.Build.props"), "<Project />", cancellationToken);
+            Path.Combine(restoreDir, "Directory.Build.props"),
+            IntegrationClosureBuilder.CreateClosureDirectoryBuildProps(restoreDir).ToString(),
+            cancellationToken);
+
+        // Write empty Directory.Build.targets to prevent parent targets imports.
         await File.WriteAllTextAsync(
             Path.Combine(restoreDir, "Directory.Build.targets"), "<Project />", cancellationToken);
 
