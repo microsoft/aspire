@@ -43,10 +43,11 @@ paths.
 
 | Section | What it is |
 |---------|------------|
+| `prefilter` | `{ patterns_file, keep_routed }`. Changed files matched by a pattern in `patterns_file` are **dropped before both layers run** — unless carved out by `keep_routed`. `patterns_file` is `eng/testing/github-ci-trigger-patterns.txt`, the *same* list the top-level CI skip gate uses, read at runtime so the two can't drift; its glob syntax is the check-changed-files action's (ported in `ChangedFileFilter`). `keep_routed` are the files the selector routes to a target (`.github/workflows/**`, `eng/pipelines/**`, and the patterns file itself → `Infrastructure.Tests`), so they are never dropped. Unlike `ignore`, this also removes the file from Layer 1's input, so a packed `README.md` can never be attributed and fanned out. |
 | `conventions` | `<name>`-capture pattern → target template, emitted only if the derived test exists (existence guard). Additive. Covers a test's own folder and the Hosting/Components integration dirs as a backstop for non-MSBuild files the graph cannot attribute. |
-| `ignore` | globs Layer 2 accounts for with **no** target (Layer 1 covers them, or they are inert), so they do not trip the run-all fallback |
+| `ignore` | globs Layer 2 accounts for with **no** target, so they do not trip the run-all fallback. `ignore` only suppresses the fallback — Layer 1 still attributes the file — so it is now only needed for files Layer 1 *cannot* attribute (the inert `Vendoring/OpenTelemetry.Shared`). Link-compiled `src/Shared` / `tests/Shared` / `Components/Common` files are reported in Layer 1's attributed-paths set, and the fallback treats any attributed file as owned, so they need no `ignore` entry. |
 | `path_rules` | a path glob set → a target set (`test:` / `job:` / a group / `ALL`). The single general path matcher: catch-all-to-`ALL`, convention misses, non-.NET job loose-file triggers, and loose-file reads all live here under comment headers |
-| `affected_project_rules` | an affected **production** project, matched by project-name glob against Layer 1's affected set, → a target set. Keeps production-project triggers keyed by graph identity and follows the graph's transitive closure |
+| `affected_project_rules` | an affected **production** project, matched by project-name glob against Layer 1's affected set, → a target set. Matched against production names **only** — affected matrix test projects are excluded, so a test-only change cannot fire production jobs via a glob like `Aspire.Hosting*`. Follows the graph's transitive closure |
 | `derived_targets` | "if any of these tests is selected, also run these jobs/tests" — a *test-set* relationship, not a file edge |
 | `groups` | named, reusable bundles of `test:`/`job:` targets that expand recursively |
 
@@ -56,8 +57,12 @@ The map stays small by keeping each dependency in the layer that can prove it:
 - a test project's own folder is a convention;
 - override/job/loose-file buckets are all `path_rules`, because they have no
   distinct selector behavior;
-- linked-file and `Components/Common` edges are owned by Layer 1 at runtime, so
-  they are not curated.
+- linked-file, `Components/Common`, and `src/Shared` / `tests/Shared` `*.cs` edges
+  are owned by Layer 1 at runtime (the attributed-paths set), so they need no
+  curated entry;
+- docs and other no-CI files are dropped up front by `prefilter`, reading the
+  CI skip-gate patterns file.
+
 
 ## Target vocabulary
 

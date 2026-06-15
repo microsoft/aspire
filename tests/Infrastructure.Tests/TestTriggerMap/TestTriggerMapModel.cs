@@ -21,6 +21,8 @@ public sealed class TestTriggerMap
 
     public List<ConventionRule> Conventions { get; set; } = new();
 
+    public PrefilterConfig? Prefilter { get; set; }
+
     public List<string> Ignore { get; set; } = new();
 
     public List<PathRule> PathRules { get; set; } = new();
@@ -172,4 +174,13 @@ public sealed class AffectedProjectRule
     public List<string> Targets { get; set; } = new();
 
     public string? Reason { get; set; }
+}
+
+/// <summary>The <c>prefilter</c> block: the patterns file (CI skip-gate list) read at runtime and the
+/// keep_routed carve-outs the selector routes to a target.</summary>
+public sealed class PrefilterConfig
+{
+    public string? PatternsFile { get; set; }
+
+    public List<string> KeepRouted { get; set; } = new();
 }

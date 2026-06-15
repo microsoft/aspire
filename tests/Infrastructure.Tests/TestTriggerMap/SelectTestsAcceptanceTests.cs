@@ -717,7 +717,84 @@ public sealed class SelectTestsAcceptanceTests
         Assert.Empty(r.Jobs);
     }
 
+    // Regression (production-only affected_project_rules): Layer 1 reports affected production AND test
+    // projects. affected_project_rules key off project NAME globs and must match only PRODUCTION names.
+    // A matrix test project ("Aspire.Hosting.Foo.Tests") matches a production glob ("Aspire.Hosting*"),
+    // so without the production-only filter a TEST-ONLY change would spuriously fire that rule's
+    // production jobs (ats-diffs / extension-e2e / typescript-api-compat / deployment-e2e).
+    [Fact]
+    public void AffectedProjectRulesMatchProductionProjectsNotTestProjects()
+    {
+        const string map = """
+            version: 1
+            affected_project_rules:
+              - projects: [Aspire.Hosting*]
+                targets: [job:prodjob]
+            """;
+        var dir = Directory.CreateTempSubdirectory("selecttests");
+        var mapPath = Path.Combine(dir.FullName, "map.yml");
+        File.WriteAllText(mapPath, map);
+        var matrix = new[] { "Aspire.Hosting.Foo.Tests" }.ToHashSet(StringComparer.Ordinal);
+        var selector = new TestSelector(mapPath, matrix, []);
+
+        // A test-only change: only the test project is affected. It is still selected as a test (Layer 1
+        // intersection), but must NOT drive the production rule's job.
+        var testOnly = selector.Select([], ["Aspire.Hosting.Foo.Tests"], new SelectorOptions());
+        Assert.Contains("Aspire.Hosting.Foo.Tests", testOnly.TestProjects);
+        Assert.DoesNotContain("job:prodjob", testOnly.Jobs);
+
+        // A production project of the same name prefix DOES drive the rule.
+        var prod = selector.Select([], ["Aspire.Hosting.Foo"], new SelectorOptions());
+        Assert.Contains("job:prodjob", prod.Jobs);
+    }
+
     // --- H. Real-map invariant smoke (computed from the filesystem; no hardcoded names) ------
+
+    // The prefilter reads eng/testing/github-ci-trigger-patterns.txt at runtime and matches it with the
+    // SAME glob->regex the check-changed-files action uses (ported in ChangedFileFilter). This pins that
+    // port (docs/.slnf/scripts get dropped) and the keep_routed carve-outs (selector-routed files are NOT
+    // dropped even though the patterns file lists them).
+    [Fact]
+    public void PrefilterReadsPatternsFileAndHonorsKeepRouted()
+    {
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "test-trigger-map.yml");
+        var map = TriggerMap.Load(mapPath);
+        var filter = ChangedFileFilter.Create(RepoRoot.Path, map.Prefilter);
+
+        // Dropped: entries from the patterns file (action glob syntax: **.md, localhive.*, ...).
+        Assert.True(filter.IsExcluded("docs/anything.md"));
+        Assert.True(filter.IsExcluded("src/Aspire.Cli/README.md"));     // **.md matches at any depth
+        Assert.True(filter.IsExcluded(".agents/skills/foo/SKILL.md"));
+        Assert.True(filter.IsExcluded("Aspire-Core.slnf"));
+        Assert.True(filter.IsExcluded("localhive.ps1"));                 // localhive.* -> localhive\.[^/]*
+
+        // Kept: real source the patterns file does not list.
+        Assert.False(filter.IsExcluded("src/Aspire.Cli/Program.cs"));
+
+        // keep_routed carve-outs: listed by the patterns file but routed by the selector -> NOT dropped.
+        Assert.False(filter.IsExcluded(".github/workflows/backport.yml"));
+        Assert.False(filter.IsExcluded("eng/pipelines/azure-pipelines-public.yml"));
+        Assert.False(filter.IsExcluded("eng/testing/github-ci-trigger-patterns.txt"));
+    }
+
+    // A src/** file that no Layer 2 rule matches and that is not under a project directory normally hits
+    // the run-all fallback. But when Layer 1 attributed it (a link-compiled src/Shared / tests/Shared
+    // file), it is Layer-1-owned and must NOT force ALL -- this is why those dirs need no `ignore` entry.
+    [Fact]
+    public void Layer1AttributedFileIsOwnedAndDoesNotForceRunAll()
+    {
+        const string shared = "src/Shared/Foo.cs";
+
+        // No attribution, no project dirs -> the src/** fallback escalates to ALL.
+        var withoutAttribution = Select([shared]);
+        Assert.True(withoutAttribution.SelectsAll);
+
+        // Same file, but reported as Layer-1-attributed -> owned, so no fallback and no ALL.
+        var withAttribution = Selector().Select(
+            [shared], [], new SelectorOptions(), new HashSet<string>(StringComparer.Ordinal) { shared });
+        Assert.False(withAttribution.SelectsAll);
+        Assert.Empty(withAttribution.TestProjects);
+    }
 
     [Fact]
     public void RealMapLoadsAndConventionSelectsAComponentsTestWithoutSelectingAll()

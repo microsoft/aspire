@@ -32,6 +32,26 @@ namespace Aspire.SelectTests;
 /// scenario, with no third-party package dependency.
 /// </para>
 /// </remarks>
+/// <summary>
+/// The outcome of the Layer 1 graph computation.
+/// </summary>
+/// <param name="AffectedProjects">
+/// Affected project base names (production + test) — the reverse-dependency closure of the change.
+/// </param>
+/// <param name="AttributedPaths">
+/// The changed repo-relative ('/'-separated) paths the graph actually mapped to a project (via the
+/// evaluated-item <c>FullPath</c> index or directory containment). The selector treats these as
+/// Layer-1-owned, so a link-compiled <c>src/Shared</c>/<c>tests/Shared</c> file — attributed but not
+/// under a project directory — does not trip the run-all fallback without needing an <c>ignore</c> entry.
+/// </param>
+internal sealed record AffectedResult(
+    IReadOnlyCollection<string> AffectedProjects,
+    IReadOnlySet<string> AttributedPaths)
+{
+    public static readonly AffectedResult Empty =
+        new(Array.Empty<string>(), new HashSet<string>(StringComparer.Ordinal));
+}
+
 internal static class GraphAffectedProjects
 {
     // Linux CI is the source of truth, but the tool also runs on dev machines (incl. case-insensitive
@@ -55,9 +75,11 @@ internal static class GraphAffectedProjects
     }
 
     /// <summary>
-    /// Computes the affected project base names (csproj filename without extension — the same shape
-    /// <c>dotnet-affected</c> emitted as <c>Name</c>, which <see cref="TestSelector"/> intersects with
-    /// the matrix and matches against <c>project_rules</c>).
+    /// Computes the projects affected by the changed files: the base names (csproj filename without
+    /// extension — the same shape <c>dotnet-affected</c> emitted as <c>Name</c>, which
+    /// <see cref="TestSelector"/> intersects with the matrix and matches against <c>project_rules</c>),
+    /// plus the set of changed repo-relative paths the graph actually <em>attributed</em> to a project
+    /// (so the selector can treat those as Layer-1-owned without relying on a directory heuristic).
     /// </summary>
     /// <param name="repoRoot">Repository root (where <c>Aspire.slnx</c> and <c>.git</c> live).</param>
     /// <param name="from">Base git ref to diff from. Required unless <paramref name="changedFilesPath"/> is given.</param>
@@ -66,7 +88,12 @@ internal static class GraphAffectedProjects
     /// Optional newline-delimited list of changed repo-relative paths, used instead of a git diff.
     /// When supplied there is no rename/delete status, so every path is treated as present.
     /// </param>
-    public static IReadOnlyCollection<string> Compute(string repoRoot, string? from, string? to, string? changedFilesPath)
+    /// <param name="filter">
+    /// Optional pre-filter (the map's <c>prefilter</c>). Changed paths it excludes are dropped before
+    /// attribution, so an excluded file (e.g. a packed <c>README.md</c>) never maps to a project. The
+    /// same filter is applied to the Layer 2 input in <c>Program</c>.
+    /// </param>
+    public static AffectedResult Compute(string repoRoot, string? from, string? to, string? changedFilesPath, ChangedFileFilter? filter = null)
     {
         repoRoot = NormalizeFullPath(repoRoot);
         var solutionPath = NormalizeFullPath(Path.Combine(repoRoot, "Aspire.slnx"));
@@ -75,10 +102,10 @@ internal static class GraphAffectedProjects
             throw new InvalidOperationException($"Aspire.slnx was not found under repository root: {repoRoot}");
         }
 
-        var changedPaths = ResolveChangedPaths(repoRoot, from, to, changedFilesPath);
+        var changedPaths = ResolveChangedPaths(repoRoot, from, to, changedFilesPath, filter);
         if (changedPaths.Count == 0)
         {
-            return Array.Empty<string>();
+            return AffectedResult.Empty;
         }
 
         var graph = BuildGraph(repoRoot, solutionPath);
@@ -95,15 +122,17 @@ internal static class GraphAffectedProjects
             .ToArray();
 
         var directlyChangedProjects = FindDirectlyChangedProjects(
-            changedPaths, nodesByProjectPath, inputFileIndex, projectDirectories);
+            changedPaths, nodesByProjectPath, inputFileIndex, projectDirectories, out var attributedPaths);
 
         var affectedProjects = ComputeReverseClosure(directlyChangedProjects, nodesByProjectPath);
 
-        return affectedProjects
+        var names = affectedProjects
             .Select(Path.GetFileNameWithoutExtension)
             .Where(name => !string.IsNullOrEmpty(name))
             .Select(name => name!)
             .ToHashSet(StringComparer.Ordinal);
+
+        return new AffectedResult(names, attributedPaths);
     }
 
     private static ProjectGraph BuildGraph(string repoRoot, string solutionPath)
@@ -199,22 +228,27 @@ internal static class GraphAffectedProjects
     }
 
     private static HashSet<string> FindDirectlyChangedProjects(
-        IReadOnlyCollection<string> changedAbsolutePaths,
+        IReadOnlyCollection<ChangedPath> changedPaths,
         IReadOnlyDictionary<string, List<ProjectGraphNode>> nodesByProjectPath,
         IReadOnlyDictionary<string, HashSet<string>> inputFileIndex,
-        IReadOnlyList<string> projectDirectoriesLongestFirst)
+        IReadOnlyList<string> projectDirectoriesLongestFirst,
+        out IReadOnlySet<string> attributedRepoRelativePaths)
     {
         var directlyChanged = new HashSet<string>(s_pathComparer);
+        // The repo-relative paths the graph actually attributed to a project (by either mechanism). The
+        // selector treats these as Layer-1-owned so the run-all fallback does not fire for them.
+        var attributed = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var changedPath in changedAbsolutePaths)
+        foreach (var changed in changedPaths)
         {
-            if (inputFileIndex.TryGetValue(changedPath, out var owningProjects))
+            if (inputFileIndex.TryGetValue(changed.Absolute, out var owningProjects))
             {
                 foreach (var project in owningProjects)
                 {
                     directlyChanged.Add(project);
                 }
 
+                attributed.Add(changed.Relative);
                 continue;
             }
 
@@ -224,7 +258,7 @@ internal static class GraphAffectedProjects
             // contains it; the reverse closure then pulls in that project's dependents.
             foreach (var directory in projectDirectoriesLongestFirst)
             {
-                if (IsUnder(changedPath, directory))
+                if (IsUnder(changed.Absolute, directory))
                 {
                     foreach (var project in nodesByProjectPath.Keys)
                     {
@@ -234,11 +268,13 @@ internal static class GraphAffectedProjects
                         }
                     }
 
+                    attributed.Add(changed.Relative);
                     break;
                 }
             }
         }
 
+        attributedRepoRelativePaths = attributed;
         return directlyChanged;
     }
 
@@ -282,10 +318,15 @@ internal static class GraphAffectedProjects
         return affected;
     }
 
-    // Resolves the set of changed repo files as absolute, normalized paths. When diffing with git we
-    // use --name-status -M so that deletes and BOTH sides of a rename are captured: a file moving from
-    // project A to project B must mark both A (it lost the file) and B (it gained it).
-    private static IReadOnlyCollection<string> ResolveChangedPaths(string repoRoot, string? from, string? to, string? changedFilesPath)
+    // A changed file in both forms the graph needs: Relative is the repo-relative '/'-separated path
+    // (what the selector matches and what AttributedPaths reports); Absolute is the normalized full
+    // path used to look the file up in the evaluated-item index and project-directory containment.
+    private readonly record struct ChangedPath(string Relative, string Absolute);
+
+    // Resolves the set of changed repo files. When diffing with git we use --name-status -M so that
+    // deletes and BOTH sides of a rename are captured: a file moving from project A to project B must
+    // mark both A (it lost the file) and B (it gained it).
+    private static IReadOnlyCollection<ChangedPath> ResolveChangedPaths(string repoRoot, string? from, string? to, string? changedFilesPath, ChangedFileFilter? filter)
     {
         IEnumerable<string> relativePaths;
         if (changedFilesPath is not null)
@@ -303,9 +344,22 @@ internal static class GraphAffectedProjects
             throw new InvalidOperationException("Provide either changedFilesPath or from (with optional to).");
         }
 
-        return relativePaths
-            .Select(rel => NormalizeFullPath(Path.Combine(repoRoot, rel.Replace('/', Path.DirectorySeparatorChar))))
-            .ToHashSet(s_pathComparer);
+        // Pre-filter: drop files the prefilter marks as needing no CI (docs/skills/etc.) BEFORE
+        // attribution, so an excluded file (e.g. a packed README.md <None> item) never gets mapped to a
+        // project and fanned out. The same filter is applied to the Layer 2 input in Program.cs, so both
+        // layers see the identical post-exclude change set.
+        var normalized = relativePaths.Select(rel => rel.Replace('\\', '/'));
+        if (filter is not null)
+        {
+            normalized = normalized.Where(rel => !filter.IsExcluded(rel));
+        }
+
+        return normalized
+            .Select(rel => new ChangedPath(
+                rel,
+                NormalizeFullPath(Path.Combine(repoRoot, rel.Replace('/', Path.DirectorySeparatorChar)))))
+            .DistinctBy(cp => cp.Absolute, s_pathComparer)
+            .ToList();
     }
 
     private static IEnumerable<string> GetChangedPathsFromGit(string repoRoot, string from, string? to)

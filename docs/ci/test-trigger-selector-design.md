@@ -182,14 +182,32 @@ MSBuild graph cannot infer:
 
 Only five selector matchers exist; `groups` are reusable target bundles:
 
+- **`prefilter`**: globs whose changed files are dropped *before* Layer 1 and
+  Layer 2 run. The pattern list is **read at runtime** from
+  `eng/testing/github-ci-trigger-patterns.txt` — the same file the top-level
+  `ci.yml` skip gate uses — so the selector and the gate can never drift. Its
+  glob syntax is the *action's*, not the map's (`**`→any incl. `/`, `*`→any
+  except `/`, `.` literal, anchored), ported verbatim in `ChangedFileFilter`.
+  `keep_routed` carves out the files the selector routes to a target
+  (`.github/workflows/**` and `eng/pipelines/**` → `Infrastructure.Tests`, and
+  the patterns file itself), so those are never dropped. This is the only
+  mechanism that also removes a file from Layer 1's input, so a packed
+  `README.md` cannot be attributed by the graph and fanned out.
 - **`conventions`**: `<name>`-capture pattern → target template, additive and
   existence-guarded.
 - **`ignore`**: globs Layer 2 accounts for with no target, so they do not trip
-  the run-all fallback.
+  the run-all fallback. `ignore` only suppresses the fallback — Layer 1 still
+  attributes the file. It is now only needed for files Layer 1 *cannot* attribute
+  (the inert `Vendoring/OpenTelemetry.Shared`, compiled by nothing): a
+  link-compiled `src/Shared`/`tests/Shared`/`Components/Common` file is reported
+  by Layer 1 in its attributed-paths set, and the fallback treats any
+  Layer-1-attributed file as owned, so those need no `ignore` entry.
 - **`path_rules`**: the general path-glob → targets matcher (`test:` / `job:` /
   group / `ALL`).
-- **`affected_project_rules`**: an affected production project name glob
-  → targets.
+- **`affected_project_rules`**: an affected **production** project name glob
+  → targets. Matched against production names only; affected matrix *test*
+  projects are filtered out first, so a test-only change cannot fire production
+  jobs (`ats-diffs`, `extension-e2e`, …) through a glob like `Aspire.Hosting*`.
 - **`derived_targets`**: if any selected test matches, add more targets to a
   fixpoint.
 
@@ -222,15 +240,24 @@ before any matrix exists.
 
 Flow:
 
-1. Resolve changed files for Layer 2 path matching.
-2. Compute Layer 1 affected project names unless `--force-all` or
-   `--skip-layer1` is set.
+1. Resolve changed files, then drop any matched by the `prefilter` (the CI
+   skip-gate patterns file, read at runtime, minus `keep_routed`) — applied to
+   **both** the Layer 2 path list and Layer 1's git diff, so an excluded file
+   (e.g. a packed `README.md`) influences neither layer.
+2. Compute Layer 1 affected project names (and the set of changed paths it
+   attributed) unless `--force-all` or `--skip-layer1` is set.
 3. Apply Layer 2 `conventions`, `ignore`, and `path_rules` for each changed
-   file.
-4. Apply `affected_project_rules` to Layer 1 production-project names.
+   file. A changed file that Layer 1 attributed (its attributed-paths set) is
+   treated as Layer-1-owned, so a link-compiled `src/Shared`/`tests/Shared`
+   file does not trip the run-all fallback even though it is under no project
+   directory.
+4. Apply `affected_project_rules` to Layer 1 **production**-project names only
+   (affected matrix test projects are filtered out first, so a test-only change
+   does not fire production jobs through a production-name glob).
 5. Apply `derived_targets` to a cycle-safe fixpoint.
 6. Escalate to `ALL` for a kill switch, an `ALL` path rule, or an unattributed
-   `src/**` file that is not under a project directory in `Aspire.slnx`.
+   `src/**` file that is neither under a project directory in `Aspire.slnx` nor
+   in Layer 1's attributed-paths set.
 7. Emit the per-job booleans, and — in enforce mode for a non-ALL selection —
    the `OverrideProjectToBuild` props restricting the downstream build.
 

@@ -331,4 +331,64 @@ public sealed class TestTriggerMapTests
 
         Assert.True(missing.Count == 0, $"test: targets with no tests/<X>/<X>.csproj: {string.Join(", ", missing)}");
     }
+
+    [Fact]
+    public void PrefilterPatternsFileExists()
+    {
+        // The prefilter reads its pattern list from this file at runtime (SSOT with the ci.yml skip
+        // gate). A typo'd path would make ChangedFileFilter.Create throw at runtime; pin it here.
+        Assert.NotNull(s_map.Prefilter);
+        Assert.False(string.IsNullOrWhiteSpace(s_map.Prefilter!.PatternsFile));
+        Assert.True(File.Exists(Path.Combine(RepoRoot.Path, s_map.Prefilter.PatternsFile!)),
+            $"prefilter.patterns_file does not exist: {s_map.Prefilter.PatternsFile}");
+    }
+
+    [Fact]
+    public void PrefilterKeepRoutedGlobsAreLiveAndCoverSelectorRoutedDirs()
+    {
+        // keep_routed are the carve-outs: files the patterns file lists but the selector routes to a
+        // target, so they must NOT be dropped. Each must match a real file (catch typos), and the two
+        // selector-routed dirs must be covered so a workflow/pipeline change still runs Infrastructure
+        // .Tests in a mixed PR.
+        Assert.NotNull(s_map.Prefilter);
+        var keepRouted = s_map.Prefilter!.KeepRouted;
+
+        var dead = keepRouted.Where(g => !GlobMatchesAnyTrackedFile(g)).Order(StringComparer.Ordinal).ToList();
+        Assert.True(dead.Count == 0, $"prefilter.keep_routed globs matching no tracked file: {string.Join(", ", dead)}");
+
+        foreach (var required in new[] { ".github/workflows/**", "eng/pipelines/**" })
+        {
+            Assert.Contains(required, keepRouted);
+        }
+    }
+
+    [Fact]
+    public void EveryTestsSharedFileIsCsAttributedOrRoutedToAllOrExcluded()
+    {
+        // tests/Shared has both link-compiled *.cs (Layer 1 attributes them precisely, so the run-all
+        // fallback treats them as owned — they need no curated rule) and non-source build/fixture infra
+        // (props/targets/packages/Docker/Playwright/certs -> ALL). A tests/Shared file that is NEITHER a
+        // *.cs NOR matched by an ALL path rule NOR a doc (excluded by the prefilter) would silently select
+        // nothing: it is not under a project dir (so directory containment can't attribute a loose file
+        // there) and the run-all fallback is src/-only. Pin the invariant so a new file type added under
+        // tests/Shared can't quietly fall through. (.md files are dropped by the prefilter's **.md.)
+        var allGlobs = s_map.PathRules
+            .Where(r => r.Targets.Contains("ALL", StringComparer.Ordinal))
+            .SelectMany(r => r.Paths)
+            .ToList();
+
+        bool RoutedToAll(string file) => allGlobs.Any(g => TestTriggerMap.GlobMatches(g, file));
+
+        var orphaned = s_trackedFiles
+            .Where(f => f.StartsWith("tests/Shared/", StringComparison.Ordinal))
+            .Where(f => !f.EndsWith(".cs", StringComparison.Ordinal))
+            .Where(f => !f.EndsWith(".md", StringComparison.Ordinal))
+            .Where(f => !RoutedToAll(f))
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        Assert.True(orphaned.Count == 0,
+            $"tests/Shared files that are neither *.cs (Layer 1-attributed), *.md (prefiltered), nor routed " +
+            $"to ALL (they would silently select nothing): {string.Join(", ", orphaned)}");
+    }
 }

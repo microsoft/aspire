@@ -64,6 +64,19 @@ public sealed class GraphAffectedProjectsTests
         Assert.Contains("AppTests", affected);
     }
 
+    // Failure mode: a link-compiled shared file (attributed via the FullPath index, not a project
+    // directory) is omitted from AttributedPaths, so the selector's run-all fallback would escalate it
+    // to ALL instead of trusting Layer 1. The graph must report it as attributed.
+    [Fact]
+    public void LinkedSharedFileIsReportedAsAttributed()
+    {
+        using var repo = new GraphFixture();
+
+        var result = repo.ComputeResult("Shared/Linked.cs");
+
+        Assert.Contains("Shared/Linked.cs", result.AttributedPaths);
+    }
+
     // Failure mode: a changed .csproj is not attributed to its own project, so a project-file edit
     // (e.g. adding a dependency) selects nothing for that project.
     [Fact]
@@ -232,6 +245,13 @@ public sealed class GraphAffectedProjectsTests
         {
             var changedFilesPath = System.IO.Path.Combine(_temp.Path, "changed.txt");
             File.WriteAllLines(changedFilesPath, changedRepoRelativePaths);
+            return GraphAffectedProjects.Compute(_temp.Path, from: null, to: null, changedFilesPath: changedFilesPath).AffectedProjects;
+        }
+
+        public AffectedResult ComputeResult(params string[] changedRepoRelativePaths)
+        {
+            var changedFilesPath = System.IO.Path.Combine(_temp.Path, "changed.txt");
+            File.WriteAllLines(changedFilesPath, changedRepoRelativePaths);
             return GraphAffectedProjects.Compute(_temp.Path, from: null, to: null, changedFilesPath: changedFilesPath);
         }
 
@@ -331,7 +351,7 @@ public sealed class GraphAffectedProjectsTests
             Git("mv", oldRelativePath, newRelativePath);
             Git("commit", "-q", "-m", "rename across projects");
 
-            return GraphAffectedProjects.Compute(_temp.Path, from: baseSha, to: "HEAD", changedFilesPath: null);
+            return GraphAffectedProjects.Compute(_temp.Path, from: baseSha, to: "HEAD", changedFilesPath: null).AffectedProjects;
         }
 
         private void Write(string relativePath, string contents)

@@ -77,6 +77,31 @@ conventions:
   - pattern: src/Components/<name>/**
     target: test:<name>.Tests
 
+# Prefilter (pre-Layer-1 exclude): changed files matching a pattern in `patterns_file` are DROPPED
+# before BOTH layers run, so they influence no selection at all. `patterns_file` is the SAME list the
+# top-level CI skip gate uses (eng/testing/github-ci-trigger-patterns.txt, consumed by ci.yml via the
+# check-changed-files action), read at runtime so the two can never drift. Its glob syntax is the
+# action's, NOT the map's: `**` -> any chars incl. '/', `*` -> any chars except '/', `.` literal,
+# anchored (ChangedFileFilter ports the action's glob_to_regex verbatim).
+#
+# keep_routed are the carve-outs: files the patterns_file would drop but the selector deliberately
+# ROUTES to a target, so they must NOT be dropped. .github/workflows/** and eng/pipelines/** route to
+# Infrastructure.Tests (workflow/pipeline validation); the patterns file itself is a selector input
+# (read here) so a change to it must run that same verifier. Everything else the patterns file lists
+# (docs, .agents/skills, .github/instructions, .github/aw, loose scripts) is dropped.
+#
+# Why this is separate from `ignore`: `ignore` only suppresses the Layer 2 run-all fallback -- Layer 1
+# STILL git-diffs and attributes the file. A README.md is a packed <None> item, so the graph would
+# fan it out to its owning project's whole test closure even though it is "ignored". The prefilter
+# removes the file from Layer 1's input too, which is the only place that actually stops the fan-out.
+# See docs/ci/test-trigger-selector-design.md.
+prefilter:
+  patterns_file: eng/testing/github-ci-trigger-patterns.txt
+  keep_routed:
+    - .github/workflows/**                            # routed to Infrastructure.Tests (workflow validation)
+    - eng/pipelines/**                                # routed to Infrastructure.Tests (pipeline validation)
+    - eng/testing/github-ci-trigger-patterns.txt      # a selector input (read above) -> route to Infrastructure.Tests
+
 # Ignore: files Layer 2 accounts for with NO target, so they do NOT trigger the run-all fallback.
 # Each is either covered precisely by Layer 1 (the graph index sees the linked/shared-file consumers)
 # or is inert. Not a no-op for selection: Layer 1 still unions in the real consumers.
@@ -84,10 +109,13 @@ ignore:
   - src/Components/Common/**                            # link-compiled into many components; Layer 1 covers
   - src/Vendoring/OpenTelemetry.Instrumentation.*/**    # glob-compiled into the Redis/Kafka components; Layer 1 covers
   - src/Vendoring/OpenTelemetry.Shared/**               # compiled by nothing (each instrumentation dir has its own Shared/); inert
-  - "**/*.md"                                            # documentation; never gates a test (Layer 1 still owns any README it actually packs/builds)
-  # NOTE: eng/test-trigger-map.yml is deliberately NOT ignored. Its verifier
-  # (Infrastructure.Tests/TestTriggerMap/TestTriggerMapTests) validates the map against repo reality,
-  # so a map edit must run that test -- see the tools/SelectTests path_rule below.
+  # NOTE: src/Shared/**/*.cs and tests/Shared/**/*.cs are NOT listed here. They are link-compiled, so
+  # Layer 1 attributes them to their consuming projects, and the run-all fallback now treats any file
+  # Layer 1 attributed as "owned" (not just files under a project directory) -- so they are selected
+  # precisely without an ignore entry. The inert Vendoring/Shared above still needs ignore because the
+  # graph attributes it to nothing (it is compiled by nothing), so without ignore it would hit the
+  # src/** fallback. **/*.md and other no-CI files are handled by `prefilter` above.
+
 
 # Path rules: a glob set -> a target set. One mechanism; the comment headers below are organization
 # only. targets may be test: / job: / a GROUP name / ALL.
@@ -112,8 +140,20 @@ path_rules:
       - eng/OuterPreBuild.proj   # build-wide project-name validation traversal -> err toward ALL
       - eng/Version.Details.xml
       - eng/common/**
-      - src/Shared/**
-      - tests/Shared/**
+      # tests/Shared build & fixture infra that is NOT link-compiled source (Layer 1 cannot attribute
+      # these the way it does the *.cs here, and they are imported/consumed broadly): props/targets/
+      # packages, the EmptyProject/InstallSdk/RepoTesting closure, Docker e2e images, Playwright config,
+      # template fixtures, and test certificates -> err toward ALL. The link-compiled tests/Shared/**/*.cs
+      # are handled precisely by Layer 1 (see the `ignore` section), NOT routed here.
+      - tests/Shared/**/*.props
+      - tests/Shared/**/*.targets
+      - tests/Shared/**/*.proj
+      - tests/Shared/**/*.config
+      - tests/Shared/**/*.json
+      - tests/Shared/**/*.sh
+      - tests/Shared/**/*.pfx
+      - tests/Shared/**/Dockerfile*
+      - tests/Shared/TemplatesTesting/data/**
       - .github/actions/enumerate-tests/**
       - eng/scripts/split-test-matrix-by-deps.ps1
       - eng/scripts/build-test-matrix.ps1   # canonical-matrix builder; a bug skews every PR's matrix -> err toward ALL (also runs its BuildTestMatrixTests verifier)
@@ -281,8 +321,9 @@ path_rules:
   - paths:
       - tools/SelectTests/**
       - eng/test-trigger-map.yml
+      - eng/testing/github-ci-trigger-patterns.txt
     targets: [test:Infrastructure.Tests]
-    reason: SelectTests acceptance/behavior tests live in Infrastructure.Tests/TestTriggerMap; the same project's verifier validates eng/test-trigger-map.yml against repo reality, so a map edit must run it
+    reason: SelectTests acceptance/behavior tests live in Infrastructure.Tests/TestTriggerMap; the same project's verifier validates eng/test-trigger-map.yml and reads eng/testing/github-ci-trigger-patterns.txt (the prefilter source), so a change to any of them must run it
   - paths:
       - .github/workflows/**
       - eng/pipelines/**

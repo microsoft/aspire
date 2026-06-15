@@ -20,6 +20,10 @@ internal sealed class TriggerMap
 
     public List<ConventionRule> Conventions { get; set; } = new();
 
+    // Pre-Layer-1 exclude config: read the CI skip-gate patterns file at runtime and drop matching
+    // changed files before both layers, except the keep_routed carve-outs. See ChangedFileFilter.
+    public PrefilterConfig? Prefilter { get; set; }
+
     public List<string> Ignore { get; set; } = new();
 
     public List<PathRule> PathRules { get; set; } = new();
@@ -161,6 +165,15 @@ internal sealed class TriggerMap
         target = rule.Target.Replace("<name>", match.Groups[1].Value, StringComparison.Ordinal);
         return true;
     }
+}
+
+// prefilter config: read the CI skip-gate patterns file at runtime and drop matching changed files
+// before both layers, except keep_routed (files the selector routes to a target). See ChangedFileFilter.
+internal sealed class PrefilterConfig
+{
+    public string? PatternsFile { get; set; }
+
+    public List<string> KeepRouted { get; set; } = new();
 }
 
 internal sealed class PathRule

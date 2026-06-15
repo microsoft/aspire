@@ -119,18 +119,34 @@ internal static class Selection
         var testProjectsByName = LoadTestProjects(options.RepoRoot);
         var allTestProjects = testProjectsByName.Keys.ToHashSet(StringComparer.Ordinal);
 
+        // The prefilter (the map's `prefilter` block): read the CI skip-gate patterns file at runtime
+        // and drop matching changed files before BOTH layers, except the keep_routed carve-outs. So an
+        // excluded file influences no selection. See ChangedFileFilter for why this must gate Layer 1 too.
+        var changedFileFilter = ChangedFileFilter.Create(options.RepoRoot, TriggerMap.Load(options.MapPath).Prefilter);
+
         // Under --force-all the selector returns ALL regardless of the diff (see below), so skip
         // resolving changed files and the Layer 1 graph closure entirely. Resolving them is not just
         // wasted work: --force-all is the path taken when there is no usable diff base (or the
         // [full ci] kill switch fired), so ResolveChangedFiles would otherwise throw for lack of a
         // --from/--changed-files input.
-        var changedFiles = options.ForceAll
+        var rawChangedFiles = options.ForceAll
             ? Array.Empty<string>()
             : ResolveChangedFiles(options);
 
-        var layer1Affected = (options.ForceAll || options.SkipLayer1)
-            ? Array.Empty<string>()
-            : RunLayer1(options);
+        // Split the raw change set into excluded (reported for audit transparency) and the filtered
+        // set that actually drives Layer 2. RunLayer1 applies the same filter to Layer 1's own git
+        // diff, so both layers see the identical post-prefilter change set.
+        var excludedFiles = rawChangedFiles
+            .Where(changedFileFilter.IsExcluded)
+            .ToList();
+        var changedFiles = rawChangedFiles
+            .Where(f => !changedFileFilter.IsExcluded(f))
+            .ToList();
+
+        var layer1 = (options.ForceAll || options.SkipLayer1)
+            ? AffectedResult.Empty
+            : RunLayer1(options, changedFileFilter);
+        var layer1Affected = layer1.AffectedProjects;
 
         // When Layer 1 is skipped there is no graph attribution, so the project-directory set must be
         // empty too. Otherwise TestSelector would treat files under those dirs as "Layer-1-owned" and
@@ -140,9 +156,9 @@ internal static class Selection
             : LoadProjectDirectories(options.RepoRoot);
 
         var selector = new TestSelector(options.MapPath, allTestProjects, projectDirectories);
-        var result = selector.Select(changedFiles, layer1Affected, new SelectorOptions(options.ForceAll));
+        var result = selector.Select(changedFiles, layer1Affected, new SelectorOptions(options.ForceAll), layer1.AttributedPaths);
 
-        WriteSummary(options, result, allTestProjects, changedFiles, layer1Affected);
+        WriteSummary(options, result, allTestProjects, changedFiles, layer1Affected, excludedFiles);
         WriteJobBooleans(options, result);
         WriteSelectionComment(options, result, allTestProjects);
 
@@ -321,7 +337,7 @@ internal static class Selection
     // *affected* (downstream dependents). We return the full set of project names: the selector
     // intersects the test projects into the matrix and matches the production projects against
     // project_rules. See GraphAffectedProjects for why this replaced dotnet-affected.
-    private static IReadOnlyCollection<string> RunLayer1(RunOptions options)
+    private static AffectedResult RunLayer1(RunOptions options, ChangedFileFilter filter)
     {
         try
         {
@@ -330,7 +346,7 @@ internal static class Selection
             // it is not JITted until the call below, so registering here (once) is in time.
             GraphAffectedProjects.EnsureMSBuildRegistered();
 
-            return GraphAffectedProjects.Compute(options.RepoRoot, options.From, options.To, options.ChangedFilesPath);
+            return GraphAffectedProjects.Compute(options.RepoRoot, options.From, options.To, options.ChangedFilesPath, filter);
         }
         catch (Exception ex)
         {
@@ -341,7 +357,7 @@ internal static class Selection
     // Layer 1 is not optional: under-selecting would silently skip real tests. Any failure to compute
     // the graph closure is fatal — surface it rather than masking it behind an empty (under-selecting)
     // result.
-    private static IReadOnlyCollection<string> Layer1Failed(string detail) =>
+    private static AffectedResult Layer1Failed(string detail) =>
         throw new InvalidOperationException($"Layer 1 (affected-projects graph) failed: {detail}");
 
     // Per-job booleans for the if: conditions gating the non-.NET jobs. job:extension-e2e ->
@@ -454,7 +470,8 @@ internal static class Selection
         SelectionResult result,
         IReadOnlySet<string> allTestProjects,
         IReadOnlyCollection<string> changedFiles,
-        IReadOnlyCollection<string> layer1Affected)
+        IReadOnlyCollection<string> layer1Affected,
+        IReadOnlyCollection<string> excludedFiles)
     {
         var sb = new StringBuilder();
         sb.AppendLine("## SelectTests");
@@ -484,6 +501,22 @@ internal static class Selection
         sb.AppendLine();
         sb.AppendLine("</details>");
         sb.AppendLine();
+
+        // Files dropped by the pre-filter (exclude globs): docs/skills/instructions and other
+        // no-CI-needed loose files. Shown so an audit reader can see they were intentionally removed
+        // from BOTH layers' input (not silently un-attributed).
+        if (excludedFiles.Count > 0)
+        {
+            sb.AppendLine(CultureInfo.InvariantCulture, $"### Pre-filtered (excluded) files ({excludedFiles.Count})");
+            sb.AppendLine();
+            sb.AppendLine("Dropped before selection by the prefilter (CI skip-gate patterns; no CI impact):");
+            sb.AppendLine();
+            foreach (var file in excludedFiles.OrderBy(f => f, StringComparer.Ordinal))
+            {
+                sb.AppendLine(CultureInfo.InvariantCulture, $"- `{file}`");
+            }
+            sb.AppendLine();
+        }
 
         // Files no layer accounted for: matched no curated rule (Layer 2), not ignored, and not a
         // project-owned source file (Layer 1, via the Aspire.slnx project dirs). A src/** file here

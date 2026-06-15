@@ -432,6 +432,52 @@ public sealed class SelectTestsCliTests
         }, slnx: slnx);
     }
 
+    // Pre-filter: changed files matching a pattern in the (runtime-read) skip-gate patterns file are
+    // dropped BEFORE both layers, so a docs-only change selects nothing even when a path rule would
+    // otherwise route it to ALL. keep_routed carve-outs (files the selector routes) are never dropped.
+    [Fact]
+    public void PrefilterDropsPatternFileMatchesButHonorsKeepRouted()
+    {
+        const string mapWithPrefilter = """
+            version: 1
+            prefilter:
+              patterns_file: skip-patterns.txt
+              keep_routed:
+                - .github/workflows/**
+            path_rules:
+              - paths: [docs/**]
+                targets: [ALL]
+              - paths: [.github/workflows/**]
+                targets: ["test:Aspire.Hosting.Tests"]
+            """;
+
+        // A docs-only .md change is dropped (patterns file has **.md) -> empty selection (NOT ALL), even
+        // though docs/** -> ALL would have matched it.
+        RunInTempRepo((repoRoot, propsPath, output) =>
+        {
+            File.WriteAllText(Path.Combine(repoRoot, "skip-patterns.txt"), "# docs\n**.md\n");
+            var changed = WriteChangedFiles(repoRoot, "docs/guide.md");
+
+            Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, enforce: true));
+
+            Assert.Equal("false", output()["has_dotnet_tests"]);
+            var summary = File.ReadAllText(Path.Combine(repoRoot, "summary"));
+            Assert.Contains("Pre-filtered (excluded) files (1)", summary);
+            Assert.Contains("docs/guide.md", summary);
+        }, map: mapWithPrefilter);
+
+        // keep_routed carve-out: a workflow file the patterns file lists is NOT dropped, so its rule fires.
+        RunInTempRepo((repoRoot, propsPath, _) =>
+        {
+            File.WriteAllText(Path.Combine(repoRoot, "skip-patterns.txt"), ".github/workflows/**\n");
+            var changed = WriteChangedFiles(repoRoot, ".github/workflows/ci.yml");
+
+            Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, enforce: true));
+
+            Assert.Contains("Aspire.Hosting.Tests", File.ReadAllText(propsPath));
+        }, map: mapWithPrefilter);
+    }
+
     private static RunOptions Options(
         string repoRoot,
         string propsPath,

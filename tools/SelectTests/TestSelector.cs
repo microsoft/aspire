@@ -123,12 +123,20 @@ public sealed class TestSelector
     /// empty.
     /// </param>
     /// <param name="options">Selection overrides (kill switch).</param>
+    /// <param name="layer1AttributedPaths">
+    /// The changed repo-relative paths the Layer 1 graph actually attributed to a project
+    /// (<see cref="AffectedResult.AttributedPaths"/>). Such a file is Layer-1-owned even when it is not
+    /// under a project directory (e.g. a link-compiled <c>src/Shared</c> file), so it does not trip the
+    /// run-all fallback. Empty when Layer 1 did not run (<c>--skip-layer1</c> / <c>--force-all</c>).
+    /// </param>
     public SelectionResult Select(
         IReadOnlyCollection<string> changedFiles,
         IReadOnlyCollection<string> layer1Affected,
-        SelectorOptions options)
+        SelectorOptions options,
+        IReadOnlySet<string>? layer1AttributedPaths = null)
     {
         var map = TriggerMap.Load(_mapPath);
+        var attributedPaths = layer1AttributedPaths ?? new HashSet<string>(StringComparer.Ordinal);
 
         // name -> the reasons it was selected. The key set IS the selected set; the lists carry the
         // attribution surfaced in the PR comment / step summary.
@@ -184,9 +192,13 @@ public sealed class TestSelector
             // they are inert). They must not trigger the run-all fallback below.
             var ignored = map.Ignore.Any(g => TriggerMap.GlobMatches(g, file));
 
-            // Layer-1-owned: the file sits under a project dir in Aspire.slnx, so dotnet-affected
-            // attributes it. Such files rely on Layer 1 and never force ALL.
-            var layer1Owned = IsLayer1Owned(file);
+            // Layer-1-owned: either the graph actually attributed this changed file to a project
+            // (the authoritative signal — covers link-compiled src/Shared / tests/Shared / Components
+            // /Common files that are NOT under any project directory), or the file sits under a project
+            // directory in Aspire.slnx (the directory heuristic, which also covers deleted files and the
+            // old side of a cross-project rename that the graph index can no longer see at HEAD). Either
+            // way the file relies on Layer 1 and must never force ALL.
+            var layer1Owned = attributedPaths.Contains(file) || IsLayer1Owned(file);
 
             if (fileMatched || ignored || layer1Owned)
             {
@@ -222,11 +234,21 @@ public sealed class TestSelector
         // carry, and follows the graph's transitive closure (a dependency change marks the project
         // affected). Keyed on the affected-project set, so it contributes nothing when Layer 1
         // produced none (e.g. --skip-layer1) -- the path_rules still cover the loose-file triggers.
+        //
+        // Match ONLY production project names: Layer 1 reports production AND test projects, and the
+        // affected test projects are already selected via the intersection above. Without this filter
+        // an affected matrix test name (e.g. "Aspire.Hosting.Python.Tests") would match a production
+        // glob like "Aspire.Hosting*" and spuriously fire production jobs (ats-diffs / extension-e2e /
+        // typescript-api-compat / deployment-e2e) for a TEST-ONLY change. See test-trigger-map.yml's
+        // affected_project_rules comment ("matched against the affected PRODUCTION projects").
+        var affectedProductionProjects = layer1Affected
+            .Where(name => !_allTestProjects.Contains(name))
+            .ToList();
         foreach (var rule in map.AffectedProjectRules)
         {
             // Attribute the rule to the first affected project that matched it, so the cause names a
             // concrete project rather than the rule's whole glob set.
-            var matchedProject = layer1Affected.FirstOrDefault(name => rule.Projects.Any(p => TriggerMap.ProjectNameMatches(p, name)));
+            var matchedProject = affectedProductionProjects.FirstOrDefault(name => rule.Projects.Any(p => TriggerMap.ProjectNameMatches(p, name)));
             if (matchedProject is not null)
             {
                 ApplyTargets(rule.Targets, map, testCauses, jobCauses, ref selectsAll, ref reason,
