@@ -550,6 +550,16 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             return;
         }
 
+        List<LaunchArgument>? launchProfileArgs = null;
+        if (runIndex > 0 &&
+            launchArgs[0].Executable &&
+            string.Equals(launchArgs[0].Value, "--", StringComparison.Ordinal))
+        {
+            launchProfileArgs = launchArgs.GetRange(0, runIndex);
+            launchArgs.RemoveRange(0, runIndex);
+            runIndex = 0;
+        }
+
         var argsToInsert = new List<string>();
         if (!string.IsNullOrEmpty(_distributedApplicationOptions.Configuration) &&
             !ContainsDotnetRunOption(launchArgs, "--configuration", "-c"))
@@ -563,7 +573,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             argsToInsert.Add("--no-launch-profile");
         }
 
-        if (argsToInsert.Count == 0)
+        if (argsToInsert.Count == 0 && launchProfileArgs is null)
         {
             return;
         }
@@ -572,7 +582,16 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         // instead of using Aspire's default project wrapper. Keep the SDK-shaped command, but
         // preserve the same AppHost configuration and launch-profile suppression that regular
         // process-launched project resources get.
-        launchArgs.InsertRange(runIndex + 1, argsToInsert.Select(argument => new LaunchArgument(argument, IsSensitive: false, Executable: true, Display: false, EffectiveArgumentIndex: null)));
+        if (argsToInsert.Count > 0)
+        {
+            launchArgs.InsertRange(runIndex + 1, argsToInsert.Select(argument => new LaunchArgument(argument, IsSensitive: false, Executable: true, Display: false, EffectiveArgumentIndex: null)));
+        }
+
+        if (launchProfileArgs is not null)
+        {
+            launchArgs.AddRange(launchProfileArgs);
+        }
+
         ReindexExecutableLaunchArgs(launchArgs, executableArgumentStartIndex);
     }
 

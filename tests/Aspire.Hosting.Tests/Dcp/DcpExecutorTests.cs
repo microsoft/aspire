@@ -3219,6 +3219,70 @@ public class DcpExecutorTests
     }
 
     [Fact]
+    public async Task ProjectWithNonProjectAnnotationAndExecutableAnnotation_LaunchProfileArgsStayAfterDotnetRunArgs()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var projectBuilder = builder.AddProject<TestProjectWithLaunchProfileCommandLineArgs>("proj", launchProfileName: "http");
+        var annotationToRemove = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
+        if (annotationToRemove is not null)
+        {
+            projectBuilder.Resource.Annotations.Remove(annotationToRemove);
+        }
+        projectBuilder
+            .WithAnnotation(new ExecutableAnnotation
+            {
+                Command = "dotnet",
+                WorkingDirectory = "/tmp/mauiapp"
+            })
+            .WithDebugSupport(mode => new ExecutableLaunchConfiguration("maui-ios-simulator") { Mode = mode }, "maui-ios-simulator")
+            .WithArgs("run", "-f", "net10.0-ios", "-p:_DeviceName=:v2:udid=E25BBE37-69BA-4720-B6FD-D54C97791E79");
+
+        var runSessionInfo = new RunSessionInfo
+        {
+            ProtocolsSupported = ["coreclr"],
+            SupportedLaunchConfigurations = ["project"]
+        };
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(runSessionInfo),
+            [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234"
+        };
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var distributedApplicationOptions = new DistributedApplicationOptions { AssemblyName = typeof(DcpExecutorTests).Assembly.FullName };
+        var expectedConfiguration = System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyConfigurationAttribute>(typeof(DcpExecutorTests).Assembly)?.Configuration;
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration, distributedApplicationOptions: distributedApplicationOptions);
+
+        await appExecutor.RunApplicationAsync();
+
+        var expectedArgs = new List<string> { "run" };
+        if (!string.IsNullOrEmpty(expectedConfiguration))
+        {
+            expectedArgs.AddRange(["--configuration", expectedConfiguration]);
+        }
+        expectedArgs.AddRange([
+            "--no-launch-profile",
+            "-f",
+            "net10.0-ios",
+            "-p:_DeviceName=:v2:udid=E25BBE37-69BA-4720-B6FD-D54C97791E79",
+            "--",
+            "--profile-arg",
+            "profile value"
+        ]);
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "proj");
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+        Assert.Equal(expectedArgs, exe.Spec.Args);
+    }
+
+    [Fact]
     public async Task ProjectWithNonProjectAnnotation_NoDebugSession_RunsInProcess()
     {
         // Guard: When there's no debug session (CLI scenario, no DEBUG_SESSION_PORT),
@@ -4822,6 +4886,24 @@ public class DcpExecutorTests
                     ["ASPNETCORE_ENVIRONMENT"] = "Development"
                 }
             };
+            return settings;
+        }
+    }
+
+    private sealed class TestProjectWithLaunchProfileCommandLineArgs : IProjectMetadata
+    {
+        public string ProjectPath => "TestProjectWithLaunchProfileCommandLineArgs";
+        public LaunchSettings LaunchSettings { get; } = CreateLaunchSettings();
+
+        private static LaunchSettings CreateLaunchSettings()
+        {
+            var settings = new LaunchSettings();
+            settings.Profiles["http"] = new LaunchProfile
+            {
+                CommandName = "Project",
+                CommandLineArgs = "--profile-arg \"profile value\""
+            };
+
             return settings;
         }
     }
