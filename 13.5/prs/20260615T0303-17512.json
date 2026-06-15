@@ -1,0 +1,9 @@
+{
+  "author": "alirezafzali",
+  "comment": "Bug fix: aspire update --self --non-interactive now auto-detects update channel from CLI identity without prompting",
+  "mergedAt": "2026-06-15T03:03:49Z",
+  "number": 17512,
+  "runDate": "2026-06-15T07:51:39Z",
+  "status": "included",
+  "title": "Fix non-interactive self-update channel selection"
+}

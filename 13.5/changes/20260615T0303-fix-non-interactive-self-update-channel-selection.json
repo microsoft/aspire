@@ -1,0 +1,21 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@alirezafzali"
+  ],
+  "description": "Running `aspire update --self --non-interactive` now correctly auto-detects the update channel from the CLI's current identity, fixing a failure when `--channel` is not specified.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-06-15T03:03:49Z",
+  "lastMergedAt": "2026-06-15T03:03:49Z",
+  "name": "Fix non-interactive self-update channel selection",
+  "owner": "JamesNK",
+  "prs": [
+    17512
+  ]
+}
