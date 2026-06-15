@@ -55,6 +55,13 @@ Aspire-Core.slnf
 .github/workflows/update-*.yml
 .github/workflows/auto-rerun-transient-ci-failures.*
 
+# GitHub Agentic Workflows (gh-aw): shared action locks (.github/aw/**), compiled
+# *.lock.yml workflows, and the agentics-maintenance workflows. The .md source files
+# are already covered by **.md above. None of these affect the CI build or test process.
+.github/aw/**
+.github/workflows/*.lock.yml
+.github/workflows/agentics-maintenance*.yml
+
 # Scripts not used on CI
 start-code.sh
 localhive.*

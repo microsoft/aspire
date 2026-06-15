@@ -5,20 +5,17 @@ using System.CommandLine;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Backchannel;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
-using Aspire.Cli.Telemetry;
-using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Commands;
 
 internal sealed class ExtensionInternalCommand : BaseCommand
 {
-    public ExtensionInternalCommand(IFeatures features, ICliUpdateNotifier updateNotifier, IProjectLocator projectLocator, CliExecutionContext executionContext, IInteractionService interactionService, AspireCliTelemetry telemetry) : base("extension", "Hidden command for extension integration", features, updateNotifier, executionContext, interactionService, telemetry)
+    public ExtensionInternalCommand(IProjectLocator projectLocator, CommonCommandServices services) : base("extension", "Hidden command for extension integration", services)
     {
         this.Hidden = true;
-        this.Subcommands.Add(new GetAppHostCandidatesCommand(features, updateNotifier, projectLocator, executionContext, interactionService, telemetry));
+        this.Subcommands.Add(new GetAppHostCandidatesCommand(projectLocator, services));
     }
 
     protected override Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -30,7 +27,7 @@ internal sealed class ExtensionInternalCommand : BaseCommand
     {
         private readonly IProjectLocator _projectLocator;
 
-        public GetAppHostCandidatesCommand(IFeatures features, ICliUpdateNotifier updateNotifier, IProjectLocator projectLocator, CliExecutionContext executionContext, IInteractionService interactionService, AspireCliTelemetry telemetry) : base("get-apphosts", "Get AppHosts in the specified directory", features, updateNotifier, executionContext, interactionService, telemetry)
+        public GetAppHostCandidatesCommand(IProjectLocator projectLocator, CommonCommandServices services) : base("get-apphosts", "Get AppHosts in the specified directory", services)
         {
             _projectLocator = projectLocator;
         }

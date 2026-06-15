@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+
 using Aspire.TestUtilities;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -456,6 +458,17 @@ public class MongoDbFunctionalTests(ITestOutputHelper testOutputHelper)
                         item => Assert.Contains("The Dark Knight", item.Name),
                         item => Assert.Contains("Schindler's List", item.Name)
                         );
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public Task MongoDB_WithPersistentLifetime_ReusesContainer()
+    {
+        return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
+            testOutputHelper,
+            builder => builder.AddMongoDB("resource").WithPersistentLifetime(),
+            "resource",
+            useTestContainerRegistry: true);
     }
 }
 

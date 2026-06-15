@@ -153,7 +153,6 @@ suite('Aspire package contribution surface E2E', function () {
             'aspire-vscode.publish',
             'aspire-vscode.do',
             'aspire-vscode.update',
-            'aspire-vscode.updateSelf',
             'aspire-vscode.openTerminal',
             'aspire-vscode.openLocalSettings',
             'aspire-vscode.openGlobalSettings',
@@ -164,6 +163,26 @@ suite('Aspire package contribution surface E2E', function () {
             await executeE2eControlCommand({ name: 'executeAspireCommand', commandId });
             await waitForCommandOutcome(commandId, 'canceled', 60000, before);
         }
+    });
+
+    test('routes update self even when the shared CLI availability path would cancel other commands', async () => {
+        await openAspireView();
+        await waitForRepositoryIdle();
+        await setCliUnavailableForE2E(true);
+        await setTerminalCommandExecutionSuppressedForE2E(true);
+
+        const beforeInvocation = getCommandInvocationCount('aspire-vscode.updateSelf');
+        const beforeTerminalCommand = getTerminalCommandCount();
+        await executeE2eControlCommand({ name: 'executeAspireCommand', commandId: 'aspire-vscode.updateSelf' });
+        await waitForCommandOutcome('aspire-vscode.updateSelf', 'success', 60000, beforeInvocation);
+
+        const terminalCommand = await waitForTerminalCommand(
+            event => event.executionSuppressed && event.subcommand === 'update --self',
+            'update self terminal command',
+            60000,
+            beforeTerminalCommand);
+
+        assert.strictEqual(terminalCommand.executionSuppressed, true);
     });
 
     test('routes package terminal and CodeLens commands without executing shell text', async () => {
@@ -183,9 +202,9 @@ suite('Aspire package contribution surface E2E', function () {
             { commandId: 'aspire-vscode.add', expectedSubcommand: 'add' },
             { commandId: 'aspire-vscode.update', expectedSubcommand: 'update' },
             { commandId: 'aspire-vscode.updateSelf', expectedSubcommand: 'update --self' },
-            { commandId: 'aspire-vscode.codeLensViewLogs', args: ['e2e-worker', appHostPath], expectedSubcommand: 'logs "e2e-worker"' },
+            { commandId: 'aspire-vscode.codeLensViewLogs', args: ['e2e-worker', appHostPath], expectedSubcommand: `logs ${quoteExpectedShellArg('e2e-worker')}` },
             { commandId: 'aspire-vscode.codeLensViewAppHostLogs', args: [appHostPath], expectedSubcommand: 'logs' },
-            { commandId: 'aspire-vscode.codeLensResourceAction', args: ['e2e-worker', 'restart', appHostPath], expectedSubcommand: 'resource "e2e-worker" "restart"' },
+            { commandId: 'aspire-vscode.codeLensResourceAction', args: ['e2e-worker', 'restart', appHostPath], expectedSubcommand: `resource ${quoteExpectedShellArg('e2e-worker')} ${quoteExpectedShellArg('restart')}` },
         ];
 
         for (const item of cases) {
@@ -395,6 +414,14 @@ function delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function quoteExpectedShellArg(arg: string): string {
+    if (process.platform === 'win32') {
+        return `"${arg.replace(/`/g, '``').replace(/"/g, '`"').replace(/\$/g, '`$')}"`;
+    }
+
+    return `'${arg.replace(/'/g, "'\"'\"'")}'`;
+}
+
 const expectedActivationEvents = [
     'onDebugResolve:aspire',
     'onDebugInitialConfigurations:aspire',
@@ -405,7 +432,11 @@ const expectedActivationEvents = [
     'onView:workbench.view.debug',
     'workspaceContains:**/apphost.cs',
     'workspaceContains:**/apphost.ts',
+    'workspaceContains:**/apphost.mts',
+    'workspaceContains:**/apphost.cts',
     'workspaceContains:**/apphost.js',
+    'workspaceContains:**/apphost.mjs',
+    'workspaceContains:**/apphost.cjs',
     'onCommand:aspire-vscode.installCliStable',
     'onCommand:aspire-vscode.installCliDaily',
     'onCommand:aspire-vscode.verifyCliInstalled',
@@ -429,6 +460,7 @@ const expectedCommandIds = [
     'aspire-vscode.deploy',
     'aspire-vscode.do',
     'aspire-vscode.executeResourceCommand',
+    'aspire-vscode.executeResourceCommandItem',
     'aspire-vscode.expandAll',
     'aspire-vscode.globalRefreshAppHosts',
     'aspire-vscode.init',
@@ -437,6 +469,7 @@ const expectedCommandIds = [
     'aspire-vscode.new',
     'aspire-vscode.openAppHostSource',
     'aspire-vscode.openDashboard',
+    'aspire-vscode.openDashboardToSide',
     'aspire-vscode.openGlobalSettings',
     'aspire-vscode.openInExternalBrowser',
     'aspire-vscode.openInIntegratedBrowser',
@@ -489,6 +522,7 @@ const expectedMenuLocations = [
 
 const expectedViewItemContextCommands = [
     'aspire-vscode.openDashboard',
+    'aspire-vscode.openDashboardToSide',
     'aspire-vscode.expandAll',
     'aspire-vscode.openAppHostSource',
     'aspire-vscode.runAppHost',
@@ -499,6 +533,7 @@ const expectedViewItemContextCommands = [
     'aspire-vscode.startResource',
     'aspire-vscode.restartResource',
     'aspire-vscode.executeResourceCommand',
+    'aspire-vscode.executeResourceCommandItem',
     'aspire-vscode.viewResourceLogs',
     'aspire-vscode.openInExternalBrowser',
     'aspire-vscode.openInIntegratedBrowser',

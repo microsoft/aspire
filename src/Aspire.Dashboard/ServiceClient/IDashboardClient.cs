@@ -25,6 +25,21 @@ public interface IDashboardClient : IAsyncDisposable
     bool IsEnabled { get; }
 
     /// <summary>
+    /// Gets the current connection state of the client to the resource service.
+    /// </summary>
+    DashboardConnectionState ConnectionState { get; }
+
+    /// <summary>
+    /// An event raised when the connection state changes. Subscribers receive the new state.
+    /// </summary>
+    event Action<DashboardConnectionState>? ConnectionStateChanged;
+
+    /// <summary>
+    /// Explicitly triggers a reconnection attempt to the resource service.
+    /// </summary>
+    Task ReconnectAsync();
+
+    /// <summary>
     /// Gets the application name advertised by the server.
     /// </summary>
     /// <remarks>

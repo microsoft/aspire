@@ -5,6 +5,7 @@ using System.Collections.Immutable;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.ServiceClient;
 using Aspire.DashboardService.Proto.V1;
 using Google.Protobuf.WellKnownTypes;
 
@@ -23,6 +24,11 @@ public class TestDashboardClient : IDashboardClient
     public bool IsEnabled { get; }
     public Task WhenConnected { get; }
     public string ApplicationName { get; } = "TestApp";
+    public DashboardConnectionState ConnectionState => DashboardConnectionState.Connected;
+#pragma warning disable CS0067 // Event is never used - required by interface
+    public event Action<DashboardConnectionState>? ConnectionStateChanged;
+#pragma warning restore CS0067
+    public Task ReconnectAsync() => Task.CompletedTask;
 
     public TestDashboardClient(
         bool? isEnabled = false,

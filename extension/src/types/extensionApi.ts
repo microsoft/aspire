@@ -49,6 +49,7 @@ export interface AspireResourceUrlState {
 export interface AspireResourceCommandState {
     displayName?: string | null;
     description: string | null;
+    state?: string | null;
     visibility?: string | null;
 }
 
@@ -148,6 +149,7 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'startResource'; appHostPath?: string; resourceName: string }
     | { name: 'restartResource'; appHostPath?: string; resourceName: string }
     | { name: 'executeResourceCommand'; appHostPath?: string; resourceName: string }
+    | { name: 'executeResourceCommandItem'; appHostPath?: string; resourceName: string; commandName: string }
     | { name: 'executeAspireCommand'; commandId: string; args?: readonly unknown[] }
     | { name: 'setSourceBreakpoint'; filePath: string; line: number; clearExisting?: boolean }
     | { name: 'clearBreakpoints' }

@@ -66,6 +66,7 @@ public class AgentMcpCommandTests(ITestOutputHelper outputHelper)
             services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
         }
 
+        // ServiceProvider lifetime is managed by McpTestContext.DisposeAsync, not this method.
         var serviceProvider = services.BuildServiceProvider();
         var agentMcpCommand = serviceProvider.GetRequiredService<AgentMcpCommand>();
         var rootCommand = serviceProvider.GetRequiredService<RootCommand>();

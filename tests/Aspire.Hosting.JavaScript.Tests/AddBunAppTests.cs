@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -299,4 +300,112 @@ public class AddBunAppTests
         // --use-openssl-ca flag, which Bun reads from NODE_OPTIONS for Node compatibility.
         Assert.Equal("--use-openssl-ca", envVars["NODE_OPTIONS"]);
     }
+
+#pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only
+
+    [Fact]
+    public void BunApp_WithVSCodeDebugging_AddsSupportsDebuggingAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var tempDir = new TestTempDirectory();
+
+        var bunApp = builder.AddBunApp("bunapp", tempDir.Path, "server.ts");
+
+        var annotation = bunApp.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
+        Assert.NotNull(annotation);
+        Assert.Equal("bun", annotation.LaunchConfigurationType);
+    }
+
+    [Fact]
+    public void BunApp_WithVSCodeDebugging_DoesNotAddAnnotationInPublishMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var tempDir = new TestTempDirectory();
+
+        var bunApp = builder.AddBunApp("bunapp", tempDir.Path, "server.ts");
+
+        var annotation = bunApp.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
+        Assert.Null(annotation);
+    }
+
+    [Fact]
+    public void BunApp_WithRunScript_AddsSupportsDebuggingAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var tempDir = new TestTempDirectory();
+
+        var bunApp = builder.AddBunApp("bunapp", tempDir.Path, "server.ts")
+            .WithRunScript("dev");
+
+        var annotation = bunApp.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
+        Assert.NotNull(annotation);
+        Assert.Equal("bun", annotation.LaunchConfigurationType);
+    }
+
+    [Fact]
+    public void BunApp_WithPackageJson_HasPackageManagerAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var tempDir = new TestTempDirectory();
+
+        // AddBunApp automatically calls WithBun() when a package.json exists.
+        File.WriteAllText(Path.Combine(tempDir.Path, "package.json"), "{}");
+
+        var bunApp = builder.AddBunApp("bunapp", tempDir.Path, "server.ts")
+            .WithRunScript("dev");
+
+        Assert.True(bunApp.Resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var pmAnnotation));
+        Assert.Equal("bun", pmAnnotation.ExecutableName);
+    }
+
+    [Fact]
+    public void BunApp_DirectFile_ProducesBunRuntimeExecutable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var tempDir = new TestTempDirectory();
+
+        var bunApp = builder.AddBunApp("bunapp", tempDir.Path, "server.ts");
+
+        var launchConfig = InvokeLaunchConfigurationAnnotator(bunApp.Resource);
+
+        Assert.Equal("bun", launchConfig.Type);
+        Assert.Equal("bun", launchConfig.RuntimeExecutable);
+        Assert.Equal("direct", launchConfig.LaunchMethod);
+        Assert.Equal(Path.GetFullPath("server.ts", tempDir.Path), launchConfig.ScriptPath);
+    }
+
+    [Fact]
+    public void BunApp_WithRunScriptAndPackageManager_ProducesBunRuntimeExecutable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var tempDir = new TestTempDirectory();
+
+        // AddBunApp automatically calls WithBun() when a package.json exists, which makes the run-script a
+        // package-manager invocation (bun run dev).
+        File.WriteAllText(Path.Combine(tempDir.Path, "package.json"), "{}");
+
+        var bunApp = builder.AddBunApp("bunapp", tempDir.Path, "server.ts")
+            .WithRunScript("dev");
+
+        var launchConfig = InvokeLaunchConfigurationAnnotator(bunApp.Resource);
+
+        Assert.Equal("bun", launchConfig.Type);
+        Assert.Equal("bun", launchConfig.RuntimeExecutable);
+        Assert.Equal("package-manager", launchConfig.LaunchMethod);
+    }
+
+    private static JavaScriptLaunchConfiguration InvokeLaunchConfigurationAnnotator(IResource resource)
+    {
+        Assert.True(resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
+
+        var exe = Executable.Create("test", "bun");
+        supportsDebugging.LaunchConfigurationAnnotator(exe, ExecutableLaunchMode.Debug);
+
+        Assert.True(exe.TryGetAnnotationAsObjectList<JavaScriptLaunchConfiguration>(
+            Executable.LaunchConfigurationsAnnotation,
+            out var launchConfigs));
+        return Assert.Single(launchConfigs);
+    }
+
+#pragma warning restore ASPIREEXTENSION001 // Type is for evaluation purposes only
 }

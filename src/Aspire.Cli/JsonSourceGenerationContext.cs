@@ -3,17 +3,17 @@
 
 using System.Text.Encodings.Web;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Caching;
-using Aspire.Cli.Projects;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Documentation.ApiDocs;
 using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.Mcp.Tools;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Utils.EnvironmentChecker;
 
 namespace Aspire.Cli;

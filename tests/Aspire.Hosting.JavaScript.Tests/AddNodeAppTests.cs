@@ -5,6 +5,7 @@
 
 using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -587,6 +588,53 @@ public class AddNodeAppTests
         return (IResourceBuilder<TDestination>)s_polyglotWithReferenceMethod
             .MakeGenericMethod(typeof(TDestination))
             .Invoke(null, [builder, source, connectionName, optional, name])!;
+    }
+
+    [Fact]
+    public void NodeApp_DirectFile_ProducesNodeRuntimeExecutable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var tempDir = new TestTempDirectory();
+
+        var nodeApp = builder.AddNodeApp("nodeapp", tempDir.Path, "app.js");
+
+        var launchConfig = InvokeLaunchConfigurationAnnotator(nodeApp.Resource);
+
+        Assert.Equal("node", launchConfig.Type);
+        Assert.Equal("node", launchConfig.RuntimeExecutable);
+        Assert.Equal("direct", launchConfig.LaunchMethod);
+        Assert.Equal(Path.GetFullPath("app.js", tempDir.Path), launchConfig.ScriptPath);
+    }
+
+    [Fact]
+    public void ViteApp_DevServer_ProducesPackageManagerRuntimeExecutable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var tempDir = new TestTempDirectory();
+
+        var viteApp = builder.AddViteApp("viteapp", tempDir.Path);
+
+        var launchConfig = InvokeLaunchConfigurationAnnotator(viteApp.Resource);
+
+        // Vite/Next.js/AddJavaScriptApp always debug through the Node adapter via a package-manager dev
+        // server. With no package.json present, the runtime executable falls back to "npm".
+        Assert.Equal("node", launchConfig.Type);
+        Assert.Equal("npm", launchConfig.RuntimeExecutable);
+        Assert.Equal("package-manager", launchConfig.LaunchMethod);
+        Assert.Equal(string.Empty, launchConfig.ScriptPath);
+    }
+
+    private static JavaScriptLaunchConfiguration InvokeLaunchConfigurationAnnotator(IResource resource)
+    {
+        Assert.True(resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
+
+        var exe = Executable.Create("test", "node");
+        supportsDebugging.LaunchConfigurationAnnotator(exe, ExecutableLaunchMode.Debug);
+
+        Assert.True(exe.TryGetAnnotationAsObjectList<JavaScriptLaunchConfiguration>(
+            Executable.LaunchConfigurationsAnnotation,
+            out var launchConfigs));
+        return Assert.Single(launchConfigs);
     }
 
 #pragma warning restore ASPIREEXTENSION001 // Type is for evaluation purposes only

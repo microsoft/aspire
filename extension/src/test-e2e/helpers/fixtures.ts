@@ -1,15 +1,14 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { AspireExtensionE2EControlCommand, AspireExtensionE2EControlStatus } from '../../types/extensionApi';
-import { applyE2eControl, findRunningAppHostByPath, isSamePath, readStateFile, waitForExtensionState, waitForNoRunningAppHost } from './assertions';
+import { applyE2eControl, isSamePath, readStateFile, waitForExtensionState, waitForNoRunningAppHost } from './assertions';
 import { getCliPath, getPrimaryAppHostProjectPath, getRepoRoot, getWorkspaceRoot } from './paths';
-import { ProcessError, runProcess, terminateProcessTree } from './process';
+import { runProcess, terminateProcessTree } from './process';
 
 const csharpFileHeader = `// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 `;
-let atomicWriteSequence = 0;
 
 export function getWorkspaceSettingsPath(): string {
     return path.join(getWorkspaceRoot(), '.vscode', 'settings.json');
@@ -34,7 +33,7 @@ export async function writeWorkspaceCliPath(cliPath: string): Promise<void> {
     const settingsPath = getWorkspaceSettingsPath();
     const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8')) as Record<string, unknown>;
     settings['aspire.aspireCliExecutablePath'] = cliPath;
-    writeFileAtomically(settingsPath, JSON.stringify(settings, undefined, 2));
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, undefined, 2));
 
     await applyE2eControl({ aspireCliExecutablePath: cliPath });
 }
@@ -69,17 +68,16 @@ export async function executeE2eControlCommand(command: AspireExtensionE2EContro
 
 export async function runE2eTeardown(cleanups: ReadonlyArray<() => unknown | Promise<unknown>>, failureMessage: string): Promise<void> {
     const failures: unknown[] = [];
-    for (let i = 0; i < cleanups.length; i++) {
-        const cleanup = cleanups[i];
+    for (const cleanup of cleanups) {
         try {
             await cleanup();
         } catch (error) {
-            failures.push(new Error(`Cleanup ${i + 1} failed: ${formatErrorForDiagnostics(error)}`, { cause: error }));
+            failures.push(error);
         }
     }
 
     if (failures.length > 0) {
-        throw new AggregateError(failures, `${failureMessage}\n\n${failures.map(formatErrorForDiagnostics).join('\n\n')}`);
+        throw new AggregateError(failures, failureMessage);
     }
 }
 
@@ -115,7 +113,6 @@ export async function addIntegrationPackageToAppHost(integration: string, appHos
         integration,
         '--apphost',
         appHostPath,
-        ...getPackageVersionArgs(),
         '--non-interactive',
         '--nologo',
     ], {
@@ -142,6 +139,32 @@ export function removeGeneratedProject(projectName: string): void {
     removePath(getGeneratedProjectRoot(projectName), { recursive: true, force: true });
 }
 
+export function removePrimaryAppHostFixture(): void {
+    removePath(path.join(getWorkspaceRoot(), 'AspireE2E.AppHost'), { recursive: true, force: true });
+    removePath(path.join(getWorkspaceRoot(), 'AspireE2E.Worker'), { recursive: true, force: true });
+    removeWorkspaceAppHostConfig();
+}
+
+export function writeNoCapabilitiesCliWrapper(name = 'aspire-no-capabilities'): string {
+    return writeCliWrapper(name, {
+        configInfoJson: {
+            localSettingsPath: path.join(getWorkspaceRoot(), 'aspire.config.json'),
+            globalSettingsPath: path.join(getWorkspaceRoot(), 'global-aspire.config.json'),
+            availableFeatures: [],
+            localSettingsSchema: { properties: [] },
+            globalSettingsSchema: { properties: [] },
+            capabilities: [],
+        },
+    });
+}
+
+export function writeConfigInfoUnsupportedCliWrapper(name = 'aspire-no-config-info'): string {
+    return writeCliWrapper(name, {
+        configInfoExitCode: 42,
+        configInfoStderr: 'config info is not available in this simulated old CLI',
+    });
+}
+
 export async function restoreWorkspaceCliPath(): Promise<void> {
     await writeWorkspaceCliPath(getCliPath());
 }
@@ -151,11 +174,11 @@ export function removeWorkspaceAppHostConfig(): void {
 }
 
 export function writeWorkspaceAppHostConfig(value: unknown): void {
-    writeFileAtomically(getWorkspaceAppHostConfigPath(), JSON.stringify(value, undefined, 2));
+    fs.writeFileSync(getWorkspaceAppHostConfigPath(), JSON.stringify(value, undefined, 2));
 }
 
 export function writeWorkspaceAppHostConfigRaw(value: string): void {
-    writeFileAtomically(getWorkspaceAppHostConfigPath(), value);
+    fs.writeFileSync(getWorkspaceAppHostConfigPath(), value);
 }
 
 export function restoreWorkspaceAppHostConfig(): void {
@@ -179,12 +202,13 @@ export function writeWorkspaceSetting(key: string, value: unknown): void {
     const settingsPath = getWorkspaceSettingsPath();
     const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8')) as Record<string, unknown>;
     settings[key] = value;
-    writeFileAtomically(settingsPath, JSON.stringify(settings, undefined, 2));
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, undefined, 2));
 }
 
 export function writeLegacyAspireSettings(appHostPath = path.join('..', 'AspireE2E.AppHost', 'AspireE2E.AppHost.csproj')): void {
     const settingsPath = getLegacyAspireSettingsPath();
-    writeFileAtomically(settingsPath, JSON.stringify({ appHostPath }, undefined, 2));
+    fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+    fs.writeFileSync(settingsPath, JSON.stringify({ appHostPath }, undefined, 2));
 }
 
 export function removeLegacyAspireSettings(): void {
@@ -224,7 +248,6 @@ export async function stopPrimaryAppHostIfRunning(): Promise<void> {
 }
 
 export async function stopAppHostIfRunning(appHostPath: string): Promise<void> {
-    const appHostBeforeStop = findRunningAppHostByPathInState(appHostPath) ?? await findRunningAppHostByPathFromCli(appHostPath);
     try {
         await runProcess(getCliPath(), ['stop', '--non-interactive', '--apphost', appHostPath], {
             cwd: getWorkspaceRoot(),
@@ -236,28 +259,17 @@ export async function stopAppHostIfRunning(appHostPath: string): Promise<void> {
             throw error;
         }
 
-        const stopErrorText = error.message;
-        if (/not running|No running AppHost|No AppHost/i.test(stopErrorText)) {
+        if (/not running|No running AppHost|No AppHost/i.test(error.message)) {
             return;
         }
 
-        if (/timed out after \d+ms/i.test(stopErrorText)) {
-            await forceTerminateRunningAppHost(appHostPath, appHostBeforeStop?.appHostPid);
-            try {
-                await waitForNoRunningAppHost(appHostPath, 30000);
-                return;
-            }
-            catch {
-                throw error;
-            }
-        }
-
-        if (/Failed to stop/i.test(stopErrorText)) {
+        if (/timed out|Failed to stop/i.test(error.message)) {
             try {
                 // Debug-session shutdown can race with the CLI's fallback stop command. If the CLI
-                // had to force-terminate the AppHost it exits non-zero, but teardown should only fail
-                // when the extension still observes a running or launching AppHost afterward.
-                await waitForNoRunningAppHost(appHostPath, 30000);
+                // had to force-terminate the AppHost (or the stop process timed out), teardown should
+                // only fail when the extension still observes this specific AppHost afterward.
+                terminateRunningAppHostFromState(appHostPath);
+                await waitForNoRunningAppHost(30000, appHostPath);
                 return;
             }
             catch {
@@ -269,49 +281,15 @@ export async function stopAppHostIfRunning(appHostPath: string): Promise<void> {
     }
 }
 
-async function forceTerminateRunningAppHost(appHostPath: string, fallbackPid?: number): Promise<void> {
-    const runningAppHost = findRunningAppHostByPathInState(appHostPath);
-    const appHostPid = runningAppHost?.appHostPid ?? fallbackPid;
-    if (appHostPid === undefined) {
-        return;
+function terminateRunningAppHostFromState(appHostPath: string): void {
+    const state = readStateFile().state;
+    const runningAppHost = state.workspaceAppHost && isSamePath(state.workspaceAppHost.appHostPath, appHostPath)
+        ? state.workspaceAppHost
+        : state.appHosts.find(candidate => isSamePath(candidate.appHostPath, appHostPath));
+
+    if (runningAppHost) {
+        terminateProcessTree(runningAppHost.appHostPid, 'SIGTERM');
     }
-
-    terminateProcessTree(appHostPid, 'SIGTERM');
-    await delay(5000);
-    terminateProcessTree(appHostPid, 'SIGKILL');
-}
-
-function findRunningAppHostByPathInState(appHostPath: string): RunningAppHostProcess | undefined {
-    return findRunningAppHostByPath(readStateFile().state, appHostPath);
-}
-
-async function findRunningAppHostByPathFromCli(appHostPath: string): Promise<RunningAppHostProcess | undefined> {
-    try {
-        const result = await runProcess(getCliPath(), ['ps', '--format', 'json'], {
-            cwd: getWorkspaceRoot(),
-            timeoutMs: 30000,
-            rejectOnNonZeroExit: false,
-        });
-        if (result.exitCode !== 0) {
-            return undefined;
-        }
-
-        const parsed = JSON.parse(result.stdout) as unknown;
-        const appHosts = Array.isArray(parsed) ? parsed : [parsed];
-        return appHosts
-            .filter(isRunningAppHostProcess)
-            .find(appHost => isSamePath(appHost.appHostPath, appHostPath));
-    }
-    catch {
-        return undefined;
-    }
-}
-
-function isRunningAppHostProcess(value: unknown): value is RunningAppHostProcess {
-    return typeof value === 'object'
-        && value !== null
-        && typeof (value as RunningAppHostProcess).appHostPath === 'string'
-        && typeof (value as RunningAppHostProcess).appHostPid === 'number';
 }
 
 function getAppHostSdkVersion(): string {
@@ -342,6 +320,61 @@ function getWorkspaceAppHostConfigPath(): string {
 
 function getLegacyAspireSettingsPath(): string {
     return path.join(getWorkspaceRoot(), '.aspire', 'settings.json');
+}
+
+function writeCliWrapper(
+    name: string,
+    options: { configInfoJson?: unknown; configInfoExitCode?: number; configInfoStderr?: string },
+): string {
+    const wrapperDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers');
+    fs.mkdirSync(wrapperDirectory, { recursive: true });
+
+    const scriptPath = path.join(wrapperDirectory, `${name}.js`);
+    fs.writeFileSync(scriptPath, `#!/usr/bin/env node
+const { spawnSync } = require('child_process');
+const realCli = ${JSON.stringify(getCliPath())};
+const args = process.argv.slice(2);
+
+if (args.includes('--include-disabled-commands')) {
+  console.error('simulated old CLI does not support --include-disabled-commands');
+  process.exit(123);
+}
+
+if (args.length === 3 && args[0] === 'config' && args[1] === 'info' && args[2] === '--json') {
+${options.configInfoJson === undefined
+        ? `  console.error(${JSON.stringify(options.configInfoStderr ?? 'config info is not available')});
+  process.exit(${options.configInfoExitCode ?? 1});`
+        : `  console.log(${JSON.stringify(JSON.stringify(options.configInfoJson))});
+  process.exit(0);`}
+}
+
+const result = spawnSync(realCli, args, {
+  cwd: process.cwd(),
+  env: process.env,
+  stdio: 'inherit',
+  shell: false,
+});
+
+if (result.error) {
+  console.error(result.error.stack || result.error.message);
+  process.exit(1);
+}
+
+process.exit(result.status ?? (result.signal ? 1 : 0));
+`);
+    fs.chmodSync(scriptPath, 0o755);
+
+    if (process.platform === 'win32') {
+        const wrapperPath = path.join(wrapperDirectory, `${name}.cmd`);
+        fs.writeFileSync(wrapperPath, `@echo off\r\n"${process.execPath}" "${scriptPath}" %*\r\n`);
+        return wrapperPath;
+    }
+
+    const wrapperPath = path.join(wrapperDirectory, name);
+    fs.writeFileSync(wrapperPath, `#!/usr/bin/env sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(scriptPath)} "$@"\n`);
+    fs.chmodSync(wrapperPath, 0o755);
+
+    return wrapperPath;
 }
 
 function getPackageSourceArgs(): string[] {
@@ -403,65 +436,10 @@ function delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function formatErrorForDiagnostics(error: unknown): string {
-    if (error instanceof Error) {
-        return error.stack ?? error.message;
-    }
-
-    return String(error);
-}
-
 function removePath(targetPath: string, options: fs.RmOptions): void {
     fs.rmSync(targetPath, {
         maxRetries: process.platform === 'win32' ? 20 : 0,
         retryDelay: 250,
         ...options,
     });
-}
-
-interface RunningAppHostProcess {
-    readonly appHostPath: string;
-    readonly appHostPid: number;
-}
-
-function writeFileAtomically(filePath: string, content: string): void {
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    const temporaryPath = `${filePath}.${process.pid}.${atomicWriteSequence++}.tmp`;
-    fs.writeFileSync(temporaryPath, content);
-    try {
-        renameFileWithRetry(temporaryPath, filePath);
-    }
-    finally {
-        fs.rmSync(temporaryPath, { force: true });
-    }
-}
-
-function renameFileWithRetry(sourcePath: string, destinationPath: string): void {
-    const maxAttempts = process.platform === 'win32' ? 10 : 1;
-    for (let attempt = 1; ; attempt++) {
-        try {
-            fs.renameSync(sourcePath, destinationPath);
-            return;
-        }
-        catch (error) {
-            if (attempt >= maxAttempts || !isRetryableRenameError(error)) {
-                throw error;
-            }
-
-            sleepSynchronously(25);
-        }
-    }
-}
-
-function isRetryableRenameError(error: unknown): boolean {
-    if (process.platform !== 'win32' || !error || typeof error !== 'object' || !('code' in error)) {
-        return false;
-    }
-
-    return error.code === 'EPERM' || error.code === 'EACCES' || error.code === 'EEXIST';
-}
-
-function sleepSynchronously(milliseconds: number): void {
-    const buffer = new SharedArrayBuffer(4);
-    Atomics.wait(new Int32Array(buffer), 0, 0, milliseconds);
 }

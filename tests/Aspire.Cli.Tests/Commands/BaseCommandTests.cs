@@ -333,4 +333,94 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
         var logMessage = Assert.Single(testInteractionService.DisplayedMessages, m => m.Message == expectedLogMessage);
         Assert.Equal(ConsoleOutput.Error, logMessage.ConsoleOverride);
     }
+
+    [Fact]
+    public async Task BaseCommand_OnCancellation_DisplaysStoppingMessageAfterDelay()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var testInteractionService = new TestInteractionService();
+        var handlerEnteredTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var projectLocator = new TestProjectLocator
+        {
+            // Block inside the handler until cancellation, then wait 500ms before throwing
+            // so the 200ms stopping-message timer fires.
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = async (_, _, _, ct) =>
+            {
+                handlerEnteredTcs.SetResult();
+                try
+                {
+                    await AsyncTestHelpers.WaitForCancellationAsync(ct);
+                }
+                catch (OperationCanceledException)
+                {
+                    // Simulate slow cleanup that takes longer than 200ms
+                    await Task.Delay(500, CancellationToken.None);
+                    throw;
+                }
+
+                return new AppHostProjectSearchResult(null, []);
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("run");
+
+        using var cts = new CancellationTokenSource();
+        var invokeTask = result.InvokeAsync(cancellationToken: cts.Token);
+
+        // Wait for the handler to start, then cancel
+        await handlerEnteredTcs.Task.DefaultTimeout();
+        await cts.CancelAsync();
+
+        await invokeTask.DefaultTimeout();
+
+        // The stopping message should have been shown exactly once (by the 200ms timer),
+        // and not duplicated by the normal cancellation result path.
+        Assert.Single(testInteractionService.DisplayedCancellations);
+    }
+
+    [Fact]
+    public async Task BaseCommand_OnCancellation_DoesNotDisplayStoppingMessageIfHandlerCompletesQuickly()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var testInteractionService = new TestInteractionService();
+        var projectLocator = new TestProjectLocator
+        {
+            // Throw OperationCanceledException immediately on cancellation (no delay).
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = async (_, _, _, ct) =>
+            {
+                await AsyncTestHelpers.WaitForCancellationAsync(ct);
+                return new AppHostProjectSearchResult(null, []);
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("run");
+
+        using var cts = new CancellationTokenSource();
+        // Cancel immediately — handler will throw OperationCanceledException right away
+        cts.Cancel();
+
+        var exitCode = await result.InvokeAsync(cancellationToken: cts.Token).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        // The cancellation message should still be displayed (from the normal result path)
+        // since the handler completed before the 200ms timer.
+        Assert.Single(testInteractionService.DisplayedCancellations);
+    }
 }

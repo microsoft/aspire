@@ -212,11 +212,11 @@ internal static class TypeScriptAppHostToolchainResolver
                 Command = "bun",
                 Args = ["run", "{appHostFile}"]
             },
-                TypeScriptAppHostToolchain.Yarn => new CommandSpec
-                {
-                    Command = "yarn",
-                    Args = ["run", "tsx", "--tsconfig", tsConfigFileName, "{appHostFile}"]
-                },
+            TypeScriptAppHostToolchain.Yarn => new CommandSpec
+            {
+                Command = "yarn",
+                Args = ["run", "tsx", "--tsconfig", tsConfigFileName, "{appHostFile}"]
+            },
             TypeScriptAppHostToolchain.Pnpm => new CommandSpec
             {
                 Command = "pnpm",

@@ -183,4 +183,50 @@
   <data name="ConsoleLogsNoWrapLogs" xml:space="preserve">
     <value>Don't wrap log lines</value>
   </data>
+  <data name="TerminalToolbarDecreaseFontSize" xml:space="preserve">
+    <value>Decrease font size</value>
+  </data>
+  <data name="TerminalToolbarFontSize" xml:space="preserve">
+    <value>Terminal font size</value>
+  </data>
+  <data name="TerminalToolbarIncreaseFontSize" xml:space="preserve">
+    <value>Increase font size</value>
+  </data>
+  <data name="TerminalToolbarGridSize" xml:space="preserve">
+    <value>Terminal grid size</value>
+  </data>
+  <data name="TerminalToolbarGridSizeAuto" xml:space="preserve">
+    <value>Auto</value>
+  </data>
+  <data name="TerminalToolbarCurrentGrid" xml:space="preserve">
+    <value>Current terminal grid</value>
+  </data>
+  <data name="TerminalToolbarPrimaryLabel" xml:space="preserve">
+    <value>Primary</value>
+  </data>
+  <data name="TerminalToolbarConnectingLabel" xml:space="preserve">
+    <value>Connecting…</value>
+  </data>
+  <data name="TerminalToolbarTakeControlLabel" xml:space="preserve">
+    <value>Take control</value>
+  </data>
+  <data name="TerminalToolbarPrimaryTitle" xml:space="preserve">
+    <value>This tab owns primary input on the terminal session.</value>
+  </data>
+  <data name="TerminalToolbarNoPrimaryTitle" xml:space="preserve">
+    <value>No client currently owns primary input. Click to take it.</value>
+  </data>
+  <data name="TerminalToolbarViewerTitle" xml:space="preserve">
+    <value>Another client owns primary input. Click to take control.</value>
+  </data>
+  <data name="TerminalToolbarConnectingTitle" xml:space="preserve">
+    <value>Connecting to the terminal session…</value>
+  </data>
+  <data name="TerminalHeader" xml:space="preserve">
+    <value>Terminal</value>
+  </data>
+  <data name="TerminalPageTitle" xml:space="preserve">
+    <value>{0} terminal</value>
+    <comment>{0} is an application name</comment>
+  </data>
 </root>

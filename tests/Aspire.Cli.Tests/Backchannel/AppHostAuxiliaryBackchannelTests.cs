@@ -45,6 +45,39 @@ public class AppHostAuxiliaryBackchannelTests
         Assert.Contains(AuxiliaryBackchannelCapabilities.V3, server.Target.WatchResourcesRequest.ClientCapabilities);
     }
 
+    [Fact]
+    public async Task GetTerminalInfoAsync_WhenTerminalsCapabilityMissing_ReturnsUnavailableWithoutCallingRpc()
+    {
+        // The server below advertises only [V1, V2] — no Terminals_V1. The
+        // TestAppHostRpcTarget also deliberately exposes no GetTerminalInfoAsync
+        // method, so if the production capability gate is ever removed the call
+        // would route to JsonRpc and fail with RemoteMethodNotFoundException —
+        // i.e. this test would fail loudly the right way.
+        using var server = TestAppHostBackchannelServer.Start();
+        using var backchannel = await server.ConnectAsync().DefaultTimeout();
+
+        var response = await backchannel.GetTerminalInfoAsync("frontend").DefaultTimeout();
+
+        Assert.False(response.IsAvailable);
+        Assert.Null(response.Replicas);
+    }
+
+    [Fact]
+    public async Task ListTerminalsAsync_WhenTerminalsCapabilityMissing_ReturnsEmptyWithoutCallingRpc()
+    {
+        // See GetTerminalInfoAsync_WhenTerminalsCapabilityMissing_*: the server
+        // exposes no ListTerminalsAsync handler, so reaching the RPC would
+        // throw RemoteMethodNotFoundException. The capability gate must
+        // short-circuit before that happens.
+        using var server = TestAppHostBackchannelServer.Start();
+        using var backchannel = await server.ConnectAsync().DefaultTimeout();
+
+        var response = await backchannel.ListTerminalsAsync().DefaultTimeout();
+
+        Assert.NotNull(response.Terminals);
+        Assert.Empty(response.Terminals);
+    }
+
     private sealed class TestAppHostBackchannelServer : IDisposable
     {
         private readonly TcpListener _listener;

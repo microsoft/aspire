@@ -47,13 +47,13 @@ suite('configInfoProvider tests', () => {
             capabilities: ['pipelines'],
         }));
 
-        assert.strictEqual(configInfo.LocalSettingsPath, '/workspace/aspire.config.json');
-        assert.strictEqual(configInfo.GlobalSettingsPath, '/home/user/.aspire/aspire.config.json');
-        assert.strictEqual(configInfo.AvailableFeatures[0].Name, 'pipelines');
-        assert.strictEqual(configInfo.AvailableFeatures[0].DefaultValue, true);
-        assert.strictEqual(configInfo.LocalSettingsSchema.Properties[0].Name, 'appHost');
-        assert.strictEqual(configInfo.LocalSettingsSchema.Properties[0].SubProperties?.[0].Name, 'path');
-        assert.deepStrictEqual(configInfo.Capabilities, ['pipelines']);
+        assert.strictEqual(configInfo.localSettingsPath, '/workspace/aspire.config.json');
+        assert.strictEqual(configInfo.globalSettingsPath, '/home/user/.aspire/aspire.config.json');
+        assert.strictEqual(configInfo.availableFeatures[0].name, 'pipelines');
+        assert.strictEqual(configInfo.availableFeatures[0].defaultValue, true);
+        assert.strictEqual(configInfo.localSettingsSchema.properties[0].name, 'appHost');
+        assert.strictEqual(configInfo.localSettingsSchema.properties[0].subProperties?.[0].name, 'path');
+        assert.deepStrictEqual(configInfo.capabilities, ['pipelines']);
     });
 
     test('parseConfigInfoOutput accepts legacy Pascal-case CLI JSON', () => {
@@ -84,11 +84,11 @@ suite('configInfoProvider tests', () => {
             Capabilities: ['pipelines'],
         }));
 
-        assert.strictEqual(configInfo.LocalSettingsPath, '/workspace/aspire.config.json');
-        assert.strictEqual(configInfo.GlobalSettingsPath, '/home/user/.aspire/aspire.config.json');
-        assert.strictEqual(configInfo.AvailableFeatures[0].Description, 'Pipeline support');
-        assert.strictEqual(configInfo.LocalSettingsSchema.Properties[0].AdditionalPropertiesType, 'string');
-        assert.deepStrictEqual(configInfo.Capabilities, ['pipelines']);
+        assert.strictEqual(configInfo.localSettingsPath, '/workspace/aspire.config.json');
+        assert.strictEqual(configInfo.globalSettingsPath, '/home/user/.aspire/aspire.config.json');
+        assert.strictEqual(configInfo.availableFeatures[0].description, 'Pipeline support');
+        assert.strictEqual(configInfo.localSettingsSchema.properties[0].additionalPropertiesType, 'string');
+        assert.deepStrictEqual(configInfo.capabilities, ['pipelines']);
     });
 
     test('getConfigInfo runs in the workspace folder when one is open', async () => {
