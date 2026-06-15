@@ -64,6 +64,12 @@
     <trans-unit id="aspire-vscode.strings.aspireTerminalName">
       <source xml:lang="en">Aspire terminal</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.terminalCommandArgumentControlCharacters">
+      <source xml:lang="en">Aspire terminal command arguments cannot contain control characters.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.terminalCommandUnsafeLiteral">
+      <source xml:lang="en">Aspire terminal command syntax can only contain command names and flags.</source>
+    </trans-unit>
     <trans-unit id="extension.debug.defaultConfiguration.name">
       <source xml:lang="en">Aspire: Launch default AppHost</source>
     </trans-unit>
@@ -289,12 +295,6 @@
     <trans-unit id="walkthrough.getStarted.title">
       <source xml:lang="en">Get started with Aspire</source>
     </trans-unit>
-    <trans-unit id="aspire-vscode.strings.goLabel">
-      <source xml:lang="en">Go</source>
-    </trans-unit>
-    <trans-unit id="aspire-vscode.strings.goDisplayName">
-      <source xml:lang="en">Go: {0}</source>
-    </trans-unit>
     <trans-unit id="configuration.aspire.enableDebugConfigEnvironmentLogging">
       <source xml:lang="en">Include environment variables when logging debug session configurations. This can help diagnose environment-related issues but may expose sensitive information in logs.</source>
     </trans-unit>
@@ -367,6 +367,9 @@
     <trans-unit id="views.appHosts.welcome">
       <source xml:lang="en">No Aspire AppHosts detected in this workspace.&#10;[Refresh](command:aspire-vscode.refreshAppHosts)</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.dashboardUrlNotFound">
+      <source xml:lang="en">No Aspire Dashboard URL is available. Start an AppHost and try again.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.noCsharpBuildTask">
       <source xml:lang="en">No C# Dev Kit build task found, defaulting to dotnet CLI. Maybe the workspace hasn&apos;t finished loading?</source>
     </trans-unit>
@@ -408,6 +411,9 @@
     </trans-unit>
     <trans-unit id="command.openDashboard">
       <source xml:lang="en">Open Aspire Dashboard</source>
+    </trans-unit>
+    <trans-unit id="command.openDashboardToSide">
+      <source xml:lang="en">Open Aspire Dashboard to the Side</source>
     </trans-unit>
     <trans-unit id="command.openTerminal">
       <source xml:lang="en">Open Aspire terminal</source>
@@ -568,6 +574,9 @@
     <trans-unit id="walkthrough.getStarted.installCli.description">
       <source xml:lang="en">The Aspire CLI creates, runs, and manages your applications. Install it using the commands in the panel, then verify your installation.&#10;&#10;[Verify installation](command:aspire-vscode.verifyCliInstalled)</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.dashboardUrlUnsupported">
+      <source xml:lang="en">The Aspire Dashboard URL must use http or https.</source>
+    </trans-unit>
     <trans-unit id="walkthrough.getStarted.dashboard.description">
       <source xml:lang="en">The Aspire Dashboard shows your resources, endpoints, logs, traces, and metrics — all in one place.&#10;&#10;[Open dashboard](command:aspire-vscode.openDashboard)</source>
     </trans-unit>
@@ -612,6 +621,9 @@
     </trans-unit>
     <trans-unit id="configuration.aspire.dashboardBrowser.openExternalBrowser">
       <source xml:lang="en">Use the system default browser (cannot auto-close).</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.parameterValueMissing">
+      <source xml:lang="en">Value missing</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.resourceCommandMaxLength">
       <source xml:lang="en">Value must be {0} characters or fewer.</source>

@@ -515,6 +515,90 @@ public class ConsoleInteractionServiceTests
         Assert.Contains("9.0.0-preview.1 [rc]", outputString);
     }
 
+    private static (ConsoleInteractionService InteractionService, StringBuilder Output) CreateInteractionServiceWithOutputCapture()
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output))
+        });
+
+        // Use a wide profile so assertions on full message text aren't broken by line wrapping.
+        console.Profile.Width = 512;
+
+        return (CreateInteractionService(console), output);
+    }
+
+    [Fact]
+    public void DisplayIncompatibleVersionError_AppHostOlderThanCli_SuggestsUpdatingAppHost()
+    {
+        // Arrange
+        var (interactionService, output) = CreateInteractionServiceWithOutputCapture();
+        var ex = new AppHostIncompatibleException("Incompatible", "baseline.v2");
+
+        // Act - hosting version is older than any CLI version.
+        var exitCode = interactionService.DisplayIncompatibleVersionError(ex, "0.1.0");
+
+        // Assert
+        Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode);
+        var outputString = output.ToString();
+        Assert.Contains(InteractionServiceStrings.AppHostNotCompatibleUpdateAppHost, outputString);
+        Assert.Contains("aspire update", outputString);
+    }
+
+    [Fact]
+    public void DisplayIncompatibleVersionError_CliOlderThanAppHost_SuggestsUpdatingCli()
+    {
+        // Arrange
+        var (interactionService, output) = CreateInteractionServiceWithOutputCapture();
+        var ex = new AppHostIncompatibleException("Incompatible", "baseline.v2");
+
+        // Act - hosting version is newer than any CLI version.
+        var exitCode = interactionService.DisplayIncompatibleVersionError(ex, "999.0.0");
+
+        // Assert
+        Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode);
+        var outputString = output.ToString();
+        Assert.Contains(InteractionServiceStrings.AppHostNotCompatibleUpdateCli, outputString);
+        Assert.Contains("To update, run:", outputString);
+    }
+
+    [Fact]
+    public void DisplayIncompatibleVersionError_SameVersion_ShowsGenericMessageWithoutUpdateCommand()
+    {
+        // Arrange
+        var (interactionService, output) = CreateInteractionServiceWithOutputCapture();
+        var ex = new AppHostIncompatibleException("Incompatible", "baseline.v2");
+
+        // Act - same version on both sides (incompatible for another reason, e.g. a capability).
+        var exitCode = interactionService.DisplayIncompatibleVersionError(ex, VersionHelper.GetDefaultTemplateVersion());
+
+        // Assert
+        Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode);
+        var outputString = output.ToString();
+        Assert.Contains(InteractionServiceStrings.AppHostNotCompatibleConsiderUpgrading, outputString);
+        Assert.DoesNotContain("To update, run:", outputString);
+    }
+
+    [Fact]
+    public void DisplayIncompatibleVersionError_UnparseableVersion_ShowsGenericMessage()
+    {
+        // Arrange
+        var (interactionService, output) = CreateInteractionServiceWithOutputCapture();
+        var ex = new AppHostIncompatibleException("Incompatible", "baseline.v2");
+
+        // Act - the caller passes the required capability when no version is available.
+        var exitCode = interactionService.DisplayIncompatibleVersionError(ex, "baseline.v2");
+
+        // Assert
+        Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode);
+        var outputString = output.ToString();
+        Assert.Contains(InteractionServiceStrings.AppHostNotCompatibleConsiderUpgrading, outputString);
+        Assert.DoesNotContain("To update, run:", outputString);
+    }
+
     [Fact]
     public void DisplayMessage_WithMarkupCharactersInMessage_AutoEscapesByDefault()
     {

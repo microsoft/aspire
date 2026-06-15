@@ -23,6 +23,7 @@ using Aspire.Dashboard.Otlp.Grpc;
 using Aspire.Dashboard.Otlp.Http;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Telemetry;
+using Aspire.Dashboard.Terminal;
 using Aspire.Dashboard.Utils;
 using Aspire.Hosting;
 using Microsoft.AspNetCore.Authentication;
@@ -340,6 +341,12 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         builder.Services.AddSingleton<IKnownPropertyLookup, KnownPropertyLookup>();
 
+        // Resolves per-replica HMP v1 producer streams server-side from the live
+        // resource snapshot stream. Default impl looks up by display name and
+        // replica index in IDashboardClient and connects to the consumer UDS
+        // path the AppHost stamped onto the snapshot.
+        builder.Services.TryAddSingleton<Aspire.Dashboard.Terminal.ITerminalConnectionResolver, Aspire.Dashboard.Terminal.DefaultTerminalConnectionResolver>();
+
         builder.Services.AddScoped<DimensionManager>();
         builder.Services.AddScoped<DashboardDialogService>();
         builder.Services.AddScoped<ResourceMenuBuilder>();
@@ -511,8 +518,12 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         _app.UseMiddleware<BrowserSecurityHeadersMiddleware>();
         _app.UseAntiforgery();
+        _app.UseWebSockets();
 
         _app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
+
+        // Terminal WebSocket proxy
+        _app.MapTerminalWebSocket();
 
         // OTLP HTTP services.
         _app.MapHttpOtlpApi(dashboardOptions.Otlp);
@@ -955,7 +966,12 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         }
         catch (Exception ex)
         {
+            // Include the full exception (type, stack trace, inner exceptions)
+            // so that a "dashboard silently died" report has enough breadcrumbs
+            // to find the root cause from the AppHost log alone, without
+            // requiring a debugger attach.
             Console.Error.WriteLine($"Error: {ex.Message}");
+            Console.Error.WriteLine(ex.ToString());
             return ExitCodeUnexpectedError;
         }
     }

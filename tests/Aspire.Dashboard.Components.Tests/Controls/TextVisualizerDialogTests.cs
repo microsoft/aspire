@@ -48,7 +48,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
 
         Assert.Equal(expectedJson, instance.TextVisualizerViewModel.FormattedText);
         Assert.Equal(DashboardUIHelpers.JsonFormat, instance.TextVisualizerViewModel.FormatKind);
-        Assert.Equal([DashboardUIHelpers.JsonFormat, DashboardUIHelpers.MarkdownFormat, DashboardUIHelpers.PlaintextFormat], instance.EnabledOptions.ToImmutableSortedSet());
+        Assert.Equal([DashboardUIHelpers.JsonFormat, DashboardUIHelpers.PlaintextFormat], instance.EnabledOptions.ToImmutableSortedSet());
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
 
         Assert.Equal(DashboardUIHelpers.XmlFormat, instance.TextVisualizerViewModel.FormatKind);
         Assert.Equal(expectedXml, instance.TextVisualizerViewModel.FormattedText);
-        Assert.Equal([DashboardUIHelpers.MarkdownFormat, DashboardUIHelpers.PlaintextFormat, DashboardUIHelpers.XmlFormat], instance.EnabledOptions.ToImmutableSortedSet());
+        Assert.Equal([DashboardUIHelpers.PlaintextFormat, DashboardUIHelpers.XmlFormat], instance.EnabledOptions.ToImmutableSortedSet());
 
         instance.ChangeFormat(DashboardUIHelpers.PlaintextFormat);
 
@@ -135,7 +135,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
 
         Assert.Equal(DashboardUIHelpers.XmlFormat, instance.TextVisualizerViewModel.FormatKind);
         Assert.Equal(expectedXml, instance.TextVisualizerViewModel.FormattedText);
-        Assert.Equal([DashboardUIHelpers.MarkdownFormat, DashboardUIHelpers.PlaintextFormat, DashboardUIHelpers.XmlFormat], instance.EnabledOptions.ToImmutableSortedSet());
+        Assert.Equal([DashboardUIHelpers.PlaintextFormat, DashboardUIHelpers.XmlFormat], instance.EnabledOptions.ToImmutableSortedSet());
     }
 
     [Fact]

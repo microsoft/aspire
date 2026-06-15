@@ -23,7 +23,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
     public AutoRerunTransientCiFailuresTests(ITestOutputHelper output)
     {
         _output = output;
-        _repoRoot = FindRepoRoot();
+        _repoRoot = RepoRoot.Path;
         _harnessPath = Path.Combine(_repoRoot, "tests", "Infrastructure.Tests", "WorkflowScripts", "auto-rerun-transient-ci-failures.harness.js");
     }
 
@@ -726,6 +726,137 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         Assert.False(rerunExecutionEligible);
     }
 
+    // TEMPORARY — FORCE_RERUN_ALL (remove with the force-mode plumbing):
+    // Force mode is a short-circuit. It does NOT enumerate or classify jobs, so these
+    // tests cover the only force-mode logic that lives in the JS: the eligibility
+    // decision (attempt cap only) and the rerun execution (rerun fires with an empty
+    // job list, simple comment, open-PR gate preserved).
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ForceModeEligibilityDependsOnlyOnTheAttemptCap()
+    {
+        // Force mode bypasses the job-count cap entirely: eligibility does not depend on
+        // retryableCount (the short-circuit never supplies one). It stays true through the
+        // attempt cap and flips to false only once the attempt cap is exceeded.
+        bool eligibleAttempt1 = await InvokeHarnessAsync<bool>(
+            "computeRerunEligibility",
+            new { runAttempt = 1, forceRerunAll = true });
+        Assert.True(eligibleAttempt1);
+
+        bool eligibleAttempt3 = await InvokeHarnessAsync<bool>(
+            "computeRerunEligibility",
+            new { runAttempt = 3, forceRerunAll = true });
+        Assert.True(eligibleAttempt3);
+
+        bool eligibleAttempt4 = await InvokeHarnessAsync<bool>(
+            "computeRerunEligibility",
+            new { runAttempt = 4, forceRerunAll = true });
+        Assert.False(eligibleAttempt4);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ForceModeExecutionEligibilityRespectsDryRunAndTheAttemptCap()
+    {
+        bool executeAttempt1 = await InvokeHarnessAsync<bool>(
+            "computeRerunExecutionEligibility",
+            new { dryRun = false, runAttempt = 1, forceRerunAll = true });
+        Assert.True(executeAttempt1);
+
+        bool dryRunBlocks = await InvokeHarnessAsync<bool>(
+            "computeRerunExecutionEligibility",
+            new { dryRun = true, runAttempt = 1, forceRerunAll = true });
+        Assert.False(dryRunBlocks);
+
+        bool attemptCapBlocks = await InvokeHarnessAsync<bool>(
+            "computeRerunExecutionEligibility",
+            new { dryRun = false, runAttempt = 4, forceRerunAll = true });
+        Assert.False(attemptCapBlocks);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ForceModeRerunsFailedJobsWithAnEmptyJobListWhenPullRequestIsOpen()
+    {
+        // Force mode passes an empty retryableJobs list (no enumeration). rerunMatchedJobs
+        // must still POST the run-level rerun, post a short comment with no job list, and
+        // write a summary with no "Retryable jobs" table.
+        RerunMatchedJobsResult result = await InvokeHarnessAsync<RerunMatchedJobsResult>(
+            "rerunMatchedJobs",
+            new
+            {
+                owner = "dotnet",
+                repo = "aspire",
+                retryableJobs = Array.Empty<RetryableJobInput>(),
+                pullRequestNumbers = new[] { 15110 },
+                issueStatesByNumber = new Dictionary<string, string>
+                {
+                    ["15110"] = "open"
+                },
+                commentHtmlUrlByNumber = new Dictionary<string, string>
+                {
+                    ["15110"] = "https://github.com/microsoft/aspire/pull/15110#issuecomment-123"
+                },
+                latestRunAttempt = 2,
+                sourceRunId = 123,
+                sourceRunAttempt = 1,
+                sourceRunUrl = "https://github.com/microsoft/aspire/actions/runs/123",
+                forceRerunAll = true
+            });
+
+        Assert.Contains(
+            result.Requests,
+            r => r.Route == "POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs");
+
+        RequestRecord commentRequest = Assert.Single(
+            result.Requests,
+            r => r.Route == "POST /repos/{owner}/{repo}/issues/{issue_number}/comments");
+        string commentBody = commentRequest.Payload.GetProperty("body").GetString()!;
+        Assert.Equal(
+            "Retrying the failed CI jobs for this pull request from [the CI run attempt](https://github.com/microsoft/aspire/actions/runs/123/attempts/1). The rerun is being tracked in [the rerun attempt](https://github.com/microsoft/aspire/actions/runs/123/attempts/2).",
+            commentBody);
+
+        SummaryEvent headingEvent = Assert.Single(result.Events, e => e.Type == "heading" && e.Level == 1);
+        Assert.Equal("Rerun requested", headingEvent.Text);
+
+        // No retry-safe job table is written in force mode (no jobs were enumerated).
+        Assert.DoesNotContain(result.Events, e => e.Type == "heading" && e.Level == 2 && e.Text == "Retryable jobs");
+        Assert.DoesNotContain(result.Events, e => e.Type == "table");
+    }
+
+    [Fact]
+    public async Task WorkflowYamlEnablesForceRerunAllMode()
+    {
+        string workflowText = await ReadRepoFileAsync(".github/workflows/auto-rerun-transient-ci-failures.yml");
+
+        // Force mode is controlled by FORCE_RERUN_ALL on BOTH jobs (analyze + rerun).
+        // It must be set consistently: either enabled ('true') on both or disabled
+        // ('false') on both. A half-flip (toggling only one job) leaves the workflow in
+        // a confusing partially-bypassed state and must fail. The documented disable
+        // path (flip both to 'false') stays valid here; fully removing the temporary
+        // measure removes these tests along with the env vars.
+        int enabledCount = workflowText.Split("FORCE_RERUN_ALL: 'true'").Length - 1;
+        int disabledCount = workflowText.Split("FORCE_RERUN_ALL: 'false'").Length - 1;
+        bool consistentlyEnabled = enabledCount >= 2 && disabledCount == 0;
+        bool consistentlyDisabled = disabledCount >= 2 && enabledCount == 0;
+        Assert.True(
+            consistentlyEnabled || consistentlyDisabled,
+            $"FORCE_RERUN_ALL must be set consistently on both jobs. Found {enabledCount} 'true' and {disabledCount} 'false'.");
+
+        // The env var is parsed to a boolean on both jobs and gates the short-circuit.
+        Assert.Contains("const forceRerunAll = String(process.env.FORCE_RERUN_ALL).toLowerCase() === 'true';", workflowText);
+
+        // The analyze step short-circuits on force mode: it computes eligibility with
+        // forceRerunAll: true and writes the dedicated force-mode summary instead of
+        // enumerating jobs.
+        Assert.Contains("if (forceRerunAll) {", workflowText);
+        Assert.Contains("forceRerunAll: true,", workflowText);
+        Assert.Contains("writeForceRerunSummary", workflowText);
+
+        // The rerun step proceeds even with an empty job list when force mode is on.
+        Assert.Contains("if (!forceRerunAll && retryableJobs.length === 0) {", workflowText);
+    }
+
     [Fact]
     public async Task RepresentativeWorkflowFixturesStayAlignedWithCurrentWorkflowDefinitions()
     {
@@ -1014,6 +1145,42 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 
         SummaryEvent skippedRaw = Assert.Single(result.Events, e => e.Type == "raw" && e.Text is not null && e.Text.Contains("All associated pull requests are closed."));
         Assert.Contains("All associated pull requests are closed. No jobs were rerun.", skippedRaw.Text);
+    }
+
+    // FORCE_RERUN_ALL: force mode must NOT bypass the open-PR gate. A closed associated
+    // PR is still skipped (no value in spending CI on a closed/merged PR). If the gate
+    // is ever re-bypassed in force mode, this test fails because the rerun POST fires.
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ForceRerunAllStillSkipsRerunWhenAllAssociatedPullRequestsAreClosed()
+    {
+        RerunMatchedJobsResult result = await InvokeHarnessAsync<RerunMatchedJobsResult>(
+            "rerunMatchedJobs",
+            new
+            {
+                owner = "dotnet",
+                repo = "aspire",
+                retryableJobs = Array.Empty<RetryableJobInput>(),
+                pullRequestNumbers = new[] { 15110 },
+                issueStatesByNumber = new Dictionary<string, string>
+                {
+                    ["15110"] = "closed"
+                },
+                sourceRunId = 123,
+                sourceRunAttempt = 1,
+                sourceRunUrl = "https://github.com/microsoft/aspire/actions/runs/123",
+                forceRerunAll = true
+            });
+
+        SummaryEvent skippedHeading = Assert.Single(result.Events, e => e.Type == "heading" && e.Text == "Rerun skipped");
+        Assert.Equal(1, skippedHeading.Level);
+
+        SummaryEvent skippedRaw = Assert.Single(result.Events, e => e.Type == "raw" && e.Text is not null && e.Text.Contains("All associated pull requests are closed."));
+        Assert.Contains("All associated pull requests are closed. No jobs were rerun.", skippedRaw.Text);
+
+        Assert.DoesNotContain(
+            result.Requests,
+            r => r.Route == "POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs");
     }
 
     [Fact]
@@ -2066,23 +2233,6 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                 Conclusion = "failure"
             }).ToArray()
         };
-
-    private static string FindRepoRoot()
-    {
-        string? current = AppContext.BaseDirectory;
-
-        while (current is not null)
-        {
-            if (File.Exists(Path.Combine(current, "Aspire.slnx")))
-            {
-                return current;
-            }
-
-            current = Directory.GetParent(current)?.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not find repository root containing Aspire.slnx");
-    }
 
     private Task<string> ReadRepoFileAsync(string relativePath)
         => File.ReadAllTextAsync(Path.Combine(_repoRoot, relativePath.Replace('/', Path.DirectorySeparatorChar)));

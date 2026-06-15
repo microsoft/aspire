@@ -614,7 +614,7 @@ internal class DotNetTemplateFactory(
             {
                 var defaultPath = pathDeriver(executionContext, projectName);
                 var validator = OutputPathHelper.CreateOutputPathValidator(executionContext.WorkingDirectory.FullName);
-                return await prompter.PromptForOutputPath(defaultPath, parseResult, validator, cancellationToken, outputPathResolver);
+                return await prompter.PromptForOutputPath(defaultPath, parseResult, validator, outputPathResolver, cancellationToken);
             },
             interactionService);
     }

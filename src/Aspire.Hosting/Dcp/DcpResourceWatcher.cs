@@ -30,7 +30,6 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
     private readonly DcpExecutorEvents _executorEvents;
     private readonly ILogger _logger;
     private readonly IConfiguration _configuration;
-    private readonly Func<IResource, CancellationToken, Task> _publishEndpointsAllocatedEventAsync;
     private readonly ProfilingTelemetry _profilingTelemetry;
     private readonly CancellationToken _shutdownToken;
 
@@ -57,7 +56,6 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         DistributedApplicationModel model,
         DcpAppResourceStore appResources,
         IConfiguration configuration,
-        Func<IResource, CancellationToken, Task> publishEndpointsAllocatedEventAsync,
         ProfilingTelemetry profilingTelemetry,
         CancellationToken shutdownToken)
     {
@@ -66,7 +64,6 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         _executorEvents = executorEvents;
         _logger = logger;
         _configuration = configuration;
-        _publishEndpointsAllocatedEventAsync = publishEndpointsAllocatedEventAsync;
         _profilingTelemetry = profilingTelemetry;
         _shutdownToken = shutdownToken;
 
@@ -497,10 +494,9 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
             return;
         }
 
-        if (watchEventType is WatchEventType.Added or WatchEventType.Modified &&
-            DcpModelUtilities.TryApplyServiceAddressToEndpoint(service, _resourceState.AppResources, out var allocatedResource))
+        if (watchEventType is WatchEventType.Added or WatchEventType.Modified)
         {
-            await _publishEndpointsAllocatedEventAsync(allocatedResource, _shutdownToken).ConfigureAwait(false);
+            DcpModelUtilities.ApplyServiceAddressToEndpoint(service, _resourceState.AppResources);
         }
 
         foreach (var ((resourceKind, resourceName), _) in _resourceState.ResourceAssociatedServicesMap.Where(e => e.Value.Contains(service.Metadata.Name)))

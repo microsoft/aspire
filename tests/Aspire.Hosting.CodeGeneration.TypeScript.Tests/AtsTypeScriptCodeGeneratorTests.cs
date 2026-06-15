@@ -111,7 +111,7 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Contains("condition: extractHandleForExpr(state.condition),", files["base.mts"]);
         Assert.Contains("('$handle' in json || '$expr' in json)", files["base.mts"]);
         Assert.Contains("registerCancellation(state.client, cancellationToken)", files["base.mts"]);
-        Assert.Contains("arguments(): Promise<InteractionInputCollection>", aspireTs);
+        Assert.Contains("arguments(): InteractionInputCollectionPromise", aspireTs);
         Assert.DoesNotContain("setArguments", aspireTs);
     }
 
@@ -1034,6 +1034,29 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public void GenerateDistributedApplication_WithDtoCallbackOptions_MarshalsNestedCallbackProperties()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireTs = files["aspire.mts"];
+        var processCommandExportOptions = Assert.Single(atsContext.DtoTypes, dto => dto.Name == "ProcessCommandExportOptions");
+        var createProcessSpec = Assert.Single(processCommandExportOptions.Properties, property => property.Name == "CreateProcessSpec");
+
+        Assert.True(createProcessSpec.IsOptional);
+        Assert.Contains("const ____optionsForRpcPrepareRequestId = ____optionsForRpcPrepareRequest ? registerCallback", aspireTs);
+        Assert.Contains("createProcessSpec?: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>;", aspireTs);
+        Assert.Contains("const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback", aspireTs);
+        Assert.Contains("__optionsForRpcData[\"createProcessSpec\"] = ____optionsForRpcCreateProcessSpecId;", aspireTs);
+        Assert.Contains("@deprecated Use withProcessCommand with createProcessSpec in the options object instead.", aspireTs);
+        Assert.Contains("const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;", aspireTs);
+        Assert.Contains("const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };", aspireTs);
+        Assert.Contains("const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback", aspireTs);
+        Assert.Contains("const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback", aspireTs);
+        Assert.Contains("__optionsForRpcData[\"commandOptions\"] = ____optionsForRpcCommandOptionsForRpc;", aspireTs);
+    }
+
+    [Fact]
     public void Scanner_AzureProvisioningCallbacks_ExposeTypedCustomizationProperties()
     {
         var capabilities = ScanCapabilitiesFromAzureAssemblies();
@@ -1049,6 +1072,41 @@ public class AtsTypeScriptCodeGeneratorTests
         AssertTargetedMethod(capabilities, "Aspire.Hosting.Azure.AppService/configureWebSiteSlotSiteConfig", "configureSlotSiteConfig", typeof(WebSiteSlot), GetRequiredType("Aspire.Hosting.Azure.AzureAppServiceSiteConfig, Aspire.Hosting.Azure.AppService"));
 
         AssertTargetedMethod(capabilities, "Aspire.Hosting.Azure.AppContainers/configureContainerAppScale", "configureScale", typeof(ContainerApp), GetRequiredType("Aspire.Hosting.Azure.AzureContainerAppScaleConfig, Aspire.Hosting.Azure.AppContainers"));
+    }
+
+    [Fact]
+    public void Scanner_AzureExistingResourceScopes_ExposeTypeScriptCapabilities()
+    {
+        var capabilities = ScanCapabilitiesFromAzureAssemblies();
+
+        AssertAzureExistingResourceScopeCapability(capabilities, "runAsExistingInResourceGroup", ["name", "resourceGroup", "subscription"]);
+        AssertAzureExistingResourceScopeCapability(capabilities, "publishAsExistingInResourceGroup", ["name", "resourceGroup", "subscription"]);
+        AssertAzureExistingResourceScopeCapability(capabilities, "asExistingInResourceGroup", ["name", "resourceGroup", "subscription"]);
+        AssertAzureExistingResourceScopeCapability(capabilities, "runAsExistingInSubscription", ["name", "subscription"]);
+        AssertAzureExistingResourceScopeCapability(capabilities, "publishAsExistingInSubscription", ["name", "subscription"]);
+        AssertAzureExistingResourceScopeCapability(capabilities, "asExistingInSubscription", ["name", "subscription"]);
+        AssertAzureExistingResourceScopeCapability(capabilities, "runAsExistingInTenant", ["name"]);
+        AssertAzureExistingResourceScopeCapability(capabilities, "publishAsExistingInTenant", ["name"]);
+        AssertAzureExistingResourceScopeCapability(capabilities, "asExistingInTenant", ["name"]);
+    }
+
+    [Fact]
+    public void GenerateDistributedApplication_WithAzureExistingResourceScopes_EmitsTypeScriptMethods()
+    {
+        var result = AtsCapabilityScanner.ScanAssemblies(LoadAzureAssemblies());
+
+        var files = _generator.GenerateDistributedApplication(result.ToAtsContext());
+        var aspireTs = files["aspire.mts"];
+
+        Assert.Contains("runAsExistingInResourceGroup", aspireTs);
+        Assert.Contains("publishAsExistingInResourceGroup", aspireTs);
+        Assert.Contains("asExistingInResourceGroup", aspireTs);
+        Assert.Contains("runAsExistingInSubscription", aspireTs);
+        Assert.Contains("publishAsExistingInSubscription", aspireTs);
+        Assert.Contains("asExistingInSubscription", aspireTs);
+        Assert.Contains("runAsExistingInTenant", aspireTs);
+        Assert.Contains("publishAsExistingInTenant", aspireTs);
+        Assert.Contains("asExistingInTenant", aspireTs);
     }
 
     private static List<AtsCapabilityInfo> ScanCapabilitiesFromTestAssembly()
@@ -1189,6 +1247,16 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Equal(methodName, capability.MethodName);
         Assert.Equal(GetAtsTypeId(targetType), capability.TargetTypeId);
         Assert.Equal(GetAtsTypeId(parameterType), parameter.Type?.TypeId);
+    }
+
+    private static void AssertAzureExistingResourceScopeCapability(IReadOnlyList<AtsCapabilityInfo> capabilities, string methodName, string[] parameterNames)
+    {
+        var capability = Assert.Single(capabilities, c => c.CapabilityId == $"Aspire.Hosting.Azure/{methodName}");
+
+        Assert.Equal(methodName, capability.MethodName);
+        Assert.Equal(GetAtsTypeId(typeof(IAzureResource)), capability.TargetTypeId);
+        Assert.True(capability.ReturnsBuilder);
+        Assert.Equal(parameterNames, capability.Parameters.Select(p => p.Name));
     }
 
     private static Type GetRequiredType(string assemblyQualifiedTypeName)

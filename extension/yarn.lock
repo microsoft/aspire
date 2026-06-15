@@ -461,10 +461,10 @@
   dependencies:
     "@nevware21/ts-utils" ">= 0.12.2 < 2.x"
 
-"@nevware21/ts-utils@>= 0.10.4 < 2.x", "@nevware21/ts-utils@>= 0.11.8 < 2.x", "@nevware21/ts-utils@>= 0.12.2 < 2.x", "@nevware21/ts-utils@>= 0.9.4 < 2.x":
-  version "0.13.0"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/@nevware21/ts-utils/-/ts-utils-0.13.0.tgz"
-  integrity sha1-CxaZWX9zbRYiIcGSIXKSSzjO9Uw=
+"@nevware21/ts-utils@0.14.0", "@nevware21/ts-utils@>= 0.10.4 < 2.x", "@nevware21/ts-utils@>= 0.11.8 < 2.x", "@nevware21/ts-utils@>= 0.12.2 < 2.x", "@nevware21/ts-utils@>= 0.9.4 < 2.x":
+  version "0.14.0"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/@nevware21/ts-utils/-/ts-utils-0.14.0.tgz#9e6074ce28f0b1bab7bfdacd1a7760b2ba73688d"
+  integrity sha1-nmB0zijwsbq3v9rNGndgsrpzaI0=
 
 "@nodelib/fs.scandir@2.1.5":
   version "2.1.5"
@@ -2877,10 +2877,10 @@ fast-levenshtein@^3.0.0:
   dependencies:
     fastest-levenshtein "^1.0.7"
 
-fast-uri@^3.0.1:
-  version "3.1.0"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/fast-uri/-/fast-uri-3.1.0.tgz"
-  integrity sha1-Zu7P9sdkwN+bdi5iyn7c+1O07fo=
+fast-uri@3.1.2, fast-uri@^3.0.1:
+  version "3.1.2"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/fast-uri/-/fast-uri-3.1.2.tgz#8af3d4fc9d3e71b11572cc2673b514a7d1a8c8ec"
+  integrity sha1-ivPU/J0+cbEVcswmc7UUp9GoyOw=
 
 fastest-levenshtein@^1.0.12, fastest-levenshtein@^1.0.7:
   version "1.0.16"
@@ -5134,10 +5134,10 @@ punycode@^2.1.0:
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/punycode/-/punycode-2.3.1.tgz"
   integrity sha1-AnQi4vrsCyXhVJw+G9gwm5EztuU=
 
-qs@^6.14.0, qs@^6.14.1, qs@^6.9.1:
-  version "6.15.0"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/qs/-/qs-6.15.0.tgz"
-  integrity sha1-24/V0bHS1rWzOtr4dCmAXxkJ57M=
+qs@6.15.2, qs@^6.14.0, qs@^6.14.1, qs@^6.9.1:
+  version "6.15.2"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/qs/-/qs-6.15.2.tgz#fd55426d710403ddccc45e0f9eab16db7727ece9"
+  integrity sha1-/VVCbXEEA93MxF4PnqsW23cn7Ok=
   dependencies:
     side-channel "^1.1.0"
 
@@ -6762,12 +6762,7 @@ wrappy@1:
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/wrappy/-/wrappy-1.0.2.tgz"
   integrity sha1-tSQ9jz7BqjXxNkYFvA0QNuMKtp8=
 
-ws@8.20.0:
-  version "8.20.0"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/ws/-/ws-8.20.0.tgz"
-  integrity sha1-TNlTI1jrpgvIY6rRYj37BFpNSvg=
-
-ws@^8.20.1:
+ws@8.21.0, ws@^8.20.1:
   version "8.21.0"
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/ws/-/ws-8.21.0.tgz#012e413fc07429945121b0c153158c4343086951"
   integrity sha1-AS5BP8B0KZRRIbDBUxWMQ0MIaVE=

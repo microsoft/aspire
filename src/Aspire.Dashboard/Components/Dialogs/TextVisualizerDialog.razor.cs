@@ -73,7 +73,6 @@ public partial class TextVisualizerDialog : ComponentBase
 
         EnabledOptions.Clear();
         EnabledOptions.Add(DashboardUIHelpers.PlaintextFormat);
-        EnabledOptions.Add(DashboardUIHelpers.MarkdownFormat);
 
         // If a fixed format is specified, use it directly without auto-detection.
         if (Content.FixedFormat is not null)
@@ -91,6 +90,12 @@ public partial class TextVisualizerDialog : ComponentBase
             else if (TextVisualizerViewModel.FormatKind == DashboardUIHelpers.XmlFormat)
             {
                 EnabledOptions.Add(DashboardUIHelpers.XmlFormat);
+            }
+            else
+            {
+                // Markdown can't be reliably detected from content, so enable it when the format is
+                // unknown to let users switch to markdown rendering if they want.
+                EnabledOptions.Add(DashboardUIHelpers.MarkdownFormat);
             }
         }
 
