@@ -17,10 +17,10 @@ public class DotnetToolResourceTests
         resource.ToolConfiguration!.Version = "1.2.3";
 
         var properties = resource.CreateSnapshotProperties().ToDictionary(p => p.Name);
-        var firstResourceSpecificSortOrder = KnownResourcePropertySortOrder.FirstResourceSpecific;
+        var producerDefinedSortOrderStart = KnownResourcePropertySortOrder.ProducerDefinedStart;
 
-        AssertToolProperty(properties[KnownProperties.Tool.Package], "dotnet-dump", MessageStrings.ResourcePropertyToolPackageDisplayName, firstResourceSpecificSortOrder);
-        AssertToolProperty(properties[KnownProperties.Tool.Version], "1.2.3", MessageStrings.ResourcePropertyToolVersionDisplayName, firstResourceSpecificSortOrder + 1);
+        AssertToolProperty(properties[KnownProperties.Tool.Package], "dotnet-dump", MessageStrings.ResourcePropertyToolPackageDisplayName, producerDefinedSortOrderStart);
+        AssertToolProperty(properties[KnownProperties.Tool.Version], "1.2.3", MessageStrings.ResourcePropertyToolVersionDisplayName, producerDefinedSortOrderStart + 1);
 
         var sourceProperty = properties[KnownProperties.Resource.Source];
         Assert.Equal("dotnet-dump", sourceProperty.Value);

@@ -550,7 +550,7 @@ public class ResourceDetailsTests : DashboardTestContext
     public void Render_ProducerSuppliedSortOrder_OrdersUnknownHighlightedProperties()
     {
         ResourceSetupHelpers.SetupResourceDetails(this);
-        var firstResourceSpecificSortOrder = KnownResourcePropertySortOrder.FirstResourceSpecific;
+        var producerDefinedSortOrderStart = KnownResourcePropertySortOrder.ProducerDefinedStart;
 
         var properties = new Dictionary<string, ResourcePropertyViewModel>
         {
@@ -561,7 +561,7 @@ public class ResourceDetailsTests : DashboardTestContext
                 knownProperty: null,
                 displayName: "Container command",
                 isHighlighted: true,
-                sortOrder: firstResourceSpecificSortOrder + 2),
+                sortOrder: producerDefinedSortOrderStart + 2),
             [KnownProperties.Container.Image] = new(
                 KnownProperties.Container.Image,
                 Value.ForString("redis:latest"),
@@ -569,7 +569,7 @@ public class ResourceDetailsTests : DashboardTestContext
                 knownProperty: null,
                 displayName: "Container image",
                 isHighlighted: true,
-                sortOrder: firstResourceSpecificSortOrder),
+                sortOrder: producerDefinedSortOrderStart),
             [KnownProperties.Container.Id] = new(
                 KnownProperties.Container.Id,
                 Value.ForString("1234567890abcdef"),
@@ -577,7 +577,7 @@ public class ResourceDetailsTests : DashboardTestContext
                 knownProperty: null,
                 displayName: "Container ID",
                 isHighlighted: true,
-                sortOrder: firstResourceSpecificSortOrder + 1),
+                sortOrder: producerDefinedSortOrderStart + 1),
             ["provider.diagnostic"] = new(
                 "provider.diagnostic",
                 Value.ForString("diagnostic"),

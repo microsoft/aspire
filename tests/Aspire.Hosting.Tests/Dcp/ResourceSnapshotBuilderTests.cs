@@ -29,14 +29,14 @@ public class ResourceSnapshotBuilderTests
         };
 
         var snapshot = CreateSnapshotBuilder().ToSnapshot(container, CreatePreviousSnapshot());
-        var firstResourceSpecificSortOrder = KnownResourcePropertySortOrder.FirstResourceSpecific;
+        var producerDefinedSortOrderStart = KnownResourcePropertySortOrder.ProducerDefinedStart;
 
-        AssertHighlightedProperty(snapshot, KnownProperties.Container.Image, "Container image", isSensitive: false, sortOrder: firstResourceSpecificSortOrder);
-        AssertHighlightedProperty(snapshot, KnownProperties.Container.Id, "Container ID", isSensitive: false, sortOrder: firstResourceSpecificSortOrder + 1);
-        AssertHighlightedProperty(snapshot, KnownProperties.Container.Command, "Container command", isSensitive: false, sortOrder: firstResourceSpecificSortOrder + 2);
-        AssertHighlightedProperty(snapshot, KnownProperties.Container.Args, "Container arguments", isSensitive: true, sortOrder: firstResourceSpecificSortOrder + 3);
-        AssertHighlightedProperty(snapshot, KnownProperties.Container.Ports, "Container ports", isSensitive: false, sortOrder: firstResourceSpecificSortOrder + 4);
-        AssertHighlightedProperty(snapshot, KnownProperties.Container.Lifetime, "Container lifetime", isSensitive: false, sortOrder: firstResourceSpecificSortOrder + 5);
+        AssertHighlightedProperty(snapshot, KnownProperties.Container.Image, "Container image", isSensitive: false, sortOrder: producerDefinedSortOrderStart);
+        AssertHighlightedProperty(snapshot, KnownProperties.Container.Id, "Container ID", isSensitive: false, sortOrder: producerDefinedSortOrderStart + 1);
+        AssertHighlightedProperty(snapshot, KnownProperties.Container.Command, "Container command", isSensitive: false, sortOrder: producerDefinedSortOrderStart + 2);
+        AssertHighlightedProperty(snapshot, KnownProperties.Container.Args, "Container arguments", isSensitive: true, sortOrder: producerDefinedSortOrderStart + 3);
+        AssertHighlightedProperty(snapshot, KnownProperties.Container.Ports, "Container ports", isSensitive: false, sortOrder: producerDefinedSortOrderStart + 4);
+        AssertHighlightedProperty(snapshot, KnownProperties.Container.Lifetime, "Container lifetime", isSensitive: false, sortOrder: producerDefinedSortOrderStart + 5);
     }
 
     [Fact]
@@ -51,12 +51,12 @@ public class ResourceSnapshotBuilderTests
         };
 
         var snapshot = CreateSnapshotBuilder().ToSnapshot(executable, CreatePreviousSnapshot());
-        var firstResourceSpecificSortOrder = KnownResourcePropertySortOrder.FirstResourceSpecific;
+        var producerDefinedSortOrderStart = KnownResourcePropertySortOrder.ProducerDefinedStart;
 
-        AssertHighlightedProperty(snapshot, KnownProperties.Executable.Path, "Executable path", isSensitive: false, sortOrder: firstResourceSpecificSortOrder);
-        AssertHighlightedProperty(snapshot, KnownProperties.Executable.WorkDir, "Working directory", isSensitive: false, sortOrder: firstResourceSpecificSortOrder + 1);
-        AssertHighlightedProperty(snapshot, KnownProperties.Executable.Args, "Executable arguments", isSensitive: true, sortOrder: firstResourceSpecificSortOrder + 2);
-        AssertHighlightedProperty(snapshot, KnownProperties.Executable.Pid, "Process ID", isSensitive: false, sortOrder: firstResourceSpecificSortOrder + 3);
+        AssertHighlightedProperty(snapshot, KnownProperties.Executable.Path, "Executable path", isSensitive: false, sortOrder: producerDefinedSortOrderStart);
+        AssertHighlightedProperty(snapshot, KnownProperties.Executable.WorkDir, "Working directory", isSensitive: false, sortOrder: producerDefinedSortOrderStart + 1);
+        AssertHighlightedProperty(snapshot, KnownProperties.Executable.Args, "Executable arguments", isSensitive: true, sortOrder: producerDefinedSortOrderStart + 2);
+        AssertHighlightedProperty(snapshot, KnownProperties.Executable.Pid, "Process ID", isSensitive: false, sortOrder: producerDefinedSortOrderStart + 3);
     }
 
     [Fact]
@@ -79,14 +79,14 @@ public class ResourceSnapshotBuilderTests
         {
             [project.Name] = project
         }).ToSnapshot(executable, CreatePreviousSnapshot());
-        var firstResourceSpecificSortOrder = KnownResourcePropertySortOrder.FirstResourceSpecific;
+        var producerDefinedSortOrderStart = KnownResourcePropertySortOrder.ProducerDefinedStart;
 
         AssertDefaultProperty(snapshot, KnownProperties.Executable.Path, isSensitive: false);
         AssertDefaultProperty(snapshot, KnownProperties.Executable.WorkDir, isSensitive: false);
         AssertDefaultProperty(snapshot, KnownProperties.Executable.Args, isSensitive: true);
-        AssertHighlightedProperty(snapshot, KnownProperties.Project.Path, "Project path", isSensitive: false, sortOrder: firstResourceSpecificSortOrder);
-        AssertHighlightedProperty(snapshot, KnownProperties.Project.LaunchProfile, "Launch profile", isSensitive: false, sortOrder: firstResourceSpecificSortOrder + 1);
-        AssertHighlightedProperty(snapshot, KnownProperties.Executable.Pid, "Process ID", isSensitive: false, sortOrder: firstResourceSpecificSortOrder + 2);
+        AssertHighlightedProperty(snapshot, KnownProperties.Project.Path, "Project path", isSensitive: false, sortOrder: producerDefinedSortOrderStart);
+        AssertHighlightedProperty(snapshot, KnownProperties.Project.LaunchProfile, "Launch profile", isSensitive: false, sortOrder: producerDefinedSortOrderStart + 1);
+        AssertHighlightedProperty(snapshot, KnownProperties.Executable.Pid, "Process ID", isSensitive: false, sortOrder: producerDefinedSortOrderStart + 2);
     }
 
     [Fact]

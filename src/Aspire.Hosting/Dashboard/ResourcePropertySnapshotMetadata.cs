@@ -17,9 +17,9 @@ namespace Aspire.Hosting.Dashboard;
 /// </remarks>
 internal static class ResourcePropertySnapshotMetadata
 {
-    // Generic resource properties are still ordered first by the dashboard. Resource-specific
+    // Generic resource properties are still ordered first by the dashboard. Producer-defined
     // properties start after those values to preserve the previous details grid order.
-    private const int FirstResourceSpecificSortOrder = KnownResourcePropertySortOrder.FirstResourceSpecific;
+    private const int ProducerDefinedSortOrderStart = KnownResourcePropertySortOrder.ProducerDefinedStart;
 
     internal static ResourcePropertySnapshot Create(string resourceType, string name, object? value, bool isSensitive = false)
     {
@@ -41,19 +41,19 @@ internal static class ResourcePropertySnapshotMetadata
     {
         return (resourceType, name) switch
         {
-            (KnownResourceTypes.Container, KnownProperties.Container.Image) => (ResourcePropertyContainerImageDisplayName, true, FirstResourceSpecificSortOrder),
-            (KnownResourceTypes.Container, KnownProperties.Container.Id) => (ResourcePropertyContainerIdDisplayName, true, FirstResourceSpecificSortOrder + 1),
-            (KnownResourceTypes.Container, KnownProperties.Container.Command) => (ResourcePropertyContainerCommandDisplayName, true, FirstResourceSpecificSortOrder + 2),
-            (KnownResourceTypes.Container, KnownProperties.Container.Args) => (ResourcePropertyContainerArgumentsDisplayName, true, FirstResourceSpecificSortOrder + 3),
-            (KnownResourceTypes.Container, KnownProperties.Container.Ports) => (ResourcePropertyContainerPortsDisplayName, true, FirstResourceSpecificSortOrder + 4),
-            (KnownResourceTypes.Container, KnownProperties.Container.Lifetime) => (ResourcePropertyContainerLifetimeDisplayName, true, FirstResourceSpecificSortOrder + 5),
-            (KnownResourceTypes.Executable, KnownProperties.Executable.Path) => (ResourcePropertyExecutablePathDisplayName, true, FirstResourceSpecificSortOrder),
-            (KnownResourceTypes.Executable, KnownProperties.Executable.WorkDir) => (ResourcePropertyExecutableWorkingDirectoryDisplayName, true, FirstResourceSpecificSortOrder + 1),
-            (KnownResourceTypes.Executable, KnownProperties.Executable.Args) => (ResourcePropertyExecutableArgumentsDisplayName, true, FirstResourceSpecificSortOrder + 2),
-            (KnownResourceTypes.Executable, KnownProperties.Executable.Pid) => (ResourcePropertyExecutableProcessIdDisplayName, true, FirstResourceSpecificSortOrder + 3),
-            (KnownResourceTypes.Project, KnownProperties.Project.Path) => (ResourcePropertyProjectPathDisplayName, true, FirstResourceSpecificSortOrder),
-            (KnownResourceTypes.Project, KnownProperties.Project.LaunchProfile) => (ResourcePropertyProjectLaunchProfileDisplayName, true, FirstResourceSpecificSortOrder + 1),
-            (KnownResourceTypes.Project, KnownProperties.Executable.Pid) => (ResourcePropertyExecutableProcessIdDisplayName, true, FirstResourceSpecificSortOrder + 2),
+            (KnownResourceTypes.Container, KnownProperties.Container.Image) => (ResourcePropertyContainerImageDisplayName, true, ProducerDefinedSortOrderStart),
+            (KnownResourceTypes.Container, KnownProperties.Container.Id) => (ResourcePropertyContainerIdDisplayName, true, ProducerDefinedSortOrderStart + 1),
+            (KnownResourceTypes.Container, KnownProperties.Container.Command) => (ResourcePropertyContainerCommandDisplayName, true, ProducerDefinedSortOrderStart + 2),
+            (KnownResourceTypes.Container, KnownProperties.Container.Args) => (ResourcePropertyContainerArgumentsDisplayName, true, ProducerDefinedSortOrderStart + 3),
+            (KnownResourceTypes.Container, KnownProperties.Container.Ports) => (ResourcePropertyContainerPortsDisplayName, true, ProducerDefinedSortOrderStart + 4),
+            (KnownResourceTypes.Container, KnownProperties.Container.Lifetime) => (ResourcePropertyContainerLifetimeDisplayName, true, ProducerDefinedSortOrderStart + 5),
+            (KnownResourceTypes.Executable, KnownProperties.Executable.Path) => (ResourcePropertyExecutablePathDisplayName, true, ProducerDefinedSortOrderStart),
+            (KnownResourceTypes.Executable, KnownProperties.Executable.WorkDir) => (ResourcePropertyExecutableWorkingDirectoryDisplayName, true, ProducerDefinedSortOrderStart + 1),
+            (KnownResourceTypes.Executable, KnownProperties.Executable.Args) => (ResourcePropertyExecutableArgumentsDisplayName, true, ProducerDefinedSortOrderStart + 2),
+            (KnownResourceTypes.Executable, KnownProperties.Executable.Pid) => (ResourcePropertyExecutableProcessIdDisplayName, true, ProducerDefinedSortOrderStart + 3),
+            (KnownResourceTypes.Project, KnownProperties.Project.Path) => (ResourcePropertyProjectPathDisplayName, true, ProducerDefinedSortOrderStart),
+            (KnownResourceTypes.Project, KnownProperties.Project.LaunchProfile) => (ResourcePropertyProjectLaunchProfileDisplayName, true, ProducerDefinedSortOrderStart + 1),
+            (KnownResourceTypes.Project, KnownProperties.Executable.Pid) => (ResourcePropertyExecutableProcessIdDisplayName, true, ProducerDefinedSortOrderStart + 2),
             _ => (null, false, null)
         };
     }

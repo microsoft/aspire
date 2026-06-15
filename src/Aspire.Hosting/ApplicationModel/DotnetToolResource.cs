@@ -19,7 +19,7 @@ namespace Aspire.Hosting.ApplicationModel;
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Tool = {ToolConfiguration?.PackageId}")]
 public class DotnetToolResource : ExecutableResource
 {
-    private const int FirstToolSpecificSortOrder = KnownResourcePropertySortOrder.FirstResourceSpecific;
+    private const int ToolMetadataSortOrderStart = KnownResourcePropertySortOrder.ProducerDefinedStart;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DotnetToolResource"/> class.
@@ -50,8 +50,8 @@ public class DotnetToolResource : ExecutableResource
             yield break;
         }
 
-        yield return CreateHighlightedProperty(KnownProperties.Tool.Package, toolConfig.PackageId, ResourcePropertyToolPackageDisplayName, FirstToolSpecificSortOrder);
-        yield return CreateHighlightedProperty(KnownProperties.Tool.Version, toolConfig.Version, ResourcePropertyToolVersionDisplayName, FirstToolSpecificSortOrder + 1);
+        yield return CreateHighlightedProperty(KnownProperties.Tool.Package, toolConfig.PackageId, ResourcePropertyToolPackageDisplayName, ToolMetadataSortOrderStart);
+        yield return CreateHighlightedProperty(KnownProperties.Tool.Version, toolConfig.Version, ResourcePropertyToolVersionDisplayName, ToolMetadataSortOrderStart + 1);
         yield return new(KnownProperties.Resource.Source, toolConfig.PackageId);
     }
 
