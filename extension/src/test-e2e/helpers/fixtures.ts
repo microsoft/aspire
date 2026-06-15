@@ -279,6 +279,10 @@ export async function stopAppHostIfRunning(appHostPath: string): Promise<void> {
 
         if (/timed out|Failed to stop/i.test(error.message)) {
             try {
+                if (!await isAppHostRunningAccordingToCli(appHostPath)) {
+                    return;
+                }
+
                 await waitForRunningAppHostProcessExitFromState(appHostPath, 30000);
                 return;
             }
@@ -289,6 +293,36 @@ export async function stopAppHostIfRunning(appHostPath: string): Promise<void> {
 
         throw error;
     }
+}
+
+async function isAppHostRunningAccordingToCli(appHostPath: string): Promise<boolean> {
+    const result = await runProcess(getCliPath(), ['ps', '--format', 'json'], {
+        cwd: getWorkspaceRoot(),
+        timeoutMs: 30000,
+    });
+    const appHosts = JSON.parse(result.stdout) as unknown;
+
+    if (!Array.isArray(appHosts)) {
+        throw new Error(`Unexpected aspire ps JSON output: ${result.stdout}`);
+    }
+
+    return appHosts.some(candidate => {
+        if (!isPsAppHost(candidate)) {
+            return false;
+        }
+
+        return candidate.status !== 'stopped' && isSamePath(candidate.appHostPath, appHostPath);
+    });
+}
+
+function isPsAppHost(value: unknown): value is { appHostPath: string; status?: string } {
+    if (typeof value !== 'object' || value === null) {
+        return false;
+    }
+
+    const candidate = value as { appHostPath?: unknown; status?: unknown };
+    return typeof candidate.appHostPath === 'string'
+        && (candidate.status === undefined || typeof candidate.status === 'string');
 }
 
 async function waitForRunningAppHostProcessExitFromState(appHostPath: string, timeoutMs: number): Promise<void> {

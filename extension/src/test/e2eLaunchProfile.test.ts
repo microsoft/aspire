@@ -335,7 +335,9 @@ suite('E2E launch profile', () => {
         const stopAppHost = fixtures.slice(stopAppHostStart, stopAppHostEnd);
 
         assert.ok(stopAppHost.includes('await waitForRunningAppHostProcessExitFromState(appHostPath, 5000).catch(() => undefined);'));
+        assert.ok(stopAppHost.includes('if (!await isAppHostRunningAccordingToCli(appHostPath))'));
         assert.ok(stopAppHost.includes('await waitForRunningAppHostProcessExitFromState(appHostPath, 30000);'));
+        assert.ok(fixtures.includes("['ps', '--format', 'json']"));
         assert.ok(!fixtures.includes('terminateProcessTree(runningAppHost.appHostPid'));
         assert.ok(fixtures.includes('async function waitForProcessExit(pid: number, timeoutMs: number): Promise<void>'));
         assert.ok(fixtures.includes('process.kill(pid, 0);'));
