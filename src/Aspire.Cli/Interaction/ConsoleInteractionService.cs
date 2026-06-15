@@ -845,7 +845,7 @@ internal class ConsoleInteractionService : IInteractionService
         // text. Some choice formatters intentionally include [bold]/[dim]/etc. tokens for the
         // interactive multi-select renderer; those tokens would otherwise leak verbatim through
         // DisplaySubtleMessage and confuse anyone diagnosing a typoed --option value.
-        var availableChoices = string.Join(", ", choices.Select(c => choiceFormatter(c).RemoveSpectreFormatting()));
+        var availableChoices = string.Join(", ", choices.Select(c => Markup.Remove(choiceFormatter(c))));
         DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveAvailableValues, availableChoices));
         throw new NonInteractiveException(symbolDisplayName);
     }
