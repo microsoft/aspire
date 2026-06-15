@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Extended --skills and --skill-locations flags to support non-interactive mode across aspire init, new, and agent init commands; grouped with PR #18191",
+  "mergedAt": "2026-06-15T00:12:47Z",
+  "number": 18192,
+  "runDate": "2026-06-15T00:30:31Z",
+  "status": "included",
+  "title": "Thread PromptBindings through AgentInitCommand and NewCommand"
+}

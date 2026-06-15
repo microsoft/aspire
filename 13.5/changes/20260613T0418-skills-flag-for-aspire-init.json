@@ -7,15 +7,16 @@
   "communityContributors": [
     "@nanookclaw"
   ],
-  "description": "The aspire init command now accepts a --skills flag to control which agent skills are installed during initialization. Non-interactive flows can pass --skills none to skip all skill installation, or specify individual skills explicitly.",
+  "description": "The aspire init, aspire new, and aspire agent init commands now accept --skills and --skill-locations flags to control which agent skills are installed during initialization. These flags support non-interactive mode, allowing use in scripts and CI environments without interactive prompts.",
   "docsPrs": [],
   "docsRequired": true,
   "emoji": "🛠️",
   "firstMergedAt": "2026-06-13T04:18:47Z",
-  "lastMergedAt": "2026-06-13T04:18:47Z",
-  "name": "--skills flag for aspire init",
+  "lastMergedAt": "2026-06-15T00:12:47Z",
+  "name": "--skills and --skill-locations flags for init and new commands",
   "owner": "JamesNK",
   "prs": [
-    18191
+    18191,
+    18192
   ]
 }
