@@ -214,7 +214,10 @@ namespace Projects%3B
     </PropertyGroup>
 
     <PropertyGroup>
-      <_AspireCliBundleNotFoundError>$(MSBuildProjectName) is configured to use the Aspire CLI bundle, but the bundle could not be resolved. Some new Aspire features require the Aspire CLI to be installed. Install the Aspire CLI from https://get.aspire.dev and ensure the aspire command is available on PATH, or set AspireCliBundlePath/AspireCliPath to a valid Aspire CLI installation or bundle layout.</_AspireCliBundleNotFoundError>
+      <_AspireCliBundleNotFoundError>
+        $(MSBuildProjectName) is configured to use the Aspire CLI bundle, but the bundle could not be resolved. New features require the Aspire CLI to be installed. The Aspire dashboard &amp; DCP packages will be deprecated in a future release.
+        Install the Aspire CLI from https://get.aspire.dev and ensure the aspire command is available on PATH, or set AspireCliBundlePath/AspireCliPath to a valid Aspire CLI installation or bundle layout.
+      </_AspireCliBundleNotFoundError>
     </PropertyGroup>
 
     <Error Code="ASPIRE009"
