@@ -94,7 +94,9 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
         spec.PemCertificates = pemCertificates;
 
-        var launchArgs = BuildLaunchArgs(er, spec, configuration.Arguments, spec.Args?.Count ?? 0);
+        var executableArgumentStartIndex = spec.Args?.Count ?? 0;
+        var launchArgs = BuildLaunchArgs(er, spec, configuration.Arguments, executableArgumentStartIndex);
+        AddDotnetRunArgsForExecutableAnnotatedProject(er, launchArgs, executableArgumentStartIndex);
         var executableArgs = launchArgs.Where(a => a.Executable).Select(a => a.Value).ToList();
         var displayArgs = launchArgs.Where(a => a.Display).ToList();
         if (executableArgs.Count > 0)
@@ -531,6 +533,77 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         launchArgs.AddRange(appHostArgList.Select(a => CreateLaunchArgument(a.Value, a.IsSensitive, executable: true, display: true)));
 
         return launchArgs;
+    }
+
+    private void AddDotnetRunArgsForExecutableAnnotatedProject(RenderedModelResource<Executable> er, List<LaunchArgument> launchArgs, int executableArgumentStartIndex)
+    {
+        if (er.ModelResource is not ProjectResource ||
+            !er.ModelResource.TryGetLastAnnotation<ExecutableAnnotation>(out var executableAnnotation) ||
+            !string.Equals(executableAnnotation.Command, "dotnet", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var runIndex = launchArgs.FindIndex(argument => argument.Executable && string.Equals(argument.Value, "run", StringComparison.Ordinal));
+        if (runIndex < 0)
+        {
+            return;
+        }
+
+        var argsToInsert = new List<string>();
+        if (!string.IsNullOrEmpty(_distributedApplicationOptions.Configuration) &&
+            !ContainsDotnetRunOption(launchArgs, "--configuration", "-c"))
+        {
+            argsToInsert.AddRange(["--configuration", _distributedApplicationOptions.Configuration]);
+        }
+
+        if (!ContainsDotnetRunOption(launchArgs, "--no-launch-profile") &&
+            !ContainsDotnetRunOption(launchArgs, "--launch-profile"))
+        {
+            argsToInsert.Add("--no-launch-profile");
+        }
+
+        if (argsToInsert.Count == 0)
+        {
+            return;
+        }
+
+        // Some ProjectResource subtypes provide the `dotnet run` command through resource args
+        // instead of using Aspire's default project wrapper. Keep the SDK-shaped command, but
+        // preserve the same AppHost configuration and launch-profile suppression that regular
+        // process-launched project resources get.
+        launchArgs.InsertRange(runIndex + 1, argsToInsert.Select(argument => new LaunchArgument(argument, IsSensitive: false, Executable: true, Display: false, EffectiveArgumentIndex: null)));
+        ReindexExecutableLaunchArgs(launchArgs, executableArgumentStartIndex);
+    }
+
+    private static bool ContainsDotnetRunOption(List<LaunchArgument> launchArgs, params string[] options)
+    {
+        var separatorIndex = launchArgs.FindIndex(argument => argument.Executable && string.Equals(argument.Value, "--", StringComparison.Ordinal));
+        var endIndex = separatorIndex < 0 ? launchArgs.Count : separatorIndex;
+
+        for (var i = 0; i < endIndex; i++)
+        {
+            var value = launchArgs[i].Value;
+            if (options.Any(option => string.Equals(value, option, StringComparison.Ordinal) || value.StartsWith(option + "=", StringComparison.Ordinal)))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static void ReindexExecutableLaunchArgs(List<LaunchArgument> launchArgs, int executableArgumentStartIndex)
+    {
+        var nextExecutableArgumentIndex = executableArgumentStartIndex;
+        for (var i = 0; i < launchArgs.Count; i++)
+        {
+            var argument = launchArgs[i];
+            launchArgs[i] = argument with
+            {
+                EffectiveArgumentIndex = argument.Executable ? nextExecutableArgumentIndex++ : null
+            };
+        }
     }
 
     /// <summary>

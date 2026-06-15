@@ -3193,7 +3193,9 @@ public class DcpExecutorTests
         var kubernetesService = new TestKubernetesService();
         using var app = builder.Build();
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+        var distributedApplicationOptions = new DistributedApplicationOptions { AssemblyName = typeof(DcpExecutorTests).Assembly.FullName };
+        var expectedConfiguration = System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyConfigurationAttribute>(typeof(DcpExecutorTests).Assembly)?.Configuration;
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration, distributedApplicationOptions: distributedApplicationOptions);
 
         await appExecutor.RunApplicationAsync();
 
@@ -3201,14 +3203,19 @@ public class DcpExecutorTests
         Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
         Assert.Equal("dotnet", exe.Spec.ExecutablePath);
         Assert.Equal("/tmp/mauiapp", exe.Spec.WorkingDirectory);
-        Assert.Equal(
-            [
-                "run",
-                "-f",
-                "net10.0-ios",
-                "-p:_DeviceName=:v2:udid=E25BBE37-69BA-4720-B6FD-D54C97791E79"
-            ],
-            exe.Spec.Args);
+        var expectedArgs = new List<string> { "run" };
+        if (!string.IsNullOrEmpty(expectedConfiguration))
+        {
+            expectedArgs.AddRange(["--configuration", expectedConfiguration]);
+        }
+        expectedArgs.AddRange([
+            "--no-launch-profile",
+            "-f",
+            "net10.0-ios",
+            "-p:_DeviceName=:v2:udid=E25BBE37-69BA-4720-B6FD-D54C97791E79"
+        ]);
+
+        Assert.Equal(expectedArgs, exe.Spec.Args);
     }
 
     [Fact]
@@ -4605,7 +4612,8 @@ public class DcpExecutorTests
         DcpOptions? dcpOptions = null,
         ResourceLoggerService? resourceLoggerService = null,
         DcpExecutorEvents? events = null,
-        Hosting.Eventing.IDistributedApplicationEventing? distributedApplicationEventing = null)
+        Hosting.Eventing.IDistributedApplicationEventing? distributedApplicationEventing = null,
+        DistributedApplicationOptions? distributedApplicationOptions = null)
     {
         if (configuration == null)
         {
@@ -4654,7 +4662,7 @@ public class DcpExecutorTests
             configuration,
             nameGenerator,
             distributedAppModel,
-            new DistributedApplicationOptions(),
+            distributedApplicationOptions ?? new DistributedApplicationOptions(),
             executionContext,
             locations,
             aspireStore,
