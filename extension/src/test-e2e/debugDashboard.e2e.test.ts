@@ -82,6 +82,7 @@ suite('Aspire debug dashboard E2E', function () {
             const before = getCommandInvocationCount('aspire-vscode.debugAppHost');
             await executeE2eControlCommand({ name: 'debugAppHost', appHostPath }, { waitFor: 'started' });
             await waitForCommandOutcome('aspire-vscode.debugAppHost', 'success', 60000, before);
+            await waitForDebugConsoleOutput('error CS0103', appHostPath, 120000);
             await waitForDebugConsoleOutput('The project could not be built', appHostPath, 120000);
             const logOutput = await waitForDebugConsoleOutput('See logs at', appHostPath, 120000);
             const logPath = getLogPathFromDebugConsoleOutput(logOutput.output);

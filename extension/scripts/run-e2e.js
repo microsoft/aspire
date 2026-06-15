@@ -817,7 +817,8 @@ function writeAppHostProject(projectName, resolvedAppHostSdkVersion) {
 </Project>
 `);
 
-  fs.writeFileSync(path.join(projectDirectory, 'AppHost.cs'), `${csharpFileHeader}
+  fs.writeFileSync(path.join(projectDirectory, 'AppHost.cs'), `${csharpFileHeader}#pragma warning disable ASPIREINTERACTION001
+// The E2E fixture intentionally covers interaction command arguments while the API is still experimental.
 var builder = DistributedApplication.CreateBuilder(args);
 
 builder.AddProject<Projects.AspireE2E_Worker>("e2e-worker")

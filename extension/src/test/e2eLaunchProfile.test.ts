@@ -200,6 +200,15 @@ suite('E2E launch profile', () => {
         assert.ok(runTests.includes('extestEnv'));
     });
 
+    test('suppresses evaluation diagnostics for intentional E2E AppHost interaction APIs', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+
+        assert.ok(runner.includes('#pragma warning disable ASPIREINTERACTION001'));
+        assert.ok(runner.includes('new InteractionInput'));
+        assert.ok(runner.includes('InputType.SecretText'));
+    });
+
     test('launches VS Code E2E tests with telemetry disabled before extension activation', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
@@ -282,6 +291,7 @@ suite('E2E launch profile', () => {
 
         assert.ok(assertions.includes('writeJsonFileAtomic(controlFilePath'));
         assert.ok(assertions.includes('renameFileWithRetry(temporaryPath, filePath)'));
+        assert.ok(assertions.includes("code === 'EBUSY'"));
         assert.ok(fixtures.includes('writeFileWithRetry(settingsPath'));
         assert.ok(fixtures.includes("code === 'EBUSY'"));
         assert.ok(fixtures.includes("code === 'EPERM'"));
