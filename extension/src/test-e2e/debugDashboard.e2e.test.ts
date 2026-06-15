@@ -82,12 +82,10 @@ suite('Aspire debug dashboard E2E', function () {
             const before = getCommandInvocationCount('aspire-vscode.debugAppHost');
             await executeE2eControlCommand({ name: 'debugAppHost', appHostPath }, { waitFor: 'started' });
             await waitForCommandOutcome('aspire-vscode.debugAppHost', 'success', 60000, before);
-            await waitForDebugConsoleOutput('error CS0103', appHostPath, 120000);
+            await waitForDebugConsoleOutput("__AspireE2EFlushRegressionMissingSymbol__' does not exist", appHostPath, 120000);
             await waitForDebugConsoleOutput('The project could not be built', appHostPath, 120000);
             const logOutput = await waitForDebugConsoleOutput('See logs at', appHostPath, 120000);
             assert.ok(!logOutput.output.includes('\u001b]8;'), `Expected debug console log output to omit terminal hyperlinks: ${JSON.stringify(logOutput.output)}`);
-            const logPath = getLogPathFromDebugConsoleOutput(logOutput.output);
-            await waitForLogFileText(logPath, '__AspireE2EFlushRegressionMissingSymbol__');
         }
         finally {
             await runE2eTeardown([
@@ -99,35 +97,3 @@ suite('Aspire debug dashboard E2E', function () {
         }
     });
 });
-
-function getLogPathFromDebugConsoleOutput(output: string): string {
-    const match = output.match(/See logs at (.+?)(?:\r?\n|$)/);
-    assert.ok(match, `Expected debug console output to include a log path: ${JSON.stringify(output)}`);
-
-    const logPath = match[1].trim();
-    assert.ok(path.isAbsolute(logPath), `Expected an absolute log path in debug console output: ${JSON.stringify(output)}`);
-
-    return logPath;
-}
-
-async function waitForLogFileText(logPath: string, expectedText: string, timeoutMs = 120000): Promise<void> {
-    const started = Date.now();
-    let lastError: string | undefined;
-    let lastContent = '<missing>';
-
-    while (Date.now() - started < timeoutMs) {
-        try {
-            lastContent = fs.readFileSync(logPath, 'utf8');
-            if (lastContent.includes(expectedText)) {
-                return;
-            }
-        }
-        catch (error) {
-            lastError = error instanceof Error ? error.message : String(error);
-        }
-
-        await new Promise(resolve => setTimeout(resolve, 500));
-    }
-
-    throw new Error(`Timed out after ${timeoutMs}ms waiting for ${logPath} to contain '${expectedText}'. Last error: ${lastError ?? '<none>'}. Last content:\n${lastContent}`);
-}

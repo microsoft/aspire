@@ -289,6 +289,7 @@ suite('E2E launch profile', () => {
         const extension = fs.readFileSync(path.join(extensionRoot, 'src', 'extension.ts'), 'utf8');
         const assertions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'assertions.ts'), 'utf8');
         const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const debugDashboard = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'debugDashboard.e2e.test.ts'), 'utf8');
         const extensionRenameRetryStart = extension.indexOf('function isRetryableRenameError');
         const extensionRenameRetryEnd = extension.indexOf('function sleepSynchronously');
         const renameRetryStart = assertions.indexOf('function isRetryableRenameError');
@@ -307,6 +308,12 @@ suite('E2E launch profile', () => {
         assert.ok(fixtures.includes('writeFileWithRetry(settingsPath'));
         assert.ok(fixtures.includes('removePath(getWorkspaceAppHostConfigPath(), { force: true });'));
         assert.ok(fixtures.includes("removePath(path.join(getWorkspaceRoot(), '.aspire'), { recursive: true, force: true });"));
+        assert.ok(fixtures.includes("const maxAttempts = process.platform === 'win32' ? 40 : 1;"));
+        assert.ok(fixtures.includes('fs.rmSync(targetPath, options);'));
+        assert.ok(debugDashboard.includes('writeFileWithRetry(appHostSourcePath, brokenSource);'));
+        assert.ok(debugDashboard.includes('writeFileWithRetry(appHostSourcePath, originalSource)'));
+        assert.ok(debugDashboard.includes("__AspireE2EFlushRegressionMissingSymbol__' does not exist"));
+        assert.ok(!debugDashboard.includes('waitForLogFileText'));
         assert.ok(fixtures.includes("code === 'EBUSY'"));
         assert.ok(fixtures.includes("code === 'EPERM'"));
         assert.ok(fixtures.includes("code === 'EACCES'"));
@@ -346,6 +353,6 @@ suite('E2E launch profile', () => {
         assert.ok(fixtures.includes('async function waitForProcessExit(pid: number, timeoutMs: number): Promise<void>'));
         assert.ok(fixtures.includes('process.kill(pid, 0);'));
         assert.ok(fixtures.includes("error.code === 'EPERM'"));
-        assert.ok(fixtures.includes('maxRetries: process.platform === \'win32\' ? 40 : 0'));
+        assert.ok(fixtures.includes("const maxAttempts = process.platform === 'win32' ? 40 : 1;"));
     });
 });

@@ -526,11 +526,20 @@ function delay(ms: number): Promise<void> {
 }
 
 function removePath(targetPath: string, options: fs.RmOptions): void {
-    fs.rmSync(targetPath, {
-        maxRetries: process.platform === 'win32' ? 40 : 0,
-        retryDelay: 250,
-        ...options,
-    });
+    const maxAttempts = process.platform === 'win32' ? 40 : 1;
+    for (let attempt = 1; ; attempt++) {
+        try {
+            fs.rmSync(targetPath, options);
+            return;
+        }
+        catch (error) {
+            if (attempt >= maxAttempts || !isRetryableFileSystemError(error)) {
+                throw error;
+            }
+
+            sleepSynchronously(250);
+        }
+    }
 }
 
 export function writeFileWithRetry(filePath: string, content: string): void {
