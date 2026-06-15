@@ -133,7 +133,7 @@
     <PackageVersion Include="StackExchange.Redis" Version="2.13.1" />
     <PackageVersion Include="System.IO.Hashing" Version="10.0.8" />
     <PackageVersion Include="Yarp.ReverseProxy" Version="2.3.0" />
-    <PackageVersion Include="StreamJsonRpc" Version="2.22.23" />
+    <PackageVersion Include="StreamJsonRpc" Version="2.24.92" />
     <PackageVersion Include="Semver" Version="3.0.0" />
     <PackageVersion Include="Sigstore" Version="0.5.0" />
     <PackageVersion Include="Tuf" Version="0.5.0" />
