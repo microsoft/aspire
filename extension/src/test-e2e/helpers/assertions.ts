@@ -477,7 +477,7 @@ function sanitizeUrlForDiagnostics(url: string): string {
     }
 }
 
-function sleepSynchronously(milliseconds: number): void {
+export function sleepSynchronously(milliseconds: number): void {
     const buffer = new SharedArrayBuffer(4);
     Atomics.wait(new Int32Array(buffer), 0, 0, milliseconds);
 }

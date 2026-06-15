@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { AspireExtensionE2EControlCommand, AspireExtensionE2EControlStatus } from '../../types/extensionApi';
-import { applyE2eControl, isSamePath, readStateFile, waitForExtensionState, waitForNoRunningAppHost } from './assertions';
+import { applyE2eControl, isSamePath, readStateFile, sleepSynchronously, waitForExtensionState, waitForNoRunningAppHost } from './assertions';
 import { getCliPath, getPrimaryAppHostProjectPath, getRepoRoot, getWorkspaceRoot } from './paths';
 import { runProcess, terminateProcessTree } from './process';
 
@@ -468,8 +468,4 @@ function isRetryableFileSystemError(error: unknown): boolean {
 
     const code = (error as NodeJS.ErrnoException).code;
     return code === 'EBUSY' || code === 'EPERM';
-}
-
-function sleepSynchronously(ms: number): void {
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
