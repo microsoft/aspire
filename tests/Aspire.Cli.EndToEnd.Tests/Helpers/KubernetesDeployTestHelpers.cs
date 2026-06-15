@@ -245,10 +245,10 @@ internal static class KubernetesDeployTestHelpers
             await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromSeconds(180));
         }
 
-        // Step 4: Add client NuGet packages to ApiService (--prerelease needed for PR builds)
+        // Step 4: Add client NuGet packages to ApiService (uses local hive version when available, otherwise falls back to --prerelease)
         foreach (var package in apiClientPackages)
         {
-            await auto.TypeAsync($"dotnet add {projectName}.ApiService package {package} --prerelease");
+            await auto.TypeAsync(AspireCliShellCommandHelpers.GetDotnetAddPackageCommand($"{projectName}.ApiService", package));
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
         }

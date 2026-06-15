@@ -144,7 +144,7 @@ public class DashboardServiceDataTerminalTests
     private static bool HasTerminalProperty(ResourceSnapshot snapshot, string name)
         => snapshot.Properties.Any(p => string.Equals(p.Name, name, StringComparison.Ordinal));
 
-    private static (string Name, Google.Protobuf.WellKnownTypes.Value Value, bool IsSensitive) GetTerminalProperty(ResourceSnapshot snapshot, string name)
+    private static (string Name, Google.Protobuf.WellKnownTypes.Value Value, bool IsSensitive, string? DisplayName, bool IsHighlighted) GetTerminalProperty(ResourceSnapshot snapshot, string name)
         => snapshot.Properties.Single(p => string.Equals(p.Name, name, StringComparison.Ordinal));
 
     private static IReadOnlyList<TerminalHostResource> GetTerminalHosts(Resource resource)

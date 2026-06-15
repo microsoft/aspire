@@ -131,13 +131,13 @@
     <value>The Aspire CLI is older than the Aspire version used by the AppHost. Update the Aspire CLI to continue.</value>
   </data>
   <data name="AspireHostingSDKVersion" xml:space="preserve">
-    <value>Aspire.Hosting Version</value>
+    <value>Aspire.Hosting version</value>
   </data>
   <data name="AspireCLIVersion" xml:space="preserve">
-    <value>Aspire CLI Version</value>
+    <value>Aspire CLI version</value>
   </data>
   <data name="RequiredCapability" xml:space="preserve">
-    <value>Required Capability</value>
+    <value>Required capability</value>
   </data>
   <data name="Dashboard" xml:space="preserve">
     <value>Dashboard</value>

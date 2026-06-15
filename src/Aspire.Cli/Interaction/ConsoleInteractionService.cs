@@ -468,10 +468,20 @@ internal class ConsoleInteractionService : IInteractionService
 
         DisplayError(errorMessage);
         MessageConsole.WriteLine();
-        MessageConsole.MarkupLine(
-            $"\t[bold]{InteractionServiceStrings.AspireHostingSDKVersion}[/]: {appHostHostingVersion.EscapeMarkup()}");
-        MessageConsole.MarkupLine($"\t[bold]{InteractionServiceStrings.AspireCLIVersion}[/]: {cliInformationalVersion.EscapeMarkup()}");
-        MessageConsole.MarkupLine($"\t[bold]{InteractionServiceStrings.RequiredCapability}[/]: {ex.RequiredCapability.EscapeMarkup()}");
+
+        var grid = new Grid();
+        grid.AddColumn(new GridColumn { Padding = new Padding(2, 0, 1, 0), NoWrap = true });
+        grid.AddColumn(new GridColumn { Padding = new Padding(0) });
+        grid.AddRow(
+            new Markup($"[bold]{InteractionServiceStrings.AspireHostingSDKVersion.EscapeMarkup()}[/]"),
+            new Markup(appHostHostingVersion.EscapeMarkup()));
+        grid.AddRow(
+            new Markup($"[bold]{InteractionServiceStrings.AspireCLIVersion.EscapeMarkup()}[/]"),
+            new Markup(cliInformationalVersion.EscapeMarkup()));
+        grid.AddRow(
+            new Markup($"[bold]{InteractionServiceStrings.RequiredCapability.EscapeMarkup()}[/]"),
+            new Markup(ex.RequiredCapability.EscapeMarkup()));
+        MessageConsole.Write(grid);
 
         if (updateCommand is not null)
         {
