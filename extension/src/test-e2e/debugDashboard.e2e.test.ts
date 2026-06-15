@@ -85,9 +85,9 @@ suite('Aspire debug dashboard E2E', function () {
             await waitForDebugConsoleOutput('error CS0103', appHostPath, 120000);
             await waitForDebugConsoleOutput('The project could not be built', appHostPath, 120000);
             const logOutput = await waitForDebugConsoleOutput('See logs at', appHostPath, 120000);
+            assert.ok(!logOutput.output.includes('\u001b]8;'), `Expected debug console log output to omit terminal hyperlinks: ${JSON.stringify(logOutput.output)}`);
             const logPath = getLogPathFromDebugConsoleOutput(logOutput.output);
             await waitForLogFileText(logPath, '__AspireE2EFlushRegressionMissingSymbol__');
-            assert.ok(!logOutput.output.includes('\u001b]8;'), `Expected debug console log output to omit terminal hyperlinks: ${JSON.stringify(logOutput.output)}`);
         }
         finally {
             await setShowStatusDelayForE2E(undefined);

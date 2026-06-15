@@ -288,10 +288,15 @@ suite('E2E launch profile', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const assertions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'assertions.ts'), 'utf8');
         const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const renameRetryStart = assertions.indexOf('function isRetryableRenameError');
+        const renameRetryEnd = assertions.indexOf('function isDebugSessionForAppHost');
+        assert.ok(renameRetryStart >= 0);
+        assert.ok(renameRetryEnd > renameRetryStart);
+        const renameRetry = assertions.slice(renameRetryStart, renameRetryEnd);
 
         assert.ok(assertions.includes('writeJsonFileAtomic(controlFilePath'));
         assert.ok(assertions.includes('renameFileWithRetry(temporaryPath, filePath)'));
-        assert.ok(assertions.includes("code === 'EBUSY'"));
+        assert.ok(renameRetry.includes("error.code === 'EBUSY'"));
         assert.ok(fixtures.includes('writeFileWithRetry(settingsPath'));
         assert.ok(fixtures.includes("code === 'EBUSY'"));
         assert.ok(fixtures.includes("code === 'EPERM'"));
