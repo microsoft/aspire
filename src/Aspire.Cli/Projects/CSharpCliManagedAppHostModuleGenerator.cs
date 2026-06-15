@@ -212,6 +212,7 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         CancellationToken cancellationToken)
     {
         var generatedProjectPath = Path.ChangeExtension(appHostFile.FullName, ".csproj");
+        var moduleProjectPath = Path.Combine(appHostFile.Directory!.FullName, AspireJsonConfiguration.SettingsFolder, ModulesDirectoryName, ModuleProjectFileName);
         var projectCondition = $"'$(MSBuildProjectFullPath)' == '{generatedProjectPath}'";
 
         var root = new XElement("Project");
@@ -220,6 +221,14 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
             new XElement("ProjectReference",
                 new XAttribute("Update", "@(ProjectReference)"),
                 new XAttribute("GlobalPropertiesToRemove", "%(ProjectReference.GlobalPropertiesToRemove);DirectoryBuildPropsPath;DirectoryBuildTargetsPath"))));
+        root.Add(new XElement("ItemGroup",
+            new XAttribute("Condition", projectCondition),
+            new XElement("ProjectReference",
+                new XAttribute("Update", "@(ProjectReference)"),
+                new XAttribute("Condition", $"'%(ProjectReference.FullPath)' == '{moduleProjectPath}'"),
+                new XElement("ReferenceOutputAssembly", "false"),
+                new XElement("Private", "false"),
+                new XElement("BuildReference", "false"))));
 
         await using var stream = appHostBuildTargetsFile.Create();
         await new XDocument(root).SaveAsync(stream, SaveOptions.None, cancellationToken).ConfigureAwait(false);

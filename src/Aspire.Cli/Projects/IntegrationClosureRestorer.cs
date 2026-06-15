@@ -170,7 +170,7 @@ internal sealed class IntegrationClosureRestorer(
             }
         }
 
-        var closureManifest = await ReadClosureManifestAsync(restoreDir, moduleProjectFile, cancellationToken).ConfigureAwait(false);
+        var closureManifest = await ReadClosureManifestAsync(restoreDir, cancellationToken).ConfigureAwait(false);
         if (closureManifest is null)
         {
             return false;
@@ -204,13 +204,13 @@ internal sealed class IntegrationClosureRestorer(
         return true;
     }
 
-    private async Task<AppHostServerClosureManifest?> ReadClosureManifestAsync(string restoreDir, FileInfo moduleProjectFile, CancellationToken cancellationToken)
+    private async Task<AppHostServerClosureManifest?> ReadClosureManifestAsync(string restoreDir, CancellationToken cancellationToken)
     {
-        // The module project's obj/ directory holds project.assets.json (NuGet writes it under
-        // BaseIntermediateOutputPath, not under the closure restoreDir). We compute it relative to
-        // the module project file to keep working regardless of any future restoreDir layout
-        // changes.
-        var assetsFilePath = Path.Combine(moduleProjectFile.Directory!.FullName, "obj", IntegrationClosureBuilder.ProjectAssetsFileName);
+        // The generated module project sets BaseIntermediateOutputPath under the same
+        // integration-restore directory that receives the closure files, matching the
+        // polyglot/prebuilt generated-project layout even though Aspire.csproj itself lives under
+        // .aspire/modules so file-based AppHosts can reference it with #:project.
+        var assetsFilePath = Path.Combine(restoreDir, "obj", IntegrationClosureBuilder.ProjectAssetsFileName);
 
         // The CLI-managed restorer treats missing closure files as a soft failure (log + return
         // null) so the caller surfaces "build did not emit closure" rather than crashing. We

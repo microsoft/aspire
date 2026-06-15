@@ -66,6 +66,16 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
         Assert.Equal("false", propertyGroup.Element("GenerateDocumentationFile")?.Value);
         Assert.Equal("false", propertyGroup.Element("IsPackable")?.Value);
         Assert.Equal("false", propertyGroup.Element("IsPublishable")?.Value);
+        var restoreDir = Path.Combine(
+            IntegrationClosureRestorer.GetOrCreateWorkingDirectory(appHostFile).FullName,
+            IntegrationClosureBuilder.IntegrationRestoreFolderName);
+        Assert.Equal(
+            Path.Combine(restoreDir, "bin") + Path.DirectorySeparatorChar,
+            propertyGroup.Element("BaseOutputPath")?.Value);
+        Assert.Equal(
+            Path.Combine(restoreDir, "obj") + Path.DirectorySeparatorChar,
+            propertyGroup.Element("BaseIntermediateOutputPath")?.Value);
+        Assert.Equal("$(BaseIntermediateOutputPath)", propertyGroup.Element("MSBuildProjectExtensionsPath")?.Value);
         Assert.Equal("false", propertyGroup.Element("ProduceReferenceAssembly")?.Value);
         Assert.DoesNotContain(moduleProject.Root.Elements("Import"), e => e.Attribute("Project")?.Value == "Aspire.targets");
         Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.targets")));
@@ -98,6 +108,14 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
             e.Element("ProjectReference") is { } projectReference &&
             projectReference.Attribute("Update")?.Value == "@(ProjectReference)" &&
             projectReference.Attribute("GlobalPropertiesToRemove")?.Value == "%(ProjectReference.GlobalPropertiesToRemove);DirectoryBuildPropsPath;DirectoryBuildTargetsPath");
+        Assert.Contains(appHostBuildTargets.Root.Elements("ItemGroup"), e =>
+            e.Attribute("Condition")?.Value == projectCondition &&
+            e.Element("ProjectReference") is { } projectReference &&
+            projectReference.Attribute("Update")?.Value == "@(ProjectReference)" &&
+            projectReference.Attribute("Condition")?.Value == $"'%(ProjectReference.FullPath)' == '{moduleProjectFile.FullName}'" &&
+            projectReference.Element("ReferenceOutputAssembly")?.Value == "false" &&
+            projectReference.Element("Private")?.Value == "false" &&
+            projectReference.Element("BuildReference")?.Value == "false");
 
         var appHostPropertyGroup = appHostBuildProps.Root.Elements("PropertyGroup")
             .Single(e => e.Attribute("Condition")?.Value == projectCondition);

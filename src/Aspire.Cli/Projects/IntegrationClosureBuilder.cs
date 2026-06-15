@@ -52,6 +52,9 @@ internal static class IntegrationClosureBuilder
         projectFile.AddProperty("GenerateDocumentationFile", "false");
         projectFile.AddProperty("IsPackable", "false");
         projectFile.AddProperty("IsPublishable", "false");
+        projectFile.AddProperty("BaseOutputPath", EnsureTrailingSlash(Path.Combine(restoreDir, "bin")));
+        projectFile.AddProperty("BaseIntermediateOutputPath", EnsureTrailingSlash(Path.Combine(restoreDir, "obj")));
+        projectFile.AddProperty("MSBuildProjectExtensionsPath", "$(BaseIntermediateOutputPath)");
 
         // Closure output properties consumed by the post-build reader.
         projectFile.AddProperty("CopyLocalLockFileAssemblies", "true");
@@ -111,6 +114,11 @@ internal static class IntegrationClosureBuilder
                     new XAttribute("WriteOnlyWhenDifferent", "true"))));
 
         return projectFile;
+
+        static string EnsureTrailingSlash(string path)
+            => path.EndsWith(Path.DirectorySeparatorChar)
+                ? path
+                : path + Path.DirectorySeparatorChar;
     }
 
     /// <summary>
