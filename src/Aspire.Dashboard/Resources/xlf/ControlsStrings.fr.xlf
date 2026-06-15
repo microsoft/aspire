@@ -162,6 +162,11 @@
         <target state="translated">Exporter JSON</target>
         <note />
       </trans-unit>
+      <trans-unit id="FilterAllColumnsTitle">
+        <source>Search all columns</source>
+        <target state="new">Search all columns</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FilterPlaceholder">
         <source>Filter...</source>
         <target state="translated">Filtrer...</target>

@@ -385,6 +385,15 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Search all columns.
+        /// </summary>
+        public static string FilterAllColumnsTitle {
+            get {
+                return ResourceManager.GetString("FilterAllColumnsTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Filter....
         /// </summary>
         public static string FilterPlaceholder {

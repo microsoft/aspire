@@ -13,8 +13,23 @@ public class StructuredLogsViewModel
 {
     private readonly TelemetryRepository _telemetryRepository;
     private readonly List<FieldTelemetryFilter> _filters = new();
+    private readonly List<TelemetryFilter> _columnFilters = new();
     // Cache span lookups for GenAI attributes to avoid repeated lookups.
     private readonly ConcurrentDictionary<SpanKey, bool> _spanGenAICache = new();
+
+    /// <summary>
+    /// Per-column log level filter state. The view model is registered as transient and injected into the page
+    /// component, so this state lives as long as the page component instance: it persists across in-page parameter
+    /// navigation (the same routable component is reused) but resets when the page is left and re-created.
+    /// </summary>
+    public ConcurrentDictionary<string, bool> LogLevelFilterValues { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Per-column resource filter state. The view model is registered as transient and injected into the page
+    /// component, so this state lives as long as the page component instance: it persists across in-page parameter
+    /// navigation (the same routable component is reused) but resets when the page is left and re-created.
+    /// </summary>
+    public ConcurrentDictionary<string, bool> ResourceFilterValues { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     private PagedResult<OtlpLogEntry>? _logs;
     private ResourceKey? _resourceKey;
@@ -95,6 +110,34 @@ public class StructuredLogsViewModel
     public int Count { get => _logsCount; set => SetValue(ref _logsCount, value); }
     public LogLevel? LogLevel { get => _logLevel; set => SetValue(ref _logLevel, value); }
 
+    /// <summary>
+    /// Adds a persistent column-level filter (e.g., checkbox-based value filter).
+    /// Column filters are always included in queries and are not cleared by <see cref="ClearFilters"/>.
+    /// The same filter instance is only registered once; registration happens during page initialization.
+    /// </summary>
+    public void AddColumnFilter(TelemetryFilter filter)
+    {
+        if (!_columnFilters.Contains(filter))
+        {
+            _columnFilters.Add(filter);
+        }
+    }
+
+    /// <summary>
+    /// Recalculates cached state on all registered <see cref="ColumnValueFilter"/> instances.
+    /// Call after bulk checkbox changes to avoid repeated snapshot allocations during query evaluation.
+    /// </summary>
+    public void RecalculateColumnFilterCaches()
+    {
+        foreach (var filter in _columnFilters)
+        {
+            if (filter is ColumnValueFilter cvf)
+            {
+                cvf.RecalculateIsUnfiltered();
+            }
+        }
+    }
+
     private void SetValue<T>(ref T field, T value)
     {
         if (EqualityComparer<T>.Default.Equals(field, value))
@@ -130,9 +173,11 @@ public class StructuredLogsViewModel
     public List<TelemetryFilter> GetFilters()
     {
         var filters = Filters.Cast<TelemetryFilter>().ToList();
+        filters.AddRange(_columnFilters);
         if (!string.IsNullOrWhiteSpace(FilterText))
         {
-            filters.Add(new FieldTelemetryFilter { Field = nameof(OtlpLogEntry.Message), Condition = FilterCondition.Contains, Value = FilterText });
+            // Search across all user-visible columns: message, resource name, trace ID, severity, and category.
+            filters.Add(new CrossColumnLogFilter(FilterText));
         }
         // If the log level is set and it is not the bottom level, which has no effect, then add a filter.
         if (_logLevel != null && _logLevel != Microsoft.Extensions.Logging.LogLevel.Trace)

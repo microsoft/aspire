@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
@@ -11,6 +12,14 @@ public class TracesViewModel
 {
     private readonly TelemetryRepository _telemetryRepository;
     private readonly List<FieldTelemetryFilter> _filters = new();
+    private readonly List<TelemetryFilter> _columnFilters = new();
+
+    /// <summary>
+    /// Per-column resource filter state. The view model is registered as transient and injected into the page
+    /// component, so this state lives as long as the page component instance: it persists across in-page parameter
+    /// navigation (the same routable component is reused) but resets when the page is left and re-created.
+    /// </summary>
+    public ConcurrentDictionary<string, bool> ResourceFilterValues { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     private PagedResult<OtlpTrace>? _traces;
     private ResourceKey? _resourceKey;
@@ -32,6 +41,34 @@ public class TracesViewModel
     public int Count { get => _count; set => SetValue(ref _count, value); }
     public TimeSpan MaxDuration { get; private set; }
     public IReadOnlyList<FieldTelemetryFilter> Filters => _filters;
+
+    /// <summary>
+    /// Adds a persistent column-level filter (e.g., checkbox-based value filter).
+    /// Column filters are always included in queries and are not cleared by <see cref="ClearFilters"/>.
+    /// The same filter instance is only registered once; registration happens during page initialization.
+    /// </summary>
+    public void AddColumnFilter(TelemetryFilter filter)
+    {
+        if (!_columnFilters.Contains(filter))
+        {
+            _columnFilters.Add(filter);
+        }
+    }
+
+    /// <summary>
+    /// Recalculates cached state on all registered <see cref="ColumnValueFilter"/> instances.
+    /// Call after bulk checkbox changes to avoid repeated snapshot allocations during query evaluation.
+    /// </summary>
+    public void RecalculateColumnFilterCaches()
+    {
+        foreach (var filter in _columnFilters)
+        {
+            if (filter is ColumnValueFilter cvf)
+            {
+                cvf.RecalculateIsUnfiltered();
+            }
+        }
+    }
 
     public void ClearFilters()
     {
@@ -105,12 +142,10 @@ public class TracesViewModel
 
     public PagedResult<OtlpTrace> GetErrorTraces(int count)
     {
-        var filters = Filters.Cast<TelemetryFilter>().ToList();
-
-        if (SpanType?.Filter is { } typeFilter)
-        {
-            filters.Add(typeFilter);
-        }
+        // Use GetFilters() so column filters (e.g. the resource checkbox filter) are honored,
+        // keeping the error count consistent with the rows shown in the grid. Otherwise errors
+        // from resources the user has filtered out would still be counted.
+        var filters = GetFilters();
 
         filters.Add(new FieldTelemetryFilter { Field = KnownTraceFields.StatusField, Condition = FilterCondition.Equals, Value = OtlpSpanStatusCode.Error.ToString() });
 
@@ -129,6 +164,7 @@ public class TracesViewModel
     private List<TelemetryFilter> GetFilters()
     {
         var filters = Filters.Cast<TelemetryFilter>().ToList();
+        filters.AddRange(_columnFilters);
         if (SpanType?.Filter is { } typeFilter)
         {
             filters.Add(typeFilter);

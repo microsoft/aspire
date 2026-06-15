@@ -1,0 +1,39 @@
+@* Licensed to the .NET Foundation under one or more agreements. *@
+@* The .NET Foundation licenses this file to you under the MIT license. *@
+
+@namespace Aspire.Dashboard.Components.Controls.Grid
+
+@using System.Collections.Concurrent
+@using Aspire.Dashboard.Resources
+
+@inject IStringLocalizer<ControlsStrings> ControlsStringsLoc
+
+<div class="column-filter-menu">
+    @if (Values.Count > ValueSearchThreshold)
+    {
+        <FluentSearch @bind-Value="_searchText"
+                      @bind-Value:after="OnSearchChanged"
+                      Immediate="true"
+                      ImmediateDelay="@FluentUIExtensions.InputDelay"
+                      Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
+                      Class="column-filter-search" />
+    }
+
+    <FluentStack Orientation="Orientation.Vertical" Class="column-filter-options">
+        <FluentCheckbox Label="@ControlsStringsLoc[nameof(ControlsStrings.LabelAll)]"
+                        ThreeState="true"
+                        ShowIndeterminate="false"
+                        ThreeStateOrderUncheckToIntermediate="true"
+                        @bind-CheckState:get="@GetCheckState()"
+                        @bind-CheckState:set="@OnAllCheckedChangedAsync" />
+
+        @foreach (var (key, isChecked) in GetFilteredValues())
+        {
+            var label = string.IsNullOrEmpty(key) ? ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)] : key;
+
+            <FluentCheckbox Label="@label"
+                            @bind-Value:get="@isChecked"
+                            @bind-Value:set="@(c => OnValueCheckedChangedAsync(key, c))" />
+        }
+    </FluentStack>
+</div>

@@ -162,6 +162,11 @@
         <target state="translated">JSON 내보내기</target>
         <note />
       </trans-unit>
+      <trans-unit id="FilterAllColumnsTitle">
+        <source>Search all columns</source>
+        <target state="new">Search all columns</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FilterPlaceholder">
         <source>Filter...</source>
         <target state="translated">필터...</target>

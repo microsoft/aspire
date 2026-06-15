@@ -147,6 +147,9 @@
   <data name="EnvironmentVariablesHideVariableValues" xml:space="preserve">
     <value>Hide sensitive values</value>
   </data>
+  <data name="FilterAllColumnsTitle" xml:space="preserve">
+    <value>Search all columns</value>
+  </data>
   <data name="FilterPlaceholder" xml:space="preserve">
     <value>Filter...</value>
   </data>
