@@ -286,16 +286,23 @@ suite('E2E launch profile', () => {
 
     test('writes E2E control and mutable fixture files with Windows-safe retries', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
+        const extension = fs.readFileSync(path.join(extensionRoot, 'src', 'extension.ts'), 'utf8');
         const assertions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'assertions.ts'), 'utf8');
         const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const extensionRenameRetryStart = extension.indexOf('function isRetryableRenameError');
+        const extensionRenameRetryEnd = extension.indexOf('function sleepSynchronously');
         const renameRetryStart = assertions.indexOf('function isRetryableRenameError');
         const renameRetryEnd = assertions.indexOf('function isDebugSessionForAppHost');
+        assert.ok(extensionRenameRetryStart >= 0);
+        assert.ok(extensionRenameRetryEnd > extensionRenameRetryStart);
         assert.ok(renameRetryStart >= 0);
         assert.ok(renameRetryEnd > renameRetryStart);
+        const extensionRenameRetry = extension.slice(extensionRenameRetryStart, extensionRenameRetryEnd);
         const renameRetry = assertions.slice(renameRetryStart, renameRetryEnd);
 
         assert.ok(assertions.includes('writeJsonFileAtomic(controlFilePath'));
         assert.ok(assertions.includes('renameFileWithRetry(temporaryPath, filePath)'));
+        assert.ok(extensionRenameRetry.includes("error.code === 'EBUSY'"));
         assert.ok(renameRetry.includes("error.code === 'EBUSY'"));
         assert.ok(fixtures.includes('writeFileWithRetry(settingsPath'));
         assert.ok(fixtures.includes("code === 'EBUSY'"));
@@ -309,6 +316,7 @@ suite('E2E launch profile', () => {
         const commandPalette = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'commandPalette.e2e.test.ts'), 'utf8');
         const discoveryConfiguration = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'discoveryConfiguration.e2e.test.ts'), 'utf8');
 
+        assert.ok(commandPalette.includes('this.timeout(420000);'));
         assert.ok(fixtures.includes("kind: 'project' | 'single-file' = 'project'"));
         assert.ok(fixtures.includes("path.join(projectDirectory, 'apphost.cs')"));
         assert.ok(fixtures.includes('#:sdk Aspire.AppHost.Sdk@${getAppHostSdkVersion()}'));

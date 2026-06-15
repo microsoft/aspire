@@ -678,7 +678,7 @@ function isRetryableRenameError(error: unknown): boolean {
     return false;
   }
 
-  return error.code === 'EPERM' || error.code === 'EACCES' || error.code === 'EEXIST';
+  return error.code === 'EPERM' || error.code === 'EACCES' || error.code === 'EBUSY' || error.code === 'EEXIST';
 }
 
 function sleepSynchronously(milliseconds: number): void {

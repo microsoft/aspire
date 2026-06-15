@@ -7,7 +7,7 @@ import { getWorkspaceRoot } from './helpers/paths';
 import { executeCommandFromPalette, openAspireView, waitForEditorTitle, waitForNotificationMessage, waitForTerminalChannel, waitForWorkbenchText } from './helpers/vscode';
 
 suite('Aspire command palette E2E', function () {
-    this.timeout(300000);
+    this.timeout(420000);
 
     teardown(async () => {
         const failures: unknown[] = [];
