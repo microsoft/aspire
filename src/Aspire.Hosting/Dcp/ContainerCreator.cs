@@ -832,12 +832,15 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                     Contents = new string(keyPem),
                 });
 
-                certificateFiles.Add(new ContainerFileSystemEntry
+                if (tlsCertificateConfiguration.IsCertificateWithKeyPathReferenced)
                 {
-                    Name = thumbprint + ".pem",
-                    Type = ContainerFileSystemEntryType.File,
-                    Contents = new string([.. keyPem, '\n', .. publicCertificatePem]),
-                });
+                    certificateFiles.Add(new ContainerFileSystemEntry
+                    {
+                        Name = thumbprint + ".pem",
+                        Type = ContainerFileSystemEntryType.File,
+                        Contents = new string([.. keyPem, '\n', .. publicCertificatePem]),
+                    });
+                }
 
                 Array.Clear(keyPem, 0, keyPem.Length);
             }
