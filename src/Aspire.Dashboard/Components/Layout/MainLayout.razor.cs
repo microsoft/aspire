@@ -250,6 +250,13 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     private string GetDefaultReturnFocusElementId(string desktopButtonId) => ViewportInformation.IsDesktop ? desktopButtonId : NavigationButtonId;
 
+    private string? GetVisibleReturnFocusElementId(string? returnFocusElementId, string desktopButtonId)
+    {
+        // Dialog launchers move between the desktop header and the mobile navigation menu.
+        // Resolve the target when the dialog closes so viewport changes do not focus a removed element.
+        return returnFocusElementId is null ? null : GetDefaultReturnFocusElementId(desktopButtonId);
+    }
+
     private Task LaunchHelpAsync() => LaunchHelpAsync(GetDefaultReturnFocusElementId(HelpButtonId));
 
     private async Task LaunchHelpAsync(string? returnFocusElementId)
@@ -266,7 +273,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             Width = "700px",
             Height = "auto",
             Id = HelpDialogId,
-            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, _ => HandleDialogClose(returnFocusElementId))
+            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, _ => HandleDialogClose(GetVisibleReturnFocusElementId(returnFocusElementId, HelpButtonId)))
         };
 
         if (!await CloseOpenPageDialogForReplacementAsync(HelpDialogId).ConfigureAwait(true))
@@ -352,7 +359,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             Width = "300px",
             Height = "auto",
             Id = SettingsDialogId,
-            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, _ => HandleDialogClose(returnFocusElementId))
+            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, _ => HandleDialogClose(GetVisibleReturnFocusElementId(returnFocusElementId, SettingsButtonId)))
         };
 
         if (!await CloseOpenPageDialogForReplacementAsync(SettingsDialogId).ConfigureAwait(true))

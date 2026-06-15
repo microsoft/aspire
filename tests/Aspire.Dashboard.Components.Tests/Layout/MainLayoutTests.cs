@@ -12,6 +12,7 @@ using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Aspire.Tests.Shared;
 using Bunit;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -229,6 +230,69 @@ public partial class MainLayoutTests : DashboardTestContext
 
         Assert.NotNull(capturedParameters);
         Assert.Equal(expectedDialogId, capturedParameters.Id);
+
+        await cut.InvokeAsync(() => capturedParameters.OnDialogClosing.InvokeAsync(null!));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains(JSInterop.Invocations, invocation =>
+                invocation.Identifier == "focusElement" &&
+                invocation.Arguments.Count == 1 &&
+                string.Equals((string?)invocation.Arguments[0], expectedFocusId, StringComparison.Ordinal));
+        });
+    }
+
+    [Theory]
+    [InlineData(true, false, "dashboard-help-button", "HelpDialog", "dashboard-navigation-button")]
+    [InlineData(true, false, "dashboard-settings-button", "SettingsDialog", "dashboard-navigation-button")]
+    [InlineData(false, true, "dashboard-navigation-button", "HelpDialog", "dashboard-help-button")]
+    [InlineData(false, true, "dashboard-navigation-button", "SettingsDialog", "dashboard-settings-button")]
+    public async Task HeaderDialogClose_AfterViewportChange_RestoresFocusToVisibleLaunchButton(
+        bool initialIsDesktop,
+        bool closingIsDesktop,
+        string launchButtonId,
+        string expectedDialogId,
+        string expectedFocusId)
+    {
+        DialogParameters? capturedParameters = null;
+        TestDialogService? dialogService = null;
+        dialogService = new TestDialogService(onShowDialog: (_, parameters) =>
+        {
+            capturedParameters = parameters;
+            return Task.FromResult<IDialogReference>(new DialogReference(parameters.Id, dialogService!));
+        });
+
+        SetupMainLayoutServices(dialogService: dialogService);
+        JSInterop.SetupVoid("focusElement", _ => true);
+
+        var cut = RenderComponent<CascadingValue<ViewportInformation>>(builder =>
+        {
+            builder.Add(p => p.Value, new ViewportInformation(IsDesktop: initialIsDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false));
+            builder.AddChildContent<MainLayout>();
+        });
+
+        if (initialIsDesktop)
+        {
+            await cut.InvokeAsync(() => cut.Find($"#{launchButtonId}").Click());
+        }
+        else
+        {
+            var menuItemName = expectedDialogId == "HelpDialog"
+                ? "Help"
+                : "Settings";
+
+            await cut.InvokeAsync(() => cut.Find("#dashboard-navigation-button").Click());
+            await cut.InvokeAsync(() => cut.FindAll("fluent-menu-item").Single(item => item.TextContent.Contains(menuItemName, StringComparison.OrdinalIgnoreCase)).Click());
+        }
+
+        Assert.NotNull(capturedParameters);
+        Assert.Equal(expectedDialogId, capturedParameters.Id);
+
+        cut.SetParametersAndRender(parameters =>
+        {
+            parameters.Add(p => p.Value, new ViewportInformation(IsDesktop: closingIsDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false));
+            parameters.AddChildContent<MainLayout>();
+        });
 
         await cut.InvokeAsync(() => capturedParameters.OnDialogClosing.InvokeAsync(null!));
 
