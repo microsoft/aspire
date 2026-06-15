@@ -300,6 +300,7 @@ suite('E2E launch profile', () => {
         assert.ok(fixtures.includes('writeFileWithRetry(settingsPath'));
         assert.ok(fixtures.includes("code === 'EBUSY'"));
         assert.ok(fixtures.includes("code === 'EPERM'"));
+        assert.ok(fixtures.includes("code === 'EACCES'"));
     });
 
     test('uses lightweight secondary AppHost candidates for discovery-only E2E coverage', () => {
@@ -313,6 +314,7 @@ suite('E2E launch profile', () => {
         assert.ok(fixtures.includes('#:sdk Aspire.AppHost.Sdk@${getAppHostSdkVersion()}'));
         assert.ok(commandPalette.includes("createAdditionalAppHostCandidate('AspireE2E.SecondAppHost', 'single-file')"));
         assert.ok(discoveryConfiguration.includes("createAdditionalAppHostCandidate('AspireE2E.SecondAppHost', 'single-file')"));
+        assert.ok(discoveryConfiguration.includes('restored primary AppHost without stale secondary candidate'));
     });
 
     test('waits for running AppHosts to stop before deleting E2E fixture directories', () => {

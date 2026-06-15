@@ -480,5 +480,5 @@ function isRetryableFileSystemError(error: unknown): boolean {
     }
 
     const code = (error as NodeJS.ErrnoException).code;
-    return code === 'EBUSY' || code === 'EPERM';
+    return code === 'EBUSY' || code === 'EPERM' || code === 'EACCES';
 }

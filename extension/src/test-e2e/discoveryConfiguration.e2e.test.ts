@@ -53,7 +53,13 @@ suite('Aspire workspace discovery and configuration E2E', function () {
         await executeE2eControlCommand({ name: 'refreshAppHosts' });
         await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 60000, refreshRestoredConfigBefore);
 
-        const restored = await waitForWorkspaceAppHost();
+        const restored = await waitForExtensionState(
+            file => file.state.workspaceAppHostPath !== undefined
+                && isSamePath(file.state.workspaceAppHostPath, getPrimaryAppHostProjectPath())
+                && file.state.workspaceAppHostCandidatePaths.some(candidate => isSamePath(candidate, getPrimaryAppHostProjectPath()))
+                && !file.state.workspaceAppHostCandidatePaths.some(candidate => isSamePath(candidate, secondaryAppHostPath)),
+            'restored primary AppHost without stale secondary candidate',
+            60000);
         assert.ok(restored.state.workspaceAppHostCandidatePaths.some(candidate => isSamePath(candidate, getPrimaryAppHostProjectPath())));
     });
 
