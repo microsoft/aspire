@@ -122,8 +122,8 @@ internal static class IntegrationClosureBuilder
         ArgumentException.ThrowIfNullOrEmpty(restoreDir);
 
         var propertyGroup = new XElement("PropertyGroup",
-            new XElement("BaseOutputPath", EnsureTrailingSlash(Path.Combine(restoreDir, "bin"))),
-            new XElement("BaseIntermediateOutputPath", EnsureTrailingSlash(Path.Combine(restoreDir, "obj"))),
+            new XElement("BaseOutputPath", CliPathHelper.EnsureTrailingSlash(Path.Combine(restoreDir, "bin"))),
+            new XElement("BaseIntermediateOutputPath", CliPathHelper.EnsureTrailingSlash(Path.Combine(restoreDir, "obj"))),
             new XElement("MSBuildProjectExtensionsPath", "$(BaseIntermediateOutputPath)"));
 
         return new XDocument(new XElement("Project", propertyGroup));
@@ -360,10 +360,6 @@ internal static class IntegrationClosureBuilder
         string? PathInPackage,
         string? AssetType);
 
-    private static string EnsureTrailingSlash(string path)
-        => path.EndsWith(Path.DirectorySeparatorChar)
-            ? path
-            : path + Path.DirectorySeparatorChar;
 }
 
 /// <summary>

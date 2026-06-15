@@ -169,8 +169,8 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
 
         var root = new XElement("Project");
         var propertyGroup = new XElement("PropertyGroup", new XAttribute("Condition", projectCondition));
-        propertyGroup.Add(new XElement("BaseOutputPath", EnsureTrailingSlash(Path.Combine(appHostBuildDirectory, "bin"))));
-        propertyGroup.Add(new XElement("BaseIntermediateOutputPath", EnsureTrailingSlash(Path.Combine(appHostBuildDirectory, "obj"))));
+        propertyGroup.Add(new XElement("BaseOutputPath", CliPathHelper.EnsureTrailingSlash(Path.Combine(appHostBuildDirectory, "bin"))));
+        propertyGroup.Add(new XElement("BaseIntermediateOutputPath", CliPathHelper.EnsureTrailingSlash(Path.Combine(appHostBuildDirectory, "obj"))));
         propertyGroup.Add(new XElement("MSBuildProjectExtensionsPath", "$(BaseIntermediateOutputPath)"));
 
         if (additionalSources.Count > 0)
@@ -256,10 +256,5 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         var appHostDirectory = appHostFile.Directory ?? throw new InvalidOperationException($"AppHost file '{appHostFile.FullName}' does not have a containing directory.");
         return new FileInfo(Path.Combine(appHostDirectory.FullName, AspireJsonConfiguration.SettingsFolder, ModulesDirectoryName, AppHostBuildTargetsFileName));
     }
-
-    private static string EnsureTrailingSlash(string path)
-        => path.EndsWith(Path.DirectorySeparatorChar)
-            ? path
-            : path + Path.DirectorySeparatorChar;
 
 }
