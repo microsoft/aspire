@@ -218,7 +218,7 @@ public static class MongoDBReplicaSetBuilderExtensions
     {
         member
             .WithReplicaSet(builder.Resource.Name)
-            .WithTls();
+            .WithKeyFile(builder.Resource.SharedKeyFileParameter);
 
         return builder
             .WithAnnotation(new MongoReplicaSetMemberAnnotation(member.Resource))

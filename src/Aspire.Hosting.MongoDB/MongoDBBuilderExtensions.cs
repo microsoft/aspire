@@ -293,7 +293,7 @@ public static class MongoDBBuilderExtensions
     }
 
     /// <summary>
-    /// Specifies a keyfile for internal authentication between members of a MongoDB replica set, with the specified <paramref name="keyValue"/> as the content of the file.
+    /// Sets up a keyfile for internal authentication between members of a MongoDB replica set, with the specified <paramref name="keyValue"/> as the content of the file.
     /// </summary>
     /// <remarks>
     /// All members in a replica set should share the same keyfile content in order for the communication authentication to succeed.

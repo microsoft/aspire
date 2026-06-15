@@ -19,6 +19,11 @@ public sealed class MongoDBReplicaSetResource(
     /// </summary>
     public ReferenceExpression ConnectionStringExpression => BuildConnectionString();
 
+    /// <summary>
+    /// Gets the parameter that contains the content of the key file used for internal authentication between members of the MongoDB replica set.
+    /// </summary>
+    public ParameterResource SharedKeyFileParameter => keyFile;
+
     private ReferenceExpression BuildConnectionString()
     {
         if (!this.TryGetAnnotationsOfType<MongoReplicaSetMemberAnnotation>(out var members) || !members.Any())
@@ -71,9 +76,4 @@ public sealed class MongoDBReplicaSetResource(
 
         return builder.Build();
     }
-
-    /// <summary>
-    /// Gets the parameter that contains the content of the key file used for internal authentication between members of the MongoDB replica set.
-    /// </summary>
-    public ParameterResource SharedKeyFileParameter => keyFile;
 }
