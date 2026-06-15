@@ -571,7 +571,6 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             {
                 _tunnelSemaphore.Release();
             }
-            ;
         }
 
         await factory.UpdateWithEffectiveAddressInfo(serviceObjects, cancellationToken, TimeSpan.FromMinutes(1)).ConfigureAwait(false);
@@ -837,7 +836,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                 {
                     Name = thumbprint + ".pem",
                     Type = ContainerFileSystemEntryType.File,
-                    Contents = new string([.. publicCertificatePem, '\n', .. keyPem]),
+                    Contents = new string([.. keyPem, '\n', .. publicCertificatePem]),
                 });
 
                 Array.Clear(keyPem, 0, keyPem.Length);
