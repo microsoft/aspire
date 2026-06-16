@@ -1,0 +1,27 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "aspire",
+            "request": "launch",
+            "name": "Aspire: Launch default AppHost",
+            "program": "${workspaceFolder}"
+        },
+        {
+            "type": "blazorwasm",
+            "request": "attach",
+            "name": "Blazor WebAssembly: Attach",
+            "url": "https://localhost:7195"
+        },
+        {
+            "type": "blazorwasm",
+            "request": "launch",
+            "name": "Blazor WebAssembly: Launch",
+            "cwd": "${workspaceFolder}/BlazorHosted.Server",
+            "projectPath": "${workspaceFolder}/BlazorHosted.Server/"
+        }
+    ]
+}

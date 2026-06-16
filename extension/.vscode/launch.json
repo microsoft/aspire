@@ -7,10 +7,12 @@
 			"type": "extensionHost",
 			"request": "launch",
 			"args": [
-				"--extensionDevelopmentPath=${workspaceFolder}"
+				"--extensionDevelopmentPath=${workspaceFolder}",
+				"--extensionDevelopmentPath=${workspaceFolder}/../../vscode-csharp/"
 			],
 			"outFiles": [
-				"${workspaceFolder}/dist/**/*.js"
+				"${workspaceFolder}/dist/**/*.js",
+				"${workspaceFolder:vscode-csharp}/dist/**/*.js"
 			],
 			"preLaunchTask": "tasks: watch extension"
 		},
