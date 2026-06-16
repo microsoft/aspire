@@ -74,6 +74,11 @@ public sealed class MongoDBReplicaSetResource(
             builder.Append($"{MongoDBServerResource.DefaultAuthenticationMechanism:uri}");
         }
 
+        if (membersList.Any(m => m.Member.TlsEnabled))
+        {
+            builder.AppendLiteral("&tls=true");
+        }
+
         return builder.Build();
     }
 }

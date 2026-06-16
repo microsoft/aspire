@@ -86,28 +86,22 @@ public static class MongoDBReplicaSetBuilderExtensions
                 var primaryClient = new MongoClient(connectionStringToPrimary);
 
                 var membersBsonArray = new BsonArray(
-                    // todo
-                    [
-                        new BsonDocument
+                    await Task.WhenAll(memberAnnotations.Select(async (m, i) => new BsonDocument
+                    {
+                        ["_id"] = i,
+                        // NOTE: `host` represents the host and port that should be accessible from within the MongoDB server's container.
+                        ["host"] = $"{m.Member.Name}:{m.Member.PrimaryEndpoint.TargetPort!.Value}", // NOTE: We know this is always set.
+                        // NOTE: `horizons` is a poorly-documented but quite essential MongoDB feature when it comes to clustering — see https://github.com/mongodb/mongo/tree/master/src/mongo/db/repl/split_horizon as well as https://www.percona.com/blog/using-replicasethorizons-in-mongodb/
+                        ["horizons"] = new BsonDocument
                         {
-                            ["_id"] = 0,
-                            // NOTE: `host` represents the host and port that should be accessible from within the MongoDB server's container.
-                            ["host"] = $"{initialPrimary.Name}:{initialPrimary.PrimaryEndpoint.TargetPort!.Value}", // NOTE: We know this is always set.
-                            ["horizons"] = new BsonDocument
-                            {
-                                // NOTE: This represents the host and port that would actually be advertised to outside clients, and should as such be accessible from outside the MongoDB server's container
-                                ["external"] = await initialPrimary.PrimaryEndpoint
-                                    .Property(EndpointProperty.HostAndPort)
-                                    .GetValueAsync(ct)
-                                    .ConfigureAwait(false),
-                            }
+                            // NOTE: This represents the host and port that would actually be advertised to outside clients, and should as such be accessible from outside the MongoDB server's container
+                            // NOTE: The property name (`external`) here is merely information, what matters is the value and specifically whether or not the hostname in the value matches the SNI of the incoming client connections.
+                            ["external"] = await m.Member.PrimaryEndpoint
+                                .Property(EndpointProperty.HostAndPort)
+                                .GetValueAsync(ct)
+                                .ConfigureAwait(false),
                         }
-                    ]
-                // memberAnnotations.Select(async (m, i) => new BsonDocument
-                // {
-                //     ["_id"] = i,
-                //     ["host"] = $"localhost:{m.Member.PrimaryEndpoint.TargetPort ?? 27017}",
-                // })
+                    })).ConfigureAwait(false)
                 );
 
                 var admin = primaryClient.GetDatabase("admin");
@@ -191,7 +185,7 @@ public static class MongoDBReplicaSetBuilderExtensions
                 }
 
                 var foo = new MongoClient(connectionString);
-                var v = await foo.ListDatabaseNamesAsync(ct).ConfigureAwait(false);
+                var v = await foo.GetDatabase("admin").RunCommandAsync<BsonDocument>(new BsonDocument { ["hello"] = 1 }, cancellationToken: ct).ConfigureAwait(false);
 
                 await evt.Notifications.PublishUpdateAsync(resource, s => s with
                 {
@@ -210,6 +204,14 @@ public static class MongoDBReplicaSetBuilderExtensions
     /// The MongoDB server resource that represents the member to add to this replica set.
     /// </param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// Internally calls three methods on the member's builder:
+    /// <list type="number">
+    /// <item> <description><see cref="MongoDBBuilderExtensions.WithReplicaSet(IResourceBuilder{MongoDBServerResource}, string)"/> to set the replica set name on the member resource and configure it accordingly. </description></item>
+    /// <item> <description><see cref="MongoDBBuilderExtensions.WithTls(IResourceBuilder{MongoDBServerResource}, MongoDBTlsMode)"/> to enable TLS on the member resource, which is required for the split-horizon member hostname advertisement by the server. </description></item>
+    /// <item> <description><see cref="MongoDBBuilderExtensions.WithKeyFile(IResourceBuilder{MongoDBServerResource}, IExpressionValue, string)"/> to set the key file parameter on the member resource, which is required for internal authentication between replica set members. </description></item>
+    /// </list>
+    /// </remarks>
     [AspireExport]
     public static IResourceBuilder<MongoDBReplicaSetResource> WithMember(
         this IResourceBuilder<MongoDBReplicaSetResource> builder,
@@ -218,6 +220,7 @@ public static class MongoDBReplicaSetBuilderExtensions
     {
         member
             .WithReplicaSet(builder.Resource.Name)
+            .WithTls() // NOTE: TLS is actually necessary here, because the `horizons` feature used for initializing the replica set operates on top of SNI, which requires client-to-server TLS to be enabled.
             .WithKeyFile(builder.Resource.SharedKeyFileParameter);
 
         return builder

@@ -265,6 +265,9 @@ public static class MongoDBBuilderExtensions
     /// <summary>
     /// Configures the MongoDB server to bind to and listen on all network interfaces.
     /// </summary>
+    /// <remarks>
+    /// See https://www.mongodb.com/docs/manual/reference/configuration-options/#mongodb-setting-net.bindIpAll
+    /// </remarks>
     [AspireExport]
     public static IResourceBuilder<MongoDBServerResource> WithBindIpAll(this IResourceBuilder<MongoDBServerResource> builder)
     {
@@ -288,6 +291,7 @@ public static class MongoDBBuilderExtensions
 
         builder.Resource.ReplicaSetName = name;
         return builder
+            .WithAnnotation(new MongoDBServerReplicaSetAnnotation(name))
             .WithBindIpAll()
             .WithArgs("--replSet", name);
     }
@@ -297,6 +301,7 @@ public static class MongoDBBuilderExtensions
     /// </summary>
     /// <remarks>
     /// All members in a replica set should share the same keyfile content in order for the communication authentication to succeed.
+    /// See https://www.mongodb.com/docs/manual/tutorial/deploy-replica-set-with-keyfile-access-control/
     /// </remarks>
     [AspireExport]
     public static IResourceBuilder<MongoDBServerResource> WithKeyFile(
@@ -309,6 +314,7 @@ public static class MongoDBBuilderExtensions
         ArgumentException.ThrowIfNullOrEmpty(keyFilePath);
 
         return builder
+            .WithAnnotation(new MongoDBServerKeyfileAnnotation(keyValue, keyFilePath))
             .WithContainerFiles(
                 destinationPath: Path.GetDirectoryName(keyFilePath)!,
                 callback: async (_, ct) => [new ContainerFile
@@ -327,6 +333,9 @@ public static class MongoDBBuilderExtensions
     /// <summary>
     /// Configures the MongoDB server to use TLS with the specified certificate and CA files.
     /// </summary>
+    /// <remarks>
+    /// See https://www.mongodb.com/docs/manual/tutorial/configure-ssl/
+    /// </remarks>
     [AspireExport]
     public static IResourceBuilder<MongoDBServerResource> WithTls(
         this IResourceBuilder<MongoDBServerResource> builder,
@@ -336,6 +345,7 @@ public static class MongoDBBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
 
         return builder
+            .WithAnnotation(new MongoDBServerTlsAnnotation(mode))
             .WithArgs("--tlsMode", mode switch
             {
                 MongoDBTlsMode.Disabled => "disabled",
@@ -349,7 +359,6 @@ public static class MongoDBBuilderExtensions
             {
                 ctx.Arguments.Add("--tlsCAFile");
                 ctx.Arguments.Add(ctx.CertificateBundlePath);
-                builder.Resource.TlsCaFilePath = ctx.CertificateBundlePath;
             })
             .WithHttpsCertificateConfiguration(async ctx =>
             {
@@ -411,3 +420,16 @@ public enum MongoDBTlsMode
     /// </summary>
     RequireTls,
 }
+
+internal sealed record MongoDBServerReplicaSetAnnotation(
+    string Name
+) : IResourceAnnotation;
+
+internal sealed record MongoDBServerKeyfileAnnotation(
+    IExpressionValue Value,
+    string FilePath
+) : IResourceAnnotation;
+
+internal sealed record MongoDBServerTlsAnnotation(
+    MongoDBTlsMode Mode
+) : IResourceAnnotation;

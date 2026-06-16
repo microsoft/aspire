@@ -1,8 +1,5 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
-
-using System.Diagnostics.CodeAnalysis;
-
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
@@ -88,13 +85,7 @@ public class MongoDBServerResource(string name) : ContainerResource(name), IReso
     /// <summary>
     /// Gets a value indicating whether TLS is enabled for the MongoDB server.
     /// </summary>
-    [MemberNotNullWhen(true, nameof(TlsCaFilePath))]
-    public bool TlsEnabled => TlsCaFilePath is not null;
-
-    /// <summary>
-    /// Gets the file path to the TLS CA certificate, if TLS is enabled.
-    /// </summary>
-    public ReferenceExpression? TlsCaFilePath { get; internal set; }
+    public bool TlsEnabled => this.HasAnnotationOfType<MongoDBServerTlsAnnotation>();
 
     private static ReferenceExpression AuthenticationDatabaseReference => ReferenceExpression.Create($"{DefaultAuthenticationDatabase}");
 
