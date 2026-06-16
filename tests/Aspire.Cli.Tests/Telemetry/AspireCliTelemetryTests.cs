@@ -278,6 +278,32 @@ public class AspireCliTelemetryTests
         Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.InternalMicrosoft && t.Value is true);
     }
 
+    [Fact]
+    public async Task InitializeAsync_DoesNotRunInternalMicrosoftDetectorWhenReportedTelemetryIsDisabled()
+    {
+        var provider = new TelemetryFixture.TestMachineInformationProvider();
+        var ciDetector = new TelemetryFixture.TestCIEnvironmentDetector();
+        var codingAgentDetector = new TelemetryFixture.TestCodingAgentDetector();
+        var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
+        {
+            IsInternalMicrosoft = true
+        };
+        var telemetry = new AspireCliTelemetry(
+            NullLogger<AspireCliTelemetry>.Instance,
+            provider,
+            ciDetector,
+            codingAgentDetector,
+            internalMicrosoftDetector,
+            static () => false,
+            AspireCliTelemetry.ReportedActivitySourceName,
+            AspireCliTelemetry.DiagnosticsActivitySourceName);
+
+        await telemetry.InitializeAsync().DefaultTimeout();
+
+        Assert.Equal(0, internalMicrosoftDetector.InvocationCount);
+        Assert.DoesNotContain(telemetry.GetDefaultTags(), t => t.Key == TelemetryConstants.Tags.InternalMicrosoft);
+    }
+
     [Theory]
     [MemberData(nameof(CodingAgentTelemetryTestCases))]
     public void CodingAgentDetector_DetectsKnownCodingAgents((string, string?)[] environmentVariables, string? expectedCodingAgent)

@@ -48,6 +48,7 @@ internal sealed class AspireCliTelemetry : IHostedService
     private readonly ICIEnvironmentDetector _ciEnvironmentDetector;
     private readonly ICodingAgentDetector _codingAgentDetector;
     private readonly IInternalMicrosoftDetector _internalMicrosoftDetector;
+    private readonly Func<bool> _isReportedTelemetryEnabled;
     private readonly ILogger<AspireCliTelemetry> _logger;
     private readonly List<KeyValuePair<string, object?>> _tagsList = [];
 
@@ -62,7 +63,21 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// <param name="codingAgentDetector">The coding agent detector.</param>
     /// <param name="internalMicrosoftDetector">The internal Microsoft detector.</param>
     public AspireCliTelemetry(ILogger<AspireCliTelemetry> logger, IMachineInformationProvider machineInformationProvider, ICIEnvironmentDetector ciEnvironmentDetector, ICodingAgentDetector codingAgentDetector, IInternalMicrosoftDetector internalMicrosoftDetector)
-        : this(logger, machineInformationProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector, ReportedActivitySourceName, DiagnosticsActivitySourceName)
+        : this(logger, machineInformationProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector, static () => true, ReportedActivitySourceName, DiagnosticsActivitySourceName)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="AspireCliTelemetry"/> class.
+    /// </summary>
+    /// <param name="logger">The logger instance for recording errors.</param>
+    /// <param name="machineInformationProvider">The machine information provider.</param>
+    /// <param name="ciEnvironmentDetector">The CI environment detector.</param>
+    /// <param name="codingAgentDetector">The coding agent detector.</param>
+    /// <param name="internalMicrosoftDetector">The internal Microsoft detector.</param>
+    /// <param name="telemetryManager">The telemetry manager.</param>
+    public AspireCliTelemetry(ILogger<AspireCliTelemetry> logger, IMachineInformationProvider machineInformationProvider, ICIEnvironmentDetector ciEnvironmentDetector, ICodingAgentDetector codingAgentDetector, IInternalMicrosoftDetector internalMicrosoftDetector, TelemetryManager telemetryManager)
+        : this(logger, machineInformationProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector, () => telemetryManager.HasAzureMonitor, ReportedActivitySourceName, DiagnosticsActivitySourceName)
     {
     }
 
@@ -78,12 +93,18 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// <param name="reportedSourceName">The name for the reported activity source.</param>
     /// <param name="diagnosticsSourceName">The name for the diagnostics activity source.</param>
     internal AspireCliTelemetry(ILogger<AspireCliTelemetry> logger, IMachineInformationProvider machineInformationProvider, ICIEnvironmentDetector ciEnvironmentDetector, ICodingAgentDetector codingAgentDetector, IInternalMicrosoftDetector internalMicrosoftDetector, string reportedSourceName, string diagnosticsSourceName)
+        : this(logger, machineInformationProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector, static () => true, reportedSourceName, diagnosticsSourceName)
+    {
+    }
+
+    internal AspireCliTelemetry(ILogger<AspireCliTelemetry> logger, IMachineInformationProvider machineInformationProvider, ICIEnvironmentDetector ciEnvironmentDetector, ICodingAgentDetector codingAgentDetector, IInternalMicrosoftDetector internalMicrosoftDetector, Func<bool> isReportedTelemetryEnabled, string reportedSourceName, string diagnosticsSourceName)
     {
         _logger = logger;
         _machineInformationProvider = machineInformationProvider;
         _ciEnvironmentDetector = ciEnvironmentDetector;
         _codingAgentDetector = codingAgentDetector;
         _internalMicrosoftDetector = internalMicrosoftDetector;
+        _isReportedTelemetryEnabled = isReportedTelemetryEnabled;
         _reportedActivitySource = new ActivitySource(reportedSourceName);
         _diagnosticsActivitySource = new ActivitySource(diagnosticsSourceName);
     }
@@ -223,13 +244,21 @@ internal sealed class AspireCliTelemetry : IHostedService
         {
             var macAddressHashTask = _machineInformationProvider.GetMacAddressHash();
             var deviceIdTask = _machineInformationProvider.GetOrCreateDeviceId();
-            var internalMicrosoftTask = _internalMicrosoftDetector.IsInternalMicrosoftMachineAsync(CancellationToken.None);
 
-            await Task.WhenAll(macAddressHashTask, deviceIdTask, internalMicrosoftTask).ConfigureAwait(false);
+            Task<bool>? internalMicrosoftTask = null;
+            if (_isReportedTelemetryEnabled())
+            {
+                internalMicrosoftTask = _internalMicrosoftDetector.IsInternalMicrosoftMachineAsync(CancellationToken.None);
+            }
+
+            await Task.WhenAll(macAddressHashTask, deviceIdTask, internalMicrosoftTask ?? Task.CompletedTask).ConfigureAwait(false);
 
             _tagsList.Add(new(TelemetryConstants.Tags.MacAddressHash, macAddressHashTask.Result));
             _tagsList.Add(new(TelemetryConstants.Tags.DeviceId, deviceIdTask.Result));
-            _tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoft, internalMicrosoftTask.Result));
+            if (internalMicrosoftTask is not null)
+            {
+                _tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoft, internalMicrosoftTask.Result));
+            }
 
             // This is consistent with dashboard version data.
             _tagsList.Add(new(TelemetryConstants.Tags.CliVersion, GetCliVersion()));
