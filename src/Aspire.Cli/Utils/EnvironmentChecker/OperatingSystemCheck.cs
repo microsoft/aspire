@@ -107,7 +107,8 @@ internal sealed class OperatingSystemCheck : IEnvironmentCheck
             // /etc/os-release uses KEY=VALUE lines, for example:
             //   NAME="Ubuntu"
             //   VERSION_ID="24.04"
-            // Strip surrounding quotes for display, but leave the value content otherwise unchanged.
+            // Strip surrounding quotes for display. Double-quoted values can escape shell-special
+            // characters; remove those escape markers because doctor displays the values as text.
             var line = rawLine.Trim();
             if (line.Length == 0 || line[0] == '#')
             {
@@ -212,7 +213,13 @@ internal sealed class OperatingSystemCheck : IEnvironmentCheck
             return value;
         }
 
-        return value[1..^1];
+        var unquoted = value[1..^1];
+        return quote == '"'
+            ? unquoted.Replace("\\\"", "\"", StringComparison.Ordinal)
+                .Replace("\\$", "$", StringComparison.Ordinal)
+                .Replace("\\`", "`", StringComparison.Ordinal)
+                .Replace("\\\\", "\\", StringComparison.Ordinal)
+            : unquoted;
     }
 }
 
