@@ -169,6 +169,12 @@ internal interface IAppHostProject
     string DisplayName { get; }
 
     /// <summary>
+    /// Gets whether <c>aspire add</c> should stop matching running AppHost instances before
+    /// mutating package references for this project type.
+    /// </summary>
+    bool RequiresStopForAddPackage { get; }
+
+    /// <summary>
     /// Gets the file patterns to search for when detecting apphosts.
     /// Examples: ["*.csproj", "*.fsproj", "apphost.cs"] or ["apphost.ts"]
     /// </summary>

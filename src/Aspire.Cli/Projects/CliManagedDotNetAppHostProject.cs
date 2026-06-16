@@ -68,6 +68,8 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
     public override bool CanHandle(FileInfo appHostFile)
         => IsCliManagedSingleFileAppHost(appHostFile, _features);
 
+    public override bool RequiresStopForAddPackage => false;
+
     public override Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, CancellationToken cancellationToken)
     {
         if (IsUnsupported)

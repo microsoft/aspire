@@ -51,6 +51,8 @@ internal sealed class TestTypeScriptStarterProject(Func<DirectoryInfo, Cancellat
 
     public string DisplayName => "TypeScript (Node.js)";
 
+    public bool RequiresStopForAddPackage => false;
+
     public string? AppHostFileName => "apphost.mts";
 
     public Task<string[]> GetDetectionPatternsAsync(CancellationToken cancellationToken = default)

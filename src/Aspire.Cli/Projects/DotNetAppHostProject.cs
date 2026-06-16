@@ -104,6 +104,9 @@ internal class DotNetAppHostProject : IAppHostProject
     /// <inheritdoc />
     public string DisplayName => "C# (.NET)";
 
+    /// <inheritdoc />
+    public virtual bool RequiresStopForAddPackage => true;
+
     // ═══════════════════════════════════════════════════════════════
     // DETECTION
     // ═══════════════════════════════════════════════════════════════

@@ -337,14 +337,19 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             options.PackagingServiceFactory = _ => packagingService;
         });
 
-        runner.BuildAsyncCallback = (_, _, _, _) =>
+        runner.BuildAsyncCallback = (_, _, options, _) =>
         {
             Assert.Equal("staging", packagingService.LastRequestedChannelName);
             AssertRegeneratedModuleNuGetConfig(modulesDirectory, nuGetConfigPath, oldSource, currentSource);
+            Assert.Equal(nuGetConfigPath, options.MSBuildProperties["RestoreConfigFile"]);
             return 0;
         };
         runner.GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => throw new InvalidOperationException("CLI-managed file-based AppHosts should not query SDK AppHost metadata.");
-        runner.RunAsyncCallback = (_, _, _, _, _, _, _, _, _) => Task.FromResult(0);
+        runner.RunAsyncCallback = (_, _, _, _, _, _, _, options, _) =>
+        {
+            Assert.Equal(nuGetConfigPath, options.MSBuildProperties["RestoreConfigFile"]);
+            return Task.FromResult(0);
+        };
 
         var exitCode = await project.RunAsync(new AppHostProjectContext
         {
@@ -371,10 +376,11 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             options.PackagingServiceFactory = _ => packagingService;
         });
 
-        runner.BuildAsyncCallback = (_, _, _, _) =>
+        runner.BuildAsyncCallback = (_, _, options, _) =>
         {
             Assert.Equal("staging", packagingService.LastRequestedChannelName);
             AssertRegeneratedModuleNuGetConfig(modulesDirectory, nuGetConfigPath, oldSource, currentSource);
+            Assert.Equal(nuGetConfigPath, options.MSBuildProperties["RestoreConfigFile"]);
             TestHelpers.WriteEmptyIntegrationClosureFiles(appHostFile);
             return 0;
         };

@@ -221,6 +221,10 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
 
         Assert.Equal(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "nuget.config"), restoreConfigFile);
 
+        var appHostBuildPropsPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "AppHost.Directory.Build.props");
+        var appHostBuildProps = XDocument.Load(appHostBuildPropsPath);
+        Assert.Equal(restoreConfigFile, appHostBuildProps.Descendants("RestoreConfigFile").Single().Value);
+
         var nugetConfig = XDocument.Load(restoreConfigFile);
         Assert.Equal(["/tmp/aspire-pr-hive/packages", "https://example.invalid/daily/all"], GetPackageSources(nugetConfig));
         Assert.Equal(["Aspire*"], GetPackagePatternsForSource(nugetConfig, "/tmp/aspire-pr-hive/packages"));

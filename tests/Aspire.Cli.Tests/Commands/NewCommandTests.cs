@@ -971,6 +971,8 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     public async Task NewCommandWithCliManagedCSharpEmptyTemplateCreatesFileBasedAppHost()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string sourceOverride = "/tmp/aspire-pr-hive/packages";
+
         var services = CreateServiceCollection(workspace, options =>
         {
             options.FeatureFlagsFactory = _ => new TestFeatures()
@@ -979,7 +981,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse($"new {KnownTemplateId.CSharpCliManagedEmptyAppHost} --name TestApp --output ./output --localhost-tld false --suppress-agent-init");
+        var result = command.Parse($"new {KnownTemplateId.CSharpCliManagedEmptyAppHost} --name TestApp --output ./output --localhost-tld false --suppress-agent-init --source {sourceOverride}");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -994,6 +996,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.True(features.GetProperty(KnownFeatures.CSharpCliManagedAppHostEnabled).GetBoolean());
         Assert.False(File.Exists(Path.Combine(outputPath, "apphost.run.json")));
         Assert.False(File.Exists(Path.Combine(outputPath, "AppHost.csproj")));
+        Assert.False(File.Exists(Path.Combine(outputPath, "nuget.config")));
     }
 
     [Fact]

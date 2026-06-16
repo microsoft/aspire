@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Configuration;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Utils;
@@ -178,11 +180,6 @@ internal sealed partial class CliTemplateFactory
                 Directory.CreateDirectory(outputPath);
             }
 
-            if (!await _templateNuGetConfigService.CreateOrUpdateNuGetConfigForSourceOverrideAsync(inputs.Source, inputs.Channel, outputPath, cancellationToken))
-            {
-                await _templateNuGetConfigService.PromptToCreateOrUpdateNuGetConfigAsync(inputs.Channel, outputPath, cancellationToken);
-            }
-
             var templateResult = await _interactionService.ShowStatusAsync(
                 TemplatingStrings.CreatingNewProject,
                 (Func<Task<TemplateResult>>)(async () =>
@@ -195,6 +192,8 @@ internal sealed partial class CliTemplateFactory
             {
                 return templateResult;
             }
+
+            await CreateCSharpCliManagedModuleNuGetConfigForSourceOverrideAsync(inputs.Source, inputs.Channel, outputPath, cancellationToken);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -206,6 +205,19 @@ internal sealed partial class CliTemplateFactory
         DisplayPostCreationInstructions(outputPath);
 
         return new TemplateResult(CliExitCodes.Success, outputPath);
+    }
+
+    private async Task CreateCSharpCliManagedModuleNuGetConfigForSourceOverrideAsync(string? sourceOverride, string? channelName, string outputPath, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(sourceOverride))
+        {
+            return;
+        }
+
+        var modulesPath = Path.Combine(outputPath, AspireJsonConfiguration.SettingsFolder, CSharpCliManagedAppHostModuleGenerator.ModulesDirectoryName);
+        Directory.CreateDirectory(modulesPath);
+
+        await _templateNuGetConfigService.CreateOrUpdateNuGetConfigForSourceOverrideAsync(sourceOverride, channelName, modulesPath, cancellationToken);
     }
 
     private async Task WriteCSharpEmptyAppHostAsync(string? templateVersion, string outputPath, string projectName, bool useLocalhostTld, CancellationToken cancellationToken)

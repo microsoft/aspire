@@ -100,6 +100,9 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     /// <inheritdoc />
     public string DisplayName => _resolvedLanguage.DisplayName;
 
+    /// <inheritdoc />
+    public bool RequiresStopForAddPackage => false;
+
     /// <summary>
     /// Gets the effective SDK version from configuration (inherits from parent directories)
     /// or falls back to the default SDK version.

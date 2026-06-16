@@ -243,6 +243,16 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         AddBuildProperty(options);
         options.MSBuildProperties["DirectoryBuildPropsPath"] = GetAppHostBuildPropsFile(appHostFile).FullName;
         options.MSBuildProperties["DirectoryBuildTargetsPath"] = GetAppHostBuildTargetsFile(appHostFile).FullName;
+        AddRestoreConfigFilePropertyIfExists(appHostFile, options);
+    }
+
+    internal static void AddRestoreConfigFilePropertyIfExists(FileInfo appHostFile, ProcessInvocationOptions options)
+    {
+        var nuGetConfigFile = GetModuleNuGetConfigFile(appHostFile);
+        if (nuGetConfigFile.Exists)
+        {
+            options.MSBuildProperties["RestoreConfigFile"] = nuGetConfigFile.FullName;
+        }
     }
 
     internal static FileInfo GetAppHostBuildPropsFile(FileInfo appHostFile)
@@ -255,6 +265,12 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
     {
         var appHostDirectory = appHostFile.Directory ?? throw new InvalidOperationException($"AppHost file '{appHostFile.FullName}' does not have a containing directory.");
         return new FileInfo(Path.Combine(appHostDirectory.FullName, AspireJsonConfiguration.SettingsFolder, ModulesDirectoryName, AppHostBuildTargetsFileName));
+    }
+
+    internal static FileInfo GetModuleNuGetConfigFile(FileInfo appHostFile)
+    {
+        var appHostDirectory = appHostFile.Directory ?? throw new InvalidOperationException($"AppHost file '{appHostFile.FullName}' does not have a containing directory.");
+        return new FileInfo(Path.Combine(appHostDirectory.FullName, AspireJsonConfiguration.SettingsFolder, ModulesDirectoryName, NuGetConfigFileName));
     }
 
 }

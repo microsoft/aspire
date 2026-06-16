@@ -146,6 +146,7 @@ internal sealed class IntegrationClosureRestorer(
             }
 
             CSharpCliManagedAppHostModuleGenerator.AddBuildProperty(buildOptions);
+            CSharpCliManagedAppHostModuleGenerator.AddRestoreConfigFilePropertyIfExists(appHostFile, buildOptions);
             OutputCollector? localCollector = null;
             if (buildOptions.StandardOutputCallback is null && buildOptions.StandardErrorCallback is null)
             {
