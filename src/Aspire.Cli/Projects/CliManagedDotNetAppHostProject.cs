@@ -87,9 +87,20 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
             return CliExitCodes.SdkNotInstalled;
         }
 
+        var moduleProjectFile = await _cliManagedModuleGenerator.TryGenerateAsync(appHostFile, cancellationToken);
+        if (moduleProjectFile is null)
+        {
+            return CliExitCodes.FailedToBuildArtifacts;
+        }
+
         var restoreSucceeded = await _integrationClosureRestorer.RestoreAsync(
             appHostFile,
-            new IntegrationClosureRestoreOptions { BuildOutputCollector = outputCollector },
+            moduleProjectFile,
+            new IntegrationClosureRestoreOptions
+            {
+                BuildInvocationOptions = CreateModuleBuildInvocationOptions(appHostFile),
+                BuildOutputCollector = outputCollector,
+            },
             cancellationToken);
 
         return restoreSucceeded
@@ -153,23 +164,36 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
         var packageSourceOverride = PackageSourceOverrideMappings.HasCredentialMaterial(context.Source ?? string.Empty)
             ? null
             : context.Source;
-        await _cliManagedModuleGenerator.TryGenerateAsync(context.AppHostFile, config, configDirectory, packageSourceOverride, cancellationToken);
+        var moduleProjectFile = await _cliManagedModuleGenerator.TryGenerateAsync(context.AppHostFile, config, configDirectory, packageSourceOverride, cancellationToken);
+        if (moduleProjectFile is null)
+        {
+            return false;
+        }
 
-        // Persist config now so that any downstream consumer (including the closure restorer's
-        // own internal call to TryGenerateAsync) sees the newly added package on disk.
+        // Persist config after generating the module from the in-memory package update so that the
+        // module keeps source overrides with credential material out of aspire.config.json.
         config.Save(configDirectory.FullName);
 
         // Re-materialize the integration closure cache (probe manifest + libs path) so the next
         // `aspire run` resolves the newly added package without requiring an explicit `aspire restore`.
         var restoreSucceeded = await _integrationClosureRestorer.RestoreAsync(
             context.AppHostFile,
+            moduleProjectFile,
             new IntegrationClosureRestoreOptions
             {
+                BuildInvocationOptions = CreateModuleBuildInvocationOptions(context.AppHostFile),
                 BuildOutputCollector = outputCollector,
-                PackageSourceOverride = packageSourceOverride,
             },
             cancellationToken);
         return restoreSucceeded;
+    }
+
+    private static ProcessInvocationOptions CreateModuleBuildInvocationOptions(FileInfo appHostFile)
+    {
+        var options = new ProcessInvocationOptions();
+        CSharpCliManagedAppHostModuleGenerator.AddBuildProperty(options);
+        CSharpCliManagedAppHostModuleGenerator.AddRestoreConfigFilePropertyIfExists(appHostFile, options);
+        return options;
     }
 
     private static bool IsCSharpCliManagedAppHostEnabled(FileInfo candidateFile, IFeatures features)

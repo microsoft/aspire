@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
@@ -22,10 +21,9 @@ internal interface IIntegrationClosureRestorer
     /// <summary>
     /// Builds the CLI-managed AppHost's integration module project and emits the closure layout
     /// (project libs + probe manifest) under <c>.aspire/integrations/apphosts/&lt;hash&gt;/</c>.
-    /// Returns <see langword="true"/> when generation/build succeeded, or <see langword="false"/>
-    /// when the AppHost is not a CLI-managed file-based AppHost.
+    /// Returns <see langword="true"/> when the module build and closure materialization succeeded.
     /// </summary>
-    Task<bool> RestoreAsync(FileInfo appHostFile, IntegrationClosureRestoreOptions options, CancellationToken cancellationToken);
+    Task<bool> RestoreAsync(FileInfo appHostFile, FileInfo moduleProjectFile, IntegrationClosureRestoreOptions options, CancellationToken cancellationToken);
 
     /// <summary>
     /// Returns the integration closure layout for the given CLI-managed AppHost when a probe
@@ -35,7 +33,7 @@ internal interface IIntegrationClosureRestorer
     IntegrationClosureLayout? TryLoad(FileInfo appHostFile);
 }
 
-internal sealed record IntegrationClosureRestoreOptions(bool BuildModule = true, string? PackageSourceOverride = null)
+internal sealed record IntegrationClosureRestoreOptions(bool BuildModule = true)
 {
     /// <summary>
     /// Optional caller-supplied invocation options to merge into the build of the integration
@@ -55,40 +53,11 @@ internal sealed record IntegrationClosureLayout(
     string? IntegrationLibsPath);
 
 internal sealed class IntegrationClosureRestorer(
-    ICSharpCliManagedAppHostModuleGenerator moduleGenerator,
     IDotNetCliRunner dotNetCliRunner,
     ILogger<IntegrationClosureRestorer> logger) : IIntegrationClosureRestorer
 {
-    public async Task<bool> RestoreAsync(FileInfo appHostFile, IntegrationClosureRestoreOptions options, CancellationToken cancellationToken)
-    {
-        // Honor the caller-supplied PackageSourceOverride during module regeneration so that
-        // workflows like `aspire add --source <feed>` keep their additional feed wired into the
-        // generated module project. Without this, the regenerated project would lose the
-        // override's RestoreAdditionalProjectSources / RestoreConfigFile entry and the
-        // subsequent build would fail when the package is only resolvable via the override.
-        FileInfo? moduleProjectFile;
-        if (options.PackageSourceOverride is { Length: > 0 } packageSourceOverride)
-        {
-            var appHostDirectory = appHostFile.Directory
-                ?? throw new InvalidOperationException($"AppHost file '{appHostFile.FullName}' has no parent directory.");
-            var configDirectory = ConfigurationHelper.GetConfigRootDirectory(appHostDirectory);
-            var config = AspireConfigFile.Load(configDirectory.FullName) ?? new AspireConfigFile();
-            moduleProjectFile = await moduleGenerator
-                .TryGenerateAsync(appHostFile, config, configDirectory, packageSourceOverride, cancellationToken)
-                .ConfigureAwait(false);
-        }
-        else
-        {
-            moduleProjectFile = await moduleGenerator.TryGenerateAsync(appHostFile, cancellationToken).ConfigureAwait(false);
-        }
-
-        if (moduleProjectFile is null)
-        {
-            return false;
-        }
-
-        return await RestoreCoreAsync(appHostFile, moduleProjectFile, options, cancellationToken).ConfigureAwait(false);
-    }
+    public async Task<bool> RestoreAsync(FileInfo appHostFile, FileInfo moduleProjectFile, IntegrationClosureRestoreOptions options, CancellationToken cancellationToken)
+        => await RestoreCoreAsync(appHostFile, moduleProjectFile, options, cancellationToken).ConfigureAwait(false);
 
     public IntegrationClosureLayout? TryLoad(FileInfo appHostFile)
     {
@@ -145,8 +114,6 @@ internal sealed class IntegrationClosureRestorer(
                 };
             }
 
-            CSharpCliManagedAppHostModuleGenerator.AddBuildProperty(buildOptions);
-            CSharpCliManagedAppHostModuleGenerator.AddRestoreConfigFilePropertyIfExists(appHostFile, buildOptions);
             OutputCollector? localCollector = null;
             if (buildOptions.StandardOutputCallback is null && buildOptions.StandardErrorCallback is null)
             {
