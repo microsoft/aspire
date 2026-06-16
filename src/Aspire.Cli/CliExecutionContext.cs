@@ -92,7 +92,8 @@ internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, Direct
     /// <summary>
     /// Gets a value indicating whether at least one identity field
     /// (<see cref="IdentityChannel"/>, <see cref="IdentityVersion"/>,
-    /// <see cref="IdentityCommit"/> or <see cref="IdentityPackagesDirectory"/>)
+    /// <see cref="IdentityCommit"/>, <see cref="NuGetServiceIndexOverride"/>
+    /// or <see cref="IdentityPackagesDirectory"/>)
     /// was sourced from an <c>ASPIRE_CLI_*</c> environment variable or the
     /// install sidecar rather than the assembly's build-time stamp. When
     /// <see langword="true"/> the CLI is emulating a build it is not, so a
