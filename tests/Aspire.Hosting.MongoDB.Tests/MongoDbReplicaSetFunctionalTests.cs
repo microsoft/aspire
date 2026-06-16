@@ -5,7 +5,6 @@ using Aspire.TestUtilities;
 using Aspire.Hosting.Utils;
 using MongoDB.Bson;
 using MongoDB.Driver;
-using Polly;
 using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.MongoDB.Tests;
@@ -13,7 +12,8 @@ namespace Aspire.Hosting.MongoDB.Tests;
 public class MongoDbReplicaSetFunctionalTests(ITestOutputHelper testOutputHelper)
 {
     private const string DbName = "testdb";
-    private const string CollectionName = "movie_collection";
+    private const string CollectionNameA = "movie_collection";
+    private const string CollectionNameB = "directors_collection";
 
     private static readonly Movie[] s_movies =
     [
@@ -22,15 +22,19 @@ public class MongoDbReplicaSetFunctionalTests(ITestOutputHelper testOutputHelper
         new() { Name = "The Dark Knight"},
         new() { Name = "Schindler's List"},
     ];
+    private static readonly Director[] s_directors =
+    [
+        new() { Name = "Quentin Tarantino"},
+        new() { Name = "Francis Ford Coppola"},
+        new() { Name = "Christopher Nolan"},
+        new() { Name = "Steven Spielberg"},
+    ];
 
     [Fact]
     [RequiresFeature(TestFeature.Docker)]
     public async Task VerifyMongoDBReplicaSetResource()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
-        var pipeline = new ResiliencePipelineBuilder()
-            .AddRetry(new() { MaxRetryAttempts = 20, Delay = TimeSpan.FromSeconds(3) })
-            .Build();
 
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
 
@@ -44,90 +48,30 @@ public class MongoDbReplicaSetFunctionalTests(ITestOutputHelper testOutputHelper
 
         var connectionString = await rs.Resource.ConnectionStringExpression.GetValueAsync(cts.Token);
 
-        await pipeline.ExecuteAsync(async token =>
-        {
-            var client = new MongoClient(connectionString);
-            var db = client.GetDatabase(DbName);
-            await CreateTestDataAsync(db, token);
-        }, cts.Token);
+        var client = new MongoClient(connectionString);
+        var db = client.GetDatabase(DbName);
+        await CreateTestDataWithReplicaSetFeaturesAsync(db, cts.Token);
 
         await app.StopAsync();
     }
 
-    // [Fact]
-    // [RequiresFeature(TestFeature.Docker)]
-    // public async Task VerifyReplSetGetConfigReturnsValidConfiguration()
-    // {
-    //     // Test that verifies the replica set configuration is correctly initialized
-    //     // by running the replSetGetConfig command and validating the response.
-    //     var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
-    //     var pipeline = new ResiliencePipelineBuilder()
-    //         .AddRetry(new() { MaxRetryAttempts = 20, Delay = TimeSpan.FromSeconds(3) })
-    //         .Build();
-
-    //     using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
-
-    //     var mongo1 = builder.AddMongoDB("mongo1");
-
-    //     var rs = builder.AddMongoDBReplicaSet("rs0")
-    //         .WithMember(mongo1);
-
-    //     using var app = builder.Build();
-    //     await app.StartAsync(cts.Token);
-
-    //     // Wait for the replica set health check to pass, meaning replSetInitiate has completed
-    //     await app.ResourceNotifications.WaitForResourceHealthyAsync(rs.Resource.Name, cts.Token);
-
-    //     var connectionString = await rs.Resource.ConnectionStringExpression.GetValueAsync(cts.Token);
-
-    //     await pipeline.ExecuteAsync(async token =>
-    //     {
-    //         var client = new MongoClient(connectionString);
-    //         var admin = client.GetDatabase("admin");
-
-    //         // Run replSetGetConfig to retrieve the replica set configuration
-    //         var config = await admin.RunCommandAsync<BsonDocument>(
-    //             new BsonDocument { ["replSetGetConfig"] = 1 },
-    //             cancellationToken: token
-    //         );
-
-    //         // Verify that the configuration exists and has the expected structure
-    //         Assert.NotNull(config);
-    //         Assert.True(config.Contains("config"), "Configuration should contain 'config' field");
-
-    //         var configDoc = config["config"].AsBsonDocument;
-    //         Assert.NotNull(configDoc);
-
-    //         // Verify the replica set name matches what we configured
-    //         Assert.Equal("rs0", configDoc["_id"].AsString);
-
-    //         // Verify the members array exists and has the correct count (single member)
-    //         Assert.True(configDoc.Contains("members"), "Configuration should contain 'members' field");
-    //         var members = configDoc["members"].AsBsonArray;
-    //         Assert.Single(members);
-
-    //         // Verify the single member has the required fields
-    //         var memberDoc = members[0].AsBsonDocument;
-    //         Assert.True(memberDoc.Contains("_id"), "Member should have '_id' field");
-    //         Assert.True(memberDoc.Contains("host"), "Member should have 'host' field");
-    //         Assert.Equal(0, memberDoc["_id"].AsInt32);
-
-    //         // Verify the version field exists
-    //         Assert.True(configDoc.Contains("version"), "Configuration should contain 'version' field");
-    //         var version = configDoc["version"].AsInt32;
-    //         Assert.True(version >= 1, "Configuration version should be at least 1");
-    //     }, cts.Token);
-
-    //     await app.StopAsync();
-    // }
-
-    private static async Task CreateTestDataAsync(IMongoDatabase mongoDatabase, CancellationToken token)
+    private static async Task CreateTestDataWithReplicaSetFeaturesAsync(IMongoDatabase mongoDatabase, CancellationToken ct)
     {
-        await mongoDatabase.CreateCollectionAsync(CollectionName, cancellationToken: token);
-        var collection = mongoDatabase.GetCollection<Movie>(CollectionName);
-        await collection.InsertManyAsync(s_movies, cancellationToken: token);
+        await mongoDatabase.CreateCollectionAsync(CollectionNameA, cancellationToken: ct);
+        await mongoDatabase.CreateCollectionAsync(CollectionNameB, cancellationToken: ct);
 
-        var results = await collection.Find(new BsonDocument()).ToListAsync(token);
+        var moviesCollection = mongoDatabase.GetCollection<Movie>(CollectionNameA);
+        var directorsCollection = mongoDatabase.GetCollection<Director>(CollectionNameB);
+
+        using var session = await mongoDatabase.Client.StartSessionAsync(cancellationToken: ct);
+        session.StartTransaction(); // NOTE: Transactions in MongoDB only work within replica sets; so this effectively tests that the replica set features are working as expected when we can successfully use transactions.
+
+        await moviesCollection.InsertManyAsync(session, s_movies, cancellationToken: ct);
+        await directorsCollection.InsertManyAsync(session, s_directors, cancellationToken: ct);
+
+        await session.CommitTransactionAsync(ct);
+
+        var results = await moviesCollection.Find(new BsonDocument()).ToListAsync(ct);
 
         Assert.Collection(results,
             item => Assert.Contains("The Shawshank Redemption", item.Name),
