@@ -39,7 +39,7 @@ public static class MongoDBReplicaSetBuilderExtensions
                 secret: true,
                 new GenerateParameterDefault
                 {
-                    MinLength = 512,
+                    MinLength = 512, // NOTE: MongoDB requires the key file content to be between 6 and 1024 characters — see https://www.mongodb.com/docs/manual/tutorial/deploy-replica-set-with-keyfile-access-control/#create-a-keyfile
                     Special = false,
                 }
             )
@@ -176,10 +176,6 @@ public static class MongoDBReplicaSetBuilderExtensions
                             // NOTE: Happens when in race with another concurrent process trying to initialize the replica set
                             // NOTE: We retry the whole operation
                         }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine(ex);
                     }
                 }
 
