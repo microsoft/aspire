@@ -4,11 +4,11 @@
 
 ## Implementation status
 
-Tracked in PR [#18087](https://github.com/microsoft/aspire/pull/18087). The resolver, the full call-site migration, and the regression guardrail have **landed together** as the spec requires.
+Tracked in PR [#18087](https://github.com/microsoft/aspire/pull/18087). The resolver and the full call-site migration have **landed together** as the spec requires.
 
 - **Resolver + `CliExecutionContext`.** `IIdentityResolver` (`IdentityResolver`) composes env var → sidecar → assembly fallback per field. `CliExecutionContext` exposes `IdentityChannel`, `IdentityVersion`, `IdentityCommit`, plus two derived members beyond the original shape below: `IdentitySdkVersion` (`IdentityVersion` with `+build` metadata stripped — absorbs the old `VersionHelper.GetDefaultSdkVersion()` logic) and `IdentityOverridden` (true when any field came from env or sidecar, used to drive the startup notice).
 - **Call-site migration — complete.** Every identity-conditional decision now reads `CliExecutionContext` (`PackagingService` staging feed/version, `PackageChannel` template filter, `New`/`Add`/`Update` commands, `TemplateNuGetConfigService`, `InitCommand`/`ScaffoldingService` version stamping, `GuestAppHostProject` skew warning, `ExtensionRpcTarget`, SDK/skills generation). Physical-binary reads stay on the assembly and are annotated `// physical-binary-version-by-design (see docs/specs/cli-identity-sidecar.md)`.
-- **Regression guardrail — landed.** The grep test ships as `tests/Aspire.Cli.Tests/IdentityCallSiteGuardrailTests.cs` (the `IdentityCallSiteAuditTests` named in the test plan). It scans `src/Aspire.Cli/` for physical version reads, enforces a file-level allow-list, and a companion test fails if the allow-list goes stale.
+- **Identity-conditional reads — documented convention.** Physical-binary reads are annotated `// physical-binary-version-by-design (see docs/specs/cli-identity-sidecar.md)` at each site, and `VersionHelper` documents that its `GetDefault*Version` helpers bypass identity. The invariant ("identity-sensitive version decisions read `CliExecutionContext`") is enforced by review rather than an automated guardrail. An earlier grep-based test that scanned `src/Aspire.Cli/` for stray physical reads was removed as too brittle (regex over source plus a file-level allow-list).
 - **Telemetry split — done.** Binary `cli.version` / `cli.build_id` are kept; `identity.version` / `identity.channel` (and `identity.commit` when non-empty) are emitted alongside.
 - **`--version` — overridden.** A custom version action (`Commands/IdentityVersionAction.cs`) prints `IdentityVersion`, so emulated runs report the emulated version. The non-override output is byte-identical to the System.CommandLine default.
 - **Startup override notice — added.** When `IdentityOverridden` and output is human-readable, a yellow notice on stderr makes a diagnostic run impossible to mistake for a real one.
@@ -387,12 +387,6 @@ The resolver and call-site migration land together; the test plan reflects that.
 - `PeerInstallProbe` peer spawn under parent `ASPIRE_CLI_CHANNEL=staging` — assert peer's reported identity is its own (sidecar/fallback), not `staging`.
 - AppHost spawn under parent override — assert env vars are stripped from the child unless the opt-in mechanism is set.
 - A negative test: parent sets `ASPIRE_CLI_CHANNEL=staging`, runs `aspire doctor`, every peer row shows its own identity.
-
-**Call-site migration test** (`IdentityCallSiteGuardrailTests`):
-
-- Grep `src/Aspire.Cli/**/*.cs` for direct uses of `AssemblyInformationalVersionAttribute`, `[AssemblyMetadata(...)]` reads, `VersionHelper.GetDefaultTemplateVersion()`, `VersionHelper.GetDefaultSdkVersion()`.
-- Assert each hit is in the resolver implementation, the dotnet-tool first-run materializer, the telemetry binary-version emitter, or an explicit allow-list of bundled-package-compat sites annotated with a "physical-binary-version-by-design" comment pointing at this spec.
-- Fails on any new unannotated hit, forcing reviewers to either route through `CliExecutionContext` or document why the assembly read is intentional.
 
 **Bootstrap and execution-context tests**:
 

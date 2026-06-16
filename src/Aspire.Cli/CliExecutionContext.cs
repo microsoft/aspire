@@ -70,7 +70,12 @@ internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, Direct
     /// SDK-version decisions read this instead of
     /// <c>VersionHelper.GetDefaultSdkVersion()</c>.
     /// </summary>
-    public string IdentitySdkVersion => StripBuildMetadata(IdentityVersion);
+    /// <remarks>
+    /// Computed once and cached: <see cref="IdentityVersion"/> is immutable and
+    /// <see cref="StripBuildMetadata"/> is a pure string operation, so there is
+    /// no reason to recompute it on every access.
+    /// </remarks>
+    public string IdentitySdkVersion => field ??= StripBuildMetadata(IdentityVersion);
 
     /// <summary>
     /// Gets the running CLI's source-revision commit (the <c>+&lt;sha&gt;</c>

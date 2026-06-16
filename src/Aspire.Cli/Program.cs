@@ -354,9 +354,25 @@ public class Program
         {
             // Binary dir is the directory containing the running executable.
             // We pass it explicitly because the sidecar reader resolves the
-            // sidecar path relative to it, and Environment.ProcessPath can be
-            // null in some test hosts — in that case the resolver simply skips
-            // the sidecar layer (env → assembly → terminal default still apply).
+            // sidecar path relative to it (<binaryDir>/.aspire-install.json).
+            //
+            // This is the right anchor for every shipping install route because
+            // Environment.ProcessPath resolves to the actual native CLI binary
+            // that is running, and each route either co-locates its sidecar next
+            // to that binary or intentionally ships none (see
+            // docs/specs/install-routes.md):
+            //   - dotnet tool: the RID-specific tool nupkg payload-embeds
+            //     .aspire-install.json next to the native binary (staged by
+            //     Aspire.Cli.csproj _PreparePreBuiltCliBinaryForPackTool), so
+            //     ProcessPath points at the payload binary and the sidecar is found.
+            //   - npm: eng/clipack/npm/aspire.js spawns the extracted native binary
+            //     directly (child_process.spawn), so ProcessPath is that native exe.
+            //     The npm package consumes the sidecar-free shared archive and there
+            //     is no npm install source, so no sidecar is found and identity falls
+            //     back to the assembly stamp — correct for an official npm build.
+            //   - managed-host launch (dotnet aspire.dll in tests/dev) or a null
+            //     ProcessPath: the resolver simply skips the sidecar layer and the
+            //     env → assembly → terminal default fallbacks still apply.
             var binaryDir = Environment.ProcessPath is { Length: > 0 } p
                 ? Path.GetDirectoryName(p)
                 : null;

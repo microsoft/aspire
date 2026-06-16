@@ -67,8 +67,7 @@ internal static class VersionHelper
     // version directly and therefore DO NOT honor ASPIRE_CLI_VERSION / sidecar identity overrides.
     // Identity-sensitive version decisions must read CliExecutionContext.IdentityVersion /
     // IdentitySdkVersion instead. These helpers remain for genuinely physical-binary reads (e.g.
-    // bundled-package compatibility checks) and are tracked by the identity call-site guardrail test.
-    // See docs/specs/cli-identity-sidecar.md.
+    // bundled-package compatibility checks). See docs/specs/cli-identity-sidecar.md.
     public static string GetDefaultTemplateVersion()
     {
         return PackageUpdateHelpers.GetCurrentAssemblyVersion() ?? throw new InvalidOperationException(ErrorStrings.UnableToRetrieveAssemblyVersion);
