@@ -12,6 +12,7 @@ class TestDotNetService {
 
     public getDotNetTargetPathStub: sinon.SinonStub;
     public buildDotNetProjectStub: sinon.SinonStub;
+    public getDotNetRunApiOutputStub: sinon.SinonStub;
 
     constructor(outputPath: string, rejectBuild: Error | null, hasDevKit: boolean) {
         this.getDotNetTargetPathStub = sinon.stub();
@@ -23,6 +24,13 @@ class TestDotNetService {
         } else {
             this.buildDotNetProjectStub.resolves();
         }
+
+        this.getDotNetRunApiOutputStub = sinon.stub();
+        this.getDotNetRunApiOutputStub.resolves(JSON.stringify({
+            $type: 'RunCommand',
+            ExecutablePath: outputPath,
+            EnvironmentVariables: { RUN_API_ENV: 'run-api-value' }
+        }));
 
         this._hasDevKit = hasDevKit;
     }
@@ -40,7 +48,7 @@ class TestDotNetService {
     }
 
     getDotNetRunApiOutput(projectPath: string, env?: { name: string; value: string }[]): Promise<string> {
-        return Promise.resolve('');
+        return this.getDotNetRunApiOutputStub(projectPath, env);
     }
 }
 
@@ -123,7 +131,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         ]);
     });
 
-    test('passes launch environment to dotnet target-path and build helpers', async () => {
+    test('passes only MSBuild helper environment to dotnet target-path and build helpers', async () => {
         const outputPath = 'C:\\temp\\bin\\Debug\\net10.0\\AppHost.dll';
         const { extension, dotNetService } = createDebuggerExtension(outputPath, null, true, false);
         const projectPath = 'C:\\temp\\AppHost.csproj';
@@ -138,13 +146,52 @@ suite('Dotnet Debugger Extension Tests', () => {
             name: 'Test Debug Config',
             request: 'launch'
         };
-        const env = [{ name: 'AspireCliPath', value: 'C:\\repo\\artifacts\\bin\\Aspire.Cli\\Debug\\net10.0\\aspire.exe' }];
+        const env = [
+            { name: 'AspireCliPath', value: 'C:\\repo\\artifacts\\bin\\Aspire.Cli\\Debug\\net10.0\\aspire.exe' },
+            { name: 'Configuration', value: 'Release' },
+            { name: 'PATH', value: 'C:\\app-runtime-tools' },
+        ];
+        const helperEnv = [{ name: 'AspireCliPath', value: 'C:\\repo\\artifacts\\bin\\Aspire.Cli\\Debug\\net10.0\\aspire.exe' }];
         const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
 
         await extension.createDebugSessionConfigurationCallback!(launchConfig, [], env, { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession }, debugConfig);
 
-        assert.strictEqual(dotNetService.getDotNetTargetPathStub.calledOnceWith(projectPath, env), true);
-        assert.strictEqual(dotNetService.buildDotNetProjectStub.calledOnceWith(projectPath, env), true);
+        assert.deepStrictEqual(dotNetService.getDotNetTargetPathStub.firstCall.args, [projectPath, helperEnv]);
+        assert.deepStrictEqual(dotNetService.buildDotNetProjectStub.firstCall.args, [projectPath, helperEnv]);
+        assert.strictEqual(debugConfig.env?.AspireCliPath, 'C:\\repo\\artifacts\\bin\\Aspire.Cli\\Debug\\net10.0\\aspire.exe');
+        assert.strictEqual(debugConfig.env?.Configuration, 'Release');
+        assert.strictEqual(debugConfig.env?.PATH, 'C:\\app-runtime-tools');
+    });
+
+    test('passes only MSBuild helper environment to dotnet run-api for file-based apps', async () => {
+        const outputPath = 'C:\\temp\\AppHost.exe';
+        const { extension, dotNetService } = createDebuggerExtension(outputPath, null, true, false);
+        const projectPath = 'C:\\temp\\apphost.cs';
+        const launchConfig: ProjectLaunchConfiguration = {
+            type: 'project',
+            project_path: projectPath
+        };
+        const debugConfig: AspireResourceExtendedDebugConfiguration = {
+            runId: '1',
+            debugSessionId: '1',
+            type: 'coreclr',
+            name: 'Test Debug Config',
+            request: 'launch'
+        };
+        const env = [
+            { name: 'AspireCliPath', value: 'C:\\repo\\artifacts\\bin\\Aspire.Cli\\Debug\\net10.0\\aspire.exe' },
+            { name: 'TargetFramework', value: 'net8.0' },
+        ];
+        const helperEnv = [{ name: 'AspireCliPath', value: 'C:\\repo\\artifacts\\bin\\Aspire.Cli\\Debug\\net10.0\\aspire.exe' }];
+        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+
+        await extension.createDebugSessionConfigurationCallback!(launchConfig, [], env, { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession }, debugConfig);
+
+        assert.deepStrictEqual(dotNetService.getDotNetRunApiOutputStub.firstCall.args, [projectPath, helperEnv]);
+        assert.deepStrictEqual(dotNetService.buildDotNetProjectStub.firstCall.args, [projectPath, helperEnv]);
+        assert.strictEqual(debugConfig.env?.AspireCliPath, 'C:\\repo\\artifacts\\bin\\Aspire.Cli\\Debug\\net10.0\\aspire.exe');
+        assert.strictEqual(debugConfig.env?.TargetFramework, 'net8.0');
+        assert.strictEqual(debugConfig.env?.RUN_API_ENV, 'run-api-value');
     });
 
     test('failed AppHost start does not duplicate already streamed build output', async () => {

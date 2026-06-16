@@ -10,7 +10,7 @@ import * as fs from 'fs';
 import { doesFileExist } from '../../utils/io';
 import { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfiguration, isProjectLaunchConfiguration, ProjectLaunchConfiguration } from '../../dcp/types';
 import { ResourceDebuggerExtension } from '../debuggerExtensions';
-import { mergeEnvs } from '../../utils/environment';
+import { aspireCliPathEnvironmentVariableName, mergeEnvs } from '../../utils/environment';
 import {
     readLaunchSettings,
     determineBaseLaunchProfile,
@@ -254,6 +254,14 @@ function createDotNetRunArguments(projectPath: string, baseProfileArgs: string |
     return dotnetRunArgs;
 }
 
+function getDotNetHelperEnvironment(env: EnvVar[]): EnvVar[] | undefined {
+    const aspireCliPath = env.find(variable => variable.name.toLowerCase() === aspireCliPathEnvironmentVariableName.toLowerCase());
+
+    return aspireCliPath
+        ? [{ name: aspireCliPathEnvironmentVariableName, value: aspireCliPath.value }]
+        : undefined;
+}
+
 export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSession: AspireDebugSession) => IDotNetService): ResourceDebuggerExtension {
     return {
         resourceType: 'project',
@@ -318,6 +326,8 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                 env.push({ name: "ASPIRE_DASHBOARD_AI_DISABLED", value: "true" });
             }
 
+            const dotNetHelperEnv = getDotNetHelperEnvironment(env);
+
             if (baseProfile?.commandName?.toLowerCase() === LaunchProfileCommandName.executable && baseProfile.executablePath) {
                 // For Executable command profiles (e.g., class library integrations), the launch profile
                 // specifies an external executable to run instead of the project output.
@@ -325,7 +335,7 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                 // using the profile's executable path and command line arguments.
                 // Expand environment variable references (e.g. $(HOME)) that VS handles natively
                 // but aren't expanded by the coreclr debugger.
-                await dotNetService.buildDotNetProject(projectPath, env);
+                await dotNetService.buildDotNetProject(projectPath, dotNetHelperEnv);
 
                 debugConfiguration.program = expandEnvironmentVariables(baseProfile.executablePath);
                 if (debugConfiguration.args) {
@@ -341,9 +351,9 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                 ));
             }
             else if (!isFileBasedApp(projectPath)) {
-                const outputPath = await dotNetService.getDotNetTargetPath(projectPath, env);
+                const outputPath = await dotNetService.getDotNetTargetPath(projectPath, dotNetHelperEnv);
                 if ((!(await doesFileExist(outputPath)) || launchOptions.forceBuild)) {
-                    await dotNetService.buildDotNetProject(projectPath, env);
+                    await dotNetService.buildDotNetProject(projectPath, dotNetHelperEnv);
                 }
 
                 if (await shouldLaunchProjectWithDotNetRun(outputPath)) {
@@ -369,12 +379,12 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
             }
             else {
                 // For file-based apps, get the dotnet run-api output first to determine the executable path
-                const runApiOutput = await dotNetService.getDotNetRunApiOutput(projectPath, env);
+                const runApiOutput = await dotNetService.getDotNetRunApiOutput(projectPath, dotNetHelperEnv);
                 const runApiConfig = getRunApiConfigFromOutput(runApiOutput);
 
                 // There may be an older cached version of the file-based app, so we
                 // should force a build.
-                await dotNetService.buildDotNetProject(projectPath, env);
+                await dotNetService.buildDotNetProject(projectPath, dotNetHelperEnv);
 
                 debugConfiguration.program = runApiConfig.executablePath;
 
