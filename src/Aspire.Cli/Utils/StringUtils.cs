@@ -1,10 +1,32 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Spectre.Console;
+
 namespace Aspire.Cli.Utils;
 
 internal static class StringUtils
 {
+    public static string RemoveMarkup(string input)
+    {
+        if (string.IsNullOrEmpty(input))
+        {
+            return input;
+        }
+
+        try
+        {
+            return Markup.Remove(input).Trim();
+        }
+        catch (Exception)
+        {
+            // Backchannel payloads can contain plain text with literal '[' or ']' from
+            // user/project output (for example, compiler diagnostics). Treat malformed
+            // markup as plain text so error reporting never throws while logging another error.
+            return input.Trim();
+        }
+    }
+
     /// <summary>
     /// Calculates a fuzzy match score between a search term and a target string.
     /// </summary>

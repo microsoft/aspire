@@ -62,7 +62,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
                 {
                     try
                     {
-                        await Backchannel.DisplayErrorAsync(Markup.Remove(ex.Message), _cancellationToken);
+                        await Backchannel.DisplayErrorAsync(StringUtils.RemoveMarkup(ex.Message), _cancellationToken);
                     }
                     catch (Exception displayErrorException)
                     {
@@ -94,7 +94,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
 
     public async Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false)
     {
-        var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.ShowStatusAsync(Markup.Remove(statusText), _cancellationToken));
+        var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.ShowStatusAsync(StringUtils.RemoveMarkup(statusText), _cancellationToken));
         Debug.Assert(result);
 
         try
@@ -111,7 +111,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
 
     public async Task<T> ShowDynamicStatusAsync<T>(string initialStatusText, Func<Action<string>, Task<T>> action, KnownEmoji? emoji = null)
     {
-        var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.ShowStatusAsync(Markup.Remove(initialStatusText), _cancellationToken));
+        var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.ShowStatusAsync(StringUtils.RemoveMarkup(initialStatusText), _cancellationToken));
         Debug.Assert(result);
 
         try
@@ -120,7 +120,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
                 initialStatusText,
                 updateStatus => action(statusText =>
                 {
-                    var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.ShowStatusAsync(Markup.Remove(statusText), _cancellationToken));
+                    var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.ShowStatusAsync(StringUtils.RemoveMarkup(statusText), _cancellationToken));
                     Debug.Assert(result);
                     updateStatus(statusText);
                 }),
@@ -135,7 +135,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
 
     public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false)
     {
-        var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.ShowStatusAsync(Markup.Remove(statusText), _cancellationToken));
+        var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.ShowStatusAsync(StringUtils.RemoveMarkup(statusText), _cancellationToken));
         Debug.Assert(result);
 
         try
@@ -178,17 +178,17 @@ internal class ExtensionInteractionService : IExtensionInteractionService
                         if (hasSecretPromptsCapability)
                         {
                             // Use the new dedicated secret prompt method (no default value for secrets)
-                            result = await Backchannel.PromptForSecretStringAsync(Markup.Remove(promptText), validator, required, _cancellationToken).ConfigureAwait(false);
+                            result = await Backchannel.PromptForSecretStringAsync(StringUtils.RemoveMarkup(promptText), validator, required, _cancellationToken).ConfigureAwait(false);
                         }
                         else
                         {
                             // Fallback to regular prompt for older extension versions
-                            result = await Backchannel.PromptForStringAsync(Markup.Remove(promptText), binding?.DefaultValue, validator, required, _cancellationToken).ConfigureAwait(false);
+                            result = await Backchannel.PromptForStringAsync(StringUtils.RemoveMarkup(promptText), binding?.DefaultValue, validator, required, _cancellationToken).ConfigureAwait(false);
                         }
                     }
                     else
                     {
-                        result = await Backchannel.PromptForStringAsync(Markup.Remove(promptText), binding?.DefaultValue, validator, required, _cancellationToken).ConfigureAwait(false);
+                        result = await Backchannel.PromptForStringAsync(StringUtils.RemoveMarkup(promptText), binding?.DefaultValue, validator, required, _cancellationToken).ConfigureAwait(false);
                     }
 
                     tcs.SetResult(result);
@@ -228,7 +228,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
                 {
                     try
                     {
-                        var result = await Backchannel.PromptForFilePathAsync(Markup.Remove(promptText), binding?.DefaultValue, directory, _cancellationToken).ConfigureAwait(false);
+                        var result = await Backchannel.PromptForFilePathAsync(StringUtils.RemoveMarkup(promptText), binding?.DefaultValue, directory, _cancellationToken).ConfigureAwait(false);
                         tcs.SetResult(result);
                     }
                     catch (Exception ex)
@@ -282,7 +282,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
             {
                 try
                 {
-                    var result = await Backchannel.ConfirmAsync(Markup.Remove(promptText), binding?.DefaultValue ?? false, _cancellationToken).ConfigureAwait(false);
+                    var result = await Backchannel.ConfirmAsync(StringUtils.RemoveMarkup(promptText), binding?.DefaultValue ?? false, _cancellationToken).ConfigureAwait(false);
                     tcs.SetResult(result);
                 }
                 catch (Exception ex)
@@ -320,7 +320,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
             {
                 try
                 {
-                    var result = await Backchannel.PromptForSelectionAsync(Markup.Remove(promptText), choices, choiceFormatter, _cancellationToken).ConfigureAwait(false);
+                    var result = await Backchannel.PromptForSelectionAsync(StringUtils.RemoveMarkup(promptText), choices, choiceFormatter, _cancellationToken).ConfigureAwait(false);
                     tcs.SetResult(result);
                 }
                 catch (Exception ex)
@@ -361,7 +361,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
                 {
                     // Note: The extension backchannel protocol does not yet support preSelected items.
                     // Pre-selected items are applied only when falling back to the console interaction service.
-                    var result = await Backchannel.PromptForSelectionsAsync(Markup.Remove(promptText), choices, choiceFormatter, _cancellationToken).ConfigureAwait(false);
+                    var result = await Backchannel.PromptForSelectionsAsync(StringUtils.RemoveMarkup(promptText), choices, choiceFormatter, _cancellationToken).ConfigureAwait(false);
                     tcs.SetResult(result);
                 }
                 catch (Exception ex)
@@ -399,7 +399,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         // out-of-order output like an error message preceding the lines that explain it.
         var result = _extensionTaskChannel.Writer.TryWrite(async () =>
         {
-            await Backchannel.DisplayErrorAsync(Markup.Remove(errorMessage), _cancellationToken);
+            await Backchannel.DisplayErrorAsync(StringUtils.RemoveMarkup(errorMessage), _cancellationToken);
             _consoleInteractionService.DisplayError(errorMessage, allowMarkup);
         });
         Debug.Assert(result);
@@ -409,7 +409,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
     {
         var result = _extensionTaskChannel.Writer.TryWrite(async () =>
         {
-            await Backchannel.DisplayMessageAsync(emoji.Name, Markup.Remove(message), _cancellationToken);
+            await Backchannel.DisplayMessageAsync(emoji.Name, StringUtils.RemoveMarkup(message), _cancellationToken);
             _consoleInteractionService.DisplayMessage(emoji, message, allowMarkup, consoleOverride);
         });
         Debug.Assert(result);
@@ -417,14 +417,14 @@ internal class ExtensionInteractionService : IExtensionInteractionService
 
     public void DisplaySuccess(string message, bool allowMarkup = false)
     {
-        var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.DisplaySuccessAsync(Markup.Remove(message), _cancellationToken));
+        var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.DisplaySuccessAsync(StringUtils.RemoveMarkup(message), _cancellationToken));
         Debug.Assert(result);
         _consoleInteractionService.DisplaySuccess(message, allowMarkup);
     }
 
     public void DisplaySubtleMessage(string message, bool allowMarkup = false)
     {
-        var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.DisplaySubtleMessageAsync(Markup.Remove(message), _cancellationToken));
+        var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.DisplaySubtleMessageAsync(StringUtils.RemoveMarkup(message), _cancellationToken));
         Debug.Assert(result);
         _consoleInteractionService.DisplaySubtleMessage(message, allowMarkup);
     }
@@ -447,7 +447,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
 
         var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.DisplayLinesAsync(materialized.Select(line => new DisplayLineState(
             line.Stream == OutputLineStream.StdOut ? "stdout" : "stderr",
-            Markup.Remove(line.Line))), _cancellationToken));
+            StringUtils.RemoveMarkup(line.Line))), _cancellationToken));
         Debug.Assert(result);
 
         // Intentionally do NOT also write to the local console here. Unlike most Display* methods
@@ -514,7 +514,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
     public void DisplayMarkupLine(string markup)
     {
         // Strip markup for backchannel, display as-is to console
-        var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.LogMessageAsync(LogLevel.Information, Markup.Remove(markup), _cancellationToken));
+        var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.LogMessageAsync(LogLevel.Information, StringUtils.RemoveMarkup(markup), _cancellationToken));
         Debug.Assert(result);
         _consoleInteractionService.DisplayMarkupLine(markup);
     }
@@ -536,7 +536,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
 
     public void LogMessage(LogLevel logLevel, string message)
     {
-        var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.LogMessageAsync(logLevel, Markup.Remove(message), _cancellationToken));
+        var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.LogMessageAsync(logLevel, StringUtils.RemoveMarkup(message), _cancellationToken));
         Debug.Assert(result);
     }
 
@@ -568,7 +568,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
 
     public void WriteDebugSessionMessage(string message, bool stdout, string? textStyle)
     {
-        var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.WriteDebugSessionMessageAsync(Markup.Remove(message), stdout, textStyle, _cancellationToken));
+        var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.WriteDebugSessionMessageAsync(StringUtils.RemoveMarkup(message), stdout, textStyle, _cancellationToken));
         Debug.Assert(result);
     }
 }

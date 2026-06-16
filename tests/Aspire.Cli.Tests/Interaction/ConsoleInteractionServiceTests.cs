@@ -1602,21 +1602,21 @@ public class ConsoleInteractionServiceTests
     }
 
     [Fact]
-    public async Task PromptForSelectionsAsync_NonInteractive_CliProvidedInvalidValue_WithUnescapedClosingBracketInChoiceLabel_ThrowsInvalidOperationException()
+    public async Task PromptForSelectionsAsync_NonInteractive_CliProvidedInvalidValue_WithUnescapedClosingBracketInChoiceLabel_DoesNotThrowInvalidOperationException()
     {
-        // Markup.Remove throws when it encounters an unescaped ']' token.
-        // This reproduces the failure mode where choice labels contain literal brackets.
+        // Non-interactive error reporting should tolerate literal brackets in labels.
+        // These labels can come from user data and are not guaranteed to be valid Spectre markup.
         var output = new StringBuilder();
         var console = CreateInteractiveConsoleWithInput(output, "");
         var interactionService = CreateInteractionService(console, hostEnvironment: TestHelpers.CreateNonInteractiveHostEnvironment());
         var choices = new[] { "alpha", "beta" };
 
-        var option = new System.CommandLine.Option<string?>("--items");
-        var command = new System.CommandLine.RootCommand { option };
+        var option = new Option<string?>("--items");
+        var command = new RootCommand { option };
         var parseResult = command.Parse("--items invalid");
         var binding = PromptBinding.Create(parseResult, option);
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<NonInteractiveException>(() =>
             interactionService.PromptForSelectionsAsync(
                 "Select:",
                 choices,
@@ -1624,7 +1624,9 @@ public class ConsoleInteractionServiceTests
                 binding: binding,
                 cancellationToken: CancellationToken.None));
 
-        Assert.Contains("unescaped ']'", ex.Message, StringComparison.OrdinalIgnoreCase);
+        var outputString = output.ToString();
+        Assert.Contains("alpha]", outputString);
+        Assert.Contains("beta]", outputString);
     }
 
     [Fact]
