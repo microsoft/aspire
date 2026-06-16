@@ -1,6 +1,5 @@
 import aspire.*;
 import java.util.Map;
-import java.util.function.Function;
 
 void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
@@ -47,6 +46,14 @@ void main() throws Exception {
         dockerFactoryContainer.withDockerfileFactory("./app", dockerfileFactory, "runtime");
         var exe = builder.addExecutable("myexe", "echo", ".", new String[] { "hello" });
         var project = builder.addProject("myproject", "./src/MyProject", "https");
+        project.withEndpointsInEnvironment(new String[] { "https" });
+        builder.addHealthCheck("custom_check", () -> {
+            var result = new HealthCheckResult();
+            result.setStatus(HealthStatus.HEALTHY);
+            result.setDescription("custom health check");
+            result.setData(Map.of("custom", "value"));
+            return result;
+        });
         var csharpApp = builder.addCSharpApp("csharpapp", "./src/CSharpApp");
         var cache = builder.addRedis("cache");
         var tool = builder.addDotnetTool("mytool", "dotnet-ef");
@@ -60,6 +67,26 @@ void main() throws Exception {
         customInputOptions.setOptions(Map.of("one", "One", "two", "Two"));
         customInputParam.withCustomInput(customInputOptions);
         container.withDockerfileBaseImage(new WithDockerfileBaseImageOptions().buildImage("mcr.microsoft.com/dotnet/sdk:8.0"));
+        var containerFilesOptions = new ContainerFilesOptions();
+        containerFilesOptions.setDefaultOwner(1000.0);
+        containerFilesOptions.setDefaultGroup(1000.0);
+        containerFilesOptions.setUmask(18.0);
+        container.withContainerFiles("/usr/lib/aspire/container-files", ".", containerFilesOptions);
+        var callbackContainerFilesOptions = new ContainerFilesOptions();
+        callbackContainerFilesOptions.setDefaultOwner(1000.0);
+        callbackContainerFilesOptions.setDefaultGroup(1000.0);
+        callbackContainerFilesOptions.setUmask(18.0);
+        container.withContainerFilesCallback("/usr/lib/aspire/container-files", (filesCtx, filesCancellationToken) -> {
+            var filesServices = filesCtx.services();
+            var filesLoggerFactory = filesServices.getLoggerFactory();
+            var filesLogger = filesLoggerFactory.createLogger("ValidationAppHost.ContainerFilesCallback");
+            filesLogger.logInformation("ContainerFilesCallback services");
+            var appConfig = filesCtx.createFile("app.conf", new CreateFileOptions().contents("key=value").mode(420.0));
+            var nestedConfig = filesCtx.createFile("nested.conf", new CreateFileOptions().contents("nested=true"));
+            var confDir = filesCtx.createDirectory("conf.d", new ContainerFileSystemItem[] { nestedConfig }, new CreateDirectoryOptions().mode(493.0));
+            var cert = filesCtx.createCertificateFile("server.pem", new CreateCertificateFileOptions().contents("-----BEGIN CERTIFICATE-----"));
+            return new ContainerFileSystemItem[] { appConfig, confDir, cert };
+        }, callbackContainerFilesOptions);
         container.withImageRegistry("docker.io");
         dockerContainer.withHttpEndpoint(new WithHttpEndpointOptions().name("http").targetPort(80.0));
         dockerContainer.withHttpEndpointCallback((updateContext) -> { updateContext.setPort(8080.0); updateContext.setIsProxied(false); }, new WithHttpEndpointCallbackOptions().name("http").createIfNotExists(false));
@@ -116,6 +143,14 @@ void main() throws Exception {
         });
         container.withMcpServer(new WithMcpServerOptions().path("/mcp"));
         container.withRequiredCommand("docker");
+        container.withRequiredCommandValidation("docker", (validationCtx) -> {
+            var _validationResolvedPath = validationCtx.resolvedPath();
+            var validationServices = validationCtx.services();
+            var validationLoggerFactory = validationServices.getLoggerFactory();
+            var validationLogger = validationLoggerFactory.createLogger("ValidationAppHost.RequiredCommandValidation");
+            validationLogger.logInformation("RequiredCommandValidation services");
+            return validationCtx.success();
+        });
         tool.withToolIgnoreExistingFeeds();
         tool.withToolIgnoreFailedSources();
         tool.withToolPackage("dotnet-ef");
@@ -233,8 +268,12 @@ void main() throws Exception {
         container.withHttpHealthCheck();
         container.withHttpHealthCheck();
         var commandOptions = new CommandOptions();
-        commandOptions.setUpdateState((Function<UpdateCommandStateContext, ResourceCommandState>) (ctx) -> {
+        commandOptions.setUpdateState((ctx) -> {
             var snapshot = ctx.resourceSnapshot();
+            var updateStateServices = ctx.services();
+            var updateStateLoggerFactory = updateStateServices.getLoggerFactory();
+            var updateStateLogger = updateStateLoggerFactory.createLogger("ValidationAppHost.UpdateCommandState");
+            updateStateLogger.logInformation("UpdateCommandState services");
             return snapshot.getHealthStatus() == HealthStatus.HEALTHY ? ResourceCommandState.ENABLED : ResourceCommandState.DISABLED;
         });
         container.withCommand("noop", "Noop", (_ctx) -> {
@@ -248,10 +287,19 @@ void main() throws Exception {
         messageArgument.setInputType(InputType.TEXT);
         messageArgument.setRequired(true);
         echoCommandOptions.setArguments(new InteractionInput[] { messageArgument });
+        echoCommandOptions.setValidateArguments((ctx) -> {
+            var validationServices = ctx.services();
+            var validationLoggerFactory = validationServices.getLoggerFactory();
+            var validationLogger = validationLoggerFactory.createLogger("ValidationAppHost.ValidateCommandArguments");
+            validationLogger.logInformation("Validate command arguments services");
+        });
         container.withCommand("echo", "Echo", (ctx) -> {
-            var commandArguments = ctx.arguments().toArray();
+            var echoServices = ctx.services();
+            var echoLoggerFactory = echoServices.getLoggerFactory();
+            var echoLogger = echoLoggerFactory.createLogger("ValidationAppHost.EchoCommand");
+            echoLogger.logInformation("Echo command services");
             var result = new ExecuteCommandResult();
-            result.setSuccess("hello".equals(commandArguments[0].getValue()));
+            result.setSuccess("hello".equals(ctx.arguments().value("message")));
             return result;
         }, echoCommandOptions);
         container.withCommand("restart", "Restart", (ctx) -> {
@@ -263,6 +311,202 @@ void main() throws Exception {
                     .arguments(Map.of("message", "hello"))
                     .cancellationToken(cancellationToken));
         });
+        // Test bench for the polyglot IInteractionService API: prompts for a region, then dynamically
+        // loads the available zones for that region into a second choice input. Reached via the command's
+        // service provider (services().getInteractionService()), which only prompts when the
+        // interaction service is available (the interactive dashboard path).
+        container.withCommand("pick-zone", "Pick Zone", (ctx) -> {
+            var interactionService = ctx.services().getInteractionService();
+            if (!interactionService.isAvailable()) {
+                var unavailable = new ExecuteCommandResult();
+                unavailable.setSuccess(true);
+                unavailable.setMessage("Interaction service is not available.");
+                return unavailable;
+            }
+
+            var regionInput = interactionService.createChoiceInput(
+                "region",
+                new CreateChoiceInputOptions().choices(new InteractionChoiceOption[] { opt("us", "United States"), opt("eu", "Europe") }));
+
+            var zoneInput = interactionService.createChoiceInput("zone").withDynamicLoading((loadContext) -> {
+                var region = loadContext.inputs().value("region");
+                InteractionChoiceOption[] zones = "eu".equals(region)
+                    ? new InteractionChoiceOption[] { opt("eu-west", "EU West"), opt("eu-north", "EU North") }
+                    : new InteractionChoiceOption[] { opt("us-east", "US East"), opt("us-west", "US West") };
+                loadContext.input().setChoiceOptions(zones);
+            });
+
+            var result = interactionService.promptInputs(
+                "Pick a zone",
+                "Choose a region, then pick a zone from the dynamically loaded options.",
+                new InteractionInputBuilder[] { regionInput, zoneInput });
+
+            var canceled = result.canceled();
+            var commandResult = new ExecuteCommandResult();
+            commandResult.setSuccess(!canceled);
+            commandResult.setCanceled(canceled);
+            return commandResult;
+        });
+        // Exhaustive coverage of the remaining IInteractionService surface so every newly added member is
+        // exercised by the polyglot typecheck: all prompt overloads, every input factory and builder method,
+        // the dynamic-loading context accessors/setters, and the option/result DTO fields.
+        container.withCommand("interaction-showcase", "Interaction Showcase", (ctx) -> {
+            var interactionService = ctx.services().getInteractionService();
+            if (!interactionService.isAvailable()) {
+                var unavailable = new ExecuteCommandResult();
+                unavailable.setSuccess(true);
+                unavailable.setMessage("Interaction service is not available.");
+                return unavailable;
+            }
+
+            var confirmBox = new InteractionMessageBoxOptions();
+            confirmBox.setPrimaryButtonText("Yes");
+            confirmBox.setSecondaryButtonText("No");
+            confirmBox.setShowSecondaryButton(true);
+            confirmBox.setShowDismiss(true);
+            confirmBox.setEnableMessageMarkdown(true);
+            confirmBox.setIntent(MessageIntent.CONFIRMATION);
+            var confirmation = interactionService.promptConfirmation("Confirm", "Proceed?",
+                new PromptConfirmationOptions().options(confirmBox));
+
+            var infoBox = new InteractionMessageBoxOptions();
+            infoBox.setPrimaryButtonText("OK");
+            infoBox.setIntent(MessageIntent.INFORMATION);
+            var messageBox = interactionService.promptMessageBox("Notice", "Read this.",
+                new PromptMessageBoxOptions().options(infoBox));
+
+            var notificationOptions = new InteractionNotificationOptions();
+            notificationOptions.setIntent(MessageIntent.WARNING);
+            notificationOptions.setLinkText("Learn more");
+            notificationOptions.setLinkUrl("https://aspire.dev");
+            notificationOptions.setShowDismiss(true);
+            var notification = interactionService.promptNotification("Heads up", "Something happened.",
+                new PromptNotificationOptions().options(notificationOptions));
+
+            var textOptions = new CreateInteractionInputOptions();
+            textOptions.setLabel("Name");
+            textOptions.setDescription("Your **name**");
+            textOptions.setEnableDescriptionMarkdown(true);
+            textOptions.setRequired(true);
+            textOptions.setPlaceholder("Jane Doe");
+            textOptions.setValue("Jane");
+            textOptions.setMaxLength(64.0);
+            textOptions.setDisabled(false);
+            var textInput = interactionService.createTextInput("name", textOptions);
+
+            var secretOptions = new CreateInteractionInputOptions();
+            secretOptions.setRequired(true);
+            var secretInput = interactionService.createSecretInput("password", secretOptions);
+
+            var booleanOptions = new CreateInteractionInputOptions();
+            booleanOptions.setValue("true");
+            var booleanInput = interactionService.createBooleanInput("enabled", booleanOptions);
+
+            var numberOptions = new CreateInteractionInputOptions();
+            numberOptions.setValue("1");
+            var numberInput = interactionService.createNumberInput("count", numberOptions);
+
+            var choiceExtras = new CreateInteractionInputOptions();
+            choiceExtras.setAllowCustomChoice(true);
+            var choiceInput = interactionService.createChoiceInput("color",
+                new CreateChoiceInputOptions().choices(new InteractionChoiceOption[] { opt("r", "Red"), opt("g", "Green") }).options(choiceExtras));
+
+            var presetInput = interactionService.createTextInput("greeting").withValue("hello");
+            var sizeInput = interactionService.createChoiceInput("size")
+                .withChoiceOptions(new InteractionChoiceOption[] { opt("s", "Small"), opt("l", "Large") });
+
+            var dynamicLoadingOptions = new DynamicLoadingOptions();
+            dynamicLoadingOptions.setAlwaysLoadOnStart(true);
+            dynamicLoadingOptions.setDependsOnInputs(new String[] { "color" });
+            var dependentInput = interactionService.createChoiceInput("shade").withDynamicLoading((loadContext) -> {
+                var input = loadContext.input();
+                var inputName = input.getName();
+                var color = loadContext.inputs().value("color");
+                InteractionChoiceOption[] shades = "r".equals(color)
+                    ? new InteractionChoiceOption[] { opt("crimson", "Crimson"), opt("scarlet", "Scarlet") }
+                    : new InteractionChoiceOption[] { opt("lime", "Lime"), opt("forest", "Forest") };
+                input.setChoiceOptions(shades);
+                input.setValue(inputName);
+            }, dynamicLoadingOptions);
+
+            var singleDialogOptions = new InteractionInputsDialogOptions();
+            singleDialogOptions.setPrimaryButtonText("Save");
+            singleDialogOptions.setValidationCallback((validationContext) -> {
+                if (validationContext.inputs().value("solo").isEmpty()) {
+                    validationContext.addValidationError("solo", "A value is required.");
+                }
+            });
+            var single = interactionService.promptInput("Single input", "Enter a value.",
+                interactionService.createTextInput("solo"),
+                new PromptInputOptions().options(singleDialogOptions));
+
+            var multiDialogOptions = new InteractionInputsDialogOptions();
+            multiDialogOptions.setPrimaryButtonText("Submit");
+            multiDialogOptions.setEnableMessageMarkdown(true);
+            multiDialogOptions.setValidationCallback((validationContext) -> {
+                if ("bad".equals(validationContext.inputs().value("name"))) {
+                    validationContext.addValidationError("name", "Name cannot be 'bad'.");
+                }
+            });
+            var multi = interactionService.promptInputs("Multiple inputs", "Fill out the form.",
+                new InteractionInputBuilder[] { textInput, secretInput, booleanInput, numberInput, choiceInput, presetInput, sizeInput, dependentInput },
+                new PromptInputsOptions().options(multiDialogOptions));
+
+            String selectedColor = multi.inputs().value("color");
+            String soloValue = single.getInput() != null ? single.getInput().getValue() : "";
+
+            var multiCanceled = multi.canceled();
+            var success = !confirmation.getCanceled()
+                && Boolean.TRUE.equals(confirmation.getValue())
+                && !messageBox.getCanceled()
+                && !notification.getCanceled()
+                && !single.getCanceled()
+                && !multiCanceled;
+
+            var commandResult = new ExecuteCommandResult();
+            commandResult.setSuccess(success);
+            commandResult.setCanceled(multiCanceled);
+            commandResult.setMessage("color=" + (selectedColor == null ? "" : selectedColor)
+                + " solo=" + (soloValue == null ? "" : soloValue));
+            return commandResult;
+        });
+        container.withHealthCheck("custom_check");
+        container.withHttpsCertificateConfiguration((certCtx) -> {
+            var _certResource = certCtx.resource();
+            var _certIsRunMode = certCtx.executionContext().isRunMode();
+            var certificatePath = certCtx.certificatePath();
+            var keyPath = certCtx.keyPath();
+            var certArgs = certCtx.arguments();
+            certArgs.add("--certificate");
+            certArgs.add(certificatePath);
+            certArgs.add("--key");
+            certArgs.add(keyPath);
+            var certEnv = certCtx.environment();
+            certEnv.set("Kestrel__Certificates__Path", certificatePath);
+            certEnv.set("Kestrel__Certificates__KeyPath", keyPath);
+        });
+        container.subscribeHttpsEndpointsUpdate((httpsCtx) -> {
+            var _httpsResource = httpsCtx.resource();
+            var _httpsModel = httpsCtx.model();
+            var httpsServices = httpsCtx.services();
+            var httpsLoggerFactory = httpsServices.getLoggerFactory();
+            var httpsLogger = httpsLoggerFactory.createLogger("ValidationAppHost.HttpsEndpointsUpdate");
+            httpsLogger.logInformation("HttpsEndpointsUpdate services");
+        });
+        container.withContainerBuildOptions((buildCtx) -> {
+            buildCtx.setDestination(ContainerImageDestination.REGISTRY);
+            buildCtx.setImageFormat(ContainerImageFormat.OCI);
+            buildCtx.setTargetPlatform(ContainerTargetPlatform.LINUX_AMD64);
+            buildCtx.setOutputPath("./artifacts/container-image");
+            buildCtx.setLocalImageName("validation-image");
+            buildCtx.setLocalImageTag("latest");
+            var _buildResource = buildCtx.resource();
+            var _buildExecutionContext = buildCtx.executionContext();
+            var buildServices = buildCtx.services();
+            var buildLoggerFactory = buildServices.getLoggerFactory();
+            var buildLogger = buildLoggerFactory.createLogger("ValidationAppHost.ContainerBuildOptions");
+            buildLogger.logInformation("ContainerBuildOptions services");
+        });
         container.withHttpCommand("/health", "Health Check");
         var httpCmdOptions = new HttpCommandExportOptions();
         httpCmdOptions.setMethodName("POST");
@@ -270,4 +514,11 @@ void main() throws Exception {
         container.withHttpCommand("/api/reset", "Reset", httpCmdOptions);
         var app = builder.build();
         app.run();
+    }
+
+    InteractionChoiceOption opt(String value, String label) {
+        var option = new InteractionChoiceOption();
+        option.setValue(value);
+        option.setLabel(label);
+        return option;
     }

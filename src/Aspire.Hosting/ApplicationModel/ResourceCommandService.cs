@@ -7,8 +7,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.ApplicationModel;
 
-#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe resource command arguments.
-
 /// <summary>
 /// A service to execute resource commands.
 /// </summary>
@@ -365,7 +363,7 @@ public class ResourceCommandService
                 var context = new ExecuteCommandContext
                 {
                     ResourceName = resourceId,
-                    ServiceProvider = _serviceProvider,
+                    Services = _serviceProvider,
                     CancellationToken = cancellationToken,
                     Logger = logger,
                     Arguments = arguments
@@ -784,4 +782,3 @@ internal sealed class ResourceCommandExecutionOptions
     public bool NonInteractive { get; init; }
 }
 
-#pragma warning restore ASPIREINTERACTION001

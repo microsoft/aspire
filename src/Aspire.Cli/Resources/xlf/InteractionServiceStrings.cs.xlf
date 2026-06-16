@@ -17,19 +17,29 @@
         <target state="needs-review-translation">Verze AppHost není kompatibilní. Upgradujte prosím hostitele aplikací nebo rozhraní příkazového řádku Aspire.</target>
         <note />
       </trans-unit>
+      <trans-unit id="AppHostNotCompatibleUpdateAppHost">
+        <source>The AppHost is using an older Aspire version than the Aspire CLI. Update the AppHost's Aspire packages to continue.</source>
+        <target state="new">The AppHost is using an older Aspire version than the Aspire CLI. Update the AppHost's Aspire packages to continue.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostNotCompatibleUpdateCli">
+        <source>The Aspire CLI is older than the Aspire version used by the AppHost. Update the Aspire CLI to continue.</source>
+        <target state="new">The Aspire CLI is older than the Aspire version used by the AppHost. Update the Aspire CLI to continue.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AppHostShutDown">
         <source>The application shut down.</source>
         <target state="new">The application shut down.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireCLIVersion">
-        <source>Aspire CLI Version</source>
-        <target state="translated">Verze Aspire CLI</target>
+        <source>Aspire CLI version</source>
+        <target state="needs-review-translation">Verze Aspire CLI</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireHostingSDKVersion">
-        <source>Aspire.Hosting Version</source>
-        <target state="translated">Verze Aspire.Hosting</target>
+        <source>Aspire.Hosting version</source>
+        <target state="needs-review-translation">Verze Aspire.Hosting</target>
         <note />
       </trans-unit>
       <trans-unit id="BuildingAppHost">
@@ -163,8 +173,8 @@
         <note />
       </trans-unit>
       <trans-unit id="RequiredCapability">
-        <source>Required Capability</source>
-        <target state="translated">Požadovaná funkce</target>
+        <source>Required capability</source>
+        <target state="needs-review-translation">Požadovaná funkce</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchingProjects">

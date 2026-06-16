@@ -12,7 +12,7 @@ on:
         type: string
 
 env:
-  POLYGLOT_ASPIRE_CLI_CHANNEL: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'daily' }}
+  POLYGLOT_ASPIRE_CLI_CHANNEL: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.ref == 'refs/heads/main' && 'local' || 'daily' }}
 
 jobs:
   validate_python:

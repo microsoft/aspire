@@ -42,4 +42,13 @@ internal static class StringUtils
             ? value[..^suffix.Length]
             : value;
     }
+
+    public static string? FirstNonEmpty(string? first, string? second)
+    {
+        return !string.IsNullOrEmpty(first)
+            ? first
+            : !string.IsNullOrEmpty(second)
+                ? second
+                : null;
+    }
 }

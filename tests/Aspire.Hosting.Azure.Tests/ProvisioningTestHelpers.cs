@@ -63,6 +63,10 @@ internal static class ProvisioningTestHelpers
     public static IArmClientProvider CreateArmClientProvider() => new TestArmClientProvider();
     public static IArmClientProvider CreateArmClientProvider(Dictionary<string, object> deploymentOutputs) => new TestArmClientProvider(deploymentOutputs);
     public static IArmClientProvider CreateArmClientProvider(Func<string, Dictionary<string, object>> deploymentOutputsProvider) => new TestArmClientProvider(deploymentOutputsProvider);
+    public static IArmClientProvider CreateArmClientProvider(IEnumerable<string> existingResourceIds) => new TestArmClientProvider(existingResourceIds: existingResourceIds);
+    public static IArmClientProvider CreateArmClientProvider(IEnumerable<string> existingResourceIds, List<string> deletedResourceIds) => new TestArmClientProvider(existingResourceIds: existingResourceIds, deletedResourceIds: deletedResourceIds);
+    public static IArmClientProvider CreateArmClientProvider(IEnumerable<string> existingResourceIds, List<string>? deletedResourceIds, IEnumerable<string>? deploymentTargetResourceIds, List<string>? canceledDeploymentIds) => new TestArmClientProvider(existingResourceIds: existingResourceIds, deletedResourceIds: deletedResourceIds, deploymentTargetResourceIds: deploymentTargetResourceIds, canceledDeploymentIds: canceledDeploymentIds);
+    public static IArmClientProvider CreateArmClientProviderForMissingResourceGroup() => new TestArmClientProvider(resourceGroupLookupReturnsNotFound: true);
     public static ITokenCredentialProvider CreateTokenCredentialProvider() => new TestTokenCredentialProvider();
     public static ISecretClientProvider CreateSecretClientProvider() => new TestSecretClientProvider(CreateTokenCredentialProvider());
     public static IBicepCompiler CreateBicepCompiler() => new TestBicepCompiler();
@@ -184,12 +188,26 @@ internal sealed class TestArmClient : IArmClient
     private readonly Dictionary<string, object>? _deploymentOutputs;
     private readonly Func<string, Dictionary<string, object>>? _deploymentOutputsProvider;
     private readonly TestResourceGroupResource? _resourceGroup;
-    public TestRoleAssignmentCollection RoleAssignments { get; } = new();
+    private readonly ISubscriptionResource? _subscription;
+    private readonly ITenantResource? _tenant;
+    private readonly HashSet<string>? _existingResourceIds;
+    private readonly List<string>? _deletedResourceIds;
+    private readonly IEnumerable<string>? _deploymentTargetResourceIds;
+    private readonly IReadOnlyList<AzureDeploymentOperationDetails>? _deploymentOperations;
+    private readonly IReadOnlyDictionary<string, IEnumerable<string>>? _supportedLocationsByResourceType;
+    private readonly Func<string, string, CancellationToken, Task<IEnumerable<string>>>? _supportedLocationsProvider;
+    private readonly List<string>? _canceledDeploymentIds;
+    private readonly bool _resourceGroupLookupReturnsNotFound;
 
-    public TestArmClient(Dictionary<string, object> deploymentOutputs, TestResourceGroupResource? resourceGroup = null)
+    public TestRoleAssignmentCollection RoleAssignments { get; } = new();
+    public int SupportedLocationsCallCount { get; private set; }
+    public int DeploymentOperationsCallCount { get; private set; }
+
+    public TestArmClient(Dictionary<string, object> deploymentOutputs, TestResourceGroupResource? resourceGroup = null, bool resourceGroupLookupReturnsNotFound = false)
     {
         _deploymentOutputs = deploymentOutputs;
         _resourceGroup = resourceGroup;
+        _resourceGroupLookupReturnsNotFound = resourceGroupLookupReturnsNotFound;
     }
 
     public TestArmClient(Func<string, Dictionary<string, object>> deploymentOutputsProvider)
@@ -197,22 +215,56 @@ internal sealed class TestArmClient : IArmClient
         _deploymentOutputsProvider = deploymentOutputsProvider;
     }
 
-    public TestArmClient() : this([])
+    public TestArmClient(ISubscriptionResource subscription, ITenantResource? tenant = null)
+    {
+        _deploymentOutputs = [];
+        _subscription = subscription;
+        _tenant = tenant;
+    }
+
+    public TestArmClient(
+        IReadOnlyList<AzureDeploymentOperationDetails> deploymentOperations,
+        IReadOnlyDictionary<string, IEnumerable<string>>? supportedLocationsByResourceType = null,
+        Func<string, string, CancellationToken, Task<IEnumerable<string>>>? supportedLocationsProvider = null)
+        : this(new Dictionary<string, object>())
+    {
+        _deploymentOperations = deploymentOperations;
+        _supportedLocationsByResourceType = supportedLocationsByResourceType;
+        _supportedLocationsProvider = supportedLocationsProvider;
+    }
+
+    public TestArmClient(
+        IEnumerable<string> existingResourceIds,
+        List<string>? deletedResourceIds = null,
+        IEnumerable<string>? deploymentTargetResourceIds = null,
+        List<string>? canceledDeploymentIds = null)
+    {
+        _existingResourceIds = new HashSet<string>(existingResourceIds, StringComparer.OrdinalIgnoreCase);
+        _deletedResourceIds = deletedResourceIds;
+        _deploymentTargetResourceIds = deploymentTargetResourceIds;
+        _canceledDeploymentIds = canceledDeploymentIds;
+    }
+
+    public TestArmClient() : this(new Dictionary<string, object>())
     {
     }
 
     public Task<(ISubscriptionResource subscription, ITenantResource tenant)> GetSubscriptionAndTenantAsync(CancellationToken cancellationToken = default)
     {
         ISubscriptionResource subscription;
-        if (_deploymentOutputsProvider is not null)
+        if (_subscription is not null)
+        {
+            subscription = _subscription;
+        }
+        else if (_deploymentOutputsProvider is not null)
         {
             subscription = new TestSubscriptionResource(_deploymentOutputsProvider);
         }
         else
         {
-            subscription = new TestSubscriptionResource(_deploymentOutputs!, _resourceGroup);
+            subscription = new TestSubscriptionResource(_deploymentOutputs!, _resourceGroup, resourceGroupLookupReturnsNotFound: _resourceGroupLookupReturnsNotFound);
         }
-        var tenant = new TestTenantResource();
+        var tenant = _tenant ?? new TestTenantResource();
         return Task.FromResult<(ISubscriptionResource, ITenantResource)>((subscription, tenant));
     }
 
@@ -246,13 +298,33 @@ internal sealed class TestArmClient : IArmClient
         return Task.FromResult<IEnumerable<ISubscriptionResource>>(subscriptions);
     }
 
+    public Task<ISubscriptionResource> GetSubscriptionAsync(string subscriptionId, CancellationToken cancellationToken = default)
+    {
+        ISubscriptionResource subscription;
+        if (_subscription is not null)
+        {
+            subscription = _subscription;
+        }
+        else if (_deploymentOutputsProvider is not null)
+        {
+            subscription = new TestSubscriptionResource(_deploymentOutputsProvider, subscriptionId);
+        }
+        else
+        {
+            subscription = new TestSubscriptionResource(_deploymentOutputs!, _resourceGroup, subscriptionId);
+        }
+
+        return Task.FromResult(subscription);
+    }
+
     public Task<IEnumerable<(string Name, string DisplayName)>> GetAvailableLocationsAsync(string subscriptionId, CancellationToken cancellationToken = default)
     {
         var locations = new List<(string Name, string DisplayName)>
         {
             ("eastus", "East US"),
             ("westus", "West US"),
-            ("westus2", "West US 2")
+            ("westus2", "West US 2"),
+            ("westus3", "West US 3")
         };
         return Task.FromResult<IEnumerable<(string, string)>>(locations);
     }
@@ -268,9 +340,79 @@ internal sealed class TestArmClient : IArmClient
         return Task.FromResult<IEnumerable<(string, string)>>(resourceGroups);
     }
 
+    public async Task<IEnumerable<string>> GetSupportedLocationsAsync(string subscriptionId, string resourceType, CancellationToken cancellationToken = default)
+    {
+        SupportedLocationsCallCount++;
+
+        if (_supportedLocationsProvider is not null)
+        {
+            return await _supportedLocationsProvider(subscriptionId, resourceType, cancellationToken).ConfigureAwait(false);
+        }
+
+        return _supportedLocationsByResourceType?.TryGetValue(resourceType, out var locations) == true
+            ? locations
+            : [];
+    }
+
     public IRoleAssignmentCollection GetRoleAssignments(ResourceIdentifier scope)
     {
         return RoleAssignments;
+    }
+
+    public Task<bool> ResourceExistsAsync(string resourceId, CancellationToken cancellationToken = default)
+    {
+        var exists = _existingResourceIds is null || _existingResourceIds.Contains(resourceId);
+        return Task.FromResult(exists);
+    }
+
+    public Task DeleteResourceAsync(string resourceId, CancellationToken cancellationToken = default)
+    {
+        _existingResourceIds?.Remove(resourceId);
+        _deletedResourceIds?.Add(resourceId);
+        return Task.CompletedTask;
+    }
+
+    public Task CancelDeploymentAsync(string deploymentId, CancellationToken cancellationToken = default)
+    {
+        _canceledDeploymentIds?.Add(deploymentId);
+        return Task.CompletedTask;
+    }
+
+    public async IAsyncEnumerable<string> GetDeploymentTargetResourceIdsAsync(string deploymentId, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        _ = deploymentId;
+        await Task.CompletedTask;
+
+        if (_deploymentTargetResourceIds is null)
+        {
+            yield break;
+        }
+
+        foreach (var resourceId in _deploymentTargetResourceIds)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return resourceId;
+        }
+    }
+
+    public async IAsyncEnumerable<AzureDeploymentOperationDetails> GetDeploymentOperationsAsync(
+        string deploymentId,
+        bool recursive = true,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        DeploymentOperationsCallCount++;
+        await Task.CompletedTask;
+
+        if (_deploymentOperations is null)
+        {
+            yield break;
+        }
+
+        foreach (var operation in _deploymentOperations)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return operation;
+        }
     }
 }
 
@@ -279,45 +421,45 @@ internal sealed class TestArmClient : IArmClient
 /// </summary>
 internal sealed class TestSubscriptionResource : ISubscriptionResource
 {
-    private readonly Dictionary<string, object>? _deploymentOutputs;
-    private readonly Func<string, Dictionary<string, object>>? _deploymentOutputsProvider;
-    private readonly TestResourceGroupResource? _resourceGroup;
+    private const string DefaultSubscriptionId = "12345678-1234-1234-1234-123456789012";
 
-    public TestSubscriptionResource(Dictionary<string, object> deploymentOutputs, TestResourceGroupResource? resourceGroup = null)
+    public TestSubscriptionResource(Dictionary<string, object> deploymentOutputs, TestResourceGroupResource? resourceGroup = null, string subscriptionId = DefaultSubscriptionId, bool resourceGroupLookupReturnsNotFound = false)
     {
-        _deploymentOutputs = deploymentOutputs;
-        _resourceGroup = resourceGroup;
+        Id = new ResourceIdentifier($"/subscriptions/{subscriptionId}");
+        Deployments = new TestArmDeploymentCollection(deploymentOutputs, deploymentName => new ResourceIdentifier($"{Id}/providers/Microsoft.Resources/deployments/{deploymentName}"));
+        ResourceGroups = new TestResourceGroupCollection(deploymentOutputs, resourceGroup, resourceGroupLookupReturnsNotFound);
     }
 
-    public TestSubscriptionResource(Func<string, Dictionary<string, object>> deploymentOutputsProvider)
+    public TestSubscriptionResource(Dictionary<string, object> deploymentOutputs, TestResourceGroupResource? resourceGroup, bool resourceGroupLookupReturnsNotFound)
+        : this(deploymentOutputs, resourceGroup, DefaultSubscriptionId, resourceGroupLookupReturnsNotFound)
     {
-        _deploymentOutputsProvider = deploymentOutputsProvider;
+    }
+
+    public TestSubscriptionResource(Func<string, Dictionary<string, object>> deploymentOutputsProvider, string subscriptionId = DefaultSubscriptionId)
+    {
+        Id = new ResourceIdentifier($"/subscriptions/{subscriptionId}");
+        Deployments = new TestArmDeploymentCollection(deploymentOutputsProvider, deploymentName => new ResourceIdentifier($"{Id}/providers/Microsoft.Resources/deployments/{deploymentName}"));
+        ResourceGroups = new TestResourceGroupCollection(deploymentOutputsProvider);
     }
 
     public TestSubscriptionResource() : this([])
     {
     }
 
-    public ResourceIdentifier Id { get; } = new ResourceIdentifier("/subscriptions/12345678-1234-1234-1234-123456789012");
+    public ResourceIdentifier Id { get; }
     public string? DisplayName { get; } = "Test Subscription";
     public Guid? TenantId { get; } = Guid.Parse("87654321-4321-4321-4321-210987654321");
+    public TestArmDeploymentCollection Deployments { get; }
+    public TestResourceGroupCollection ResourceGroups { get; }
 
     public IArmDeploymentCollection GetArmDeployments()
     {
-        if (_deploymentOutputsProvider is not null)
-        {
-            return new TestArmDeploymentCollection(_deploymentOutputsProvider);
-        }
-        return new TestArmDeploymentCollection(_deploymentOutputs!);
+        return Deployments;
     }
 
     public IResourceGroupCollection GetResourceGroups()
     {
-        if (_deploymentOutputsProvider is not null)
-        {
-            return new TestResourceGroupCollection(_deploymentOutputsProvider);
-        }
-        return new TestResourceGroupCollection(_deploymentOutputs!, _resourceGroup);
+        return ResourceGroups;
     }
 }
 
@@ -329,11 +471,14 @@ internal sealed class TestResourceGroupCollection : IResourceGroupCollection
     private readonly Dictionary<string, object>? _deploymentOutputs;
     private readonly Func<string, Dictionary<string, object>>? _deploymentOutputsProvider;
     private readonly TestResourceGroupResource? _resourceGroup;
+    public string? LastRequestedResourceGroupName { get; private set; }
+    private readonly bool _resourceGroupLookupReturnsNotFound;
 
-    public TestResourceGroupCollection(Dictionary<string, object> deploymentOutputs, TestResourceGroupResource? resourceGroup = null)
+    public TestResourceGroupCollection(Dictionary<string, object> deploymentOutputs, TestResourceGroupResource? resourceGroup = null, bool resourceGroupLookupReturnsNotFound = false)
     {
         _deploymentOutputs = deploymentOutputs;
         _resourceGroup = resourceGroup;
+        _resourceGroupLookupReturnsNotFound = resourceGroupLookupReturnsNotFound;
     }
 
     public TestResourceGroupCollection(Func<string, Dictionary<string, object>> deploymentOutputsProvider)
@@ -347,6 +492,12 @@ internal sealed class TestResourceGroupCollection : IResourceGroupCollection
 
     public Task<Response<IResourceGroupResource>> GetAsync(string resourceGroupName, CancellationToken cancellationToken = default)
     {
+        LastRequestedResourceGroupName = resourceGroupName;
+        if (_resourceGroupLookupReturnsNotFound)
+        {
+            throw new RequestFailedException(404, $"Resource group '{resourceGroupName}' was not found.");
+        }
+
         if (_resourceGroup is not null)
         {
             return Task.FromResult(Response.FromValue<IResourceGroupResource>(_resourceGroup, new MockResponse(200)));
@@ -385,45 +536,58 @@ internal sealed class TestResourceGroupCollection : IResourceGroupCollection
 /// </summary>
 internal sealed class TestResourceGroupResource : IResourceGroupResource
 {
-    private readonly Dictionary<string, object>? _deploymentOutputs;
-    private readonly Func<string, Dictionary<string, object>>? _deploymentOutputsProvider;
+    private const string DefaultSubscriptionId = "12345678-1234-1234-1234-123456789012";
     private readonly string _name;
+    private readonly RequestFailedException? _deleteException;
 
-    public TestResourceGroupResource(string name, Dictionary<string, object> deploymentOutputs)
+    public TestResourceGroupResource(string name, Dictionary<string, object> deploymentOutputs, string subscriptionId = DefaultSubscriptionId)
     {
         _name = name;
-        _deploymentOutputs = deploymentOutputs;
+        Id = new ResourceIdentifier($"/subscriptions/{subscriptionId}/resourceGroups/{name}");
+        Deployments = new TestArmDeploymentCollection(deploymentOutputs, deploymentName => new ResourceIdentifier($"{Id}/providers/Microsoft.Resources/deployments/{deploymentName}"));
     }
 
-    public TestResourceGroupResource(string name, Func<string, Dictionary<string, object>> deploymentOutputsProvider)
+    public TestResourceGroupResource(string name, Func<string, Dictionary<string, object>> deploymentOutputsProvider, string subscriptionId = DefaultSubscriptionId)
     {
         _name = name;
-        _deploymentOutputsProvider = deploymentOutputsProvider;
+        Id = new ResourceIdentifier($"/subscriptions/{subscriptionId}/resourceGroups/{name}");
+        Deployments = new TestArmDeploymentCollection(deploymentOutputsProvider, deploymentName => new ResourceIdentifier($"{Id}/providers/Microsoft.Resources/deployments/{deploymentName}"));
     }
 
     public TestResourceGroupResource(string name = "test-rg") : this(name, [])
     {
     }
 
-    public ResourceIdentifier Id { get; } = new ResourceIdentifier("/subscriptions/12345678-1234-1234-1234-123456789012/resourceGroups/test-rg");
+    public TestResourceGroupResource(string name, RequestFailedException deleteException)
+        : this(name)
+    {
+        _deleteException = deleteException;
+    }
+
+    public int DeleteCallCount { get; private set; }
+
+    public ResourceIdentifier Id { get; }
     public string Name => _name;
+    public TestArmDeploymentCollection Deployments { get; }
 
     public IArmDeploymentCollection GetArmDeployments()
     {
-        if (_deploymentOutputsProvider is not null)
-        {
-            return new TestArmDeploymentCollection(_deploymentOutputsProvider);
-        }
-        return new TestArmDeploymentCollection(_deploymentOutputs!);
+        return Deployments;
     }
 
     public bool WasDeleteCalled { get; private set; }
     public bool WasGetResourcesCalled { get; private set; }
 
-    public Task DeleteAsync(WaitUntil waitUntil, CancellationToken cancellationToken = default)
+    public Task<ArmOperation> DeleteAsync(WaitUntil waitUntil, CancellationToken cancellationToken = default)
     {
         WasDeleteCalled = true;
-        return Task.CompletedTask;
+        DeleteCallCount++;
+        if (_deleteException is not null)
+        {
+            return Task.FromException<ArmOperation>(_deleteException);
+        }
+
+        return Task.FromResult<ArmOperation>(new TestDeleteArmOperation());
     }
 
     public async IAsyncEnumerable<(string Name, string ResourceType)> GetResourcesAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -468,15 +632,18 @@ internal sealed class TestArmDeploymentCollection : IArmDeploymentCollection
 {
     private readonly Dictionary<string, object>? _deploymentOutputs;
     private readonly Func<string, Dictionary<string, object>>? _deploymentOutputsProvider;
+    private readonly Func<string, ResourceIdentifier>? _deploymentIdFactory;
 
-    public TestArmDeploymentCollection(Dictionary<string, object> deploymentOutputs)
+    public TestArmDeploymentCollection(Dictionary<string, object> deploymentOutputs, Func<string, ResourceIdentifier>? deploymentIdFactory = null)
     {
         _deploymentOutputs = deploymentOutputs;
+        _deploymentIdFactory = deploymentIdFactory;
     }
 
-    public TestArmDeploymentCollection(Func<string, Dictionary<string, object>> deploymentOutputsProvider)
+    public TestArmDeploymentCollection(Func<string, Dictionary<string, object>> deploymentOutputsProvider, Func<string, ResourceIdentifier>? deploymentIdFactory = null)
     {
         _deploymentOutputsProvider = deploymentOutputsProvider;
+        _deploymentIdFactory = deploymentIdFactory;
     }
 
     public TestArmDeploymentCollection() : this([])
@@ -489,18 +656,33 @@ internal sealed class TestArmDeploymentCollection : IArmDeploymentCollection
         ArmDeploymentContent content,
         CancellationToken cancellationToken = default)
     {
+        WasCreateOrUpdateCalled = true;
+        WaitUntil = waitUntil;
+        DeploymentName = deploymentName;
+        Content = content;
+        CancellationToken = cancellationToken;
+
+        var deploymentId = _deploymentIdFactory?.Invoke(deploymentName);
         TestArmDeploymentResource deployment;
         if (_deploymentOutputsProvider is not null)
         {
-            deployment = new TestArmDeploymentResource(deploymentName, _deploymentOutputsProvider);
+            deployment = new TestArmDeploymentResource(deploymentName, _deploymentOutputsProvider, deploymentId);
         }
         else
         {
-            deployment = new TestArmDeploymentResource(deploymentName, _deploymentOutputs!);
+            deployment = new TestArmDeploymentResource(deploymentName, _deploymentOutputs!, deploymentId);
         }
         var operation = new TestArmOperation<ArmDeploymentResource>(deployment);
         return Task.FromResult<ArmOperation<ArmDeploymentResource>>(operation);
     }
+
+    public bool WasCreateOrUpdateCalled { get; private set; }
+    public WaitUntil? WaitUntil { get; private set; }
+    public string? DeploymentName { get; private set; }
+    public ArmDeploymentContent? Content { get; private set; }
+    public CancellationToken CancellationToken { get; private set; }
+
+    public Task CancelAsync(string deploymentName, CancellationToken cancellationToken = default) => Task.CompletedTask;
 }
 
 /// <summary>
@@ -508,9 +690,29 @@ internal sealed class TestArmDeploymentCollection : IArmDeploymentCollection
 /// </summary>
 internal sealed class TestTenantResource : ITenantResource
 {
+    public TestTenantResource(Dictionary<string, object> deploymentOutputs)
+    {
+        Deployments = new TestArmDeploymentCollection(deploymentOutputs, deploymentName => new ResourceIdentifier($"/providers/Microsoft.Resources/deployments/{deploymentName}"));
+    }
+
+    public TestTenantResource(Func<string, Dictionary<string, object>> deploymentOutputsProvider)
+    {
+        Deployments = new TestArmDeploymentCollection(deploymentOutputsProvider, deploymentName => new ResourceIdentifier($"/providers/Microsoft.Resources/deployments/{deploymentName}"));
+    }
+
+    public TestTenantResource() : this([])
+    {
+    }
+
     public Guid? TenantId { get; } = Guid.Parse("87654321-4321-4321-4321-210987654321");
     public string? DisplayName { get; } = "Test Tenant";
     public string? DefaultDomain { get; } = "testdomain.onmicrosoft.com";
+    public TestArmDeploymentCollection Deployments { get; }
+
+    public IArmDeploymentCollection GetArmDeployments()
+    {
+        return Deployments;
+    }
 }
 
 /// <summary>
@@ -532,6 +734,18 @@ internal sealed class TestArmOperation<T>(T value) : ArmOperation<T>
     public override Response<T> WaitForCompletion(TimeSpan pollingInterval, CancellationToken cancellationToken = default) => Response.FromValue(Value, new MockResponse(200));
 }
 
+internal sealed class TestDeleteArmOperation : ArmOperation
+{
+    public override string Id { get; } = Guid.NewGuid().ToString();
+    public override bool HasCompleted { get; } = true;
+
+    public override Response GetRawResponse() => new MockResponse(200);
+    public override Response UpdateStatus(CancellationToken cancellationToken = default) => new MockResponse(200);
+    public override ValueTask<Response> UpdateStatusAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult<Response>(new MockResponse(200));
+    public override ValueTask<Response> WaitForCompletionResponseAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult<Response>(new MockResponse(200));
+    public override ValueTask<Response> WaitForCompletionResponseAsync(TimeSpan pollingInterval, CancellationToken cancellationToken = default) => ValueTask.FromResult<Response>(new MockResponse(200));
+}
+
 /// <summary>
 /// Test implementation of ArmDeploymentResource for testing.
 /// </summary>
@@ -540,20 +754,36 @@ internal sealed class TestArmDeploymentResource : ArmDeploymentResource
     private readonly string _name;
     private readonly Dictionary<string, object>? _deploymentData;
     private readonly Func<string, Dictionary<string, object>>? _deploymentDataProvider;
+    private readonly ResourceIdentifier? _id;
+    private readonly ResourcesProvisioningState _provisioningState;
 
-    public TestArmDeploymentResource(string name, Dictionary<string, object> deploymentData)
+    public TestArmDeploymentResource(string name, Dictionary<string, object> deploymentData, ResourceIdentifier? id = null, ResourcesProvisioningState? provisioningState = null)
     {
         _name = name;
         _deploymentData = deploymentData;
+        _id = id;
+        _provisioningState = provisioningState ?? ResourcesProvisioningState.Succeeded;
     }
 
-    public TestArmDeploymentResource(string name, Func<string, Dictionary<string, object>> deploymentDataProvider)
+    public TestArmDeploymentResource(string name, Dictionary<string, object> deploymentData, ResourcesProvisioningState provisioningState)
+        : this(name, deploymentData, id: null, provisioningState)
+    {
+    }
+
+    public TestArmDeploymentResource(string name, Func<string, Dictionary<string, object>> deploymentDataProvider, ResourceIdentifier? id = null, ResourcesProvisioningState? provisioningState = null)
     {
         _name = name;
         _deploymentDataProvider = deploymentDataProvider;
+        _id = id;
+        _provisioningState = provisioningState ?? ResourcesProvisioningState.Succeeded;
     }
 
-    public override ResourceIdentifier Id => new ResourceIdentifier($"/subscriptions/12345678-1234-1234-1234-123456789012/resourceGroups/test-rg/providers/Microsoft.Resources/deployments/{_name}");
+    public TestArmDeploymentResource(string name, Func<string, Dictionary<string, object>> deploymentDataProvider, ResourcesProvisioningState provisioningState)
+        : this(name, deploymentDataProvider, id: null, provisioningState)
+    {
+    }
+
+    public override ResourceIdentifier Id => _id ?? new ResourceIdentifier($"/subscriptions/12345678-1234-1234-1234-123456789012/resourceGroups/test-rg/providers/Microsoft.Resources/deployments/{_name}");
 
     public override ArmDeploymentData Data
     {
@@ -568,7 +798,7 @@ internal sealed class TestArmDeploymentResource : ArmDeploymentResource
             {
                 data = _deploymentData!;
             }
-            return ArmResourcesModelFactory.ArmDeploymentData(Id, _name, properties: ArmResourcesModelFactory.ArmDeploymentPropertiesExtended(provisioningState: ResourcesProvisioningState.Succeeded, outputs: BinaryData.FromObjectAsJson(data)));
+            return ArmResourcesModelFactory.ArmDeploymentData(Id, _name, properties: ArmResourcesModelFactory.ArmDeploymentPropertiesExtended(provisioningState: _provisioningState, outputs: BinaryData.FromObjectAsJson(data)));
         }
     }
 
@@ -605,6 +835,11 @@ internal sealed class TestArmClientProvider : IArmClientProvider
     private readonly Dictionary<string, object>? _deploymentOutputs;
     private readonly Func<string, Dictionary<string, object>>? _deploymentOutputsProvider;
     private readonly TestResourceGroupResource? _resourceGroup;
+    private readonly IEnumerable<string>? _existingResourceIds;
+    private readonly List<string>? _deletedResourceIds;
+    private readonly IEnumerable<string>? _deploymentTargetResourceIds;
+    private readonly List<string>? _canceledDeploymentIds;
+    private readonly bool _resourceGroupLookupReturnsNotFound;
 
     public TestArmClientProvider(Dictionary<string, object> deploymentOutputs)
     {
@@ -622,7 +857,25 @@ internal sealed class TestArmClientProvider : IArmClientProvider
         _deploymentOutputs = [];
     }
 
-    public TestArmClientProvider() : this([])
+    public TestArmClientProvider(bool resourceGroupLookupReturnsNotFound)
+    {
+        _resourceGroupLookupReturnsNotFound = resourceGroupLookupReturnsNotFound;
+        _deploymentOutputs = [];
+    }
+
+    public TestArmClientProvider(
+        IEnumerable<string> existingResourceIds,
+        List<string>? deletedResourceIds = null,
+        IEnumerable<string>? deploymentTargetResourceIds = null,
+        List<string>? canceledDeploymentIds = null)
+    {
+        _existingResourceIds = existingResourceIds;
+        _deletedResourceIds = deletedResourceIds;
+        _deploymentTargetResourceIds = deploymentTargetResourceIds;
+        _canceledDeploymentIds = canceledDeploymentIds;
+    }
+
+    public TestArmClientProvider() : this(new Dictionary<string, object>())
     {
     }
 
@@ -632,7 +885,11 @@ internal sealed class TestArmClientProvider : IArmClientProvider
         {
             return new TestArmClient(_deploymentOutputsProvider);
         }
-        return new TestArmClient(_deploymentOutputs!, _resourceGroup);
+        if (_existingResourceIds is not null)
+        {
+            return new TestArmClient(_existingResourceIds, _deletedResourceIds, _deploymentTargetResourceIds, _canceledDeploymentIds);
+        }
+        return new TestArmClient(_deploymentOutputs!, _resourceGroup, _resourceGroupLookupReturnsNotFound);
     }
 
     public IArmClient GetArmClient(TokenCredential credential)

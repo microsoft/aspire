@@ -101,9 +101,9 @@
     <PackageVersion Include="Grpc.AspNetCore" Version="2.80.0" />
     <PackageVersion Include="Grpc.Net.ClientFactory" Version="2.80.0" />
     <PackageVersion Include="Grpc.Tools" Version="2.80.0" />
-    <PackageVersion Include="Hex1b" Version="0.154.0" />
-    <PackageVersion Include="Hex1b.McpServer" Version="0.154.0" />
-    <PackageVersion Include="Hex1b.Tool" Version="0.154.0" />
+    <PackageVersion Include="Hex1b" Version="0.163.0" />
+    <PackageVersion Include="Hex1b.McpServer" Version="0.163.0" />
+    <PackageVersion Include="Hex1b.Tool" Version="0.163.0" />
     <PackageVersion Include="Humanizer.Core" Version="3.0.10" />
     <PackageVersion Include="KubernetesClient" Version="19.0.2" />
     <PackageVersion Include="JsonPatch.Net" Version="5.0.2" />
@@ -111,6 +111,7 @@
     <PackageVersion Include="Microsoft.AI.Foundry.Local" Version="1.1.0" />
     <PackageVersion Include="Microsoft.Agents.AI.OpenAI" Version="1.5.0" />
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.0.1" />
+    <PackageVersion Include="Microsoft.Data.SqlClient.Extensions.Azure" Version="1.0.0" />
     <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components" Version="4.14.1" />
     <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components.Icons" Version="4.14.1" />
     <PackageVersion Include="Milvus.Client" Version="2.3.0-preview.1" /> <!-- No stable release available -->
@@ -129,11 +130,11 @@
     <PackageVersion Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0" />
     <PackageVersion Include="Qdrant.Client" Version="1.18.1" />
     <PackageVersion Include="RabbitMQ.Client" Version="7.2.1" />
-    <PackageVersion Include="Spectre.Console" Version="0.55.2" />
+    <PackageVersion Include="Spectre.Console" Version="0.57.0" />
     <PackageVersion Include="StackExchange.Redis" Version="2.13.1" />
     <PackageVersion Include="System.IO.Hashing" Version="10.0.8" />
     <PackageVersion Include="Yarp.ReverseProxy" Version="2.3.0" />
-    <PackageVersion Include="StreamJsonRpc" Version="2.22.23" />
+    <PackageVersion Include="StreamJsonRpc" Version="2.25.29" />
     <PackageVersion Include="Semver" Version="3.0.0" />
     <PackageVersion Include="Sigstore" Version="0.5.0" />
     <PackageVersion Include="Tuf" Version="0.5.0" />

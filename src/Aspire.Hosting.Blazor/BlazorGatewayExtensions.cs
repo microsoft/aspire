@@ -619,7 +619,7 @@ public static class BlazorGatewayExtensions
         DistributedApplicationModel? model;
         try
         {
-            model = context.ExecutionContext.ServiceProvider.GetService<DistributedApplicationModel>();
+            model = context.ExecutionContext.Services.GetService<DistributedApplicationModel>();
         }
         catch (InvalidOperationException)
         {

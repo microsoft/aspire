@@ -8,7 +8,8 @@ import { AspireCodeLensProvider } from '../editor/AspireCodeLensProvider';
 import { AspireGutterDecorationProvider } from '../editor/AspireGutterDecorationProvider';
 import * as AppHostResourceParser from '../editor/parsers/AppHostResourceParser';
 import { ParsedResource } from '../editor/parsers/AppHostResourceParser';
-import { codeLensCommand } from '../loc/strings';
+import { codeLensCommand, codeLensResourceValueMissing } from '../loc/strings';
+import { ResourceState, ResourceType } from '../editor/resourceConstants';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
 import { AppHostDataRepository, AppHostDisplayInfo, ResourceJson } from '../views/AppHostDataRepository';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
@@ -225,6 +226,27 @@ suite('AspireCodeLensProvider builder lens', () => {
         assert.strictEqual(builderLenses.length, 2);
         assert.deepStrictEqual(builderLenses[0].command?.arguments, [hostPath]);
         assert.deepStrictEqual(builderLenses[1].command?.arguments, [hostPath]);
+        harness.dispose();
+    });
+
+    test('emits builder lenses when .mts document matches a running global AppHost', async () => {
+        const appHostPath = p('repo', 'AppHost', 'apphost.mts');
+        const harness = createHarness({ appHosts: [makeAppHost(appHostPath)] });
+
+        const doc = createMockDocument([
+            'import { createBuilder } from "@aspire/sdk";',
+            'const builder = await createBuilder();',
+            'await builder.addRedis("cache");',
+        ].join('\n'), appHostPath);
+        const lenses = await harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
+        const builderLenses = lenses.filter(l =>
+            l.command?.command === 'aspire-vscode.codeLensOpenDashboard' ||
+            l.command?.command === 'aspire-vscode.codeLensViewAppHostLogs'
+        );
+
+        assert.strictEqual(builderLenses.length, 2);
+        assert.deepStrictEqual(builderLenses[0].command?.arguments, [appHostPath]);
+        assert.deepStrictEqual(builderLenses[1].command?.arguments, [appHostPath]);
         harness.dispose();
     });
 
@@ -985,6 +1007,91 @@ suite('AspireCodeLensProvider resource lens anchoring', () => {
         assert.ok(customLens);
         assert.strictEqual(customLens!.command?.title, codeLensCommand('reset-db'));
         assert.strictEqual(customLens!.command?.tooltip, 'reset-db');
+        harness.dispose();
+    });
+
+    function makeParameterHarness(overrides: Partial<ResourceJson>) {
+        const hostPath = p('repo', 'AppHost', 'apphost.ts');
+        const content = [
+            'const builder = await createBuilder();',
+            'builder.addParameter("param");',
+        ].join('\n');
+
+        const harness = createHarness({
+            workspaceAppHostPath: hostPath,
+            workspaceResources: [makeResource('param', {
+                resourceType: ResourceType.Parameter,
+                state: ResourceState.Running,
+                ...overrides,
+            } as Partial<ResourceJson>)],
+        });
+
+        return { harness, doc: createMockDocument(content, p('repo', 'AppHost', 'apphost.ts')) };
+    }
+
+    const revealLenses = (lenses: vscode.CodeLens[]) =>
+        lenses.filter(l => l.command?.command === 'aspire-vscode.codeLensRevealResource');
+
+    test('parameter value lens shows a non-secret value', async () => {
+        const { harness, doc } = makeParameterHarness({
+            properties: { Value: 'plain-value' } as any,
+            commands: {
+                'set-parameter': { displayName: 'Set parameter', description: null, argumentInputs: [{ name: 'Value', inputType: 'Text' }] },
+            } as any,
+        });
+
+        const lenses = await harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
+        const valueLens = revealLenses(lenses).find(l => l.command?.title === 'plain-value');
+
+        assert.ok(valueLens, 'expected a value lens showing the parameter value');
+        harness.dispose();
+    });
+
+    test('parameter value lens masks secret values', async () => {
+        const { harness, doc } = makeParameterHarness({
+            properties: { Value: 'super-secret-value' } as any,
+            commands: {
+                'set-parameter': { displayName: 'Set parameter', description: null, argumentInputs: [{ name: 'Value', inputType: 'SecretText' }] },
+            } as any,
+        });
+
+        const lenses = await harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
+        const titles = revealLenses(lenses).map(l => l.command?.title);
+
+        assert.ok(titles.includes('●●●●●●●●'), 'expected a masked value lens');
+        assert.ok(!titles.includes('super-secret-value'), 'secret value must not be displayed');
+        harness.dispose();
+    });
+
+    test('parameter value lens truncates long values to 80 characters', async () => {
+        const longValue = 'a'.repeat(100);
+        const { harness, doc } = makeParameterHarness({
+            properties: { Value: longValue } as any,
+            commands: {
+                'set-parameter': { displayName: 'Set parameter', description: null, argumentInputs: [{ name: 'Value', inputType: 'Text' }] },
+            } as any,
+        });
+
+        const lenses = await harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
+        const valueLens = revealLenses(lenses).find(l => typeof l.command?.title === 'string' && l.command.title.endsWith('…'));
+
+        assert.ok(valueLens, 'expected a truncated value lens');
+        assert.strictEqual(valueLens!.command!.title!.length, 80);
+        harness.dispose();
+    });
+
+    test('parameter with missing value shows the warning state lens and no value lens', async () => {
+        const { harness, doc } = makeParameterHarness({
+            state: ResourceState.ValueMissing,
+            properties: {} as any,
+            commands: {} as any,
+        });
+
+        const lenses = await harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
+        const reveals = revealLenses(lenses);
+
+        assert.strictEqual(reveals.length, 1, 'expected only the state lens (no value lens) for a missing value');
+        assert.strictEqual(reveals[0].command?.title, codeLensResourceValueMissing);
         harness.dispose();
     });
 });

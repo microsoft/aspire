@@ -40,6 +40,20 @@ internal sealed class TemplateNuGetConfigService(
             return;
         }
 
+        // Skip channels that don't require a project-level nuget.config (e.g. stable,
+        // whose mappings only point to nuget.org — the default source) unless a config
+        // already exists in the target directory. An existing config should still be
+        // updated to clean up stale feeds from a previous channel.
+        // See: https://github.com/microsoft/aspire/issues/18124
+        if (!channel.RequiresProjectNuGetConfig)
+        {
+            var targetDir = new DirectoryInfo(outputPath);
+            if (!NuGetConfigMerger.TryFindNuGetConfigInDirectory(targetDir, out _))
+            {
+                return;
+            }
+        }
+
         var mappings = channel.Mappings;
         if (mappings is null || mappings.Length == 0)
         {
@@ -136,6 +150,18 @@ internal sealed class TemplateNuGetConfigService(
         if (mappings is null || mappings.Length == 0)
         {
             return false;
+        }
+
+        // Skip channels that don't require a project-level nuget.config (e.g. stable,
+        // whose mappings only point to nuget.org) unless a config already exists.
+        // See: https://github.com/microsoft/aspire/issues/18124
+        if (!matchingChannel.RequiresProjectNuGetConfig)
+        {
+            var targetDir = new DirectoryInfo(outputPath);
+            if (!NuGetConfigMerger.TryFindNuGetConfigInDirectory(targetDir, out _))
+            {
+                return false;
+            }
         }
 
         // Call the merger directly — bypass NuGetConfigPrompter so we don't emit a

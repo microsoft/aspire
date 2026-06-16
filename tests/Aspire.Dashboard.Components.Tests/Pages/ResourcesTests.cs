@@ -557,7 +557,9 @@ public partial class ResourcesTests : DashboardTestContext
                 ProtobufValue.ForString("my-secret-value"),
                 isValueSensitive: true,
                 knownProperty: null,
-                priority: 0));
+                sortOrder: 0,
+                displayName: null,
+                isHighlighted: false));
 
         var initialResources = new List<ResourceViewModel>
         {
@@ -601,7 +603,9 @@ public partial class ResourcesTests : DashboardTestContext
                 ProtobufValue.ForString("Parameter 'myparameter' not found in configuration."),
                 isValueSensitive: false,
                 knownProperty: null,
-                priority: 0));
+                sortOrder: 0,
+                displayName: null,
+                isHighlighted: false));
 
         var initialResources = new List<ResourceViewModel>
         {
@@ -643,7 +647,9 @@ public partial class ResourcesTests : DashboardTestContext
                 ProtobufValue.ForString("Error initializing parameter"),
                 isValueSensitive: false,
                 knownProperty: null,
-                priority: 0));
+                sortOrder: 0,
+                displayName: null,
+                isHighlighted: false));
 
         var initialResources = new List<ResourceViewModel>
         {

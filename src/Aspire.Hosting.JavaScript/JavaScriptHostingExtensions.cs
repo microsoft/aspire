@@ -266,7 +266,7 @@ public static class JavaScriptHostingExtensions
             resourceBuilder.WithNpm();
         }
 
-        resourceBuilder.WithVSCodeDebugging(scriptPath);
+        resourceBuilder.WithVSCodeDebugging(scriptPath, "node");
 
         if (builder.ExecutionContext.IsRunMode)
         {
@@ -605,6 +605,8 @@ public static class JavaScriptHostingExtensions
             // Automatically add bun as the package manager if a package.json file exists
             resourceBuilder.WithBun();
         }
+
+        resourceBuilder.WithVSCodeDebugging(scriptPath, "bun");
 
         if (builder.ExecutionContext.IsRunMode)
         {
@@ -1473,7 +1475,7 @@ public static class JavaScriptHostingExtensions
                     }
                     catch (Exception ex)
                     {
-                        var resourceLoggerService = ctx.ExecutionContext.ServiceProvider.GetRequiredService<ResourceLoggerService>();
+                        var resourceLoggerService = ctx.ExecutionContext.Services.GetRequiredService<ResourceLoggerService>();
                         var resourceLogger = resourceLoggerService.GetLogger(resource);
 
                         resourceLogger.LogWarning(ex, "Failed to generate Aspire Vite HTTPS config wrapper for resource '{ResourceName}'. Falling back to existing Vite config without Aspire modifications. Automatic HTTPS configuration won't be available", resource.Name);
@@ -1952,8 +1954,8 @@ public static class JavaScriptHostingExtensions
     }
 
     [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    internal static IResourceBuilder<T> WithVSCodeDebugging<T>(this IResourceBuilder<T> builder, string scriptPath)
-        where T : NodeAppResource
+    internal static IResourceBuilder<T> WithVSCodeDebugging<T>(this IResourceBuilder<T> builder, string scriptPath, string launchConfigType)
+        where T : JavaScriptAppResource
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(scriptPath);
@@ -1967,17 +1969,18 @@ public static class JavaScriptHostingExtensions
                 // Compute at run time so the launch config reflects the final annotation state
                 var hasRunScript = resource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out _);
                 var hasPackageManager = resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var pmAnnotation);
-                var runtimeExecutable = hasRunScript && hasPackageManager ? pmAnnotation!.ExecutableName : "node";
+                var isPackageManagerScript = hasRunScript && hasPackageManager;
 
-                return new NodeLaunchConfiguration
+                return new JavaScriptLaunchConfiguration(launchConfigType)
                 {
                     ScriptPath = Path.GetFullPath(scriptPath, workingDirectory),
                     Mode = mode,
-                    RuntimeExecutable = runtimeExecutable,
+                    RuntimeExecutable = isPackageManagerScript ? pmAnnotation!.ExecutableName : launchConfigType,
+                    LaunchMethod = isPackageManagerScript ? JavaScriptLaunchConfiguration.LaunchMethodPackageManager : JavaScriptLaunchConfiguration.LaunchMethodDirect,
                     WorkingDirectory = workingDirectory
                 };
             },
-            "node");
+            launchConfigType);
     }
 
     [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -1989,21 +1992,28 @@ public static class JavaScriptHostingExtensions
         var resource = builder.Resource;
         var workingDirectory = Path.GetFullPath(resource.WorkingDirectory);
 
+        if (resource is BunAppResource)
+        {
+            throw new InvalidOperationException(
+                $"Bun apps cannot be debugged through the Node dev-server debug path. '{resource.Name}' is a {nameof(BunAppResource)}; use {nameof(AddBunApp)}, which wires its own Bun debug support.");
+        }
+
         return builder.WithDebugSupport(
             mode =>
             {
-                // Compute at run time so the launch config reflects the final annotation state
+                // Fall back to "npm" (the default for these frameworks) if no package manager annotation is present.
                 var packageManager = "npm";
                 if (resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var pmAnnotation))
                 {
                     packageManager = pmAnnotation.ExecutableName;
                 }
 
-                return new NodeLaunchConfiguration
+                return new JavaScriptLaunchConfiguration("node")
                 {
                     ScriptPath = string.Empty,
                     Mode = mode,
                     RuntimeExecutable = packageManager,
+                    LaunchMethod = JavaScriptLaunchConfiguration.LaunchMethodPackageManager,
                     WorkingDirectory = workingDirectory
                 };
             },
