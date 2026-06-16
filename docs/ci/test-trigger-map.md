@@ -63,7 +63,6 @@ The map stays small by keeping each dependency in the layer that can prove it:
 - docs and other no-CI files are dropped up front by `prefilter`, reading the
   CI skip-gate patterns file.
 
-
 ## Target vocabulary
 
 | Target | Maps to |
