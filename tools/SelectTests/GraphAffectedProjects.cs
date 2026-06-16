@@ -371,7 +371,11 @@ internal static class GraphAffectedProjects
         //   R097\tsrc/A/Old.cs\tsrc/B/New.cs     (rename: status, old path, new path)
         // For renames we take BOTH paths; for everything else the single path. -M detects renames so
         // the old path is reported as R..., not as separate D + A.
-        var args = new List<string> { "diff", "--name-status", "-M" };
+        // -c core.quotePath=false so a non-ASCII path comes back as the literal UTF-8 repo-relative
+        // path, not git's default octal-escaped, double-quoted form (e.g. "src/caf\303\251.cs"). The
+        // quoted form would neither match the file index nor split correctly on TAB below, mis-attributing
+        // the change. (Program.cs's Layer 2 diff does the same.)
+        var args = new List<string> { "-c", "core.quotePath=false", "diff", "--name-status", "-M" };
         args.Add(from);
         if (to is not null)
         {

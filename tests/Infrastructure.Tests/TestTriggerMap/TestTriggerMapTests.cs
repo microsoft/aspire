@@ -391,4 +391,47 @@ public sealed class TestTriggerMapTests
             $"tests/Shared files that are neither *.cs (Layer 1-attributed), *.md (prefiltered), nor routed " +
             $"to ALL (they would silently select nothing): {string.Join(", ", orphaned)}");
     }
+
+    [Fact]
+    public void EveryLocalActionUsedByAWorkflowIsRoutedToAll()
+    {
+        // A local composite action (.github/actions/<name>) is not a project, so Layer 1 never attributes
+        // a change to it, and the run-all fallback in TestSelector escalates only src/** files. So a
+        // changed action that no path rule matches selects NOTHING in enforce mode -- a PR editing a
+        // CI-critical action (the skip gate, the macOS keychain unlock, enumerate-tests, ...) would
+        // silently skip all tests. The map routes .github/actions/** -> ALL to cover this; pin the
+        // invariant so a new action referenced from a workflow can't fall through if that rule is ever
+        // narrowed. Failure mode: drop the .github/actions/** ALL rule and this goes red.
+        var allGlobs = s_map.PathRules
+            .Where(r => r.Targets.Contains("ALL", StringComparer.Ordinal))
+            .SelectMany(r => r.Paths)
+            .ToList();
+
+        bool RoutedToAll(string file) => allGlobs.Any(g => TestTriggerMap.GlobMatches(g, file));
+
+        // `uses: ./.github/actions/<name>` (with optional surrounding quotes / a trailing @ref) names a
+        // local composite action whose definition lives at .github/actions/<name>/action.yml.
+        var usesLocalAction = new System.Text.RegularExpressions.Regex(
+            @"uses:\s*['""]?\./\.github/actions/(?<name>[^\s'""@]+)",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        var workflowsDir = Path.Combine(RepoRoot.Path, ".github", "workflows");
+        var referencedActions = Directory.EnumerateFiles(workflowsDir, "*.yml")
+            .SelectMany(f => usesLocalAction.Matches(File.ReadAllText(f)).Select(m => m.Groups["name"].Value))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        // Sanity: the scan finds the actions we know are referenced, so a regex slip can't make this
+        // assertion vacuously pass.
+        Assert.Contains("enumerate-tests", referencedActions);
+
+        var unrouted = referencedActions
+            .Where(name => !RoutedToAll($".github/actions/{name}/action.yml"))
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        Assert.True(unrouted.Count == 0,
+            $"local actions referenced by a workflow but not routed to ALL (a change to them would select " +
+            $"nothing in enforce mode): {string.Join(", ", unrouted)}");
+    }
 }

@@ -343,6 +343,44 @@ public sealed class SelectTestsCliTests
         });
     }
 
+    // Regression: a changed file whose repo-relative path contains non-ASCII bytes must still be
+    // attributed. git's default core.quotePath=true octal-escapes and double-quotes such paths
+    // (e.g. "eng/\343\203\206.../trigger.cs"), which does not glob-equal the real path, so the rule
+    // never fires. Because the path is NOT under src/, the run-all fallback does not mask the miss
+    // (that fallback is src/-only) -> the project would silently select nothing in enforce mode. The
+    // selector passes -c core.quotePath=false so git emits the literal UTF-8 path. A CJK dir name is
+    // used deliberately (no NFC/NFD decomposition) so the test is stable on case/normalizing
+    // filesystems while still exercising the non-ASCII path. Failure mode: drop -c core.quotePath=false
+    // and this goes red.
+    [Fact]
+    public void NonAsciiChangedPathUnderAMappedDirStillSelectsItsTests()
+    {
+        const string unicodeMap = """
+            version: 1
+            path_rules:
+              - paths: ["eng/テスト/**"]
+                targets: ["test:Aspire.Hosting.Tests"]
+            """;
+
+        WithGitRepo((repoRoot, output) =>
+        {
+            WriteFile(repoRoot, "Aspire.slnx", Slnx);
+            WriteFile(repoRoot, "map.yml", unicodeMap);
+            WriteFile(repoRoot, "placeholder.txt", "v0");
+            GitCommitAll(repoRoot, "base");
+            var baseSha = RunGit(repoRoot, "rev-parse", "HEAD");
+
+            WriteFile(repoRoot, "eng/テスト/trigger.cs", "// changed");
+            GitCommitAll(repoRoot, "add a non-ASCII path under a mapped directory");
+            var headSha = RunGit(repoRoot, "rev-parse", "HEAD");
+
+            var propsPath = Path.Combine(repoRoot, "BeforeBuildProps.props");
+            Selection.Run(Options(repoRoot, propsPath, from: baseSha, to: headSha, skipLayer1: true, enforce: true));
+
+            Assert.Contains("Aspire.Hosting.Tests", File.ReadAllText(propsPath));
+        });
+    }
+
     // P1-7. --changed-files trims surrounding whitespace and drops blank lines before glob matching.
     // A regression that fed padded/blank paths to the globber would match nothing — " trigger.txt "
     // does not glob-equal "trigger.txt" — so the surrounding-whitespace line below must still select

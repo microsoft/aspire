@@ -166,7 +166,12 @@ path_rules:
       - tests/Shared/**/*.pfx
       - tests/Shared/**/Dockerfile*
       - tests/Shared/TemplatesTesting/data/**
-      - .github/actions/enumerate-tests/**
+      - .github/actions/**   # local composite actions are CI-load-bearing (the skip gate, the test
+                             # runner's keychain unlock, enumerate-tests, ...) and a change to one can
+                             # affect any job; a non-src file matches no run-all fallback (TestSelector
+                             # escalates only src/**), so route every local action to ALL or it would
+                             # select nothing in enforce mode. Pinned by
+                             # TestTriggerMapTests.EveryLocalActionUsedByAWorkflowIsRoutedToAll.
       - eng/scripts/split-test-matrix-by-deps.ps1
       - eng/scripts/build-test-matrix.ps1   # canonical-matrix builder; a bug skews every PR's matrix -> err toward ALL (also runs its BuildTestMatrixTests verifier)
       - eng/scripts/expand-test-matrix-github.ps1   # GitHub matrix expansion; a bug skews every PR's matrix -> err toward ALL (also runs its ExpandTestMatrixGitHubTests verifier)

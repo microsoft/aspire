@@ -300,7 +300,11 @@ internal static class Selection
         // the old path and silently skip that directory's mapped tests. Layer 1 captures both sides via
         // -M; this keeps Layer 2 consistent.
         var range = options.To is null ? new[] { options.From } : new[] { options.From, options.To };
-        var args = new List<string> { "diff", "--name-only", "--no-renames" };
+        // -c core.quotePath=false: with the default (true), git octal-escapes and double-quotes any
+        // path with non-ASCII bytes (e.g. "src/caf\303\251.cs"). That escaped string is not the real
+        // repo-relative path, so the map globs below would silently miss it. Forcing quotePath off makes
+        // git emit the literal UTF-8 path, which is what the globs expect. (Layer 1's diff does the same.)
+        var args = new List<string> { "-c", "core.quotePath=false", "diff", "--name-only", "--no-renames" };
         args.AddRange(range);
 
         var stdout = RunProcess("git", args, options.RepoRoot, out var exitCode, out var stderr);
