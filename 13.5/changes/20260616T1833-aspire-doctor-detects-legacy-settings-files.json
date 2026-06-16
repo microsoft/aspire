@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The aspire doctor command now detects workspaces that have a legacy .aspire/settings.json without a sibling aspire.config.json. When found, it surfaces a warning hint directing users to run aspire init (or any aspire run/add/update command) to trigger automatic migration to the current configuration format.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🩺",
+  "firstMergedAt": "2026-06-16T18:33:33Z",
+  "lastMergedAt": "2026-06-16T18:33:33Z",
+  "name": "aspire doctor detects legacy settings files",
+  "owner": "ellahathaway",
+  "prs": [
+    17934
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Resource property metadata moved to producers - improvement enabling custom resources to supply property display metadata",
+  "mergedAt": "2026-06-16T15:52:38Z",
+  "number": 18202,
+  "runDate": "2026-06-16T19:11:58Z",
+  "status": "included",
+  "title": "Move resource property metadata to producers"
+}

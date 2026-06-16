@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Resource producers such as projects, containers, executables, parameters, and .NET tools now supply their own property display metadata (labels, default visibility, and ordering) via the resource snapshot protocol. The dashboard uses this producer-supplied metadata instead of hardcoded per-resource-type lookups, enabling custom resources to control how their properties appear in the resource details panel.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🏷️",
+  "firstMergedAt": "2026-06-16T15:52:38Z",
+  "lastMergedAt": "2026-06-16T15:52:38Z",
+  "name": "Resource property metadata moved to producers",
+  "owner": "davidfowl",
+  "prs": [
+    18202
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "guanzhousongmicrosoft",
+  "comment": "Azure Cosmos DB vNext emulator GA alignment - completes image tag update from #18158 with behavioral fixes and comprehensive test coverage",
+  "mergedAt": "2026-06-16T17:17:01Z",
+  "number": 18161,
+  "runDate": "2026-06-16T19:11:58Z",
+  "status": "included",
+  "title": "Align Azure Cosmos DB emulator with GA vnext-latest image"
+}

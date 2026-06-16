@@ -1,0 +1,9 @@
+{
+  "author": "0xharkirat",
+  "comment": "Bug fix for Entra ID auth in SqlServer client integrations - adds missing Azure extensions package",
+  "mergedAt": "2026-06-16T17:40:03Z",
+  "number": 18149,
+  "runDate": "2026-06-16T19:11:58Z",
+  "status": "included",
+  "title": "Reference Microsoft.Data.SqlClient.Extensions.Azure in SqlServer client integrations for Entra ID auth"
+}

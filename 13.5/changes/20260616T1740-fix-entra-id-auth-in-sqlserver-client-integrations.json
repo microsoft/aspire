@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@0xharkirat"
+  ],
+  "description": "The SqlServer client integrations (Aspire.Microsoft.Data.SqlClient and Aspire.Microsoft.EntityFrameworkCore.SqlServer) now reference Microsoft.Data.SqlClient.Extensions.Azure, which contains the Entra ID authentication providers that were moved out of the core SqlClient driver in version 7.0. Apps using managed identity or Active Directory authentication against Azure SQL no longer fail at runtime with 'Cannot find an authentication provider for ActiveDirectoryDefault'.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔐",
+  "firstMergedAt": "2026-06-16T17:40:03Z",
+  "lastMergedAt": "2026-06-16T17:40:03Z",
+  "name": "Fix Entra ID auth in SqlServer client integrations",
+  "owner": "sebastienros",
+  "prs": [
+    18149
+  ]
+}

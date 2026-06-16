@@ -3,19 +3,20 @@
   "areaEmoji": "🏠",
   "backport": false,
   "breaking": false,
-  "changeType": "Bug fixes",
+  "changeType": "Improvements",
   "communityContributors": [
     "@guanzhousongmicrosoft"
   ],
-  "description": "The RunAsPreviewEmulator() API now pulls the mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:vnext-latest tag instead of the retired vnext-preview tag, restoring access to the current Cosmos DB preview emulator.",
+  "description": "The Azure Cosmos DB Linux-based (vNext) emulator is now fully aligned with the GA vnext-latest image. RunAsPreviewEmulator() pulls mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:vnext-latest; the Data Explorer is now opt-in (call WithDataExplorer() to enable it instead of running unconditionally); and WithDataVolume() no longer sets the AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE variable for the vNext emulator since the GA image uses implicit /data volume persistence instead.",
   "docsPrs": [],
-  "docsRequired": false,
-  "emoji": "🛠️",
+  "docsRequired": true,
+  "emoji": "🌌",
   "firstMergedAt": "2026-06-12T15:11:01Z",
-  "lastMergedAt": "2026-06-12T15:11:01Z",
-  "name": "Fix Cosmos DB preview emulator image tag",
+  "lastMergedAt": "2026-06-16T17:17:01Z",
+  "name": "Azure Cosmos DB vNext emulator GA alignment",
   "owner": "sebastienros",
   "prs": [
-    18158
+    18158,
+    18161
   ]
 }

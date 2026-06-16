@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed misleading error classification in TypeScript AppHost when addParameter() is called with both secret: true and publishValueAsDefault: true. The invalid option combination now correctly surfaces an INVALID_ARGUMENT error with a clear diagnostic message instead of a confusing TYPE_MISMATCH capability error.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-06-16T19:05:56Z",
+  "lastMergedAt": "2026-06-16T19:05:56Z",
+  "name": "Fix addParameter error for invalid option combination",
+  "owner": "ellahathaway",
+  "prs": [
+    18024
+  ]
+}

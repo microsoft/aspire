@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Bug fix for TypeScript AppHost addParameter error classification when secret and publishValueAsDefault are both true",
+  "mergedAt": "2026-06-16T19:05:56Z",
+  "number": 18024,
+  "runDate": "2026-06-16T19:11:58Z",
+  "status": "included",
+  "title": "Fix addParameter error classification for invalid option combo"
+}
