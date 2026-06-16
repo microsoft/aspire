@@ -525,10 +525,13 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     {
         if (isSingleFileAppHost)
         {
-            // A single-file apphost pins its Aspire.Hosting version to whatever the CLI ships,
-            // so this reports the CLI's identity version (honoring ASPIRE_CLI_VERSION / sidecar
-            // overrides) rather than the physical assembly version.
-            return (true, _executionContext.IdentityVersion);
+            // A single-file apphost pins its Aspire.Hosting version via the
+            // `#:sdk Aspire.AppHost.Sdk@<version>` directive, which uses IdentitySdkVersion (the
+            // identity version with build metadata stripped, matching the published NuGet package
+            // version). Report that same value here so the compatibility check reflects what the
+            // apphost actually pins, honoring ASPIRE_CLI_VERSION / sidecar overrides rather than
+            // the physical assembly version.
+            return (true, _executionContext.IdentitySdkVersion);
         }
 
         using var compatibilityActivity = _profilingTelemetry.StartAppHostCheckCompatibility();
