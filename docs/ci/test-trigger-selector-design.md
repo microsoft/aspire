@@ -1,0 +1,433 @@
+# Test trigger selector — design
+
+A design for a tool that takes a PR's changed files and emits the set of test
+projects and CI jobs to run, so PR CI runs a relevant subset instead of the full
+matrix.
+
+Companion documents:
+
+- [`test-trigger-map.md`](./test-trigger-map.md) — the descriptive path → target map.
+- [`eng/test-trigger-map.yml`](../../eng/test-trigger-map.yml) — its machine-readable form.
+
+**Status: audit.** `tests.yml`'s `setup_for_tests` runs the `select-tests` action
+*before* `enumerate-tests`. When its `enforce: 'true'` and the selection is
+not ALL, the selector writes an `OverrideProjectToBuild` props file so
+`enumerate-tests` builds and enumerates only the selected projects; in audit mode
+(`enforce: 'false'`) it writes no props and `enumerate-tests` produces
+the full matrix unchanged while the summary still reports what enforcing would
+have skipped.
+
+Audit mode does not soften Layer 1 failures. If the affected-projects graph
+cannot be computed, `SelectTests` fails the step because under-selecting would
+silently skip real tests.
+
+## Goal
+
+Input: the list of files changed in a PR. Output:
+
+- the subset of `test:<Project>` entries to run, and
+- which non-.NET jobs to trigger (`job:polyglot`, `job:extension-e2e`, …).
+
+Select *before* enumeration: pick the affected test projects, then have
+`enumerate-tests` build/shard only those — do **not** enumerate the full matrix
+and filter it after.
+
+## Why not just consume `test-trigger-map.yml`?
+
+The map mixes two kinds of rule. The large graph-derived edges (a leaf
+integration → its own test, the core fan-out, and foreign linked-file consumers)
+are mechanically derivable from the `.csproj` graph and go stale the moment a
+project or a `ProjectReference` changes.
+
+So the design splits by **who can know the dependency**:
+
+- **Layer 1 — derived (zero maintenance):** changed file → owning project
+  → reverse-dependency closure → affected test projects. Computed from the live
+  MSBuild graph every run, so it can never drift.
+- **Layer 2 — curated:** only what the MSBuild graph cannot see — the non-.NET
+  jobs, runtime/loose-file reads, and convention backstops.
+
+## Layer 1 — derived, in process
+
+Layer 1 is implemented by
+[`tools/SelectTests/GraphAffectedProjects.cs`](../../tools/SelectTests/GraphAffectedProjects.cs).
+It builds an MSBuild `ProjectGraph` from `Aspire.slnx` at the PR head.
+
+The graph is **HEAD-only**. It never evaluates from-commit project content; the
+diff is used only to identify changed paths.
+
+### Changed paths
+
+When `--from` / `--to` are supplied, Layer 1 reads changed files with:
+
+```text
+git diff --name-status -M <from> <to>
+```
+
+Deletes are included. Renames include both the old path and the new path, so a
+cross-project move marks both the project that lost the file and the project
+that gained it.
+
+`--changed-files` is a path-only input for local/debug runs. It does not carry
+rename/delete status, so each line is treated as a present changed path.
+
+### File → project attribution
+
+Layer 1 indexes evaluated `ProjectInstance` inputs for every graph node:
+
+- project files themselves;
+- `ProjectInstance.ImportPaths`, including repo hook files imported through
+  SDK/Arcade targets that live in the NuGet cache, such as `eng/Versions.props`
+  and `Directory.Build.props`;
+- evaluated items resolved through their `FullPath` metadata.
+
+The indexed item types include `Compile`, `Content`, `None`,
+`EmbeddedResource`, `AdditionalFiles`, and other registered types from each
+project's `AvailableItemName` items, such as `Protobuf`.
+
+Using each item's resolved `FullPath` matters for linked/shared files. A source
+file linked into multiple projects maps to every project that consumes it, not
+just to the directory where the file physically lives.
+
+Files not found in that index fall back to longest-prefix project directory
+containment. This covers deleted files, the old side of a cross-project rename,
+and project-owned files that are not modeled as one of the indexed item types.
+
+### Reverse closure and output
+
+After direct attribution, Layer 1 walks `ProjectGraphNode.ReferencingProjects`
+transitively. This produces every downstream project that can be broken by the
+change.
+
+The output is the affected project base names: the `.csproj` filename without
+extension. `TestSelector.Select(...)` intersects test-project names with the
+matrix and matches production-project names against `affected_project_rules`.
+
+### Why a HEAD-only graph
+
+The selector deliberately avoids `dotnet-affected` for Layer 1.
+
+`dotnet-affected` reads from-commit blobs through a libgit2-backed MSBuild
+virtual filesystem to diff packages. That has two CI-breaking constraints:
+
+- it crashes whenever the diff touches `Directory.Packages.props`, because it
+  eager-loads `global.json` as MSBuild XML
+  (`leonardochaia/dotnet-affected#155`);
+- it cannot run inside a git worktree.
+
+A HEAD-only graph never evaluates from-commit content, so both constraints
+disappear. Two-commit central-package diffing is intentionally not reproduced:
+Layer 2 routes `Directory.Packages.props` to `ALL`.
+
+### Why no `Microsoft.Build.Prediction`
+
+Layer 1 does not use `Microsoft.Build.Prediction`.
+
+The evaluated-item index (`FullPath`) plus `ImportPaths` and
+`AvailableItemName`-registered item types reaches every file class that matters
+for this selector. It was measured equal-or-superset of a prediction-based index
+for cross-project linked `.cs`, `.proto`, linked `.json`, and `.resx` changes.
+
+The evaluated-item index was strictly better for deleted files under a project
+directory, because the containment fallback can still attribute the removed
+path. Prediction's only diff-relevant unique catch was `global.json`, which
+Layer 2 already routes to `ALL`.
+
+Avoiding prediction keeps Layer 1 self-owned and avoids another third-party
+dependency.
+
+### Why root at `Aspire.slnx`
+
+`ProjectGraph` follows `ProjectReference` edges. An Arcade `Build.proj`-style
+root expresses its build set as `ProjectToBuild` items, so using that shape as
+the graph root does not produce the repository project graph.
+
+Evaluating `eng/Build.props`'s `ProjectToBuild` items would also make selection
+depend on build flags and the current RID. Flags such as `SkipNativeBuild`,
+`BuildBundleDepsOnly`, and `SkipTestProjects` differ across CI jobs.
+
+That project set is also a net loss for test selection:
+
+- it adds test-less leaves, such as RID-specific `eng/dcppack`,
+  `eng/dashboardpack`, and `eng/clipack` packaging projects, plus
+  `playground/**` sample apps;
+- it drops `tools/**` projects that `Aspire.slnx` includes and that affect real
+  tests through `Infrastructure.Tests`.
+
+`Aspire.slnx` is deterministic, RID/flag-independent, and test-complete.
+`ProjectGraph` auto-expands `ProjectReference`s, so every project reachable to a
+test is in the graph even if it is not directly listed as a solution entry.
+
+### MSBuild loading
+
+`SelectTests` references:
+
+- `Microsoft.Build` `18.3.3` with `ExcludeAssets=runtime`;
+- `Microsoft.Build.Framework` `18.3.3` with `ExcludeAssets=runtime`;
+- `Microsoft.Build.Locator` `1.9.1`.
+
+The MSBuild engine assemblies are loaded from the repo-local SDK via
+`MSBuildLocator`. The packages are available on the approved dnceng feeds, and
+no external tool restore is required for Layer 1.
+
+## Layer 2 — curated
+
+Layer 2 is the hand-owned part in `test-trigger-map.yml`. It contains what the
+MSBuild graph cannot infer:
+
+- non-.NET jobs;
+- runtime and loose-file reads;
+- convention backstops for files that are not modeled as MSBuild inputs;
+- conservative `ALL` routes for broad infrastructure changes.
+
+Only five selector matchers exist; `groups` are reusable target bundles:
+
+- **`prefilter`**: globs whose changed files are dropped *before* Layer 1 and
+  Layer 2 run. The pattern list is **read at runtime** from
+  `eng/testing/github-ci-trigger-patterns.txt` — the same file the top-level
+  `ci.yml` skip gate uses — so the selector and the gate can never drift. Its
+  glob syntax is the *action's*, not the map's (`**`→any incl. `/`, `*`→any
+  except `/`, `.` literal, anchored), ported verbatim in `ChangedFileFilter`.
+  `keep_routed` carves out the files the selector routes to a target
+  (`.github/workflows/**` and `eng/pipelines/**` → `Infrastructure.Tests`, and
+  the patterns file itself), so those are never dropped. This is the only
+  mechanism that also removes a file from Layer 1's input, so a packed
+  `README.md` cannot be attributed by the graph and fanned out.
+- **`conventions`**: `<name>`-capture pattern → target template, additive and
+  existence-guarded.
+- **`ignore`**: globs Layer 2 accounts for with no target, so they do not trip
+  the run-all fallback. `ignore` only suppresses the fallback — Layer 1 still
+  attributes the file. It is now only needed for files Layer 1 *cannot* attribute
+  (the inert `Vendoring/OpenTelemetry.Shared`, compiled by nothing): a
+  link-compiled `src/Shared`/`tests/Shared`/`Components/Common` file is reported
+  by Layer 1 in its attributed-paths set, and the fallback treats any
+  Layer-1-attributed file as owned, so those need no `ignore` entry.
+- **`path_rules`**: the general path-glob → targets matcher (`test:` / `job:` /
+  group / `ALL`).
+- **`affected_project_rules`**: an affected **production** project name glob
+  → targets. Matched against production names only; affected matrix *test*
+  projects are filtered out first, so a test-only change cannot fire production
+  jobs (`ats-diffs`, `extension-e2e`, …) through a glob like `Aspire.Hosting*`.
+- **`derived_targets`**: if any selected test matches, add more targets to a
+  fixpoint.
+
+These are sourced from the corresponding sections of `test-trigger-map.yml`.
+
+## The tool (`tools/SelectTests`)
+
+`SelectTests` is a small C# console tool, run *before* `enumerate-tests`. It
+decides which test projects are affected; `enumerate-tests` then builds and
+shards only those.
+
+Main options:
+
+- `--repo-root`: repository root, defaulting to the current directory.
+- `--map`: curated map path, defaulting to `eng/test-trigger-map.yml`.
+- `--slnx`: path to the solution that defines the project universe, defaulting to
+  `<repo-root>/Aspire.slnx`.
+- `--from` / `--to`: git refs for the PR diff.
+- `--changed-files`: newline-delimited changed file list, instead of
+  `--from` / `--to`.
+- `--skip-layer1`: skip the graph closure for explicit diagnostics.
+- `--force-all`: kill switch; force ALL.
+- `--enforce`: write the restriction props for a non-ALL selection. Without this
+  (audit), no props are written and `enumerate-tests` runs the full matrix.
+- `--before-build-props`: path for the `OverrideProjectToBuild` props file
+  (consumed by `enumerate-tests` via `BeforeBuildPropsPath`).
+
+The test-project universe (the set an `ALL` selection expands to, and the
+existence guard) is the `tests/<Name>/<Name>.csproj` projects ending in `.Tests`
+in `Aspire.slnx` — derived directly from the slnx because the selector runs
+before any matrix exists.
+
+Flow:
+
+1. Resolve changed files, then drop any matched by the `prefilter` (the CI
+   skip-gate patterns file, read at runtime, minus `keep_routed`) — applied to
+   **both** the Layer 2 path list and Layer 1's git diff, so an excluded file
+   (e.g. a packed `README.md`) influences neither layer.
+2. Compute Layer 1 affected project names (and the set of changed paths it
+   attributed) unless `--force-all` or `--skip-layer1` is set.
+3. Apply Layer 2 `conventions`, `ignore`, and `path_rules` for each changed
+   file. A changed file that Layer 1 attributed (its attributed-paths set) is
+   treated as Layer-1-owned, so a link-compiled `src/Shared`/`tests/Shared`
+   file does not trip the run-all fallback even though it is under no project
+   directory.
+4. Apply `affected_project_rules` to Layer 1 **production**-project names only
+   (affected matrix test projects are filtered out first, so a test-only change
+   does not fire production jobs through a production-name glob).
+5. Apply `derived_targets` to a cycle-safe fixpoint.
+6. Escalate to `ALL` for a kill switch, an `ALL` path rule, or any changed file
+   that survived the prefilter but is not Layer-1-owned (neither under a project
+   directory in `Aspire.slnx` nor in Layer 1's attributed-paths set), not
+   `ignore`d, and matched by no rule. The fallback is location-independent (not
+   `src/**`-only): a missed test is a silent regression, so any unmapped change
+   fails safe to the full matrix. Files that genuinely need no CI are dropped by
+   the prefilter in step 1, so they never reach this fallback.
+7. Emit the per-job booleans (as one `selection` JSON object), and — in enforce
+   mode for a non-ALL selection — the `OverrideProjectToBuild` props restricting
+   the downstream build.
+
+Selection only decides *which* projects survive. OS expansion, timeouts,
+`requiresNugets` / `requiresCliArchive` flags, and the matrix split stay owned
+by the existing scripts (downstream of `enumerate-tests`).
+
+## Pipeline integration
+
+The flow in `tests.yml`'s `setup_for_tests` job:
+
+```text
+checkout
+  -> select-tests (action: minimal SDK bootstrap; curated map + Layer 1 in process)
+       -> selection JSON (run_<job> booleans) + summary
+       -> (enforce && !ALL) project_override_props: BeforeBuildProps.props (OverrideProjectToBuild)
+  -> enumerate-tests (action; checkout reused; own restore; beforeBuildPropsPath)
+       -> all_tests JSON {"include":[...]} (only the selected projects in enforce)
+  -> split-test-matrix-by-deps.ps1
+  -> run-tests.yml (per-dependency matrices)
+```
+
+The `select-tests` action runs first; `enumerate-tests` reuses the job's checkout
+(`checkout: 'false'`) so the props file survives — a fresh checkout's `git clean`
+would otherwise remove it. Selection only needs a minimal SDK (the action's
+`./dotnet.sh --version`), not a full repo restore; `enumerate-tests` does its own
+restore (`restore: 'true'`). The split, per-OS/per-dependency bucketing, and
+`run-tests.yml` are unchanged.
+
+The `select-tests` action emits the per-job gates as a single generic `selection`
+step output — a JSON object keyed `run_<job>` — so neither the action nor the
+SelectTests tool enumerates the concrete jobs. `tests.yml` is where the per-job
+names belong, so `setup_for_tests` unpacks that object into one boolean job
+output per job, e.g.
+`run_polyglot: ${{ fromJSON(steps.select_tests.outputs.selection).run_polyglot }}`.
+Each non-.NET job then gates on plain `needs.setup_for_tests.outputs.run_<job> ==
+'true'` (no `fromJSON` at the call site, and usable in a job-level `if:`, where
+the `env` context is unavailable): `polyglot_validation`, `typescript_sdk_tests`,
+`typescript_api_compat`, the extension jobs, `cli_starter_validation_windows`,
+and the WinGet/Homebrew installer-prepare jobs. Adding a trigger-map job means
+adding its unpack line + its own `if:` — no change to the action or the tool.
+
+The .NET test jobs need no `run_<job>` gate: they are already gated by their
+matrix bucket being empty once `enumerate-tests` produces only the selected
+projects. Base builds stay ungated because they are upstream `needs:` that run
+whenever a dependent runs.
+
+The extension-unit jobs (`extension_tests_win` / `extension_bootstrap_linux`)
+gate on `run_extension_unit` **or** `run_extension_e2e`, because
+`extension_e2e_tests` needs them. Gating them off while e2e runs would skip e2e
+via need-propagation.
+
+**Audit vs. enforce is a single knob: the `select-tests` action's `enforce`
+input.** Audit (`'false'`, no `--enforce`) writes no restriction
+props, so `enumerate-tests` builds the full matrix and every `run_<job>` output
+is true, with the advisory summary showing what enforcing would select.
+
+Flipping `enforce` to `'true'` makes the same selector return the
+selective matrix and selective `run_<job>` outputs. The downstream gates do not
+need to change.
+
+The kill switch is wired in the same step: a `[full ci]` token in the PR body
+passes `--force-all`. Non-PR events (no base SHA at all,
+e.g. a push to `main`) also force the full set. A PR *with* a base SHA that
+cannot be fetched in the shallow checkout **fails the step** instead of forcing
+run-all: `base.sha` is always reachable on origin, so a fetch failure is a real
+problem, and masking it with run-all would teach the audit nothing.
+
+## Failure policy
+
+Layer 1 is safety-critical. Any failure to compute the affected-projects graph
+is fatal in audit and enforce modes.
+
+The selector may still choose run-all intentionally for known-safe reasons:
+
+- `--force-all`;
+- a non-PR event with no diff base at all (e.g. a push to `main`);
+- a changed path that matches an `ALL` rule;
+- any changed file that survived the prefilter but is not Layer-1-owned, not
+  `ignore`d, and matched by no rule (the run-all fallback — location-independent,
+  not `src/**`-only).
+
+Those are explicit selections of the full matrix. They are not fallbacks for a
+crashed selector or a failed graph computation. (A PR whose base SHA cannot be
+fetched is *not* one of them — that fails the step; see above.)
+
+## Measured selectivity
+
+The graph has two structural "god edges" that make any hosting-integration or
+data-component change fan out to roughly the hosting test cluster:
+
+- `tests/Aspire.Hosting.Tests` `ProjectReference`s several integrations and is
+  itself referenced by many hosting test projects.
+- `tests/testproject` (`TestProject.AppHost`, `IntegrationServiceA`) references
+  a broad component set, bridging data-component changes into the hosting
+  cluster.
+
+**This fan-out is accepted, not a defect to fix.** Running the affected hosting
+cluster for a hosting-integration change is still far cheaper than the full
+matrix, and pruning those edges would change what "affected" means for the test
+owners.
+
+The clean wins remain large and safe:
+
+- CLI-only, Dashboard-only, extension-only, TypeScript-only, and polyglot-only
+  changes stay tightly scoped.
+- Component ↔ component isolation holds: an `Aspire.Npgsql` change does not pull
+  unrelated Redis / RabbitMQ / MongoDB / Milvus component tests.
+
+## Audit mode
+
+Audit mode computes the subset and writes a `$GITHUB_STEP_SUMMARY`, but CI still
+runs the full matrix and all jobs. The summary shows:
+
+- the invocation mode and change source;
+- selected test projects and triggered jobs, each annotated with **why** it was
+  selected — the changed file, affected project, graph edge, or selected test
+  that pulled it in, plus the curated rule's `reason` text;
+- the would-have-been-skipped list;
+- any `ALL` or kill-switch escalation and why;
+- unattributed changed files that may need curated rules.
+
+The sticky PR comment carries the same selection in a terser form: each test
+project and job is listed with **every** cause that selected it (e.g. a job
+pulled in only because a test runs reads `via test <Name>`), priority-ordered
+and de-duplicated. The full per-item cause list additionally includes the rule
+`reason` text in the step summary. In audit mode the comment is advisory — the
+full matrix and all jobs still run — so it is labelled "(audit mode)" and states
+that the lists are what selective CI **would** run under enforcement.
+
+Any audit run where a would-be-skipped test would have failed is a map bug,
+fixed before enforcing. Once audit data shows the skip set is consistently safe,
+flip to enforcing and keep the `[full ci]` kill switch.
+
+## Verifier test
+
+`Infrastructure.Tests` keeps the curated layer honest:
+
+- **Referential integrity:** every curated `test:` / `job:` target, including
+  `affected_project_rules` and `derived_targets`, names a real test project or
+  known job; every path glob is valid; every `affected_project_rules`
+  project-name glob matches at least one project in `Aspire.slnx`.
+- **Coverage:** every test project and every `src` project is reachable by some
+  rule or by `Aspire.slnx`, so a newly added, unmapped project fails loudly
+  instead of silently never running.
+
+A convention-miss dir with no same-named test is intentionally not asserted.
+Its MSBuild files are owned by Layer 1, and a non-MSBuild change there safely
+hits a curated rule, the convention backstop, or the run-all fallback.
+
+## Rollout
+
+1. Run `SelectTests` in audit mode.
+2. Watch the audit summaries and fix unsafe skips in the curated layer.
+3. Flip to enforcing. Keep the kill switch and hard-fail Layer 1 policy.
+
+## Future refinement
+
+Refinement is about the curated layer staying accurate, not about changing the
+graph:
+
+- new non-.NET jobs or runtime file dependencies get curated rules;
+- the verifier catches new unmapped projects;
+- audit data flags any rule that under- or over-selects.
+
+God-edge pruning is explicitly out of scope.
