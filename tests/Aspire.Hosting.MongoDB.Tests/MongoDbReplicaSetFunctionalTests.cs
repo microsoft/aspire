@@ -63,8 +63,10 @@ public class MongoDbReplicaSetFunctionalTests(ITestOutputHelper testOutputHelper
         var moviesCollection = mongoDatabase.GetCollection<Movie>(CollectionNameA);
         var directorsCollection = mongoDatabase.GetCollection<Director>(CollectionNameB);
 
+        // NOTE: Watch streams and transactions in MongoDB only work within replica sets; so if we successfully use both the aforementioned features, it is effectively verified that the replica set is functional.
+        var directorsWatchCursor = await directorsCollection.WatchAsync(cancellationToken: ct);
         using var session = await mongoDatabase.Client.StartSessionAsync(cancellationToken: ct);
-        session.StartTransaction(); // NOTE: Transactions in MongoDB only work within replica sets; so this effectively tests that the replica set features are working as expected when we can successfully use transactions.
+        session.StartTransaction();
 
         await moviesCollection.InsertManyAsync(session, s_movies, cancellationToken: ct);
         await directorsCollection.InsertManyAsync(session, s_directors, cancellationToken: ct);
@@ -78,5 +80,12 @@ public class MongoDbReplicaSetFunctionalTests(ITestOutputHelper testOutputHelper
             item => Assert.Contains("The Godfather", item.Name),
             item => Assert.Contains("The Dark Knight", item.Name),
             item => Assert.Contains("Schindler's List", item.Name));
+
+        await foreach (var item in directorsWatchCursor.ToAsyncEnumerable())
+        {
+            // NOTE: We only assert the first item
+            Assert.Contains("Quentin Tarantino", item.FullDocument.Name);
+            break;
+        }
     }
 }
