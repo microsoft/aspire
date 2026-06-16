@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Dashboard dialogs now return focus to the launcher element after closing, improving keyboard navigation. Assistant feedback buttons now expose an aria-pressed state, the Text Visualizer format picker uses a proper select control with disabled unavailable options, and console resource prefix colors meet WCAG AA contrast requirements in both light and dark themes.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "♿",
+  "firstMergedAt": "2026-06-15T21:45:23Z",
+  "lastMergedAt": "2026-06-15T21:45:23Z",
+  "name": "Improved dashboard dialog and control accessibility",
+  "owner": "adamint",
+  "prs": [
+    17929
+  ]
+}

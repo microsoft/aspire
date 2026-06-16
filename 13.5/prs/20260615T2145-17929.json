@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Multiple dashboard accessibility improvements: dialog focus return, assistant feedback button states, Text Visualizer select control, console resource prefix contrast",
+  "mergedAt": "2026-06-15T21:45:23Z",
+  "number": 17929,
+  "runDate": "2026-06-16T00:37:17Z",
+  "status": "included",
+  "title": "Improve dashboard dialog and control accessibility states"
+}

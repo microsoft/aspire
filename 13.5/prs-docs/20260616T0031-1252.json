@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Reworks Install Aspire CLI page to add package manager sections (npm, NuGet, WinGet, Homebrew). Matches aspire-cli-available-via-npm entry.",
+  "mergedAt": "2026-06-16T00:31:03Z",
+  "number": 1252,
+  "runDate": "2026-06-16T00:37:17Z",
+  "status": "included",
+  "title": "Fix install CLI and prerequisites pages"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI build infrastructure change: cross-compiles osx-x64 CLI on Apple Silicon runner to reduce build time. No user-visible impact.",
+  "mergedAt": "2026-06-15T23:35:47Z",
+  "number": 18190,
+  "runDate": "2026-06-16T00:37:17Z",
+  "status": "excluded",
+  "title": "ci: cross-compile osx-x64 CLI archive on Apple Silicon runner"
+}

@@ -7,7 +7,8 @@
   "communityContributors": [],
   "description": "The Aspire CLI is now available as an npm package (@microsoft/aspire-cli), providing an alternative installation method. The update command and update notifier now detect and handle npm-installed versions.",
   "docsPrs": [
-    1243
+    1243,
+    1252
   ],
   "docsRequired": true,
   "emoji": "📦",

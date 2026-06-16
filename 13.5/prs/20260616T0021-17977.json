@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Bot-authored automated update of ATS API surface area. Excluded as bot PR.",
+  "mergedAt": "2026-06-16T00:21:32Z",
+  "number": 17977,
+  "runDate": "2026-06-16T00:37:17Z",
+  "status": "excluded",
+  "title": "[Automated] Update ATS API Surface Area"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Test-only fix for flaky Docker pipeline tests. No user-visible impact.",
+  "mergedAt": "2026-06-16T00:02:28Z",
+  "number": 18126,
+  "runDate": "2026-06-16T00:37:17Z",
+  "status": "excluded",
+  "title": "test(hosting): fix flaky \"Docker is not running\" failures in pipeline tests"
+}
