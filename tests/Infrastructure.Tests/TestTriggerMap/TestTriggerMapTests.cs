@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
 using Microsoft.Extensions.FileSystemGlobbing;
 using Xunit;
 
@@ -226,20 +225,7 @@ public sealed class TestTriggerMapTests
 
     private static IReadOnlyList<string> LoadTrackedFiles()
     {
-        var psi = new ProcessStartInfo("git", "ls-files")
-        {
-            WorkingDirectory = RepoRoot.Path,
-            RedirectStandardOutput = true,
-            UseShellExecute = false,
-        };
-        using var process = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start 'git ls-files'.");
-        var output = process.StandardOutput.ReadToEnd();
-        process.WaitForExit();
-        if (process.ExitCode != 0)
-        {
-            throw new InvalidOperationException($"'git ls-files' exited with code {process.ExitCode}.");
-        }
-
+        var output = GitCli.Run(RepoRoot.Path, "ls-files");
         return output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     }
 

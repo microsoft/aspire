@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.SelectTests;
-using System.Diagnostics;
 using Xunit;
 
 namespace Infrastructure.Tests.TestTriggerMap;
@@ -381,32 +380,7 @@ public sealed class GraphAffectedProjectsTests
                 """);
         }
 
-        private string Git(params string[] args)
-        {
-            var psi = new ProcessStartInfo("git")
-            {
-                WorkingDirectory = _temp.Path,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-            };
-            psi.ArgumentList.Add("--no-pager");
-            foreach (var arg in args)
-            {
-                psi.ArgumentList.Add(arg);
-            }
-
-            using var process = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start git.");
-            var stdout = process.StandardOutput.ReadToEnd();
-            var stderr = process.StandardError.ReadToEnd();
-            process.WaitForExit();
-            if (process.ExitCode != 0)
-            {
-                throw new InvalidOperationException($"git {string.Join(' ', args)} failed ({process.ExitCode}): {stderr}");
-            }
-
-            return stdout.Trim();
-        }
+        private string Git(params string[] args) => GitCli.Run(_temp.Path, args);
 
         public void Dispose() => _temp.Dispose();
     }
