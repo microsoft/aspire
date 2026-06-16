@@ -101,6 +101,43 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
         }
     }
 
+    [Fact]
+    public async Task ExtractAsync_UpToDateMarkerWithIncompleteDashboardAssets_Reextracts()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var layoutRoot = workspace.WorkspaceRoot.FullName;
+        var payload = CreateFakeBundlePayload("repaired-bundle");
+        var provider = new TestBundlePayloadProvider(payload);
+
+        var layoutDiscovery = new TestLayoutDiscovery(layoutRoot);
+        var service = CreateService(provider, layoutDiscovery);
+
+        var result1 = await service.ExtractAsync(layoutRoot, force: true);
+        Assert.Equal(BundleExtractResult.Extracted, result1);
+
+        var versionsDir = Path.Combine(layoutRoot, BundleService.VersionsDirectoryName);
+        var activeVersionDir = Assert.Single(Directory.GetDirectories(versionsDir));
+        var appCssPath = Path.Combine(activeVersionDir,
+            BundleDiscovery.ManagedDirectoryName,
+            BundleService.s_requiredManagedDashboardAssets[0]);
+
+        File.Delete(appCssPath);
+        Assert.False(BundleService.IsVersionedLayoutValid(activeVersionDir));
+
+        try
+        {
+            var result2 = await service.ExtractAsync(layoutRoot, force: false);
+
+            Assert.Equal(BundleExtractResult.Extracted, result2);
+            Assert.True(File.Exists(appCssPath), $"Dashboard asset should have been restored at {appCssPath}");
+            Assert.Contains("repaired-bundle", File.ReadAllText(appCssPath));
+        }
+        finally
+        {
+            CleanupReparsePoints(layoutRoot);
+        }
+    }
+
     /// <summary>
     /// Verifies that upgrading from v1 to v2 flips the reparse points to the
     /// new versioned directory and cleans up the old one.
@@ -518,6 +555,8 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
                 DataStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes($"#!/bin/sh\necho {contentMarker}\n"))
             };
             tar.WriteEntry(managedEntry);
+            WriteFakeDashboardAssetEntries(tar, contentMarker);
+            WriteFakeBlazorFrameworkAssetEntry(tar, contentMarker);
 
             // dcp/ directory with a placeholder file.
             tar.WriteEntry(new PaxTarEntry(TarEntryType.Directory, $"aspire-payload/{BundleDiscovery.DcpDirectoryName}/"));
@@ -530,6 +569,32 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
         }
 
         return ms.ToArray();
+    }
+
+    private static void WriteFakeDashboardAssetEntries(TarWriter tar, string contentMarker)
+    {
+        foreach (var relativeAssetPath in BundleService.s_requiredManagedDashboardAssets)
+        {
+            var tarAssetPath = relativeAssetPath.Replace(Path.DirectorySeparatorChar, '/');
+            var dashboardEntry = new PaxTarEntry(
+                TarEntryType.RegularFile,
+                $"aspire-payload/{BundleDiscovery.ManagedDirectoryName}/{tarAssetPath}")
+            {
+                DataStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes($"{relativeAssetPath}-{contentMarker}\n"))
+            };
+            tar.WriteEntry(dashboardEntry);
+        }
+    }
+
+    private static void WriteFakeBlazorFrameworkAssetEntry(TarWriter tar, string contentMarker)
+    {
+        var dashboardEntry = new PaxTarEntry(
+            TarEntryType.RegularFile,
+            $"aspire-payload/{BundleDiscovery.ManagedDirectoryName}/wwwroot/framework/{BundleService.GetRequiredDashboardBlazorFrameworkAssetFileName()}")
+        {
+            DataStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes($"{BundleService.GetRequiredDashboardBlazorFrameworkAssetFileName()}-{contentMarker}\n"))
+        };
+        tar.WriteEntry(dashboardEntry);
     }
 
     /// <summary>

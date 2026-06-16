@@ -66,6 +66,18 @@ internal sealed class BundleService(
         BundleDiscovery.BundleDirectoryName,
     ];
 
+    internal static readonly string[] s_requiredManagedDashboardAssets = [
+        Path.Combine("wwwroot", "css", "app.css"),
+        Path.Combine("wwwroot", "css", "highlight.css"),
+        Path.Combine("wwwroot", "css", "markdown.css"),
+        Path.Combine("wwwroot", "js", "app.js"),
+        Path.Combine("wwwroot", "js", "app-reconnect.js"),
+        Path.Combine("wwwroot", "js", "app-theme.js"),
+    ];
+
+    internal const int DashboardBlazorMinSupportedMajor = 10;
+    internal const int DashboardBlazorMaxSupportedMajor = 11;
+
     /// <inheritdoc/>
     public async Task EnsureExtractedAsync(CancellationToken cancellationToken = default)
     {
@@ -161,11 +173,18 @@ internal sealed class BundleService(
                 var currentVersion = GetCurrentVersion(ProcessPathOverride);
                 if (existingVersion == currentVersion)
                 {
-                    logger.LogDebug("Bundle already extracted and up to date (version: {Version}).", existingVersion);
-                    return BundleExtractResult.AlreadyUpToDate;
-                }
+                    if (ResolveActiveVersionDirectory(destinationPath) is not null)
+                    {
+                        logger.LogDebug("Bundle already extracted and up to date (version: {Version}).", existingVersion);
+                        return BundleExtractResult.AlreadyUpToDate;
+                    }
 
-                logger.LogDebug("Version mismatch: existing={ExistingVersion}, current={CurrentVersion}. Re-extracting.", existingVersion, currentVersion);
+                    logger.LogDebug("Bundle version marker is up to date, but the active bundle layout is missing or incomplete. Re-extracting.");
+                }
+                else
+                {
+                    logger.LogDebug("Version mismatch: existing={ExistingVersion}, current={CurrentVersion}. Re-extracting.", existingVersion, currentVersion);
+                }
             }
 
             return await ExtractCoreAsync(destinationPath, cancellationToken);
@@ -525,7 +544,8 @@ internal sealed class BundleService(
 
     /// <summary>
     /// Returns <see langword="true"/> if <paramref name="versionDir"/> contains the
-    /// essential bundle components (<c>managed/aspire-managed</c> and a DCP directory).
+    /// essential bundle components (<c>managed/aspire-managed</c>, the dashboard assets,
+    /// and a DCP directory).
     /// </summary>
     internal static bool IsVersionedLayoutValid(string versionDir)
     {
@@ -561,7 +581,39 @@ internal sealed class BundleService(
             return false;
         }
 
-        return true;
+        return HasRequiredManagedDashboardAssets(managedDir);
+    }
+
+    private static bool HasRequiredManagedDashboardAssets(string managedDir)
+    {
+        // Layout discovery only needs aspire-managed and DCP to launch commands, but
+        // the same managed payload hosts the dashboard. The HTML entry point in
+        // Aspire.Dashboard/Components/App.razor references these root assets directly;
+        // accepting a partial wwwroot here leaves the dashboard serving HTML fallbacks
+        // for CSS/JS requests and surfaces as browser 404/MIME errors.
+        foreach (var relativeAssetPath in s_requiredManagedDashboardAssets)
+        {
+            if (!File.Exists(Path.Combine(managedDir, relativeAssetPath)))
+            {
+                return false;
+            }
+        }
+
+        var frameworkAssetPath = Path.Combine(managedDir, "wwwroot", "framework", GetRequiredDashboardBlazorFrameworkAssetFileName());
+
+        return File.Exists(frameworkAssetPath);
+    }
+
+    internal static string GetRequiredDashboardBlazorFrameworkAssetFileName()
+        => GetRequiredDashboardBlazorFrameworkAssetFileName(Environment.Version.Major);
+
+    internal static string GetRequiredDashboardBlazorFrameworkAssetFileName(int runtimeMajor)
+    {
+        // Keep these bounds in sync with Aspire.Dashboard/Components/BlazorScript.razor
+        // and the files produced by Aspire.Dashboard/BlazorAssets.targets.
+        var major = Math.Clamp(runtimeMajor, DashboardBlazorMinSupportedMajor, DashboardBlazorMaxSupportedMajor);
+
+        return $"blazor.web.{major}.js";
     }
 
     /// <summary>

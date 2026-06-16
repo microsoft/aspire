@@ -151,6 +151,42 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void IsVersionedLayoutValid_RequiresDashboardAssets()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var dir = workspace.WorkspaceRoot.FullName;
+        CreateFakeBundleLayout(dir);
+
+        var managedDir = Path.Combine(dir, BundleDiscovery.ManagedDirectoryName);
+        File.Delete(Path.Combine(managedDir, "wwwroot", "js", "app-theme.js"));
+
+        Assert.False(BundleService.IsVersionedLayoutValid(dir));
+    }
+
+    [Fact]
+    public void IsVersionedLayoutValid_RequiresBlazorFrameworkAsset()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var dir = workspace.WorkspaceRoot.FullName;
+        CreateFakeBundleLayout(dir);
+
+        var frameworkDir = Path.Combine(dir, BundleDiscovery.ManagedDirectoryName, "wwwroot", "framework");
+        Directory.Delete(frameworkDir, recursive: true);
+
+        Assert.False(BundleService.IsVersionedLayoutValid(dir));
+    }
+
+    [Theory]
+    [InlineData(8, "blazor.web.10.js")]
+    [InlineData(10, "blazor.web.10.js")]
+    [InlineData(11, "blazor.web.11.js")]
+    [InlineData(12, "blazor.web.11.js")]
+    public void GetRequiredDashboardBlazorFrameworkAssetFileName_MatchesDashboardRuntimeClamp(int runtimeMajor, string expectedFileName)
+    {
+        Assert.Equal(expectedFileName, BundleService.GetRequiredDashboardBlazorFrameworkAssetFileName(runtimeMajor));
+    }
+
+    [Fact]
     public void TryCleanupStaleVersions_RemovesNonActiveVersionsAndStaleTempDirs()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -194,9 +230,24 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
         File.WriteAllText(
             Path.Combine(managedDir, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
             "#!/bin/sh\necho aspire-managed\n");
+        WriteFakeDashboardAssets(managedDir);
 
         var dcpDir = Path.Combine(root, BundleDiscovery.DcpDirectoryName);
         Directory.CreateDirectory(dcpDir);
         File.WriteAllText(Path.Combine(dcpDir, "placeholder"), "dcp");
+    }
+
+    private static void WriteFakeDashboardAssets(string managedDir)
+    {
+        foreach (var relativeAssetPath in BundleService.s_requiredManagedDashboardAssets)
+        {
+            var assetPath = Path.Combine(managedDir, relativeAssetPath);
+            Directory.CreateDirectory(Path.GetDirectoryName(assetPath)!);
+            File.WriteAllText(assetPath, relativeAssetPath);
+        }
+
+        var frameworkAssetPath = Path.Combine(managedDir, "wwwroot", "framework", BundleService.GetRequiredDashboardBlazorFrameworkAssetFileName());
+        Directory.CreateDirectory(Path.GetDirectoryName(frameworkAssetPath)!);
+        File.WriteAllText(frameworkAssetPath, BundleService.GetRequiredDashboardBlazorFrameworkAssetFileName());
     }
 }
