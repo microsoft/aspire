@@ -288,20 +288,18 @@ output per job, e.g.
 `run_polyglot: ${{ fromJSON(steps.select_tests.outputs.selection).run_polyglot }}`.
 Each non-.NET job then gates on plain `needs.setup_for_tests.outputs.run_<job> ==
 'true'` (no `fromJSON` at the call site, and usable in a job-level `if:`, where
-the `env` context is unavailable): `polyglot_validation`, `typescript_sdk_tests`,
-`typescript_api_compat`, the extension jobs, `cli_starter_validation_windows`,
-and the WinGet/Homebrew installer-prepare jobs. Adding a trigger-map job means
-adding its unpack line + its own `if:` — no change to the action or the tool.
+the `env` context is unavailable). Adding a trigger-map job means adding its
+unpack line + its own `if:` — no change to the action or the tool.
 
 The .NET test jobs need no `run_<job>` gate: they are already gated by their
 matrix bucket being empty once `enumerate-tests` produces only the selected
 projects. Base builds stay ungated because they are upstream `needs:` that run
 whenever a dependent runs.
 
-The extension-unit jobs (`extension_tests_win` / `extension_bootstrap_linux`)
-gate on `run_extension_unit` **or** `run_extension_e2e`, because
-`extension_e2e_tests` needs them. Gating them off while e2e runs would skip e2e
-via need-propagation.
+When a gated job is a `needs:` dependency of another gated job, its gate must be
+the **or** of its own condition and its dependents', so need-propagation cannot
+skip a downstream job whose dependency was gated off. This is a property of the
+`needs:` graph, not of any particular job.
 
 **Audit vs. enforce is a single knob: the `select-tests` action's `enforce`
 input.** Audit (`'false'`, no `--enforce`) writes no restriction
