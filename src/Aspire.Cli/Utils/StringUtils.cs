@@ -16,14 +16,14 @@ internal static class StringUtils
 
         try
         {
-            return Markup.Remove(input).Trim();
+            return Markup.Remove(input);
         }
         catch (InvalidOperationException)
         {
             // Backchannel payloads can contain plain text with literal '[' or ']' from
             // user/project output (for example, compiler diagnostics). Treat malformed
             // markup as plain text so error reporting never throws while logging another error.
-            return input.Trim();
+            return input;
         }
     }
 
