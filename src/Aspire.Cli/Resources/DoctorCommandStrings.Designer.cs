@@ -537,7 +537,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Run 'aspire init' (or any aspire run/add/update command) to migrate to aspire.config.json....
+        ///   Looks up a localized string similar to Run 'aspire init' (or any aspire run/add/update/pipeline command) to migrate to aspire.config.json....
         /// </summary>
         public static string LegacySettingsDetectedFix {
             get {
