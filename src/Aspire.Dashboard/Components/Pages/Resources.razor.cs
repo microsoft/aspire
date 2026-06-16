@@ -167,7 +167,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         // Only clear the selected resource if it no longer passes the current filter.
         // This preserves the selection when a filter is removed (result set expands) and
         // the selected resource is still visible.
-        if (SelectedResource is null || !Filter(SelectedResource))
+        if (PageViewModel.SelectedResource is null || !Filter(PageViewModel.SelectedResource))
         {
             await ClearSelectedResourceAsync();
         }
