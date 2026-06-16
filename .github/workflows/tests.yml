@@ -33,13 +33,6 @@ jobs:
       # Selective CI (see docs/ci/test-trigger-selector-design.md). The audit/enforce knob is the
       # select-tests action's `enforce` input; tests.yml just consumes what the selector returns.
       # In audit the selector returns run-all (every gate true + the full matrix), so everything runs.
-      #
-      # The action emits ONE generic `selection` JSON object ({"run_<job>":bool,...}) so it -- and the
-      # SelectTests tool -- never enumerate the concrete jobs. tests.yml is the right place to know the
-      # per-job names, so we unpack that object here into one boolean output per job. Downstream gates
-      # then read plain needs.setup_for_tests.outputs.run_<job> == 'true' (no fromJSON, and usable in
-      # job-level if:, where the env context is unavailable). Adding a trigger-map job means adding its
-      # line here + its own if: -- no change to the action or the tool.
       run_polyglot: ${{ fromJSON(steps.select_tests.outputs.selection).run_polyglot }}
       run_typescript_sdk: ${{ fromJSON(steps.select_tests.outputs.selection).run_typescript_sdk }}
       run_typescript_api_compat: ${{ fromJSON(steps.select_tests.outputs.selection).run_typescript_api_compat }}
@@ -248,8 +241,6 @@ jobs:
       build_cli_archive_windows,
       build_cli_archive_windows_arm64,
     ]
-    # Audit: always runs. Enforcing: gated by the selector (the map ties the installer jobs to
-    # Aspire.Acquisition.Tests via derived_targets).
     if: ${{ needs.setup_for_tests.outputs.run_winget_installer == 'true' }}
     with:
       installer: winget
@@ -471,9 +462,8 @@ jobs:
     name: Run VS Code extension unit tests (Windows)
     runs-on: windows-latest
     needs: [setup_for_tests]
-    # Audit: always runs. Enforcing: gated by run_extension_unit (extension/** changes). Also runs
-    # when run_extension_e2e is set, because extension_e2e_tests `needs` this job -- gating it off
-    # while e2e runs would skip e2e via need-propagation.
+    # Also gated on run_extension_e2e (not just run_extension_unit): extension_e2e_tests `needs` this
+    # job, so gating it off while e2e runs would skip e2e via need-propagation.
     if: ${{ needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true' }}
     env:
       NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
@@ -611,8 +601,6 @@ jobs:
 
   extension_e2e_tests:
     name: Run VS Code extension E2E tests
-    # In audit the selector returns run_extension_e2e=true, so this always runs; enforcing gates it
-    # (the map's extension-e2e rule replaces the old extension_e2e_changes regex).
     if: ${{ needs.setup_for_tests.outputs.run_extension_e2e == 'true' }}
     uses: ./.github/workflows/extension-e2e-tests.yml
     needs: [setup_for_tests, build_packages, build_cli_archive_linux, build_cli_archive_windows, extension_tests_win, extension_bootstrap_linux]
@@ -620,7 +608,6 @@ jobs:
   typescript_sdk_tests:
     name: TypeScript SDK Unit Tests
     needs: [setup_for_tests]
-    # In audit the selector returns these true, so this always runs; enforcing gates it.
     if: ${{ needs.setup_for_tests.outputs.run_typescript_sdk == 'true' }}
     uses: ./.github/workflows/typescript-sdk-tests.yml
 
