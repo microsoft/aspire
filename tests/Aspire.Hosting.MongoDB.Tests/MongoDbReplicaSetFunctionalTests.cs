@@ -5,7 +5,6 @@ using Aspire.TestUtilities;
 using Aspire.Hosting.Utils;
 using MongoDB.Bson;
 using MongoDB.Driver;
-using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.MongoDB.Tests;
 
@@ -44,7 +43,7 @@ public class MongoDbReplicaSetFunctionalTests(ITestOutputHelper testOutputHelper
         using var app = builder.Build();
         await app.StartAsync(cts.Token);
 
-        await app.ResourceNotifications.WaitForResourceAsync(rs.Resource.Name, KnownResourceStates.Running, cts.Token);
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(rs.Resource.Name, cts.Token);
 
         var connectionString = await rs.Resource.ConnectionStringExpression.GetValueAsync(cts.Token);
 

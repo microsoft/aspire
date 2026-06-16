@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 using Aspire.Hosting.ApplicationModel;
+using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
@@ -44,18 +45,16 @@ public static class MongoDBReplicaSetBuilderExtensions
             )
         );
 
-        // var healthCheckKey = $"{name}_check";
-        // todo
-        // builder.Services.AddHealthChecks()
-        //     .AddCheck(
-        //         name: healthCheckKey,
-        //         check: () => wasInitialized
-        //             ? HealthCheckResult.Healthy()
-        //             : HealthCheckResult.Unhealthy("Replica set not yet initialized")
-        //     );
+        var connectionString = null as string;
+        var healthCheckKey = $"{name}_check";
+
+        builder.Services.AddHealthChecks()
+            .AddMongoDb(
+                sp => new MongoClient(connectionString ?? throw new InvalidOperationException("Connection string is unavailable")),
+                name: healthCheckKey);
 
         return builder.AddResource(rsResource)
-            // .WithHealthCheck(healthCheckKey)
+            .WithHealthCheck(healthCheckKey)
             .WithInitialState(new()
             {
                 ResourceType = "MongoDB Replica Set",
@@ -65,7 +64,7 @@ public static class MongoDBReplicaSetBuilderExtensions
             })
             .OnInitializeResource(async (resource, evt, ct) =>
             {
-                var connectionString = await rsResource.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+                connectionString = await rsResource.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
 
                 await evt.Eventing.PublishAsync(new ConnectionStringAvailableEvent(resource, evt.Services), ct)
                     .ConfigureAwait(false);
