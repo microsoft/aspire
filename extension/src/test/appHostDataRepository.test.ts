@@ -447,6 +447,7 @@ suite('AppHostDataRepository', () => {
         const repository = new AppHostDataRepository(terminalProvider);
 
         try {
+            repository.setViewMode('global');
             repository.activate();
             repository.setPanelVisible(true);
             await waitForMicrotasks();
