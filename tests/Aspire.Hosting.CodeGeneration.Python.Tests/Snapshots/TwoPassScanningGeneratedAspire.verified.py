@@ -1064,7 +1064,7 @@ class CancellationToken:
     def __init__(self, handle: Handle, client: AspireClient) -> None:
         self.handle = handle
         self._client = client
-
+    
     def cancel(self) -> None:
         '''Cancel the token, which will signal the server to cancel the associated operation.'''
         self._client._send_request("cancelToken", self.handle.handle_id)
@@ -1098,7 +1098,7 @@ class ReferenceExpression:
         self._when_true = kwargs.get("when_true")
         self._when_false = kwargs.get("when_false")
         self._match_value = kwargs.get("match")
-
+    
     @classmethod
     def format_string(cls, format_str: str, *value_providers: typing.Any) -> "ReferenceExpression":
         '''
@@ -1879,6 +1879,7 @@ class HttpsCertificateExecutionConfigurationExportData(typing.TypedDict, total=F
     KeyPathExpression: str
     PfxPathExpression: str
     IsKeyPathReferenced: bool
+    IsCertificateWithKeyPathReferenced: bool
     IsPfxPathReferenced: bool
     Password: str | None
 

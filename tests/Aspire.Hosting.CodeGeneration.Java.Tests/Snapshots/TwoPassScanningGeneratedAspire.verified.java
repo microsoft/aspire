@@ -350,7 +350,7 @@ import java.util.function.*;
  */
 public class AspireClient {
     private static final boolean DEBUG = System.getenv("ASPIRE_DEBUG") != null;
-
+    
     private final String socketPath;
     private OutputStream outputStream;
     private InputStream inputStream;
@@ -373,13 +373,13 @@ public class AspireClient {
 
     public void connect() throws IOException {
         debug("Connecting to AppHost server at " + socketPath);
-
+        
         if (isWindows()) {
             connectWindowsNamedPipe();
         } else {
             connectUnixSocket();
         }
-
+        
         connected = true;
         debug("Connected successfully");
     }
@@ -393,15 +393,15 @@ public class AspireClient {
         String pipeName = new java.io.File(socketPath).getName();
         String pipePath = "\\\\.\\pipe\\" + pipeName;
         debug("Opening Windows named pipe: " + pipePath);
-
+        
         // Use RandomAccessFile to open the named pipe
         RandomAccessFile pipe = new RandomAccessFile(pipePath, "rw");
-
+        
         // Create streams from the RandomAccessFile
         FileDescriptor fd = pipe.getFD();
         inputStream = new FileInputStream(fd);
         outputStream = new FileOutputStream(fd);
-
+        
         debug("Named pipe opened successfully");
     }
 
@@ -410,11 +410,11 @@ public class AspireClient {
         debug("Opening Unix domain socket: " + socketPath);
         var address = java.net.UnixDomainSocketAddress.of(socketPath);
         var channel = java.nio.channels.SocketChannel.open(address);
-
+        
         // Create streams from the channel
         inputStream = java.nio.channels.Channels.newInputStream(channel);
         outputStream = java.nio.channels.Channels.newOutputStream(channel);
-
+        
         debug("Unix domain socket opened successfully");
     }
 
@@ -424,7 +424,7 @@ public class AspireClient {
 
     public Object invokeCapability(String capabilityId, Map<String, Object> args) {
         int id = requestId.incrementAndGet();
-
+        
         Map<String, Object> params = new HashMap<>();
         params.put("capabilityId", capabilityId);
         params.put("args", marshalTransportValue(args));
@@ -436,7 +436,7 @@ public class AspireClient {
         request.put("params", params);
 
         debug("Sending request invokeCapability with id=" + id);
-
+        
         try {
             sendMessage(request);
             return readResponse(id);
@@ -514,9 +514,9 @@ public class AspireClient {
         String json = toJson(message);
         byte[] content = json.getBytes(StandardCharsets.UTF_8);
         String header = "Content-Length: " + content.length + "\r\n\r\n";
-
+        
         debug("Writing message: " + message.get("method") + " (id=" + message.get("id") + ")");
-
+        
         synchronized (outputStream) {
             outputStream.write(header.getBytes(StandardCharsets.UTF_8));
             outputStream.write(content);
@@ -527,22 +527,22 @@ public class AspireClient {
     private Object readResponse(int expectedId) throws IOException {
         while (true) {
             Map<String, Object> message = readMessage();
-
+            
             if (message.containsKey("method")) {
                 // This is a request from server (callback invocation)
                 handleServerRequest(message);
                 continue;
             }
-
+            
             // This is a response
             Object idObj = message.get("id");
             int responseId = idObj instanceof Number ? ((Number) idObj).intValue() : Integer.parseInt(idObj.toString());
-
+            
             if (responseId != expectedId) {
                 debug("Received response for different id: " + responseId + " (expected " + expectedId + ")");
                 continue;
             }
-
+            
             if (message.containsKey("error")) {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> error = (Map<String, Object>) message.get("error");
@@ -551,7 +551,7 @@ public class AspireClient {
                 Object data = error.get("data");
                 throw new CapabilityError(code, errorMessage, data);
             }
-
+            
             Object result = message.get("result");
             return unwrapResult(result);
         }
@@ -562,7 +562,7 @@ public class AspireClient {
         // Read headers
         StringBuilder headerBuilder = new StringBuilder();
         int contentLength = -1;
-
+        
         while (true) {
             String line = readLine();
             if (line.isEmpty()) {
@@ -572,11 +572,11 @@ public class AspireClient {
                 contentLength = Integer.parseInt(line.substring(15).trim());
             }
         }
-
+        
         if (contentLength < 0) {
             throw new IOException("No Content-Length header found");
         }
-
+        
         // Read body
         byte[] body = new byte[contentLength];
         int totalRead = 0;
@@ -587,10 +587,10 @@ public class AspireClient {
             }
             totalRead += read;
         }
-
+        
         String json = new String(body, StandardCharsets.UTF_8);
         debug("Received: " + json.substring(0, Math.min(200, json.length())) + "...");
-
+        
         return (Map<String, Object>) parseJson(json);
     }
 
@@ -670,7 +670,7 @@ public class AspireClient {
         } else {
             response.put("result", serializeValue(result));
         }
-
+        
         sendMessage(response);
     }
 
@@ -744,23 +744,23 @@ public class AspireClient {
         if (value == null) {
             return null;
         }
-
+        
         if (value instanceof Map) {
             Map<String, Object> map = (Map<String, Object>) value;
-
+            
             // Check for handle
             if (map.containsKey("$handle")) {
                 String handleId = (String) map.get("$handle");
                 String typeId = (String) map.get("$type");
                 Handle handle = new Handle(handleId, typeId);
-
+                
                 BiFunction<Handle, AspireClient, Object> factory = handleWrappers.get(typeId);
                 if (factory != null) {
                     return factory.apply(handle, this);
                 }
                 return handle;
             }
-
+            
             // Check for error
             if (map.containsKey("$error")) {
                 Map<String, Object> errorData = (Map<String, Object>) map.get("$error");
@@ -768,7 +768,7 @@ public class AspireClient {
                 String message = String.valueOf(errorData.get("message"));
                 throw new CapabilityError(code, message, errorData.get("data"));
             }
-
+            
             // Recursively unwrap map values
             Map<String, Object> result = new HashMap<>();
             for (Map.Entry<String, Object> entry : map.entrySet()) {
@@ -776,7 +776,7 @@ public class AspireClient {
             }
             return result;
         }
-
+        
         if (value instanceof List) {
             List<Object> list = (List<Object>) value;
             List<Object> result = new ArrayList<>();
@@ -785,7 +785,7 @@ public class AspireClient {
             }
             return result;
         }
-
+        
         return value;
     }
 
@@ -13953,6 +13953,7 @@ public class HttpsCertificateExecutionConfigurationExportData implements JsonSer
     private String keyPathExpression;
     private String pfxPathExpression;
     private boolean isKeyPathReferenced;
+    private boolean isCertificateWithKeyPathReferenced;
     private boolean isPfxPathReferenced;
     private String password;
 
@@ -13966,6 +13967,8 @@ public class HttpsCertificateExecutionConfigurationExportData implements JsonSer
     public void setPfxPathExpression(String value) { this.pfxPathExpression = value; }
     public boolean getIsKeyPathReferenced() { return isKeyPathReferenced; }
     public void setIsKeyPathReferenced(boolean value) { this.isKeyPathReferenced = value; }
+    public boolean getIsCertificateWithKeyPathReferenced() { return isCertificateWithKeyPathReferenced; }
+    public void setIsCertificateWithKeyPathReferenced(boolean value) { this.isCertificateWithKeyPathReferenced = value; }
     public boolean getIsPfxPathReferenced() { return isPfxPathReferenced; }
     public void setIsPfxPathReferenced(boolean value) { this.isPfxPathReferenced = value; }
     public String getPassword() { return password; }
@@ -13984,6 +13987,8 @@ public class HttpsCertificateExecutionConfigurationExportData implements JsonSer
         value.setPfxPathExpression((String) pfxPathExpressionValue);
         var isKeyPathReferencedValue = map.get("IsKeyPathReferenced");
         value.setIsKeyPathReferenced((Boolean) isKeyPathReferencedValue);
+        var isCertificateWithKeyPathReferencedValue = map.get("IsCertificateWithKeyPathReferenced");
+        value.setIsCertificateWithKeyPathReferenced((Boolean) isCertificateWithKeyPathReferencedValue);
         var isPfxPathReferencedValue = map.get("IsPfxPathReferenced");
         value.setIsPfxPathReferenced((Boolean) isPfxPathReferencedValue);
         var passwordValue = map.get("Password");
@@ -13998,6 +14003,7 @@ public class HttpsCertificateExecutionConfigurationExportData implements JsonSer
         map.put("KeyPathExpression", AspireClient.serializeValue(keyPathExpression));
         map.put("PfxPathExpression", AspireClient.serializeValue(pfxPathExpression));
         map.put("IsKeyPathReferenced", AspireClient.serializeValue(isKeyPathReferenced));
+        map.put("IsCertificateWithKeyPathReferenced", AspireClient.serializeValue(isCertificateWithKeyPathReferenced));
         map.put("IsPfxPathReferenced", AspireClient.serializeValue(isPfxPathReferenced));
         map.put("Password", AspireClient.serializeValue(password));
         return map;

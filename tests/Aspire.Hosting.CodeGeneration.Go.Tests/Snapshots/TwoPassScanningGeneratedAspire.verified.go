@@ -406,6 +406,7 @@ type HttpsCertificateExecutionConfigurationExportData struct {
 	KeyPathExpression string `json:"KeyPathExpression,omitempty"`
 	PfxPathExpression string `json:"PfxPathExpression,omitempty"`
 	IsKeyPathReferenced bool `json:"IsKeyPathReferenced,omitempty"`
+	IsCertificateWithKeyPathReferenced bool `json:"IsCertificateWithKeyPathReferenced,omitempty"`
 	IsPfxPathReferenced bool `json:"IsPfxPathReferenced,omitempty"`
 	Password *string `json:"Password,omitempty"`
 }
@@ -418,6 +419,7 @@ func (d *HttpsCertificateExecutionConfigurationExportData) ToMap() map[string]an
 	m["KeyPathExpression"] = serializeValue(d.KeyPathExpression)
 	m["PfxPathExpression"] = serializeValue(d.PfxPathExpression)
 	m["IsKeyPathReferenced"] = serializeValue(d.IsKeyPathReferenced)
+	m["IsCertificateWithKeyPathReferenced"] = serializeValue(d.IsCertificateWithKeyPathReferenced)
 	m["IsPfxPathReferenced"] = serializeValue(d.IsPfxPathReferenced)
 	if d.Password != nil { m["Password"] = serializeValue(d.Password) }
 	return m
@@ -17223,7 +17225,7 @@ func (s *httpsCertificateConfigurationCallbackAnnotationContext) CertificatePath
 	return typed
 }
 
-// CertificateWithKeyPath A value provider that will resolve to a path to the certificate and key concatenated together in PEM format.
+// CertificateWithKeyPath a value provider that will resolve to a path to the certificate and key concatenated together in PEM format.
 func (s *httpsCertificateConfigurationCallbackAnnotationContext) CertificateWithKeyPath() *ReferenceExpression {
 	if s.err != nil { return nil }
 	ctx := context.Background()

@@ -850,6 +850,8 @@ pub struct HttpsCertificateExecutionConfigurationExportData {
     pub pfx_path_expression: String,
     #[serde(rename = "IsKeyPathReferenced")]
     pub is_key_path_referenced: bool,
+    #[serde(rename = "IsCertificateWithKeyPathReferenced")]
+    pub is_certificate_with_key_path_referenced: bool,
     #[serde(rename = "IsPfxPathReferenced")]
     pub is_pfx_path_referenced: bool,
     #[serde(rename = "Password", skip_serializing_if = "Option::is_none")]
@@ -866,6 +868,7 @@ impl HttpsCertificateExecutionConfigurationExportData {
         map.insert("KeyPathExpression".to_string(), serde_json::to_value(&self.key_path_expression).unwrap_or(Value::Null));
         map.insert("PfxPathExpression".to_string(), serde_json::to_value(&self.pfx_path_expression).unwrap_or(Value::Null));
         map.insert("IsKeyPathReferenced".to_string(), serde_json::to_value(&self.is_key_path_referenced).unwrap_or(Value::Null));
+        map.insert("IsCertificateWithKeyPathReferenced".to_string(), serde_json::to_value(&self.is_certificate_with_key_path_referenced).unwrap_or(Value::Null));
         map.insert("IsPfxPathReferenced".to_string(), serde_json::to_value(&self.is_pfx_path_referenced).unwrap_or(Value::Null));
         if let Some(ref v) = self.password {
             map.insert("Password".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
