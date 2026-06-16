@@ -88,6 +88,11 @@ internal enum EnvironmentCheckStatus
     Warning,
 
     /// <summary>
+    /// The check completed with informational feedback (non-blocking).
+    /// </summary>
+    Info,
+
+    /// <summary>
     /// The check failed (blocking issue).
     /// </summary>
     Fail
@@ -105,6 +110,7 @@ internal sealed class LowercaseEnumConverter : JsonConverter<EnvironmentCheckSta
         {
             "pass" => EnvironmentCheckStatus.Pass,
             "warning" => EnvironmentCheckStatus.Warning,
+            "info" => EnvironmentCheckStatus.Info,
             "fail" => EnvironmentCheckStatus.Fail,
             _ => throw new JsonException($"Unknown status value: {value}")
         };
