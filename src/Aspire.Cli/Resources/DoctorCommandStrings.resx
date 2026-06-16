@@ -236,6 +236,6 @@
   </data>
   <data name="LegacySettingsDetectedFix" xml:space="preserve">
     <value>Run 'aspire init' (or any aspire run/add/update/pipeline command) to migrate to aspire.config.json.
-The legacy file continues to work — this is informational only.</value>
+The legacy file continues to work — this is a non-blocking warning.</value>
   </data>
 </root>
