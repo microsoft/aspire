@@ -300,7 +300,7 @@ public static class MongoDBBuilderExtensions
     /// Sets up a keyfile for internal authentication between members of a MongoDB replica set, with the specified <paramref name="keyValue"/> as the content of the file.
     /// </summary>
     /// <remarks>
-    /// All members in a replica set should share the same keyfile content in order for the communication authentication to succeed.
+    /// The keyfile is a shared secret. Every member of the replica set (or sharded cluster) should have the same keyfile, and possession of that secret is what authenticates a connection as "a legitimate member of this cluster."
     /// See https://www.mongodb.com/docs/manual/tutorial/deploy-replica-set-with-keyfile-access-control/
     /// </remarks>
     [AspireExport]
@@ -355,6 +355,7 @@ public static class MongoDBBuilderExtensions
                 _ => throw new ArgumentOutOfRangeException(nameof(mode), $"Unsupported TLS mode: {mode}"),
             })
             .WithArgs("--tlsAllowConnectionsWithoutCertificates") // NOTE: This allows clients to connect without having to provide the certificate+key and the CA from their end (that's called mutual TLS and is unnecessary).
+            .WithArgs("--tlsAllowInvalidCertificates") // TODO: Could be removed and replaced with `--tlsClusterFile <file>` (along with the more restrictive `--tlsAllowInvalidHostnames`) once Aspire adds support for TLS certificates with EKUs of `clientAuth` — see https://discord.com/channels/1361488941836140614/1361488942813286403/1516575977256259735
             .WithCertificateTrustConfiguration(async ctx =>
             {
                 ctx.Arguments.Add("--tlsCAFile");

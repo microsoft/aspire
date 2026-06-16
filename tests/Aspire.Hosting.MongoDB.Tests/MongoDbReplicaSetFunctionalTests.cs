@@ -54,6 +54,36 @@ public class MongoDbReplicaSetFunctionalTests(ITestOutputHelper testOutputHelper
         await app.StopAsync();
     }
 
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public async Task VerifyMongoDBMultiNodeReplicaSetResource()
+    {
+        var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+
+        var mongo1 = builder.AddMongoDB("mongo1");
+        var mongo2 = builder.AddMongoDB("mongo2");
+        var mongo3 = builder.AddMongoDB("mongo3");
+        var rs = builder.AddMongoDBReplicaSet("rs0")
+            .WithMember(mongo1)
+            .WithMember(mongo2)
+            .WithMember(mongo3);
+
+        using var app = builder.Build();
+        await app.StartAsync(cts.Token);
+
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(rs.Resource.Name, cts.Token);
+
+        var connectionString = await rs.Resource.ConnectionStringExpression.GetValueAsync(cts.Token);
+
+        var client = new MongoClient(connectionString);
+        var db = client.GetDatabase(DbName);
+        await CreateTestDataWithReplicaSetFeaturesAsync(db, cts.Token);
+
+        await app.StopAsync();
+    }
+
     private static async Task CreateTestDataWithReplicaSetFeaturesAsync(IMongoDatabase mongoDatabase, CancellationToken ct)
     {
         await mongoDatabase.CreateCollectionAsync(CollectionNameA, cancellationToken: ct);
