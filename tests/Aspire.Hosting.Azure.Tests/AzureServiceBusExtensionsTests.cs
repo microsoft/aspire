@@ -369,7 +369,7 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
         var configAnnotation = serviceBusEmulatorResource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>().Single();
 
         Assert.Equal("/ServiceBus_Emulator/ConfigFiles", configAnnotation.DestinationPath);
-        var configFiles = await configAnnotation.Callback(new ContainerFileSystemCallbackContext { Model = serviceBusEmulatorResource, ServiceProvider = app.Services }, CancellationToken.None);
+        var configFiles = await configAnnotation.Callback(new ContainerFileSystemCallbackContext { Model = serviceBusEmulatorResource, Services = app.Services }, CancellationToken.None);
         var configFile = Assert.IsType<ContainerFile>(Assert.Single(configFiles));
         Assert.Equal("Config.json", configFile.Name);
 
@@ -468,7 +468,7 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
         var configAnnotation = serviceBusEmulatorResource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>().Single();
 
         Assert.Equal("/ServiceBus_Emulator/ConfigFiles", configAnnotation.DestinationPath);
-        var configFiles = await configAnnotation.Callback(new ContainerFileSystemCallbackContext { Model = serviceBusEmulatorResource, ServiceProvider = app.Services }, CancellationToken.None);
+        var configFiles = await configAnnotation.Callback(new ContainerFileSystemCallbackContext { Model = serviceBusEmulatorResource, Services = app.Services }, CancellationToken.None);
         var configFile = Assert.IsType<ContainerFile>(Assert.Single(configFiles));
         Assert.Equal("Config.json", configFile.Name);
 
@@ -524,7 +524,7 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
         var configAnnotation = serviceBusEmulatorResource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>().Single();
 
         Assert.Equal("/ServiceBus_Emulator/ConfigFiles", configAnnotation.DestinationPath);
-        var configFiles = await configAnnotation.Callback(new ContainerFileSystemCallbackContext { Model = serviceBusEmulatorResource, ServiceProvider = app.Services }, CancellationToken.None);
+        var configFiles = await configAnnotation.Callback(new ContainerFileSystemCallbackContext { Model = serviceBusEmulatorResource, Services = app.Services }, CancellationToken.None);
         var configFile = Assert.IsType<ContainerFile>(Assert.Single(configFiles));
         Assert.Equal("Config.json", configFile.Name);
 
@@ -583,7 +583,7 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
         var configAnnotation = serviceBusEmulatorResource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>().Single();
 
         Assert.Equal("/ServiceBus_Emulator/ConfigFiles", configAnnotation.DestinationPath);
-        var configFiles = await configAnnotation.Callback(new ContainerFileSystemCallbackContext { Model = serviceBusEmulatorResource, ServiceProvider = app.Services }, CancellationToken.None);
+        var configFiles = await configAnnotation.Callback(new ContainerFileSystemCallbackContext { Model = serviceBusEmulatorResource, Services = app.Services }, CancellationToken.None);
         var configFile = Assert.IsType<ContainerFile>(Assert.Single(configFiles));
         Assert.Equal("Config.json", configFile.Name);
 
@@ -948,6 +948,88 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
 
         var serviceBus = builder.AddAzureServiceBus("test-servicebus")
             .AsExisting(existingName, existingResourceGroup);
+
+        var module = builder.AddAzureInfrastructure("mymodule", infra =>
+        {
+            _ = serviceBus.Resource.AddAsExistingResource(infra);
+        });
+
+        var (manifest, bicep) = await AzureManifestUtils.GetManifestWithBicep(module.Resource, skipPreparer: true);
+
+        await Verify(manifest.ToString(), "json")
+             .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task AddAsExistingResource_EmitsResourceGroupAndSubscriptionScopeFromParameterAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var existingName = builder.AddParameter("existing-sb-name");
+        var existingResourceGroup = builder.AddParameter("existing-sb-rg");
+        var existingSubscription = builder.AddParameter("existing-sb-subscription");
+
+        var serviceBus = builder.AddAzureServiceBus("test-servicebus")
+            .AsExistingInResourceGroup(existingName, existingResourceGroup, existingSubscription);
+
+        var module = builder.AddAzureInfrastructure("mymodule", infra =>
+        {
+            _ = serviceBus.Resource.AddAsExistingResource(infra);
+        });
+
+        var (manifest, bicep) = await AzureManifestUtils.GetManifestWithBicep(module.Resource, skipPreparer: true);
+
+        await Verify(manifest.ToString(), "json")
+             .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task AddAsExistingResource_EmitsResourceGroupAndSubscriptionScopeFromStringAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var serviceBus = builder.AddAzureServiceBus("test-servicebus")
+            .AsExistingInResourceGroup("existing-sb", "existing-rg", "00000000-0000-0000-0000-000000000000");
+
+        var module = builder.AddAzureInfrastructure("mymodule", infra =>
+        {
+            _ = serviceBus.Resource.AddAsExistingResource(infra);
+        });
+
+        var (manifest, bicep) = await AzureManifestUtils.GetManifestWithBicep(module.Resource, skipPreparer: true);
+
+        await Verify(manifest.ToString(), "json")
+             .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task AddAsExistingResource_EmitsSubscriptionScopeFromExistingAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var existingName = builder.AddParameter("existing-sb-name");
+        var existingSubscription = builder.AddParameter("existing-sb-subscription");
+
+        var serviceBus = builder.AddAzureServiceBus("test-servicebus")
+            .AsExistingInSubscription(existingName, existingSubscription);
+
+        var module = builder.AddAzureInfrastructure("mymodule", infra =>
+        {
+            _ = serviceBus.Resource.AddAsExistingResource(infra);
+        });
+
+        var (manifest, bicep) = await AzureManifestUtils.GetManifestWithBicep(module.Resource, skipPreparer: true);
+
+        await Verify(manifest.ToString(), "json")
+             .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task AddAsExistingResource_EmitsTenantScopeFromExistingAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var existingName = builder.AddParameter("existing-sb-name");
+
+        var serviceBus = builder.AddAzureServiceBus("test-servicebus")
+            .AsExistingInTenant(existingName);
 
         var module = builder.AddAzureInfrastructure("mymodule", infra =>
         {

@@ -4,6 +4,7 @@
 using System.Collections.Immutable;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Dcp.Model;
 
 namespace Aspire.Hosting.Dcp;
@@ -50,12 +51,12 @@ internal class ResourceSnapshotBuilder
             // Map a container exit code of -1 (unknown) to null
             ExitCode = container.Status?.ExitCode is null or Conventions.UnknownExitCode ? null : container.Status.ExitCode,
             Properties = previous.Properties.SetResourcePropertyRange([
-                new(KnownProperties.Container.Image, container.Spec.Image),
-                new(KnownProperties.Container.Id, containerId),
-                new(KnownProperties.Container.Command, container.Spec.Command),
-                new(KnownProperties.Container.Args, effectiveArgs ?? []) { IsSensitive = true },
-                new(KnownProperties.Container.Ports, GetPorts()),
-                new(KnownProperties.Container.Lifetime, GetContainerLifetime()),
+                ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Container, KnownProperties.Container.Image, container.Spec.Image),
+                ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Container, KnownProperties.Container.Id, containerId),
+                ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Container, KnownProperties.Container.Command, container.Spec.Command),
+                ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Container, KnownProperties.Container.Args, effectiveArgs ?? [], isSensitive: true),
+                ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Container, KnownProperties.Container.Ports, GetPorts()),
+                ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Container, KnownProperties.Container.Lifetime, GetContainerLifetime()),
                 new(KnownProperties.Resource.AppArgs, launchArguments?.Args) { IsSensitive = launchArguments?.IsSensitive ?? false },
                 new(KnownProperties.Resource.AppArgsSensitivity, launchArguments?.ArgsAreSensitive) { IsSensitive = launchArguments?.IsSensitive ?? false },
             ]),
@@ -114,8 +115,8 @@ internal class ResourceSnapshotBuilder
             State = state,
             ExitCode = executable.Status?.ExitCode,
             Properties = previous.Properties.SetResourcePropertyRange([
-                new(KnownProperties.Executable.WorkDir, executable.Spec.WorkingDirectory),
-                new(KnownProperties.Executable.Args, effectiveArgs ?? []) { IsSensitive = true },
+                ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Executable, KnownProperties.Executable.WorkDir, executable.Spec.WorkingDirectory),
+                ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Executable, KnownProperties.Executable.Args, effectiveArgs ?? [], isSensitive: true),
                 new(KnownProperties.Resource.AppArgs, launchArguments?.Args) { IsSensitive = launchArguments?.IsSensitive ?? false },
                 new(KnownProperties.Resource.AppArgsSensitivity, launchArguments?.ArgsAreSensitive) { IsSensitive = launchArguments?.IsSensitive ?? false },
             ]),
@@ -170,12 +171,12 @@ internal class ResourceSnapshotBuilder
                 State = state,
                 ExitCode = executable.Status?.ExitCode,
                 Properties = previous.Properties.SetResourcePropertyRange([
-                    new(KnownProperties.Executable.Path, executable.Spec.ExecutablePath),
-                    new(KnownProperties.Executable.WorkDir, executable.Spec.WorkingDirectory),
-                    new(KnownProperties.Executable.Args, effectiveArgs ?? []) { IsSensitive = true },
-                    new(KnownProperties.Executable.Pid, executable.Status?.ProcessId),
-                    new(KnownProperties.Project.Path, projectPath),
-                    new(KnownProperties.Project.LaunchProfile, launchProfileName),
+                    ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Executable.Path, executable.Spec.ExecutablePath),
+                    ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Executable.WorkDir, executable.Spec.WorkingDirectory),
+                    ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Executable.Args, effectiveArgs ?? [], isSensitive: true),
+                    ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Executable.Pid, executable.Status?.ProcessId),
+                    ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Project.Path, projectPath),
+                    ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Project.LaunchProfile, launchProfileName),
                     new(KnownProperties.Resource.AppArgs, launchArguments?.Args) { IsSensitive = launchArguments?.IsSensitive ?? false },
                     new(KnownProperties.Resource.AppArgsSensitivity, launchArguments?.ArgsAreSensitive) { IsSensitive = launchArguments?.IsSensitive ?? false },
                 ]),
@@ -194,10 +195,10 @@ internal class ResourceSnapshotBuilder
             State = state,
             ExitCode = executable.Status?.ExitCode,
             Properties = previous.Properties.SetResourcePropertyRange([
-                new(KnownProperties.Executable.Path, executable.Spec.ExecutablePath),
-                new(KnownProperties.Executable.WorkDir, executable.Spec.WorkingDirectory),
-                new(KnownProperties.Executable.Args, effectiveArgs ?? []) { IsSensitive = true },
-                new(KnownProperties.Executable.Pid, executable.Status?.ProcessId),
+                ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Executable, KnownProperties.Executable.Path, executable.Spec.ExecutablePath),
+                ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Executable, KnownProperties.Executable.WorkDir, executable.Spec.WorkingDirectory),
+                ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Executable, KnownProperties.Executable.Args, effectiveArgs ?? [], isSensitive: true),
+                ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Executable, KnownProperties.Executable.Pid, executable.Status?.ProcessId),
                 new(KnownProperties.Resource.AppArgs, launchArguments?.Args) { IsSensitive = launchArguments?.IsSensitive ?? false },
                 new(KnownProperties.Resource.AppArgsSensitivity, launchArguments?.ArgsAreSensitive) { IsSensitive = launchArguments?.IsSensitive ?? false },
             ]),

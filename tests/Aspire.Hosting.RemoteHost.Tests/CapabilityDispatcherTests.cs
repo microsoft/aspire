@@ -1022,6 +1022,51 @@ public class CapabilityDispatcherTests
     }
 
     [Fact]
+    public void Invoke_AcceptsUnionWithEnumValue()
+    {
+        var dispatcher = CreateDispatcher(typeof(TestTypeCategoryCapabilities).Assembly);
+        var args = new JsonObject { ["value"] = nameof(TestDispatchEnum.ValueB) };
+
+        var result = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/acceptEnumStringUnion", args);
+
+        Assert.NotNull(result);
+        Assert.Equal("enum:ValueB", result.GetValue<string>());
+    }
+
+    [Fact]
+    public void Invoke_AcceptsUnionWithStringThatIsNotEnumValue()
+    {
+        var dispatcher = CreateDispatcher(typeof(TestTypeCategoryCapabilities).Assembly);
+        var args = new JsonObject { ["value"] = "/usr/local/lib/redis/modules/redisearch.so" };
+
+        var result = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/acceptEnumStringUnion", args);
+
+        Assert.NotNull(result);
+        Assert.Equal("string:/usr/local/lib/redis/modules/redisearch.so", result.GetValue<string>());
+    }
+
+    [Fact]
+    public void Invoke_EnumStringUnionWithUnsupportedObject_ThrowsTypeMismatch()
+    {
+        var dispatcher = CreateDispatcher(typeof(TestTypeCategoryCapabilities).Assembly);
+        var args = new JsonObject
+        {
+            ["value"] = new JsonObject
+            {
+                ["label"] = "unexpected"
+            }
+        };
+
+        var ex = Assert.Throws<CapabilityException>(() =>
+            dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/acceptEnumStringUnion", args));
+
+        Assert.Equal(AtsErrorCodes.TypeMismatch, ex.Error.Code);
+        Assert.Equal("value", ex.Error.Details?.Parameter);
+        Assert.Equal("TestDispatchEnum | String", ex.Error.Details?.Expected);
+        Assert.Equal("object", ex.Error.Details?.Actual);
+    }
+
+    [Fact]
     public void Invoke_AcceptsUnionWithBuilderBackedHandle()
     {
         var handles = new HandleRegistry();
@@ -2442,6 +2487,18 @@ internal static class TestTypeCategoryCapabilities
         {
             TestUnionDto dto => dto.Label ?? string.Empty,
             string[] values => string.Join(",", values),
+            _ => throw new InvalidOperationException($"Unexpected union value type: {value.GetType().Name}")
+        };
+    }
+
+    /// <ats-summary>Accepts a union of enum or string</ats-summary>
+    [AspireExport("acceptEnumStringUnion")]
+    public static string AcceptEnumStringUnion([AspireUnion(typeof(TestDispatchEnum), typeof(string))] object value)
+    {
+        return value switch
+        {
+            TestDispatchEnum enumValue => $"enum:{enumValue}",
+            string text => $"string:{text}",
             _ => throw new InvalidOperationException($"Unexpected union value type: {value.GetType().Name}")
         };
     }

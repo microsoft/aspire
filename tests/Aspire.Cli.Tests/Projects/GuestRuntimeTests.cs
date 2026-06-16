@@ -388,7 +388,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         var appHostFile = new FileInfo("/tmp/apphost.ts");
         var directory = new DirectoryInfo("/tmp");
 
-        await runtime.PublishAsync(appHostFile, directory, new Dictionary<string, string>(), ["--output", "/out"], launcher, CancellationToken.None);
+        await runtime.PublishAsync(appHostFile, directory, new Dictionary<string, string>(), ["--output", "/out"], launcher, cancellationToken: CancellationToken.None);
 
         Assert.Equal("publish-cmd", launcher.LastCommand);
         Assert.Contains(launcher.LastArgs, a => a.Contains("--output") && a.Contains("/out"));
@@ -409,10 +409,46 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         var appHostFile = new FileInfo("/tmp/apphost.ts");
         var directory = new DirectoryInfo("/tmp");
 
-        await runtime.PublishAsync(appHostFile, directory, new Dictionary<string, string>(), ["--output", "/out"], launcher, CancellationToken.None);
+        await runtime.PublishAsync(appHostFile, directory, new Dictionary<string, string>(), ["--output", "/out"], launcher, cancellationToken: CancellationToken.None);
 
         Assert.Equal(2, launcher.Calls.Count);
         Assert.Equal("typecheck-cmd", launcher.Calls[0].Command);
+        Assert.Equal("publish-cmd", launcher.Calls[1].Command);
+    }
+
+    [Fact]
+    public async Task PublishAsync_CallsAfterAppHostLaunchedAfterPreExecute()
+    {
+        var spec = CreateTestSpec(
+            execute: new CommandSpec { Command = "run-cmd", Args = ["{appHostFile}"] },
+            publishExecute: new CommandSpec { Command = "publish-cmd", Args = ["{appHostFile}", "{args}"] },
+            preExecute:
+            [
+                new CommandSpec { Command = "typecheck-cmd", Args = ["--project", "{appHostDir}"] }
+            ]);
+        var runtime = CreateRuntime(spec);
+        var launcher = new RecordingLauncher();
+        var appHostFile = new FileInfo("/tmp/apphost.ts");
+        var directory = new DirectoryInfo("/tmp");
+        var afterAppHostLaunchedCalls = 0;
+
+        await runtime.PublishAsync(
+            appHostFile,
+            directory,
+            new Dictionary<string, string>(),
+            ["--output", "/out"],
+            launcher,
+            afterAppHostLaunchedAsync: () =>
+            {
+                afterAppHostLaunchedCalls++;
+                Assert.Equal(2, launcher.Calls.Count);
+                Assert.Equal("publish-cmd", launcher.Calls[1].Command);
+                return Task.CompletedTask;
+            },
+            cancellationToken: CancellationToken.None);
+
+        Assert.Equal(1, afterAppHostLaunchedCalls);
+        Assert.Equal(2, launcher.Calls.Count);
         Assert.Equal("publish-cmd", launcher.Calls[1].Command);
     }
 
@@ -431,8 +467,8 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
             new Dictionary<string, string>(),
             ["--operation", "publish"],
             launcher,
-            CancellationToken.None,
-            noBuild: true);
+            noBuild: true,
+            cancellationToken: CancellationToken.None);
 
         Assert.Equal(0, exitCode);
         var call = Assert.Single(launcher.Calls);
@@ -449,7 +485,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         var appHostFile = new FileInfo("/tmp/apphost.ts");
         var directory = new DirectoryInfo("/tmp");
 
-        await runtime.PublishAsync(appHostFile, directory, new Dictionary<string, string>(), null, launcher, CancellationToken.None);
+        await runtime.PublishAsync(appHostFile, directory, new Dictionary<string, string>(), null, launcher, cancellationToken: CancellationToken.None);
 
         Assert.Equal("run-cmd", launcher.LastCommand);
     }
@@ -545,7 +581,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         var appHostFile = new FileInfo("/tmp/apphost.ts");
         var directory = new DirectoryInfo("/tmp");
 
-        await runtime.PublishAsync(appHostFile, directory, new Dictionary<string, string>(), ["--extra", "arg"], launcher, CancellationToken.None);
+        await runtime.PublishAsync(appHostFile, directory, new Dictionary<string, string>(), ["--extra", "arg"], launcher, cancellationToken: CancellationToken.None);
 
         Assert.Equal(appHostFile.FullName, launcher.LastArgs[0]);
         Assert.Equal("--extra", launcher.LastArgs[1]);

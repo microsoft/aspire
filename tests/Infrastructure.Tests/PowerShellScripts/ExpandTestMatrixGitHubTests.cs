@@ -19,7 +19,7 @@ public class ExpandTestMatrixGitHubTests : IDisposable
     public ExpandTestMatrixGitHubTests(ITestOutputHelper output)
     {
         _output = output;
-        _scriptPath = Path.Combine(FindRepoRoot(), "eng", "scripts", "expand-test-matrix-github.ps1");
+        _scriptPath = Path.Combine(RepoRoot.Path, "eng", "scripts", "expand-test-matrix-github.ps1");
     }
 
     public void Dispose() => _tempDir.Dispose();
@@ -543,7 +543,7 @@ public class ExpandTestMatrixGitHubTests : IDisposable
             supportedOSes: ["linux"]);
 
         // Run build-test-matrix.ps1
-        var buildMatrixScript = Path.Combine(FindRepoRoot(), "eng", "scripts", "build-test-matrix.ps1");
+        var buildMatrixScript = Path.Combine(RepoRoot.Path, "eng", "scripts", "build-test-matrix.ps1");
         var canonicalFile = Path.Combine(_tempDir.Path, "canonical.json");
 
         using var buildCmd = new PowerShellCommand(buildMatrixScript, _output)
@@ -559,7 +559,7 @@ public class ExpandTestMatrixGitHubTests : IDisposable
         expandResult.EnsureSuccessful("expand-test-matrix-github.ps1 failed");
 
         // Run split-test-matrix-by-deps.ps1
-        var splitScriptPath = Path.Combine(FindRepoRoot(), "eng", "scripts", "split-test-matrix-by-deps.ps1");
+        var splitScriptPath = Path.Combine(RepoRoot.Path, "eng", "scripts", "split-test-matrix-by-deps.ps1");
         var githubOutputFile = Path.Combine(_tempDir.Path, "github_output.txt");
         File.WriteAllText(githubOutputFile, "");
 
@@ -687,19 +687,5 @@ public class ExpandTestMatrixGitHubTests : IDisposable
         }
 
         return new GitHubActionsMatrix { Include = entries };
-    }
-
-    private static string FindRepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "Aspire.slnx")))
-            {
-                return dir.FullName;
-            }
-            dir = dir.Parent;
-        }
-        throw new InvalidOperationException("Could not find repository root");
     }
 }

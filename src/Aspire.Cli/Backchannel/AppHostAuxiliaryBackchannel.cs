@@ -89,6 +89,14 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     public bool SupportsV2 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.V2);
 
     /// <inheritdoc />
+    // Per-feature capability strings (e.g. Terminals_V1) are deliberately preferred over a
+    // monolithic "rev the whole aux backchannel version" approach. See
+    // docs/specs/cli-backchannel.md §3 ("Capability Negotiation Over Version Numbers"). When
+    // the CLI starts using a new RPC, add a new capability constant in
+    // src/Aspire.Hosting/Backchannel/BackchannelDataTypes.cs (advertised by the AppHost RPC
+    // target) and surface a SupportsXxx property here for the call site to gate on. This way
+    // a single new method never requires every consumer to upgrade an opaque version field.
+    public bool SupportsTerminalsV1 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.Terminals_V1);
     public bool SupportsV3 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.V3);
 
     /// <summary>
@@ -1002,6 +1010,66 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
             cancellationToken).ConfigureAwait(false);
 
         _logger.LogDebug("Wait for resource '{ResourceName}' completed: success={Success}, state={State}", resourceName, response.Success, response.State);
+
+        return response;
+    }
+
+    /// <summary>
+    /// Gets terminal information for a resource.
+    /// </summary>
+    public async Task<GetTerminalInfoResponse> GetTerminalInfoAsync(string resourceName, CancellationToken cancellationToken = default)
+    {
+        // Gate on the per-feature Terminals_V1 capability rather than the v2 envelope:
+        // an AppHost can speak aux.v2 without having terminal support compiled in. We
+        // must not call GetTerminalInfoAsync against such an AppHost or the RPC will
+        // surface as an unknown-method error to the caller.
+        if (!SupportsTerminalsV1)
+        {
+            return new GetTerminalInfoResponse { IsAvailable = false };
+        }
+
+        var rpc = EnsureConnected();
+
+        _logger?.LogDebug("Getting terminal info for resource '{ResourceName}'", resourceName);
+
+        var request = new GetTerminalInfoRequest { ResourceName = resourceName };
+
+        var response = await rpc.InvokeWithCancellationAsync<GetTerminalInfoResponse>(
+            "GetTerminalInfoAsync",
+            [request],
+            cancellationToken).ConfigureAwait(false);
+
+        _logger?.LogDebug("Terminal info for '{ResourceName}': available={Available}, replicas={ReplicaCount}",
+            resourceName, response.IsAvailable, response.Replicas?.Length ?? 0);
+
+        return response;
+    }
+
+    /// <summary>
+    /// Lists every <c>WithTerminal</c>-enabled resource in the AppHost. Older AppHosts without
+    /// the <see cref="AuxiliaryBackchannelCapabilities.Terminals_V1"/> capability are
+    /// short-circuited to an empty response so the CLI can render a clean "nothing to show"
+    /// message rather than a mysterious RPC error.
+    /// </summary>
+    public async Task<ListTerminalsResponse> ListTerminalsAsync(CancellationToken cancellationToken = default)
+    {
+        if (!SupportsTerminalsV1)
+        {
+            return new ListTerminalsResponse { Terminals = Array.Empty<TerminalSummary>() };
+        }
+
+        var rpc = EnsureConnected();
+
+        _logger?.LogDebug("Listing all terminal-enabled resources.");
+
+        var request = new ListTerminalsRequest();
+
+        var response = await rpc.InvokeWithCancellationAsync<ListTerminalsResponse>(
+            "ListTerminalsAsync",
+            [request],
+            cancellationToken).ConfigureAwait(false);
+
+        _logger?.LogDebug("ListTerminals returned {Count} terminal-enabled resource(s).", response.Terminals.Length);
 
         return response;
     }
