@@ -1602,6 +1602,32 @@ public class ConsoleInteractionServiceTests
     }
 
     [Fact]
+    public async Task PromptForSelectionsAsync_NonInteractive_CliProvidedInvalidValue_WithUnescapedClosingBracketInChoiceLabel_ThrowsInvalidOperationException()
+    {
+        // Markup.Remove throws when it encounters an unescaped ']' token.
+        // This reproduces the failure mode where choice labels contain literal brackets.
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "");
+        var interactionService = CreateInteractionService(console, hostEnvironment: TestHelpers.CreateNonInteractiveHostEnvironment());
+        var choices = new[] { "alpha", "beta" };
+
+        var option = new System.CommandLine.Option<string?>("--items");
+        var command = new System.CommandLine.RootCommand { option };
+        var parseResult = command.Parse("--items invalid");
+        var binding = PromptBinding.Create(parseResult, option);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            interactionService.PromptForSelectionsAsync(
+                "Select:",
+                choices,
+                x => $"{x}]",
+                binding: binding,
+                cancellationToken: CancellationToken.None));
+
+        Assert.Contains("unescaped ']'", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task PromptForSelectionAsync_NonInteractive_WithDefaultValue_ReturnsMatch()
     {
         var output = new StringBuilder();
