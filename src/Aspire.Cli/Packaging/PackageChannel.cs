@@ -9,12 +9,13 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Semver;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Packaging;
 
-internal class PackageChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, IFeatures features, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, bool requiresProjectNuGetConfig = true, ILogger? logger = null, string? currentCliVersion = null)
+internal class PackageChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, IFeatures features, ILogger logger, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, string? currentCliVersion = null)
 {
     // Threaded so the local-folder integration listing can honor the same
     // ShowDeprecatedPackages flag that NuGetPackageCache honors on the feed-based path.
@@ -38,13 +39,6 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
     public string? CliDownloadBaseUrl { get; } = cliDownloadBaseUrl;
     public string? PinnedVersion { get; } = pinnedVersion;
 
-    /// <summary>
-    /// Whether projects created with this channel should have a project-level nuget.config
-    /// written. Channels whose mappings only point to default sources (e.g. nuget.org) set
-    /// this to <see langword="false"/> because the config would be redundant.
-    /// </summary>
-    public bool RequiresProjectNuGetConfig { get; } = requiresProjectNuGetConfig;
-
     public string SourceDetails { get; } = ComputeSourceDetails(mappings);
 
     public bool ShouldPersistChannelName() =>
@@ -63,12 +57,10 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
     /// <c>pr-&lt;N&gt;</c>/local-hive channels all point at custom feeds, so their mappings must be
     /// persisted for restore to succeed. This deliberately mirrors <see cref="ShouldPersistChannelName"/>:
     /// the set of channels whose name we pin is exactly the set we drop a config for (those that
-    /// additionally carry feed mappings). A channel can additionally opt out explicitly via
-    /// <see cref="RequiresProjectNuGetConfig"/> (set <see langword="false"/> at construction), which
-    /// is how the <c>stable</c> channel suppresses the redundant nuget.org config.
+    /// additionally carry feed mappings).
     /// </remarks>
     public bool ShouldCreateNuGetConfig() =>
-        RequiresProjectNuGetConfig && ShouldPersistChannelName() && Mappings is { Length: > 0 };
+        ShouldPersistChannelName() && Mappings is { Length: > 0 };
 
     /// <summary>
     /// Whether this channel resolves Aspire.* packages from a local directory of <c>.nupkg</c>
@@ -78,20 +70,16 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
     /// <remarks>
     /// Unlike <see cref="VersionHelper.IsLocalBuildChannel(string)"/> — which keys off the channel
     /// <em>name</em> (<c>local</c>/<c>pr-&lt;N&gt;</c>/<c>run-&lt;N&gt;</c>) — this inspects the actual
-    /// mappings. That matters when a locally built CLI emulates a released build: the synthesized
-    /// channel is named after the emulated identity (<c>stable</c>/<c>daily</c>/<c>staging</c>) yet
-    /// points Aspire.* at a local directory. The name check would misclassify it as remote and
-    /// silently fall back to nuget.org; this property recognizes it as locally backed so
-    /// <c>aspire new</c>/<c>aspire add</c> resolve those local packages. See
-    /// <c>docs/specs/cli-identity-sidecar.md</c>.
+    /// mappings via <see cref="PackageMapping.IsAspireDirectoryMapping"/>. That matters when a locally
+    /// built CLI emulates a released build: the synthesized channel is named after the emulated
+    /// identity (<c>stable</c>/<c>daily</c>/<c>staging</c>) yet points Aspire.* at a local directory.
+    /// The name check would misclassify it as remote and silently fall back to nuget.org; this
+    /// property recognizes it as locally backed so <c>aspire new</c>/<c>aspire add</c> resolve those
+    /// local packages. See <c>docs/specs/cli-identity-sidecar.md</c>.
     /// </remarks>
     public bool IsBackedByLocalPackageDirectory =>
         Type is PackageChannelType.Explicit &&
-        Mappings?.Any(static mapping =>
-            mapping.PackageFilter.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase) &&
-            mapping.PackageFilter != PackageMapping.AllPackages &&
-            !UrlHelper.IsHttpUrl(mapping.Source) &&
-            Directory.Exists(mapping.Source)) == true;
+        Mappings?.Any(static mapping => mapping.IsAspireDirectoryMapping) == true;
 
     private static string ComputeSourceDetails(PackageMapping[]? mappings)
     {
@@ -456,10 +444,10 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             .SelectMany(mapping => CreateScopedMappings(mapping, requestedPackageIds, logger))
             .ToArray();
 
-        return new PackageChannel(Name, Quality, scopedMappings, nuGetPackageCache, _features, ConfigureGlobalPackagesFolder, CliDownloadBaseUrl, PinnedVersion, RequiresProjectNuGetConfig, logger, _currentCliVersion);
+        return new PackageChannel(Name, Quality, scopedMappings, nuGetPackageCache, _features, logger, ConfigureGlobalPackagesFolder, CliDownloadBaseUrl, PinnedVersion, _currentCliVersion);
     }
 
-    private static IEnumerable<PackageMapping> CreateScopedMappings(PackageMapping mapping, IReadOnlyCollection<string> packageIds, ILogger? logger)
+    private static IEnumerable<PackageMapping> CreateScopedMappings(PackageMapping mapping, IReadOnlyCollection<string> packageIds, ILogger logger)
     {
         if (!IsScopedAspireMapping(mapping))
         {
@@ -475,7 +463,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         }
     }
 
-    private static HashSet<string> GetScopedPackageIds(string source, IEnumerable<string> packageIds, ILogger? logger)
+    private static HashSet<string> GetScopedPackageIds(string source, IEnumerable<string> packageIds, ILogger logger)
     {
         var resolvedPackageIds = new HashSet<string>(packageIds, StringComparers.NuGetPackageId);
 
@@ -526,7 +514,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         return new PackageFileMetadata(packageIdentity.Value.PackageId, packageIdentity.Value.Version, packageFile);
     }
 
-    private static IEnumerable<string> GetDependencyPackageIds(string packageFile, ILogger? logger)
+    private static IEnumerable<string> GetDependencyPackageIds(string packageFile, ILogger logger)
     {
         try
         {
@@ -550,17 +538,17 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         }
         catch (IOException ex)
         {
-            logger?.LogDebug(ex, "Failed to read package file '{PackageFile}' while resolving dependencies.", packageFile);
+            logger.LogDebug(ex, "Failed to read package file '{PackageFile}' while resolving dependencies.", packageFile);
             return [];
         }
         catch (InvalidDataException ex)
         {
-            logger?.LogDebug(ex, "Package file '{PackageFile}' contains invalid data.", packageFile);
+            logger.LogDebug(ex, "Package file '{PackageFile}' contains invalid data.", packageFile);
             return [];
         }
         catch (System.Xml.XmlException ex)
         {
-            logger?.LogDebug(ex, "Failed to parse nuspec in package file '{PackageFile}'.", packageFile);
+            logger.LogDebug(ex, "Failed to parse nuspec in package file '{PackageFile}'.", packageFile);
             return [];
         }
     }
@@ -620,9 +608,9 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         return isHostingOrCommunityToolkitNamespaced && !isExcluded;
     }
 
-    public static PackageChannel CreateExplicitChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, IFeatures features, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, bool requiresProjectNuGetConfig = true, ILogger? logger = null, string? currentCliVersion = null)
+    public static PackageChannel CreateExplicitChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, IFeatures features, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null, string? currentCliVersion = null)
     {
-        return new PackageChannel(name, quality, mappings, nuGetPackageCache, features, configureGlobalPackagesFolder, cliDownloadBaseUrl, pinnedVersion, requiresProjectNuGetConfig, logger, currentCliVersion);
+        return new PackageChannel(name, quality, mappings, nuGetPackageCache, features, logger ?? NullLogger.Instance, configureGlobalPackagesFolder, cliDownloadBaseUrl, pinnedVersion, currentCliVersion);
     }
 
     public static PackageChannel CreateImplicitChannel(INuGetPackageCache nuGetPackageCache, IFeatures features, ILogger? logger = null, string? currentCliVersion = null)
@@ -632,6 +620,6 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         // in the case of implicit feeds we want to be able to show that, along side the stable
         // version. Not really an issue for template selection though (unless we start allowing)
         // for broader templating options.
-        return new PackageChannel("default", PackageChannelQuality.Both, null, nuGetPackageCache, features, logger: logger, currentCliVersion: currentCliVersion);
+        return new PackageChannel("default", PackageChannelQuality.Both, null, nuGetPackageCache, features, logger ?? NullLogger.Instance, currentCliVersion: currentCliVersion);
     }
 }

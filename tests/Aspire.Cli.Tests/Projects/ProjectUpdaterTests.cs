@@ -1544,8 +1544,8 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task UpdateProjectAsync_StableChannel_DoesNotCreateNuGetConfigWhenNoneExists()
     {
-        // When updating to the stable channel (RequiresProjectNuGetConfig = false) and no
-        // project-local nuget.config exists, the updater should NOT create one.
+        // When updating to the stable channel (maps Aspire* to nuget.org, so no config is
+        // needed) and no project-local nuget.config exists, the updater should NOT create one.
         // See: https://github.com/microsoft/aspire/issues/18124
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var (appHostProjectFile, _) = await SetupNuGetConfigTestProject(workspace);
@@ -1614,7 +1614,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task UpdateProjectAsync_DailyChannel_CreatesNuGetConfigWhenNoneExists()
     {
-        // Contrast: when updating to the daily channel (RequiresProjectNuGetConfig = true),
+        // Contrast: when updating to the daily channel (routes Aspire* to a custom feed),
         // the updater should create a nuget.config if none exists.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var (appHostProjectFile, _) = await SetupNuGetConfigTestProject(workspace);

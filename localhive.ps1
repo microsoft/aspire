@@ -666,7 +666,7 @@ if ($Output) {
   if ($stableBuild -and (-not $SkipCli)) {
     Write-Log ""
     Write-Log "Emulated stable $Version. Activate a hermetic, all-local session with:"
-    Write-Log "  . $Output/activate.ps1"
+    Write-Log "  . `"$Output/activate.ps1`""
     Write-Log "It sets PATH + ASPIRE_CLI_* (channel=stable, version=$Version) and an isolated"
     Write-Log "NUGET_PACKAGES so restores can't be shadowed by a stale cached $Version."
   }

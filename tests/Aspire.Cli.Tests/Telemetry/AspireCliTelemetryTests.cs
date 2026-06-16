@@ -316,7 +316,7 @@ public class AspireCliTelemetryTests
         var provider = new TelemetryFixture.TestMachineInformationProvider();
         var ciDetector = new TelemetryFixture.TestCIEnvironmentDetector();
         var codingAgentDetector = new TelemetryFixture.TestCodingAgentDetector();
-        var telemetry = new AspireCliTelemetry(NullLogger<AspireCliTelemetry>.Instance, provider, ciDetector, codingAgentDetector);
+        var telemetry = new AspireCliTelemetry(NullLogger<AspireCliTelemetry>.Instance, provider, ciDetector, codingAgentDetector, Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)));
 
         var exception = Assert.Throws<InvalidOperationException>(() => telemetry.StartReportedActivity("test"));
         Assert.Contains("not been initialized", exception.Message);
@@ -328,7 +328,7 @@ public class AspireCliTelemetryTests
         var provider = new TelemetryFixture.TestMachineInformationProvider();
         var ciDetector = new TelemetryFixture.TestCIEnvironmentDetector();
         var codingAgentDetector = new TelemetryFixture.TestCodingAgentDetector();
-        var telemetry = new AspireCliTelemetry(NullLogger<AspireCliTelemetry>.Instance, provider, ciDetector, codingAgentDetector);
+        var telemetry = new AspireCliTelemetry(NullLogger<AspireCliTelemetry>.Instance, provider, ciDetector, codingAgentDetector, Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)));
 
         await telemetry.InitializeAsync().DefaultTimeout();
         var tagsAfterFirstInit = telemetry.GetDefaultTags().Count;
@@ -362,18 +362,6 @@ public class AspireCliTelemetryTests
         // distinguishable from the physical binary that produced the telemetry.
         Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.CliVersion);
         Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.CliBuildId);
-    }
-
-    [Fact]
-    public void InitializeAsync_DoesNotAddIdentityTags_WhenNoExecutionContext()
-    {
-        using var fixture = new TelemetryFixture();
-
-        var tags = fixture.Telemetry.GetDefaultTags();
-
-        Assert.DoesNotContain(tags, t => t.Key == TelemetryConstants.Tags.IdentityVersion);
-        Assert.DoesNotContain(tags, t => t.Key == TelemetryConstants.Tags.IdentityChannel);
-        Assert.DoesNotContain(tags, t => t.Key == TelemetryConstants.Tags.IdentityCommit);
     }
 
     [Fact]

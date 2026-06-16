@@ -7,7 +7,7 @@ using Aspire.Shared;
 
 namespace Aspire.Cli;
 
-internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory, DirectoryInfo cacheDirectory, DirectoryInfo sdksDirectory, DirectoryInfo logsDirectory, string logFilePath, bool debugMode = false, IReadOnlyDictionary<string, string?>? environmentVariables = null, DirectoryInfo? homeDirectory = null, DirectoryInfo? packagesDirectory = null, string identityChannel = "local", DirectoryInfo? aspireHomeDirectory = null, string? identityVersion = null, string? identityCommit = null, string? nugetServiceIndexOverride = null, bool identityOverridden = false, DirectoryInfo? identityPackagesDirectory = null)
+internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory, DirectoryInfo cacheDirectory, DirectoryInfo sdksDirectory, DirectoryInfo logsDirectory, string logFilePath, string identityChannel, bool debugMode = false, IReadOnlyDictionary<string, string?>? environmentVariables = null, DirectoryInfo? homeDirectory = null, DirectoryInfo? packagesDirectory = null, DirectoryInfo? aspireHomeDirectory = null, string? identityVersion = null, string? identityCommit = null, string? nugetServiceIndexOverride = null, bool identityOverridden = false, DirectoryInfo? identityPackagesDirectory = null)
 {
     public DirectoryInfo WorkingDirectory { get; } = workingDirectory;
     public DirectoryInfo HivesDirectory { get; } = hivesDirectory;

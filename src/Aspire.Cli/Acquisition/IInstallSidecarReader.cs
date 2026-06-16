@@ -58,11 +58,11 @@ internal sealed record InstallSidecarInfo(
     string SidecarPath,
     InstallSource Source,
     string RawSource,
-    string? Channel = null,
-    string? Version = null,
-    string? Commit = null,
-    string? NuGetServiceIndexOverride = null,
-    string? Packages = null);
+    string? Channel,
+    string? Version,
+    string? Commit,
+    string? NuGetServiceIndexOverride,
+    string? Packages);
 
 /// <summary>
 /// Result of attempting to read an install-route sidecar.

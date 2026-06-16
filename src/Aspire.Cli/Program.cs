@@ -662,7 +662,7 @@ public class Program
         var sdksDirectory = GetSdksDirectory(processPath);
         var packagesDirectory = GetPackagesDirectory(processPath);
         var aspireHomeDirectory = new DirectoryInfo(GetUsersAspirePath(processPath));
-        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, new DirectoryInfo(logsDirectory), logFilePath, debugMode, packagesDirectory: packagesDirectory, identityChannel: channel, aspireHomeDirectory: aspireHomeDirectory);
+        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, new DirectoryInfo(logsDirectory), logFilePath, identityChannel: channel, debugMode: debugMode, packagesDirectory: packagesDirectory, aspireHomeDirectory: aspireHomeDirectory);
     }
 
     internal static CliExecutionContext BuildCliExecutionContext(bool debugMode, string logsDirectory, string logFilePath, IIdentityResolver identityResolver, string? processPath = null)
@@ -703,15 +703,15 @@ public class Program
             sdksDirectory,
             new DirectoryInfo(logsDirectory),
             logFilePath,
-            debugMode,
-            packagesDirectory: packagesDirectory,
             identityChannel: channel.Value,
-            aspireHomeDirectory: aspireHomeDirectory,
             identityVersion: version.Value,
             identityCommit: commit.Value,
             nugetServiceIndexOverride: nugetServiceIndexOverride.Value,
             identityOverridden: identityOverridden,
-            identityPackagesDirectory: identityPackagesDirectory);
+            identityPackagesDirectory: identityPackagesDirectory,
+            debugMode: debugMode,
+            packagesDirectory: packagesDirectory,
+            aspireHomeDirectory: aspireHomeDirectory);
     }
 
     private static DirectoryInfo GetCacheDirectory(string? processPath = null)
@@ -824,13 +824,18 @@ public class Program
         if (executionContext.IdentityOverridden && !isMachineReadableOutput)
         {
             var consoleEnvironment = serviceProvider.GetRequiredService<ConsoleEnvironment>();
+            var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
             var notice = string.Format(
                 CultureInfo.CurrentCulture,
                 RootCommandStrings.IdentityOverrideNotice,
                 executionContext.IdentityChannel,
                 executionContext.IdentityVersion);
+
+            // Route through the interaction service with a warning icon, but force the notice
+            // to stderr (ConsoleOutput.Error) so it never contaminates stdout for callers that
+            // parse it. The surrounding blank lines stay on the same stderr stream for spacing.
             consoleEnvironment.Error.WriteLine();
-            consoleEnvironment.Error.MarkupLine($"[yellow]{notice.EscapeMarkup()}[/]");
+            interactionService.DisplayMessage(KnownEmojis.Warning, $"[yellow]{notice.EscapeMarkup()}[/]", allowMarkup: true, consoleOverride: ConsoleOutput.Error);
             consoleEnvironment.Error.WriteLine();
         }
     }

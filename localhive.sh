@@ -600,7 +600,7 @@ if [[ -n "$OUTPUT_DIR" ]]; then
   if [[ $STABLE_BUILD -eq 1 ]] && [[ $SKIP_CLI -eq 0 ]]; then
     log ""
     log "Emulated stable $STABLE_VERSION. Activate a hermetic, all-local session with:"
-    log "  source $OUTPUT_DIR/activate.sh"
+    log "  source \"$OUTPUT_DIR/activate.sh\""
     log "It sets PATH + ASPIRE_CLI_* (channel=stable, version=$STABLE_VERSION) and an isolated"
     log "NUGET_PACKAGES so restores can't be shadowed by a stale cached $STABLE_VERSION."
   fi

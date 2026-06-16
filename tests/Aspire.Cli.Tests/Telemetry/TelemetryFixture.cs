@@ -24,6 +24,7 @@ internal sealed class TelemetryFixture : IDisposable
     /// <param name="codingAgentDetector">Optional coding agent detector. Uses a default test detector if not specified.</param>
     /// <param name="logger">Optional logger. Uses <see cref="NullLogger"/> if not specified.</param>
     /// <param name="sampleResult">The sampling result for the activity listener. Defaults to <see cref="ActivitySamplingResult.AllDataAndRecorded"/>.</param>
+    /// <param name="executionContext">Optional CLI execution context. Defaults to a local-identity context so the telemetry's required context is always satisfied.</param>
     public TelemetryFixture(
         IMachineInformationProvider? machineInfoProvider = null,
         ICIEnvironmentDetector? ciEnvironmentDetector = null,
@@ -47,6 +48,7 @@ internal sealed class TelemetryFixture : IDisposable
         ciEnvironmentDetector ??= new TestCIEnvironmentDetector();
         codingAgentDetector ??= new TestCodingAgentDetector();
         logger ??= NullLogger<AspireCliTelemetry>.Instance;
+        executionContext ??= Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory));
 
         Telemetry = new AspireCliTelemetry(logger, machineInfoProvider, ciEnvironmentDetector, codingAgentDetector, ReportedSourceName, DiagnosticsSourceName, executionContext);
         Telemetry.InitializeAsync().GetAwaiter().GetResult();

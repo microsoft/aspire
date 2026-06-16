@@ -23,6 +23,6 @@ internal sealed class IdentityVersionAction(CliExecutionContext executionContext
     public override int Invoke(ParseResult parseResult)
     {
         parseResult.InvocationConfiguration.Output.WriteLine(executionContext.IdentityVersion);
-        return 0;
+        return CliExitCodes.Success;
     }
 }

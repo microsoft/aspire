@@ -69,14 +69,15 @@ internal static class TestExecutionContextHelper
             sdksDirectory,
             logsDirectory,
             logFilePath,
-            debugMode: debugMode,
-            environmentVariables: environmentVariables,
-            homeDirectory: homeDirectory,
-            packagesDirectory: packagesDirectory,
             identityChannel: identityChannel,
             identityVersion: identityVersion,
             identityCommit: identityCommit,
+            nugetServiceIndexOverride: null,
             identityOverridden: identityOverridden,
-            identityPackagesDirectory: identityPackagesDirectory);
+            identityPackagesDirectory: identityPackagesDirectory,
+            debugMode: debugMode,
+            environmentVariables: environmentVariables,
+            homeDirectory: homeDirectory,
+            packagesDirectory: packagesDirectory);
     }
 }

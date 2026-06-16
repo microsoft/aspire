@@ -5,7 +5,7 @@ namespace Aspire.Cli.Packaging;
 
 internal static class PackageSourceOverrideMappings
 {
-    public static PackageMapping[] Create(string packageSourceOverride, PackageChannel? requestedChannel, string? nugetServiceIndexOverride = null)
+    public static PackageMapping[] Create(string packageSourceOverride, PackageChannel? requestedChannel, string? nugetServiceIndexOverride)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(packageSourceOverride);
         if (HasCredentialMaterial(packageSourceOverride))

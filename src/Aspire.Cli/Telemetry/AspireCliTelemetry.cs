@@ -48,7 +48,7 @@ internal sealed class AspireCliTelemetry : IHostedService
     private readonly ICIEnvironmentDetector _ciEnvironmentDetector;
     private readonly ICodingAgentDetector _codingAgentDetector;
     private readonly ILogger<AspireCliTelemetry> _logger;
-    private readonly CliExecutionContext? _executionContext;
+    private readonly CliExecutionContext _executionContext;
     private readonly List<KeyValuePair<string, object?>> _tagsList = [];
 
     private bool _isInitialized;
@@ -61,11 +61,11 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// <param name="ciEnvironmentDetector">The CI environment detector.</param>
     /// <param name="codingAgentDetector">The coding agent detector.</param>
     /// <param name="executionContext">
-    /// The CLI execution context carrying the effective identity. Optional so existing
-    /// direct-construction tests keep working; in production the DI container injects the
-    /// registered singleton so identity telemetry tags are always emitted.
+    /// The CLI execution context carrying the effective identity. Required: the DI
+    /// container injects the registered singleton, so identity telemetry tags are
+    /// always emitted from it.
     /// </param>
-    public AspireCliTelemetry(ILogger<AspireCliTelemetry> logger, IMachineInformationProvider machineInformationProvider, ICIEnvironmentDetector ciEnvironmentDetector, ICodingAgentDetector codingAgentDetector, CliExecutionContext? executionContext = null)
+    public AspireCliTelemetry(ILogger<AspireCliTelemetry> logger, IMachineInformationProvider machineInformationProvider, ICIEnvironmentDetector ciEnvironmentDetector, ICodingAgentDetector codingAgentDetector, CliExecutionContext executionContext)
         : this(logger, machineInformationProvider, ciEnvironmentDetector, codingAgentDetector, ReportedActivitySourceName, DiagnosticsActivitySourceName, executionContext)
     {
     }
@@ -80,8 +80,8 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// <param name="codingAgentDetector">The coding agent detector.</param>
     /// <param name="reportedSourceName">The name for the reported activity source.</param>
     /// <param name="diagnosticsSourceName">The name for the diagnostics activity source.</param>
-    /// <param name="executionContext">The CLI execution context carrying the effective identity. Optional in tests.</param>
-    internal AspireCliTelemetry(ILogger<AspireCliTelemetry> logger, IMachineInformationProvider machineInformationProvider, ICIEnvironmentDetector ciEnvironmentDetector, ICodingAgentDetector codingAgentDetector, string reportedSourceName, string diagnosticsSourceName, CliExecutionContext? executionContext = null)
+    /// <param name="executionContext">The CLI execution context carrying the effective identity.</param>
+    internal AspireCliTelemetry(ILogger<AspireCliTelemetry> logger, IMachineInformationProvider machineInformationProvider, ICIEnvironmentDetector ciEnvironmentDetector, ICodingAgentDetector codingAgentDetector, string reportedSourceName, string diagnosticsSourceName, CliExecutionContext executionContext)
     {
         _logger = logger;
         _machineInformationProvider = machineInformationProvider;
@@ -240,14 +240,11 @@ internal sealed class AspireCliTelemetry : IHostedService
             // Identity tags describe the build the CLI is *behaving* as (env / sidecar overrides),
             // kept separate from the physical binary's cli.version/cli.build_id above so emulated
             // runs are distinguishable in telemetry. See docs/specs/cli-identity-sidecar.md.
-            if (_executionContext is not null)
+            _tagsList.Add(new(TelemetryConstants.Tags.IdentityVersion, _executionContext.IdentityVersion));
+            _tagsList.Add(new(TelemetryConstants.Tags.IdentityChannel, _executionContext.IdentityChannel));
+            if (!string.IsNullOrEmpty(_executionContext.IdentityCommit))
             {
-                _tagsList.Add(new(TelemetryConstants.Tags.IdentityVersion, _executionContext.IdentityVersion));
-                _tagsList.Add(new(TelemetryConstants.Tags.IdentityChannel, _executionContext.IdentityChannel));
-                if (!string.IsNullOrEmpty(_executionContext.IdentityCommit))
-                {
-                    _tagsList.Add(new(TelemetryConstants.Tags.IdentityCommit, _executionContext.IdentityCommit));
-                }
+                _tagsList.Add(new(TelemetryConstants.Tags.IdentityCommit, _executionContext.IdentityCommit));
             }
 
             var codingAgent = _codingAgentDetector.GetCodingAgent();

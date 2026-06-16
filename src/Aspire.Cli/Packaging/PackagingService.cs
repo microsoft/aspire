@@ -147,7 +147,7 @@ internal class PackagingService : IPackagingService
         var stableChannel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Stable, new[]
         {
             new PackageMapping(PackageMapping.AllPackages, nugetOrg)
-        }, _nuGetPackageCache, _features, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/ga/daily", requiresProjectNuGetConfig: false, logger: _logger, currentCliVersion: _executionContext.IdentitySdkVersion);
+        }, _nuGetPackageCache, _features, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/ga/daily", logger: _logger, currentCliVersion: _executionContext.IdentitySdkVersion);
 
         var dailyChannel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Daily, PackageChannelQuality.Prerelease, new[]
         {
@@ -252,7 +252,12 @@ internal class PackagingService : IPackagingService
             // most specific signal of intent. We replace it here (after the full list is built) rather
             // than earlier so built-in channels are covered too. See docs/specs/cli-identity-sidecar.md.
             EnsurePackagesOverrideDirectoryIsUnambiguous(identityPackagesDirectory);
-            channels.RemoveAll(c => string.Equals(c.Name, _executionContext.IdentityChannel, StringComparisons.ChannelName));
+            var replacedChannelCount = channels.RemoveAll(c => string.Equals(c.Name, _executionContext.IdentityChannel, StringComparisons.ChannelName));
+            _logger.LogDebug(
+                "Synthesized package channel '{Channel}' from the packages override directory '{PackagesDirectory}', replacing {ReplacedChannelCount} same-named channel(s).",
+                _executionContext.IdentityChannel,
+                identityPackagesDirectory.FullName,
+                replacedChannelCount);
             channels.Add(CreateLocalHiveChannel(_executionContext.IdentityChannel, identityPackagesDirectory));
         }
 
@@ -757,7 +762,7 @@ internal class PackagingService : IPackagingService
     // The first '.'-delimited segment that begins with a digit marks the start of the version, because
     // package-id segments never start with a digit. Returns false (and the file is ignored by the
     // guardrail) when no split yields a strict-SemVer version.
-    private static bool TryParseNupkgFileName(string fileName, out string id, out string version)
+    internal static bool TryParseNupkgFileName(string fileName, out string id, out string version)
     {
         id = string.Empty;
         version = string.Empty;

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Aspire.Cli.Packaging;
 using Aspire.Shared;
@@ -15,9 +16,12 @@ namespace Aspire.Cli.Acquisition;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Each resolved field is cached for the lifetime of the resolver instance
-/// via <see cref="Lazy{T}"/>. The resolver is a DI singleton so reads happen
-/// at most once per CLI process; tests substitute a fake implementation.
+/// All identity fields are resolved together, once, behind a single
+/// <see cref="Lazy{T}"/>. The resolver is a DI singleton whose fields are all
+/// read at startup when <c>CliExecutionContext</c> is built, so there is no
+/// value in caching each field independently. Laziness is retained only so a
+/// malformed <c>ASPIRE_CLI_*</c> override fails fast on first access rather
+/// than throwing during DI construction.
 /// </para>
 /// <para>
 /// The env-reader is injected as a delegate rather than read straight from
@@ -59,15 +63,9 @@ internal sealed class IdentityResolver : IIdentityResolver
     private readonly string? _binaryDir;
     private readonly Func<string, string?> _envReader;
 
-    private readonly Lazy<InstallSidecarInfo?> _sidecar;
-    private readonly Lazy<string> _assemblyChannel;
-    private readonly Lazy<(string Version, string Commit)> _assemblyVersionAndCommit;
-
-    private readonly Lazy<IdentityValue<string>> _channel;
-    private readonly Lazy<IdentityValue<string>> _version;
-    private readonly Lazy<IdentityValue<string>> _commit;
-    private readonly Lazy<IdentityValue<string?>> _nugetServiceIndexOverride;
-    private readonly Lazy<IdentityValue<string?>> _packagesDirectory;
+    // A single Lazy resolves every identity field together on first use; see the type remarks
+    // for why per-field caching is unnecessary and why laziness is still retained.
+    private readonly Lazy<ResolvedIdentity> _identity;
 
     public IdentityResolver(
         IInstallSidecarReader sidecarReader,
@@ -83,46 +81,53 @@ internal sealed class IdentityResolver : IIdentityResolver
         _binaryDir = binaryDir;
         _envReader = envReader ?? Environment.GetEnvironmentVariable;
 
-        _sidecar = new Lazy<InstallSidecarInfo?>(LoadSidecar, LazyThreadSafetyMode.ExecutionAndPublication);
-        _assemblyChannel = new Lazy<string>(LoadAssemblyChannel, LazyThreadSafetyMode.ExecutionAndPublication);
-        _assemblyVersionAndCommit = new Lazy<(string, string)>(LoadAssemblyVersionAndCommit, LazyThreadSafetyMode.ExecutionAndPublication);
-
-        _channel = new Lazy<IdentityValue<string>>(ResolveChannelCore, LazyThreadSafetyMode.ExecutionAndPublication);
-        _version = new Lazy<IdentityValue<string>>(ResolveVersionCore, LazyThreadSafetyMode.ExecutionAndPublication);
-        _commit = new Lazy<IdentityValue<string>>(ResolveCommitCore, LazyThreadSafetyMode.ExecutionAndPublication);
-        _nugetServiceIndexOverride = new Lazy<IdentityValue<string?>>(ResolveNuGetServiceIndexOverrideCore, LazyThreadSafetyMode.ExecutionAndPublication);
-        _packagesDirectory = new Lazy<IdentityValue<string?>>(ResolvePackagesDirectoryCore, LazyThreadSafetyMode.ExecutionAndPublication);
+        _identity = new Lazy<ResolvedIdentity>(ResolveIdentity, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     /// <inheritdoc />
-    public IdentityValue<string> ResolveChannel() => _channel.Value;
+    public IdentityValue<string> ResolveChannel() => _identity.Value.Channel;
 
     /// <inheritdoc />
-    public IdentityValue<string> ResolveVersion() => _version.Value;
+    public IdentityValue<string> ResolveVersion() => _identity.Value.Version;
 
     /// <inheritdoc />
-    public IdentityValue<string> ResolveCommit() => _commit.Value;
+    public IdentityValue<string> ResolveCommit() => _identity.Value.Commit;
 
     /// <inheritdoc />
-    public IdentityValue<string?> ResolveNuGetServiceIndexOverride() => _nugetServiceIndexOverride.Value;
+    public IdentityValue<string?> ResolveNuGetServiceIndexOverride() => _identity.Value.NuGetServiceIndexOverride;
 
     /// <inheritdoc />
-    public IdentityValue<string?> ResolvePackagesDirectory() => _packagesDirectory.Value;
+    public IdentityValue<string?> ResolvePackagesDirectory() => _identity.Value.PackagesDirectory;
 
-    private IdentityValue<string> ResolveChannelCore()
+    private ResolvedIdentity ResolveIdentity()
+    {
+        // Load the I/O-backed inputs (sidecar file + assembly metadata) once, then resolve every
+        // field from them. A single combined resolution is why the per-field Lazy<T> wrappers are
+        // unnecessary (see the _identity field).
+        var sidecar = LoadSidecar();
+        var assemblyVersionAndCommit = LoadAssemblyVersionAndCommit();
+        return new ResolvedIdentity(
+            ResolveChannelCore(sidecar),
+            ResolveVersionCore(sidecar, assemblyVersionAndCommit),
+            ResolveCommitCore(sidecar, assemblyVersionAndCommit),
+            ResolveNuGetServiceIndexOverrideCore(sidecar),
+            ResolvePackagesDirectoryCore(sidecar));
+    }
+
+    private IdentityValue<string> ResolveChannelCore(InstallSidecarInfo? sidecar)
     {
         if (TryGetEnv(ChannelEnvVar, out var env))
         {
             return new IdentityValue<string>(env, IdentitySource.Environment);
         }
 
-        var sidecarValue = _sidecar.Value?.Channel;
+        var sidecarValue = sidecar?.Channel;
         if (!string.IsNullOrEmpty(sidecarValue))
         {
             return new IdentityValue<string>(sidecarValue, IdentitySource.Sidecar);
         }
 
-        var assemblyValue = _assemblyChannel.Value;
+        var assemblyValue = LoadAssemblyChannel();
         if (!string.IsNullOrEmpty(assemblyValue))
         {
             // The assembly default for non-CI builds is "local", so this also
@@ -133,7 +138,7 @@ internal sealed class IdentityResolver : IIdentityResolver
         return new IdentityValue<string>(PackageChannelNames.Local, IdentitySource.TerminalDefault);
     }
 
-    private IdentityValue<string> ResolveVersionCore()
+    private IdentityValue<string> ResolveVersionCore(InstallSidecarInfo? sidecar, (string Version, string Commit) assemblyVersionAndCommit)
     {
         if (TryGetEnv(VersionEnvVar, out var env))
         {
@@ -141,17 +146,17 @@ internal sealed class IdentityResolver : IIdentityResolver
             return new IdentityValue<string>(env, IdentitySource.Environment);
         }
 
-        var sidecarValue = _sidecar.Value?.Version;
+        var sidecarValue = sidecar?.Version;
         if (!string.IsNullOrEmpty(sidecarValue))
         {
             ValidateVersion(sidecarValue, IdentitySource.Sidecar);
             return new IdentityValue<string>(sidecarValue, IdentitySource.Sidecar);
         }
 
-        return new IdentityValue<string>(_assemblyVersionAndCommit.Value.Version, IdentitySource.AssemblyFallback);
+        return new IdentityValue<string>(assemblyVersionAndCommit.Version, IdentitySource.AssemblyFallback);
     }
 
-    private IdentityValue<string> ResolveCommitCore()
+    private IdentityValue<string> ResolveCommitCore(InstallSidecarInfo? sidecar, (string Version, string Commit) assemblyVersionAndCommit)
     {
         if (TryGetEnv(CommitEnvVar, out var env))
         {
@@ -159,17 +164,17 @@ internal sealed class IdentityResolver : IIdentityResolver
             return new IdentityValue<string>(env, IdentitySource.Environment);
         }
 
-        var sidecarValue = _sidecar.Value?.Commit;
+        var sidecarValue = sidecar?.Commit;
         if (!string.IsNullOrEmpty(sidecarValue))
         {
             ValidateCommit(sidecarValue, IdentitySource.Sidecar);
             return new IdentityValue<string>(sidecarValue, IdentitySource.Sidecar);
         }
 
-        return new IdentityValue<string>(_assemblyVersionAndCommit.Value.Commit, IdentitySource.AssemblyFallback);
+        return new IdentityValue<string>(assemblyVersionAndCommit.Commit, IdentitySource.AssemblyFallback);
     }
 
-    private IdentityValue<string?> ResolveNuGetServiceIndexOverrideCore()
+    private IdentityValue<string?> ResolveNuGetServiceIndexOverrideCore(InstallSidecarInfo? sidecar)
     {
         if (TryGetEnv(NuGetServiceIndexEnvVar, out var env))
         {
@@ -177,7 +182,7 @@ internal sealed class IdentityResolver : IIdentityResolver
             return new IdentityValue<string?>(env, IdentitySource.Environment);
         }
 
-        var sidecarValue = _sidecar.Value?.NuGetServiceIndexOverride;
+        var sidecarValue = sidecar?.NuGetServiceIndexOverride;
         if (!string.IsNullOrEmpty(sidecarValue))
         {
             ValidateNuGetServiceIndex(sidecarValue, IdentitySource.Sidecar);
@@ -189,14 +194,14 @@ internal sealed class IdentityResolver : IIdentityResolver
         return new IdentityValue<string?>(null, IdentitySource.TerminalDefault);
     }
 
-    private IdentityValue<string?> ResolvePackagesDirectoryCore()
+    private IdentityValue<string?> ResolvePackagesDirectoryCore(InstallSidecarInfo? sidecar)
     {
         if (TryGetEnv(PackagesEnvVar, out var env))
         {
             return new IdentityValue<string?>(env, IdentitySource.Environment);
         }
 
-        var sidecarValue = _sidecar.Value?.Packages;
+        var sidecarValue = sidecar?.Packages;
         if (!string.IsNullOrEmpty(sidecarValue))
         {
             return new IdentityValue<string?>(sidecarValue, IdentitySource.Sidecar);
@@ -226,8 +231,8 @@ internal sealed class IdentityResolver : IIdentityResolver
         // (see PackageChannel / PackageUpdateHelpers).
         if (!SemVersion.TryParse(value, SemVersionStyles.Strict, out _))
         {
-            throw InvalidOverride(source, VersionEnvVar, "version", value,
-                "a SemVer 2.0 version such as '13.4.3' or '13.5.0-preview.1.26311.9'");
+            throw new InvalidOperationException(BuildInvalidOverrideMessage(source, VersionEnvVar, "version", value,
+                "a SemVer 2.0 version such as '13.4.3' or '13.5.0-preview.1.26311.9'"));
         }
     }
 
@@ -243,8 +248,8 @@ internal sealed class IdentityResolver : IIdentityResolver
         // SHA-256 (64) revisions all validate.
         if (!IsHex(value, minLength: 8, maxLength: 64))
         {
-            throw InvalidOverride(source, CommitEnvVar, "commit", value,
-                "a hexadecimal commit SHA of 8 to 64 characters, e.g. 'abcdef01'");
+            throw new InvalidOperationException(BuildInvalidOverrideMessage(source, CommitEnvVar, "commit", value,
+                "a hexadecimal commit SHA of 8 to 64 characters, e.g. 'abcdef01'"));
         }
     }
 
@@ -256,8 +261,8 @@ internal sealed class IdentityResolver : IIdentityResolver
         if (!Uri.TryCreate(value, UriKind.Absolute, out var uri)
             || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
         {
-            throw InvalidOverride(source, NuGetServiceIndexEnvVar, "nugetServiceIndexOverride", value,
-                "an absolute http(s) URL such as 'http://127.0.0.1:5400/v3/index.json'");
+            throw new InvalidOperationException(BuildInvalidOverrideMessage(source, NuGetServiceIndexEnvVar, "nugetServiceIndexOverride", value,
+                "an absolute http(s) URL such as 'http://127.0.0.1:5400/v3/index.json'"));
         }
     }
 
@@ -279,7 +284,7 @@ internal sealed class IdentityResolver : IIdentityResolver
         return true;
     }
 
-    private static InvalidOperationException InvalidOverride(IdentitySource source, string envVar, string sidecarField, string value, string expected)
+    private static string BuildInvalidOverrideMessage(IdentitySource source, string envVar, string sidecarField, string value, string expected)
     {
         // Name the exact input the developer set so the fix is obvious. Only env and sidecar values
         // flow here; the assembly fallback is never validated.
@@ -290,15 +295,15 @@ internal sealed class IdentityResolver : IIdentityResolver
             _ => "identity override",
         };
 
-        return new InvalidOperationException($"The {origin} value '{value}' is not valid. Expected {expected}.");
+        return $"The {origin} value '{value}' is not valid. Expected {expected}.";
     }
 
-    private bool TryGetEnv(string name, out string value)
+    private bool TryGetEnv(string name, [NotNullWhen(true)] out string? value)
     {
         var raw = _envReader(name);
         if (string.IsNullOrEmpty(raw))
         {
-            value = string.Empty;
+            value = null;
             return false;
         }
 
@@ -320,26 +325,13 @@ internal sealed class IdentityResolver : IIdentityResolver
 
     private string LoadAssemblyChannel()
     {
-        // Delegate to the existing assembly-only reader so we keep one canonical
-        // shape validator for the AssemblyMetadata(AspireCliChannel, ...) value.
-        // The reader throws on missing/invalid metadata, which is the right
-        // behavior at the assembly layer; we catch here so a malformed stamp
-        // does not nuke the whole resolver — we just fall through to the
-        // terminal default (`local`).
-        try
-        {
-            // Main refactored IdentityChannelReader to a Try pattern (see PR #17828).
-            // Treat a `false` return the same as the old `InvalidOperationException`
-            // path: fall through to the terminal default so a malformed stamp does
-            // not nuke the whole resolver.
-            return new IdentityChannelReader(_assembly).TryReadChannel(out var channel, out _)
-                ? channel
-                : string.Empty;
-        }
-        catch (InvalidOperationException)
-        {
-            return string.Empty;
-        }
+        // Delegate to the assembly-only reader so we keep one canonical shape validator for the
+        // AssemblyMetadata(AspireCliChannel, ...) value. IdentityChannelReader uses a Try pattern
+        // (PR #17828) and never throws: a malformed or missing stamp returns false, which we treat
+        // as "no channel" and let the caller fall through to the terminal default (`local`).
+        return new IdentityChannelReader(_assembly).TryReadChannel(out var channel, out _)
+            ? channel
+            : string.Empty;
     }
 
     private (string Version, string Commit) LoadAssemblyVersionAndCommit()
@@ -363,4 +355,13 @@ internal sealed class IdentityResolver : IIdentityResolver
 
         return (informational[..plusIndex], informational[(plusIndex + 1)..]);
     }
+
+    // Snapshot of every resolved identity field, produced once by ResolveIdentity and cached
+    // behind the single _identity Lazy.
+    private readonly record struct ResolvedIdentity(
+        IdentityValue<string> Channel,
+        IdentityValue<string> Version,
+        IdentityValue<string> Commit,
+        IdentityValue<string?> NuGetServiceIndexOverride,
+        IdentityValue<string?> PackagesDirectory);
 }
