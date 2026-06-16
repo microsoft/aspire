@@ -19,7 +19,8 @@ internal static class TestTelemetryHelper
         var provider = new TestMachineInformationProvider();
         var ciDetector = new TestCIEnvironmentDetector();
         var codingAgentDetector = new TestCodingAgentDetector();
-        var telemetry = new AspireCliTelemetry(NullLogger<AspireCliTelemetry>.Instance, provider, ciDetector, codingAgentDetector);
+        var internalMicrosoftDetector = new TestInternalMicrosoftDetector();
+        var telemetry = new AspireCliTelemetry(NullLogger<AspireCliTelemetry>.Instance, provider, ciDetector, codingAgentDetector, internalMicrosoftDetector);
         telemetry.InitializeAsync().GetAwaiter().GetResult();
         return telemetry;
     }
@@ -32,7 +33,8 @@ internal static class TestTelemetryHelper
         var provider = new TestMachineInformationProvider();
         var ciDetector = new TestCIEnvironmentDetector();
         var codingAgentDetector = new TestCodingAgentDetector();
-        var telemetry = new AspireCliTelemetry(NullLogger<AspireCliTelemetry>.Instance, provider, ciDetector, codingAgentDetector, reportedSourceName, diagnosticsSourceName);
+        var internalMicrosoftDetector = new TestInternalMicrosoftDetector();
+        var telemetry = new AspireCliTelemetry(NullLogger<AspireCliTelemetry>.Instance, provider, ciDetector, codingAgentDetector, internalMicrosoftDetector, reportedSourceName, diagnosticsSourceName);
         telemetry.InitializeAsync().GetAwaiter().GetResult();
         return telemetry;
     }
@@ -51,5 +53,10 @@ internal static class TestTelemetryHelper
     private sealed class TestCodingAgentDetector : ICodingAgentDetector
     {
         public string? GetCodingAgent() => null;
+    }
+
+    private sealed class TestInternalMicrosoftDetector : IInternalMicrosoftDetector
+    {
+        public Task<bool> IsInternalMicrosoftMachineAsync(CancellationToken cancellationToken = default) => Task.FromResult(false);
     }
 }

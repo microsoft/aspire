@@ -22,12 +22,14 @@ internal sealed class TelemetryFixture : IDisposable
     /// <param name="machineInfoProvider">Optional machine information provider. Uses a default test provider if not specified.</param>
     /// <param name="ciEnvironmentDetector">Optional CI environment detector. Uses a default test detector if not specified.</param>
     /// <param name="codingAgentDetector">Optional coding agent detector. Uses a default test detector if not specified.</param>
+    /// <param name="internalMicrosoftDetector">Optional internal Microsoft detector. Uses a default test detector if not specified.</param>
     /// <param name="logger">Optional logger. Uses <see cref="NullLogger"/> if not specified.</param>
     /// <param name="sampleResult">The sampling result for the activity listener. Defaults to <see cref="ActivitySamplingResult.AllDataAndRecorded"/>.</param>
     public TelemetryFixture(
         IMachineInformationProvider? machineInfoProvider = null,
         ICIEnvironmentDetector? ciEnvironmentDetector = null,
         ICodingAgentDetector? codingAgentDetector = null,
+        IInternalMicrosoftDetector? internalMicrosoftDetector = null,
         ILogger<AspireCliTelemetry>? logger = null,
         ActivitySamplingResult sampleResult = ActivitySamplingResult.AllDataAndRecorded)
     {
@@ -45,9 +47,10 @@ internal sealed class TelemetryFixture : IDisposable
         machineInfoProvider ??= new TestMachineInformationProvider();
         ciEnvironmentDetector ??= new TestCIEnvironmentDetector();
         codingAgentDetector ??= new TestCodingAgentDetector();
+        internalMicrosoftDetector ??= new TestInternalMicrosoftDetector();
         logger ??= NullLogger<AspireCliTelemetry>.Instance;
 
-        Telemetry = new AspireCliTelemetry(logger, machineInfoProvider, ciEnvironmentDetector, codingAgentDetector, ReportedSourceName, DiagnosticsSourceName);
+        Telemetry = new AspireCliTelemetry(logger, machineInfoProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector, ReportedSourceName, DiagnosticsSourceName);
         Telemetry.InitializeAsync().GetAwaiter().GetResult();
     }
 
@@ -106,5 +109,15 @@ internal sealed class TelemetryFixture : IDisposable
         public string? CodingAgent { get; set; }
 
         public string? GetCodingAgent() => CodingAgent;
+    }
+
+    /// <summary>
+    /// A test implementation of <see cref="IInternalMicrosoftDetector"/> with configurable result.
+    /// </summary>
+    internal sealed class TestInternalMicrosoftDetector : IInternalMicrosoftDetector
+    {
+        public bool IsInternalMicrosoft { get; set; }
+
+        public Task<bool> IsInternalMicrosoftMachineAsync(CancellationToken cancellationToken = default) => Task.FromResult(IsInternalMicrosoft);
     }
 }

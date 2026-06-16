@@ -79,6 +79,11 @@ internal static class TelemetryConstants
         public const string CodingAgent = "process.coding_agent";
 
         /// <summary>
+        /// Tag indicating whether the current user or machine appears to be Microsoft internal.
+        /// </summary>
+        public const string InternalMicrosoft = "aspire.cli.is_microsoft_internal";
+
+        /// <summary>
         /// Tag for the deployment environment name ("ci" or "local").
         /// </summary>
         public const string DeploymentEnvironmentName = "deployment.environment.name";
