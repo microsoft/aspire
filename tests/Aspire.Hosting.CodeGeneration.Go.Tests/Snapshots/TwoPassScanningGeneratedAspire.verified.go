@@ -787,6 +787,7 @@ func (d *HttpCommandRequestExportData) ToMap() map[string]any {
 type HttpsCertificateExecutionConfigurationContext struct {
 	CertificatePath *ReferenceExpression `json:"CertificatePath,omitempty"`
 	KeyPath *ReferenceExpression `json:"KeyPath,omitempty"`
+	CertificateWithKeyPath *ReferenceExpression `json:"CertificateWithKeyPath,omitempty"`
 	PfxPath *ReferenceExpression `json:"PfxPath,omitempty"`
 }
 
@@ -795,6 +796,7 @@ func (d *HttpsCertificateExecutionConfigurationContext) ToMap() map[string]any {
 	m := map[string]any{}
 	if d.CertificatePath != nil { m["CertificatePath"] = serializeValue(d.CertificatePath) }
 	if d.KeyPath != nil { m["KeyPath"] = serializeValue(d.KeyPath) }
+	if d.CertificateWithKeyPath != nil { m["CertificateWithKeyPath"] = serializeValue(d.CertificateWithKeyPath) }
 	if d.PfxPath != nil { m["PfxPath"] = serializeValue(d.PfxPath) }
 	return m
 }
@@ -17151,6 +17153,7 @@ type HttpsCertificateConfigurationCallbackAnnotationContext interface {
 	Arguments() CommandLineArgsEditor
 	CancellationToken() (*CancellationToken, error)
 	CertificatePath() *ReferenceExpression
+	CertificateWithKeyPath() *ReferenceExpression
 	Environment() EnvironmentEditor
 	ExecutionContext() DistributedApplicationExecutionContext
 	KeyPath() *ReferenceExpression
@@ -17215,6 +17218,23 @@ func (s *httpsCertificateConfigurationCallbackAnnotationContext) CertificatePath
 	typed, ok := result.(*ReferenceExpression)
 	if !ok {
 		s.setErr(fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.certificatePath returned unexpected type %T", result))
+		return nil
+	}
+	return typed
+}
+
+// CertificateWithKeyPath A value provider that will resolve to a path to the certificate and key concatenated together in PEM format.
+func (s *httpsCertificateConfigurationCallbackAnnotationContext) CertificateWithKeyPath() *ReferenceExpression {
+	if s.err != nil { return nil }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.certificateWithKeyPath", reqArgs)
+	if err != nil { s.setErr(err); return nil }
+	typed, ok := result.(*ReferenceExpression)
+	if !ok {
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.certificateWithKeyPath returned unexpected type %T", result))
 		return nil
 	}
 	return typed

@@ -1024,6 +1024,8 @@ export interface HttpsCertificateExecutionConfigurationContext {
     certificatePath?: ReferenceExpression;
     /** Expression that will resolve to the path of the server authentication certificate key in PEM format. For containers this will be a path inside the container. */
     keyPath?: ReferenceExpression;
+    /** Expression that will resolve to the path of the server authentication certificate and key in a combined PEM file. For containers this will be a path inside the container. */
+    certificateWithKeyPath?: ReferenceExpression;
     /** Expression that will resolve to the path of the server authentication certificate in PFX format. For containers this will be a path inside the container. */
     pfxPath?: ReferenceExpression;
 }
@@ -1880,7 +1882,7 @@ export interface AfterPublishEventPromise extends PromiseLike<AfterPublishEvent>
 
 /** This event is published after the distributed application is published. */
 class AfterPublishEventImpl implements AfterPublishEvent {
-    constructor(private _handle: AfterPublishEventHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: AfterPublishEventHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -1974,7 +1976,7 @@ export interface AfterResourcesCreatedEventPromise extends PromiseLike<AfterReso
  * in `AfterResourcesCreatedAsync`.
  */
 class AfterResourcesCreatedEventImpl implements AfterResourcesCreatedEvent {
-    constructor(private _handle: AfterResourcesCreatedEventHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: AfterResourcesCreatedEventHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -2054,7 +2056,7 @@ export interface BeforePublishEventPromise extends PromiseLike<BeforePublishEven
 
 /** This event is published before the distributed application is published. */
 class BeforePublishEventImpl implements BeforePublishEvent {
-    constructor(private _handle: BeforePublishEventHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: BeforePublishEventHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -2142,7 +2144,7 @@ export interface BeforeResourceStartedEventPromise extends PromiseLike<BeforeRes
  * Resources that are created by orchestrators may not yet be ready to handle requests.
  */
 class BeforeResourceStartedEventImpl implements BeforeResourceStartedEvent {
-    constructor(private _handle: BeforeResourceStartedEventHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: BeforeResourceStartedEventHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -2236,7 +2238,7 @@ export interface BeforeStartEventPromise extends PromiseLike<BeforeStartEvent> {
  * in `BeforeStartAsync`.
  */
 class BeforeStartEventImpl implements BeforeStartEvent {
-    constructor(private _handle: BeforeStartEventHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: BeforeStartEventHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -2332,7 +2334,7 @@ export interface CommandLineArgsCallbackContextPromise extends PromiseLike<Comma
 
 /** Represents a callback context for the list of command-line arguments associated with an executable resource. */
 class CommandLineArgsCallbackContextImpl implements CommandLineArgsCallbackContext {
-    constructor(private _handle: CommandLineArgsCallbackContextHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: CommandLineArgsCallbackContextHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -2444,7 +2446,7 @@ export interface CommandLineArgsEditorPromise extends PromiseLike<CommandLineArg
 
 /** Provides an ATS-first editor for command-line arguments within polyglot callbacks. */
 class CommandLineArgsEditorImpl implements CommandLineArgsEditor {
-    constructor(private _handle: CommandLineArgsEditorHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: CommandLineArgsEditorHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -2517,7 +2519,7 @@ export interface ConnectionStringAvailableEventPromise extends PromiseLike<Conne
 
 /** The {@link ConnectionStringAvailableEvent} is raised when a connection string becomes available for a resource. */
 class ConnectionStringAvailableEventImpl implements ConnectionStringAvailableEvent {
-    constructor(private _handle: ConnectionStringAvailableEventHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: ConnectionStringAvailableEventHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -2651,7 +2653,7 @@ export interface ContainerBuildOptionsCallbackContextPromise extends PromiseLike
 
 /** Context for configuring container build options via a callback. */
 class ContainerBuildOptionsCallbackContextImpl implements ContainerBuildOptionsCallbackContext {
-    constructor(private _handle: ContainerBuildOptionsCallbackContextHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: ContainerBuildOptionsCallbackContextHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -2907,7 +2909,7 @@ export interface ContainerFileSystemCallbackContextPromise extends PromiseLike<C
 
 /** Represents the context for a `ContainerFileSystemCallbackAnnotation` callback. */
 class ContainerFileSystemCallbackContextImpl implements ContainerFileSystemCallbackContext {
-    constructor(private _handle: ContainerFileSystemCallbackContextHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: ContainerFileSystemCallbackContextHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -3085,7 +3087,7 @@ export interface ContainerImagePushOptions {
  * to construct the complete image reference including registry endpoint and tag.
  */
 class ContainerImagePushOptionsImpl implements ContainerImagePushOptions {
-    constructor(private _handle: ContainerImagePushOptionsHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: ContainerImagePushOptionsHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -3152,7 +3154,7 @@ export interface ContainerImagePushOptionsCallbackContextPromise extends Promise
 
 /** Provides context information for container image push options callbacks. */
 class ContainerImagePushOptionsCallbackContextImpl implements ContainerImagePushOptionsCallbackContext {
-    constructor(private _handle: ContainerImagePushOptionsCallbackContextHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: ContainerImagePushOptionsCallbackContextHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -3241,7 +3243,7 @@ export interface ContainerImageReferencePromise extends PromiseLike<ContainerIma
 
 /** Represents the fully‑qualified container image reference that should be deployed. */
 class ContainerImageReferenceImpl implements ContainerImageReference {
-    constructor(private _handle: ContainerImageReferenceHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: ContainerImageReferenceHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -3325,7 +3327,7 @@ export interface ContainerMountAnnotationPromise extends PromiseLike<ContainerMo
 
 /** Represents a mount annotation for a container resource. */
 class ContainerMountAnnotationImpl implements ContainerMountAnnotation {
-    constructor(private _handle: ContainerMountAnnotationHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: ContainerMountAnnotationHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -3419,7 +3421,7 @@ export interface ContainerPortReferencePromise extends PromiseLike<ContainerPort
 
 /** Represents a TCP/UDP port that a container can expose. */
 class ContainerPortReferenceImpl implements ContainerPortReference {
-    constructor(private _handle: ContainerPortReferenceHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: ContainerPortReferenceHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -3515,7 +3517,7 @@ export interface DistributedApplicationPromise extends PromiseLike<DistributedAp
 
 /** Represents a distributed application that implements the {@link IHost} and {@link IAsyncDisposable} interfaces. */
 class DistributedApplicationImpl implements DistributedApplication {
-    constructor(private _handle: DistributedApplicationHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: DistributedApplicationHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -3615,7 +3617,7 @@ export interface DistributedApplicationExecutionContextPromise extends PromiseLi
 
 /** Exposes the global contextual information for this invocation of the AppHost. */
 class DistributedApplicationExecutionContextImpl implements DistributedApplicationExecutionContext {
-    constructor(private _handle: DistributedApplicationExecutionContextHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: DistributedApplicationExecutionContextHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -3757,7 +3759,7 @@ export interface DistributedApplicationModelPromise extends PromiseLike<Distribu
 
 /** Represents a distributed application. */
 class DistributedApplicationModelImpl implements DistributedApplicationModel {
-    constructor(private _handle: DistributedApplicationModelHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: DistributedApplicationModelHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -3868,7 +3870,7 @@ export interface DockerfileBuilderPromise extends PromiseLike<DockerfileBuilder>
 
 /** Builder for creating Dockerfiles programmatically. */
 class DockerfileBuilderImpl implements DockerfileBuilder {
-    constructor(private _handle: DockerfileBuilderHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: DockerfileBuilderHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -4000,7 +4002,7 @@ export interface DockerfileBuilderCallbackContextPromise extends PromiseLike<Doc
 
 /** Provides context information for Dockerfile build callbacks. */
 class DockerfileBuilderCallbackContextImpl implements DockerfileBuilderCallbackContext {
-    constructor(private _handle: DockerfileBuilderCallbackContextHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: DockerfileBuilderCallbackContextHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -4103,7 +4105,7 @@ export interface DockerfileFactoryContextPromise extends PromiseLike<DockerfileF
 
 /** Provides context for Dockerfile factory functions. */
 class DockerfileFactoryContextImpl implements DockerfileFactoryContext {
-    constructor(private _handle: DockerfileFactoryContextHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: DockerfileFactoryContextHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -4240,7 +4242,7 @@ export interface DockerfileStagePromise extends PromiseLike<DockerfileStage> {
 
 /** Represents a stage within a multi-stage Dockerfile. */
 class DockerfileStageImpl implements DockerfileStage {
-    constructor(private _handle: DockerfileStageHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: DockerfileStageHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -4698,7 +4700,7 @@ export interface EndpointReferencePromise extends PromiseLike<EndpointReference>
 
 /** Represents an endpoint reference for a resource with endpoints. */
 class EndpointReferenceImpl implements EndpointReference {
-    constructor(private _handle: EndpointReferenceHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: EndpointReferenceHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -4986,7 +4988,7 @@ export interface EndpointReferenceExpressionPromise extends PromiseLike<Endpoint
 
 /** Represents a property expression for an endpoint reference. */
 class EndpointReferenceExpressionImpl implements EndpointReferenceExpression {
-    constructor(private _handle: EndpointReferenceExpressionHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: EndpointReferenceExpressionHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -5119,7 +5121,7 @@ export interface EndpointUpdateContextPromise extends PromiseLike<EndpointUpdate
 
 /** Provides a mutable callback context for updating an endpoint in polyglot app hosts. */
 class EndpointUpdateContextImpl implements EndpointUpdateContext {
-    constructor(private _handle: EndpointUpdateContextHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: EndpointUpdateContextHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -5346,7 +5348,7 @@ export interface EnvironmentCallbackContextPromise extends PromiseLike<Environme
 
 /** Represents a callback context for environment variables associated with a publisher. */
 class EnvironmentCallbackContextImpl implements EnvironmentCallbackContext {
-    constructor(private _handle: EnvironmentCallbackContextHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: EnvironmentCallbackContextHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -5460,7 +5462,7 @@ export interface EnvironmentEditorPromise extends PromiseLike<EnvironmentEditor>
 
 /** Provides an ATS-first editor for environment variables within polyglot callbacks. */
 class EnvironmentEditorImpl implements EnvironmentEditor {
-    constructor(private _handle: EnvironmentEditorHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: EnvironmentEditorHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -5582,7 +5584,7 @@ export interface EventingSubscriberRegistrationContextPromise extends PromiseLik
 
 /** Context passed to ATS-friendly eventing subscriber registrations. */
 class EventingSubscriberRegistrationContextImpl implements EventingSubscriberRegistrationContext {
-    constructor(private _handle: EventingSubscriberRegistrationContextHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: EventingSubscriberRegistrationContextHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -5771,7 +5773,7 @@ export interface ExecuteCommandContextPromise extends PromiseLike<ExecuteCommand
 
 /** Context for {@link ResourceCommandAnnotation.ExecuteCommand}. */
 class ExecuteCommandContextImpl implements ExecuteCommandContext {
-    constructor(private _handle: ExecuteCommandContextHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: ExecuteCommandContextHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -5893,7 +5895,7 @@ export interface HttpCommandPrepareRequestContextPromise extends PromiseLike<Htt
 
 /** Provides context for HTTP command prepare-request callbacks in polyglot app hosts. */
 class HttpCommandPrepareRequestContextImpl implements HttpCommandPrepareRequestContext {
-    constructor(private _handle: HttpCommandPrepareRequestContextHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: HttpCommandPrepareRequestContextHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -5981,6 +5983,8 @@ export interface HttpsCertificateConfigurationCallbackAnnotationContext {
     certificatePath(): Promise<ReferenceExpression>;
     /** A value provider that will resolve to a path to the private key for the certificate. */
     keyPath(): Promise<ReferenceExpression>;
+    /** A value provider that will resolve to a path to the certificate and key concatenated together in PEM format. */
+    certificateWithKeyPath(): Promise<ReferenceExpression>;
     /** A value provider that will resolve to a path to a PFX file for the key pair. */
     pfxPath(): Promise<ReferenceExpression>;
     /** Gets the `CancellationToken` that can be used to cancel the operation. */
@@ -6000,6 +6004,8 @@ export interface HttpsCertificateConfigurationCallbackAnnotationContextPromise e
     certificatePath(): Promise<ReferenceExpression>;
     /** A value provider that will resolve to a path to the private key for the certificate. */
     keyPath(): Promise<ReferenceExpression>;
+    /** A value provider that will resolve to a path to the certificate and key concatenated together in PEM format. */
+    certificateWithKeyPath(): Promise<ReferenceExpression>;
     /** A value provider that will resolve to a path to a PFX file for the key pair. */
     pfxPath(): Promise<ReferenceExpression>;
     /** Gets the `CancellationToken` that can be used to cancel the operation. */
@@ -6016,7 +6022,7 @@ export interface HttpsCertificateConfigurationCallbackAnnotationContextPromise e
 
 /** Context provided to a `HttpsCertificateConfigurationCallbackAnnotation` callback. */
 class HttpsCertificateConfigurationCallbackAnnotationContextImpl implements HttpsCertificateConfigurationCallbackAnnotationContext {
-    constructor(private _handle: HttpsCertificateConfigurationCallbackAnnotationContextHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: HttpsCertificateConfigurationCallbackAnnotationContextHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -6053,6 +6059,13 @@ class HttpsCertificateConfigurationCallbackAnnotationContextImpl implements Http
     async keyPath(): Promise<ReferenceExpression> {
         return await this._client.invokeCapability<ReferenceExpression>(
             'Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.keyPath',
+            { context: this._handle }
+        );
+    }
+
+    async certificateWithKeyPath(): Promise<ReferenceExpression> {
+        return await this._client.invokeCapability<ReferenceExpression>(
+            'Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.certificateWithKeyPath',
             { context: this._handle }
         );
     }
@@ -6127,6 +6140,10 @@ class HttpsCertificateConfigurationCallbackAnnotationContextPromiseImpl implemen
         return this._promise.then(obj => obj.keyPath());
     }
 
+    certificateWithKeyPath(): Promise<ReferenceExpression> {
+        return this._promise.then(obj => obj.certificateWithKeyPath());
+    }
+
     pfxPath(): Promise<ReferenceExpression> {
         return this._promise.then(obj => obj.pfxPath());
     }
@@ -6179,7 +6196,7 @@ export interface HttpsEndpointUpdateCallbackContextPromise extends PromiseLike<H
 
 /** Context provided to the callback of `SubscribeHttpsEndpointsUpdate``1` when an HTTPS certificate is determined to be available for the resource. */
 class HttpsEndpointUpdateCallbackContextImpl implements HttpsEndpointUpdateCallbackContext {
-    constructor(private _handle: HttpsEndpointUpdateCallbackContextHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: HttpsEndpointUpdateCallbackContextHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -6308,7 +6325,7 @@ export interface InitializeResourceEventPromise extends PromiseLike<InitializeRe
  * that manage the resource's lifecycle.
  */
 class InitializeResourceEventImpl implements InitializeResourceEvent {
-    constructor(private _handle: InitializeResourceEventHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: InitializeResourceEventHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -6449,7 +6466,7 @@ export interface InputsDialogValidationContextPromise extends PromiseLike<Inputs
 
 /** Represents the context for validating inputs in an inputs dialog interaction. */
 class InputsDialogValidationContextImpl implements InputsDialogValidationContext {
-    constructor(private _handle: InputsDialogValidationContextHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: InputsDialogValidationContextHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -6574,7 +6591,7 @@ export interface InputsInteractionResultPromise extends PromiseLike<InputsIntera
  * collections already expose, instead of having to scan a serialized array by hand.
  */
 class InputsInteractionResultImpl implements InputsInteractionResult {
-    constructor(private _handle: InputsInteractionResultHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: InputsInteractionResultHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -6688,7 +6705,7 @@ export interface InteractionInputBuilderPromise extends PromiseLike<InteractionI
  * instead of the by-value `InteractionInput` DTO.
  */
 class InteractionInputBuilderImpl implements InteractionInputBuilder {
-    constructor(private _handle: InteractionInputBuilderHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: InteractionInputBuilderHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -6846,7 +6863,7 @@ export interface InteractionInputLoadContextPromise extends PromiseLike<Interact
 
 /** The context passed to a polyglot dynamic-loading callback. Exposes the loading input as a handle and provides read access to the other inputs in the prompt. */
 class InteractionInputLoadContextImpl implements InteractionInputLoadContext {
-    constructor(private _handle: InteractionInputLoadContextHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: InteractionInputLoadContextHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -6967,7 +6984,7 @@ export interface InteractionLoadingInputPromise extends PromiseLike<InteractionL
  * `InteractionInput` DTO.
  */
 class InteractionLoadingInputImpl implements InteractionLoadingInput {
-    constructor(private _handle: InteractionLoadingInputHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: InteractionLoadingInputHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -7109,7 +7126,7 @@ export interface LogFacadePromise extends PromiseLike<LogFacade> {
 
 /** Provides a narrow logging surface for polyglot callback contexts. */
 class LogFacadeImpl implements LogFacade {
-    constructor(private _handle: LogFacadeHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: LogFacadeHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -7259,7 +7276,7 @@ export interface PipelineConfigurationContextPromise extends PromiseLike<Pipelin
 
 /** Provides contextual information for pipeline configuration callbacks. */
 class PipelineConfigurationContextImpl implements PipelineConfigurationContext {
-    constructor(private _handle: PipelineConfigurationContextHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: PipelineConfigurationContextHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -7383,7 +7400,7 @@ export interface PipelineContextPromise extends PromiseLike<PipelineContext> {
 
 /** Provides contextual information and services for the pipeline execution process of a distributed application. */
 class PipelineContextImpl implements PipelineContext {
-    constructor(private _handle: PipelineContextHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: PipelineContextHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -7538,7 +7555,7 @@ export interface PipelineEditorPromise extends PromiseLike<PipelineEditor> {
 
 /** Provides an ATS-first editor for pipeline configuration callbacks. */
 class PipelineEditorImpl implements PipelineEditor {
-    constructor(private _handle: PipelineEditorHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: PipelineEditorHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -7673,7 +7690,7 @@ export interface PipelineStepPromise extends PromiseLike<PipelineStep> {
 
 /** Represents a step in the deployment pipeline. */
 class PipelineStepImpl implements PipelineStep {
-    constructor(private _handle: PipelineStepHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: PipelineStepHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -7906,7 +7923,7 @@ export interface PipelineStepContextPromise extends PromiseLike<PipelineStepCont
  * allowing each step to track its own tasks and completion state independently.
  */
 class PipelineStepContextImpl implements PipelineStepContext {
-    constructor(private _handle: PipelineStepContextHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: PipelineStepContextHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -8073,7 +8090,7 @@ export interface PipelineStepFactoryContextPromise extends PromiseLike<PipelineS
 
 /** Provides contextual information for creating pipeline steps from a {@link PipelineStepAnnotation}. */
 class PipelineStepFactoryContextImpl implements PipelineStepFactoryContext {
-    constructor(private _handle: PipelineStepFactoryContextHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: PipelineStepFactoryContextHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -8191,7 +8208,7 @@ export interface PipelineSummaryPromise extends PromiseLike<PipelineSummary> {
  * property and can be accessed from any pipeline step.
  */
 class PipelineSummaryImpl implements PipelineSummary {
-    constructor(private _handle: PipelineSummaryHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: PipelineSummaryHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -8291,7 +8308,7 @@ export interface ProjectResourceOptions {
 
 /** Various properties to modify the behavior of the project resource. */
 class ProjectResourceOptionsImpl implements ProjectResourceOptions {
-    constructor(private _handle: ProjectResourceOptionsHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: ProjectResourceOptionsHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -8403,7 +8420,7 @@ export interface ReferenceExpressionBuilderPromise extends PromiseLike<Reference
 
 /** A builder for creating {@link ReferenceExpression} instances. */
 class ReferenceExpressionBuilderImpl implements ReferenceExpressionBuilder {
-    constructor(private _handle: ReferenceExpressionBuilderHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: ReferenceExpressionBuilderHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -8575,7 +8592,7 @@ export interface RequiredCommandValidationContextPromise extends PromiseLike<Req
 
 /** Provides context for validating a required command. */
 class RequiredCommandValidationContextImpl implements RequiredCommandValidationContext {
-    constructor(private _handle: RequiredCommandValidationContextHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: RequiredCommandValidationContextHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -8708,7 +8725,7 @@ export interface RequiredCommandValidationResultPromise extends PromiseLike<Requ
 
 /** Represents the result of validating a required command. */
 class RequiredCommandValidationResultImpl implements RequiredCommandValidationResult {
-    constructor(private _handle: RequiredCommandValidationResultHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: RequiredCommandValidationResultHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -8788,7 +8805,7 @@ export interface ResourceCommandServicePromise extends PromiseLike<ResourceComma
 
 /** A service to execute resource commands. */
 class ResourceCommandServiceImpl implements ResourceCommandService {
-    constructor(private _handle: ResourceCommandServiceHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: ResourceCommandServiceHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -8870,7 +8887,7 @@ export interface ResourceEndpointsAllocatedEventPromise extends PromiseLike<Reso
  * Any resources that customize their URLs via a `ResourceUrlsCallbackAnnotation` will have their callbacks invoked during this event.
  */
 class ResourceEndpointsAllocatedEventImpl implements ResourceEndpointsAllocatedEvent {
-    constructor(private _handle: ResourceEndpointsAllocatedEventHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: ResourceEndpointsAllocatedEventHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -8950,7 +8967,7 @@ export interface ResourceLoggerServicePromise extends PromiseLike<ResourceLogger
 
 /** A service that provides loggers for resources to write to. */
 class ResourceLoggerServiceImpl implements ResourceLoggerService {
-    constructor(private _handle: ResourceLoggerServiceHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: ResourceLoggerServiceHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -9067,7 +9084,7 @@ export interface ResourceNotificationServicePromise extends PromiseLike<Resource
 
 /** A service that allows publishing and subscribing to changes in the state of a resource. */
 class ResourceNotificationServiceImpl implements ResourceNotificationService {
-    constructor(private _handle: ResourceNotificationServiceHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: ResourceNotificationServiceHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -9235,7 +9252,7 @@ export interface ResourceReadyEventPromise extends PromiseLike<ResourceReadyEven
  * This event is only fired the first time a resource transitions to a ready state after starting.
  */
 class ResourceReadyEventImpl implements ResourceReadyEvent {
-    constructor(private _handle: ResourceReadyEventHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: ResourceReadyEventHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -9323,7 +9340,7 @@ export interface ResourceStoppedEventPromise extends PromiseLike<ResourceStopped
  * This event allows for cleanup or unregistration logic when a resource is stopped by an orchestrator.
  */
 class ResourceStoppedEventImpl implements ResourceStoppedEvent {
-    constructor(private _handle: ResourceStoppedEventHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: ResourceStoppedEventHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -9421,7 +9438,7 @@ export interface ResourceUrlsCallbackContextPromise extends PromiseLike<Resource
 
 /** Represents a callback context for resource URLs. */
 class ResourceUrlsCallbackContextImpl implements ResourceUrlsCallbackContext {
-    constructor(private _handle: ResourceUrlsCallbackContextHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: ResourceUrlsCallbackContextHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -9575,7 +9592,7 @@ export interface ResourceUrlsEditorPromise extends PromiseLike<ResourceUrlsEdito
 
 /** Provides an ATS-first editor for resource URLs within polyglot callbacks. */
 class ResourceUrlsEditorImpl implements ResourceUrlsEditor {
-    constructor(private _handle: ResourceUrlsEditorHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: ResourceUrlsEditorHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -9696,7 +9713,7 @@ export interface TestCallbackContext {
 
 /** Test callback context for WithCustomCallback. Also used to verify [AspireExport(ExposeProperties = true)] scanning. */
 class TestCallbackContextImpl implements TestCallbackContext {
-    constructor(private _handle: TestCallbackContextHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: TestCallbackContextHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -9775,7 +9792,7 @@ export interface TestCollectionContextPromise extends PromiseLike<TestCollection
 
 /** Test context with collection properties to verify consistent code generation. Verifies both List and Dictionary properties generate proper getter patterns. */
 class TestCollectionContextImpl implements TestCollectionContext {
-    constructor(private _handle: TestCollectionContextHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: TestCollectionContextHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -9863,7 +9880,7 @@ export interface TestEnvironmentContext {
 
 /** Test environment context used in callbacks. Verifies property-like object pattern (ctx.name.get(), ctx.name.set()). */
 class TestEnvironmentContextImpl implements TestEnvironmentContext {
-    constructor(private _handle: TestEnvironmentContextHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: TestEnvironmentContextHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -9933,7 +9950,7 @@ export interface TestMutableCollectionContext {
 
 /** Type class for TestMutableCollectionContext. */
 class TestMutableCollectionContextImpl implements TestMutableCollectionContext {
-    constructor(private _handle: TestMutableCollectionContextHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: TestMutableCollectionContextHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -10006,7 +10023,7 @@ export interface TestResourceContextPromise extends PromiseLike<TestResourceCont
 
 /** Test context type with exposed instance methods. Verifies [AspireExport(ExposeMethods=true)] generates async methods. */
 class TestResourceContextImpl implements TestResourceContext {
-    constructor(private _handle: TestResourceContextHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: TestResourceContextHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -10131,7 +10148,7 @@ export interface UpdateCommandStateContextPromise extends PromiseLike<UpdateComm
 
 /** Context for {@link ResourceCommandAnnotation.UpdateState}. */
 class UpdateCommandStateContextImpl implements UpdateCommandStateContext {
-    constructor(private _handle: UpdateCommandStateContextHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: UpdateCommandStateContextHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -10229,7 +10246,7 @@ export interface AspireStorePromise extends PromiseLike<AspireStore> {
  * do not conflict with unrelated applications.
  */
 class AspireStoreImpl implements AspireStore {
-    constructor(private _handle: IAspireStoreHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: IAspireStoreHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -10357,7 +10374,7 @@ export interface ConfigurationPromise extends PromiseLike<Configuration> {
 
 /** Type class for Configuration. */
 class ConfigurationImpl implements Configuration {
-    constructor(private _handle: IConfigurationHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: IConfigurationHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -10501,7 +10518,7 @@ export interface ConfigurationSectionPromise extends PromiseLike<ConfigurationSe
 
 /** Type class for ConfigurationSection. */
 class ConfigurationSectionImpl implements ConfigurationSection {
-    constructor(private _handle: IConfigurationSectionHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: IConfigurationSectionHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -11016,7 +11033,7 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
 
 /** A builder for creating instances of {@link DistributedApplication}. */
 class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder {
-    constructor(private _handle: IDistributedApplicationBuilderHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: IDistributedApplicationBuilderHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -11825,7 +11842,7 @@ export interface DistributedApplicationEventingPromise extends PromiseLike<Distr
 
 /** Supports publishing and subscribing to events which are executed during the AppHost lifecycle. */
 class DistributedApplicationEventingImpl implements DistributedApplicationEventing {
-    constructor(private _handle: IDistributedApplicationEventingHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: IDistributedApplicationEventingHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -11931,7 +11948,7 @@ export interface DistributedApplicationPipelinePromise extends PromiseLike<Distr
 
 /** Represents a pipeline for executing deployment steps in a distributed application. */
 class DistributedApplicationPipelineImpl implements DistributedApplicationPipeline {
-    constructor(private _handle: IDistributedApplicationPipelineHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: IDistributedApplicationPipelineHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -12117,7 +12134,7 @@ export interface ExecutionConfigurationBuilderPromise extends PromiseLike<Execut
 
 /** Builder for gathering and resolving the execution configuration (arguments and environment variables) for a specific resource. */
 class ExecutionConfigurationBuilderImpl implements ExecutionConfigurationBuilder {
-    constructor(private _handle: IExecutionConfigurationBuilderHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: IExecutionConfigurationBuilderHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -12308,7 +12325,7 @@ export interface ExecutionConfigurationResultPromise extends PromiseLike<Executi
 
 /** Configuration (arguments and environment variables) to apply to a specific resource. */
 class ExecutionConfigurationResultImpl implements ExecutionConfigurationResult {
-    constructor(private _handle: IExecutionConfigurationResultHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: IExecutionConfigurationResultHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -12438,7 +12455,7 @@ export interface HostEnvironmentPromise extends PromiseLike<HostEnvironment> {
 
 /** Type class for HostEnvironment. */
 class HostEnvironmentImpl implements HostEnvironment {
-    constructor(private _handle: IHostEnvironmentHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: IHostEnvironmentHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -12702,7 +12719,7 @@ export interface InteractionServicePromise extends PromiseLike<InteractionServic
 
 /** A service to interact with the current development environment. */
 class InteractionServiceImpl implements InteractionService {
-    constructor(private _handle: IInteractionServiceHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: IInteractionServiceHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -13021,7 +13038,7 @@ export interface LoggerPromise extends PromiseLike<Logger> {
 
 /** Type class for Logger. */
 class LoggerImpl implements Logger {
-    constructor(private _handle: ILoggerHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: ILoggerHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -13169,7 +13186,7 @@ export interface LoggerFactoryPromise extends PromiseLike<LoggerFactory> {
 
 /** Type class for LoggerFactory. */
 class LoggerFactoryImpl implements LoggerFactory {
-    constructor(private _handle: ILoggerFactoryHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: ILoggerFactoryHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -13282,7 +13299,7 @@ export interface ReportingStepPromise extends PromiseLike<ReportingStep> {
 
 /** Represents a publishing step, which can contain multiple tasks. */
 class ReportingStepImpl implements ReportingStep {
-    constructor(private _handle: IReportingStepHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: IReportingStepHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -13502,7 +13519,7 @@ export interface ReportingTaskPromise extends PromiseLike<ReportingTask> {
 
 /** Represents a publishing task, which belongs to a step. */
 class ReportingTaskImpl implements ReportingTask {
-    constructor(private _handle: IReportingTaskHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: IReportingTaskHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -13735,7 +13752,7 @@ export interface ServiceProviderPromise extends PromiseLike<ServiceProvider> {
 
 /** Type class for ServiceProvider. */
 class ServiceProviderImpl implements ServiceProvider {
-    constructor(private _handle: IServiceProviderHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: IServiceProviderHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
@@ -14047,7 +14064,7 @@ export interface UserSecretsManagerPromise extends PromiseLike<UserSecretsManage
 
 /** Defines an interface for managing user secrets with support for read and write operations. */
 class UserSecretsManagerImpl implements UserSecretsManager {
-    constructor(private _handle: IUserSecretsManagerHandle, private _client: AspireClientRpc) {}
+    constructor(private _handle: IUserSecretsManagerHandle, private _client: AspireClientRpc) { }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }

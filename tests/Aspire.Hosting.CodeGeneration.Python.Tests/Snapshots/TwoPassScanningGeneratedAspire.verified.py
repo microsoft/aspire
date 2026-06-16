@@ -1064,7 +1064,7 @@ class CancellationToken:
     def __init__(self, handle: Handle, client: AspireClient) -> None:
         self.handle = handle
         self._client = client
-    
+
     def cancel(self) -> None:
         '''Cancel the token, which will signal the server to cancel the associated operation.'''
         self._client._send_request("cancelToken", self.handle.handle_id)
@@ -1098,7 +1098,7 @@ class ReferenceExpression:
         self._when_true = kwargs.get("when_true")
         self._when_false = kwargs.get("when_false")
         self._match_value = kwargs.get("match")
-    
+
     @classmethod
     def format_string(cls, format_str: str, *value_providers: typing.Any) -> "ReferenceExpression":
         '''
@@ -1870,6 +1870,7 @@ class HttpCommandRequestExportData(typing.TypedDict, total=False):
 class HttpsCertificateExecutionConfigurationContext(typing.TypedDict, total=False):
     CertificatePath: ReferenceExpression
     KeyPath: ReferenceExpression
+    CertificateWithKeyPath: ReferenceExpression
     PfxPath: ReferenceExpression
 
 class HttpsCertificateExecutionConfigurationExportData(typing.TypedDict, total=False):
@@ -5461,6 +5462,15 @@ class HttpsCertificateConfigurationCallbackAnnotationContext:
         """A value provider that will resolve to a path to the private key for the certificate."""
         result = self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.keyPath',
+            {'context': self._handle}
+        )
+        return typing.cast(ReferenceExpression, result)
+
+    @_cached_property
+    def certificate_with_key_path(self) -> ReferenceExpression:
+        """A value provider that will resolve to a path to the certificate and key concatenated together in PEM format."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.certificateWithKeyPath',
             {'context': self._handle}
         )
         return typing.cast(ReferenceExpression, result)

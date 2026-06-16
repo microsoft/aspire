@@ -91,7 +91,7 @@ public sealed class HttpsCertificateConfigurationCallbackAnnotationContext
     public required ReferenceExpression KeyPath { get; init; }
 
     /// <summary>
-    /// A value provider that will resolve to a path to the the certificate and key concatenated together in PEM format.
+    /// A value provider that will resolve to a path to the certificate and key concatenated together in PEM format.
     /// </summary>
     [AspireExport]
     public required ReferenceExpression CertificateWithKeyPath { get; init; }
