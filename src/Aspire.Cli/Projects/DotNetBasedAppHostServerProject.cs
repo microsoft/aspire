@@ -469,6 +469,38 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         string[]? additionalArgs = null,
         bool debug = false)
     {
+        var startInfo = CreateStartInfo(hostPid, environmentVariables, additionalArgs, debug);
+        var process = Process.Start(startInfo)!;
+
+        var outputCollector = new OutputCollector();
+        process.OutputDataReceived += (sender, e) =>
+        {
+            if (e.Data is not null)
+            {
+                _logger.LogTrace("AppHostServer({ProcessId}) stdout: {Line}", process.Id, e.Data);
+                outputCollector.AppendOutput(e.Data);
+            }
+        };
+        process.ErrorDataReceived += (sender, e) =>
+        {
+            if (e.Data is not null)
+            {
+                _logger.LogTrace("AppHostServer({ProcessId}) stderr: {Line}", process.Id, e.Data);
+                outputCollector.AppendError(e.Data);
+            }
+        };
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+
+        return (_socketPath, process, outputCollector);
+    }
+
+    internal ProcessStartInfo CreateStartInfo(
+        int hostPid,
+        IReadOnlyDictionary<string, string>? environmentVariables = null,
+        string[]? additionalArgs = null,
+        bool debug = false)
+    {
         var assemblyPath = Path.Combine(BuildPath, ProjectDllName);
         var dotnetExe = OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet";
 
@@ -517,6 +549,19 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
             }
         }
 
+        // Wire the bundled watch tool for guest/polyglot AppHosts running in repo mode.
+        if (WatchToolLocator.TryGetRepoLocalWatchToolPath(_repoRoot) is { } watchToolPath
+            && !ContainsKey(environmentVariables, BundleDiscovery.WatchToolPathEnvVar))
+        {
+            startInfo.Environment[BundleDiscovery.WatchToolPathEnvVar] = watchToolPath;
+
+            if (!ContainsKey(environmentVariables, BundleDiscovery.WatchSdkPathEnvVar)
+                && _dotNetCliRunner.TryGetWatchSdkDirectory() is { } watchSdkDirectory)
+            {
+                startInfo.Environment[BundleDiscovery.WatchSdkPathEnvVar] = watchSdkDirectory;
+            }
+        }
+
         if (environmentVariables is not null)
         {
             foreach (var (key, value) in environmentVariables)
@@ -534,29 +579,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         startInfo.RedirectStandardOutput = true;
         startInfo.RedirectStandardError = true;
 
-        var process = Process.Start(startInfo)!;
-
-        var outputCollector = new OutputCollector();
-        process.OutputDataReceived += (sender, e) =>
-        {
-            if (e.Data is not null)
-            {
-                _logger.LogTrace("AppHostServer({ProcessId}) stdout: {Line}", process.Id, e.Data);
-                outputCollector.AppendOutput(e.Data);
-            }
-        };
-        process.ErrorDataReceived += (sender, e) =>
-        {
-            if (e.Data is not null)
-            {
-                _logger.LogTrace("AppHostServer({ProcessId}) stderr: {Line}", process.Id, e.Data);
-                outputCollector.AppendError(e.Data);
-            }
-        };
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-
-        return (_socketPath, process, outputCollector);
+        return startInfo;
     }
 
     private static string? FindNuGetConfig(string workingDirectory)

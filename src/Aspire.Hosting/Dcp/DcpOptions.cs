@@ -50,6 +50,27 @@ internal sealed class DcpOptions
     public string? TerminalHostInvocationArgs { get; set; }
 
     /// <summary>
+    /// Optional path to the bundled watch tool entry-point DLL
+    /// (<c>Microsoft.DotNet.HotReload.Watch.Aspire.dll</c>). Backs the experimental
+    /// <c>aspire watch</c> hot-reload modality. Resolved from the CLI bundle's <c>watch/</c>
+    /// directory and injected via <see cref="BundleDiscovery.WatchToolPathEnvVar"/>.
+    /// </summary>
+    public string? WatchToolPath { get; set; }
+
+    /// <summary>
+    /// Optional .NET SDK base path passed to the watch tool's <c>--sdk</c> argument so it
+    /// targets the same SDK used to launch the app host. Companion to <see cref="WatchToolPath"/>;
+    /// injected via <see cref="BundleDiscovery.WatchSdkPathEnvVar"/>.
+    /// </summary>
+    /// <remarks>
+    /// This is only the fast path: the CLI sets it via pure path math when the app host runs
+    /// under a private SDK install. When it is empty (the common ambient-<c>dotnet</c> case), the app
+    /// model resolves the SDK base path itself by running <c>dotnet --info</c> (lazily and memoized,
+    /// at watch-server launch). The watch tool does not self-resolve the SDK.
+    /// </remarks>
+    public string? WatchSdkPath { get; set; }
+
+    /// <summary>
     /// Optional container runtime to override default runtime for DCP containers.
     /// </summary>
     /// <example>
@@ -300,6 +321,26 @@ internal class ConfigureDefaultDcpOptions(
             {
                 options.TerminalHostInvocationArgs = "terminalhost";
             }
+        }
+
+        var configWatchToolPath = configuration[BundleDiscovery.WatchToolPathEnvVar];
+        if (!string.IsNullOrEmpty(configWatchToolPath))
+        {
+            options.WatchToolPath = configWatchToolPath;
+        }
+        else if (!string.IsNullOrEmpty(dcpPublisherConfiguration[nameof(options.WatchToolPath)]))
+        {
+            options.WatchToolPath = dcpPublisherConfiguration[nameof(options.WatchToolPath)];
+        }
+
+        var configWatchSdkPath = configuration[BundleDiscovery.WatchSdkPathEnvVar];
+        if (!string.IsNullOrEmpty(configWatchSdkPath))
+        {
+            options.WatchSdkPath = configWatchSdkPath;
+        }
+        else if (!string.IsNullOrEmpty(dcpPublisherConfiguration[nameof(options.WatchSdkPath)]))
+        {
+            options.WatchSdkPath = dcpPublisherConfiguration[nameof(options.WatchSdkPath)];
         }
 
         if (!string.IsNullOrEmpty(dcpPublisherConfiguration[nameof(options.ContainerRuntime)]))

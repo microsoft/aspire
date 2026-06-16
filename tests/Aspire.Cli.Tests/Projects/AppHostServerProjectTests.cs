@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.InternalTesting;
 using System.Security.Cryptography;
 using System.Text;
 using System.Xml.Linq;
+using Aspire.Cli.Tests.Acquisition;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
@@ -12,6 +13,7 @@ using Aspire.Cli.Utils;
 using Aspire.Cli.Tests.Mcp;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -473,6 +475,162 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         foreach (var dir in dirInfo.GetDirectories())
         {
             DumpDirectoryTree(dir.FullName, output, indent + "  ");
+        }
+    }
+}
+
+[Collection(EnvVarMutatingTestCollection.Name)]
+public class AppHostServerProjectWatchEnvironmentTests(ITestOutputHelper outputHelper) : IDisposable
+{
+    private const string TestWatchPackageVersion = "20.0.100-preview.1";
+    private readonly TemporaryWorkspace _workspace = TemporaryWorkspace.Create(outputHelper);
+
+    public void Dispose()
+    {
+        _workspace.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
+    [Fact]
+    public void CreateStartInfo_InjectsWatchToolAndSdkPathFromRepoCache()
+    {
+        var (repoRoot, cacheRoot, watchToolPath) = CreateRepoLocalWatchPackage(TestWatchPackageVersion);
+        var watchSdkDir = Path.Combine(_workspace.WorkspaceRoot.FullName, "fake-sdk", "sdk", "20.0.100");
+        var runner = new TestDotNetCliRunner
+        {
+            TryGetWatchSdkDirectoryCallback = () => watchSdkDir
+        };
+
+        RunWithNuGetPackages(cacheRoot, () =>
+        {
+            var project = CreateProject(runner, repoRoot);
+
+            var startInfo = project.CreateStartInfo(hostPid: 123);
+
+            Assert.Equal(watchToolPath, startInfo.Environment[BundleDiscovery.WatchToolPathEnvVar]);
+            Assert.Equal(watchSdkDir, startInfo.Environment[BundleDiscovery.WatchSdkPathEnvVar]);
+        });
+    }
+
+    [Fact]
+    public void CreateStartInfo_OmitsWatchSdkPathWhenSdkDirectoryUnavailable()
+    {
+        var (repoRoot, cacheRoot, watchToolPath) = CreateRepoLocalWatchPackage(TestWatchPackageVersion);
+        var runner = new TestDotNetCliRunner
+        {
+            TryGetWatchSdkDirectoryCallback = () => null
+        };
+
+        RunWithNuGetPackages(cacheRoot, () =>
+        {
+            var project = CreateProject(runner, repoRoot);
+
+            var startInfo = project.CreateStartInfo(hostPid: 123);
+
+            Assert.Equal(watchToolPath, startInfo.Environment[BundleDiscovery.WatchToolPathEnvVar]);
+            Assert.False(startInfo.Environment.ContainsKey(BundleDiscovery.WatchSdkPathEnvVar));
+        });
+    }
+
+    [Fact]
+    public void CreateStartInfo_OmitsWatchEnvironmentWhenRepoCacheHasNoWatchPackage()
+    {
+        var repoRoot = CreateRepoRoot(TestWatchPackageVersion);
+        var cacheRoot = Path.Combine(_workspace.WorkspaceRoot.FullName, "empty-cache");
+        Directory.CreateDirectory(cacheRoot);
+        var runner = new TestDotNetCliRunner
+        {
+            TryGetWatchSdkDirectoryCallback = () => Path.Combine(_workspace.WorkspaceRoot.FullName, "fake-sdk", "sdk", "20.0.100")
+        };
+
+        RunWithNuGetPackages(cacheRoot, () =>
+        {
+            var project = CreateProject(runner, repoRoot);
+
+            var startInfo = project.CreateStartInfo(hostPid: 123);
+
+            Assert.False(startInfo.Environment.ContainsKey(BundleDiscovery.WatchToolPathEnvVar));
+            Assert.False(startInfo.Environment.ContainsKey(BundleDiscovery.WatchSdkPathEnvVar));
+        });
+    }
+
+    [Fact]
+    public void CreateStartInfo_PreservesExplicitWatchToolPath()
+    {
+        var (repoRoot, cacheRoot, _) = CreateRepoLocalWatchPackage(TestWatchPackageVersion);
+        var customWatchTool = Path.Combine(_workspace.WorkspaceRoot.FullName, "custom-watch", BundleDiscovery.WatchToolDllName);
+        var runner = new TestDotNetCliRunner
+        {
+            TryGetWatchSdkDirectoryCallback = () => Path.Combine(_workspace.WorkspaceRoot.FullName, "fake-sdk", "sdk", "20.0.100")
+        };
+
+        RunWithNuGetPackages(cacheRoot, () =>
+        {
+            var project = CreateProject(runner, repoRoot);
+
+            var startInfo = project.CreateStartInfo(
+                hostPid: 123,
+                environmentVariables: new Dictionary<string, string>
+                {
+                    [BundleDiscovery.WatchToolPathEnvVar] = customWatchTool
+                });
+
+            Assert.Equal(customWatchTool, startInfo.Environment[BundleDiscovery.WatchToolPathEnvVar]);
+            Assert.False(startInfo.Environment.ContainsKey(BundleDiscovery.WatchSdkPathEnvVar));
+        });
+    }
+
+    private DotNetBasedAppHostServerProject CreateProject(TestDotNetCliRunner runner, string repoRoot)
+    {
+        return new DotNetBasedAppHostServerProject(
+            _workspace.WorkspaceRoot.FullName,
+            "test.sock",
+            repoRoot,
+            runner,
+            MockPackagingServiceFactory.Create(),
+            NullLogger<DotNetBasedAppHostServerProject>.Instance);
+    }
+
+    private (string RepoRoot, string CacheRoot, string WatchToolPath) CreateRepoLocalWatchPackage(string version)
+    {
+        var repoRoot = CreateRepoRoot(version);
+        var cacheRoot = Path.Combine(_workspace.WorkspaceRoot.FullName, "nuget-cache");
+        var toolsDir = Path.Combine(cacheRoot, BundleDiscovery.WatchToolNugetCacheFolder, version, "tools", BundleDiscovery.WatchToolDotNetVersion, "any");
+        Directory.CreateDirectory(toolsDir);
+
+        var watchToolPath = Path.Combine(toolsDir, BundleDiscovery.WatchToolDllName);
+        File.WriteAllText(watchToolPath, "stub");
+
+        return (repoRoot, cacheRoot, watchToolPath);
+    }
+
+    private string CreateRepoRoot(string watchVersion)
+    {
+        var repoRoot = Path.Combine(_workspace.WorkspaceRoot.FullName, "repo");
+        var engDir = Path.Combine(repoRoot, "eng");
+        Directory.CreateDirectory(engDir);
+        File.WriteAllText(Path.Combine(engDir, "Versions.props"), $$"""
+            <Project>
+              <PropertyGroup>
+                <MicrosoftDotNetHotReloadWatchAspireVersion>{{watchVersion}}</MicrosoftDotNetHotReloadWatchAspireVersion>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        return repoRoot;
+    }
+
+    private static void RunWithNuGetPackages(string cacheRoot, Action action)
+    {
+        var original = Environment.GetEnvironmentVariable("NUGET_PACKAGES");
+        try
+        {
+            Environment.SetEnvironmentVariable("NUGET_PACKAGES", cacheRoot);
+            action();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("NUGET_PACKAGES", original);
         }
     }
 }

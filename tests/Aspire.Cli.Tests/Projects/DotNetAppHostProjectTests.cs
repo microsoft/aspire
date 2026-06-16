@@ -24,12 +24,16 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         // of the in-repo aspire-managed discovery; otherwise the repo's real built artifact
         // shadows the fake bundle path the test pre-stamped into the layout.
         DotNetAppHostProject.RepoLocalManagedPathProviderOverride = () => null;
+
+        // Likewise neutralize the repo-local watch tool probe. Individual watch tests set this explicitly.
+        DotNetAppHostProject.RepoLocalWatchToolPathProviderOverride = () => null;
         return this;
     }
 
     public void Dispose()
     {
         DotNetAppHostProject.RepoLocalManagedPathProviderOverride = null;
+        DotNetAppHostProject.RepoLocalWatchToolPathProviderOverride = null;
 
         foreach (var serviceProvider in _serviceProviders)
         {
@@ -473,6 +477,177 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             {
                 [BundleDiscovery.TerminalHostPathEnvVar] = customTerminalHost
             }
+        }, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProjectAppHostInjectsWatchToolAndSdkPathFromBundle()
+    {
+        UseFakeRepoRoot();
+        var appHostFile = CreateProjectAppHost();
+        var bundleRoot = CreateCliBundle(out var layout, includeWatch: true);
+        var watchSdkDir = Path.Combine(_workspace.WorkspaceRoot.FullName, "fake-sdk", "sdk", "20.0.100");
+
+        var runner = CreateCliBundleRunner();
+        runner.TryGetWatchSdkDirectoryCallback = () => watchSdkDir;
+        var project = CreateDotNetAppHostProject(runner, layout);
+
+        var expectedWatchToolPath = Path.Combine(
+            bundleRoot.FullName, BundleDiscovery.WatchDirectoryName, BundleDiscovery.WatchToolDllName);
+
+        runner.RunAsyncCallback = (_, _, _, _, _, env, _, _, _) =>
+        {
+            Assert.Equal(expectedWatchToolPath, env![BundleDiscovery.WatchToolPathEnvVar]);
+            Assert.Equal(watchSdkDir, env[BundleDiscovery.WatchSdkPathEnvVar]);
+            return Task.FromResult(0);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProjectAppHostOmitsWatchSdkPathWhenSdkDirectoryUnavailable()
+    {
+        // No private SDK install (TryGetWatchSdkDirectory returns null): the tool path is still
+        // injected, but ASPIRE_WATCH_SDK_PATH is omitted so the watch host resolves it itself.
+        UseFakeRepoRoot();
+        var appHostFile = CreateProjectAppHost();
+        var bundleRoot = CreateCliBundle(out var layout, includeWatch: true);
+
+        var runner = CreateCliBundleRunner();
+        runner.TryGetWatchSdkDirectoryCallback = () => null;
+        var project = CreateDotNetAppHostProject(runner, layout);
+
+        var expectedWatchToolPath = Path.Combine(
+            bundleRoot.FullName, BundleDiscovery.WatchDirectoryName, BundleDiscovery.WatchToolDllName);
+
+        runner.RunAsyncCallback = (_, _, _, _, _, env, _, _, _) =>
+        {
+            Assert.Equal(expectedWatchToolPath, env![BundleDiscovery.WatchToolPathEnvVar]);
+            Assert.False(env.ContainsKey(BundleDiscovery.WatchSdkPathEnvVar));
+            return Task.FromResult(0);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProjectAppHostOmitsWatchEnvironmentWhenBundleHasNoWatchComponent()
+    {
+        // Older bundles extracted before the watch tool shipped have no watch/ directory.
+        // Injection must be skipped entirely rather than pointing at a non-existent DLL.
+        UseFakeRepoRoot();
+        var appHostFile = CreateProjectAppHost();
+        _ = CreateCliBundle(out var layout, includeWatch: false);
+
+        var runner = CreateCliBundleRunner();
+        runner.TryGetWatchSdkDirectoryCallback = () => Path.Combine(_workspace.WorkspaceRoot.FullName, "fake-sdk");
+        var project = CreateDotNetAppHostProject(runner, layout);
+
+        runner.RunAsyncCallback = (_, _, _, _, _, env, _, _, _) =>
+        {
+            Assert.False(env!.ContainsKey(BundleDiscovery.WatchToolPathEnvVar));
+            Assert.False(env.ContainsKey(BundleDiscovery.WatchSdkPathEnvVar));
+            return Task.FromResult(0);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProjectAppHostPreservesExplicitWatchToolPath()
+    {
+        // A user side-loading a custom watch build via ASPIRE_WATCH_TOOL_PATH must win: the CLI
+        // must not overwrite it, and because the whole watch block is gated on the path being
+        // absent, it must not append an ASPIRE_WATCH_SDK_PATH the user didn't ask for either.
+        UseFakeRepoRoot();
+        var appHostFile = CreateProjectAppHost();
+        _ = CreateCliBundle(out var layout, includeWatch: true);
+        var customWatchTool = Path.Combine(_workspace.WorkspaceRoot.FullName, "my-custom-watch", BundleDiscovery.WatchToolDllName);
+
+        var runner = CreateCliBundleRunner();
+        runner.TryGetWatchSdkDirectoryCallback = () => Path.Combine(_workspace.WorkspaceRoot.FullName, "fake-sdk");
+        var project = CreateDotNetAppHostProject(runner, layout);
+
+        runner.RunAsyncCallback = (_, _, _, _, _, env, _, _, _) =>
+        {
+            Assert.Equal(customWatchTool, env![BundleDiscovery.WatchToolPathEnvVar]);
+            Assert.False(env.ContainsKey(BundleDiscovery.WatchSdkPathEnvVar));
+            return Task.FromResult(0);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>
+            {
+                [BundleDiscovery.WatchToolPathEnvVar] = customWatchTool
+            }
+        }, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProjectAppHostPrefersRepoLocalWatchToolOverBundle()
+    {
+        // In repo/dev mode the watch tool is resolved from the NuGet cache (repo-local) and must
+        // take precedence over the bundle's watch/ directory, mirroring the repo-local managed
+        // path precedence used for the terminal host.
+        UseFakeRepoRoot();
+        var appHostFile = CreateProjectAppHost();
+        _ = CreateCliBundle(out var layout, includeWatch: true);
+        var repoLocalWatchTool = Path.Combine(_workspace.WorkspaceRoot.FullName, "repo-cache", BundleDiscovery.WatchToolDllName);
+        DotNetAppHostProject.RepoLocalWatchToolPathProviderOverride = () => repoLocalWatchTool;
+
+        var runner = CreateCliBundleRunner();
+        var project = CreateDotNetAppHostProject(runner, layout);
+
+        runner.RunAsyncCallback = (_, _, _, _, _, env, _, _, _) =>
+        {
+            Assert.Equal(repoLocalWatchTool, env![BundleDiscovery.WatchToolPathEnvVar]);
+            return Task.FromResult(0);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>()
         }, CancellationToken.None);
 
         Assert.Equal(0, exitCode);
@@ -1745,11 +1920,19 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         return new FileInfo(appHostPath);
     }
 
-    private DirectoryInfo CreateCliBundle(out LayoutConfiguration layout)
+    private DirectoryInfo CreateCliBundle(out LayoutConfiguration layout, bool includeWatch = false)
     {
         var bundleRoot = Directory.CreateDirectory(Path.Combine(_workspace.WorkspaceRoot.FullName, Guid.NewGuid().ToString()));
         Directory.CreateDirectory(Path.Combine(bundleRoot.FullName, BundleDiscovery.DcpDirectoryName));
         Directory.CreateDirectory(Path.Combine(bundleRoot.FullName, BundleDiscovery.ManagedDirectoryName));
+
+        if (includeWatch)
+        {
+            // Stage the optional watch/ component with its entry-point DLL so the layout's
+            // GetWatchToolPath() File.Exists probe succeeds (older bundles omit this directory).
+            var watchDir = Directory.CreateDirectory(Path.Combine(bundleRoot.FullName, BundleDiscovery.WatchDirectoryName));
+            File.WriteAllText(Path.Combine(watchDir.FullName, BundleDiscovery.WatchToolDllName), "stub");
+        }
 
         layout = new LayoutConfiguration
         {
@@ -1762,6 +1945,28 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         };
 
         return bundleRoot;
+    }
+
+    private static TestDotNetCliRunner CreateCliBundleRunner()
+    {
+        return new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) =>
+            {
+                return (0, JsonDocument.Parse($$"""
+                    {
+                      "Properties": {
+                        "MSBuildVersion": "17.0.0",
+                        "IsAspireHost": "true",
+                        "AspireHostingSDKVersion": "{{VersionHelper.GetDefaultTemplateVersion()}}",
+                        "AspireUseCliBundle": "true"
+                      },
+                      "Items": {}
+                    }
+                    """));
+            }
+        };
     }
 
     private DotNetAppHostProject CreateDotNetAppHostProject(

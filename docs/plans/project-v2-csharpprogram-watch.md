@@ -35,10 +35,11 @@ container execution, debugging-under-watch, programmatic build config, events/ca
 | D4 | **The watch tool is bundled** with the Aspire CLI/SDK (no restore/download at watch time). The CLI resolves the bundled tool path + SDK dir and hands them to the app host (mirroring the existing **TerminalHost** bundling pattern). |
 | D5 | **Coordinated temp-`.slnx` build is in scope now, for both watch and non-watch run paths.** The app model performs the initial coordinated build; the watch server takes over incremental builds. Library: `Microsoft.VisualStudio.SolutionPersistence` (vs-solutionpersistence). |
 | D6 | **Out of MVP, but kept forward-compatible:** partial runs / launch groups, persistent execution (survive app-host restart), container execution, debugging `CSharpProgram` *while under watch*, and the full model-events/callbacks redesign. **Non-watch debugging/F5 is preserved** so `CSharpAppResource` doesn't regress. |
-| D7 | **Watch tool version:** pin `Microsoft.DotNet.HotReload.Watch.Aspire` **`10.0.301`** (stable). |
+| D7 | **Watch tool version:** pin `Microsoft.DotNet.HotReload.Watch.Aspire` to`10.0.301` (stable). |
 | D8 | **Verification priority:** TypeScript-based app host first, C#-based app host second. |
+| D9 | **`watch/` is a top-level bundle component** — a peer of `dcp/` and `managed/`, **not** nested under `managed/`. Rationale: like `dcp/`, the watch tool is an *externally-sourced* bundled package (`Microsoft.DotNet.HotReload.Watch.Aspire`, pinned independently via `MicrosoftDotNetHotReloadWatchAspireVersion`); it is **framework-dependent** and needs an **external SDK** (`ASPIRE_WATCH_SDK_PATH`), unlike the **self-contained** `aspire-managed` binary; and it is **RID-agnostic** (one copy serves every RID) whereas `managed/`/`dcp/` are RID-specific. `managed/` is concretely the single self-contained binary, not a generic "managed tools" bucket. Top-level placement matches the existing peer-component model (`LayoutComponent.Watch`, `ASPIRE_WATCH_TOOL_PATH`, `TryDiscoverWatchTool*`) and avoids coupling an independently-versioned external tool to the managed binary's extract/cleanup lifecycle (which cleans/replaces `managed/` + `dcp/` as units). |
 
-### Additional assumptions (flag if wrong)
+### Additional assumptions
 - **A1.** The watch server's `server`/`resource` commands perform incremental builds and shared-library
   change handling; the **initial** build is done by the app model's coordinated `.slnx` build (D5).
 - **A2.** The type is named **`CSharpProgram`** (no `Resource` suffix) per explicit instruction, deviating
@@ -48,7 +49,18 @@ container execution, debugging-under-watch, programmatic build config, events/ca
   adds the hidden watch-server resource and rewrites each `CSharpProgram`'s launch to the watch modality.
 - **A4.** `vs-solutionpersistence` (`Microsoft.VisualStudio.SolutionPersistence`, MIT) is available on an
   approved internal feed mirror (dotnet-public). If not, it must be mirrored before Session 2.
-- **A5.** The watch tool (Microsoft.DotNet.HotReload.Watch.Aspire`) does not (and will not) do the initial application build; there will always be a need for coordinated build resource (created in Session 2).
+- **A5.** The watch tool (`Microsoft.DotNet.HotReload.Watch.Aspire`) does not (and will not) do the initial application build; there will always be a need for coordinated build resource (created in Session 2).
+- **A6.** The watch tool **does not self-resolve the .NET SDK base path**: it requires a valid
+  `--sdk <basePath>` to be supplied by the app model. When the CLI's directory-probing fast path
+  (`ASPIRE_WATCH_SDK_PATH`, see §5.6) cannot derive it, the **app model** (Aspire.Hosting) — *not* the
+  watch tool — resolves it by running `dotnet --info` and parsing the `Base Path:` line. That probe is
+  lazy (run at the latest moment, right before the watch server is launched), memoized (at most once per
+  application run), and is **never** invoked when watch mode is inactive or no `CSharpProgram` exists.
+- **A7.** From the next Aspire release the bundled watch tool is a **mandatory** CLI bundle component. 
+  The bundle build fails without it (`tools/CreateLayout` `CopyWatch()`), and the
+  CLI rejects a freshly-extracted bundle that lacks `watch/` (`BundleService.IsVersionedLayoutValid` →
+  `aspire setup --force`). Discovery of externally-supplied/legacy `ASPIRE_LAYOUT_PATH` layouts and the
+  inner-loop dev (NuGet-cache) fallback stays tolerant of its absence.
 
 ---
 
@@ -202,6 +214,9 @@ internal sealed class CSharpWatchServerResource : ExecutableResource
   before services), `ExcludeFromManifest()`, `ExcludeLifecycleCommandsAnnotation`, initial `NotStarted` snapshot —
   exactly the annotation set `AddRebuilderResource` already uses.
 - One watch server per app run (MVP). Reuses a small `PipeNameFactory` helper (ported from POC).
+- The `server --sdk <basePath>` argument is materialized at launch via the SDK base-path resolver
+  (Session 3 deliverable): fast path `DcpOptions.WatchSdkPath`, else a lazy/memoized `dotnet --info`
+  fallback. The watch tool does **not** self-resolve the SDK (A6).
 
 ### 5.5 `CSharpProgramBuildOrchestrator` (new, internal) — coordinated build
 `Aspire.Hosting/Dcp` or `Aspire.Hosting/CSharp/…`
@@ -218,14 +233,26 @@ internal sealed class CSharpProgramBuildOrchestrator
   DCP-executable-for-build approach for log capture + cleanup. File-based apps (`.cs`) are excluded from the
   `.slnx` (built/run individually as today).
 
-### 5.6 Watch options + bundling plumbing (new)
-- `BundleDiscovery`: add `WatchToolPathEnvVar = "ASPIRE_WATCH_TOOL_PATH"` (+ `watch/` layout dir +
-  `TryDiscoverWatchTool…`).
-- Hosting options: add `WatchToolPath` (+ resolved SDK dir) to `DcpOptions` *or* a new `CSharpWatchOptions`
-  bound from configuration/env — same shape as `TerminalHostPath`/`TerminalHostInvocationArgs`.
-- CLI: inject `ASPIRE_WATCH_TOOL_PATH` (and `ASPIRE_WATCH=1`, SDK dir) when launching the app host under
-  `aspire watch`, in the same spots terminal-host vars are injected
-  (`DotNetAppHostProject`, `DotNetBasedAppHostServerProject`, `PrebuiltAppHostServer`, guest/TS host launch).
+### 5.6 Watch options + bundling plumbing (new) — ✅ implemented in Session 0
+- `BundleDiscovery` (final): `WatchToolPathEnvVar = "ASPIRE_WATCH_TOOL_PATH"`,
+  `WatchSdkPathEnvVar = "ASPIRE_WATCH_SDK_PATH"`, `WatchDirectoryName = "watch"`,
+  `WatchToolEntryPointName = "Microsoft.DotNet.HotReload.Watch.Aspire.dll"`
+- Hosting options (final): `WatchToolPath` **and** `WatchSdkPath` were added to **`DcpOptions`**, 
+  bound in `ConfigureDefaultDcpOptions` with the established
+  precedence `env → dcpPublisher config → assembly metadata` — same shape as `TerminalHostPath`.
+  They are intentionally **not** added to `ValidateDcpOptions`: the watch *tool* is a mandatory CLI
+  **bundle** component (A7), but the hosting options stay optional because non-CLI / publish / test
+  hosts legitimately don't set them.
+- CLI (final): inject `ASPIRE_WATCH_TOOL_PATH` (+ `ASPIRE_WATCH_SDK_PATH` when a private SDK install is
+  resolvable) **unconditionally** at every app-host launch path.
+  Activation (`ASPIRE_WATCH=1`) is deferred to `aspire watch` (Session 4); 
+  the path vars are inert on a normal `aspire run`. 
+  Preference order per site: pre-existing env (user override) → repo-local NuGet-cache
+  probe (dev) → bundle `watch/` directory. 
+  `ASPIRE_WATCH_SDK_PATH` is only the **fast path** (pure path math; no process spawn). When it can't be
+  derived (the common ambient-`dotnet` case) it is omitted, and the **app model** resolves the SDK base
+  path itself via a single, memoized `dotnet --info` at watch-server launch (§5.4 / Session 3) — the watch
+  tool does **not** self-resolve it (A6).
 
 ### 5.7 `WatchCommand` (new) — `aspire watch`
 `Aspire.Cli/Commands/WatchCommand.cs`
@@ -265,16 +292,41 @@ internal sealed class WatchCommand : BaseCommand   // sibling of RunCommand
 > (where applicable) a manual run against the **TypeScript** app host first, then a C# app host (D8).
 > Keep all new surface `[Experimental]`. Do **not** hand-edit `api/*.cs` (generated).
 
-### Session 0 — Bundle the watch tool + hosting plumbing *(foundational; no user-visible behavior)*
-**Deliverables**
-- Pin `Microsoft.DotNet.HotReload.Watch.Aspire` `10.0.301` (D7) and include it as a **bundle component**
-  (new `watch/` dir) in the CLI/SDK layout, alongside `dcp/` and `managed/`.
-- `BundleDiscovery`: `WatchToolPathEnvVar`, `WatchDirectoryName`, `TryDiscoverWatchTool*` (mirror DCP/managed).
-- Hosting: `WatchToolPath` (+ SDK dir) option bound from config/env (mirror `TerminalHostPath`).
-- CLI: inject the watch-tool env var(s) at app-host launch (all launch paths, incl. TS/guest).
-**Reuse:** `BundleDiscovery`, `DcpOptions`, terminal-host injection in `DotNetAppHostProject`.
-**Verify:** unit test discovery; from a dev build, confirm `dotnet "$ASPIRE_WATCH_TOOL_PATH" --help` runs and
-the env var reaches a launched app host (C# and TS).
+### Session 0 — Bundle the watch tool + hosting plumbing *(foundational; no user-visible behavior)* — ✅ implemented
+**Deliverables (as built)**
+- Pinned `Microsoft.DotNet.HotReload.Watch.Aspire` in `eng/Versions.props` as
+  `MicrosoftDotNetHotReloadWatchAspireVersion` and included it as a **bundle component** (new `watch/`
+  dir) in the CLI layout, alongside `dcp/` and `managed/`. `tools/CreateLayout` downloads it via
+  `PackageDownload` and `CopyWatch()` copies the whole `tools/net10.0/any/` directory (the package is
+  **not** dependency-free — it carries Roslyn/MSBuild, locale folders and a `hotreload/` subdir — so the
+  full-directory copy is required). `eng/Bundle.proj` passes `--watch-version $(…)` so the copy is
+  deterministic.
+- `BundleDiscovery`: `WatchToolPathEnvVar` (`ASPIRE_WATCH_TOOL_PATH`), `WatchSdkPathEnvVar`
+  (`ASPIRE_WATCH_SDK_PATH`), `WatchDirectoryName` (`watch`), `WatchToolEntryPointName`
+  (`Microsoft.DotNet.HotReload.Watch.Aspire.dll`), and `TryDiscoverWatchTool*` helpers (mirror DCP/managed).
+- CLI layout: `LayoutComponent.Watch` + `LayoutComponents.Watch` (default `watch`), wired into
+  `GetComponentPath`. The watch tool is a **mandatory** bundle component (A7), guaranteed by two
+  halves: the **build** (`tools/CreateLayout` `CopyWatch()` throws if the package is absent) and the
+  **extract** integrity check (`BundleService.IsVersionedLayoutValid` rejects a freshly-extracted
+  bundle that lacks `watch/` → extraction fails → `aspire setup --force`). `LayoutDiscovery.ValidateLayout`
+  intentionally stays `managed + dcp` (it does **not** require `watch`) so externally-supplied/legacy
+  `ASPIRE_LAYOUT_PATH` layouts remain usable in a degraded, watch-less mode; `LayoutConfiguration.GetWatchToolPath()`
+  keeps its defensive `File.Exists` (returns `null` when absent) for those tolerant layouts and the
+  inner-loop dev (NuGet-cache) fallback.
+- Hosting: `WatchToolPath` + `WatchSdkPath` on **`DcpOptions`**, bound in `ConfigureDefaultDcpOptions`
+  (env → dcpPublisher config → assembly metadata). 
+- CLI: inject the watch-tool env var(s) **unconditionally** at all launch paths (incl. TS/guest), only when
+  not already present (user override wins); `ASPIRE_WATCH_SDK_PATH` added best-effort when a private SDK
+  install is resolvable, otherwise omitted (no `dotnet --info` on the launch path). When omitted, the
+  **app model** resolves the SDK base path via a single, memoized `dotnet --info` at watch-server launch
+  (Session 3) — the watch tool does **not** self-resolve it (A6).
+**Startup-perf guardrail (for Sessions 3–4):** the app-host launch path must **not** gain a `dotnet --info`
+(or any process spawn) when wiring `--sdk`; resolve the SDK dir with pure path math (as Session 0 does), or
+omit `ASPIRE_WATCH_SDK_PATH` and let the **app model** resolve it lazily via a single, memoized `dotnet --info`
+at watch-server launch — only in watch mode with ≥1 `CSharpProgram`, so a normal `aspire run` never spawns it.
+**Verified:** discovery/binding/injection unit tests (16 new, green) + no regressions in
+`DotNetAppHostProjectTests`; real `CreateLayout` run produces `watch/` with the entry DLL and its deps; the
+bundled entry DLL launches (`dotnet <dll>` reaches the tool's own arg parser).
 
 ### Session 1A — `CSharpProgram` type + generalize project-defaults wiring
 **Deliverables**
@@ -316,6 +368,15 @@ from a TS app host then a C# app host. *Depends on: 1A (resource exists). Parall
 **Deliverables**
 - `CSharpWatchServerResource` (§5.4): hidden, explicit-start `dotnet <tool> server --sdk … --server <pipe>
   --status-pipe … --control-pipe … --resource <proj> …`. `PipeNameFactory` helper (ported from POC).
+- **SDK base-path resolver** (Aspire.Hosting; new internal service, e.g. `IWatchSdkPathResolver`): supplies
+  the watch server's `--sdk` value. Fast path = `DcpOptions.WatchSdkPath` (CLI directory-probing via
+  `ASPIRE_WATCH_SDK_PATH`); when empty, fall back to running `dotnet --info` from the app host's working
+  directory and parsing the `Base Path:` line. **Lazy + memoized** (`Lazy<Task<string>>`,
+  `ExecutionAndPublication`) so the probe runs at most once per run and only when first awaited; the watch
+  server's arg/env callback (or `BeforeResourceStartedEvent`) is the only awaiter, so it is invoked at the
+  latest moment and never on a normal `aspire run` (A6). Force `DOTNET_CLI_UI_LANGUAGE=en-US` for stable
+  (non-localized) `Base Path:` parsing. On non-zero exit / unparseable output, fail the watch server
+  startup with a clear, actionable error (no launching the tool with an empty/garbage `--sdk`).
 - Launch-modality seam (§4.2): when `ASPIRE_WATCH=1`, the app model (a) adds the watch server with all
   `CSharpProgram` project paths, (b) rewrites each `CSharpProgram` to launch `dotnet <tool> resource
   --entrypoint <proj> --server <pipe> --no-launch-profile -e K=V …` as a DCP executable, (c)
@@ -324,8 +385,8 @@ from a TS app host then a C# app host. *Depends on: 1A (resource exists). Parall
 - Optional: status-pipe monitor (hosted/background service) surfacing watch status into resource logs/state
   (port of `WatchPipeMonitorHostedService`).
 **Reuse:** `WithHidden`, `WithExplicitStart`, `WaitForStart`, `ExcludeFromManifest`,
-`ExcludeLifecycleCommandsAnnotation`, `ExecutableResource`, env-callback annotations; watch-tool path + SDK
-dir from Session 0.
+`ExcludeLifecycleCommandsAnnotation`, `ExecutableResource`, env-callback annotations; `IProcessRunner`
+(`Dcp/Process`) for the `dotnet --info` fallback; watch-tool path + SDK fast-path dir from Session 0.
 **Verify (TS first):** under a watch harness, edit a service file → that service hot-reloads; edit the shared
 library → both services reload. Then repeat with a C# app host. *Depends on: 1B, 2, 0.*
 
@@ -381,16 +442,20 @@ Risk to watch out for: env/args callbacks may need to run for build/closure even
   regression tests; fall back to a dedicated prepare path.
 - **R2 — Generalizing `WithProjectDefaults` (Session 1A):** heavily `ProjectResource`-typed; the refactor is
   the riskiest reuse. Consider a shared internal interface implemented by both types.
-- **R3 — Watch tool ↔ SDK coupling:** `dotnet <tool> --sdk <dir>` must match the active SDK; bundling pins
-  `10.0.301` but the user's SDK may differ. Confirm acceptable matrix; resolve SDK dir via `dotnet --info`.
+- **R3 — Watch tool ↔ SDK coupling:** `dotnet <tool> --sdk <dir>` must match the active SDK; the bundled tool
+  is pinned (currently `10.0.301`) but the user's SDK may differ. The watch tool does **not** self-resolve the
+  SDK base path (A6), so the app model must always hand it a valid `--sdk`. Two-step resolution:
+  (1) **fast path** — the CLI's pure path-math probe (`ASPIRE_WATCH_SDK_PATH`, Session 0); the *launch path*
+  must not spawn a process (startup-perf guardrail). (2) **fallback** — when the fast path yields nothing,
+  the **app model** (Aspire.Hosting, *not* the watch tool) resolves it via a lazy, memoized `dotnet --info`
+  at watch-server launch (Session 3) — run at most once per app run and only in watch mode with ≥1
+  `CSharpProgram`, so a normal `aspire run` never spawns it.
 - **R4 — Named pipes cross-platform:** verify `PipeOptions.CurrentUserOnly` semantics on macOS/Linux (POC ran
   Windows-centric). TS-first verification will exercise non-Windows.
 - **R5 — `vs-solutionpersistence` feed availability (A4).**
 - **R6 — `aspire watch` vs existing app-host `--watch`:** ensure the two "watch" concepts don't collide in CLI
   UX/strings.
 - **O1 — Naming:** `CSharpProgram` vs `CSharpProgramResource` vs something else (A2).
-
-
   ## References 
 
   | Description | Reference |

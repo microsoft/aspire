@@ -462,6 +462,8 @@ public class DotNetTemplateFactoryTests
 
         public Task<int> InitUserSecretsAsync(FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => Task.FromResult(0);
+
+        public string? TryGetWatchSdkDirectory() => null;
     }
 
     private sealed class TestCertificateService : ICertificateService

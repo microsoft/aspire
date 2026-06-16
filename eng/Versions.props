@@ -35,6 +35,9 @@
     <MicrosoftDeveloperControlPlanelinuxmuslamd64Version>0.25.1</MicrosoftDeveloperControlPlanelinuxmuslamd64Version>
     <MicrosoftDeveloperControlPlanewindowsamd64Version>0.25.1</MicrosoftDeveloperControlPlanewindowsamd64Version>
     <MicrosoftDeveloperControlPlanewindowsarm64Version>0.25.1</MicrosoftDeveloperControlPlanewindowsarm64Version>
+
+    <!-- Aspire Watch package for hot-reloading C#-based services -->
+    <MicrosoftDotNetHotReloadWatchAspireVersion>10.0.301</MicrosoftDotNetHotReloadWatchAspireVersion>
     <!-- Other -->
     <MicrosoftDotNetRemoteExecutorVersion>10.0.0-beta.26304.4</MicrosoftDotNetRemoteExecutorVersion>
     <MicrosoftDotNetXUnitV3ExtensionsVersion>10.0.0-beta.26304.4</MicrosoftDotNetXUnitV3ExtensionsVersion>

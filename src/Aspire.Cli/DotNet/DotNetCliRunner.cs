@@ -43,6 +43,7 @@ internal interface IDotNetCliRunner
     Task<(int ExitCode, IReadOnlyList<FileInfo> Projects)> GetSolutionProjectsAsync(FileInfo solutionFile, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> AddProjectReferenceAsync(FileInfo projectFile, FileInfo referencedProject, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> InitUserSecretsAsync(FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken);
+    string? TryGetWatchSdkDirectory();
 }
 
 internal sealed class ProcessInvocationOptions
@@ -371,6 +372,29 @@ internal sealed class DotNetCliRunner(
         }
 
         return "dotnet";
+    }
+
+    public string? TryGetWatchSdkDirectory()
+    {
+        // Mirror ResolveDotNetPath's private-SDK resolution so the watch tool targets the very
+        // same SDK that launches the app host. We deliberately do NOT shell out to `dotnet --info`
+        // here because this runs on the app-host launch hot path.
+        // When this fast path can't resolve the SDK, the app model performs the `dotnet --info`
+        // fallback lazily — only for watch runs that actually need it.
+
+        var sdkVersion = DotNetSdkInstaller.GetEffectiveMinimumSdkVersion(configuration);
+        var sdkInstallPath = Path.Combine(executionContext.SdksDirectory.FullName, "dotnet", sdkVersion);
+        if (!Directory.Exists(sdkInstallPath))
+        {
+            // No private SDK installed — the app host runs under the ambient `dotnet` on PATH.
+            // We might need to run `dotnet --info` at watch-server launch.
+            return null;
+        }
+
+        // The watch tool's --sdk argument wants the SDK "Base Path" — the `sdk/<version>` directory
+        // inside the dotnet installation root (this is the "Base Path" line in `dotnet --info`).
+        var sdkDirectory = Path.Combine(sdkInstallPath, "sdk", sdkVersion);
+        return Directory.Exists(sdkDirectory) ? sdkDirectory : null;
     }
 
     private async Task StartBackchannelAsync(

@@ -57,6 +57,13 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     /// </summary>
     internal static Func<string?>? RepoLocalManagedPathProviderOverride { get; set; }
 
+    /// <summary>
+    /// Test seam: overrides <see cref="TryGetRepoLocalWatchToolPath"/>. When set, the override is
+    /// invoked instead of probing the real NuGet cache / Aspire repo checkout, so tests can assert
+    /// watch env-var injection without depending on a restored watch package on the machine.
+    /// </summary>
+    internal static Func<string?>? RepoLocalWatchToolPathProviderOverride { get; set; }
+
     public DotNetAppHostProject(
         IDotNetCliRunner runner,
         IInteractionService interactionService,
@@ -1348,6 +1355,22 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             }
         }
 
+        // Set the watch tool path if it's not already set and if it can be found cheaply
+        // (without launching `dotnet --info`).
+        if (!env.ContainsKey(BundleDiscovery.WatchToolPathEnvVar))
+        {
+            var watchToolPath = TryGetRepoLocalWatchToolPath() ?? layout?.GetWatchToolPath();
+            if (watchToolPath is not null)
+            {
+                env[BundleDiscovery.WatchToolPathEnvVar] = watchToolPath;
+
+                if (!env.ContainsKey(BundleDiscovery.WatchSdkPathEnvVar) && _runner.TryGetWatchSdkDirectory() is { } watchSdkDirectory)
+                {
+                    env[BundleDiscovery.WatchSdkPathEnvVar] = watchSdkDirectory;
+                }
+            }
+        }
+
         layoutLease?.AddEnvironment(env);
     }
 
@@ -1370,6 +1393,21 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
         var repoRoot = AspireRepositoryDetector.DetectRepositoryRoot();
         return BundleDiscovery.TryGetRepoLocalManagedPath(repoRoot);
+    }
+
+    /// <summary>
+    /// Resolves the bundled watch tool from the NuGet cache when the CLI is running 
+    /// from an Aspire repo checkout (typically <c>dotnet run --project src/Aspire.Cli</c>). 
+    /// </summary>
+    private static string? TryGetRepoLocalWatchToolPath()
+    {
+        if (RepoLocalWatchToolPathProviderOverride is { } overrideProvider)
+        {
+            return overrideProvider();
+        }
+
+        var repoRoot = AspireRepositoryDetector.DetectRepositoryRoot();
+        return WatchToolLocator.TryGetRepoLocalWatchToolPath(repoRoot);
     }
 
     /// <summary>

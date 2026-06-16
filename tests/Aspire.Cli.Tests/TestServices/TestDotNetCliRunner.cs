@@ -196,4 +196,9 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
 
     public Task<int> InitUserSecretsAsync(FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken)
         => Task.FromResult(0);
+
+    public Func<string?>? TryGetWatchSdkDirectoryCallback { get; set; }
+
+    public string? TryGetWatchSdkDirectory()
+        => TryGetWatchSdkDirectoryCallback?.Invoke();
 }

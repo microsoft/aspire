@@ -322,6 +322,81 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         }
     }
 
+    [Fact]
+    public void CreateStartInfo_InjectsWatchToolAndSdkPathFromBundle()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var layout = CreateBundleLayout(workspace, includeWatch: true);
+        var watchSdkDir = Path.Combine(workspace.WorkspaceRoot.FullName, "fake-sdk", "sdk", "20.0.100");
+        var runner = new TestDotNetCliRunner
+        {
+            TryGetWatchSdkDirectoryCallback = () => watchSdkDir
+        };
+        var server = CreateServerWithLayout(workspace, layout, runner);
+
+        var startInfo = server.CreateStartInfo(hostPid: 123);
+
+        Assert.Equal(layout.GetWatchToolPath(), startInfo.Environment[BundleDiscovery.WatchToolPathEnvVar]);
+        Assert.Equal(watchSdkDir, startInfo.Environment[BundleDiscovery.WatchSdkPathEnvVar]);
+    }
+
+    [Fact]
+    public void CreateStartInfo_OmitsWatchSdkPathWhenSdkDirectoryUnavailable()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var layout = CreateBundleLayout(workspace, includeWatch: true);
+        var runner = new TestDotNetCliRunner
+        {
+            TryGetWatchSdkDirectoryCallback = () => null
+        };
+        var server = CreateServerWithLayout(workspace, layout, runner);
+
+        var startInfo = server.CreateStartInfo(hostPid: 123);
+
+        Assert.Equal(layout.GetWatchToolPath(), startInfo.Environment[BundleDiscovery.WatchToolPathEnvVar]);
+        Assert.False(startInfo.Environment.ContainsKey(BundleDiscovery.WatchSdkPathEnvVar));
+    }
+
+    [Fact]
+    public void CreateStartInfo_OmitsWatchEnvironmentWhenBundleHasNoWatchComponent()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var layout = CreateBundleLayout(workspace, includeWatch: false);
+        var runner = new TestDotNetCliRunner
+        {
+            TryGetWatchSdkDirectoryCallback = () => Path.Combine(workspace.WorkspaceRoot.FullName, "fake-sdk", "sdk", "20.0.100")
+        };
+        var server = CreateServerWithLayout(workspace, layout, runner);
+
+        var startInfo = server.CreateStartInfo(hostPid: 123);
+
+        Assert.False(startInfo.Environment.ContainsKey(BundleDiscovery.WatchToolPathEnvVar));
+        Assert.False(startInfo.Environment.ContainsKey(BundleDiscovery.WatchSdkPathEnvVar));
+    }
+
+    [Fact]
+    public void CreateStartInfo_PreservesExplicitWatchToolPath()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var layout = CreateBundleLayout(workspace, includeWatch: true);
+        var customWatchTool = Path.Combine(workspace.WorkspaceRoot.FullName, "custom-watch", BundleDiscovery.WatchToolDllName);
+        var runner = new TestDotNetCliRunner
+        {
+            TryGetWatchSdkDirectoryCallback = () => Path.Combine(workspace.WorkspaceRoot.FullName, "fake-sdk", "sdk", "20.0.100")
+        };
+        var server = CreateServerWithLayout(workspace, layout, runner);
+
+        var startInfo = server.CreateStartInfo(
+            hostPid: 123,
+            environmentVariables: new Dictionary<string, string>
+            {
+                [BundleDiscovery.WatchToolPathEnvVar] = customWatchTool
+            });
+
+        Assert.Equal(customWatchTool, startInfo.Environment[BundleDiscovery.WatchToolPathEnvVar]);
+        Assert.False(startInfo.Environment.ContainsKey(BundleDiscovery.WatchSdkPathEnvVar));
+    }
+
     // PSM-guard cross-product tests.
     // Guard predicate: the resolved channel.Name == "local" — i.e. the *project requested* the
     // local pseudo-channel. The local hive has no real mappings, so emitting PSM would just
@@ -970,6 +1045,54 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             packagingService,
             executionContext,
             NullLogger.Instance);
+    }
+
+    private static PrebuiltAppHostServer CreateServerWithLayout(
+        TemporaryWorkspace workspace,
+        LayoutConfiguration layout,
+        TestDotNetCliRunner runner)
+    {
+        var executionContext = TestExecutionContextFactory.CreateTestContext();
+        var nugetService = new BundleNuGetService(
+            new NullLayoutDiscovery(),
+            new LayoutProcessRunner(new TestProcessExecutionFactory()),
+            new TestFeatures(),
+            executionContext,
+            NullLogger<BundleNuGetService>.Instance);
+
+        return new PrebuiltAppHostServer(
+            workspace.WorkspaceRoot.FullName,
+            "test.sock",
+            layout,
+            nugetService,
+            runner,
+            new TestDotNetSdkInstaller(),
+            MockPackagingServiceFactory.Create(),
+            executionContext,
+            NullLogger.Instance);
+    }
+
+    private static LayoutConfiguration CreateBundleLayout(TemporaryWorkspace workspace, bool includeWatch)
+    {
+        var layoutRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "bundle-layout");
+        Directory.CreateDirectory(layoutRoot);
+
+        var managedDir = Path.Combine(layoutRoot, BundleDiscovery.ManagedDirectoryName);
+        Directory.CreateDirectory(managedDir);
+        File.WriteAllText(
+            Path.Combine(managedDir, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+            "stub");
+
+        Directory.CreateDirectory(Path.Combine(layoutRoot, BundleDiscovery.DcpDirectoryName));
+
+        if (includeWatch)
+        {
+            var watchDir = Path.Combine(layoutRoot, BundleDiscovery.WatchDirectoryName);
+            Directory.CreateDirectory(watchDir);
+            File.WriteAllText(Path.Combine(watchDir, BundleDiscovery.WatchToolDllName), "stub");
+        }
+
+        return new LayoutConfiguration { LayoutPath = layoutRoot };
     }
 
     private static CliExecutionContext CreateContextWithIdentityChannel(string identityChannel) =>

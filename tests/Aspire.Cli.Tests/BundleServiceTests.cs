@@ -151,6 +151,18 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void IsVersionedLayoutValid_RequiresWatchTool()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var dir = workspace.WorkspaceRoot.FullName;
+        CreateFakeBundleLayout(dir);
+
+        // The watch tool is a mandatory bundle component: removing it invalidates the layout.
+        Directory.Delete(Path.Combine(dir, BundleDiscovery.WatchDirectoryName), recursive: true);
+        Assert.False(BundleService.IsVersionedLayoutValid(dir));
+    }
+
+    [Fact]
     public void TryCleanupStaleVersions_RemovesNonActiveVersionsAndStaleTempDirs()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -198,5 +210,10 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
         var dcpDir = Path.Combine(root, BundleDiscovery.DcpDirectoryName);
         Directory.CreateDirectory(dcpDir);
         File.WriteAllText(Path.Combine(dcpDir, "placeholder"), "dcp");
+
+        // The watch tool is a mandatory bundle component, so a valid layout must include it.
+        var watchDir = Path.Combine(root, BundleDiscovery.WatchDirectoryName);
+        Directory.CreateDirectory(watchDir);
+        File.WriteAllText(Path.Combine(watchDir, BundleDiscovery.WatchToolDllName), "watch");
     }
 }

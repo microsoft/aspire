@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.Dcp;
+using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Hosting.Tests.Dcp;
@@ -94,6 +95,78 @@ public class ConfigureDefaultDcpOptionsTests
 
         Assert.Equal(managedPath, options.TerminalHostPath);
         Assert.Equal("custom-subcommand", options.TerminalHostInvocationArgs);
+    }
+
+    [Fact]
+    public void WatchToolPathAndSdkPathBindFromEnvironmentVariables()
+    {
+        // The CLI injects ASPIRE_WATCH_TOOL_PATH / ASPIRE_WATCH_SDK_PATH at app-host launch.
+        // These are read as top-level configuration keys (env vars), not DcpPublisher settings.
+        var watchToolPath = Path.Combine(Path.GetTempPath(), "aspire-fake-bundle", "watch", BundleDiscovery.WatchToolDllName);
+        var watchSdkPath = Path.Combine(Path.GetTempPath(), "fake-sdk", "sdk", "20.0.200");
+
+        var options = ConfigureWithDcpPublisher(new()
+        {
+            ["ASPIRE_WATCH_TOOL_PATH"] = watchToolPath,
+            ["ASPIRE_WATCH_SDK_PATH"] = watchSdkPath,
+        });
+
+        Assert.Equal(watchToolPath, options.WatchToolPath);
+        Assert.Equal(watchSdkPath, options.WatchSdkPath);
+    }
+
+    [Fact]
+    public void WatchToolPathAndSdkPathBindFromDcpPublisherConfiguration()
+    {
+        // Programmatic override path: DcpPublisher:WatchToolPath / WatchSdkPath.
+        var watchToolPath = Path.Combine(Path.GetTempPath(), "custom-watch", BundleDiscovery.WatchToolDllName);
+        var watchSdkPath = Path.Combine(Path.GetTempPath(), "custom-sdk", "sdk", "20.0.200");
+
+        var options = ConfigureWithDcpPublisher(new()
+        {
+            ["DcpPublisher:WatchToolPath"] = watchToolPath,
+            ["DcpPublisher:WatchSdkPath"] = watchSdkPath,
+        });
+
+        Assert.Equal(watchToolPath, options.WatchToolPath);
+        Assert.Equal(watchSdkPath, options.WatchSdkPath);
+    }
+
+    [Fact]
+    public void WatchEnvironmentVariablesTakePrecedenceOverDcpPublisherConfiguration()
+    {
+        // Env var (user/CLI injection) wins over the DcpPublisher programmatic value, mirroring
+        // the established precedence: env var > DcpPublisher config > assembly metadata.
+        var envWatchToolPath = Path.Combine(Path.GetTempPath(), "env-watch", BundleDiscovery.WatchToolDllName);
+        var envWatchSdkPath = Path.Combine(Path.GetTempPath(), "env-sdk", "sdk", "20.0.200");
+
+        var options = ConfigureWithDcpPublisher(new()
+        {
+            ["ASPIRE_WATCH_TOOL_PATH"] = envWatchToolPath,
+            ["ASPIRE_WATCH_SDK_PATH"] = envWatchSdkPath,
+            ["DcpPublisher:WatchToolPath"] = Path.Combine(Path.GetTempPath(), "ignored-watch", "ignored-watch.dll"),
+            ["DcpPublisher:WatchSdkPath"] = Path.Combine(Path.GetTempPath(), "ignored-sdk"),
+        });
+
+        Assert.Equal(envWatchToolPath, options.WatchToolPath);
+        Assert.Equal(envWatchSdkPath, options.WatchSdkPath);
+    }
+
+    [Fact]
+    public void WatchPathsAreNullWhenUnset()
+    {
+        // Watch is an optional, experimental component: a normal `aspire run` with no watch
+        // env vars / config must leave the paths null without breaking options configuration.
+        var managedExe = OperatingSystem.IsWindows() ? "aspire-managed.exe" : "aspire-managed";
+        var managedPath = Path.Combine(Path.GetTempPath(), "aspire-fake-bundle", "managed", managedExe);
+
+        var options = ConfigureWithDcpPublisher(new()
+        {
+            ["DcpPublisher:DashboardPath"] = managedPath,
+        });
+
+        Assert.Null(options.WatchToolPath);
+        Assert.Null(options.WatchSdkPath);
     }
 
     private static DcpOptions ConfigureWithDcpPublisher(Dictionary<string, string?> dcpPublisherSettings)

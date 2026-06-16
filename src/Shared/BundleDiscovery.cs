@@ -5,8 +5,11 @@
 // - Aspire.Hosting
 // - Aspire.Cli
 // - Aspire.Managed
+// - CreateLayout
 // Do not add project-specific dependencies.
 
+using System.Globalization;
+using System.Linq;
 using System.Runtime.InteropServices;
 
 namespace Aspire.Shared;
@@ -60,6 +63,23 @@ internal static class BundleDiscovery
     public const string TerminalHostInvocationArgsEnvVar = "ASPIRE_TERMINAL_HOST_INVOCATION_ARGS";
 
     /// <summary>
+    /// Environment variable for the bundled watch tool DLL path 
+    /// (<c>Microsoft.DotNet.HotReload.Watch.Aspire.dll</c>). 
+    /// </summary>
+    public const string WatchToolPathEnvVar = "ASPIRE_WATCH_TOOL_PATH";
+
+    /// <summary>
+    /// Environment variable for the .NET SDK base path the watch tool should target
+    /// (via its <c>--sdk</c> argument). 
+    /// </summary>
+    /// <remarks>
+    /// This injection is best-effort (set only when the CLI can derive it via pure path probing, 
+    /// e.g. a private SDK install). When it is absent, the app model resolves the SDK base path itself 
+    /// via a lazy, memoized <c>dotnet --info</c> command spawned at watch-server launch.
+    /// </remarks>
+    public const string WatchSdkPathEnvVar = "ASPIRE_WATCH_SDK_PATH";
+
+    /// <summary>
     /// Environment variable containing the leased version directory for bundle-owned child processes.
     /// </summary>
     public const string BundleVersionDirectoryEnvVar = "ASPIRE_BUNDLE_VERSION_DIR";
@@ -95,6 +115,12 @@ internal static class BundleDiscovery
     /// </summary>
     public const string BundleDirectoryName = "bundle";
 
+    /// <summary>
+    /// Directory name for the bundled watch tool (Microsoft.DotNet.HotReload.Watch.Aspire)
+    /// in the bundle layout. 
+    /// </summary>
+    public const string WatchDirectoryName = "watch";
+
     // ═══════════════════════════════════════════════════════════════════════
     // EXECUTABLE NAMES (without path, just the file name)
     // ═══════════════════════════════════════════════════════════════════════
@@ -103,6 +129,16 @@ internal static class BundleDiscovery
     /// Executable name for the unified managed binary.
     /// </summary>
     public const string ManagedExecutableName = "aspire-managed";
+
+    /// <summary>
+    /// Assembly file name for the bundled watch tool. 
+    /// </summary>
+    public const string WatchToolDllName = "Microsoft.DotNet.HotReload.Watch.Aspire.dll";
+
+    // Name of the Nuget cache folder where the watch tool is stored.
+    internal const string WatchToolNugetCacheFolder = "microsoft.dotnet.hotreload.watch.aspire";
+    // Watch tool .NET (target) version
+    internal const string WatchToolDotNetVersion = "net10.0";
 
     // ═══════════════════════════════════════════════════════════════════════
     // DISCOVERY METHODS
@@ -253,6 +289,34 @@ internal static class BundleDiscovery
     }
 
     /// <summary>
+    /// Attempts to discover the bundled watch tool DLL from a base directory.
+    /// </summary>
+    /// <param name="baseDirectory">The base directory to search from (e.g., bundle layout root).</param>
+    /// <param name="watchToolPath">The full path to the watch tool entry-point DLL if found.</param>
+    /// <returns>True if the watch tool was found, false otherwise.</returns>
+    public static bool TryDiscoverWatchToolFromDirectory(
+        string baseDirectory,
+        out string? watchToolPath)
+    {
+        watchToolPath = null;
+
+        if (string.IsNullOrEmpty(baseDirectory) || !Directory.Exists(baseDirectory))
+        {
+            return false;
+        }
+
+        var watchPath = Path.Combine(baseDirectory, WatchDirectoryName, WatchToolDllName);
+
+        if (File.Exists(watchPath))
+        {
+            watchToolPath = watchPath;
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Returns the path to <c>aspire-managed</c> inside an Aspire repo checkout when the
     /// normal repo build has produced it under <c>artifacts/bin/Aspire.Managed/{Configuration}/{tfm}/</c>.
     /// Used by callers that want to point dev-mode child processes at the repo's just-built
@@ -280,6 +344,233 @@ internal static class BundleDiscovery
             "net10.0",
             GetExecutableFileName(ManagedExecutableName));
         return File.Exists(managedPath) ? managedPath : null;
+    }
+
+    /// <summary>
+    /// Returns the directory containing the watch tool DLL from the NuGet global packages cache.
+    /// Returns <c>null</c> when the cache or package is missing.
+    /// </summary>
+    /// <param name="version">
+    /// Exact package version to probe for. When <c>null</c>, the newest version
+    /// present in the cache is chosen via a single-level directory listing.
+    /// </param>
+    public static string? TryGetWatchToolDirectoryFromNuGetCache(string? version)
+    {
+        var nugetPackages = Environment.GetEnvironmentVariable("NUGET_PACKAGES")
+            ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget", "packages");
+
+        // Lowercased package id is the cache folder name.
+        var packageRoot = Path.Combine(nugetPackages, WatchToolNugetCacheFolder);
+        if (!Directory.Exists(packageRoot))
+        {
+            return null;
+        }
+
+        var versionRoot = !string.IsNullOrEmpty(version)
+            ? Path.Combine(packageRoot, version)
+            : GetNewestNuGetVersionDirectory(packageRoot);
+
+        if (versionRoot is null || !Directory.Exists(versionRoot))
+        {
+            return null;
+        }
+
+        var toolsDir = Path.Combine(versionRoot, "tools", WatchToolDotNetVersion, "any");
+        if (File.Exists(Path.Combine(toolsDir, WatchToolDllName)))
+        {
+            return toolsDir;
+        }
+
+        var fallback = Directory.EnumerateFiles(versionRoot, WatchToolDllName, SearchOption.AllDirectories)
+            .FirstOrDefault();
+        return fallback is not null ? Path.GetDirectoryName(fallback) : null;
+    }
+
+    /// <summary>
+    /// Returns the path to the watch tool DLL from the NuGet global packages cache.
+    /// Returns <c>null</c> when the cache or package is missing.
+    /// </summary>
+    /// <param name="version">
+    /// Exact package version to probe for. When <c>null</c>, the newest version
+    /// present in the cache is chosen via a single-level directory listing.
+    /// </param>
+    public static string? TryGetWatchToolPathFromNuGetCache(string? version)
+    {
+        var watchToolDirectory = TryGetWatchToolDirectoryFromNuGetCache(version);
+        return watchToolDirectory is not null ? Path.Combine(watchToolDirectory, WatchToolDllName) : null;
+    }
+
+    private static string? GetNewestNuGetVersionDirectory(string packageRoot)
+    {
+        string? newestPath = null;
+        var hasNewestVersion = false;
+        var newestVersion = default(ParsedNuGetPackageVersion);
+
+        foreach (var directory in Directory.GetDirectories(packageRoot))
+        {
+            var directoryName = Path.GetFileName(directory);
+            if (!ParsedNuGetPackageVersion.TryParse(directoryName, out var candidateVersion))
+            {
+                continue;
+            }
+
+            if (!hasNewestVersion || candidateVersion.CompareTo(newestVersion) > 0)
+            {
+                newestPath = directory;
+                newestVersion = candidateVersion;
+                hasNewestVersion = true;
+            }
+        }
+
+        return newestPath;
+    }
+
+    private readonly record struct ParsedNuGetPackageVersion(int Major, int Minor, int Patch, int Revision, string? Prerelease) : IComparable<ParsedNuGetPackageVersion>
+    {
+        public static bool TryParse(string? version, out ParsedNuGetPackageVersion parsed)
+        {
+            parsed = default;
+
+            if (string.IsNullOrEmpty(version))
+            {
+                return false;
+            }
+
+            // NuGet global-package cache directories use normalized package versions, for example:
+            //   10.0.301
+            //   10.0.301-preview.1
+            //   10.0.301-preview.1+sha.abc123
+            // System.Version rejects prerelease labels, so parse enough SemVer/NuGet precedence
+            // here to select the newest cached package without taking a NuGet dependency in every
+            // project that source-links this shared file.
+            var metadataIndex = version.IndexOf('+', StringComparison.Ordinal);
+            var versionWithoutMetadata = metadataIndex >= 0 ? version[..metadataIndex] : version;
+
+            var prereleaseIndex = versionWithoutMetadata.IndexOf('-', StringComparison.Ordinal);
+            var releasePart = prereleaseIndex >= 0 ? versionWithoutMetadata[..prereleaseIndex] : versionWithoutMetadata;
+            var prerelease = prereleaseIndex >= 0 ? versionWithoutMetadata[(prereleaseIndex + 1)..] : null;
+            if (prerelease is "")
+            {
+                return false;
+            }
+
+            var releaseComponents = releasePart.Split('.');
+            if (releaseComponents.Length is < 1 or > 4)
+            {
+                return false;
+            }
+
+            Span<int> components = stackalloc int[4];
+            for (var i = 0; i < releaseComponents.Length; i++)
+            {
+                if (!int.TryParse(releaseComponents[i], NumberStyles.None, CultureInfo.InvariantCulture, out var component) ||
+                    component < 0)
+                {
+                    return false;
+                }
+
+                components[i] = component;
+            }
+
+            parsed = new ParsedNuGetPackageVersion(components[0], components[1], components[2], components[3], prerelease);
+            return true;
+        }
+
+        public int CompareTo(ParsedNuGetPackageVersion other)
+        {
+            var result = Major.CompareTo(other.Major);
+            if (result != 0)
+            {
+                return result;
+            }
+
+            result = Minor.CompareTo(other.Minor);
+            if (result != 0)
+            {
+                return result;
+            }
+
+            result = Patch.CompareTo(other.Patch);
+            if (result != 0)
+            {
+                return result;
+            }
+
+            result = Revision.CompareTo(other.Revision);
+            return result != 0 ? result : ComparePrerelease(Prerelease, other.Prerelease);
+        }
+
+        private static int ComparePrerelease(string? left, string? right)
+        {
+            if (left is null)
+            {
+                return right is null ? 0 : 1;
+            }
+
+            if (right is null)
+            {
+                return -1;
+            }
+
+            var leftIdentifiers = left.Split('.');
+            var rightIdentifiers = right.Split('.');
+            var count = Math.Min(leftIdentifiers.Length, rightIdentifiers.Length);
+
+            for (var i = 0; i < count; i++)
+            {
+                var result = ComparePrereleaseIdentifier(leftIdentifiers[i], rightIdentifiers[i]);
+                if (result != 0)
+                {
+                    return result;
+                }
+            }
+
+            return leftIdentifiers.Length.CompareTo(rightIdentifiers.Length);
+        }
+
+        private static int ComparePrereleaseIdentifier(string left, string right)
+        {
+            var leftNumeric = TryNormalizeNumericIdentifier(left, out var normalizedLeft);
+            var rightNumeric = TryNormalizeNumericIdentifier(right, out var normalizedRight);
+
+            if (leftNumeric && rightNumeric && normalizedLeft is not null && normalizedRight is not null)
+            {
+                var lengthResult = normalizedLeft.Length.CompareTo(normalizedRight.Length);
+                return lengthResult != 0 ? lengthResult : string.CompareOrdinal(normalizedLeft, normalizedRight);
+            }
+
+            if (leftNumeric != rightNumeric)
+            {
+                return leftNumeric ? -1 : 1;
+            }
+
+            return string.Compare(left, right, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool TryNormalizeNumericIdentifier(string identifier, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? normalized)
+        {
+            normalized = null;
+            if (identifier.Length == 0)
+            {
+                return false;
+            }
+
+            foreach (var ch in identifier)
+            {
+                if (!char.IsAsciiDigit(ch))
+                {
+                    return false;
+                }
+            }
+
+            normalized = identifier.TrimStart('0');
+            if (normalized.Length == 0)
+            {
+                normalized = "0";
+            }
+
+            return true;
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════════

@@ -15,7 +15,9 @@ public enum LayoutComponent
     /// <summary>Developer Control Plane.</summary>
     Dcp,
     /// <summary>Unified managed binary (dashboard, server, nuget).</summary>
-    Managed
+    Managed,
+    /// <summary>Bundled watch tool (Microsoft.DotNet.HotReload.Watch.Aspire).</summary>
+    Watch
 }
 
 /// <summary>
@@ -64,6 +66,7 @@ public sealed class LayoutConfiguration
             LayoutComponent.Cli => Components.Cli,
             LayoutComponent.Dcp => Components.Dcp,
             LayoutComponent.Managed => Components.Managed,
+            LayoutComponent.Watch => Components.Watch,
             _ => null
         };
 
@@ -89,6 +92,23 @@ public sealed class LayoutConfiguration
 
         return Path.Combine(managedDir, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
     }
+
+    /// <summary>
+    /// Gets the path to the bundled watch tool DLL.
+    /// </summary>
+    public string? GetWatchToolPath()
+    {
+        var watchDir = GetComponentPath(LayoutComponent.Watch);
+        if (watchDir is null)
+        {
+            return null;
+        }
+
+        // Watch is a mandatory bundle component for shipping CLI but may not be present 
+        // in externally-supplied or legacy layouts. 
+        var watchToolPath = Path.Combine(watchDir, BundleDiscovery.WatchToolDllName);
+        return File.Exists(watchToolPath) ? watchToolPath : null;
+    }
 }
 
 /// <summary>
@@ -110,4 +130,9 @@ public sealed class LayoutComponents
     /// Path to the unified managed binary directory.
     /// </summary>
     public string? Managed { get; set; } = BundleDiscovery.ManagedDirectoryName;
+
+    /// <summary>
+    /// Path to the bundled watch tool directory.
+    /// </summary>
+    public string? Watch { get; set; } = BundleDiscovery.WatchDirectoryName;
 }

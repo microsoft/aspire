@@ -1029,6 +1029,19 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
             startInfo.Environment[BundleDiscovery.DashboardPathEnvVar] = managedPath;
         }
 
+        // Set the bundled watch tool path + SDK dir.
+        if (!ContainsKey(environmentVariables, BundleDiscovery.WatchToolPathEnvVar) &&
+            _layout.GetWatchToolPath() is { } watchToolPath)
+        {
+            startInfo.Environment[BundleDiscovery.WatchToolPathEnvVar] = watchToolPath;
+
+            if (!ContainsKey(environmentVariables, BundleDiscovery.WatchSdkPathEnvVar) &&
+                _dotNetCliRunner.TryGetWatchSdkDirectory() is { } watchSdkDirectory)
+            {
+                startInfo.Environment[BundleDiscovery.WatchSdkPathEnvVar] = watchSdkDirectory;
+            }
+        }
+
         // Apply environment variables from apphost.run.json
         if (environmentVariables is not null)
         {
@@ -1049,6 +1062,11 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         startInfo.RedirectStandardError = true;
 
         return startInfo;
+    }
+
+    private static bool ContainsKey(IReadOnlyDictionary<string, string>? env, string key)
+    {
+        return env is not null && env.ContainsKey(key);
     }
 
     /// <inheritdoc />

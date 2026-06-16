@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.IO.Compression;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Aspire.Shared;
 
 namespace Aspire.Tools.CreateLayout;
 
@@ -44,6 +45,13 @@ public static class Program
             DefaultValueFactory = _ => "0.0.0-dev"
         };
 
+        var watchVersionOption = new Option<string>("--watch-version")
+        {
+            Description = "Pinned version of the Microsoft.DotNet.HotReload.Watch.Aspire tool to bundle. " +
+                          "When empty, the newest version found in the NuGet cache is used.",
+            DefaultValueFactory = _ => string.Empty
+        };
+
         var archiveOption = new Option<bool>("--archive")
         {
             Description = "Create archive (zip/tar.gz) after building"
@@ -59,6 +67,7 @@ public static class Program
         rootCommand.Options.Add(artifactsOption);
         rootCommand.Options.Add(ridOption);
         rootCommand.Options.Add(bundleVersionOption);
+        rootCommand.Options.Add(watchVersionOption);
         rootCommand.Options.Add(archiveOption);
         rootCommand.Options.Add(verboseOption);
 
@@ -68,12 +77,13 @@ public static class Program
             var artifactsPath = parseResult.GetValue(artifactsOption)!;
             var rid = parseResult.GetValue(ridOption)!;
             var version = parseResult.GetValue(bundleVersionOption)!;
+            var watchVersion = parseResult.GetValue(watchVersionOption)!;
             var createArchive = parseResult.GetValue(archiveOption);
             var verbose = parseResult.GetValue(verboseOption);
 
             try
             {
-                using var builder = new LayoutBuilder(outputPath, artifactsPath, rid, version, verbose);
+                using var builder = new LayoutBuilder(outputPath, artifactsPath, rid, version, watchVersion, verbose);
                 await builder.BuildAsync().ConfigureAwait(false);
 
                 if (createArchive)
@@ -108,14 +118,16 @@ internal sealed class LayoutBuilder : IDisposable
     private readonly string _artifactsPath;
     private readonly string _rid;
     private readonly string _version;
+    private readonly string _watchVersion;
     private readonly bool _verbose;
 
-    public LayoutBuilder(string outputPath, string artifactsPath, string rid, string version, bool verbose)
+    public LayoutBuilder(string outputPath, string artifactsPath, string rid, string version, string watchVersion, bool verbose)
     {
         _outputPath = Path.GetFullPath(outputPath);
         _artifactsPath = Path.GetFullPath(artifactsPath);
         _rid = rid;
         _version = version;
+        _watchVersion = watchVersion;
         _verbose = verbose;
     }
 
@@ -140,6 +152,7 @@ internal sealed class LayoutBuilder : IDisposable
         // Copy components
         CopyManaged();
         await CopyDcpAsync().ConfigureAwait(false);
+        CopyWatch();
 
         Log("Layout build complete!");
     }
@@ -203,6 +216,31 @@ internal sealed class LayoutBuilder : IDisposable
 
         return Task.CompletedTask;
     }
+
+    private void CopyWatch()
+    {
+        Log("Copying watch tool...");
+
+        // The watch tool (Microsoft.DotNet.HotReload.Watch.Aspire) is downloaded into the NuGet
+        // global packages folder by the PackageDownload in CreateLayout.csproj. It is RID-agnostic
+        // (tools/net10.0/any), so a single copy serves every bundle RID.
+        var watchPath = BundleDiscovery.TryGetWatchToolDirectoryFromNuGetCache(_watchVersion);
+        if (watchPath is null)
+        {
+            throw new InvalidOperationException(
+                $"Watch tool package '{WatchPackageName}' (version '{(string.IsNullOrEmpty(_watchVersion) ? "latest" : _watchVersion)}') not found. " +
+                $"Ensure the package is restored into the NuGet global packages folder before running CreateLayout " +
+                $"(it is downloaded via the PackageDownload in tools/CreateLayout/CreateLayout.csproj).");
+        }
+
+        var watchDir = Path.Combine(_outputPath, "watch");
+        Directory.CreateDirectory(watchDir);
+
+        CopyDirectory(watchPath, watchDir);
+        Log($"  Copied watch tool to watch");
+    }
+
+    private const string WatchPackageName = "Microsoft.DotNet.HotReload.Watch.Aspire";
 
     public async Task<string> CreateArchiveAsync()
     {

@@ -525,7 +525,8 @@ internal sealed class BundleService(
 
     /// <summary>
     /// Returns <see langword="true"/> if <paramref name="versionDir"/> contains the
-    /// essential bundle components (<c>managed/aspire-managed</c> and a DCP directory).
+    /// essential bundle components: <c>managed/aspire-managed</c>, a DCP directory, and
+    /// the bundled watch tool (<c>watch/Microsoft.DotNet.HotReload.Watch.Aspire.dll</c>).
     /// </summary>
     internal static bool IsVersionedLayoutValid(string versionDir)
     {
@@ -557,6 +558,12 @@ internal sealed class BundleService(
 
         var dcpDir = Path.Combine(versionDir, BundleDiscovery.DcpDirectoryName);
         if (!Directory.Exists(dcpDir))
+        {
+            return false;
+        }
+
+        var watchPath = Path.Combine(versionDir, BundleDiscovery.WatchDirectoryName, BundleDiscovery.WatchToolDllName);
+        if (!File.Exists(watchPath))
         {
             return false;
         }

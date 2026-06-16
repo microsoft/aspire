@@ -527,6 +527,15 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
                 DataStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes($"dcp-{contentMarker}\n"))
             };
             tar.WriteEntry(dcpEntry);
+
+            // watch/ directory + tool DLL. 
+            tar.WriteEntry(new PaxTarEntry(TarEntryType.Directory, $"aspire-payload/{BundleDiscovery.WatchDirectoryName}/"));
+
+            var watchEntry = new PaxTarEntry(TarEntryType.RegularFile, $"aspire-payload/{BundleDiscovery.WatchDirectoryName}/{BundleDiscovery.WatchToolDllName}")
+            {
+                DataStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes($"watch-{contentMarker}\n"))
+            };
+            tar.WriteEntry(watchEntry);
         }
 
         return ms.ToArray();

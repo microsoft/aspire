@@ -269,6 +269,7 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
                     {
                         Dcp = Path.Combine(BundleDiscovery.BundleDirectoryName, BundleDiscovery.DcpDirectoryName),
                         Managed = Path.Combine(BundleDiscovery.BundleDirectoryName, BundleDiscovery.ManagedDirectoryName),
+                        Watch = Path.Combine(BundleDiscovery.BundleDirectoryName, BundleDiscovery.WatchDirectoryName),
                     }
                 };
             }
