@@ -159,6 +159,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Operating system: {0}.
+        /// </summary>
+        public static string OperatingSystemMessageFormat {
+            get {
+                return ResourceManager.GetString("OperatingSystemMessageFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to unknown.
         /// </summary>
         public static string VersionUnknown {

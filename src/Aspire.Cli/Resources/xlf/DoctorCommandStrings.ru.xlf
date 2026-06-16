@@ -224,6 +224,11 @@ The legacy file continues to work — this is a non-blocking warning.</target>
         <target state="new">Legacy .aspire/settings.json detected at {0}</target>
         <note>{0} is the full path to the legacy settings file.</note>
       </trans-unit>
+      <trans-unit id="OperatingSystemMessageFormat">
+        <source>Operating system: {0}</source>
+        <target state="new">Operating system: {0}</target>
+        <note>{0} is the operating system display name and version, for example "Windows 10.0.22631", "macOS 26.0", or "Linux Ubuntu 24.04".</note>
+      </trans-unit>
       <trans-unit id="SdkCategoryHeader">
         <source>.NET SDK</source>
         <target state="translated">Пакет SDK .NET</target>

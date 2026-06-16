@@ -59,6 +59,26 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DoctorCommand_Json_IncludesOperatingSystemStatus()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var doc = await RunDoctorJsonAsync(workspace,
+            configureOptions: options =>
+            {
+                options.CliUpdateNotifierFactory = _ => new TestCliUpdateNotifier();
+            });
+
+        var osCheck = GetCheckByName(doc, "operating-system");
+        Assert.Equal("environment", osCheck.GetProperty("category").GetString());
+        Assert.Equal("pass", osCheck.GetProperty("status").GetString());
+        Assert.StartsWith("Operating system: ", osCheck.GetProperty("message").GetString(), StringComparison.Ordinal);
+        var metadata = osCheck.GetProperty("metadata");
+        Assert.True(metadata.TryGetProperty("osType", out _));
+        Assert.True(metadata.TryGetProperty("displayName", out _));
+        Assert.True(metadata.TryGetProperty("version", out _));
+    }
+
+    [Fact]
     public async Task DoctorCommand_Json_VersionUpdateBanner_IsSuppressed()
     {
         // The cli-version environment check already surfaces "newer version available" inside
@@ -984,6 +1004,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure);
         services.RemoveAll<IEnvironmentCheck>();
         services.AddSingleton<IEnvironmentCheck, AspireVersionCheck>();
+        services.AddSingleton<IEnvironmentCheck, OperatingSystemCheck>();
         UseFakeInstallationDiscovery(
             services,
             self: new InstallationInfo

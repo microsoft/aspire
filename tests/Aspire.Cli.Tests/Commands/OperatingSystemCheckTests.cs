@@ -1,0 +1,69 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using Aspire.Cli.Utils.EnvironmentChecker;
+
+namespace Aspire.Cli.Tests.Commands;
+
+public class OperatingSystemCheckTests
+{
+    [Fact]
+    public async Task CheckAsync_ReturnsEnvironmentResultWithMetadata()
+    {
+        var check = new OperatingSystemCheck(() => new OperatingSystemDetails(
+            Type: "Linux",
+            Name: "Linux Ubuntu",
+            Version: "24.04",
+            Description: "Ubuntu 24.04.2 LTS"));
+
+        var result = Assert.Single(await check.CheckAsync(TestContext.Current.CancellationToken));
+
+        Assert.Equal("environment", result.Category);
+        Assert.Equal("operating-system", result.Name);
+        Assert.Equal(EnvironmentCheckStatus.Pass, result.Status);
+        Assert.Equal("Operating system: Linux Ubuntu 24.04", result.Message);
+        Assert.NotNull(result.Metadata);
+        Assert.Equal("Linux", result.Metadata["osType"]!.GetValue<string>());
+        Assert.Equal("Linux Ubuntu", result.Metadata["displayName"]!.GetValue<string>());
+        Assert.Equal("24.04", result.Metadata["version"]!.GetValue<string>());
+        Assert.Equal("Ubuntu 24.04.2 LTS", result.Metadata["description"]!.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData(10, 0, 19045)]
+    [InlineData(10, 0, 22631)]
+    public void CreateWindowsDetails_UsesHighLevelWindowsName(int major, int minor, int build)
+    {
+        var details = OperatingSystemCheck.CreateWindowsDetails(new Version(major, minor, build), "Microsoft Windows");
+
+        Assert.Equal("Windows", details.Type);
+        Assert.Equal("Windows", details.Name);
+        Assert.Equal($"{major}.{minor}.{build}", details.Version);
+    }
+
+    [Theory]
+    [InlineData(26, 0)]
+    [InlineData(15, 1)]
+    public void CreateMacOSDetails_UsesHighLevelMacOSName(int major, int minor)
+    {
+        var details = OperatingSystemCheck.CreateMacOSDetails(new Version(major, minor), "Darwin");
+
+        Assert.Equal("macOS", details.Type);
+        Assert.Equal("macOS", details.Name);
+        Assert.Equal($"{major}.{minor}", details.Version);
+    }
+
+    [Fact]
+    public void ParseLinuxOsRelease_UnquotesEscapedValues()
+    {
+        var values = OperatingSystemCheck.ParseLinuxOsRelease("""
+            NAME="Example \"Linux\""
+            VERSION_ID='1.0'
+            ID=example-linux
+            """);
+
+        Assert.Equal("Example \"Linux\"", values["NAME"]);
+        Assert.Equal("1.0", values["VERSION_ID"]);
+        Assert.Equal("example-linux", values["ID"]);
+    }
+}
