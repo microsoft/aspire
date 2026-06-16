@@ -35,24 +35,27 @@ internal sealed class TemplateNuGetConfigService(
     /// <param name="cancellationToken">A cancellation token.</param>
     public async Task PromptToCreateOrUpdateNuGetConfigAsync(PackageChannel channel, string outputPath, CancellationToken cancellationToken)
     {
-        // If this channel shouldn't get a fresh project NuGet.config (stable → nuget.org,
-        // Implicit, or explicit-without-mappings), only update an *existing* config in the
-        // target directory to clean up stale feeds from a previous channel; never create a
-        // new one, because a <clear/>-based config would wipe the user's other feeds.
-        // See: https://github.com/microsoft/aspire/issues/18124
-        if (!channel.ShouldCreateNuGetConfig())
-        {
-            var targetDir = new DirectoryInfo(outputPath);
-            if (!NuGetConfigMerger.TryFindNuGetConfigInDirectory(targetDir, out _))
-            {
-                return;
-            }
-        }
-
+        // Implicit channels (and any explicit channel without feed mappings) resolve from the
+        // ambient NuGet config, so there's nothing to create or merge — return before touching
+        // the output directory (which may not exist yet during `aspire new`).
         var mappings = channel.Mappings;
         if (mappings is null || mappings.Length == 0)
         {
             return;
+        }
+
+        // If this channel shouldn't get a fresh project NuGet.config (e.g. stable → nuget.org),
+        // only update an *existing* config in the target directory to clean up stale feeds from a
+        // previous channel; never create a new one, because a <clear/>-based config would wipe the
+        // user's other feeds. If the output directory doesn't exist yet there can't be an existing
+        // config, so there's nothing to do. See: https://github.com/microsoft/aspire/issues/18124
+        if (!channel.ShouldCreateNuGetConfig())
+        {
+            var targetDir = new DirectoryInfo(outputPath);
+            if (!targetDir.Exists || !NuGetConfigMerger.TryFindNuGetConfigInDirectory(targetDir, out _))
+            {
+                return;
+            }
         }
 
         var workingDir = executionContext.WorkingDirectory;
@@ -141,24 +144,27 @@ internal sealed class TemplateNuGetConfigService(
             return false;
         }
 
-        // If this channel shouldn't get a fresh project NuGet.config (stable → nuget.org,
-        // Implicit, or explicit-without-mappings), only update an *existing* config to clean up
-        // stale feeds from a previous channel; never create a new one — a <clear/>-based config
-        // would hide the ambient nuget.org feed and the user's other feeds.
-        // See: https://github.com/microsoft/aspire/issues/18124
-        if (!matchingChannel.ShouldCreateNuGetConfig())
-        {
-            var targetDir = new DirectoryInfo(outputPath);
-            if (!NuGetConfigMerger.TryFindNuGetConfigInDirectory(targetDir, out _))
-            {
-                return false;
-            }
-        }
-
+        // Implicit channels (and any explicit channel without feed mappings) resolve from the
+        // ambient NuGet config, so there's nothing to create or merge — return before touching
+        // the output directory (which may not exist yet).
         var mappings = matchingChannel.Mappings;
         if (mappings is null || mappings.Length == 0)
         {
             return false;
+        }
+
+        // If this channel shouldn't get a fresh project NuGet.config (e.g. stable → nuget.org),
+        // only update an *existing* config to clean up stale feeds from a previous channel; never
+        // create a new one — a <clear/>-based config would hide the ambient nuget.org feed and the
+        // user's other feeds. If the output directory doesn't exist yet there can't be an existing
+        // config, so there's nothing to do. See: https://github.com/microsoft/aspire/issues/18124
+        if (!matchingChannel.ShouldCreateNuGetConfig())
+        {
+            var targetDir = new DirectoryInfo(outputPath);
+            if (!targetDir.Exists || !NuGetConfigMerger.TryFindNuGetConfigInDirectory(targetDir, out _))
+            {
+                return false;
+            }
         }
 
         // Call the merger directly — bypass NuGetConfigPrompter so we don't emit a
