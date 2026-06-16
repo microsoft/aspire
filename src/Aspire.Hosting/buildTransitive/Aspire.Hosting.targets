@@ -9,4 +9,22 @@
     <Analyzer Include="$(_AspireIntegrationAnalyzerAssembly)" Condition="Exists('$(_AspireIntegrationAnalyzerAssembly)')" />
   </ItemGroup>
 
+  <!--
+    StreamJsonRpc 2.25+ ships an analyzer (StreamJsonRpc.Analyzers.dll) built against
+    Roslyn 4.14. When a consumer project is built with the .NET 8 SDK (Roslyn 4.11),
+    the C# compiler fails to load the analyzer with CSC error CS9057. The .NET 8 SDK
+    discovers analyzer assemblies from the NuGet cache by convention, so the
+    ExcludeAssets="analyzers" flag on our PackageReference is not enough to keep the
+    analyzer out of the consumer compile. Aspire does not depend on any StreamJsonRpc
+    analyzer diagnostic, so unconditionally remove it from the Analyzer item set
+    before compile. Applied via buildTransitive so it reaches any consumer that
+    pulls Aspire.Hosting in (e.g. via Aspire.Hosting.AppHost or Aspire.Hosting.Testing).
+    See: https://github.com/microsoft/vs-streamjsonrpc/pull/1459
+  -->
+  <Target Name="_AspireRemoveStreamJsonRpcAnalyzer" BeforeTargets="CoreCompile">
+    <ItemGroup>
+      <Analyzer Remove="@(Analyzer)" Condition="'%(Filename)' == 'StreamJsonRpc.Analyzers' or '%(Filename)' == 'StreamJsonRpc.Analyzers.CodeFixes'" />
+    </ItemGroup>
+  </Target>
+
 </Project>
