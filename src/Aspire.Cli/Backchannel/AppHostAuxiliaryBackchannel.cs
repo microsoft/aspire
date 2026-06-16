@@ -176,7 +176,10 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         // Create JSON-RPC connection with the source-generated serializer options.
         var stream = new NetworkStream(socket, ownsSocket: true);
         // CurlyRpc emits OpenTelemetry Activity spans natively, so the SJR ActivityTracingStrategy is no longer required.
-        var rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream), new JsonRpcOptions
+        // ownsStreams: true so disposing this backchannel's rpc (see Dispose) closes the socket, letting the
+        // AppHost-side auxiliary backchannel service observe EOF and tear down its per-connection handler.
+        // StreamJsonRpc disposed the stream on rpc dispose by default; CurlyRpc does not unless told to.
+        var rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream, ownsStreams: true), new JsonRpcOptions
         {
             SerializerOptions = BackchannelJsonSerializerContext.CreateJsonSerializerOptions()
         });

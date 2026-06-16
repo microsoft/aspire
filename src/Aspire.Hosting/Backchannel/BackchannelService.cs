@@ -75,7 +75,9 @@ internal sealed class BackchannelService(
 
             var stream = new NetworkStream(clientSocket, true);
             // CurlyRpc emits OpenTelemetry Activity spans natively, so the SJR ActivityTracingStrategy is no longer required.
-            var rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream));
+            // ownsStreams: true so disposing _rpc on shutdown (see Dispose) closes the client socket, letting the
+            // connected CLI observe the disconnect promptly. StreamJsonRpc closed the stream on dispose by default.
+            var rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream, ownsStreams: true));
             rpc.AddLocalRpcTarget(appHostRpcTarget);
             rpc.StartListening();
             activity.AddBackchannelRpcListening();

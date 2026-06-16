@@ -67,7 +67,14 @@ internal static class TerminalHostControlClient
             {
                 await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath), cancellationToken).ConfigureAwait(false);
                 var stream = new NetworkStream(socket, ownsSocket: true);
-                var handler = new HeaderDelimitedMessageHandler(stream, stream);
+                // ownsStreams: true so disposing the rpc (via `using var rpc`) closes the underlying
+                // socket. Each control probe opens a fresh connection, invokes, then disposes the rpc;
+                // the terminal-host control listener only frees its single active slot when the peer's
+                // connection closes (it observes EOF and completes its rpc.Completion). With the default
+                // ownsStreams: false the socket would stay open after dispose, the host would never see
+                // EOF, and every probe after the first would be refused. StreamJsonRpc closed the stream
+                // on dispose by default, so this preserves the pre-migration behavior.
+                var handler = new HeaderDelimitedMessageHandler(stream, stream, ownsStreams: true);
                 // Replicate StreamJsonRpc's SystemTextJsonFormatter default serialization
                 // (PascalCase property names, case-sensitive) so the terminal-host control wire stays
                 // byte-for-byte compatible with hosts that have not yet migrated off StreamJsonRpc.

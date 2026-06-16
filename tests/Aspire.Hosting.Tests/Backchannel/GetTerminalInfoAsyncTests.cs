@@ -164,6 +164,45 @@ public class GetTerminalInfoAsyncTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task ReturnsAliveForEverySequentialProbe_AgainstSingleSlotHost()
+    {
+        // Regression for the StreamJsonRpc -> CurlyRpc migration. The per-replica control client
+        // (TerminalHostControlClient) opens a fresh connection per probe and disposes its JsonRpc
+        // when done. The terminal host's control listener serves a single active slot and only
+        // frees it when the client's connection closes (it observes EOF and its rpc.Completion
+        // fires). The migrated client built its HeaderDelimitedMessageHandler with the default
+        // ownsStreams:false, so disposing the rpc left the socket open, the host never saw EOF, and
+        // every probe after the first was wedged out of the single slot (the failing TerminalCommandTests
+        // E2E saw the first 'aspire terminal ps' report alive and all subsequent probes report dead).
+        // Drive several sequential GetTerminalInfo probes through the real client against a single-slot
+        // host and assert each one comes back alive.
+        var fakeHost = await StartFakeControlHostAsync(
+            new TerminalHostSessionInfo
+            {
+                ProducerUdsPath = "host-claim-p0",
+                ConsumerUdsPath = "host-claim-r0",
+                IsAlive = true,
+                ProducerConnected = true,
+            },
+            singleSlot: true).DefaultTimeout();
+
+        var (model, _) = BuildModel(replicaCount: 1, controlListeners: [fakeHost]);
+
+        var target = CreateTarget(model);
+
+        for (var probe = 0; probe < 3; probe++)
+        {
+            var result = await target.GetTerminalInfoAsync(
+                new GetTerminalInfoRequest { ResourceName = "myapp" }).DefaultTimeout(TimeSpan.FromSeconds(10));
+
+            Assert.True(result.IsAvailable);
+            Assert.NotNull(result.Replicas);
+            var replica = Assert.Single(result.Replicas!);
+            Assert.True(replica.IsAlive);
+        }
+    }
+
+    [Fact]
     public async Task DegradedReplicaReportedWhenSomeHostsUnreachable()
     {
         // Mixed scenario: replica 0's host is reachable, replica 1's is not.
@@ -336,11 +375,11 @@ public class GetTerminalInfoAsyncTests : IAsyncDisposable
         return new AuxiliaryBackchannelRpcTarget(NullLogger<AuxiliaryBackchannelRpcTarget>.Instance, configuration, profilingTelemetry, sp);
     }
 
-    private async Task<FakeControlHost> StartFakeControlHostAsync(TerminalHostSessionInfo session)
+    private async Task<FakeControlHost> StartFakeControlHostAsync(TerminalHostSessionInfo session, bool singleSlot = false)
     {
         var dir = CreateShortTempDir();
         var socketPath = Path.Combine(dir, "ctrl.sock");
-        var host = new FakeControlHost(socketPath, session);
+        var host = new FakeControlHost(socketPath, session, singleSlot);
         await host.StartAsync().ConfigureAwait(false);
         _toDispose.Add(host);
         return host;
@@ -374,7 +413,7 @@ public class GetTerminalInfoAsyncTests : IAsyncDisposable
     /// exposes a single <see cref="TerminalHostControlProtocol.GetSessionMethod"/> that
     /// returns the canned <see cref="TerminalHostSessionInfo"/>.
     /// </summary>
-    private sealed class FakeControlHost(string socketPath, TerminalHostSessionInfo session) : IAsyncDisposable
+    private sealed class FakeControlHost(string socketPath, TerminalHostSessionInfo session, bool singleSlot = false) : IAsyncDisposable
     {
         private Socket? _listenSocket;
         private CancellationTokenSource? _cts;
@@ -415,49 +454,73 @@ public class GetTerminalInfoAsyncTests : IAsyncDisposable
                     return;
                 }
 
-                _ = Task.Run(async () =>
+                if (singleSlot)
                 {
-                    var stream = new NetworkStream(client, ownsSocket: true);
-                    // Match TerminalHostControlClient's wire casing (default PascalCase JsonSerializerOptions)
-                    // so this fake terminal-host server round-trips with the production client under CurlyRpc.
-                    var handler = new HeaderDelimitedMessageHandler(stream, stream);
-                    var rpc = new JsonRpc(handler, new JsonRpcOptions
-                    {
-                        SerializerOptions = new JsonSerializerOptions()
-                    });
-
-                    rpc.AddLocalRpcMethod(
-                        TerminalHostControlProtocol.GetSessionMethod,
-                        new Func<TerminalHostSessionInfo>(() => session));
-
-                    lock (_rpcs)
-                    {
-                        _rpcs.Add(rpc);
-                    }
-
-                    rpc.StartListening();
-                    try { await rpc.Completion.ConfigureAwait(false); }
-                    catch { }
-                }, ct);
+                    // Mirror the real TerminalHostControlListener's single active slot: serve this
+                    // connection inline and do not accept the next one until the current client's
+                    // rpc.Completion fires. That only happens when the client closes its socket, so
+                    // this loop wedges forever if a probe disposes its JsonRpc without closing the
+                    // underlying stream (the ownsStreams:false migration bug). A well-behaved client
+                    // frees the slot on dispose and the next sequential probe is accepted.
+                    await ServeAsync(client).ConfigureAwait(false);
+                }
+                else
+                {
+                    _ = Task.Run(() => ServeAsync(client), ct);
+                }
             }
+        }
+
+        private async Task ServeAsync(Socket client)
+        {
+            var stream = new NetworkStream(client, ownsSocket: true);
+            // Match TerminalHostControlClient's wire casing (default PascalCase JsonSerializerOptions)
+            // so this fake terminal-host server round-trips with the production client under CurlyRpc.
+            var handler = new HeaderDelimitedMessageHandler(stream, stream);
+            var rpc = new JsonRpc(handler, new JsonRpcOptions
+            {
+                SerializerOptions = new JsonSerializerOptions()
+            });
+
+            rpc.AddLocalRpcMethod(
+                TerminalHostControlProtocol.GetSessionMethod,
+                new Func<TerminalHostSessionInfo>(() => session));
+
+            lock (_rpcs)
+            {
+                _rpcs.Add(rpc);
+            }
+
+            rpc.StartListening();
+            try { await rpc.Completion.ConfigureAwait(false); }
+            catch { }
         }
 
         public async ValueTask DisposeAsync()
         {
             try { _cts?.Cancel(); } catch { }
             try { _listenSocket?.Dispose(); } catch { }
+
+            // Dispose any served rpcs before awaiting the accept loop. A single-slot accept loop
+            // serves inline (await rpc.Completion); if a probe wedged the slot (e.g. a failing run
+            // where the client never closed its socket) that completion never fires on its own, so
+            // disposing the rpc here releases the loop instead of hanging teardown.
+            JsonRpc[] rpcs;
+            lock (_rpcs)
+            {
+                rpcs = _rpcs.ToArray();
+                _rpcs.Clear();
+            }
+            foreach (var rpc in rpcs)
+            {
+                try { rpc.Dispose(); } catch { }
+            }
+
             if (_acceptLoop is not null)
             {
                 try { await _acceptLoop.ConfigureAwait(false); } catch { }
             }
-            lock (_rpcs)
-            {
-                foreach (var rpc in _rpcs)
-                {
-                    try { rpc.Dispose(); } catch { }
-                }
-                _rpcs.Clear();
-            }
+
             try { File.Delete(SocketPath); } catch { }
             _cts?.Dispose();
         }
