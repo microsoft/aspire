@@ -2823,7 +2823,6 @@ public static class ResourceBuilderExtensions
 
         var endpointName = endpoint.EndpointName;
 
-        Uri? uri = null;
         builder.OnResourceEndpointsAllocated((_, @event, ct) =>
         {
             if (!endpoint.Exists)
@@ -2831,6 +2830,12 @@ public static class ResourceBuilderExtensions
                 throw new DistributedApplicationException($"The endpoint '{endpointName}' does not exist on the resource '{builder.Resource.Name}'.");
             }
 
+            return Task.CompletedTask;
+        });
+
+        Uri? uri = null;
+        builder.OnBeforeResourceStarted((_, @event, ct) =>
+        {
             var baseUri = new Uri(endpoint.Url, UriKind.Absolute);
             uri = new Uri(baseUri, path);
             return Task.CompletedTask;
@@ -2928,7 +2933,6 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(executeCommand);
 
         commandOptions ??= CommandOptions.Default;
-#pragma warning disable ASPIREINTERACTION001 // Command arguments intentionally reuse the experimental interaction input model.
         ValidateCommandArguments(commandOptions.Arguments);
 
         // Replace existing annotation with the same name.
@@ -2941,7 +2945,6 @@ public static class ResourceBuilderExtensions
 #pragma warning disable CS0618 // Parameter is obsolete but still flowed for compatibility.
         return builder.WithAnnotation(new ResourceCommandAnnotation(name, displayName, commandOptions.UpdateState ?? (c => ResourceCommandState.Enabled), executeCommand, commandOptions.Description, commandOptions.Parameter, commandOptions.Arguments, commandOptions.ConfirmationMessage, commandOptions.IconName, commandOptions.IconVariant, commandOptions.IsHighlighted, commandOptions.Visibility, commandOptions.ValidateArguments));
 #pragma warning restore CS0618
-#pragma warning restore ASPIREINTERACTION001
     }
 
     /// <summary>
@@ -3006,21 +3009,16 @@ public static class ResourceBuilderExtensions
             builder.Resource.Annotations.Remove(existingAnnotation);
         }
 
-#pragma warning disable ASPIREINTERACTION001 // The obsolete overload still flows the obsolete parameter for compatibility.
         return builder.WithAnnotation(new ResourceCommandAnnotation(name, displayName, updateState ?? (c => ResourceCommandState.Enabled), executeCommand, displayDescription, parameter, confirmationMessage, iconName, iconVariant, isHighlighted));
-#pragma warning restore ASPIREINTERACTION001
     }
 
-#pragma warning disable ASPIREINTERACTION001 // Command arguments reuse interaction input metadata.
     private static void ValidateCommandArguments(IReadOnlyList<InteractionInput> arguments)
     {
         _ = new InteractionInputCollection(arguments);
     }
-#pragma warning restore ASPIREINTERACTION001
 
     private static void ApplyCommandOptions(CommandOptions target, CommandOptions source)
     {
-#pragma warning disable ASPIREINTERACTION001 // Exported command options intentionally reuse command argument metadata.
 #pragma warning disable CS0618 // Parameter is obsolete but still flowed for command option compatibility.
         target.Description = source.Description;
         target.Parameter = source.Parameter;
@@ -3033,7 +3031,6 @@ public static class ResourceBuilderExtensions
         target.IsHighlighted = source.IsHighlighted;
         target.UpdateState = source.UpdateState;
 #pragma warning restore CS0618
-#pragma warning restore ASPIREINTERACTION001
     }
 
     #pragma warning disable ASPIREPROCESSCOMMAND001 // Process command APIs are experimental.
@@ -3296,7 +3293,7 @@ public static class ResourceBuilderExtensions
     internal static async Task<ExecuteCommandResult> ExecuteProcessCommandAsync(ExecuteCommandContext context, ProcessCommandSpec processCommandSpec, ProcessCommandOptions commandOptions)
     {
         var processSpec = CreateProcessSpec(context, processCommandSpec, commandOptions);
-        var processRunner = context.ServiceProvider.GetRequiredService<IProcessRunner>();
+        var processRunner = context.Services.GetRequiredService<IProcessRunner>();
         var (pendingProcessResult, processDisposable) = processRunner.Run(processSpec);
 
         await using (processDisposable.ConfigureAwait(false))
@@ -3477,7 +3474,7 @@ public static class ResourceBuilderExtensions
         {
             var resultContext = new ProcessCommandResultContext
             {
-                ServiceProvider = context.ServiceProvider,
+                Services = context.Services,
                 ResourceName = context.ResourceName,
                 Logger = context.Logger,
                 CancellationToken = context.CancellationToken,
@@ -3724,13 +3721,13 @@ public static class ResourceBuilderExtensions
                     return new ExecuteCommandResult { Success = false, Message = "Endpoints are not yet allocated." };
                 }
                 var uri = new UriBuilder(endpoint.Url) { Path = path }.Uri;
-                var httpClient = context.ServiceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(commandOptions.HttpClientName ?? Options.DefaultName);
+                var httpClient = context.Services.GetRequiredService<IHttpClientFactory>().CreateClient(commandOptions.HttpClientName ?? Options.DefaultName);
                 var request = new HttpRequestMessage(commandOptions.Method, uri);
                 if (commandOptions.PrepareRequest is not null)
                 {
                     var requestContext = new HttpCommandRequestContext
                     {
-                        ServiceProvider = context.ServiceProvider,
+                        Services = context.Services,
                         ResourceName = context.ResourceName,
                         Endpoint = endpoint,
                         CancellationToken = context.CancellationToken,
@@ -3748,7 +3745,7 @@ public static class ResourceBuilderExtensions
                     {
                         var resultContext = new HttpCommandResultContext
                         {
-                            ServiceProvider = context.ServiceProvider,
+                            Services = context.Services,
                             ResourceName = context.ResourceName,
                             Endpoint = endpoint,
                             CancellationToken = context.CancellationToken,
@@ -4273,10 +4270,9 @@ public static class ResourceBuilderExtensions
     ///     });
     /// </code>
     /// </example>
-    /// <para>This method is not available in polyglot app hosts.</para>
     /// </remarks>
     [Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "HttpsCertificateConfigurationCallbackAnnotationContext exposes IServiceProvider and IResource — not usable from polyglot hosts.")]
+    [AspireExport]
     public static IResourceBuilder<TResource> WithHttpsCertificateConfiguration<TResource>(this IResourceBuilder<TResource> builder, Func<HttpsCertificateConfigurationCallbackAnnotationContext, Task> callback)
         where TResource : IResourceWithEnvironment, IResourceWithArgs
     {
@@ -4314,10 +4310,9 @@ public static class ResourceBuilderExtensions
     /// });
     /// </code>
     /// </example>
-    /// <para>This method is not available in polyglot app hosts.</para>
     /// </remarks>
     [Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "HttpsEndpointUpdateCallbackContext exposes IServiceProvider and IResource — not usable from polyglot hosts.")]
+    [AspireExport]
     public static IResourceBuilder<TResource> SubscribeHttpsEndpointsUpdate<TResource>(this IResourceBuilder<TResource> builder, Action<HttpsEndpointUpdateCallbackContext> callback)
         where TResource : IResource
     {

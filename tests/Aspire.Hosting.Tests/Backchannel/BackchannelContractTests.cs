@@ -31,6 +31,8 @@ public class BackchannelContractTests
         typeof(ExecuteResourceCommandRequest),
         typeof(WaitForResourceRequest),
         typeof(GetPipelineStepsRequest),
+        typeof(GetTerminalInfoRequest),
+        typeof(ListTerminalsRequest),
     ];
 
     // V2 request/response types that must follow the contract
@@ -48,6 +50,11 @@ public class BackchannelContractTests
         typeof(ExecuteResourceCommandResponse),
         typeof(WaitForResourceResponse),
         typeof(GetPipelineStepsResponse),
+        typeof(GetTerminalInfoResponse),
+        typeof(TerminalReplicaInfo),
+        typeof(TerminalPeerInfo),
+        typeof(ListTerminalsResponse),
+        typeof(TerminalSummary),
         typeof(ResourceSnapshot),
         typeof(ResourceSnapshotUrl),
         typeof(ResourceSnapshotUrlDisplayProperties),
@@ -97,7 +104,10 @@ public class BackchannelContractTests
                 type != typeof(BackchannelTraceContext) &&
                 type.Name != "McpToolContentItem" &&
                 type.Name != "ResourceLogLine" &&
-                type.Name != "ResourceLogBatch")
+                type.Name != "ResourceLogBatch" &&
+                type.Name != "TerminalReplicaInfo" &&
+                type.Name != "TerminalPeerInfo" &&
+                type.Name != "TerminalSummary")
             {
                 if (!type.Name.EndsWith("Request") && !type.Name.EndsWith("Response"))
                 {

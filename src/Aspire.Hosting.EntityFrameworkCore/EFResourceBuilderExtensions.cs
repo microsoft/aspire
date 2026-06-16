@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREDOTNETTOOL
-#pragma warning disable ASPIREINTERACTION001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.EntityFrameworkCore;
@@ -408,7 +407,7 @@ public static class EFResourceBuilderExtensions
 
     private static async Task<ExecuteCommandResult> StartEfToolResourceAsync(ExecuteCommandContext context, DotnetToolResource toolResource)
     {
-        var notificationService = context.ServiceProvider.GetRequiredService<ResourceNotificationService>();
+        var notificationService = context.Services.GetRequiredService<ResourceNotificationService>();
         var resourceStarted = false;
         Process? process = null;
 
@@ -424,7 +423,7 @@ public static class EFResourceBuilderExtensions
                 };
             }
 
-            var executionContext = context.ServiceProvider.GetService<DistributedApplicationExecutionContext>()
+            var executionContext = context.Services.GetService<DistributedApplicationExecutionContext>()
                 ?? new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
 
             var executionConfiguration = await ExecutionConfigurationBuilder.Create(toolResource)
@@ -515,7 +514,7 @@ public static class EFResourceBuilderExtensions
                 State = KnownResourceStates.Running
             }).ConfigureAwait(false);
 
-            var resourceLoggerService = context.ServiceProvider.GetRequiredService<ResourceLoggerService>();
+            var resourceLoggerService = context.Services.GetRequiredService<ResourceLoggerService>();
             var resourceLogger = resourceLoggerService.GetLogger(toolResource);
 
             var stderrBuilder = new StringBuilder();
@@ -785,7 +784,6 @@ public static class EFResourceBuilderExtensions
                 return CommandResults.Failure(result.ErrorMessage);
             });
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only
     /// <summary>
     /// Common wrapper that handles state management and exception handling for EF commands.
     /// </summary>
@@ -796,9 +794,9 @@ public static class EFResourceBuilderExtensions
         bool waitForDependencies,
         Func<EFCoreOperationExecutor, ILogger, IInteractionService?, Task<ExecuteCommandResult>> executeOperation)
     {
-        var resourceLoggerService = context.ServiceProvider.GetRequiredService<ResourceLoggerService>();
-        var resourceNotificationService = context.ServiceProvider.GetRequiredService<ResourceNotificationService>();
-        var interactionService = context.ServiceProvider.GetService<IInteractionService>();
+        var resourceLoggerService = context.Services.GetRequiredService<ResourceLoggerService>();
+        var resourceNotificationService = context.Services.GetRequiredService<ResourceNotificationService>();
+        var interactionService = context.Services.GetService<IInteractionService>();
         var logger = resourceLoggerService.GetLogger(migrationResource);
 
         if (migrationResource.IsExecutingCommand)
@@ -826,7 +824,7 @@ public static class EFResourceBuilderExtensions
                 migrationResource.DbContextTypeName,
                 logger,
                 context.CancellationToken,
-                context.ServiceProvider,
+                context.Services,
                 migrationResource.ToolResource);
 
             var result = await executeOperation(executor, logger, interactionService).ConfigureAwait(false);
@@ -996,5 +994,4 @@ public static class EFResourceBuilderExtensions
                 logger.LogError("Get Database Status command failed: {Error}", result.ErrorMessage);
                 return CommandResults.Failure(result.ErrorMessage);
             });
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only
 }

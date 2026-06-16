@@ -2281,9 +2281,9 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         const sandbox = sinon.createSandbox();
         const resource = makeResource({
             commands: {
-                'set-parameter': { displayName: 'Set parameter', description: null, registrationOrder: 0 },
-                'custom-action': { displayName: 'Custom action', description: null, registrationOrder: 1 },
-                'delete-parameter': { displayName: 'Delete parameter', description: null, registrationOrder: 2 },
+                'set-parameter': { displayName: 'Set parameter', description: null, sortOrder: 0 },
+                'custom-action': { displayName: 'Custom action', description: null, sortOrder: 1 },
+                'delete-parameter': { displayName: 'Delete parameter', description: null, sortOrder: 2 },
             },
         });
         const provider = makeTreeProvider([

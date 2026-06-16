@@ -165,6 +165,21 @@ public class AtsCapabilityScannerTests
         Assert.Equal(AtsTypeCategory.Array, enumerableReturnCapability.ReturnType.Category);
     }
 
+    [Fact]
+    public void ScanAssembly_UnionCapability_CollectsEnumTypesFromUnionMembers()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        var capability = Assert.Single(result.Capabilities,
+            c => c.CapabilityId.EndsWith("/testUnionEnumParameter", StringComparison.Ordinal));
+        var parameter = Assert.Single(capability.Parameters);
+
+        Assert.Equal(AtsTypeCategory.Union, parameter.Type?.Category);
+        Assert.Contains(parameter.Type!.UnionTypes!, type => type.ClrType == typeof(TestUnionEnum));
+        Assert.Contains(parameter.Type.UnionTypes!, type => type.TypeId == AtsConstants.String);
+        Assert.Contains(result.EnumTypes, type => type.ClrType == typeof(TestUnionEnum));
+    }
+
     #endregion
 
     #region DeriveMethodName Tests
@@ -723,6 +738,12 @@ public class AtsCapabilityScannerTests
 
     private sealed class OtherEnvironmentResource(string name) : Resource(name), IResourceWithEnvironment;
 
+    private enum TestUnionEnum
+    {
+        First,
+        Second
+    }
+
     [AspireDto]
     private sealed class NullableScalarDto
     {
@@ -784,6 +805,13 @@ public class AtsCapabilityScannerTests
         {
             _ = callback;
             return builder;
+        }
+
+        [AspireExport]
+        public static void TestUnionEnumParameter(IDistributedApplicationBuilder builder, [AspireUnion(typeof(TestUnionEnum), typeof(string))] object value)
+        {
+            _ = builder;
+            _ = value;
         }
 
         /// <param name="value">The fallback value.</param>

@@ -64,6 +64,55 @@ internal interface IProvisioningContextProvider
 }
 
 /// <summary>
+/// Provides interactive management of Azure provisioning options in run mode.
+/// </summary>
+internal interface IAzureProvisioningOptionsManager
+{
+    /// <summary>
+    /// Ensures Azure provisioning options are available, optionally forcing the user to re-enter them.
+    /// </summary>
+    /// <param name="forcePrompt">Whether to force re-prompting even when options already exist.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns><c>true</c> when options are available; otherwise, <c>false</c> if the interaction was canceled.</returns>
+    Task<bool> EnsureProvisioningOptionsAsync(bool forcePrompt, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Persists the current provisioning options to deployment state without creating a provisioning context.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    Task PersistProvisioningOptionsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Applies provisioning option values and persists the resulting Azure context.
+    /// </summary>
+    /// <param name="options">The option values to apply.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The persisted provisioning options.</returns>
+    Task<AzureProvisioningOptionsState> ApplyProvisioningOptionsAsync(AzureProvisioningOptionsUpdate options, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Azure provisioning option values supplied by a command.
+/// </summary>
+internal sealed record AzureProvisioningOptionsUpdate(string? SubscriptionId, string? ResourceGroup, string? Location, string? TenantId);
+
+/// <summary>
+/// The currently persisted Azure provisioning options.
+/// </summary>
+internal sealed record AzureProvisioningOptionsState(string? SubscriptionId, string? ResourceGroup, string? Location, string? TenantId);
+
+/// <summary>
+/// No-op implementation used in publish mode where interactive provisioning options management is not needed.
+/// </summary>
+internal sealed class NoOpAzureProvisioningOptionsManager : IAzureProvisioningOptionsManager
+{
+    public Task<bool> EnsureProvisioningOptionsAsync(bool forcePrompt, CancellationToken cancellationToken = default) => Task.FromResult(false);
+    public Task PersistProvisioningOptionsAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+    public Task<AzureProvisioningOptionsState> ApplyProvisioningOptionsAsync(AzureProvisioningOptionsUpdate options, CancellationToken cancellationToken = default)
+        => Task.FromResult(new AzureProvisioningOptionsState(options.SubscriptionId, options.ResourceGroup, options.Location, options.TenantId));
+}
+
+/// <summary>
 /// Abstraction for Azure ArmClient.
 /// </summary>
 internal interface IArmClient
@@ -89,6 +138,11 @@ internal interface IArmClient
     Task<IEnumerable<ISubscriptionResource>> GetAvailableSubscriptionsAsync(string? tenantId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Gets a subscription by identifier.
+    /// </summary>
+    Task<ISubscriptionResource> GetSubscriptionAsync(string subscriptionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Gets all available locations for the specified subscription.
     /// </summary>
     Task<IEnumerable<(string Name, string DisplayName)>> GetAvailableLocationsAsync(string subscriptionId, CancellationToken cancellationToken = default);
@@ -99,9 +153,42 @@ internal interface IArmClient
     Task<IEnumerable<(string Name, string Location)>> GetAvailableResourceGroupsWithLocationAsync(string subscriptionId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Gets Azure locations that support the specified resource type.
+    /// </summary>
+    Task<IEnumerable<string>> GetSupportedLocationsAsync(string subscriptionId, string resourceType, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Gets role assignments collection for the specified scope.
     /// </summary>
     IRoleAssignmentCollection GetRoleAssignments(ResourceIdentifier scope);
+
+    /// <summary>
+    /// Determines whether the specified Azure resource currently exists.
+    /// </summary>
+    Task<bool> ResourceExistsAsync(string resourceId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes the specified Azure resource.
+    /// </summary>
+    Task DeleteResourceAsync(string resourceId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Cancels the specified Azure deployment.
+    /// </summary>
+    Task CancelDeploymentAsync(string deploymentId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets Azure resource IDs targeted by the specified deployment.
+    /// </summary>
+    IAsyncEnumerable<string> GetDeploymentTargetResourceIdsAsync(string deploymentId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets Azure deployment operations for the specified deployment.
+    /// </summary>
+    IAsyncEnumerable<AzureDeploymentOperationDetails> GetDeploymentOperationsAsync(
+        string deploymentId,
+        bool recursive = true,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -174,7 +261,7 @@ internal interface IResourceGroupResource
     /// <summary>
     /// Deletes the resource group.
     /// </summary>
-    Task DeleteAsync(WaitUntil waitUntil, CancellationToken cancellationToken = default);
+    Task<ArmOperation> DeleteAsync(WaitUntil waitUntil, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Lists all resources in the resource group.
@@ -211,6 +298,11 @@ internal interface IArmDeploymentCollection
         string deploymentName,
         ArmDeploymentContent content,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Cancels a running deployment.
+    /// </summary>
+    Task CancelAsync(string deploymentName, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -232,6 +324,11 @@ internal interface ITenantResource
     /// Gets the default domain.
     /// </summary>
     string? DefaultDomain { get; }
+
+    /// <summary>
+    /// Gets ARM deployments collection.
+    /// </summary>
+    IArmDeploymentCollection GetArmDeployments();
 }
 
 /// <summary>

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.TestUtilities;
+using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -73,6 +74,35 @@ public class HealthCheckTests(ITestOutputHelper testOutputHelper)
             "Could not create HTTP health check for resource 'resource' as the endpoint with name 'nonhttp' and scheme 'tcp' is not an HTTP endpoint.",
             ex.Message
             );
+    }
+
+    [Fact]
+    public async Task WithHttpHealthCheckInitializesUriOnBeforeResourceStartedEvent()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var resource = builder.AddContainer("resource", "dummycontainer")
+            .WithHttpEndpoint(port: 49217, targetPort: 80)
+            .WithHttpHealthCheck();
+
+        using var app = builder.Build();
+
+        var endpoint = resource.GetEndpoint("http").EndpointAnnotation;
+        endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, KnownHostNames.Localhost, 49217, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: null);
+
+        var eventing = app.Services.GetRequiredService<IDistributedApplicationEventing>();
+        var registration = app.Services.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value.Registrations
+            .Single(r => r.Name == "resource_http_/_200_check");
+
+        await eventing.PublishAsync(new ResourceEndpointsAllocatedEvent(resource.Resource, app.Services));
+
+        // The health check URI is intentionally initialized on BeforeResourceStartedEvent (not on
+        // ResourceEndpointsAllocatedEvent) so the URI reflects the final allocated endpoint. Once that
+        // event has been published the health check factory can build a valid check.
+        await eventing.PublishAsync(new BeforeResourceStartedEvent(resource.Resource, app.Services));
+
+        var healthCheck = registration.Factory(app.Services);
+        Assert.NotNull(healthCheck);
     }
 
     [Fact]

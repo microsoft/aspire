@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Microsoft.Extensions.Configuration;
-
 namespace Aspire.Hosting.Azure.Provisioning;
 
 /// <summary>
@@ -11,13 +9,12 @@ namespace Aspire.Hosting.Azure.Provisioning;
 internal interface IBicepProvisioner
 {
     /// <summary>
-    /// Configures an Azure Bicep resource from configuration settings.
+    /// Configures an Azure Bicep resource from persisted deployment state.
     /// </summary>
-    /// <param name="configuration">The configuration containing Azure deployment settings.</param>
     /// <param name="resource">The Azure Bicep resource to configure.</param>
     /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains a value indicating whether the resource was successfully configured.</returns>
-    Task<bool> ConfigureResourceAsync(IConfiguration configuration, AzureBicepResource resource, CancellationToken cancellationToken);
+    Task<bool> ConfigureResourceAsync(AzureBicepResource resource, CancellationToken cancellationToken);
 
     /// <summary>
     /// Gets an existing resource or creates a new Azure Bicep resource.

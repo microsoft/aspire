@@ -482,6 +482,65 @@ public class ResourceDetailsTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task Render_HighlightedUnknownProperty_ShowsInDefaultResourceDetailsAndPreservesSensitivity()
+    {
+        ResourceSetupHelpers.SetupResourceDetails(this);
+
+        var properties = new Dictionary<string, ResourcePropertyViewModel>
+        {
+            ["provider.diagnostic.message"] = new(
+                "provider.diagnostic.message",
+                Value.ForString("The provider reported a recoverable deployment error."),
+                isValueSensitive: false,
+                knownProperty: null,
+                priority: int.MaxValue,
+                displayName: "Provider diagnostic",
+                isHighlighted: true),
+            ["provider.diagnostic.secret"] = new(
+                "provider.diagnostic.secret",
+                Value.ForString("Sensitive provider diagnostic detail."),
+                isValueSensitive: true,
+                knownProperty: null,
+                priority: int.MaxValue,
+                displayName: "Provider secret",
+                isHighlighted: true),
+            ["provider.diagnostic.hidden"] = new(
+                "provider.diagnostic.hidden",
+                Value.ForString("This should require show all."),
+                isValueSensitive: false,
+                knownProperty: null,
+                priority: int.MaxValue)
+        };
+
+        var resource = ModelTestHelpers.CreateResource(
+            resourceName: "redis",
+            stateStyle: "error",
+            properties: properties);
+
+        var cut = RenderComponent<ResourceDetails>(builder =>
+        {
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
+        });
+
+        var resourcePropertyGrid = cut.FindAll(".property-grid")[0];
+        Assert.Contains("Provider diagnostic", resourcePropertyGrid.TextContent);
+        Assert.Contains("The provider reported a recoverable deployment error.", resourcePropertyGrid.TextContent);
+        Assert.Contains("Provider secret", resourcePropertyGrid.TextContent);
+        Assert.DoesNotContain("Sensitive provider diagnostic detail.", resourcePropertyGrid.TextContent);
+        Assert.DoesNotContain("This should require show all.", resourcePropertyGrid.TextContent);
+
+        var maskValueButton = cut.Find(".property-grid .grid-value-mask-button");
+        await maskValueButton.ClickAsync(new MouseEventArgs());
+
+        cut.WaitForAssertion(() =>
+        {
+            var updatedResourcePropertyGrid = cut.FindAll(".property-grid")[0];
+            Assert.Contains("Sensitive provider diagnostic detail.", updatedResourcePropertyGrid.TextContent);
+        });
+    }
+
+    [Fact]
     public void FilteredEnvironmentVariables_SortedByName()
     {
         // Arrange
@@ -829,4 +888,5 @@ public class ResourceDetailsTests : DashboardTestContext
             HealthReports = [],
         };
     }
+
 }

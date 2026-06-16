@@ -331,13 +331,13 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(2, dataRows.Length);
 
         Assert.Equal(FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime), dataRows[0][0]);
-        Assert.Equal("apiservice-11111111: GET /apiservice abc1234 (http://localhost:18888/traces/detail/abc1234567890def)", dataRows[0][1]);
+        Assert.Equal("apiservice-55555555: GET /apiservice abc1234 (http://localhost:18888/traces/detail/abc1234567890def)", dataRows[0][1]);
         Assert.Equal("1", dataRows[0][2]);
         Assert.Equal("75ms", dataRows[0][3]);
         Assert.Equal("OK", dataRows[0][4]);
 
         Assert.Equal(FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime.AddMilliseconds(10)), dataRows[1][0]);
-        Assert.Equal("apiservice-aaaaaaaa: GET /apiservice def9876 (http://localhost:18888/traces/detail/def9876543210abc)", dataRows[1][1]);
+        Assert.Equal("apiservice-eeeeeeee: GET /apiservice def9876 (http://localhost:18888/traces/detail/def9876543210abc)", dataRows[1][1]);
         Assert.Equal("1", dataRows[1][2]);
         Assert.Equal("50ms", dataRows[1][3]);
         Assert.Equal("ERR", dataRows[1][4]);
