@@ -2,8 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECERTIFICATES001
+#pragma warning disable ASPIREEXTENSION001 // WithDebugSupport is experimental but used internally for debug support
 #pragma warning disable IDE1006 // Naming Styles - match Community Toolkit naming convention
 
+using System.Diagnostics.CodeAnalysis;
 using System.Formats.Asn1;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
@@ -64,7 +66,8 @@ public static class JavaHostingExtensions
                 }
             })
             .WithOtlpExporter()
-            .WithCertificateTrustConfiguration(JavaCertificateTrustCallback);
+            .WithCertificateTrustConfiguration(JavaCertificateTrustCallback)
+            .WithVSCodeDebugging();
 
         return rb;
     }
@@ -401,5 +404,18 @@ public static class JavaHostingExtensions
         {
             ctx.EnvironmentVariables["JAVA_TOOL_OPTIONS"] = trustStoreArgs;
         }
+    }
+
+    [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    internal static IResourceBuilder<T> WithVSCodeDebugging<T>(this IResourceBuilder<T> builder)
+        where T : JavaAppResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+#pragma warning disable ASPIREEXTENSION001
+        return builder.WithDebugSupport(
+            mode => new JavaLaunchConfiguration { Mode = mode, WorkingDirectory = builder.Resource.WorkingDirectory },
+            "java");
+#pragma warning restore ASPIREEXTENSION001
     }
 }

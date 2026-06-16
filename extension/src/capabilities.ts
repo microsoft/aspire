@@ -19,7 +19,9 @@ export type Capability =
     | 'bun' // Support for running Bun projects
     | 'oven.bun-vscode' // Bun debug adapter extension identifier
     | 'browser' // Support for browser debugging (built-in to VS Code via js-debug)
-    | 'azure-functions'; // Support for running Azure Functions projects
+    | 'azure-functions' // Support for running Azure Functions projects
+    | 'java' // Support for running Java projects
+    | 'vscjava.vscode-java-debug'; // Java debug adapter extension identifier
 
 export type Capabilities = Capability[];
 
@@ -55,6 +57,10 @@ export function isNodeInstalled() {
 
 export function isBunInstalled() {
     return isExtensionInstalled("oven.bun-vscode");
+}
+
+export function isJavaInstalled() {
+    return isExtensionInstalled("vscjava.vscode-java-debug");
 }
 
 export function getSupportedCapabilities(): Capabilities {
@@ -94,6 +100,11 @@ export function getSupportedCapabilities(): Capabilities {
     if (isBunInstalled()) {
         capabilities.push("bun");
         capabilities.push("oven.bun-vscode");
+    }
+
+    if (isJavaInstalled()) {
+        capabilities.push("java");
+        capabilities.push("vscjava.vscode-java-debug");
     }
 
     return capabilities;
