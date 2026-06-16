@@ -10,7 +10,7 @@
 <PageTitle><ApplicationName ResourceName="@nameof(Dashboard.Resources.Resources.ResourcesPageTitle)" Loc="@Loc" /></PageTitle>
 
 @{
-    var showDetailsView = SelectedResource is not null;
+    var showDetailsView = PageViewModel.SelectedResource is not null;
 }
 
 <div class="page-content-container">
@@ -24,7 +24,7 @@
                           Immediate="true"
                           ImmediateDelay="@FluentUIExtensions.InputDelay"
                           Name="resources-search"
-                          @bind-Value="_filter"
+                          @bind-Value="PageViewModel.TextFilter"
                           slot="end"
                           Label="@(ViewportInformation.IsDesktop ? null : ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)].Value)"
                           @bind-Value:after="HandleSearchFilterChangedAsync" />
@@ -85,10 +85,10 @@
                 </Body>
             </FluentPopover>
 
-            <SummaryDetailsView DetailsTitle="@(SelectedResource != null ? $"{SelectedResource.ResourceType}: {GetResourceName(SelectedResource)}" : null)"
+            <SummaryDetailsView DetailsTitle="@(PageViewModel.SelectedResource != null ? $"{PageViewModel.SelectedResource.ResourceType}: {GetResourceName(PageViewModel.SelectedResource)}" : null)"
                                 ShowDetails="@showDetailsView"
                                 OnDismiss="@(() => ClearSelectedResourceAsync(causedByUserAction: true))"
-                                SelectedValue="@SelectedResource"
+                                SelectedValue="@PageViewModel.SelectedResource"
                                 ViewKey="ResourcesList"
                                 OnResize="@(r => _manager.SetWidthFraction(r.Orientation == Orientation.Horizontal ? r.Panel1Fraction : 1))">
                 <Summary>
@@ -155,7 +155,7 @@
                                                             </FluentButton>
                                                         }
                                                     </span>
-                                                    <ResourceNameDisplay Resource="context.Resource" FilterText="@_filter" FormatName="GetResourceName" />
+                                                    <ResourceNameDisplay Resource="context.Resource" FilterText="@PageViewModel.TextFilter" FormatName="GetResourceName" />
                                                 </span>
                                             </AspireTemplateColumn>
                                             <AspireTemplateColumn ColumnId="@StateColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesStateColumnHeader)]" Sortable="true" SortBy="@_stateSort" Tooltip="true" TooltipText="@(c => ResourceStateViewModel.GetResourceStateTooltip(c.Resource, ColumnsLoc, _resourceByName.Values))">
@@ -168,7 +168,7 @@
                                             <AspireTemplateColumn ColumnId="@SourceColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesSourceColumnHeader)]" Tooltip="true" TooltipText="@(ctx => ResourceSourceViewModel.GetSourceViewModel(ctx.Resource)?.Tooltip)">
                                                 @if (ResourceSourceViewModel.GetSourceViewModel(context.Resource) is { } columnDisplay)
                                                 {
-                                                    <SourceColumnDisplay FilterText="@_filter" Value="@columnDisplay.Value" ContentAfterValue="@columnDisplay.ContentAfterValue" ValueToVisualize="@columnDisplay.ValueToVisualize" Tooltip="@columnDisplay.Tooltip" />
+                                                    <SourceColumnDisplay FilterText="@PageViewModel.TextFilter" Value="@columnDisplay.Value" ContentAfterValue="@columnDisplay.ContentAfterValue" ValueToVisualize="@columnDisplay.ValueToVisualize" Tooltip="@columnDisplay.Tooltip" />
                                                 }
                                                 else
                                                 {
@@ -257,7 +257,7 @@
                     <ResourceDetails Resource="context"
                                      ResourceByName="_resourceByName"
                                      ShowSpecOnlyToggle="true"
-                                     ShowHiddenResources="@_showHiddenResources"
+                                     ShowHiddenResources="@PageViewModel.ShowHiddenResources"
                                      CommandSelected="@(command => ExecuteResourceCommandAsync(context!, command))"
                                      IsCommandExecuting="@((resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name))" />
                 </Details>
