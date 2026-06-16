@@ -192,6 +192,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         File.WriteAllText(appHostFile.FullName, string.Empty);
 
         var projectFactory = new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true));
+        Assert.False(projectFactory.Project.RequiresStopForAddPackage);
         projectFactory.Project.AddPackageAsyncCallback = (context, _) =>
         {
             addPackageWasCalled = true;
