@@ -20,7 +20,7 @@ public sealed class ResourcesViewModelTests
         };
         vm.ResourceTypesToVisibility[KnownResourceTypes.Parameter] = true;
         vm.ResourceStatesToVisibility[KnownResourceState.Running.ToString()] = true;
-        vm.ResourceHealthStatusesToVisibility[""] = true;
+        vm.ResourceHealthStatusesToVisibility["Healthy"] = true;
 
         var resource = ModelTestHelpers.CreateResource(resourceType: KnownResourceTypes.Parameter, state: KnownResourceState.Running);
 
@@ -56,7 +56,7 @@ public sealed class ResourcesViewModelTests
         };
         vm.ResourceTypesToVisibility[KnownResourceTypes.Container] = false;
         vm.ResourceStatesToVisibility[KnownResourceState.Running.ToString()] = true;
-        vm.ResourceHealthStatusesToVisibility[""] = true;
+        vm.ResourceHealthStatusesToVisibility["Healthy"] = true;
 
         var resource = ModelTestHelpers.CreateResource(resourceType: KnownResourceTypes.Container, state: KnownResourceState.Running);
 
@@ -73,7 +73,7 @@ public sealed class ResourcesViewModelTests
         };
         vm.ResourceTypesToVisibility[KnownResourceTypes.Container] = true;
         vm.ResourceStatesToVisibility[KnownResourceState.Running.ToString()] = false;
-        vm.ResourceHealthStatusesToVisibility[""] = true;
+        vm.ResourceHealthStatusesToVisibility["Healthy"] = true;
 
         var resource = ModelTestHelpers.CreateResource(resourceType: KnownResourceTypes.Container, state: KnownResourceState.Running);
 
@@ -90,7 +90,7 @@ public sealed class ResourcesViewModelTests
         };
         vm.ResourceTypesToVisibility[KnownResourceTypes.Container] = true;
         vm.ResourceStatesToVisibility[KnownResourceState.Running.ToString()] = true;
-        vm.ResourceHealthStatusesToVisibility[""] = true;
+        vm.ResourceHealthStatusesToVisibility["Healthy"] = true;
 
         var resource = ModelTestHelpers.CreateResource(resourceName: "my-app", resourceType: KnownResourceTypes.Container, state: KnownResourceState.Running);
 
@@ -125,7 +125,7 @@ public sealed class ResourcesViewModelTests
         };
         vm.ResourceTypesToVisibility[KnownResourceTypes.Container] = true;
         vm.ResourceStatesToVisibility[KnownResourceState.Running.ToString()] = true;
-        vm.ResourceHealthStatusesToVisibility[""] = true;
+        vm.ResourceHealthStatusesToVisibility["Healthy"] = true;
 
         var resource = ModelTestHelpers.CreateResource(resourceType: KnownResourceTypes.Container, state: KnownResourceState.Running, hidden: true);
 
