@@ -186,6 +186,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     public async Task AddCommandDoesNotStopRunningInstanceForTypeScriptAppHost()
     {
         var addPackageWasCalled = false;
+        var stopWasCalled = false;
 
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
@@ -201,7 +202,11 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             Assert.Equal("9.2.0", context.PackageVersion);
             return Task.FromResult(true);
         };
-        projectFactory.Project.FindAndStopRunningInstanceAsyncCallback = (_, _, _) => throw new InvalidOperationException("Should not stop a running instance for TypeScript AppHosts.");
+        projectFactory.Project.FindAndStopRunningInstanceAsyncCallback = (_, _, _) =>
+        {
+            stopWasCalled = true;
+            return Task.FromResult(RunningInstanceResult.NoRunningInstance);
+        };
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -233,6 +238,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(0, exitCode);
+        Assert.False(stopWasCalled);
         Assert.True(addPackageWasCalled);
     }
 
