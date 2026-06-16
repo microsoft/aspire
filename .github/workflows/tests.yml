@@ -57,13 +57,10 @@ jobs:
           persist-credentials: false
 
       # Compute the selected test subset + non-.NET job booleans. The action reuses this job's checkout
-      # (checkout=false) so the BeforeBuildProps.props it may write survives for enumerate-tests below;
-      # it does its own minimal SDK bootstrap (setupDotNet=true). The action's `enforce` input is the
-      # single audit/enforce knob: 'false' (audit) writes no restriction props, so enumerate-tests
-      # builds the FULL matrix and run_* are all true, while the summary still reports what enforcing
-      # would have skipped. No actions/setup-dotnet at the job level on purpose -- global.json declares
-      # tools.runtimes, so Arcade always uses repo-local .dotnet; the action's dotnet.sh provisions the
-      # SDK and enumerate-tests bootstraps the toolset.
+      # (checkout=false) so the BeforeBuildProps.props it may write survives for enumerate-tests below,
+      # and does its own minimal SDK bootstrap (setupDotNet=true). enforce: 'false' keeps this audit-only
+      # (the knob is documented on the action's `enforce` input). No job-level actions/setup-dotnet on
+      # purpose -- global.json declares tools.runtimes, so Arcade always uses repo-local .dotnet.
       - name: Select relevant tests
         id: select_tests
         uses: ./.github/actions/select-tests

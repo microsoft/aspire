@@ -1,40 +1,16 @@
 # Test trigger map (machine-readable) -- the CURATED layer (Layer 2) of selective CI.
 #
-# This file maps repo paths -> CI targets that must run when a matching file changes.
-# It deliberately contains ONLY what the MSBuild project graph cannot see, plus a low-maintenance
-# convention backstop. The graph-derived closure (ProjectReference edges, evaluated project items,
-# imports, and linked/shared-file consumers) is computed in-process from Aspire.slnx at the PR head
-# (Layer 1). So leaf integration -> own test, core fan-out, and link-compiled-file edges are NOT
-# enumerated here.
+# Maps repo paths -> CI targets that must run when a matching file changes. Holds ONLY what the
+# MSBuild project graph cannot see: Layer 1 computes the ProjectReference + linked/shared-file closure
+# from Aspire.slnx in-process at the PR head, so leaf-integration -> own-test, core fan-out, and
+# link-compiled edges are NOT enumerated here. Rules are additive -- a changed file selects the union
+# of every matching rule's targets plus the Layer 1 affected projects.
 #
-# Selector flow (see test-trigger-selector-design.md):
-#   changed-files + Layer 1 affected projects (production + test)
-#     -> per changed file, Layer 2 classifies it: convention / ignore / path_rule / leftover
-#     -> selected test set = (Layer1 affected ∩ matrix) union Layer2-matched tests
-#     -> affected_project_rules: affected PRODUCTION projects (by name glob) add jobs/tests
-#     -> derived pass (fixpoint): each selected test may add jobs/tests
-#     -> ALL decision: a path_rule whose target is ALL, the kill switch, OR a leftover file (matched
-#        by no rule, not ignored, NOT Layer-1-owned i.e. under no csproj in Aspire.slnx) forces the
-#        full matrix -- regardless of location, not src/** only. The prefilter drops files that need
-#        no CI before this point. ALL = full matrix + every job token.
-#
-# There are five selector matchers, plus reusable groups. A section is its own key only when the
-# selector treats it differently. Everything that is "a path glob set -> a target set" lives in ONE
-# section (path_rules); the groupings inside it are comments, not behavior. affected_project_rules is
-# separate because it keys off the affected-PROJECT set (by project name), not changed file paths.
-#
-#   conventions      <name>-capture pattern -> target template; emitted only if the derived test
-#                    exists in the matrix (existence guard). Additive. Covers a test's own folder
-#                    and the Hosting/Components integration dirs.
-#   ignore           globs Layer 2 accounts for with NO target (Layer 1 covers them, or inert), so
-#                    they do not trip the run-all fallback.
-#   path_rules       a path glob set -> a target set. targets may be test: / job: / a GROUP / ALL.
-#   affected_project_rules    an affected PRODUCTION project (name glob) -> a target set. Keyed off
-#                    Layer 1's affected-project set, so it follows the graph's transitive closure.
-#   derived_targets  a selected test project -> extra jobs/tests (fixpoint, cycle-safe).
-#   groups           named, reusable bundles of test:/job: targets (expand recursively).
-#
-# Companion docs: test-trigger-map.md, test-trigger-selector-design.md
+# Five matchers (conventions, ignore, path_rules, affected_project_rules, derived_targets) plus
+# reusable `groups`. The selector flow, the prefilter, the run-all fallback, and a per-section
+# reference live in the companion docs -- READ THESE before editing this file:
+#   docs/ci/test-trigger-map.md              -- per-section reference + how to edit
+#   docs/ci/test-trigger-selector-design.md  -- design rationale + the selector algorithm
 #
 # Target vocabulary:
 #   test:<Name>                a .NET test project tests/<Name> (run-tests.yml matrix entry)
@@ -65,11 +41,9 @@ groups:
     - job:homebrew-installer
 
 # Conventions: <name> captures one path segment; the derived target is emitted only when that test
-# project exists in the matrix (existence guard), so a folder with no same-named test (tests/Shared,
-# src/Aspire.Hosting.Azure.CosmosDB, ...) produces nothing here and falls through to path_rules /
-# Layer 1. Additive: only ever ADDS the conventional test; never removes Layer 1's result. The
-# Hosting/Components entries are a backstop for files Layer 1 cannot attribute (non-MSBuild items:
-# data/resource files, files excluded from compile).
+# project exists in the matrix (existence guard), so a folder with no same-named test falls through to
+# path_rules / Layer 1. Additive backstop for non-MSBuild files Layer 1 cannot attribute (data/resource
+# files, files excluded from compile). See docs/ci/test-trigger-map.md.
 conventions:
   - pattern: tests/<name>/**                        # a test project's own folder -> that test
     target: test:<name>
@@ -79,23 +53,11 @@ conventions:
     target: test:<name>.Tests
 
 # Prefilter (pre-Layer-1 exclude): changed files matching a pattern in `patterns_file` are DROPPED
-# before BOTH layers run, so they influence no selection at all. `patterns_file` is the SAME list the
-# top-level CI skip gate uses (eng/github-ci/ci-skip-entirely-patterns.txt, consumed by ci.yml via the
-# check-changed-files action), read at runtime so the two can never drift. Its glob syntax is the
-# action's, NOT the map's: `**` -> any chars incl. '/', `*` -> any chars except '/', `.` literal,
-# anchored (ChangedFileFilter ports the action's glob_to_regex verbatim).
-#
-# keep_routed are the carve-outs: files the patterns_file would drop but the selector deliberately
-# ROUTES to a target, so they must NOT be dropped. .github/workflows/** and eng/pipelines/** route to
-# Infrastructure.Tests (workflow/pipeline validation); the patterns file itself is a selector input
-# (read here) so a change to it must run that same verifier. Everything else the patterns file lists
-# (docs, .agents/skills, .github/instructions, .github/aw, loose scripts) is dropped.
-#
-# Why this is separate from `ignore`: `ignore` only suppresses the Layer 2 run-all fallback -- Layer 1
-# STILL git-diffs and attributes the file. A README.md is a packed <None> item, so the graph would
-# fan it out to its owning project's whole test closure even though it is "ignored". The prefilter
-# removes the file from Layer 1's input too, which is the only place that actually stops the fan-out.
-# See docs/ci/test-trigger-selector-design.md.
+# before BOTH layers run. patterns_file is the SAME list the top-level CI skip gate uses
+# (ci-skip-entirely-patterns.txt, read at runtime so the two can never drift); its glob syntax is the
+# check-changed-files action's, ported verbatim in ChangedFileFilter. keep_routed carves out files the
+# selector still routes to a target. Why this is distinct from `ignore` (the README fan-out case) and
+# the full flow: see docs/ci/test-trigger-selector-design.md.
 prefilter:
   patterns_file: eng/github-ci/ci-skip-entirely-patterns.txt
   keep_routed:
@@ -117,12 +79,10 @@ ignore:
   - eng/scripts/debug-*.ps1                             # debug-aspire-channel/stable/staging: local channel-switch helpers
   - eng/scripts/debug-*.sh
   - eng/scripts/validate-cli-symbols.ps1                # AzDO native-AOT symbol publish validation; no GH-CI consumer
-  # NOTE: src/Shared/**/*.cs and tests/Shared/**/*.cs are NOT listed here. They are link-compiled, so
-  # Layer 1 attributes them to their consuming projects, and the run-all fallback now treats any file
-  # Layer 1 attributed as "owned" (not just files under a project directory) -- so they are selected
-  # precisely without an ignore entry. The inert Vendoring/Shared above still needs ignore because the
-  # graph attributes it to nothing (it is compiled by nothing), so without ignore it would hit the
-  # run-all fallback. **/*.md and other no-CI files are handled by `prefilter` above.
+  # NOTE: src/Shared/**/*.cs and tests/Shared/**/*.cs are deliberately NOT ignored -- Layer 1 attributes
+  # them to their consuming projects and the run-all fallback treats any attributed file as owned, so
+  # they are selected precisely without an entry. **/*.md and other no-CI files are dropped by
+  # `prefilter` above. See docs/ci/test-trigger-map.md.
 
 
 # Path rules: a glob set -> a target set. One mechanism; the comment headers below are organization

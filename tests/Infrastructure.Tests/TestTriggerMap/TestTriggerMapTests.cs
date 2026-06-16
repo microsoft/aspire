@@ -110,8 +110,8 @@ public sealed class TestTriggerMapTests
     [Fact]
     public void EverySourceProjectIsReachableByLayer1OrACuratedRule()
     {
-        // The graph closure is owned by dotnet-affected (Layer 1), which discovers projects from
-        // Aspire.slnx. So a src project is "covered" if it is in the solution (∴ Layer 1 sees it)
+        // The graph closure is owned by the Layer 1 graph (GraphAffectedProjects), which discovers
+        // projects from Aspire.slnx. So a src project is "covered" if it is in the solution (∴ Layer 1 sees it)
         // OR matched by a curated glob (the deliberately out-of-slnx ones — e.g. the template
         // placeholders that crash discovery — are covered by loose_file_deps). A new src project
         // that is neither in the solution nor curated would silently never run any test, so it
@@ -137,7 +137,7 @@ public sealed class TestTriggerMapTests
             $"src projects neither in Aspire.slnx nor matched by a curated rule: {string.Join(", ", uncovered)}");
     }
 
-    // Repo-relative '/'-separated project paths listed in Aspire.slnx (the dotnet-affected root).
+    // Repo-relative '/'-separated project paths listed in Aspire.slnx (the Layer 1 graph root).
     private static IReadOnlySet<string> LoadSolutionProjectPaths()
     {
         var slnx = File.ReadAllText(Path.Combine(RepoRoot.Path, "Aspire.slnx"));
@@ -150,8 +150,8 @@ public sealed class TestTriggerMapTests
     [Fact]
     public void EveryTestProjectIsInTheSolutionSoLayer1CanSelectIt()
     {
-        // A matrix test project that is NOT in Aspire.slnx is invisible to Layer 1 (dotnet-affected
-        // only walks the solution), so a change to a production dependency could never fan into it --
+        // A matrix test project that is NOT in Aspire.slnx is invisible to Layer 1 (the graph only
+        // walks the solution), so a change to a production dependency could never fan into it --
         // it would silently never run in enforcing mode. Require every tests/<Name>/<Name>.csproj to
         // be in the solution. (This invariant is what the Infrastructure.Tests / Aspire.Hosting.Maui
         // .Tests additions satisfied; before them, both were silent Layer-1 blind spots.) Add to the
@@ -182,9 +182,9 @@ public sealed class TestTriggerMapTests
     public void EveryAffectedProjectRuleGlobMatchesASolutionProject()
     {
         // affected_project_rules key off the affected PROJECT set (Layer 1), matched by project-name
-        // glob. dotnet-affected can only ever report a project that is in Aspire.slnx, so a project glob
+        // glob. Layer 1 can only ever report a project that is in Aspire.slnx, so a project glob
         // that matches no solution project name would silently select nothing — assert each matches
-        // at least one. Project Name == the .csproj base name (what dotnet-affected emits).
+        // at least one. Project Name == the .csproj base name (what Layer 1 emits).
         var solutionProjectNames = LoadSolutionProjectPaths()
             .Select(p => Path.GetFileNameWithoutExtension(p))
             .ToHashSet(StringComparer.Ordinal);

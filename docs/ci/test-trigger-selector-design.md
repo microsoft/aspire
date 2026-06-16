@@ -180,38 +180,24 @@ MSBuild graph cannot infer:
 - convention backstops for files that are not modeled as MSBuild inputs;
 - conservative `ALL` routes for broad infrastructure changes.
 
-Only five selector matchers exist; `groups` are reusable target bundles:
+Only five selector matchers exist (`conventions`, `ignore`, `path_rules`,
+`affected_project_rules`, `derived_targets`); `groups` are reusable target
+bundles. The per-section reference — what each matches, with examples and how to
+edit — lives in [`test-trigger-map.md`](./test-trigger-map.md). Two facts are
+load-bearing at the design level:
 
-- **`prefilter`**: globs whose changed files are dropped *before* Layer 1 and
-  Layer 2 run. The pattern list is **read at runtime** from
+- **`prefilter`** is the only matcher that drops a changed file from **Layer 1's**
+  input, not just Layer 2's. Its pattern list is **read at runtime** from
   `eng/github-ci/ci-skip-entirely-patterns.txt` — the same file the top-level
-  `ci.yml` skip gate uses — so the selector and the gate can never drift. Its
-  glob syntax is the *action's*, not the map's (`**`→any incl. `/`, `*`→any
-  except `/`, `.` literal, anchored), ported verbatim in `ChangedFileFilter`.
-  `keep_routed` carves out the files the selector routes to a target
-  (`.github/workflows/**` and `eng/pipelines/**` → `Infrastructure.Tests`, and
-  the patterns file itself), so those are never dropped. This is the only
-  mechanism that also removes a file from Layer 1's input, so a packed
-  `README.md` cannot be attributed by the graph and fanned out.
-- **`conventions`**: `<name>`-capture pattern → target template, additive and
-  existence-guarded.
-- **`ignore`**: globs Layer 2 accounts for with no target, so they do not trip
-  the run-all fallback. `ignore` only suppresses the fallback — Layer 1 still
-  attributes the file. It is now only needed for files Layer 1 *cannot* attribute
-  (the inert `Vendoring/OpenTelemetry.Shared`, compiled by nothing): a
-  link-compiled `src/Shared`/`tests/Shared`/`Components/Common` file is reported
-  by Layer 1 in its attributed-paths set, and the fallback treats any
-  Layer-1-attributed file as owned, so those need no `ignore` entry.
-- **`path_rules`**: the general path-glob → targets matcher (`test:` / `job:` /
-  group / `ALL`).
-- **`affected_project_rules`**: an affected **production** project name glob
-  → targets. Matched against production names only; affected matrix *test*
-  projects are filtered out first, so a test-only change cannot fire production
-  jobs (`ats-diffs`, `extension-e2e`, …) through a glob like `Aspire.Hosting*`.
-- **`derived_targets`**: if any selected test matches, add more targets to a
-  fixpoint.
-
-These are sourced from the corresponding sections of `test-trigger-map.yml`.
+  `ci.yml` skip gate uses — so the selector and the gate can never drift (its glob
+  syntax is the `check-changed-files` action's, ported in `ChangedFileFilter`).
+  This is why `prefilter`, not `ignore`, is what stops a packed `README.md` from
+  being attributed by the graph and fanned out: `ignore` only suppresses the
+  Layer 2 run-all fallback, while Layer 1 still attributes an `ignore`d file.
+- **`affected_project_rules`** matches Layer 1's affected **production** project
+  names only; affected matrix *test* projects are filtered out first, so a
+  test-only change cannot fire production jobs (`ats-diffs`, `extension-e2e`, …)
+  through a glob like `Aspire.Hosting*`.
 
 ## The tool (`tools/SelectTests`)
 
