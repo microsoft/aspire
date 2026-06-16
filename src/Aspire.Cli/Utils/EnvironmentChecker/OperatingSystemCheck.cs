@@ -3,7 +3,6 @@
 
 using System.Globalization;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Resources;
 
@@ -108,7 +107,7 @@ internal sealed class OperatingSystemCheck : IEnvironmentCheck
             // /etc/os-release uses KEY=VALUE lines, for example:
             //   NAME="Ubuntu"
             //   VERSION_ID="24.04"
-            // Values may be unquoted or quoted with shell-style escapes for '"', '$', '`', and '\'.
+            // Strip surrounding quotes for display, but leave the value content otherwise unchanged.
             var line = rawLine.Trim();
             if (line.Length == 0 || line[0] == '#')
             {
@@ -213,25 +212,7 @@ internal sealed class OperatingSystemCheck : IEnvironmentCheck
             return value;
         }
 
-        var builder = new StringBuilder(value.Length - 2);
-        for (var i = 1; i < value.Length - 1; i++)
-        {
-            var ch = value[i];
-            if (ch == '\\' && i + 1 < value.Length - 1)
-            {
-                var next = value[i + 1];
-                if (next is '"' or '$' or '`' or '\\')
-                {
-                    builder.Append(next);
-                    i++;
-                    continue;
-                }
-            }
-
-            builder.Append(ch);
-        }
-
-        return builder.ToString();
+        return value[1..^1];
     }
 }
 
