@@ -331,13 +331,15 @@ public class MSBuildTests
         Assert.Equal(bundle.ManagedPath, resolvedPaths[2]);
     }
 
-    [Fact]
-    public async Task CliBundleRunHookWrapsExplicitWindowsCommandShim()
+    [Theory]
+    [InlineData(".cmd")]
+    [InlineData(".bat")]
+    public async Task CliBundleRunHookWrapsExplicitWindowsCommandShim(string extension)
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
         using var tempDirectory = new TestTempDirectory();
 
-        var cliPath = Path.Combine(tempDirectory.Path, "tools", "aspire.cmd");
+        var cliPath = Path.Combine(tempDirectory.Path, "tools", $"aspire{extension}");
         Directory.CreateDirectory(Path.GetDirectoryName(cliPath)!);
         File.WriteAllText(cliPath, "");
 
