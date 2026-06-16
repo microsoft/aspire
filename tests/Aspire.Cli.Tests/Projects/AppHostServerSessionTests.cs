@@ -16,6 +16,7 @@ using Aspire.Hosting;
 using Aspire.Shared;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Projects;
@@ -117,11 +118,17 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
     {
         var project = new RecordingAppHostServerProject();
 
+        using var loggerFactory = LoggerFactory.Create(builder => builder.AddXunit(outputHelper));
+
         await using var session = AppHostServerSession.Start(
             project,
             environmentVariables: null,
             debug: false,
-            NullLogger<AppHostServerSession>.Instance);
+            loggerFactory.CreateLogger<AppHostServerSession>());
+
+        // Wait for the process to exit so the stopwatch measures only the early-exit detection
+        // latency, not the variable execution time of "dotnet --version" on loaded CI machines.
+        await project.StartedProcess!.WaitForExitAsync(TestContext.Current.CancellationToken).DefaultTimeout();
 
         var stopwatch = Stopwatch.StartNew();
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
@@ -236,6 +243,8 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
 
         public Dictionary<string, string>? ReceivedEnvironmentVariables { get; private set; }
 
+        public Process? StartedProcess { get; private set; }
+
         public string GetInstanceIdentifier() => AppDirectoryPath;
 
         public Task<AppHostServerPrepareResult> PrepareAsync(
@@ -263,6 +272,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
                 UseShellExecute = false
             })!;
 
+            StartedProcess = process;
             return ("test.sock", process, new OutputCollector());
         }
     }

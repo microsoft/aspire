@@ -14,7 +14,7 @@ using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Packaging;
 
-internal class PackageChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, IFeatures features, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null, string? currentCliVersion = null)
+internal class PackageChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, IFeatures features, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, bool requiresProjectNuGetConfig = true, ILogger? logger = null, string? currentCliVersion = null)
 {
     // Threaded so the local-folder integration listing can honor the same
     // ShowDeprecatedPackages flag that NuGetPackageCache honors on the feed-based path.
@@ -38,6 +38,13 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
     public string? CliDownloadBaseUrl { get; } = cliDownloadBaseUrl;
     public string? PinnedVersion { get; } = pinnedVersion;
 
+    /// <summary>
+    /// Whether projects created with this channel should have a project-level nuget.config
+    /// written. Channels whose mappings only point to default sources (e.g. nuget.org) set
+    /// this to <see langword="false"/> because the config would be redundant.
+    /// </summary>
+    public bool RequiresProjectNuGetConfig { get; } = requiresProjectNuGetConfig;
+
     public string SourceDetails { get; } = ComputeSourceDetails(mappings);
 
     public bool ShouldPersistChannelName() =>
@@ -56,10 +63,12 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
     /// <c>pr-&lt;N&gt;</c>/local-hive channels all point at custom feeds, so their mappings must be
     /// persisted for restore to succeed. This deliberately mirrors <see cref="ShouldPersistChannelName"/>:
     /// the set of channels whose name we pin is exactly the set we drop a config for (those that
-    /// additionally carry feed mappings).
+    /// additionally carry feed mappings). A channel can additionally opt out explicitly via
+    /// <see cref="RequiresProjectNuGetConfig"/> (set <see langword="false"/> at construction), which
+    /// is how the <c>stable</c> channel suppresses the redundant nuget.org config.
     /// </remarks>
     public bool ShouldCreateNuGetConfig() =>
-        ShouldPersistChannelName() && Mappings is { Length: > 0 };
+        RequiresProjectNuGetConfig && ShouldPersistChannelName() && Mappings is { Length: > 0 };
 
     /// <summary>
     /// Whether this channel resolves Aspire.* packages from a local directory of <c>.nupkg</c>
@@ -447,7 +456,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             .SelectMany(mapping => CreateScopedMappings(mapping, requestedPackageIds, logger))
             .ToArray();
 
-        return new PackageChannel(Name, Quality, scopedMappings, nuGetPackageCache, _features, ConfigureGlobalPackagesFolder, CliDownloadBaseUrl, PinnedVersion, logger, _currentCliVersion);
+        return new PackageChannel(Name, Quality, scopedMappings, nuGetPackageCache, _features, ConfigureGlobalPackagesFolder, CliDownloadBaseUrl, PinnedVersion, RequiresProjectNuGetConfig, logger, _currentCliVersion);
     }
 
     private static IEnumerable<PackageMapping> CreateScopedMappings(PackageMapping mapping, IReadOnlyCollection<string> packageIds, ILogger? logger)
@@ -611,9 +620,9 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         return isHostingOrCommunityToolkitNamespaced && !isExcluded;
     }
 
-    public static PackageChannel CreateExplicitChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, IFeatures features, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null, string? currentCliVersion = null)
+    public static PackageChannel CreateExplicitChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, IFeatures features, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, bool requiresProjectNuGetConfig = true, ILogger? logger = null, string? currentCliVersion = null)
     {
-        return new PackageChannel(name, quality, mappings, nuGetPackageCache, features, configureGlobalPackagesFolder, cliDownloadBaseUrl, pinnedVersion, logger, currentCliVersion);
+        return new PackageChannel(name, quality, mappings, nuGetPackageCache, features, configureGlobalPackagesFolder, cliDownloadBaseUrl, pinnedVersion, requiresProjectNuGetConfig, logger, currentCliVersion);
     }
 
     public static PackageChannel CreateImplicitChannel(INuGetPackageCache nuGetPackageCache, IFeatures features, ILogger? logger = null, string? currentCliVersion = null)

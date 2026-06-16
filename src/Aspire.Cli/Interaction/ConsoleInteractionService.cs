@@ -9,6 +9,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.Markdown;
 using Microsoft.Extensions.Logging;
+using Semver;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
@@ -442,12 +443,52 @@ internal class ConsoleInteractionService : IInteractionService
     {
         var cliInformationalVersion = _executionContext.IdentityVersion;
 
-        DisplayError(InteractionServiceStrings.AppHostNotCompatibleConsiderUpgrading);
+        // When both versions parse, tell the user which side is older and how to
+        // update it rather than the ambiguous "upgrade the AppHost or Aspire CLI".
+        var errorMessage = InteractionServiceStrings.AppHostNotCompatibleConsiderUpgrading;
+        string? updateCommand = null;
+
+        if (SemVersion.TryParse(appHostHostingVersion, SemVersionStyles.Any, out var hostingVersion) &&
+            SemVersion.TryParse(cliInformationalVersion, SemVersionStyles.Any, out var cliVersion))
+        {
+            var comparison = SemVersion.ComparePrecedence(hostingVersion, cliVersion);
+            if (comparison < 0)
+            {
+                errorMessage = InteractionServiceStrings.AppHostNotCompatibleUpdateAppHost;
+                updateCommand = "aspire update";
+            }
+            else if (comparison > 0)
+            {
+                errorMessage = InteractionServiceStrings.AppHostNotCompatibleUpdateCli;
+                updateCommand = DotNetToolDetection.GetDotNetToolUpdateCommand()
+                    ?? NpmInstallDetection.GetNpmUpdateCommand()
+                    ?? "aspire update";
+            }
+        }
+
+        DisplayError(errorMessage);
         MessageConsole.WriteLine();
-        MessageConsole.MarkupLine(
-            $"\t[bold]{InteractionServiceStrings.AspireHostingSDKVersion}[/]: {appHostHostingVersion.EscapeMarkup()}");
-        MessageConsole.MarkupLine($"\t[bold]{InteractionServiceStrings.AspireCLIVersion}[/]: {cliInformationalVersion.EscapeMarkup()}");
-        MessageConsole.MarkupLine($"\t[bold]{InteractionServiceStrings.RequiredCapability}[/]: {ex.RequiredCapability.EscapeMarkup()}");
+
+        var grid = new Grid();
+        grid.AddColumn(new GridColumn { Padding = new Padding(2, 0, 1, 0), NoWrap = true });
+        grid.AddColumn(new GridColumn { Padding = new Padding(0) });
+        grid.AddRow(
+            new Markup($"[bold]{InteractionServiceStrings.AspireHostingSDKVersion.EscapeMarkup()}[/]"),
+            new Markup(appHostHostingVersion.EscapeMarkup()));
+        grid.AddRow(
+            new Markup($"[bold]{InteractionServiceStrings.AspireCLIVersion.EscapeMarkup()}[/]"),
+            new Markup(cliInformationalVersion.EscapeMarkup()));
+        grid.AddRow(
+            new Markup($"[bold]{InteractionServiceStrings.RequiredCapability.EscapeMarkup()}[/]"),
+            new Markup(ex.RequiredCapability.EscapeMarkup()));
+        MessageConsole.Write(grid);
+
+        if (updateCommand is not null)
+        {
+            MessageConsole.WriteLine();
+            MessageConsole.MarkupLine(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ToUpdateRunCommand, updateCommand.EscapeMarkup()));
+        }
+
         MessageConsole.WriteLine();
         return CliExitCodes.AppHostIncompatible;
     }

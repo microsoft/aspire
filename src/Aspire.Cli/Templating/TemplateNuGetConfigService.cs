@@ -35,10 +35,22 @@ internal sealed class TemplateNuGetConfigService(
     /// <param name="cancellationToken">A cancellation token.</param>
     public async Task PromptToCreateOrUpdateNuGetConfigAsync(PackageChannel channel, string outputPath, CancellationToken cancellationToken)
     {
-        // Only channels routing Aspire packages to a custom feed get a per-project NuGet.config.
-        // The `stable` channel (nuget.org) and Implicit channels are skipped so the project uses
-        // the ambient NuGet config; a <clear/>-based config would wipe the user's other feeds.
+        // If this channel shouldn't get a fresh project NuGet.config (stable → nuget.org,
+        // Implicit, or explicit-without-mappings), only update an *existing* config in the
+        // target directory to clean up stale feeds from a previous channel; never create a
+        // new one, because a <clear/>-based config would wipe the user's other feeds.
+        // See: https://github.com/microsoft/aspire/issues/18124
         if (!channel.ShouldCreateNuGetConfig())
+        {
+            var targetDir = new DirectoryInfo(outputPath);
+            if (!NuGetConfigMerger.TryFindNuGetConfigInDirectory(targetDir, out _))
+            {
+                return;
+            }
+        }
+
+        var mappings = channel.Mappings;
+        if (mappings is null || mappings.Length == 0)
         {
             return;
         }
@@ -124,9 +136,27 @@ internal sealed class TemplateNuGetConfigService(
         var matchingChannel = channels.FirstOrDefault(c =>
             string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 
-        // ShouldCreateNuGetConfig also filters out `stable` and Implicit channels — those resolve
-        // from nuget.org and must not get a <clear/>-based config that would hide ambient feeds.
-        if (matchingChannel is null || !matchingChannel.ShouldCreateNuGetConfig())
+        if (matchingChannel is null)
+        {
+            return false;
+        }
+
+        // If this channel shouldn't get a fresh project NuGet.config (stable → nuget.org,
+        // Implicit, or explicit-without-mappings), only update an *existing* config to clean up
+        // stale feeds from a previous channel; never create a new one — a <clear/>-based config
+        // would hide the ambient nuget.org feed and the user's other feeds.
+        // See: https://github.com/microsoft/aspire/issues/18124
+        if (!matchingChannel.ShouldCreateNuGetConfig())
+        {
+            var targetDir = new DirectoryInfo(outputPath);
+            if (!NuGetConfigMerger.TryFindNuGetConfigInDirectory(targetDir, out _))
+            {
+                return false;
+            }
+        }
+
+        var mappings = matchingChannel.Mappings;
+        if (mappings is null || mappings.Length == 0)
         {
             return false;
         }

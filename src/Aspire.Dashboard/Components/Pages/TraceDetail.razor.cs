@@ -443,6 +443,10 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     {
         if (TraceId != _trace?.TraceId)
         {
+            // Close the span detail pane when navigating between traces (e.g. browser back/forward).
+            // If the new trace has a SpanId query parameter, it will be re-opened below.
+            SelectedData = null;
+
             UpdateDetailViewData();
             UpdateSubscription();
 

@@ -672,6 +672,9 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             CliExitCodes.Success,
             workspace.WorkspaceRoot,
             PromptBinding.CreateDefault(true),
+            PromptBinding.CreateDefault<string?>(null),
+            PromptBinding.CreateDefault<string?>(null),
+            null,
             CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
@@ -703,6 +706,9 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             CliExitCodes.Success,
             workspace.WorkspaceRoot,
             PromptBinding.CreateDefault(true),
+            PromptBinding.CreateDefault<string?>(null),
+            PromptBinding.CreateDefault<string?>(null),
+            null,
             CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
@@ -732,8 +738,10 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             CliExitCodes.Success,
             workspace.WorkspaceRoot,
             PromptBinding.CreateDefault(true),
-            CancellationToken.None,
-            AgentInitCommand.ExcludeOneTimeSetupSkillsFromDefaults).DefaultTimeout();
+            PromptBinding.CreateDefault<string?>(null),
+            PromptBinding.CreateDefault<string?>(null),
+            AgentInitCommand.ExcludeOneTimeSetupSkillsFromDefaults,
+            CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
         Assert.DoesNotContain(result.SelectedSkills, static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName));
@@ -776,6 +784,48 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
+    }
+
+    [Fact]
+    public async Task AgentInitCommand_NonInteractive_WithSkillLocationsNone_DoesNotInstallAnySkills()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --skill-locations none --skills all");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        // With --skill-locations none, no skill files should be installed even when --skills all is passed.
+        var agentsDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills");
+        Assert.False(Directory.Exists(agentsDir), $"Expected no agents/skills directory but found {agentsDir}");
+    }
+
+    [Fact]
+    public async Task AgentInitCommand_NonInteractive_WithSkillLocationsAndSkills_InstallsOnlySpecifiedSkills()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --skill-locations standard --skills {CommonAgentApplicators.AspireSkillName}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), CommonAgentApplicators.AspireSkillName);
+
+        // aspireify was not requested, so it should not be installed.
+        var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireifySkillName);
+        Assert.False(Directory.Exists(aspireifySkillPath), $"Expected no aspireify skill directory but found {aspireifySkillPath}");
     }
 
     private static void AssertSkillFileExists(DirectoryInfo workspaceRoot, string relativeSkillDirectory, string skillName)

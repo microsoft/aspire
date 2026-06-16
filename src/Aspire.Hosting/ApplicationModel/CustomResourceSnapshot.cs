@@ -256,12 +256,28 @@ public sealed record RelationshipSnapshot(string ResourceName, string Type);
 public sealed record ResourcePropertySnapshot(string Name, object? Value)
 {
     /// <summary>
+    /// The display name visible in UI.
+    /// </summary>
+    /// <remarks>
+    /// If not specified, clients may use the <see cref="Name"/> as the display name.
+    /// </remarks>
+    public string? DisplayName { get; init; }
+
+    /// <summary>
     /// Whether this property is considered sensitive or not.
     /// </summary>
     /// <remarks>
     /// Sensitive properties are masked when displayed in UI and require an explicit user action to reveal.
     /// </remarks>
     public bool IsSensitive { get; init; }
+
+    /// <summary>
+    /// A flag indicating whether the property is highlighted in the UI.
+    /// </summary>
+    /// <remarks>
+    /// Highlighted properties are shown by default even if the client does not otherwise recognize the property name.
+    /// </remarks>
+    public bool IsHighlighted { get; init; }
 
     internal void Deconstruct(out string name, out object? value, out bool isSensitive)
     {

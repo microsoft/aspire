@@ -500,6 +500,195 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
             .ToArray();
     }
 
+    [Fact]
+    public async Task PromptToCreateOrUpdateNuGetConfigAsync_ExplicitChannelRequiringConfig_CreatesConfig()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputDir = workspace.WorkspaceRoot.CreateSubdirectory("output");
+
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ =>
+            {
+                // Simulate the daily channel: explicit and RequiresProjectNuGetConfig = true (default)
+                var dailyCh = PackageChannel.CreateExplicitChannel(
+                    "daily",
+                    PackageChannelQuality.Prerelease,
+                    [
+                        new PackageMapping("Aspire*", "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json"),
+                        new PackageMapping("*", "https://api.nuget.org/v3/index.json")
+                    ],
+                    new FakeNuGetPackageCache(),
+                    features: new TestFeatures());
+                return Task.FromResult<IEnumerable<PackageChannel>>([dailyCh]);
+            }
+        };
+
+        var service = CreateService(packagingService: packagingService);
+
+        await service.PromptToCreateOrUpdateNuGetConfigAsync(channelName: "daily", outputDir.FullName, CancellationToken.None);
+
+        // nuget.config should be created because RequiresProjectNuGetConfig is true
+        var configPath = Path.Combine(outputDir.FullName, "nuget.config");
+        Assert.True(File.Exists(configPath));
+        var doc = XDocument.Load(configPath);
+        var sources = doc.Root!.Element("packageSources")!.Elements("add")
+            .Select(e => (string)e.Attribute("value")!)
+            .ToArray();
+        Assert.Equal(
+            ["https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json", "https://api.nuget.org/v3/index.json"],
+            sources);
+    }
+
+    [Fact]
+    public async Task PromptToCreateOrUpdateNuGetConfigAsync_ChannelWithRequiresProjectNuGetConfigFalse_DoesNotCreateConfig()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputDir = workspace.WorkspaceRoot.CreateSubdirectory("output");
+
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ =>
+            {
+                // Simulate the stable channel: explicit but RequiresProjectNuGetConfig = false
+                var stableCh = PackageChannel.CreateExplicitChannel(
+                    "stable",
+                    PackageChannelQuality.Stable,
+                    [new PackageMapping("*", "https://api.nuget.org/v3/index.json")],
+                    new FakeNuGetPackageCache(),
+                    features: new TestFeatures(),
+                    requiresProjectNuGetConfig: false);
+                return Task.FromResult<IEnumerable<PackageChannel>>([stableCh]);
+            }
+        };
+
+        var service = CreateService(packagingService: packagingService);
+
+        await service.PromptToCreateOrUpdateNuGetConfigAsync(channelName: "stable", outputDir.FullName, CancellationToken.None);
+
+        // No nuget.config should be created because RequiresProjectNuGetConfig is false
+        Assert.False(File.Exists(Path.Combine(outputDir.FullName, "nuget.config")));
+    }
+
+    [Fact]
+    public async Task PromptToCreateOrUpdateNuGetConfigAsync_ChannelWithRequiresProjectNuGetConfigFalse_UpdatesExistingConfig()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputDir = workspace.WorkspaceRoot.CreateSubdirectory("output");
+
+        // Pre-existing nuget.config from a previous daily channel
+        await File.WriteAllTextAsync(
+            Path.Combine(outputDir.FullName, "nuget.config"),
+            """
+            <?xml version="1.0" encoding="utf-8"?>
+            <configuration>
+              <packageSources>
+                <add key="aspire-daily" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" />
+              </packageSources>
+              <packageSourceMapping>
+                <packageSource key="aspire-daily">
+                  <package pattern="Aspire*" />
+                </packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ =>
+            {
+                var stableCh = PackageChannel.CreateExplicitChannel(
+                    "stable",
+                    PackageChannelQuality.Stable,
+                    [new PackageMapping("*", "https://api.nuget.org/v3/index.json")],
+                    new FakeNuGetPackageCache(),
+                    features: new TestFeatures(),
+                    requiresProjectNuGetConfig: false);
+                return Task.FromResult<IEnumerable<PackageChannel>>([stableCh]);
+            }
+        };
+
+        var service = CreateService(packagingService: packagingService);
+
+        await service.PromptToCreateOrUpdateNuGetConfigAsync(channelName: "stable", outputDir.FullName, CancellationToken.None);
+
+        // Existing nuget.config should still exist (it was updated)
+        var configPath = Path.Combine(outputDir.FullName, "nuget.config");
+        Assert.True(File.Exists(configPath));
+
+        // The stable channel's mapping (* → nuget.org) should now be present
+        var doc = XDocument.Load(configPath);
+        var sources = doc.Root!.Element("packageSources")!.Elements("add")
+            .Select(e => (string)e.Attribute("value")!)
+            .ToArray();
+        Assert.Equal(["https://api.nuget.org/v3/index.json"], sources);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CreateOrUpdateNuGetConfigWithoutPromptAsync_ChannelWithRequiresProjectNuGetConfigFalse_RespectsExistingConfig(bool hasExistingConfig)
+    {
+        // The "without prompt" path is used by aspire init. When the channel does not
+        // require a project-level nuget.config (e.g. stable → nuget.org only):
+        //   - No existing config → skip creation entirely (return false)
+        //   - Existing config → update it to clean up stale feeds (return true)
+        // See: https://github.com/microsoft/aspire/issues/18124
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputDir = workspace.WorkspaceRoot.CreateSubdirectory("output");
+
+        if (hasExistingConfig)
+        {
+            await File.WriteAllTextAsync(
+                Path.Combine(outputDir.FullName, "nuget.config"),
+                """
+                <?xml version="1.0" encoding="utf-8"?>
+                <configuration>
+                  <packageSources>
+                    <add key="aspire-daily" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" />
+                  </packageSources>
+                </configuration>
+                """);
+        }
+
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ =>
+            {
+                var stableCh = PackageChannel.CreateExplicitChannel(
+                    "stable",
+                    PackageChannelQuality.Stable,
+                    [new PackageMapping("*", "https://api.nuget.org/v3/index.json")],
+                    new FakeNuGetPackageCache(),
+                    features: new TestFeatures(),
+                    requiresProjectNuGetConfig: false);
+                return Task.FromResult<IEnumerable<PackageChannel>>([stableCh]);
+            }
+        };
+
+        var service = CreateService(packagingService: packagingService);
+
+        var result = await service.CreateOrUpdateNuGetConfigWithoutPromptAsync(channelName: "stable", outputDir.FullName, CancellationToken.None);
+
+        var configPath = Path.Combine(outputDir.FullName, "nuget.config");
+
+        if (hasExistingConfig)
+        {
+            Assert.True(result);
+            Assert.True(File.Exists(configPath));
+            var doc = XDocument.Load(configPath);
+            var sources = doc.Root!.Element("packageSources")!.Elements("add")
+                .Select(e => (string)e.Attribute("value")!)
+                .ToArray();
+            Assert.Equal(["https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json", "https://api.nuget.org/v3/index.json"], sources);
+        }
+        else
+        {
+            Assert.False(result);
+            Assert.False(File.Exists(configPath));
+        }
+    }
+
     private static TemplateNuGetConfigService CreateService(
         TestPackagingService? packagingService = null,
         CliExecutionContext? executionContext = null)

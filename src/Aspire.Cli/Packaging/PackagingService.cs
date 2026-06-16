@@ -147,7 +147,7 @@ internal class PackagingService : IPackagingService
         var stableChannel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Stable, new[]
         {
             new PackageMapping(PackageMapping.AllPackages, nugetOrg)
-        }, _nuGetPackageCache, _features, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/ga/daily", logger: _logger, currentCliVersion: _executionContext.IdentitySdkVersion);
+        }, _nuGetPackageCache, _features, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/ga/daily", requiresProjectNuGetConfig: false, logger: _logger, currentCliVersion: _executionContext.IdentitySdkVersion);
 
         var dailyChannel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Daily, PackageChannelQuality.Prerelease, new[]
         {

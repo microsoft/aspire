@@ -87,7 +87,16 @@ jobs:
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      targets: '[{"os": "macos-15-intel", "runner": "macos-15-intel", "rids": "osx-x64"}]'
+      # Cross-compile osx-x64 on the Apple Silicon (arm64) macos-latest runner
+      # instead of the Intel macos-15-intel runner. The Intel runner is ~2.5x
+      # slower per core and made this the long pole of the CLI build (~18m vs
+      # ~8m on Apple Silicon). Native AOT officially supports arm64 -> osx-x64
+      # cross-compilation, and this archive is only packaged and structurally
+      # verified (verify-cli-tool-nupkg.ps1 / verify-cli-npm-package.ps1) — the
+      # x64 binary is never executed here, so running it on arm64 hardware is
+      # never attempted. This mirrors the AzDO release pipeline, which already
+      # builds osx-x64 on an arm64 mac agent (eng/pipelines/templates/build_sign_native.yml).
+      targets: '[{"os": "macos-latest", "runner": "macos-latest", "rids": "osx-x64"}]'
 
   prepare_winget_installer_artifacts:
     name: Prepare WinGet installer artifacts
