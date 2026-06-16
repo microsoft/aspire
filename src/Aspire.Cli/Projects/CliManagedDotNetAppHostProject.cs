@@ -41,7 +41,7 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
         IAppHostInfoResolver appHostInfoResolver,
         IConfigurationService configurationService,
         ICSharpCliManagedAppHostModuleGenerator cliManagedModuleGenerator,
-        CliManagedAppHostIntegrationClosureRestorer integrationClosureRestorer,
+        ILogger<CliManagedAppHostIntegrationClosureRestorer> integrationClosureRestorerLogger,
         TimeProvider? timeProvider = null)
         : base(
             runner,
@@ -62,7 +62,7 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
     {
         _features = features;
         _cliManagedModuleGenerator = cliManagedModuleGenerator;
-        _integrationClosureRestorer = integrationClosureRestorer;
+        _integrationClosureRestorer = new CliManagedAppHostIntegrationClosureRestorer(runner, integrationClosureRestorerLogger);
     }
 
     public override bool CanHandle(FileInfo appHostFile)
