@@ -379,7 +379,7 @@ public sealed class DisplayedResourcePropertyViewModel : IPropertyGridItem
         ToolTip.Contains(filter, StringComparison.CurrentCultureIgnoreCase);
 }
 
-[DebuggerDisplay("Name = {Name}, Value = {Value}, IsValueSensitive = {IsValueSensitive}, IsValueMasked = {IsValueMasked}")]
+[DebuggerDisplay("Name = {Name}, Value = {Value}, IsValueSensitive = {IsValueSensitive}, IsValueMasked = {IsValueMasked}, IsHighlighted = {IsHighlighted}, SortOrder = {SortOrder}")]
 public sealed class ResourcePropertyViewModel
 {
     public string Name { get; }

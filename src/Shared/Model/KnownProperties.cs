@@ -90,4 +90,9 @@ internal static class KnownResourcePropertySortOrder
     public const int StopTime = 4;
     public const int ExitCode = 5;
     public const int ConnectionString = 6;
+
+    // Producers use local sort orders for their own resource-specific properties. The
+    // dashboard normalizes those values after the generic dashboard-owned properties.
+    // This value should always be greater than the largest known resource property.
+    public static int GetProducerDefinedStart() => ConnectionString + 1;
 }

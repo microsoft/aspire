@@ -212,7 +212,7 @@ partial class Resource
     {
         // Producers use local sort orders for their own resource-specific properties. The
         // dashboard normalizes those values after the generic dashboard-owned properties.
-        var producerDefinedStart = KnownResourcePropertySortOrder.ConnectionString + 1;
+        var producerDefinedStart = KnownResourcePropertySortOrder.GetProducerDefinedStart();
         if (producerSortOrder <= 0)
         {
             return producerDefinedStart;
