@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+// Throwaway no-op edit to exercise the audit-mode selective-CI test selector (#18127). Do not merge.
+
 using Aspire.Azure.Common;
 using Aspire.Azure.Data.Tables;
 using Azure.Core;
