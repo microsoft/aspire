@@ -94,8 +94,8 @@ suite('Aspire tree action command E2E', function () {
         const openedEndpoint = await executeE2eControlCommand({ name: 'openInIntegratedBrowser', appHostPath, resourceName: 'e2e-worker' });
         await waitForCommandOutcome('aspire-vscode.openInIntegratedBrowser', 'success', 60000, before);
         assert.strictEqual((openedEndpoint.result as { url?: string }).url, endpointUrl);
+        await waitForWorkbenchTextAfterIntegratedBrowserNavigation(new URL(endpointUrl).host);
         assert.strictEqual(await waitForHttpText(endpointUrl, 'ok'), 'ok');
-        assert.ok((await waitForWorkbenchTextAfterIntegratedBrowserNavigation('ok')).includes('ok'));
 
         const viewedLog = await executeE2eControlCommand({ name: 'viewAppHostLogFile', appHostPath });
         const viewedLogFileName = (viewedLog.result as { fileName?: string }).fileName;

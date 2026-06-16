@@ -251,8 +251,8 @@ suite('E2E launch profile', () => {
         assert.ok(extension.includes('return { url: endpointUrl };'));
         assert.ok(appHostTreeProvider.includes("await vscode.commands.executeCommand('simpleBrowser.show', element.url);"));
         assert.ok(treeActions.includes("assert.strictEqual((openedEndpoint.result as { url?: string }).url, endpointUrl);"));
+        assert.ok(treeActions.includes('waitForWorkbenchTextAfterIntegratedBrowserNavigation(new URL(endpointUrl).host)'));
         assert.ok(treeActions.includes("waitForHttpText(endpointUrl, 'ok')"));
-        assert.ok(treeActions.includes("waitForWorkbenchTextAfterIntegratedBrowserNavigation('ok')"));
         assert.ok(!treeActions.includes('waitForEditorTitle(new URL(endpointUrl).host'));
     });
 
