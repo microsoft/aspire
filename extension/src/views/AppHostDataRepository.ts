@@ -471,7 +471,7 @@ export class AppHostDataRepository {
             const pollingActive = this._pollingInterval !== undefined
                 || this._psProcesses.size > 0
                 || this._fetchInProgress;
-            if (refreshBeforeFollowOnResume && !pollingActive && this._supportsPsFollow) {
+            if (refreshBeforeFollowOnResume && !pollingActive && this._supportsPsFollow && this._appHosts.length > 0) {
                 this._startPsPolling();
                 this._refreshAppHostsFromAuthoritativeSnapshot();
             } else {
