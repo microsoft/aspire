@@ -338,6 +338,7 @@ function isPsAppHost(value: unknown): value is PsAppHost {
         && candidate.appHostPid > 0
         && (candidate.status === undefined || typeof candidate.status === 'string');
 }
+
 async function waitForRunningAppHostProcessExitFromState(appHostPath: string, timeoutMs: number): Promise<void> {
     const runningAppHost = getRunningAppHostFromState(appHostPath);
     if (runningAppHost) {
