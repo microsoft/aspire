@@ -5,8 +5,8 @@ import { extensionLogOutputChannel } from './logging';
 import { RpcServerConnectionInfo } from '../server/AspireRpcServer';
 import { DcpServerConnectionInfo } from '../dcp/types';
 import { getRunSessionInfo, getSupportedCapabilities } from '../capabilities';
-import { EnvironmentVariables, getEnvironmentWithoutE2EBridgeVariables } from './environment';
-import { resolveCliPath } from './cliPath';
+import { aspireCliPathEnvironmentVariableName, EnvironmentVariables, getAspireCliPathForMSBuild, getEnvironmentWithoutE2EBridgeVariables } from './environment';
+import { getConfiguredCliPath, resolveCliPath } from './cliPath';
 import path from 'path';
 
 export const enum AnsiColors {
@@ -18,6 +18,7 @@ export const enum AnsiColors {
 export interface AspireTerminal {
     terminal: vscode.Terminal;
     dispose: () => void;
+    msBuildAspireCliPath?: string;
 }
 
 export interface SendAspireCommandOptions {
@@ -175,7 +176,7 @@ export class AspireTerminalProvider implements vscode.Disposable {
             executionMode = 'suppressed';
         }
         else {
-            aspireTerminal = this.getAspireTerminal();
+            aspireTerminal = this.getAspireTerminal(false, cliPath);
             executionMode = aspireTerminal.terminal.shellIntegration ? 'shellIntegration' : 'sendText';
         }
         this._onDidSendAspireCommand.fire({
@@ -213,23 +214,23 @@ export class AspireTerminalProvider implements vscode.Disposable {
 
     }
 
-    getAspireTerminal(forceCreate?: boolean): AspireTerminal {
+    getAspireTerminal(forceCreate?: boolean, aspireCliPath?: string): AspireTerminal {
         const terminalName = aspireTerminalName;
+        const msBuildAspireCliPath = this.getAspireCliPathForTerminalEnvironment(aspireCliPath);
 
         const existingTerminal = this._terminalByDebugSessionId.get(null);
         if (existingTerminal) {
-            if (!forceCreate) {
+            if (!forceCreate && existingTerminal.msBuildAspireCliPath === msBuildAspireCliPath) {
                 return existingTerminal;
             }
-            else {
-                existingTerminal.dispose();
-            }
+
+            existingTerminal.dispose();
         }
 
         extensionLogOutputChannel.info(`Creating new Aspire terminal`);
         const terminalOptions: vscode.TerminalOptions = {
             name: terminalName,
-            env: this.createEnvironment(),
+            env: this.createEnvironment(undefined, undefined, undefined, aspireCliPath),
         };
         if (process.platform === 'win32') {
             // quoteShellArg uses PowerShell escaping on Windows. Do not rely on the
@@ -242,6 +243,7 @@ export class AspireTerminalProvider implements vscode.Disposable {
 
         const aspireTerminal: AspireTerminal = {
             terminal,
+            msBuildAspireCliPath,
             dispose: () => {
                 terminal.dispose();
                 this._terminalByDebugSessionId.delete(null);
@@ -253,7 +255,7 @@ export class AspireTerminalProvider implements vscode.Disposable {
         return aspireTerminal;
     }
 
-    createEnvironment(debugSessionId?: string, noDebug?: boolean, noExtensionVariables?: boolean): any {
+    createEnvironment(debugSessionId?: string, noDebug?: boolean, noExtensionVariables?: boolean, aspireCliPath?: string): any {
         if (noExtensionVariables) {
             return getEnvironmentWithoutE2EBridgeVariables();
         }
@@ -275,6 +277,11 @@ export class AspireTerminalProvider implements vscode.Disposable {
             DEBUG_SESSION_TOKEN: this.dcpServerConnectionInfo.token,
             DEBUG_SESSION_SERVER_CERTIFICATE: this.dcpServerConnectionInfo.certificate,
         };
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0];
+        const resolvedAspireCliPath = this.getAspireCliPathForTerminalEnvironment(aspireCliPath);
+        if (resolvedAspireCliPath) {
+            env[aspireCliPathEnvironmentVariableName] = resolvedAspireCliPath;
+        }
 
         if (debugSessionId) {
             env.ASPIRE_EXTENSION_DEBUG_SESSION_ID = debugSessionId;
@@ -291,7 +298,6 @@ export class AspireTerminalProvider implements vscode.Disposable {
 
             // if DCP debug logging is enabled, set DCP-specific logging environment variables
             const dcpDebugLoggingEnabled = vscode.workspace.getConfiguration('aspire').get<boolean>('enableAspireDcpDebugLogging', false);
-            const workspaceRoot = vscode.workspace.workspaceFolders?.[0];
             if (dcpDebugLoggingEnabled && workspaceRoot) {
                 env.DCP_DIAGNOSTICS_LOG_LEVEL = "debug";
                 env.DCP_PRESERVE_EXECUTABLE_LOGS = "1";
@@ -350,6 +356,11 @@ export class AspireTerminalProvider implements vscode.Disposable {
 
     isDebugConfigEnvironmentLoggingEnabled(): boolean {
         return vscode.workspace.getConfiguration('aspire').get<boolean>('enableDebugConfigEnvironmentLogging', false);
+    }
+
+    private getAspireCliPathForTerminalEnvironment(aspireCliPath?: string): string | undefined {
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0];
+        return getAspireCliPathForMSBuild(aspireCliPath ?? getConfiguredCliPath(), workspaceRoot?.uri.fsPath);
     }
 
     private getWindowsPowerShellPath(): string {

@@ -2,6 +2,7 @@ import { ChildProcessWithoutNullStreams, spawn } from "child_process";
 import { EnvVar } from "../../dcp/types";
 import { extensionLogOutputChannel } from "../../utils/logging";
 import { AspireTerminalProvider } from "../../utils/AspireTerminalProvider";
+import { aspireCliPathEnvironmentVariableName, getAspireCliPathForMSBuild } from "../../utils/environment";
 import * as readline from 'readline';
 import * as vscode from 'vscode';
 
@@ -34,7 +35,14 @@ export function spawnCliProcess(terminalProvider: AspireTerminalProvider, comman
     const env = {};
     const spawnCommand = getCliSpawnCommand(command, args);
 
-    Object.assign(env, terminalProvider.createEnvironment(options?.debugSessionId, options?.noDebug, options?.noExtensionVariables));
+    Object.assign(env, terminalProvider.createEnvironment(options?.debugSessionId, options?.noDebug, options?.noExtensionVariables, command));
+    const aspireCliPath = getAspireCliPathForMSBuild(command, workingDirectory);
+    if (aspireCliPath) {
+        // MSBuild imports environment variables as initial properties. Passing AspireCliPath keeps
+        // ResolveAspireCliBundle aligned with the exact CLI executable the extension launched,
+        // instead of falling back to a stale aspire on PATH during AppHost builds.
+        Object.assign(env, { [aspireCliPathEnvironmentVariableName]: aspireCliPath });
+    }
     if (options?.env) {
         Object.assign(env, Object.fromEntries(options.env.map(e => [e.name, e.value])));
     }

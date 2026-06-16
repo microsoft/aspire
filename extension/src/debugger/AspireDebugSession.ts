@@ -18,7 +18,7 @@ import { AspireTerminalProvider } from "../utils/AspireTerminalProvider";
 import { ICliRpcClient } from "../server/rpcClient";
 import path from "path";
 import os from "os";
-import { EnvironmentVariables } from "../utils/environment";
+import { EnvironmentVariables, withAspireCliPathForMSBuild } from "../utils/environment";
 import { sendTelemetryEvent } from "../utils/telemetry";
 import { classifyAppHostPath, classifyAppHostDirectory } from "../utils/appHostLanguage";
 import type { AspireDebugConsoleOutputEvent } from "../types/extensionApi";
@@ -388,11 +388,16 @@ export class AspireDebugSession implements vscode.DebugAdapter {
 
       extensionLogOutputChannel.info(`Starting AppHost for project: ${projectFile} with args: ${appHostArgs.join(' ')}`);
 
+      const appHostEnvironment = withAspireCliPathForMSBuild(
+        environment,
+        await this._terminalProvider.getAspireCliExecutablePath(),
+        path.dirname(projectFile));
+
       const appHostDebugSessionConfiguration = await createDebugSessionConfiguration(
         this.configuration,
         launchConfig,
         appHostArgs,
-        environment,
+        appHostEnvironment,
         { debug, forceBuild: isNodeAppHost ? false : options.forceBuild, runId: '', debugSessionId: this.debugSessionId, isApphost: true, debugSession: this },
         debuggerExtension);
 

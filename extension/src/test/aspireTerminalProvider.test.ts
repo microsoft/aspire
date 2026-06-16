@@ -147,6 +147,54 @@ suite('AspireTerminalProvider tests', () => {
                 platformStub.restore();
             }
         });
+
+        test('recreates existing terminal when MSBuild CLI path changes', () => {
+            terminalProvider.rpcServerConnectionInfo = {
+                address: 'http://localhost:1234',
+                token: 'rpc-token',
+                cert: 'rpc-cert',
+            };
+            terminalProvider.dcpServerConnectionInfo = {
+                address: 'http://localhost:5678',
+                token: 'dcp-token',
+                certificate: 'dcp-cert',
+            };
+            const disposedTerminals: string[] = [];
+            const pathTerminal = {
+                dispose: () => disposedTerminals.push('path')
+            } as unknown as vscode.Terminal;
+            const explicitTerminal = {
+                dispose: () => disposedTerminals.push('explicit')
+            } as unknown as vscode.Terminal;
+            const pathTerminalAfterReset = {
+                dispose: () => disposedTerminals.push('path-after-reset')
+            } as unknown as vscode.Terminal;
+            const createTerminalStub = sinon.stub(vscode.window, 'createTerminal');
+            createTerminalStub.onCall(0).returns(pathTerminal);
+            createTerminalStub.onCall(1).returns(explicitTerminal);
+            createTerminalStub.onCall(2).returns(pathTerminalAfterReset);
+
+            try {
+                const first = terminalProvider.getAspireTerminal(false, 'aspire');
+                const second = terminalProvider.getAspireTerminal(false, '/repo/artifacts/bin/Aspire.Cli/Debug/net10.0/aspire');
+                const third = terminalProvider.getAspireTerminal(false, '/repo/artifacts/bin/Aspire.Cli/Debug/net10.0/aspire');
+                const fourth = terminalProvider.getAspireTerminal(false, 'aspire');
+
+                assert.strictEqual(first.terminal, pathTerminal);
+                assert.strictEqual(first.msBuildAspireCliPath, undefined);
+                assert.strictEqual(second.terminal, explicitTerminal);
+                assert.strictEqual(second.msBuildAspireCliPath, '/repo/artifacts/bin/Aspire.Cli/Debug/net10.0/aspire');
+                assert.strictEqual(third, second);
+                assert.strictEqual(fourth.terminal, pathTerminalAfterReset);
+                assert.strictEqual(fourth.msBuildAspireCliPath, undefined);
+                assert.deepStrictEqual(disposedTerminals, ['path', 'explicit']);
+                assert.strictEqual(createTerminalStub.callCount, 3);
+            }
+            finally {
+                terminalProvider.dispose();
+                createTerminalStub.restore();
+            }
+        });
     });
 
     suite('sendAspireCommandToAspireTerminal', () => {
@@ -568,6 +616,24 @@ suite('AspireTerminalProvider tests', () => {
             assert.strictEqual(env.ASPIRE_EXTENSION_DEBUG_SESSION_ID, undefined);
             assert.strictEqual(env.ASPIRE_EXTENSION_PROMPT_ENABLED, 'true');
             assert.strictEqual(env.ASPIRE_NON_INTERACTIVE, undefined);
+        });
+
+        test('sets MSBuild AspireCliPath when terminal is created for an explicit CLI path', () => {
+            const env = terminalProvider.createEnvironment(undefined, undefined, undefined, '/repo/artifacts/bin/Aspire.Cli/Debug/net10.0/aspire');
+
+            assert.strictEqual(env.AspireCliPath, '/repo/artifacts/bin/Aspire.Cli/Debug/net10.0/aspire');
+        });
+
+        test('does not set MSBuild AspireCliPath for PATH-based aspire command', () => {
+            const env = terminalProvider.createEnvironment(undefined, undefined, undefined, 'aspire');
+
+            assert.strictEqual(env.AspireCliPath, undefined);
+        });
+
+        test('does not set MSBuild AspireCliPath for explicit Windows batch wrappers', () => {
+            const env = terminalProvider.createEnvironment(undefined, undefined, undefined, 'C:\\Users\\me\\AppData\\Roaming\\npm\\aspire.cmd');
+
+            assert.strictEqual(env.AspireCliPath, undefined);
         });
     });
 

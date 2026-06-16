@@ -8,14 +8,14 @@ import { ResourceDebuggerExtension } from '../debugger/debuggerExtensions';
 import { AppHostParentOutputFilter, AspireDebugSession } from '../debugger/AspireDebugSession';
 
 class TestDotNetService {
-    private _getDotNetTargetPathStub: sinon.SinonStub;
     private _hasDevKit: boolean;
 
+    public getDotNetTargetPathStub: sinon.SinonStub;
     public buildDotNetProjectStub: sinon.SinonStub;
 
     constructor(outputPath: string, rejectBuild: Error | null, hasDevKit: boolean) {
-        this._getDotNetTargetPathStub = sinon.stub();
-        this._getDotNetTargetPathStub.resolves(outputPath);
+        this.getDotNetTargetPathStub = sinon.stub();
+        this.getDotNetTargetPathStub.resolves(outputPath);
 
         this.buildDotNetProjectStub = sinon.stub();
         if (rejectBuild) {
@@ -27,19 +27,19 @@ class TestDotNetService {
         this._hasDevKit = hasDevKit;
     }
 
-    getDotNetTargetPath(projectFile: string): Promise<string> {
-        return this._getDotNetTargetPathStub(projectFile);
+    getDotNetTargetPath(projectFile: string, env?: { name: string; value: string }[]): Promise<string> {
+        return this.getDotNetTargetPathStub(projectFile, env);
     }
 
-    buildDotNetProject(projectFile: string): Promise<void> {
-        return this.buildDotNetProjectStub(projectFile);
+    buildDotNetProject(projectFile: string, env?: { name: string; value: string }[]): Promise<void> {
+        return this.buildDotNetProjectStub(projectFile, env);
     }
 
     getAndActivateDevKit(): Promise<boolean> {
         return Promise.resolve(this._hasDevKit);
     }
 
-    getDotNetRunApiOutput(projectPath: string): Promise<string> {
+    getDotNetRunApiOutput(projectPath: string, env?: { name: string; value: string }[]): Promise<string> {
         return Promise.resolve('');
     }
 }
@@ -67,7 +67,8 @@ suite('Dotnet Debugger Extension Tests', () => {
             customRequest: sinon.stub(),
             getDebugProtocolBreakpoint: sinon.stub()
         } as unknown as vscode.DebugSession;
-        const aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, {} as any, {} as any, () => { });
+        const terminalProvider = { getAspireCliExecutablePath: () => Promise.resolve(undefined) };
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, {} as any, terminalProvider as any, () => { });
         const outputEvents: any[] = [];
         const outputSubscription = aspireDebugSession.onDidSendMessage(message => outputEvents.push(message));
         const startError = new Error('AppHost build failed');
@@ -90,6 +91,62 @@ suite('Dotnet Debugger Extension Tests', () => {
         outputSubscription.dispose();
     });
 
+    test('passes configured CLI path to AppHost debug session environment', async () => {
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/AppHost/AppHost.csproj'
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub()
+        } as unknown as vscode.DebugSession;
+        const terminalProvider = { getAspireCliExecutablePath: () => Promise.resolve('/repo/artifacts/bin/Aspire.Cli/Debug/net10.0/aspire') };
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, {} as any, terminalProvider as any, () => { });
+        let appHostEnv: { name: string; value: string }[] | undefined;
+
+        sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore');
+        sinon.stub(aspireDebugSession, 'startAndGetDebugSession').resolves(undefined);
+        sinon.stub(projectDebuggerExtension, 'createDebugSessionConfigurationCallback').callsFake(async (_launchConfig, _args, env) => {
+            appHostEnv = env;
+        });
+
+        await aspireDebugSession.startAppHost('/workspace/AppHost/AppHost.csproj', ['run', '--no-build', '--project', '/workspace/AppHost/AppHost.csproj'], [], true, { forceBuild: false });
+
+        assert.deepStrictEqual(appHostEnv?.filter(variable => variable.name === 'AspireCliPath'), [
+            { name: 'AspireCliPath', value: '/repo/artifacts/bin/Aspire.Cli/Debug/net10.0/aspire' }
+        ]);
+    });
+
+    test('passes launch environment to dotnet target-path and build helpers', async () => {
+        const outputPath = 'C:\\temp\\bin\\Debug\\net10.0\\AppHost.dll';
+        const { extension, dotNetService } = createDebuggerExtension(outputPath, null, true, false);
+        const projectPath = 'C:\\temp\\AppHost.csproj';
+        const launchConfig: ProjectLaunchConfiguration = {
+            type: 'project',
+            project_path: projectPath
+        };
+        const debugConfig: AspireResourceExtendedDebugConfiguration = {
+            runId: '1',
+            debugSessionId: '1',
+            type: 'coreclr',
+            name: 'Test Debug Config',
+            request: 'launch'
+        };
+        const env = [{ name: 'AspireCliPath', value: 'C:\\repo\\artifacts\\bin\\Aspire.Cli\\Debug\\net10.0\\aspire.exe' }];
+        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+
+        await extension.createDebugSessionConfigurationCallback!(launchConfig, [], env, { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession }, debugConfig);
+
+        assert.strictEqual(dotNetService.getDotNetTargetPathStub.calledOnceWith(projectPath, env), true);
+        assert.strictEqual(dotNetService.buildDotNetProjectStub.calledOnceWith(projectPath, env), true);
+    });
+
     test('failed AppHost start does not duplicate already streamed build output', async () => {
         const parentDebugSession = {
             id: 'aspire-session',
@@ -105,7 +162,8 @@ suite('Dotnet Debugger Extension Tests', () => {
             customRequest: sinon.stub(),
             getDebugProtocolBreakpoint: sinon.stub()
         } as unknown as vscode.DebugSession;
-        const aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, {} as any, {} as any, () => { });
+        const terminalProvider = { getAspireCliExecutablePath: () => Promise.resolve(undefined) };
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, {} as any, terminalProvider as any, () => { });
         const outputEvents: any[] = [];
         const outputSubscription = aspireDebugSession.onDidSendMessage(message => outputEvents.push(message));
         const startError = new Error('Build FAILED.');

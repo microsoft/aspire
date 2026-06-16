@@ -1,4 +1,7 @@
+import * as path from 'path';
 import { EnvVar } from "../dcp/types";
+
+export const aspireCliPathEnvironmentVariableName = 'AspireCliPath';
 
 export function mergeEnvs(base: NodeJS.ProcessEnv, envVars?: EnvVar[]): Record<string, string | undefined> {
     const merged: Record<string, string | undefined> = { ...base };
@@ -14,6 +17,45 @@ export function getEnvironmentWithoutE2EBridgeVariables(): NodeJS.ProcessEnv {
     return Object.fromEntries(
         Object.entries(process.env).filter(([key]) => !key.startsWith('ASPIRE_EXTENSION_E2E_'))
     );
+}
+
+export function getAspireCliPathForMSBuild(cliPath: string | undefined, workingDirectory?: string): string | undefined {
+    const trimmedPath = cliPath?.trim();
+    if (!trimmedPath || isBareAspireCommand(trimmedPath) || isWindowsBatchWrapperPath(trimmedPath)) {
+        return undefined;
+    }
+
+    return path.isAbsolute(trimmedPath)
+        ? trimmedPath
+        : path.resolve(workingDirectory ?? process.cwd(), trimmedPath);
+}
+
+export function withAspireCliPathForMSBuild(env: EnvVar[], cliPath: string | undefined, workingDirectory?: string): EnvVar[] {
+    const aspireCliPath = getAspireCliPathForMSBuild(cliPath, workingDirectory);
+    if (!aspireCliPath) {
+        return env;
+    }
+
+    const aspireCliPathKey = aspireCliPathEnvironmentVariableName.toLowerCase();
+    return [
+        ...env.filter(variable => variable.name.toLowerCase() !== aspireCliPathKey),
+        { name: aspireCliPathEnvironmentVariableName, value: aspireCliPath },
+    ];
+}
+
+function isBareAspireCommand(value: string): boolean {
+    if (value.includes('/') || value.includes('\\')) {
+        return false;
+    }
+
+    return /^(?:aspire|aspire\.exe|aspire\.cmd|aspire\.bat)$/i.test(value);
+}
+
+function isWindowsBatchWrapperPath(value: string): boolean {
+    // The AppHost MSBuild run hook uses AspireCliPath as the direct RunCommand. Explicit
+    // .cmd/.bat wrappers need cmd.exe /C wrapping there, so leave AspireCliPath unset
+    // until the target supports direct wrapper paths.
+    return /\.(?:cmd|bat)$/i.test(value);
 }
 
 export const enum EnvironmentVariables {

@@ -8,8 +8,9 @@ import * as readline from 'readline';
 import * as os from 'os';
 import * as fs from 'fs';
 import { doesFileExist } from '../../utils/io';
-import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, isProjectLaunchConfiguration, ProjectLaunchConfiguration } from '../../dcp/types';
+import { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfiguration, isProjectLaunchConfiguration, ProjectLaunchConfiguration } from '../../dcp/types';
 import { ResourceDebuggerExtension } from '../debuggerExtensions';
+import { mergeEnvs } from '../../utils/environment';
 import {
     readLaunchSettings,
     determineBaseLaunchProfile,
@@ -24,9 +25,9 @@ import { AspireDebugSession } from '../AspireDebugSession';
 
 interface IDotNetService {
     getAndActivateDevKit(): Promise<boolean>
-    buildDotNetProject(projectFile: string): Promise<void>;
-    getDotNetTargetPath(projectFile: string): Promise<string>;
-    getDotNetRunApiOutput(projectFile: string): Promise<string>;
+    buildDotNetProject(projectFile: string, env?: EnvVar[]): Promise<void>;
+    getDotNetTargetPath(projectFile: string, env?: EnvVar[]): Promise<string>;
+    getDotNetRunApiOutput(projectFile: string, env?: EnvVar[]): Promise<string>;
 }
 
 class DotNetService implements IDotNetService {
@@ -58,12 +59,12 @@ class DotNetService implements IDotNetService {
         return Promise.resolve(true);
     }
 
-    async buildDotNetProject(projectFile: string): Promise<void> {
+    async buildDotNetProject(projectFile: string, env?: EnvVar[]): Promise<void> {
         return new Promise<void>((resolve, reject) => {
             extensionLogOutputChannel.info(`Building .NET project: ${projectFile} using dotnet CLI`);
 
             const args = ['build', projectFile];
-            const buildProcess = spawn('dotnet', args);
+            const buildProcess = spawn('dotnet', args, { env: mergeEnvs(process.env, env) });
 
             let stdoutOutput = '';
             let stderrOutput = '';
@@ -102,7 +103,7 @@ class DotNetService implements IDotNetService {
         });
     }
 
-    async getDotNetTargetPath(projectFile: string): Promise<string> {
+    async getDotNetTargetPath(projectFile: string, env?: EnvVar[]): Promise<string> {
         const args = [
             'msbuild',
             projectFile,
@@ -112,7 +113,7 @@ class DotNetService implements IDotNetService {
             '-property:GenerateFullPaths=true'
         ];
         try {
-            const { stdout } = await this.execFileAsync('dotnet', args, { encoding: 'utf8' });
+            const { stdout } = await this.execFileAsync('dotnet', args, { encoding: 'utf8', env: mergeEnvs(process.env, env) });
             const output = stdout.trim();
             if (!output) {
                 throw new Error(noOutputFromMsbuild);
@@ -124,7 +125,7 @@ class DotNetService implements IDotNetService {
         }
     }
 
-    async getDotNetRunApiOutput(projectPath: string): Promise<string> {
+    async getDotNetRunApiOutput(projectPath: string, env?: EnvVar[]): Promise<string> {
         let childProcess: ChildProcessWithoutNullStreams;
 
         return new Promise<string>(async (resolve, reject) => {
@@ -138,7 +139,7 @@ class DotNetService implements IDotNetService {
 
                 childProcess = spawn('dotnet', ['run-api'], {
                     cwd: path.dirname(projectPath),
-                    env: process.env,
+                    env: mergeEnvs(process.env, env),
                     stdio: ['pipe', 'pipe', 'pipe']
                 });
 
@@ -324,7 +325,7 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                 // using the profile's executable path and command line arguments.
                 // Expand environment variable references (e.g. $(HOME)) that VS handles natively
                 // but aren't expanded by the coreclr debugger.
-                await dotNetService.buildDotNetProject(projectPath);
+                await dotNetService.buildDotNetProject(projectPath, env);
 
                 debugConfiguration.program = expandEnvironmentVariables(baseProfile.executablePath);
                 if (debugConfiguration.args) {
@@ -340,9 +341,9 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                 ));
             }
             else if (!isFileBasedApp(projectPath)) {
-                const outputPath = await dotNetService.getDotNetTargetPath(projectPath);
+                const outputPath = await dotNetService.getDotNetTargetPath(projectPath, env);
                 if ((!(await doesFileExist(outputPath)) || launchOptions.forceBuild)) {
-                    await dotNetService.buildDotNetProject(projectPath);
+                    await dotNetService.buildDotNetProject(projectPath, env);
                 }
 
                 if (await shouldLaunchProjectWithDotNetRun(outputPath)) {
@@ -368,12 +369,12 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
             }
             else {
                 // For file-based apps, get the dotnet run-api output first to determine the executable path
-                const runApiOutput = await dotNetService.getDotNetRunApiOutput(projectPath);
+                const runApiOutput = await dotNetService.getDotNetRunApiOutput(projectPath, env);
                 const runApiConfig = getRunApiConfigFromOutput(runApiOutput);
 
                 // There may be an older cached version of the file-based app, so we
                 // should force a build.
-                await dotNetService.buildDotNetProject(projectPath);
+                await dotNetService.buildDotNetProject(projectPath, env);
 
                 debugConfiguration.program = runApiConfig.executablePath;
 
