@@ -612,6 +612,8 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         /// <summary>
         /// Returns true when the selected log entry is excluded by any of the active filters
         /// (log level, text filter, or field filters).
+        /// Delegates to <see cref="StructuredLogsViewModel.BuildFilters"/> to ensure consistent
+        /// behavior with the grid query.
         /// </summary>
         public bool IsSelectedLogEntryExcludedByFilters(string textFilter, IReadOnlyList<FieldTelemetryFilter> fieldFilters)
         {
@@ -621,54 +623,11 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             }
 
             var entry = SelectedLogEntry.LogEntry;
+            var filters = StructuredLogsViewModel.BuildFilters(fieldFilters, textFilter, SelectedLogLevel.Id);
 
-            // Check log level filter.
-            if (SelectedLogLevel.Id is { } logLevel && entry.Severity < logLevel)
+            foreach (var filter in filters.GetEnabledFilters())
             {
-                return true;
-            }
-
-            // Check text filter. Must match the same fields that TelemetryRepository.MatchesLogTextFragments
-            // checks — message, scope, traceId, spanId, severity, resource name, event name, and attributes —
-            // so we don't falsely report an entry as excluded when it's still visible in the grid.
-            if (!string.IsNullOrEmpty(textFilter) && !MatchesTextFilter(entry, textFilter))
-            {
-                return true;
-            }
-
-            // Check field filters.
-            foreach (var filter in fieldFilters)
-            {
-                if (filter.Enabled && !filter.Apply([entry]).Any())
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private static bool MatchesTextFilter(OtlpLogEntry entry, string textFilter)
-        {
-            if (entry.Message?.Contains(textFilter, StringComparison.OrdinalIgnoreCase) == true ||
-                entry.Scope.Name.Contains(textFilter, StringComparison.OrdinalIgnoreCase) ||
-                entry.TraceId.Contains(textFilter, StringComparison.OrdinalIgnoreCase) ||
-                entry.SpanId.Contains(textFilter, StringComparison.OrdinalIgnoreCase) ||
-                entry.Severity.ToString().Contains(textFilter, StringComparison.OrdinalIgnoreCase) ||
-                entry.ResourceView.Resource.ResourceName.Contains(textFilter, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            if (entry.EventName is not null && entry.EventName.Contains(textFilter, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            foreach (var attribute in entry.Attributes)
-            {
-                if (attribute.Key.Contains(textFilter, StringComparison.OrdinalIgnoreCase) ||
-                    attribute.Value.Contains(textFilter, StringComparison.OrdinalIgnoreCase))
+                if (!filter.Apply([entry]).Any())
                 {
                     return true;
                 }

@@ -96,27 +96,29 @@ public sealed class StructuredLogsPageViewModelTests
     }
 
     [Fact]
-    public void TextFilterMatchesResourceName_ReturnsNotExcluded()
+    public void TextFilterMatchesResourceName_ReturnsExcluded()
     {
         var vm = CreateViewModel(selectedLogLevel: null);
         vm.SelectedLogEntry = CreateLogDetailsViewModel(LogLevel.Information, "some message");
 
-        // The text filter matches the resource name "app1", not the message
+        // The text filter only checks the Message field (matching StructuredLogsViewModel.GetFilters() behavior).
+        // A resource name match is not sufficient to keep the entry visible.
         var result = vm.IsSelectedLogEntryExcludedByFilters("app1", []);
 
-        Assert.False(result);
+        Assert.True(result);
     }
 
     [Fact]
-    public void TextFilterMatchesSeverity_ReturnsNotExcluded()
+    public void TextFilterMatchesSeverity_ReturnsExcluded()
     {
         var vm = CreateViewModel(selectedLogLevel: null);
         vm.SelectedLogEntry = CreateLogDetailsViewModel(LogLevel.Information, "some message");
 
-        // The text filter matches the severity "Information"
+        // The text filter only checks the Message field (matching StructuredLogsViewModel.GetFilters() behavior).
+        // Matching the severity text is not sufficient to keep the entry visible.
         var result = vm.IsSelectedLogEntryExcludedByFilters("Information", []);
 
-        Assert.False(result);
+        Assert.True(result);
     }
 
     [Fact]
