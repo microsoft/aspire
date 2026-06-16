@@ -183,6 +183,59 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AddCommandDoesNotStopRunningInstanceForTypeScriptAppHost()
+    {
+        var addPackageWasCalled = false;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
+        File.WriteAllText(appHostFile.FullName, string.Empty);
+
+        var projectFactory = new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true));
+        projectFactory.Project.AddPackageAsyncCallback = (context, _) =>
+        {
+            addPackageWasCalled = true;
+            Assert.Equal(appHostFile.FullName, context.AppHostFile.FullName);
+            Assert.Equal("Aspire.Hosting.Redis", context.PackageId);
+            Assert.Equal("9.2.0", context.PackageVersion);
+            return Task.FromResult(true);
+        };
+        projectFactory.Project.FindAndStopRunningInstanceAsyncCallback = (_, _, _) => throw new InvalidOperationException("Should not stop a running instance for TypeScript AppHosts.");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AddCommandPrompterFactory = sp =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                return new TestAddCommandPrompter(interactionService);
+            };
+
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                    Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+            };
+            options.AppHostProjectFactory = _ => projectFactory;
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (_, _, _, _, _, _, _, _, _, _) =>
+                    (0, new[] { CreatePackage("Aspire.Hosting.Redis", "9.2.0") });
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"add Aspire.Hosting.Redis --apphost {appHostFile.FullName}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.True(addPackageWasCalled);
+    }
+
+    [Fact]
     public async Task IntegrationListCommandFormatJsonReturnsAvailableIntegrationsWithoutPromptingOrAddingPackage()
     {
         var addPackageWasCalled = false;

@@ -47,6 +47,10 @@ internal sealed class TestTypeScriptStarterProject(Func<DirectoryInfo, Cancellat
 
     public string? LastPackageSourceOverride { get; private set; }
 
+    public Func<AddPackageContext, CancellationToken, Task<bool>>? AddPackageAsyncCallback { get; set; }
+
+    public Func<FileInfo, DirectoryInfo, CancellationToken, Task<RunningInstanceResult>>? FindAndStopRunningInstanceAsyncCallback { get; set; }
+
     public string LanguageId => KnownLanguageId.TypeScript;
 
     public string DisplayName => "TypeScript (Node.js)";
@@ -97,7 +101,9 @@ internal sealed class TestTypeScriptStarterProject(Func<DirectoryInfo, Cancellat
 
     public Task<bool> AddPackageAsync(AddPackageContext context, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        return AddPackageAsyncCallback is not null
+            ? AddPackageAsyncCallback(context, cancellationToken)
+            : throw new NotImplementedException();
     }
 
     public Task<UpdatePackagesResult> UpdatePackagesAsync(UpdatePackagesContext context, CancellationToken cancellationToken)
@@ -107,7 +113,9 @@ internal sealed class TestTypeScriptStarterProject(Func<DirectoryInfo, Cancellat
 
     public Task<RunningInstanceResult> FindAndStopRunningInstanceAsync(FileInfo appHostFile, DirectoryInfo homeDirectory, CancellationToken cancellationToken)
     {
-        return Task.FromResult(RunningInstanceResult.NoRunningInstance);
+        return FindAndStopRunningInstanceAsyncCallback is not null
+            ? FindAndStopRunningInstanceAsyncCallback(appHostFile, homeDirectory, cancellationToken)
+            : Task.FromResult(RunningInstanceResult.NoRunningInstance);
     }
 
     public Task<string?> GetUserSecretsIdAsync(FileInfo appHostFile, bool autoInit, CancellationToken cancellationToken)
