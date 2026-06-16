@@ -23,7 +23,7 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
 {
     private readonly IFeatures _features;
     private readonly ICSharpCliManagedAppHostModuleGenerator _cliManagedModuleGenerator;
-    private readonly IIntegrationClosureRestorer _integrationClosureRestorer;
+    private readonly CliManagedAppHostIntegrationClosureRestorer _integrationClosureRestorer;
 
     public CliManagedDotNetAppHostProject(
         IDotNetCliRunner runner,
@@ -41,7 +41,7 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
         IAppHostInfoResolver appHostInfoResolver,
         IConfigurationService configurationService,
         ICSharpCliManagedAppHostModuleGenerator cliManagedModuleGenerator,
-        IIntegrationClosureRestorer integrationClosureRestorer,
+        CliManagedAppHostIntegrationClosureRestorer integrationClosureRestorer,
         TimeProvider? timeProvider = null)
         : base(
             runner,
@@ -96,7 +96,7 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
         var restoreSucceeded = await _integrationClosureRestorer.RestoreAsync(
             appHostFile,
             moduleProjectFile,
-            new IntegrationClosureRestoreOptions
+            new CliManagedAppHostIntegrationClosureRestoreOptions
             {
                 BuildInvocationOptions = CreateModuleBuildInvocationOptions(appHostFile),
                 BuildOutputCollector = outputCollector,
@@ -179,7 +179,7 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
         var restoreSucceeded = await _integrationClosureRestorer.RestoreAsync(
             context.AppHostFile,
             moduleProjectFile,
-            new IntegrationClosureRestoreOptions
+            new CliManagedAppHostIntegrationClosureRestoreOptions
             {
                 BuildInvocationOptions = CreateModuleBuildInvocationOptions(context.AppHostFile),
                 BuildOutputCollector = outputCollector,
@@ -223,7 +223,7 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
         // `aspire restore`. Mirrors PrebuiltAppHostServer.CreateStartInfo so the runtime AppHost
         // resolves integration assemblies from .aspire/integrations/apphosts/<hash>/ regardless of
         // whether we're in CLI-managed mode (this code path) or polyglot/prebuilt mode.
-        var closureLayout = _integrationClosureRestorer.TryLoad(appHostFile);
+        var closureLayout = CliManagedAppHostIntegrationClosureRestorer.TryLoad(appHostFile);
         var (hasPackageReferences, hasProjectReferences) = GetConfiguredIntegrationKinds(appHostFile);
         IntegrationClosureEnvironment.Apply(
             (key, value) => env[key] = value,

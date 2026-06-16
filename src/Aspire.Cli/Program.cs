@@ -382,7 +382,7 @@ public class Program
         builder.Services.AddSingleton<FallbackProjectParser>();
         builder.Services.AddSingleton<IProjectUpdater, ProjectUpdater>();
         builder.Services.AddSingleton<ICSharpCliManagedAppHostModuleGenerator, CSharpCliManagedAppHostModuleGenerator>();
-        builder.Services.AddSingleton<IIntegrationClosureRestorer, IntegrationClosureRestorer>();
+        builder.Services.AddSingleton<CliManagedAppHostIntegrationClosureRestorer>();
         builder.Services.AddSingleton<INewCommandPrompter, NewCommandPrompter>();
         builder.Services.AddSingleton<ITemplateVersionPrompter>(sp => (ITemplateVersionPrompter)sp.GetRequiredService<INewCommandPrompter>());
         builder.Services.AddSingleton<IAddCommandPrompter, AddCommandPrompter>();

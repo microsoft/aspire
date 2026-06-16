@@ -14,7 +14,7 @@ namespace Aspire.Cli.Projects;
 /// <summary>
 /// Shared MSBuild-side closure contract used by both the polyglot
 /// <see cref="PrebuiltAppHostServer"/> and the CLI-managed
-/// <see cref="IntegrationClosureRestorer"/>. Owns the cache-directory layout,
+/// <see cref="CliManagedAppHostIntegrationClosureRestorer"/>. Owns the cache-directory layout,
 /// file-name constants, project-file XML emission (properties + AfterBuild targets),
 /// and the post-build closure file reader.
 /// </summary>

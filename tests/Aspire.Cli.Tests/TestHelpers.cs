@@ -20,7 +20,7 @@ internal static class TestHelpers
 
     public static void WriteEmptyIntegrationClosureFiles(FileInfo appHostFile)
     {
-        var workingDir = IntegrationClosureRestorer.GetOrCreateWorkingDirectory(appHostFile);
+        var workingDir = CliManagedAppHostIntegrationClosureRestorer.GetOrCreateWorkingDirectory(appHostFile);
         var restoreDir = Path.Combine(workingDir.FullName, IntegrationClosureBuilder.IntegrationRestoreFolderName);
         Directory.CreateDirectory(restoreDir);
         File.WriteAllText(Path.Combine(restoreDir, IntegrationClosureBuilder.ClosureSourcesFileName), string.Empty);

@@ -77,7 +77,7 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
             nuGetConfigFile.Delete();
         }
 
-        var workingDirectory = IntegrationClosureRestorer.GetOrCreateWorkingDirectory(appHostFile);
+        var workingDirectory = CliManagedAppHostIntegrationClosureRestorer.GetOrCreateWorkingDirectory(appHostFile);
         var integrationRestoreDir = Path.Combine(workingDirectory.FullName, IntegrationClosureBuilder.IntegrationRestoreFolderName);
         Directory.CreateDirectory(integrationRestoreDir);
 

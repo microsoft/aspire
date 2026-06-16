@@ -16,24 +16,7 @@ namespace Aspire.Cli.Projects;
 /// <see cref="IntegrationPackageProbeManifest"/> is emitted so the running AppHost can probe
 /// integration assemblies from the cache instead of relying on bin output.
 /// </summary>
-internal interface IIntegrationClosureRestorer
-{
-    /// <summary>
-    /// Builds the CLI-managed AppHost's integration module project and emits the closure layout
-    /// (project libs + probe manifest) under <c>.aspire/integrations/apphosts/&lt;hash&gt;/</c>.
-    /// Returns <see langword="true"/> when the module build and closure materialization succeeded.
-    /// </summary>
-    Task<bool> RestoreAsync(FileInfo appHostFile, FileInfo moduleProjectFile, IntegrationClosureRestoreOptions options, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Returns the integration closure layout for the given CLI-managed AppHost when a probe
-    /// manifest has already been materialized by a prior <see cref="RestoreAsync"/> call. Used by
-    /// run-time wiring to attach the probe manifest without forcing a rebuild.
-    /// </summary>
-    IntegrationClosureLayout? TryLoad(FileInfo appHostFile);
-}
-
-internal sealed record IntegrationClosureRestoreOptions(bool BuildModule = true)
+internal sealed record CliManagedAppHostIntegrationClosureRestoreOptions(bool BuildModule = true)
 {
     /// <summary>
     /// Optional caller-supplied invocation options to merge into the build of the integration
@@ -47,19 +30,29 @@ internal sealed record IntegrationClosureRestoreOptions(bool BuildModule = true)
     public OutputCollector? BuildOutputCollector { get; init; }
 }
 
-internal sealed record IntegrationClosureLayout(
+internal sealed record CliManagedAppHostIntegrationClosureLayout(
     DirectoryInfo WorkingDirectory,
     string? ProbeManifestPath,
     string? IntegrationLibsPath);
 
-internal sealed class IntegrationClosureRestorer(
+internal sealed class CliManagedAppHostIntegrationClosureRestorer(
     IDotNetCliRunner dotNetCliRunner,
-    ILogger<IntegrationClosureRestorer> logger) : IIntegrationClosureRestorer
+    ILogger<CliManagedAppHostIntegrationClosureRestorer> logger)
 {
-    public async Task<bool> RestoreAsync(FileInfo appHostFile, FileInfo moduleProjectFile, IntegrationClosureRestoreOptions options, CancellationToken cancellationToken)
+    /// <summary>
+    /// Builds the CLI-managed AppHost's integration module project and emits the closure layout
+    /// (project libs + probe manifest) under <c>.aspire/integrations/apphosts/&lt;hash&gt;/</c>.
+    /// Returns <see langword="true"/> when the module build and closure materialization succeeded.
+    /// </summary>
+    public async Task<bool> RestoreAsync(FileInfo appHostFile, FileInfo moduleProjectFile, CliManagedAppHostIntegrationClosureRestoreOptions options, CancellationToken cancellationToken)
         => await RestoreCoreAsync(appHostFile, moduleProjectFile, options, cancellationToken).ConfigureAwait(false);
 
-    public IntegrationClosureLayout? TryLoad(FileInfo appHostFile)
+    /// <summary>
+    /// Returns the integration closure layout for the given CLI-managed AppHost when a probe
+    /// manifest has already been materialized by a prior <see cref="RestoreAsync"/> call. Used by
+    /// run-time wiring to attach the probe manifest without forcing a rebuild.
+    /// </summary>
+    public static CliManagedAppHostIntegrationClosureLayout? TryLoad(FileInfo appHostFile)
     {
         var workingDirectory = TryGetWorkingDirectory(appHostFile);
         if (workingDirectory is null)
@@ -78,7 +71,7 @@ internal sealed class IntegrationClosureRestorer(
             return null;
         }
 
-        return new IntegrationClosureLayout(
+        return new CliManagedAppHostIntegrationClosureLayout(
             workingDirectory,
             manifestExists ? probeManifestPath : null,
             integrationLibsPath);
@@ -87,7 +80,7 @@ internal sealed class IntegrationClosureRestorer(
     private async Task<bool> RestoreCoreAsync(
         FileInfo appHostFile,
         FileInfo moduleProjectFile,
-        IntegrationClosureRestoreOptions options,
+        CliManagedAppHostIntegrationClosureRestoreOptions options,
         CancellationToken cancellationToken)
     {
         var workingDirectory = GetOrCreateWorkingDirectory(appHostFile);

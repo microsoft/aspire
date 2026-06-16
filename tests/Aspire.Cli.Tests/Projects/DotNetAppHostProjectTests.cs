@@ -287,7 +287,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     public async Task RunAsync_CliManagedSingleFileAppHostClearsStaleIntegrationEnvironmentVariables()
     {
         var appHostFile = CreateCliManagedSingleFileAppHost();
-        var workingDirectory = IntegrationClosureRestorer.GetOrCreateWorkingDirectory(appHostFile);
+        var workingDirectory = CliManagedAppHostIntegrationClosureRestorer.GetOrCreateWorkingDirectory(appHostFile);
         File.WriteAllText(Path.Combine(workingDirectory.FullName, IntegrationPackageProbeManifest.FileName), "{}");
 
         var runner = new TestDotNetCliRunner();
@@ -394,7 +394,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     public async Task RestoreAsync_CliManagedSingleFileAppHostDeletesStaleProbeManifestWhenPackageBackedIntegrationsAreRemoved()
     {
         var appHostFile = CreateCliManagedSingleFileAppHost();
-        var workingDirectory = IntegrationClosureRestorer.GetOrCreateWorkingDirectory(appHostFile);
+        var workingDirectory = CliManagedAppHostIntegrationClosureRestorer.GetOrCreateWorkingDirectory(appHostFile);
         var staleProbeManifestPath = Path.Combine(workingDirectory.FullName, IntegrationPackageProbeManifest.FileName);
         Directory.CreateDirectory(workingDirectory.FullName);
         File.WriteAllText(staleProbeManifestPath, "{}");
@@ -489,7 +489,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         runner.BuildAsyncCallback = (projectFile, _, _, _) =>
         {
             // After the refactor the CLI-managed add path builds the integration module
-            // project (.aspire/modules/Aspire.csproj) via IntegrationClosureRestorer, not the
+            // project (.aspire/modules/Aspire.csproj) via CliManagedAppHostIntegrationClosureRestorer, not the
             // user's apphost.cs.
             var moduleProjectPath = Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.csproj");
             Assert.Equal(moduleProjectPath, projectFile.FullName);

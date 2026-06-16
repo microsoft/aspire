@@ -181,7 +181,7 @@ internal static class CliTestHelper
 
         // AppHost project handlers - must match Program.cs registration pattern
         services.AddSingleton<ICSharpCliManagedAppHostModuleGenerator, CSharpCliManagedAppHostModuleGenerator>();
-        services.AddSingleton<IIntegrationClosureRestorer, IntegrationClosureRestorer>();
+        services.AddSingleton<CliManagedAppHostIntegrationClosureRestorer>();
         services.AddSingleton<DotNetAppHostProject>();
         services.AddSingleton<CliManagedDotNetAppHostProject>();
         services.AddSingleton<Func<LanguageInfo, GuestAppHostProject>>(sp =>
