@@ -489,9 +489,8 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
 
         runner.BuildAsyncCallback = (projectFile, _, _, _) =>
         {
-            // After the refactor the CLI-managed add path builds the integration module
-            // project (.aspire/modules/Aspire.csproj) via CliManagedAppHostIntegrationClosureRestorer, not the
-            // user's apphost.cs.
+            // The CLI-managed add path builds the generated integration module project
+            // (.aspire/modules/Aspire.csproj), not the user's apphost.cs.
             var moduleProjectPath = Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.csproj");
             Assert.Equal(moduleProjectPath, projectFile.FullName);
             Assert.False(File.Exists(Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "modules", "Aspire.targets")));

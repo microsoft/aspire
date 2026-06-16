@@ -180,7 +180,6 @@ internal static class CliTestHelper
         services.AddSingleton<ProfileCaptureService>();
 
         // AppHost project handlers - must match Program.cs registration pattern
-        services.AddSingleton<ICSharpCliManagedAppHostModuleGenerator, CSharpCliManagedAppHostModuleGenerator>();
         services.AddSingleton<DotNetAppHostProject>();
         services.AddSingleton<CliManagedDotNetAppHostProject>();
         services.AddSingleton<Func<LanguageInfo, GuestAppHostProject>>(sp =>

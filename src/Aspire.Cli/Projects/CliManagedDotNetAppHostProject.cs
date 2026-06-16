@@ -21,9 +21,12 @@ namespace Aspire.Cli.Projects;
 /// </summary>
 internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
 {
+    private const string IntegrationLibsPathStateFileName = "integration-libs-path.txt";
+
     private readonly IFeatures _features;
-    private readonly ICSharpCliManagedAppHostModuleGenerator _cliManagedModuleGenerator;
-    private readonly CliManagedAppHostIntegrationClosureRestorer _integrationClosureRestorer;
+    private readonly IDotNetCliRunner _runner;
+    private readonly ILogger<DotNetAppHostProject> _logger;
+    private readonly CSharpCliManagedAppHostModuleGenerator _cliManagedModuleGenerator;
 
     public CliManagedDotNetAppHostProject(
         IDotNetCliRunner runner,
@@ -40,8 +43,8 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
         Program.CliLoggingOptions loggingOptions,
         IAppHostInfoResolver appHostInfoResolver,
         IConfigurationService configurationService,
-        ICSharpCliManagedAppHostModuleGenerator cliManagedModuleGenerator,
-        ILogger<CliManagedAppHostIntegrationClosureRestorer> integrationClosureRestorerLogger,
+        IPackagingService packagingService,
+        ILogger<CSharpCliManagedAppHostModuleGenerator> cliManagedModuleGeneratorLogger,
         TimeProvider? timeProvider = null)
         : base(
             runner,
@@ -61,8 +64,9 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
             timeProvider)
     {
         _features = features;
-        _cliManagedModuleGenerator = cliManagedModuleGenerator;
-        _integrationClosureRestorer = new CliManagedAppHostIntegrationClosureRestorer(runner, integrationClosureRestorerLogger);
+        _runner = runner;
+        _logger = logger;
+        _cliManagedModuleGenerator = new CSharpCliManagedAppHostModuleGenerator(packagingService, cliManagedModuleGeneratorLogger);
     }
 
     public override bool CanHandle(FileInfo appHostFile)
@@ -93,14 +97,11 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
             return CliExitCodes.FailedToBuildArtifacts;
         }
 
-        var restoreSucceeded = await _integrationClosureRestorer.RestoreAsync(
+        var restoreSucceeded = await RestoreIntegrationClosureAsync(
             appHostFile,
             moduleProjectFile,
-            new CliManagedAppHostIntegrationClosureRestoreOptions
-            {
-                BuildInvocationOptions = CreateModuleBuildInvocationOptions(appHostFile),
-                BuildOutputCollector = outputCollector,
-            },
+            CreateModuleBuildInvocationOptions(appHostFile),
+            outputCollector,
             cancellationToken);
 
         return restoreSucceeded
@@ -176,14 +177,11 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
 
         // Re-materialize the integration closure cache (probe manifest + libs path) so the next
         // `aspire run` resolves the newly added package without requiring an explicit `aspire restore`.
-        var restoreSucceeded = await _integrationClosureRestorer.RestoreAsync(
+        var restoreSucceeded = await RestoreIntegrationClosureAsync(
             context.AppHostFile,
             moduleProjectFile,
-            new CliManagedAppHostIntegrationClosureRestoreOptions
-            {
-                BuildInvocationOptions = CreateModuleBuildInvocationOptions(context.AppHostFile),
-                BuildOutputCollector = outputCollector,
-            },
+            CreateModuleBuildInvocationOptions(context.AppHostFile),
+            outputCollector,
             cancellationToken);
         return restoreSucceeded;
     }
@@ -223,7 +221,7 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
         // `aspire restore`. Mirrors PrebuiltAppHostServer.CreateStartInfo so the runtime AppHost
         // resolves integration assemblies from .aspire/integrations/apphosts/<hash>/ regardless of
         // whether we're in CLI-managed mode (this code path) or polyglot/prebuilt mode.
-        var closureLayout = CliManagedAppHostIntegrationClosureRestorer.TryLoad(appHostFile);
+        var closureLayout = TryLoadIntegrationClosure(appHostFile);
         var (hasPackageReferences, hasProjectReferences) = GetConfiguredIntegrationKinds(appHostFile);
         IntegrationClosureEnvironment.Apply(
             (key, value) => env[key] = value,
@@ -305,5 +303,185 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
         }
 
         return (hasPackageReferences, hasProjectReferences);
+    }
+
+    private async Task<bool> RestoreIntegrationClosureAsync(
+        FileInfo appHostFile,
+        FileInfo moduleProjectFile,
+        ProcessInvocationOptions buildOptions,
+        OutputCollector buildOutputCollector,
+        CancellationToken cancellationToken)
+    {
+        var appHostDirectory = appHostFile.Directory
+            ?? throw new InvalidOperationException($"AppHost file '{appHostFile.FullName}' has no parent directory.");
+        var workingDirectory = IntegrationClosureBuilder.GetAppHostIntegrationCacheDirectory(appHostDirectory);
+        Directory.CreateDirectory(workingDirectory.FullName);
+        var restoreDir = Path.Combine(workingDirectory.FullName, IntegrationClosureBuilder.IntegrationRestoreFolderName);
+        Directory.CreateDirectory(restoreDir);
+
+        var existingStandardOutputCallback = buildOptions.StandardOutputCallback;
+        var existingStandardErrorCallback = buildOptions.StandardErrorCallback;
+
+        buildOptions.StandardOutputCallback = line =>
+        {
+            existingStandardOutputCallback?.Invoke(line);
+            buildOutputCollector.AppendOutput(line);
+        };
+        buildOptions.StandardErrorCallback = line =>
+        {
+            existingStandardErrorCallback?.Invoke(line);
+            buildOutputCollector.AppendError(line);
+        };
+
+        var exitCode = await _runner.BuildAsync(moduleProjectFile, noRestore: false, buildOptions, cancellationToken).ConfigureAwait(false);
+        if (exitCode != 0)
+        {
+            _logger.LogError("Failed to build CLI-managed AppHost integration module (exit code {ExitCode}).", exitCode);
+            return false;
+        }
+
+        var closureManifest = await ReadClosureManifestAsync(restoreDir, cancellationToken).ConfigureAwait(false);
+        if (closureManifest is null)
+        {
+            return false;
+        }
+
+        if (closureManifest.Entries.Any(static entry => entry.IsPackageBacked))
+        {
+            var probeManifestPath = Path.Combine(workingDirectory.FullName, IntegrationPackageProbeManifest.FileName);
+            await IntegrationPackageProbeManifest.WriteAsync(
+                probeManifestPath,
+                closureManifest.CreatePackageProbeManifest(),
+                cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            var staleProbeManifestPath = Path.Combine(workingDirectory.FullName, IntegrationPackageProbeManifest.FileName);
+            if (File.Exists(staleProbeManifestPath))
+            {
+                File.Delete(staleProbeManifestPath);
+            }
+        }
+
+        string? integrationLibsPath = null;
+        if (closureManifest.Entries.Any(static entry => !entry.IsPackageBacked))
+        {
+            var layoutStore = new AppHostServerProjectLayoutStore(workingDirectory.FullName, _logger);
+            var layout = await layoutStore.GetOrCreateAsync(closureManifest, cancellationToken).ConfigureAwait(false);
+            if (layout is not null)
+            {
+                integrationLibsPath = layout.IntegrationLibsPath;
+            }
+        }
+
+        // Persist the resolved libs path so future run/publish invocations can attach the cached
+        // project-reference closure without rebuilding the generated module first.
+        await PersistIntegrationClosureStateAsync(workingDirectory.FullName, integrationLibsPath, cancellationToken).ConfigureAwait(false);
+
+        return true;
+    }
+
+    private async Task<AppHostServerClosureManifest?> ReadClosureManifestAsync(string restoreDir, CancellationToken cancellationToken)
+    {
+        // The generated module's Directory.Build.props sets BaseIntermediateOutputPath under the
+        // same integration-restore directory that receives the closure files, matching the
+        // polyglot/prebuilt generated-project layout even though Aspire.csproj itself lives under
+        // .aspire/modules so file-based AppHosts can reference it with #:project.
+        var assetsFilePath = Path.Combine(restoreDir, "obj", IntegrationClosureBuilder.ProjectAssetsFileName);
+
+        // The CLI-managed path treats missing closure files as a soft failure (log + return null)
+        // so the caller surfaces "build did not emit closure" rather than crashing. We pre-compute
+        // the appsettings content from project-ref assembly names because the CLI-managed path
+        // doesn't have the polyglot's IntegrationReference list available.
+        var projectRefAssemblyNames = await IntegrationClosureBuilder.ReadProjectRefAssemblyNamesAsync(
+            restoreDir, _logger, cancellationToken).ConfigureAwait(false);
+        var appSettings = CreateAppSettingsContent(projectRefAssemblyNames);
+
+        return await IntegrationClosureBuilder.ReadClosureManifestAsync(
+            restoreDir,
+            assetsFilePath,
+            appSettings,
+            ClosureFileMissingBehavior.ReturnNull,
+            _logger,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private static string CreateAppSettingsContent(IReadOnlyList<string> projectRefAssemblyNames)
+    {
+        // appsettings.json content is hashed into the closure manifest as a cache-invalidation
+        // signal; for the CLI-managed path we only contribute the project-ref assembly names
+        // (package ids are already captured via closure metadata). The CLI-managed AppHost itself
+        // doesn't consume this file today, but keeping it stable keeps the cache layout symmetric
+        // with PrebuiltAppHostServer.
+        var atsAssemblies = new SortedSet<string>(StringComparer.OrdinalIgnoreCase) { "Aspire.Hosting" };
+        foreach (var name in projectRefAssemblyNames)
+        {
+            atsAssemblies.Add(name);
+        }
+
+        var assembliesJson = string.Join(",\n      ", atsAssemblies.Select(static a => $"\"{a}\""));
+        return $$"""
+            {
+              "AtsAssemblies": [
+                {{assembliesJson}}
+              ]
+            }
+            """;
+    }
+
+    private static (string? ProbeManifestPath, string? IntegrationLibsPath)? TryLoadIntegrationClosure(FileInfo appHostFile)
+    {
+        if (appHostFile.Directory is not { } appHostDirectory)
+        {
+            return null;
+        }
+
+        var workingDirectory = IntegrationClosureBuilder.GetAppHostIntegrationCacheDirectory(appHostDirectory);
+        var probeManifestPath = Path.Combine(workingDirectory.FullName, IntegrationPackageProbeManifest.FileName);
+        var integrationLibsPath = TryReadIntegrationLibsPathFromState(workingDirectory.FullName);
+        var manifestExists = File.Exists(probeManifestPath);
+
+        // Surface null when neither artifact is present so callers can skip wiring env vars that
+        // point at missing files.
+        if (!manifestExists && integrationLibsPath is null)
+        {
+            return null;
+        }
+
+        return (manifestExists ? probeManifestPath : null, integrationLibsPath);
+    }
+
+    private static async Task PersistIntegrationClosureStateAsync(string workingDirectory, string? integrationLibsPath, CancellationToken cancellationToken)
+    {
+        var statePath = Path.Combine(workingDirectory, IntegrationLibsPathStateFileName);
+        if (string.IsNullOrWhiteSpace(integrationLibsPath))
+        {
+            if (File.Exists(statePath))
+            {
+                File.Delete(statePath);
+            }
+            return;
+        }
+
+        await File.WriteAllTextAsync(statePath, integrationLibsPath, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static string? TryReadIntegrationLibsPathFromState(string workingDirectory)
+    {
+        var statePath = Path.Combine(workingDirectory, IntegrationLibsPathStateFileName);
+        if (!File.Exists(statePath))
+        {
+            return null;
+        }
+
+        try
+        {
+            var value = File.ReadAllText(statePath).Trim();
+            return string.IsNullOrWhiteSpace(value) ? null : value;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
     }
 }

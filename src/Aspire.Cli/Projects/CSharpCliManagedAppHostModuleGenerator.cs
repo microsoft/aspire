@@ -10,16 +10,9 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Projects;
 
-internal interface ICSharpCliManagedAppHostModuleGenerator
-{
-    Task<FileInfo?> TryGenerateAsync(FileInfo appHostFile, CancellationToken cancellationToken);
-
-    Task<FileInfo?> TryGenerateAsync(FileInfo appHostFile, AspireConfigFile config, DirectoryInfo configDirectory, string? packageSourceOverride, CancellationToken cancellationToken);
-}
-
 internal sealed class CSharpCliManagedAppHostModuleGenerator(
     IPackagingService packagingService,
-    ILogger<CSharpCliManagedAppHostModuleGenerator> logger) : ICSharpCliManagedAppHostModuleGenerator
+    ILogger<CSharpCliManagedAppHostModuleGenerator> logger)
 {
     internal const string ModulesDirectoryName = "modules";
     internal const string ModuleProjectFileName = "Aspire.csproj";
@@ -28,7 +21,7 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
     internal const string NuGetConfigFileName = "nuget.config";
     internal const string BuildPropertyName = "AspireCliManagedAppHostBuild";
 
-    public async Task<FileInfo?> TryGenerateAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+    internal async Task<FileInfo?> TryGenerateAsync(FileInfo appHostFile, CancellationToken cancellationToken)
     {
         var appHostDirectory = appHostFile.Directory;
         if (appHostDirectory is null)
@@ -41,7 +34,7 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         return await TryGenerateAsync(appHostFile, config, configDirectory, packageSourceOverride: null, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<FileInfo?> TryGenerateAsync(FileInfo appHostFile, AspireConfigFile config, DirectoryInfo configDirectory, string? packageSourceOverride, CancellationToken cancellationToken)
+    internal async Task<FileInfo?> TryGenerateAsync(FileInfo appHostFile, AspireConfigFile config, DirectoryInfo configDirectory, string? packageSourceOverride, CancellationToken cancellationToken)
     {
         var appHostDirectory = appHostFile.Directory;
         if (appHostDirectory is null)
