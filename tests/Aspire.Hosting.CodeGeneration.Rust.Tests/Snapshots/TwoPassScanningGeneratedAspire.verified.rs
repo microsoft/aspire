@@ -13401,6 +13401,27 @@ impl ParameterResource {
         Ok(ParameterResource::new(handle, self.client.clone()))
     }
 
+    /// Marks the parameter resource as optional.
+    pub fn with_optional(&self) -> Result<ParameterResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/withOptional", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ParameterResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets whether the parameter resource requires a value.
+    pub fn with_required(&self, required: Option<bool>) -> Result<ParameterResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        if let Some(ref v) = required {
+            args.insert("required".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withRequired", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ParameterResource::new(handle, self.client.clone()))
+    }
+
     /// Sets a custom input for the parameter resource from a polyglot app host.
     pub fn with_custom_input(&self, options: ParameterCustomInputOptions) -> Result<ParameterResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -13776,6 +13797,29 @@ impl ParameterResource {
         let result = self.client.invoke_capability("Aspire.Hosting/createExecutionConfiguration", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
+    }
+
+    /// Gets the current value for this parameter without waiting for unresolved input.
+    pub fn try_get_current_value(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ParameterResource.tryGetCurrentValue", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Sets or replaces the value for this parameter.
+    pub fn set_value_async(&self, value: Option<&str>, cancellation_token: Option<&CancellationToken>) -> Result<(), Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        if let Some(ref v) = value {
+            args.insert("value".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(token) = cancellation_token {
+            let token_id = register_cancellation(token, self.client.clone());
+            args.insert("cancellationToken".to_string(), Value::String(token_id));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ParameterResource.setValueAsync", args)?;
+        Ok(())
     }
 
     /// Configures container build options for a compute resource using an async callback.

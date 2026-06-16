@@ -239,6 +239,28 @@ public class ExecutionConfigurationGathererTests
     }
 
     [Fact]
+    public async Task ResolveAsync_UnsetOptionalParameterEnvironmentVariable_OmitsEnvironmentVariable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var optional = builder.AddParameter("optional")
+            .WithOptional();
+        var consumer = builder.AddContainer("consumer", "image")
+            .WithEnvironment("OPTIONAL_VALUE", optional)
+            .Resource;
+
+        await builder.BuildAsync();
+
+        var context = new ExecutionConfigurationGathererContext();
+        var gatherer = new EnvironmentVariablesExecutionConfigurationGatherer();
+        await gatherer.GatherAsync(context, consumer, NullLogger.Instance, builder.ExecutionContext);
+
+        var result = await context.ResolveAsync(consumer, NullLogger.Instance, builder.ExecutionContext);
+
+        Assert.Null(result.Exception);
+        Assert.DoesNotContain(result.EnvironmentVariables, variable => variable.Key == "OPTIONAL_VALUE");
+    }
+
+    [Fact]
     public async Task ResolveAsync_FailingArgument_LogsErrorAndCollectsException()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

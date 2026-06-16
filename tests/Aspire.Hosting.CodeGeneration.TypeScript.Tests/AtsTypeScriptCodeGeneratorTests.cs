@@ -532,6 +532,40 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public void Scanner_HostingAssembly_ParameterResourceValueManagementCapabilities()
+    {
+        var capabilities = ScanCapabilitiesFromHostingAssembly();
+
+        var setValue = Assert.Single(capabilities, c => c.CapabilityId == "Aspire.Hosting.ApplicationModel/ParameterResource.setValueAsync");
+        Assert.Equal(AtsCapabilityKind.InstanceMethod, setValue.CapabilityKind);
+        Assert.Equal("setValueAsync", setValue.MethodName);
+        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource", setValue.TargetTypeId);
+
+        var valueParameter = Assert.Single(setValue.Parameters, p => p.Name == "value");
+        Assert.True(valueParameter.IsOptional);
+        // Reference-type nullability (string?) is intentionally NOT surfaced in the ATS model: only
+        // Nullable<T> value types are marked nullable. This keeps the generated polyglot API stable and
+        // consistent with existing string?-returning members (e.g. getConnectionString). The value
+        // parameter is still omittable because it has a C# default (= null), which IsOptional captures above.
+        Assert.False(valueParameter.IsNullable);
+        Assert.NotNull(valueParameter.Type);
+        Assert.Equal("string", valueParameter.Type.TypeId);
+        // AtsTypeRef.IsNullable is bool? and is left unset (null) for non-nullable types; assert it is not true.
+        Assert.NotEqual(true, valueParameter.Type.IsNullable);
+
+        var tryGetCurrentValue = Assert.Single(capabilities, c => c.CapabilityId == "Aspire.Hosting.ApplicationModel/ParameterResource.tryGetCurrentValue");
+        Assert.Equal(AtsCapabilityKind.InstanceMethod, tryGetCurrentValue.CapabilityKind);
+        Assert.Equal("tryGetCurrentValue", tryGetCurrentValue.MethodName);
+        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource", tryGetCurrentValue.TargetTypeId);
+        Assert.DoesNotContain(tryGetCurrentValue.Parameters, p => p.Name != "context");
+        Assert.NotNull(tryGetCurrentValue.ReturnType);
+        Assert.Equal("string", tryGetCurrentValue.ReturnType.TypeId);
+        // See the note above: reference-type nullability is not surfaced, so the string? return renders as
+        // a non-nullable string (AtsTypeRef.IsNullable is left unset rather than true).
+        Assert.NotEqual(true, tryGetCurrentValue.ReturnType.IsNullable);
+    }
+
+    [Fact]
     public void Scanner_BrowsersAssembly_WithBrowserLogsCapability()
     {
         var capabilities = ScanCapabilitiesFromBrowsersAssembly();

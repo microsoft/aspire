@@ -18468,8 +18468,10 @@ type ParameterResource interface {
 	OnInitializeResource(callback func(arg InitializeResourceEvent)) ParameterResource
 	OnResourceReady(callback func(arg ResourceReadyEvent)) ParameterResource
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) ParameterResource
+	SetValueAsync(options ...*SetValueAsyncOptions) error
 	SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) ParameterResource
 	TestWaitFor(dependency Resource) ParameterResource
+	TryGetCurrentValue() (string, error)
 	WithCancellableOperation(operation func(arg *CancellationToken)) ParameterResource
 	WithChildRelationship(child Resource) ParameterResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) ParameterResource
@@ -18499,6 +18501,7 @@ type ParameterResource interface {
 	WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) ParameterResource
 	WithModifiedAt(modifiedAt string) ParameterResource
 	WithNestedConfig(config *TestNestedDto) ParameterResource
+	WithOptional() ParameterResource
 	WithOptionalCallback(options ...*WithOptionalCallbackOptions) ParameterResource
 	WithOptionalString(options ...*WithOptionalStringOptions) ParameterResource
 	WithParentProcessLifetime(parentProcessId float64) ParameterResource
@@ -18509,6 +18512,7 @@ type ParameterResource interface {
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ParameterResource
 	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) ParameterResource
 	WithRelationship(resourceBuilder Resource, type_ string) ParameterResource
+	WithRequired(options ...*WithRequiredOptions) ParameterResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ParameterResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ParameterResource
 	WithSessionLifetime() ParameterResource
@@ -18664,6 +18668,30 @@ func (s *parameterResource) OnResourceStopped(callback func(arg ResourceStoppedE
 	return s
 }
 
+// SetValueAsync sets or replaces the value for this parameter.
+func (s *parameterResource) SetValueAsync(options ...*SetValueAsyncOptions) error {
+	if s.err != nil { return s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &SetValueAsyncOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.CancellationToken != nil {
+			ctx = merged.CancellationToken.Context()
+			if id := s.client.registerCancellation(merged.CancellationToken); id != "" {
+				reqArgs["cancellationToken"] = id
+			}
+		}
+	}
+	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ParameterResource.setValueAsync", reqArgs)
+	return err
+}
+
 // SubscribeHttpsEndpointsUpdate subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
 func (s *parameterResource) SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) ParameterResource {
 	if s.err != nil { return s }
@@ -18694,6 +18722,21 @@ func (s *parameterResource) TestWaitFor(dependency Resource) ParameterResource {
 	reqArgs["dependency"] = serializeValue(dependency)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/testWaitFor", reqArgs); err != nil { s.setErr(err) }
 	return s
+}
+
+// TryGetCurrentValue gets the current value for this parameter without waiting for unresolved input.
+func (s *parameterResource) TryGetCurrentValue() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ParameterResource.tryGetCurrentValue", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
 }
 
 // WithCancellableOperation performs a cancellable operation
@@ -19127,6 +19170,17 @@ func (s *parameterResource) WithNestedConfig(config *TestNestedDto) ParameterRes
 	return s
 }
 
+// WithOptional marks the parameter resource as optional.
+func (s *parameterResource) WithOptional() ParameterResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOptional", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithOptionalCallback configures with optional callback
 func (s *parameterResource) WithOptionalCallback(options ...*WithOptionalCallbackOptions) ParameterResource {
 	if s.err != nil { return s }
@@ -19305,6 +19359,24 @@ func (s *parameterResource) WithRelationship(resourceBuilder Resource, type_ str
 	reqArgs["resourceBuilder"] = serializeValue(resourceBuilder)
 	reqArgs["type"] = serializeValue(type_)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withBuilderRelationship", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithRequired sets whether the parameter resource requires a value.
+func (s *parameterResource) WithRequired(options ...*WithRequiredOptions) ParameterResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithRequiredOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequired", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -28633,6 +28705,18 @@ func (o *WithDescriptionOptions) ToMap() map[string]any {
 	return m
 }
 
+// WithRequiredOptions carries optional parameters for WithRequired.
+type WithRequiredOptions struct {
+	Required *bool `json:"required,omitempty"`
+}
+
+func (o *WithRequiredOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.Required != nil { m["required"] = serializeValue(o.Required) }
+	return m
+}
+
 // AddConnectionStringOptions carries optional parameters for AddConnectionString.
 type AddConnectionStringOptions struct {
 	EnvironmentVariableNameOrExpression any `json:"environmentVariableNameOrExpression,omitempty"`
@@ -29469,6 +29553,19 @@ type GetValueAsyncOptions struct {
 func (o *GetValueAsyncOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if o == nil { return m }
+	return m
+}
+
+// SetValueAsyncOptions carries optional parameters for SetValueAsync.
+type SetValueAsyncOptions struct {
+	Value *string `json:"value,omitempty"`
+	CancellationToken *CancellationToken `json:"-"`
+}
+
+func (o *SetValueAsyncOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.Value != nil { m["value"] = serializeValue(o.Value) }
 	return m
 }
 

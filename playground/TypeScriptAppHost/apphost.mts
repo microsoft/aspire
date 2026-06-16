@@ -31,6 +31,14 @@ const dir = await builder.appHostDirectory();
 console.log(`AppHost directory: ${dir}`);
 const processCommandScriptPath = join(dir, "process-command-scripts", "node-process-check.js");
 
+// Optional parameters can be inspected and updated programmatically from TypeScript.
+const messagePrefix = await builder.addParameter("message-prefix").withOptional();
+if (await messagePrefix.tryGetCurrentValue() === null) {
+    await messagePrefix.setValueAsync({
+        value: isPublishMode ? "published" : "local"
+    });
+}
+
 // Add PostgreSQL server and database
 const postgres = await builder.addPostgres("postgres");
 const db = await postgres.addDatabase("db");
@@ -42,6 +50,7 @@ const api = await builder
     .addNodeApp("api", "./express-api", "src/server.ts")
     .withRunScript("dev")
     .withHttpEndpoint({ env: "PORT" })
+    .withEnvironment("MESSAGE_PREFIX", messagePrefix)
     .withReference(db)
     .waitFor(db);
 

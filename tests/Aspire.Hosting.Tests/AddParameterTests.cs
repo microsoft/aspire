@@ -43,6 +43,182 @@ public class AddParameterTests
     }
 
     [Fact]
+    public void ParametersAreRequiredByDefault()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+
+        var parameter = appBuilder.AddParameter("test");
+
+        Assert.True(parameter.Resource.Required);
+    }
+
+    [Fact]
+    public void ParameterWithOptional_MarksParameterAsNotRequired()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+
+        var parameter = appBuilder.AddParameter("test")
+            .WithOptional();
+
+        Assert.False(parameter.Resource.Required);
+    }
+
+    [Fact]
+    public void ParameterWithRequired_SetsRequiredFlag()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+
+        var parameter = appBuilder.AddParameter("test")
+            .WithOptional()
+            .WithRequired();
+
+        Assert.True(parameter.Resource.Required);
+    }
+
+    [Fact]
+    public async Task OptionalParameterWithoutValue_ResolvesToNull()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+
+        var parameter = appBuilder.AddParameter("optional")
+            .WithOptional();
+
+        using var app = appBuilder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var parameterResource = Assert.Single(appModel.Resources.OfType<ParameterResource>(), r => r.Name == "optional");
+
+        Assert.Null(await parameterResource.GetValueAsync(default));
+#pragma warning disable CS0618 // Type or member is obsolete
+        Assert.Equal(string.Empty, parameter.Resource.Value);
+#pragma warning restore CS0618 // Type or member is obsolete
+    }
+
+    [Fact]
+    public async Task ParameterTrySetValue_CompletesParameterWithProgrammaticValue()
+    {
+        var parameter = new ParameterResource("test", _ => throw new MissingParameterValueException("Parameter 'test' is missing."), secret: false);
+
+        Assert.False(parameter.TryGetCurrentValue(out _));
+        Assert.True(parameter.TrySetValue("programmatic"));
+        Assert.False(parameter.TrySetValue("replacement"));
+        Assert.True(parameter.TryGetCurrentValue(out var value));
+        Assert.Equal("programmatic", value);
+        Assert.Equal("programmatic", await parameter.GetValueAsync(CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ParameterTrySetException_CompletesParameterWithProgrammaticException()
+    {
+        var parameter = new ParameterResource("test", _ => "fallback", secret: false);
+        var exception = new InvalidOperationException("Programmatic failure.");
+
+        Assert.True(parameter.TrySetException(exception));
+        Assert.False(parameter.TrySetValue("replacement"));
+        Assert.False(parameter.TryGetCurrentValue(out _));
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() => parameter.GetValueAsync(CancellationToken.None).AsTask());
+        Assert.Same(exception, thrown);
+    }
+
+    [Fact]
+    public async Task ParameterSetValueAsync_ReplacesCurrentValue()
+    {
+        var parameter = new ParameterResource("test", _ => "initial", secret: false);
+
+        Assert.True(parameter.TrySetValue("first"));
+
+        await parameter.SetValueAsync("second").DefaultTimeout();
+
+        Assert.True(parameter.TryGetCurrentValue(out var value));
+        Assert.Equal("second", value);
+        Assert.Equal("second", await parameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task RequiredParameterSetValueAsync_WithMissingValueFaultsParameter(string? value)
+    {
+        var parameter = new ParameterResource("test", _ => "initial", secret: false);
+
+        await parameter.SetValueAsync(value).DefaultTimeout();
+
+        Assert.False(parameter.TryGetCurrentValue(out _));
+        await Assert.ThrowsAsync<MissingParameterValueException>(() => parameter.GetValueAsync(CancellationToken.None).AsTask()).DefaultTimeout();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task RequiredParameterTrySetValue_WithMissingValueFaultsParameter(string? value)
+    {
+        var parameter = new ParameterResource("test", _ => "initial", secret: false);
+
+        Assert.True(parameter.TrySetValue(value));
+        Assert.False(parameter.TrySetValue("replacement"));
+
+        Assert.False(parameter.TryGetCurrentValue(out _));
+        await Assert.ThrowsAsync<MissingParameterValueException>(() => parameter.GetValueAsync(CancellationToken.None).AsTask()).DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task ParameterSetExceptionAsync_ReplacesCurrentValueWithException()
+    {
+        var parameter = new ParameterResource("test", _ => "initial", secret: false);
+        var exception = new InvalidOperationException("Programmatic failure.");
+
+        await parameter.SetValueAsync("current").DefaultTimeout();
+        await parameter.SetExceptionAsync(exception).DefaultTimeout();
+
+        Assert.False(parameter.TryGetCurrentValue(out _));
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() => parameter.GetValueAsync(CancellationToken.None).AsTask()).DefaultTimeout();
+        Assert.Same(exception, thrown);
+    }
+
+    [Fact]
+    public async Task ParameterSetValueAsync_NotifiesAllObserversWhenOneThrows()
+    {
+        var parameter = new ParameterResource("test", _ => "initial", secret: false);
+        var secondObserverInvoked = false;
+
+        parameter.ValueChanged += (_, _, _) => throw new InvalidOperationException("boom");
+        parameter.ValueChanged += (_, _, _) =>
+        {
+            secondObserverInvoked = true;
+            return Task.CompletedTask;
+        };
+
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() => parameter.SetValueAsync("value")).DefaultTimeout();
+
+        Assert.Equal("boom", thrown.Message);
+        Assert.True(secondObserverInvoked);
+    }
+
+    [Fact]
+    public async Task ParameterSetValueAsync_AggregatesMultipleObserverFailures()
+    {
+        var parameter = new ParameterResource("test", _ => "initial", secret: false);
+
+        parameter.ValueChanged += (_, _, _) => throw new InvalidOperationException("first");
+        parameter.ValueChanged += (_, _, _) => throw new InvalidOperationException("second");
+
+        var aggregate = await Assert.ThrowsAsync<AggregateException>(() => parameter.SetValueAsync("value")).DefaultTimeout();
+
+        Assert.Equal(2, aggregate.InnerExceptions.Count);
+    }
+
+    [Fact]
+    public void ParameterSetValueAsync_TrySetSwallowsObserverFailures()
+    {
+        var parameter = new ParameterResource("test", _ => "initial", secret: false);
+
+        parameter.ValueChanged += (_, _, _) => throw new InvalidOperationException("boom");
+
+        Assert.True(parameter.TrySetValue("value"));
+        Assert.True(parameter.TryGetCurrentValue(out var value));
+        Assert.Equal("value", value);
+    }
+
+    [Fact]
     public void ParametersWithConfigurationValueDoNotGetDefaultValue()
     {
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -109,6 +285,33 @@ public class AddParameterTests
               "inputs": {
                 "value": {
                   "type": "string"
+                }
+              }
+            }
+            """;
+        Assert.Equal(expectedManifest, paramManifest.ToString());
+    }
+
+    [Fact]
+    public async Task OptionalParameterManifestMarksInputAsNotRequired()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+
+        appBuilder.AddParameter("optional")
+            .WithOptional();
+
+        using var app = appBuilder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var paramManifest = await ManifestUtils.GetManifest(appModel.Resources.OfType<ParameterResource>().Single(r => r.Name == "optional")).DefaultTimeout();
+        var expectedManifest = $$"""
+            {
+              "type": "parameter.v0",
+              "value": "{optional.inputs.value}",
+              "inputs": {
+                "value": {
+                  "type": "string",
+                  "required": false
                 }
               }
             }
@@ -419,6 +622,19 @@ public class AddParameterTests
         Assert.Equal("Test description", input.Description);
         Assert.Equal(string.Format(InteractionStrings.ParametersInputsParameterPlaceholder, "test"), input.Placeholder);
         Assert.False(input.EnableDescriptionMarkdown);
+        Assert.True(input.Required);
+    }
+
+    [Fact]
+    public void ParameterCreateInput_ForOptionalParameter_ReturnsOptionalInput()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var parameter = appBuilder.AddParameter("test")
+            .WithOptional();
+
+        var input = parameter.Resource.CreateInput();
+
+        Assert.False(input.Required);
     }
 
     [Fact]
@@ -500,6 +716,59 @@ public class AddParameterTests
         Assert.Equal("Custom: Custom description", input.Description);
         Assert.Equal("Enter number", input.Placeholder);
         Assert.True(input.EnableDescriptionMarkdown);
+    }
+
+    [Fact]
+    public void ParameterCreateInput_WithCustomGenerator_PreservesGeneratorRequiredForRequiredParameter()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var parameter = appBuilder.AddParameter("test")
+            .WithCustomInput(_ => new InteractionInput
+            {
+                Name = "CustomInput",
+                InputType = InputType.Text,
+                Required = false
+            });
+
+        var input = parameter.Resource.CreateInput();
+
+        Assert.False(input.Required);
+    }
+
+    [Fact]
+    public void ParameterCreateInput_WithCustomGenerator_ForcesNotRequiredForOptionalParameter()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var parameter = appBuilder.AddParameter("test")
+            .WithOptional()
+            .WithCustomInput(_ => new InteractionInput
+            {
+                Name = "CustomInput",
+                InputType = InputType.Text,
+                Required = true
+            });
+
+        var input = parameter.Resource.CreateInput();
+
+        Assert.False(input.Required);
+    }
+
+    [Fact]
+    public void ParameterCreateInput_WithCustomGeneratorAndExplicitRequired_OverridesGenerator()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var parameter = appBuilder.AddParameter("test")
+            .WithOptional()
+            .WithCustomInput(_ => new InteractionInput
+            {
+                Name = "CustomInput",
+                InputType = InputType.Text,
+                Required = false
+            });
+
+        var input = parameter.Resource.CreateInput(required: true);
+
+        Assert.True(input.Required);
     }
 
     [Fact]
