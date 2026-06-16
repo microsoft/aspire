@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "CLI improvement: strict SemVer validation for playwrightCliVersion config override",
+  "mergedAt": "2026-06-16T01:48:03Z",
+  "number": 18225,
+  "runDate": "2026-06-16T07:52:03Z",
+  "status": "included",
+  "title": "Validate playwrightCliVersion shape with strict SemVer"
+}

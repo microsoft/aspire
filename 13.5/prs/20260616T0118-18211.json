@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "CLI improvement: stable channel aspire new/update no longer generates an unnecessary nuget.config",
+  "mergedAt": "2026-06-16T01:18:32Z",
+  "number": 18211,
+  "runDate": "2026-06-16T07:52:03Z",
+  "status": "included",
+  "title": "Don't create nuget.config for stable channel in aspire new/update"
+}

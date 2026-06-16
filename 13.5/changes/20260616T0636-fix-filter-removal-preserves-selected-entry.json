@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Removing a filter from the structured logs or resources list no longer incorrectly clears the currently selected entry. The selection is preserved when a filter is removed (which can only expand the result set), and is only cleared when the active filters actually exclude the selected item.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-06-16T06:36:19Z",
+  "lastMergedAt": "2026-06-16T06:36:19Z",
+  "name": "Fix: filter removal preserves selected log entry",
+  "owner": "JamesNK",
+  "prs": [
+    15825
+  ]
+}

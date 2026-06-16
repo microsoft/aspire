@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "When creating or updating projects using aspire new or aspire update with the stable channel, a project-level nuget.config is no longer generated since it only maps to nuget.org (the default NuGet source). Existing nuget.config files are still cleaned up to remove stale feed entries.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🧹",
+  "firstMergedAt": "2026-06-16T01:18:32Z",
+  "lastMergedAt": "2026-06-16T01:18:32Z",
+  "name": "No nuget.config generated for stable channel projects",
+  "owner": "JamesNK",
+  "prs": [
+    18211
+  ]
+}

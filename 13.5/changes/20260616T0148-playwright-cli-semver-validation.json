@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Specifying an invalid version string (such as a range like >=1.0.0, a dist-tag like 'latest', or a non-strict SemVer string) for the Playwright CLI version override configuration now fails with a clear, actionable error message instead of a confusing npm resolve failure.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "✅",
+  "firstMergedAt": "2026-06-16T01:48:03Z",
+  "lastMergedAt": "2026-06-16T01:48:03Z",
+  "name": "Strict SemVer validation for Playwright CLI version override",
+  "owner": "mitchdenny",
+  "prs": [
+    18225
+  ]
+}

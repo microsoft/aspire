@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Dashboard bug fix: removing a filter no longer incorrectly clears the selected log or resource entry",
+  "mergedAt": "2026-06-16T06:36:19Z",
+  "number": 15825,
+  "runDate": "2026-06-16T07:52:03Z",
+  "status": "included",
+  "title": "Don't clear selected log entry in structured logs if filters are removed"
+}
