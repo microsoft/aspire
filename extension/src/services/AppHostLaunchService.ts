@@ -30,6 +30,7 @@ export interface AppHostLaunchRequestedEvent {
 export interface AppHostDebugSessionTerminatedEvent {
     appHostPath: string;
     command?: AspireCommandType;
+    shouldRequestStopRefresh: boolean;
 }
 
 /**
@@ -65,9 +66,11 @@ export class AppHostLaunchService implements vscode.Disposable {
                 if (this._launchingPaths.delete(key)) {
                     this._onDidChangeLaunchingState.fire();
                 }
+                const command = getTerminationCommand(session.configuration);
                 this._onDidTerminateAppHostDebugSession.fire({
                     appHostPath,
-                    command: getTerminationCommand(session.configuration),
+                    command,
+                    shouldRequestStopRefresh: command === 'run',
                 });
             }
         });

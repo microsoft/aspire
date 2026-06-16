@@ -159,11 +159,13 @@ export class AppHostDataRepository {
     private _workspaceAppHost: AppHostDisplayInfo | undefined;
     private _pollingInterval: ReturnType<typeof setInterval> | undefined;
     private _psProcesses = new Set<ChildProcessWithoutNullStreams>();
+    private _psPollingGeneration = 0;
     private _psFetchVersion = 0;
     private _supportsPsFollow = true;
     private _fetchInProgress = false;
-    private _postStopRefreshTimer: ReturnType<typeof setTimeout> | undefined;
-    private _resumePsFollowCallbacks: Array<() => void> = [];
+    private _postStopRefreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    private _authoritativeSnapshotInProgress = false;
+    private _authoritativeSnapshotPending = false;
 
     // ── Global mode per-AppHost describe streams ──
     // In global mode `ps` only returns AppHost-level data, so to populate
@@ -354,36 +356,48 @@ export class AppHostDataRepository {
             this._startDescribeWatch();
         }
         if (this._shouldPoll) {
-            if (this._supportsPsFollow) {
-                this._restartPsWithAuthoritativeSnapshot();
-            } else {
-                this._fetchAppHosts();
-            }
+            this._refreshAppHostsFromAuthoritativeSnapshot();
         }
     }
 
-    requestAppHostStopRefresh(_appHostPath: string): void {
-        if (this._disposed || !this._shouldPoll) {
+    requestAppHostStopRefresh(appHostPath: string): void {
+        if (this._disposed || !this._shouldPoll || !appHostPath) {
             return;
         }
 
-        if (this._postStopRefreshTimer) {
-            clearTimeout(this._postStopRefreshTimer);
+        const key = this._resolveStopRefreshKey(appHostPath);
+        const timer = this._postStopRefreshTimers.get(key);
+        if (timer) {
+            clearTimeout(timer);
         }
 
-        this._postStopRefreshTimer = setTimeout(() => {
-            this._postStopRefreshTimer = undefined;
+        const refreshTimer = setTimeout(() => {
+            this._postStopRefreshTimers.delete(key);
             if (this._disposed || !this._shouldPoll) {
                 return;
             }
 
-            if (this._supportsPsFollow) {
-                this._restartPsWithAuthoritativeSnapshot();
-            } else {
-                this._fetchAppHosts();
-            }
+            this._refreshAppHostsFromAuthoritativeSnapshot();
         }, AppHostDataRepository._appHostStopRefreshDelayMs);
-        (this._postStopRefreshTimer as { unref?: () => void }).unref?.();
+        (refreshTimer as { unref?: () => void }).unref?.();
+        this._postStopRefreshTimers.set(key, refreshTimer);
+    }
+
+    private _resolveStopRefreshKey(appHostPath: string): string {
+        for (const existingPath of this._postStopRefreshTimers.keys()) {
+            if (isMatchingAppHostPath(existingPath, appHostPath)) {
+                return existingPath;
+            }
+        }
+
+        return getComparisonKey(path.normalize(appHostPath));
+    }
+
+    private _clearPostStopRefreshTimers(): void {
+        for (const timer of this._postStopRefreshTimers.values()) {
+            clearTimeout(timer);
+        }
+        this._postStopRefreshTimers.clear();
     }
 
     activate(): void {
@@ -393,11 +407,8 @@ export class AppHostDataRepository {
 
     dispose(): void {
         this._disposed = true;
-        if (this._postStopRefreshTimer) {
-            clearTimeout(this._postStopRefreshTimer);
-            this._postStopRefreshTimer = undefined;
-        }
-        this._resumePsFollowCallbacks = [];
+        this._clearPostStopRefreshTimers();
+        this._authoritativeSnapshotPending = false;
         this._stopPolling();
         this._stopDescribeWatch();
         this._stopAllGlobalDescribes();
@@ -459,7 +470,8 @@ export class AppHostDataRepository {
                 || this._psProcesses.size > 0
                 || this._fetchInProgress;
             if (refreshBeforeFollowOnResume && !pollingActive && this._supportsPsFollow) {
-                this._restartPsWithAuthoritativeSnapshot();
+                this._startPsPolling();
+                this._refreshAppHostsFromAuthoritativeSnapshot();
             } else {
                 this._startPsPolling();
             }
@@ -1125,9 +1137,12 @@ export class AppHostDataRepository {
     }
 
     private _stopPolling(): void {
+        this._psPollingGeneration++;
         this._psFetchVersion++;
         this._fetchInProgress = false;
-        this._resumePsFollowCallbacks = [];
+        this._authoritativeSnapshotInProgress = false;
+        this._authoritativeSnapshotPending = false;
+        this._clearPostStopRefreshTimers();
         if (this._pollingInterval) {
             clearInterval(this._pollingInterval);
             this._pollingInterval = undefined;
@@ -1161,7 +1176,6 @@ export class AppHostDataRepository {
             }
             return;
         }
-
         if (!this._isCurrentPsFetch(fetchVersion)) {
             return;
         }
@@ -1244,7 +1258,7 @@ export class AppHostDataRepository {
         const fetchVersion = ++this._psFetchVersion;
 
         const args = ['ps', '--format', 'json'];
-        this._runPsCommand(args, fetchVersion, (code, stdout, stderr) => {
+        this._runPsCommand(args, (code, stdout, stderr) => {
             if (code === 0) {
                 this._setPsError(undefined);
                 this._handlePsOutput(stdout);
@@ -1253,51 +1267,44 @@ export class AppHostDataRepository {
                 this._setPsError(errorFetchingAppHosts(stderr || `exit code ${code}`));
             }
             this._fetchInProgress = false;
-            this._notifyPsSnapshotCompleted();
-        });
+        }, { fetchVersion });
     }
 
-    private _restartPsWithAuthoritativeSnapshot(): void {
-        this._stopPolling();
-        if (!this._shouldPoll) {
+    private _refreshAppHostsFromAuthoritativeSnapshot(): void {
+        if (this._disposed || !this._shouldPoll) {
             return;
         }
 
-        this._fetchAppHosts();
-        this._resumePsFollowAfterSnapshot();
-    }
-
-    private _resumePsFollowAfterSnapshot(): void {
-        if (!this._supportsPsFollow) {
+        if (this._authoritativeSnapshotInProgress) {
+            this._authoritativeSnapshotPending = true;
             return;
         }
 
-        const resume = () => {
-            if (this._disposed || !this._shouldPoll) {
+        this._authoritativeSnapshotInProgress = true;
+        const pollingGeneration = this._psPollingGeneration;
+        const args = ['ps', '--format', 'json'];
+        this._runPsCommand(args, (code, stdout, stderr) => {
+            if (pollingGeneration !== this._psPollingGeneration) {
+                this._authoritativeSnapshotInProgress = false;
                 return;
             }
 
-            this._startPsPolling();
-        };
+            if (!this._disposed && this._shouldPoll) {
+                if (code === 0) {
+                    this._setPsError(undefined);
+                    this._handlePsOutput(stdout);
+                } else {
+                    this._clearLoadingForCurrentView();
+                    this._setPsError(errorFetchingAppHosts(stderr || `exit code ${code}`));
+                }
+            }
 
-        if (this._fetchInProgress) {
-            this._resumePsFollowCallbacks.push(resume);
-            return;
-        }
-
-        resume();
-    }
-
-    private _notifyPsSnapshotCompleted(): void {
-        if (this._fetchInProgress || this._resumePsFollowCallbacks.length === 0) {
-            return;
-        }
-
-        const callbacks = this._resumePsFollowCallbacks;
-        this._resumePsFollowCallbacks = [];
-        for (const callback of callbacks) {
-            callback();
-        }
+            this._authoritativeSnapshotInProgress = false;
+            if (this._authoritativeSnapshotPending) {
+                this._authoritativeSnapshotPending = false;
+                this._refreshAppHostsFromAuthoritativeSnapshot();
+            }
+        });
     }
 
     private _isCurrentPsFetch(fetchVersion: number): boolean {
@@ -1503,23 +1510,29 @@ export class AppHostDataRepository {
         this._attachGlobalResourcesToAppHosts();
     }
 
-    private async _runPsCommand(args: string[], fetchVersion: number, callback: (code: number, stdout: string, stderr: string) => void): Promise<void> {
+    private async _runPsCommand(args: string[], callback: (code: number, stdout: string, stderr: string) => void, options?: { fetchVersion?: number }): Promise<void> {
+        const fetchVersion = options?.fetchVersion;
+        const isCurrentPsCommand = () => {
+            if (fetchVersion !== undefined) {
+                return this._isCurrentPsFetch(fetchVersion);
+            }
+
+            return !this._disposed && this._shouldPoll;
+        };
+
         let cliPath: string;
         try {
             cliPath = await this._terminalProvider.getAspireCliExecutablePath();
         } catch (error) {
-            if (this._isCurrentPsFetch(fetchVersion)) {
+            if (isCurrentPsCommand()) {
                 const errorMessage = errorFetchingAppHosts(String(error));
                 extensionLogOutputChannel.warn(errorMessage);
-                this._setPsError(errorMessage);
-                this._fetchInProgress = false;
-                this._notifyPsSnapshotCompleted();
-                this._clearLoadingForCurrentView();
+                callback(1, '', errorMessage);
             }
             return;
         }
 
-        if (!this._isCurrentPsFetch(fetchVersion)) {
+        if (!isCurrentPsCommand()) {
             return;
         }
 
@@ -1545,7 +1558,7 @@ export class AppHostDataRepository {
                 removePsProcess();
                 if (!callbackInvoked) {
                     callbackInvoked = true;
-                    if (this._isCurrentPsFetch(fetchVersion)) {
+                    if (isCurrentPsCommand()) {
                         callback(code ?? 1, stdout, stderr);
                     }
                 }
@@ -1555,7 +1568,7 @@ export class AppHostDataRepository {
                 extensionLogOutputChannel.warn(errorFetchingAppHosts(error.message));
                 if (!callbackInvoked) {
                     callbackInvoked = true;
-                    if (this._isCurrentPsFetch(fetchVersion)) {
+                    if (isCurrentPsCommand()) {
                         callback(1, stdout, stderr || error.message);
                     }
                 }

@@ -145,8 +145,8 @@ suite('AppHostLaunchService', () => {
         assert.strictEqual(service.isLaunching('/repo/AppHost.csproj'), false);
     });
 
-    test('terminated run sessions include appHostPath and command in termination event', () => {
-        let terminationEvent: { appHostPath: string; command?: string } | undefined;
+    test('terminated run sessions include appHostPath and stop refresh semantics', () => {
+        let terminationEvent: { appHostPath: string; command?: string; shouldRequestStopRefresh: boolean } | undefined;
         service.onDidTerminateAppHostDebugSession(event => {
             terminationEvent = event;
         });
@@ -163,11 +163,12 @@ suite('AppHostLaunchService', () => {
         assert.deepStrictEqual(terminationEvent, {
             appHostPath: '/repo/AppHost.csproj',
             command: 'run',
+            shouldRequestStopRefresh: true,
         });
     });
 
-    test('terminated non-run sessions still raise termination events with command', () => {
-        let terminationEvent: { appHostPath: string; command?: string } | undefined;
+    test('terminated non-run sessions do not request stop refresh', () => {
+        let terminationEvent: { appHostPath: string; command?: string; shouldRequestStopRefresh: boolean } | undefined;
         service.onDidTerminateAppHostDebugSession(event => {
             terminationEvent = event;
         });
@@ -184,11 +185,12 @@ suite('AppHostLaunchService', () => {
         assert.deepStrictEqual(terminationEvent, {
             appHostPath: '/repo/AppHost.csproj',
             command: 'publish',
+            shouldRequestStopRefresh: false,
         });
     });
 
-    test('terminated Aspire sessions default missing command to run', () => {
-        let terminationEvent: { appHostPath: string; command?: string } | undefined;
+    test('terminated Aspire sessions default missing command to run and request stop refresh', () => {
+        let terminationEvent: { appHostPath: string; command?: string; shouldRequestStopRefresh: boolean } | undefined;
         service.onDidTerminateAppHostDebugSession(event => {
             terminationEvent = event;
         });
@@ -204,11 +206,12 @@ suite('AppHostLaunchService', () => {
         assert.deepStrictEqual(terminationEvent, {
             appHostPath: '/repo/AppHost.csproj',
             command: 'run',
+            shouldRequestStopRefresh: true,
         });
     });
 
-    test('terminated Aspire sessions drop invalid command values', () => {
-        let terminationEvent: { appHostPath: string; command?: string } | undefined;
+    test('terminated Aspire sessions drop invalid command values and do not request stop refresh', () => {
+        let terminationEvent: { appHostPath: string; command?: string; shouldRequestStopRefresh: boolean } | undefined;
         service.onDidTerminateAppHostDebugSession(event => {
             terminationEvent = event;
         });
@@ -225,6 +228,7 @@ suite('AppHostLaunchService', () => {
         assert.deepStrictEqual(terminationEvent, {
             appHostPath: '/repo/AppHost.csproj',
             command: undefined,
+            shouldRequestStopRefresh: false,
         });
     });
 });

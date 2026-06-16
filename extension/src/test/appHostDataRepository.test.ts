@@ -489,7 +489,7 @@ suite('AppHostDataRepository', () => {
             assert.strictEqual(repository.appHosts.length, 0, 'clears stale workspace apphost');
             assert.strictEqual(
                 spawned.filter(call => JSON.stringify(call.args) === JSON.stringify(['ps', '--follow', '--format', 'json'])).length,
-                2,
+                1,
                 'clears stale workspace apphost'
             );
         } finally {
@@ -557,8 +557,129 @@ suite('AppHostDataRepository', () => {
             assert.strictEqual(repository.appHosts.length, 1, 'preserves running apphost');
             assert.strictEqual(
                 spawned.filter(call => JSON.stringify(call.args) === JSON.stringify(['ps', '--follow', '--format', 'json'])).length,
-                2,
+                1,
                 'preserves running apphost'
+            );
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+            clock.restore();
+        }
+    });
+
+    test('stop refresh clears snapshot-running AppHost without restarting follow', async () => {
+        const clock = sinon.useFakeTimers();
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discoveryService = {
+            discover: async () => [{
+                path: '/workspace/AppHost.csproj',
+                language: 'csharp' as const,
+                status: 'buildable' as const,
+                selected: true,
+            }],
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            dispose: () => { },
+        } as unknown as AppHostDiscoveryService;
+        const spawned: { args: string[]; options: any }[] = [];
+        spawnStub.callsFake((_terminalProvider, _cliPath, args, options) => {
+            spawned.push({ args, options });
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            const followArgs = JSON.stringify(['ps', '--follow', '--format', 'json']);
+            const snapshotArgs = JSON.stringify(['ps', '--format', 'json']);
+
+            const initialFollowCall = spawned.find(call => JSON.stringify(call.args) === followArgs);
+            assert.ok(initialFollowCall, 'expected initial ps --follow call');
+            initialFollowCall.options.lineCallback(JSON.stringify({
+                appHostPath: '/workspace/AppHost.csproj',
+                appHostPid: 1234,
+                status: 'running',
+            }));
+            await waitForCondition(() => repository.workspaceAppHost?.appHostPath === '/workspace/AppHost.csproj', 'workspace apphost did not become running');
+
+            repository.requestAppHostStopRefresh('/workspace/AppHost.csproj');
+            clock.tick(400);
+            await waitForMicrotasks();
+
+            const snapshotCall = spawned.find(call => JSON.stringify(call.args) === snapshotArgs);
+            assert.ok(snapshotCall, 'expected authoritative snapshot call');
+            snapshotCall.options.stdoutCallback('[]');
+            snapshotCall.options.exitCallback(0);
+            await waitForMicrotasks();
+
+            assert.strictEqual(
+                spawned.filter(call => JSON.stringify(call.args) === followArgs).length,
+                1,
+                'expected stop refresh to keep existing follow session'
+            );
+
+            assert.strictEqual(repository.workspaceAppHost, undefined);
+            assert.strictEqual(repository.appHosts.length, 0);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+            clock.restore();
+        }
+    });
+
+    test('stop refresh schedules independent snapshots per apphost path', async () => {
+        const clock = sinon.useFakeTimers();
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discoveryService = {
+            discover: async () => [{
+                path: '/workspace/AppHost.csproj',
+                language: 'csharp' as const,
+                status: 'buildable' as const,
+                selected: true,
+            }],
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            dispose: () => { },
+        } as unknown as AppHostDiscoveryService;
+        const spawned: { args: string[]; options: any }[] = [];
+        spawnStub.callsFake((_terminalProvider, _cliPath, args, options) => {
+            spawned.push({ args, options });
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            const snapshotArgs = JSON.stringify(['ps', '--format', 'json']);
+            repository.requestAppHostStopRefresh('/workspace/Store/AppHost.csproj');
+            repository.requestAppHostStopRefresh('/workspace/Billing/AppHost.csproj');
+            await clock.tickAsync(400);
+            await waitForMicrotasks();
+
+            const firstSnapshot = spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).at(-1);
+            assert.ok(firstSnapshot, 'expected first stop refresh snapshot');
+            firstSnapshot.options.stdoutCallback('[]');
+            firstSnapshot.options.exitCallback(0);
+            await waitForMicrotasks();
+
+            assert.strictEqual(
+                spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).length,
+                2,
+                'expected one snapshot per apphost stop refresh request'
             );
         } finally {
             repository.dispose();
