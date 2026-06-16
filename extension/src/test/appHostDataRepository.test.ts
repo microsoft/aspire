@@ -435,6 +435,41 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('ps cli-path failures surface a single fetch prefix in error message', async () => {
+        const spawned: { args: string[]; options: any }[] = [];
+        spawnStub.callsFake((_terminalProvider, _cliPath, args, options) => {
+            spawned.push({ args, options });
+            return new TestChildProcess();
+        });
+        getCliPathStub.onFirstCall().resolves('aspire');
+        getCliPathStub.onSecondCall().rejects(new Error('cli missing'));
+
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            const followCall = spawned.find(call => JSON.stringify(call.args) === JSON.stringify(['ps', '--follow', '--format', 'json']));
+            assert.ok(followCall);
+
+            followCall.options.exitCallback(1);
+            await waitForCondition(() => repository.hasError, 'expected ps error after cli path failure');
+
+            assert.ok(
+                repository.errorMessage?.includes('Error fetching running AppHosts: Error: cli missing'),
+                repository.errorMessage
+            );
+            assert.ok(
+                !repository.errorMessage?.includes('Error fetching running AppHosts: Error fetching running AppHosts'),
+                repository.errorMessage
+            );
+        } finally {
+            repository.dispose();
+        }
+    });
+
     test('stop refresh clears stale apphost', async () => {
         const clock = sinon.useFakeTimers();
         const workspaceFolder = {

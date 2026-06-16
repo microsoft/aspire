@@ -1525,9 +1525,9 @@ export class AppHostDataRepository {
             cliPath = await this._terminalProvider.getAspireCliExecutablePath();
         } catch (error) {
             if (isCurrentPsCommand()) {
-                const errorMessage = errorFetchingAppHosts(String(error));
-                extensionLogOutputChannel.warn(errorMessage);
-                callback(1, '', errorMessage);
+                const rawErrorMessage = String(error);
+                extensionLogOutputChannel.warn(errorFetchingAppHosts(rawErrorMessage));
+                callback(1, '', rawErrorMessage);
             }
             return;
         }
