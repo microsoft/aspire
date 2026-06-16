@@ -189,6 +189,10 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         {
             _logger.LogDebug(ex, "Timed out waiting for cancelled Microsoft internal probes to drain.");
         }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "A cancelled Microsoft internal probe failed while draining.");
+        }
     }
 
     private async Task<InternalMicrosoftDetectorCacheEntry?> TryReadFreshCacheAsync(CancellationToken cancellationToken)
@@ -720,7 +724,16 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             yield break;
         }
 
-        var text = TryReadAllTextAsync(filePath, cancellationToken).GetAwaiter().GetResult();
+        string text;
+        try
+        {
+            text = File.ReadAllText(filePath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            yield break;
+        }
+
         if (string.IsNullOrWhiteSpace(text))
         {
             yield break;

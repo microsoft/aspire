@@ -143,6 +143,44 @@ public sealed class InternalMicrosoftDetectorTests
         await slowProbeCancelled.Task.WaitAsync(TimeSpan.FromSeconds(5));
     }
 
+    [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_ReturnsPositiveResultWhenCancelledProbeFaultsDuringDrain()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var faultingProbeStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var detector = CreateDetector(
+            Path.Combine(tempDirectory.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            [
+                [
+                    new InternalMicrosoftProbe("positive", async _ =>
+                    {
+                        await faultingProbeStarted.Task;
+                        return true;
+                    }),
+                    new InternalMicrosoftProbe("faulting", async cancellationToken =>
+                    {
+                        faultingProbeStarted.SetResult();
+
+                        try
+                        {
+                            await Task.Delay(TimeSpan.FromMinutes(5), cancellationToken);
+                        }
+                        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                        {
+                            throw new NotSupportedException("Unexpected probe failure after cancellation.");
+                        }
+
+                        return false;
+                    })
+                ]
+            ]);
+
+        var result = await detector.IsInternalMicrosoftMachineAsync();
+
+        Assert.True(result);
+    }
+
     private static InternalMicrosoftDetector CreateDetector(string cacheFilePath, DateTimeOffset now, IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>> probeStages)
     {
         return new InternalMicrosoftDetector(cacheFilePath, new FixedTimeProvider(now), NullLogger<InternalMicrosoftDetector>.Instance, probeStages);
