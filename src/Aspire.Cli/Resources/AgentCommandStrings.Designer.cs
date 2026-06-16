@@ -475,6 +475,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to The value of configuration setting &apos;{0}&apos; (&apos;{1}&apos;) is not a valid SemVer 2.0 version..
+        /// </summary>
+        internal static string PlaywrightCliInstaller_InvalidVersionOverride {
+            get {
+                return ResourceManager.GetString("PlaywrightCliInstaller_InvalidVersionOverride", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Provenance verification failed for {0}: {1}.
         /// </summary>
         internal static string PlaywrightCliInstaller_ProvenanceVerificationFailed {

@@ -424,7 +424,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         var choicesList = choices.ToList();
         // this will throw if formatting results in non-distinct values. that should happen because we cannot send the formatter over the wire.
-        var choicesByFormattedValue = choicesList.ToDictionary(choice => choiceFormatter(choice).RemoveSpectreFormatting(), choice => choice);
+        var choicesByFormattedValue = choicesList.ToDictionary(choice => StringUtils.RemoveMarkup(choiceFormatter(choice)), choice => choice);
 
         using var activity = _activitySource.StartActivity();
 
@@ -454,7 +454,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         var choicesList = choices.ToList();
         // this will throw if formatting results in non-distinct values. that should happen because we cannot send the formatter over the wire.
-        var choicesByFormattedValue = choicesList.ToDictionary(choice => choiceFormatter(choice).RemoveSpectreFormatting(), choice => choice);
+        var choicesByFormattedValue = choicesList.ToDictionary(choice => StringUtils.RemoveMarkup(choiceFormatter(choice)), choice => choice);
 
         using var activity = _activitySource.StartActivity();
 

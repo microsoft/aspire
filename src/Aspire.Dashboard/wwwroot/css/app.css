@@ -138,6 +138,11 @@ fluent-toolbar::part(end) {
     --accent-ocean: #0E5E77;
     --accent-jade: #3BAB8E;
     --accent-olive: #6F6652;
+    --accent-brand-blue-text: #fff;
+    --accent-bronze-text: #fff;
+    --accent-navy-text: #fff;
+    --accent-ocean-text: #fff;
+    --accent-olive-text: #fff;
 }
 
 [data-theme="dark"] {
@@ -217,6 +222,8 @@ fluent-toolbar::part(end) {
     --accent-ocean: #16728F;
     --accent-jade: #51C0A5;
     --accent-olive: #847B63;
+    --accent-brand-blue-text: #000;
+    --accent-olive-text: #000;
 }
 
 .fluent-data-grid-row.hover:not([row-type='header'],[row-type='sticky-header']):hover td {

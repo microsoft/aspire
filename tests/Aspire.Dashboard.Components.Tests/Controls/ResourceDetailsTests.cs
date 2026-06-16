@@ -430,7 +430,9 @@ public class ResourceDetailsTests : DashboardTestContext
                     Value.ForList(Value.ForString("nginx-abcxyz"), Value.ForString("redis")),
                     isValueSensitive: false,
                     knownProperty: null,
-                    priority: 0)
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false)
             });
 
         var cut = RenderComponent<ResourceDetails>(builder =>
@@ -463,7 +465,9 @@ public class ResourceDetailsTests : DashboardTestContext
                 Value.ForNull(),
                 isValueSensitive: false,
                 knownProperty: new KnownProperty(KnownProperties.Resource.State, _ => Aspire.Dashboard.Resources.Resources.ResourcesDetailsStateProperty),
-                priority: 0)
+                sortOrder: 0,
+                displayName: null,
+                isHighlighted: false)
         };
 
         var resource = ModelTestHelpers.CreateResource(
@@ -493,7 +497,7 @@ public class ResourceDetailsTests : DashboardTestContext
                 Value.ForString("The provider reported a recoverable deployment error."),
                 isValueSensitive: false,
                 knownProperty: null,
-                priority: int.MaxValue,
+                sortOrder: int.MaxValue,
                 displayName: "Provider diagnostic",
                 isHighlighted: true),
             ["provider.diagnostic.secret"] = new(
@@ -501,7 +505,7 @@ public class ResourceDetailsTests : DashboardTestContext
                 Value.ForString("Sensitive provider diagnostic detail."),
                 isValueSensitive: true,
                 knownProperty: null,
-                priority: int.MaxValue,
+                sortOrder: int.MaxValue,
                 displayName: "Provider secret",
                 isHighlighted: true),
             ["provider.diagnostic.hidden"] = new(
@@ -509,7 +513,9 @@ public class ResourceDetailsTests : DashboardTestContext
                 Value.ForString("This should require show all."),
                 isValueSensitive: false,
                 knownProperty: null,
-                priority: int.MaxValue)
+                sortOrder: int.MaxValue,
+                displayName: null,
+                isHighlighted: false)
         };
 
         var resource = ModelTestHelpers.CreateResource(
@@ -538,6 +544,69 @@ public class ResourceDetailsTests : DashboardTestContext
             var updatedResourcePropertyGrid = cut.FindAll(".property-grid")[0];
             Assert.Contains("Sensitive provider diagnostic detail.", updatedResourcePropertyGrid.TextContent);
         });
+    }
+
+    [Fact]
+    public void Render_ProducerSuppliedSortOrder_OrdersUnknownHighlightedProperties()
+    {
+        ResourceSetupHelpers.SetupResourceDetails(this);
+
+        var properties = new Dictionary<string, ResourcePropertyViewModel>
+        {
+            [KnownProperties.Container.Command] = new(
+                KnownProperties.Container.Command,
+                Value.ForString("redis-server"),
+                isValueSensitive: false,
+                knownProperty: null,
+                displayName: "Container command",
+                isHighlighted: true,
+                sortOrder: ProducerDefinedDisplaySortOrder(2)),
+            [KnownProperties.Container.Image] = new(
+                KnownProperties.Container.Image,
+                Value.ForString("redis:latest"),
+                isValueSensitive: false,
+                knownProperty: null,
+                displayName: "Container image",
+                isHighlighted: true,
+                sortOrder: ProducerDefinedDisplaySortOrder(0)),
+            [KnownProperties.Container.Id] = new(
+                KnownProperties.Container.Id,
+                Value.ForString("1234567890abcdef"),
+                isValueSensitive: false,
+                knownProperty: null,
+                displayName: "Container ID",
+                isHighlighted: true,
+                sortOrder: ProducerDefinedDisplaySortOrder(1)),
+            ["provider.diagnostic"] = new(
+                "provider.diagnostic",
+                Value.ForString("diagnostic"),
+                isValueSensitive: false,
+                knownProperty: null,
+                sortOrder: int.MaxValue,
+                displayName: "AAA provider diagnostic",
+                isHighlighted: true)
+        };
+
+        var resource = ModelTestHelpers.CreateResource(
+            resourceName: "redis",
+            properties: properties);
+
+        var cut = RenderComponent<ResourceDetails>(builder =>
+        {
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
+        });
+
+        Assert.Collection(cut.Instance.FilteredResourceProperties.Select(p => p.DisplayName),
+            name => Assert.Equal("Container image", name),
+            name => Assert.Equal("Container ID", name),
+            name => Assert.Equal("Container command", name),
+            name => Assert.Equal("AAA provider diagnostic", name));
+    }
+
+    private static int ProducerDefinedDisplaySortOrder(int producerSortOrder)
+    {
+        return KnownResourcePropertySortOrder.ConnectionString + 1 + producerSortOrder;
     }
 
     [Fact]
@@ -666,12 +735,7 @@ public class ResourceDetailsTests : DashboardTestContext
 
         var properties = new Dictionary<string, ResourcePropertyViewModel>
         {
-            [KnownProperties.Parameter.Value] = new ResourcePropertyViewModel(
-                KnownProperties.Parameter.Value,
-                Value.ForString("Parameter 'p' not found in configuration."),
-                isValueSensitive: false,
-                knownProperty: new KnownProperty(KnownProperties.Parameter.Value, _ => "Value"),
-                priority: 0)
+            [KnownProperties.Parameter.Value] = CreateParameterValueProperty("Parameter 'p' not found in configuration.")
         };
 
         var resource = CreateParameterResource(
@@ -717,12 +781,7 @@ public class ResourceDetailsTests : DashboardTestContext
 
         var properties = new Dictionary<string, ResourcePropertyViewModel>
         {
-            [KnownProperties.Parameter.Value] = new ResourcePropertyViewModel(
-                KnownProperties.Parameter.Value,
-                Value.ForString("Parameter 'p' not found in configuration."),
-                isValueSensitive: false,
-                knownProperty: new KnownProperty(KnownProperties.Parameter.Value, _ => "Value"),
-                priority: 0)
+            [KnownProperties.Parameter.Value] = CreateParameterValueProperty("Parameter 'p' not found in configuration.")
         };
 
         var resource = CreateParameterResource(
@@ -768,12 +827,7 @@ public class ResourceDetailsTests : DashboardTestContext
 
         var properties = new Dictionary<string, ResourcePropertyViewModel>
         {
-            [KnownProperties.Parameter.Value] = new ResourcePropertyViewModel(
-                KnownProperties.Parameter.Value,
-                Value.ForString("Parameter 'p' not found in configuration."),
-                isValueSensitive: true,
-                knownProperty: new KnownProperty(KnownProperties.Parameter.Value, _ => "Value"),
-                priority: 0)
+            [KnownProperties.Parameter.Value] = CreateParameterValueProperty("Parameter 'p' not found in configuration.", isValueSensitive: true)
         };
 
         var resource = CreateParameterResource(
@@ -803,12 +857,7 @@ public class ResourceDetailsTests : DashboardTestContext
         const string errorMessage = "Failed to initialize parameter from external provider.";
         var properties = new Dictionary<string, ResourcePropertyViewModel>
         {
-            [KnownProperties.Parameter.Value] = new ResourcePropertyViewModel(
-                KnownProperties.Parameter.Value,
-                Value.ForString(errorMessage),
-                isValueSensitive: false,
-                knownProperty: new KnownProperty(KnownProperties.Parameter.Value, _ => "Value"),
-                priority: 0)
+            [KnownProperties.Parameter.Value] = CreateParameterValueProperty(errorMessage)
         };
 
         var resource = ModelTestHelpers.CreateResource(
@@ -835,12 +884,7 @@ public class ResourceDetailsTests : DashboardTestContext
 
         var properties = new Dictionary<string, ResourcePropertyViewModel>
         {
-            [KnownProperties.Parameter.Value] = new ResourcePropertyViewModel(
-                KnownProperties.Parameter.Value,
-                Value.ForString("resolved-value"),
-                isValueSensitive: false,
-                knownProperty: new KnownProperty(KnownProperties.Parameter.Value, _ => "Value"),
-                priority: 0)
+            [KnownProperties.Parameter.Value] = CreateParameterValueProperty("resolved-value")
         };
 
         var resource = ModelTestHelpers.CreateResource(
@@ -887,6 +931,18 @@ public class ResourceDetailsTests : DashboardTestContext
             Commands = commands ?? [],
             HealthReports = [],
         };
+    }
+
+    private static ResourcePropertyViewModel CreateParameterValueProperty(string value, bool isValueSensitive = false)
+    {
+        return new(
+            KnownProperties.Parameter.Value,
+            Value.ForString(value),
+            isValueSensitive,
+            knownProperty: null,
+            displayName: "Value",
+            isHighlighted: true,
+            sortOrder: ProducerDefinedDisplaySortOrder(0));
     }
 
 }

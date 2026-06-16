@@ -8,7 +8,7 @@ namespace Aspire.Hosting;
 
 internal static class CustomResourceSnapshotExtensions
 {
-    internal static ImmutableArray<ResourcePropertySnapshot> SetResourceProperty(this ImmutableArray<ResourcePropertySnapshot> properties, string name, object value, bool isSensitive = false, string? displayName = null, bool isHighlighted = false)
+    internal static ImmutableArray<ResourcePropertySnapshot> SetResourceProperty(this ImmutableArray<ResourcePropertySnapshot> properties, string name, object value, bool isSensitive = false, string? displayName = null, bool isHighlighted = false, int? sortOrder = null)
     {
         for (var i = 0; i < properties.Length; i++)
         {
@@ -19,19 +19,20 @@ internal static class CustomResourceSnapshotExtensions
                 if (Equals(property.Value, value) &&
                     property.IsSensitive == isSensitive &&
                     string.Equals(property.DisplayName, displayName, StringComparison.Ordinal) &&
-                    property.IsHighlighted == isHighlighted)
+                    property.IsHighlighted == isHighlighted &&
+                    property.SortOrder == sortOrder)
                 {
                     // Unchanged.
                     return properties;
                 }
 
                 // Set value.
-                return properties.SetItem(i, property with { Value = value, IsSensitive = isSensitive, DisplayName = displayName, IsHighlighted = isHighlighted });
+                return properties.SetItem(i, property with { Value = value, IsSensitive = isSensitive, DisplayName = displayName, IsHighlighted = isHighlighted, SortOrder = sortOrder });
             }
         }
 
         // Add property.
-        return [.. properties, new ResourcePropertySnapshot(name, value) { IsSensitive = isSensitive, DisplayName = displayName, IsHighlighted = isHighlighted }];
+        return [.. properties, new ResourcePropertySnapshot(name, value) { IsSensitive = isSensitive, DisplayName = displayName, IsHighlighted = isHighlighted, SortOrder = sortOrder }];
     }
 
     internal static ImmutableArray<ResourcePropertySnapshot> SetResourcePropertyRange(this ImmutableArray<ResourcePropertySnapshot> properties, IEnumerable<ResourcePropertySnapshot> newValues)

@@ -335,7 +335,9 @@ public class ResourceOutgoingPeerResolverTests
                 value: Value.ForString(connectionString),
                 isValueSensitive: false,
                 knownProperty: null,
-                priority: 0)
+                sortOrder: 0,
+                displayName: null,
+                isHighlighted: false)
         };
 
         return ModelTestHelpers.CreateResource(
@@ -353,7 +355,9 @@ public class ResourceOutgoingPeerResolverTests
                 value: Value.ForString(value),
                 isValueSensitive: false,
                 knownProperty: null,
-                priority: 0)
+                sortOrder: 0,
+                displayName: null,
+                isHighlighted: false)
         };
 
         return ModelTestHelpers.CreateResource(

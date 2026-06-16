@@ -94,6 +94,11 @@ partial class Resource
                 resourceProperty.DisplayName = property.DisplayName;
             }
 
+            if (property.SortOrder is { } sortOrder)
+            {
+                resourceProperty.SortOrder = sortOrder;
+            }
+
             resource.Properties.Add(resourceProperty);
         }
 

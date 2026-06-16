@@ -449,7 +449,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         // Duration >= 10ms only matches 1-3. Its parent chain (1-1, 1-2) stays visible
         // as ancestors so the matching span remains navigable in the waterfall, even
         // though they don't themselves satisfy the duration filter.
-        var filteredItems = TraceDetail.ApplySpanFilters(
+        var filteredItems = TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(
             unfilteredData.Items.ToList(),
             filter: string.Empty,
             typeFilter: null,
@@ -474,7 +474,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         // ancestor of 1-3 and 1-5.
         // This is the per-span behavior expected for a "min duration" filter; otherwise
         // a long root span would expose every short descendant in the waterfall.
-        var rootMatchFilteredItems = TraceDetail.ApplySpanFilters(
+        var rootMatchFilteredItems = TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(
             unfilteredData.Items.ToList(),
             filter: string.Empty,
             typeFilter: null,
@@ -568,7 +568,7 @@ public partial class TraceDetailsTests : DashboardTestContext
 
         var unfilteredData = await cut.Instance.GetData(new GridItemsProviderRequest<SpanWaterfallViewModel>());
 
-        var filteredItems = TraceDetail.ApplySpanFilters(
+        var filteredItems = TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(
             unfilteredData.Items.ToList(),
             filter: string.Empty,
             typeFilter: null,
