@@ -19,6 +19,15 @@
 # Note: this also means a syntax error introduced here won't be caught by CI,
 # so take care when editing. Pattern conversion is validated by the
 # check-changed-files action at runtime.
+#
+# Interaction with selective CI: eng/test-trigger-map.yml routes a change to this
+# file to Infrastructure.Tests (its TestTriggerMap suite reads this file as the
+# selector's prefilter source). That route only fires when this file changes
+# ALONGSIDE other non-skippable work, because the entry below makes a PR that
+# touches ONLY this file match the skip gate and skip the whole tests workflow
+# before the selector runs. That is intentional - editing the skip list alone
+# doesn't warrant a full CI run - but it means the Infrastructure.Tests route is
+# best-effort for this one file, not guaranteed.
 eng/testing/github-ci-trigger-patterns.txt
 
 # Documentation
@@ -26,8 +35,6 @@ eng/testing/github-ci-trigger-patterns.txt
 
 # Engineering pipeline scripts (Azure DevOps, not used in the GitHub CI build)
 eng/pipelines/**
-eng/homebrew/**
-eng/winget/**
 eng/test-configuration.json
 
 Aspire-Core.slnf
