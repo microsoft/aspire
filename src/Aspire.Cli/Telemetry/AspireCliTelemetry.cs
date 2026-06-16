@@ -97,6 +97,17 @@ internal sealed class AspireCliTelemetry : IHostedService
     {
     }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="AspireCliTelemetry"/> class with custom telemetry enablement.
+    /// </summary>
+    /// <param name="logger">The logger instance for recording errors.</param>
+    /// <param name="machineInformationProvider">The machine information provider.</param>
+    /// <param name="ciEnvironmentDetector">The CI environment detector.</param>
+    /// <param name="codingAgentDetector">The coding agent detector.</param>
+    /// <param name="internalMicrosoftDetector">The internal Microsoft detector.</param>
+    /// <param name="isReportedTelemetryEnabled">A delegate that indicates whether reported telemetry is enabled.</param>
+    /// <param name="reportedSourceName">The name for the reported activity source.</param>
+    /// <param name="diagnosticsSourceName">The name for the diagnostics activity source.</param>
     internal AspireCliTelemetry(ILogger<AspireCliTelemetry> logger, IMachineInformationProvider machineInformationProvider, ICIEnvironmentDetector ciEnvironmentDetector, ICodingAgentDetector codingAgentDetector, IInternalMicrosoftDetector internalMicrosoftDetector, Func<bool> isReportedTelemetryEnabled, string reportedSourceName, string diagnosticsSourceName)
     {
         _logger = logger;

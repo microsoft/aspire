@@ -949,10 +949,10 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
     }
 
-    [GeneratedRegex(@"(?:github_pat_[A-Za-z0-9_]{20,}|gh[opsru]_[A-Za-z0-9_]{20,})", RegexOptions.Compiled)]
+    [GeneratedRegex(@"(?:github_pat_[A-Za-z0-9_]{20,}|gh[opsru]_[A-Za-z0-9_]{20,})")]
     private static partial Regex GitHubTokenRegex();
 
-    [GeneratedRegex(@"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", RegexOptions.Compiled)]
+    [GeneratedRegex(@"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+")]
     private static partial Regex JwtRegex();
 
     [GeneratedRegex(@"""realm""\s*:\s*""[A-Z0-9.-]+\.CORP\.MICROSOFT\.COM""", RegexOptions.IgnoreCase)]
