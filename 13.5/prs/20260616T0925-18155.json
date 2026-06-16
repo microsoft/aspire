@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Internal refactoring - replaces custom RemoveSpectreFormatting regex helper with Spectre.Console Markup.Remove built-in; no user-visible behavior change",
+  "mergedAt": "2026-06-16T10:15:36Z",
+  "number": 18209,
+  "runDate": "2026-06-16T13:35:37Z",
+  "status": "excluded",
+  "title": "Replace custom RemoveSpectreFormatting with Spectre.Console's Markup.Remove"
+}

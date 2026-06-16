@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Internal refactoring - removes obsolete Sigstore SAN workaround code path, no user-visible behavior change",
+  "mergedAt": "2026-06-16T09:22:11Z",
+  "number": 18230,
+  "runDate": "2026-06-16T13:35:37Z",
+  "status": "excluded",
+  "title": "Remove obsolete Sigstore SAN workaround"
+}
