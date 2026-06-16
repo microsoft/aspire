@@ -18,7 +18,7 @@ internal static class StringUtils
         {
             return Markup.Remove(input).Trim();
         }
-        catch (Exception)
+        catch (InvalidOperationException)
         {
             // Backchannel payloads can contain plain text with literal '[' or ']' from
             // user/project output (for example, compiler diagnostics). Treat malformed
