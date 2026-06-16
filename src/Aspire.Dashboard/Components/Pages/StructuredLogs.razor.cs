@@ -628,9 +628,10 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
                 return true;
             }
 
-            // Check text filter.
-            if (!string.IsNullOrEmpty(textFilter) &&
-                entry.Message?.Contains(textFilter, StringComparison.OrdinalIgnoreCase) != true)
+            // Check text filter. Must match the same fields that TelemetryRepository.MatchesLogTextFragments
+            // checks — message, scope, traceId, spanId, severity, resource name, event name, and attributes —
+            // so we don't falsely report an entry as excluded when it's still visible in the grid.
+            if (!string.IsNullOrEmpty(textFilter) && !MatchesTextFilter(entry, textFilter))
             {
                 return true;
             }
@@ -639,6 +640,35 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             foreach (var filter in fieldFilters)
             {
                 if (filter.Enabled && !filter.Apply([entry]).Any())
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool MatchesTextFilter(OtlpLogEntry entry, string textFilter)
+        {
+            if (entry.Message?.Contains(textFilter, StringComparison.OrdinalIgnoreCase) == true ||
+                entry.Scope.Name.Contains(textFilter, StringComparison.OrdinalIgnoreCase) ||
+                entry.TraceId.Contains(textFilter, StringComparison.OrdinalIgnoreCase) ||
+                entry.SpanId.Contains(textFilter, StringComparison.OrdinalIgnoreCase) ||
+                entry.Severity.ToString().Contains(textFilter, StringComparison.OrdinalIgnoreCase) ||
+                entry.ResourceView.Resource.ResourceName.Contains(textFilter, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (entry.EventName is not null && entry.EventName.Contains(textFilter, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            foreach (var attribute in entry.Attributes)
+            {
+                if (attribute.Key.Contains(textFilter, StringComparison.OrdinalIgnoreCase) ||
+                    attribute.Value.Contains(textFilter, StringComparison.OrdinalIgnoreCase))
                 {
                     return true;
                 }

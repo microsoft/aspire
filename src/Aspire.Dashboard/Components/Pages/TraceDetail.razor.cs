@@ -601,11 +601,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
     private async Task RefreshAfterFilterChangeAsync()
     {
-        if (PageViewModel.IsSelectedDataExcludedByFilters(GetVisibleSpanViewModels()))
-        {
-            PageViewModel.SelectedData = null;
-        }
-
+        ClearSelectedDataIfNotVisible();
         await InvokeAsync(StateHasChanged);
         await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
     }
@@ -618,6 +614,11 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     private void ClearSelectedDataIfNotVisible()
     {
         if (PageViewModel.SpanWaterfallViewModels is null)
+        {
+            return;
+        }
+
+        if (PageViewModel.SelectedData is null)
         {
             return;
         }

@@ -96,6 +96,30 @@ public sealed class StructuredLogsPageViewModelTests
     }
 
     [Fact]
+    public void TextFilterMatchesResourceName_ReturnsNotExcluded()
+    {
+        var vm = CreateViewModel(selectedLogLevel: null);
+        vm.SelectedLogEntry = CreateLogDetailsViewModel(LogLevel.Information, "some message");
+
+        // The text filter matches the resource name "app1", not the message
+        var result = vm.IsSelectedLogEntryExcludedByFilters("app1", []);
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void TextFilterMatchesSeverity_ReturnsNotExcluded()
+    {
+        var vm = CreateViewModel(selectedLogLevel: null);
+        vm.SelectedLogEntry = CreateLogDetailsViewModel(LogLevel.Information, "some message");
+
+        // The text filter matches the severity "Information"
+        var result = vm.IsSelectedLogEntryExcludedByFilters("Information", []);
+
+        Assert.False(result);
+    }
+
+    [Fact]
     public void FieldFilterExcludesEntry_ReturnsExcluded()
     {
         var vm = CreateViewModel(selectedLogLevel: null);
