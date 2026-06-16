@@ -21,7 +21,7 @@ export function getEnvironmentWithoutE2EBridgeVariables(): NodeJS.ProcessEnv {
 
 export function getAspireCliPathForMSBuild(cliPath: string | undefined, workingDirectory?: string): string | undefined {
     const trimmedPath = cliPath?.trim();
-    if (!trimmedPath || isBareAspireCommand(trimmedPath) || isWindowsBatchWrapperPath(trimmedPath)) {
+    if (!trimmedPath || isBareAspireCommand(trimmedPath)) {
         return undefined;
     }
 
@@ -49,13 +49,6 @@ function isBareAspireCommand(value: string): boolean {
     }
 
     return /^(?:aspire|aspire\.exe|aspire\.cmd|aspire\.bat)$/i.test(value);
-}
-
-function isWindowsBatchWrapperPath(value: string): boolean {
-    // The AppHost MSBuild run hook uses AspireCliPath as the direct RunCommand. Explicit
-    // .cmd/.bat wrappers need cmd.exe /C wrapping there, so leave AspireCliPath unset
-    // until the target supports direct wrapper paths.
-    return /\.(?:cmd|bat)$/i.test(value);
 }
 
 export const enum EnvironmentVariables {

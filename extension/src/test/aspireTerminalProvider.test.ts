@@ -1,4 +1,5 @@
 import * as assert from 'assert';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import * as sinon from 'sinon';
 import { AspireTerminalProvider, quoteShellArg, shellArg } from '../utils/AspireTerminalProvider';
@@ -630,10 +631,11 @@ suite('AspireTerminalProvider tests', () => {
             assert.strictEqual(env.AspireCliPath, undefined);
         });
 
-        test('does not set MSBuild AspireCliPath for explicit Windows batch wrappers', () => {
-            const env = terminalProvider.createEnvironment(undefined, undefined, undefined, 'C:\\Users\\me\\AppData\\Roaming\\npm\\aspire.cmd');
+        test('sets MSBuild AspireCliPath for explicit command shims', () => {
+            const commandShimPath = path.join(path.sep, 'repo', 'tools', 'aspire.cmd');
+            const env = terminalProvider.createEnvironment(undefined, undefined, undefined, commandShimPath);
 
-            assert.strictEqual(env.AspireCliPath, undefined);
+            assert.strictEqual(env.AspireCliPath, commandShimPath);
         });
     });
 

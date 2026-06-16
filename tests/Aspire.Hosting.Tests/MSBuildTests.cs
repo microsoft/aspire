@@ -332,6 +332,41 @@ public class MSBuildTests
     }
 
     [Fact]
+    public async Task CliBundleRunHookWrapsExplicitWindowsCommandShim()
+    {
+        var repoRoot = MSBuildUtils.GetRepoRoot();
+        using var tempDirectory = new TestTempDirectory();
+
+        var cliPath = Path.Combine(tempDirectory.Path, "tools", "aspire.cmd");
+        Directory.CreateDirectory(Path.GetDirectoryName(cliPath)!);
+        File.WriteAllText(cliPath, "");
+
+        var appHostDirectory = CreateSdkBundleOptInAppHostProject(tempDirectory.Path, repoRoot,
+            $"""
+              <AspireCliPath>{cliPath}</AspireCliPath>
+              <OS>Windows_NT</OS>
+            """,
+            additionalTargets:
+            """
+              <Target Name="WriteAspireRunHook" DependsOnTargets="_AspireComputeRunArguments">
+                <WriteLinesToFile File="$(BaseIntermediateOutputPath)run-hook.txt"
+                                  Lines="$(RunCommand);$(RunArguments)"
+                                  Overwrite="true" />
+              </Target>
+            """);
+
+        CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
+
+        var result = RunDotNet(appHostDirectory, "msbuild /t:WriteAspireRunHook -nodeReuse:false", timeoutMilliseconds: 180_000);
+        Assert.True(result.ExitCode == 0, $"MSBuild target failed: {Environment.NewLine}{result.Output}");
+
+        var runHook = await File.ReadAllLinesAsync(Path.Combine(appHostDirectory, "obj", "run-hook.txt"));
+        Assert.Equal("cmd", runHook[0]);
+        Assert.StartsWith($"/D /C call \"{cliPath}\" run --project \"", runHook[1]);
+        Assert.EndsWith($"{Path.DirectorySeparatorChar}AppHost.csproj\" --no-build --", runHook[1]);
+    }
+
+    [Fact]
     public async Task CliBundleOptInPrefersExistingRepoPathsOverBundlePath()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
@@ -407,7 +442,7 @@ public class MSBuildTests
         Assert.Contains("class App : global::Aspire.Hosting.IProjectMetadata", appMetadata);
     }
 
-    private static string CreateSdkBundleOptInAppHostProject(string basePath, string repoRoot, string additionalProperties, string additionalProjectReferences = "")
+    private static string CreateSdkBundleOptInAppHostProject(string basePath, string repoRoot, string additionalProperties, string additionalProjectReferences = "", string additionalTargets = "")
     {
         var appHostDirectory = Path.Combine(basePath, "AppHost");
         Directory.CreateDirectory(appHostDirectory);
@@ -439,6 +474,7 @@ public class MSBuildTests
                                   Lines="$(DcpDir);$(AspireDashboardDir);$(AspireDashboardPath)"
                                   Overwrite="true" />
               </Target>
+            {additionalTargets}
 
             </Project>
             """);

@@ -1,7 +1,8 @@
 import * as assert from 'assert';
 import * as path from 'path';
 import * as sinon from 'sinon';
-import { getCliSpawnCommand } from '../debugger/languages/cli';
+import { getCliSpawnCommand, spawnCliProcess } from '../debugger/languages/cli';
+import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { getAspireCliPathForMSBuild } from '../utils/environment';
 
 suite('spawnCliProcess tests', () => {
@@ -35,17 +36,40 @@ suite('spawnCliProcess tests', () => {
         assert.strictEqual(getAspireCliPathForMSBuild('aspire.bat'), undefined);
     });
 
-    test('does not set MSBuild AspireCliPath for explicit Windows batch wrappers', () => {
-        assert.strictEqual(getAspireCliPathForMSBuild('C:\\Users\\me\\AppData\\Roaming\\npm\\aspire.cmd'), undefined);
-        assert.strictEqual(getAspireCliPathForMSBuild('C:\\Users\\me\\AppData\\Roaming\\npm\\aspire.bat'), undefined);
-    });
-
     test('resolves explicit CLI paths for MSBuild AspireCliPath', () => {
         const workingDirectory = path.join(path.sep, 'workspace');
         const relativeCliPath = path.join('artifacts', 'bin', 'Aspire.Cli', 'Debug', 'net10.0', 'aspire');
         const absoluteCliPath = path.join(path.sep, 'repo', relativeCliPath);
+        const commandShimPath = path.join(path.sep, 'repo', 'tools', 'aspire.cmd');
 
         assert.strictEqual(getAspireCliPathForMSBuild(absoluteCliPath, workingDirectory), absoluteCliPath);
         assert.strictEqual(getAspireCliPathForMSBuild(relativeCliPath, workingDirectory), path.resolve(workingDirectory, relativeCliPath));
+        assert.strictEqual(getAspireCliPathForMSBuild(commandShimPath, workingDirectory), commandShimPath);
+    });
+
+    test('sets MSBuild AspireCliPath when extension variables are disabled', async () => {
+        const createEnvironmentStub = sinon.stub().returns({});
+        const terminalProvider = {
+            createEnvironment: createEnvironmentStub
+        } as unknown as AspireTerminalProvider;
+        let stdout = '';
+        let stderr = '';
+
+        const exitCode = await new Promise<number | null>((resolve, reject) => {
+            const child = spawnCliProcess(terminalProvider, process.execPath, ['-e', 'process.stdout.write(process.env.AspireCliPath ?? "")'], {
+                noExtensionVariables: true,
+                env: [{ name: 'ELECTRON_RUN_AS_NODE', value: '1' }],
+                stdoutCallback: data => { stdout += data; },
+                stderrCallback: data => { stderr += data; },
+                exitCallback: resolve,
+                errorCallback: reject,
+            });
+
+            child.on('error', reject);
+        });
+
+        assert.strictEqual(exitCode, 0, stderr);
+        assert.strictEqual(stdout, process.execPath);
+        assert.strictEqual(createEnvironmentStub.calledOnceWith(undefined, undefined, true, process.execPath), true);
     });
 });
