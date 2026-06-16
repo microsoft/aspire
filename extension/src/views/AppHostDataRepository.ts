@@ -166,6 +166,8 @@ export class AppHostDataRepository {
     private _postStopRefreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
     private _authoritativeSnapshotInProgress = false;
     private _authoritativeSnapshotPending = false;
+    private _authoritativeSnapshotRequestId = 0;
+    private _activeAuthoritativeSnapshotRequestId: number | undefined;
 
     // ── Global mode per-AppHost describe streams ──
     // In global mode `ps` only returns AppHost-level data, so to populate
@@ -1142,6 +1144,7 @@ export class AppHostDataRepository {
         this._fetchInProgress = false;
         this._authoritativeSnapshotInProgress = false;
         this._authoritativeSnapshotPending = false;
+        this._activeAuthoritativeSnapshotRequestId = undefined;
         this._clearPostStopRefreshTimers();
         if (this._pollingInterval) {
             clearInterval(this._pollingInterval);
@@ -1281,10 +1284,17 @@ export class AppHostDataRepository {
         }
 
         this._authoritativeSnapshotInProgress = true;
+        const snapshotRequestId = ++this._authoritativeSnapshotRequestId;
+        this._activeAuthoritativeSnapshotRequestId = snapshotRequestId;
         const pollingGeneration = this._psPollingGeneration;
         const args = ['ps', '--format', 'json'];
         this._runPsCommand(args, (code, stdout, stderr) => {
+            if (this._activeAuthoritativeSnapshotRequestId !== snapshotRequestId) {
+                return;
+            }
+
             if (pollingGeneration !== this._psPollingGeneration) {
+                this._activeAuthoritativeSnapshotRequestId = undefined;
                 this._authoritativeSnapshotInProgress = false;
                 return;
             }
@@ -1299,6 +1309,7 @@ export class AppHostDataRepository {
                 }
             }
 
+            this._activeAuthoritativeSnapshotRequestId = undefined;
             this._authoritativeSnapshotInProgress = false;
             if (this._authoritativeSnapshotPending) {
                 this._authoritativeSnapshotPending = false;
