@@ -11,7 +11,7 @@ namespace Infrastructure.Tests.TestTriggerMap;
 /// small SYNTHETIC maps (a temp <c>map.yml</c> + a fake matrix + fake project dirs), so they assert
 /// the resolution mechanisms — conventions, overrides, ignore, Layer-1 attribution, the run-all
 /// fallback, derived targets, and group expansion — without coupling to the contents of the real
-/// <c>eng/test-trigger-map.yml</c>. A thin set of real-map invariant smokes (computed from the
+/// <c>eng/github-ci/test-trigger-map.yml</c>. A thin set of real-map invariant smokes (computed from the
 /// filesystem, never hardcoding project names) lives at the end; structural invariants of the real
 /// map are covered by <see cref="TestTriggerMapTests"/>.
 /// </summary>
@@ -772,14 +772,14 @@ public sealed class SelectTestsAcceptanceTests : IDisposable
 
     // --- H. Real-map invariant smoke (computed from the filesystem; no hardcoded names) ------
 
-    // The prefilter reads eng/testing/github-ci-trigger-patterns.txt at runtime and matches it with the
+    // The prefilter reads eng/github-ci/ci-skip-entirely-patterns.txt at runtime and matches it with the
     // SAME glob->regex the check-changed-files action uses (ported in ChangedFileFilter). This pins that
     // port (docs/.slnf/scripts get dropped) and the keep_routed carve-outs (selector-routed files are NOT
     // dropped even though the patterns file lists them).
     [Fact]
     public void PrefilterReadsPatternsFileAndHonorsKeepRouted()
     {
-        var mapPath = Path.Combine(RepoRoot.Path, "eng", "test-trigger-map.yml");
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
         var map = TriggerMap.Load(mapPath);
         var filter = ChangedFileFilter.Create(RepoRoot.Path, map.Prefilter);
 
@@ -796,7 +796,7 @@ public sealed class SelectTestsAcceptanceTests : IDisposable
         // keep_routed carve-outs: listed by the patterns file but routed by the selector -> NOT dropped.
         Assert.False(filter.IsExcluded(".github/workflows/backport.yml"));
         Assert.False(filter.IsExcluded("eng/pipelines/azure-pipelines-public.yml"));
-        Assert.False(filter.IsExcluded("eng/testing/github-ci-trigger-patterns.txt"));
+        Assert.False(filter.IsExcluded("eng/github-ci/ci-skip-entirely-patterns.txt"));
     }
 
     // A src/** file that no Layer 2 rule matches and that is not under a project directory normally hits
@@ -821,7 +821,7 @@ public sealed class SelectTestsAcceptanceTests : IDisposable
     [Fact]
     public void RealMapLoadsAndConventionSelectsAComponentsTestWithoutSelectingAll()
     {
-        var mapPath = Path.Combine(RepoRoot.Path, "eng", "test-trigger-map.yml");
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
         var matrix = EnumerateMatrixTestProjects();
         var projectDirs = LoadProjectDirectories();
         var selector = new TestSelector(mapPath, matrix, projectDirs);

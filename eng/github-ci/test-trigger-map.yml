@@ -80,7 +80,7 @@ conventions:
 
 # Prefilter (pre-Layer-1 exclude): changed files matching a pattern in `patterns_file` are DROPPED
 # before BOTH layers run, so they influence no selection at all. `patterns_file` is the SAME list the
-# top-level CI skip gate uses (eng/testing/github-ci-trigger-patterns.txt, consumed by ci.yml via the
+# top-level CI skip gate uses (eng/github-ci/ci-skip-entirely-patterns.txt, consumed by ci.yml via the
 # check-changed-files action), read at runtime so the two can never drift. Its glob syntax is the
 # action's, NOT the map's: `**` -> any chars incl. '/', `*` -> any chars except '/', `.` literal,
 # anchored (ChangedFileFilter ports the action's glob_to_regex verbatim).
@@ -97,11 +97,11 @@ conventions:
 # removes the file from Layer 1's input too, which is the only place that actually stops the fan-out.
 # See docs/ci/test-trigger-selector-design.md.
 prefilter:
-  patterns_file: eng/testing/github-ci-trigger-patterns.txt
+  patterns_file: eng/github-ci/ci-skip-entirely-patterns.txt
   keep_routed:
     - .github/workflows/**                            # routed to Infrastructure.Tests (workflow validation)
     - eng/pipelines/**                                # routed to Infrastructure.Tests (pipeline validation)
-    - eng/testing/github-ci-trigger-patterns.txt      # a selector input (read above) -> route to Infrastructure.Tests
+    - eng/github-ci/ci-skip-entirely-patterns.txt      # a selector input (read above) -> route to Infrastructure.Tests
 
 # Ignore: files Layer 2 accounts for with NO target, so they do NOT trigger the run-all fallback.
 # Each is either covered precisely by Layer 1 (the graph index sees the linked/shared-file consumers)
@@ -345,10 +345,10 @@ path_rules:
     reason: QuarantineTools.Tests exercises the quarantine/disable source-rewriting logic
   - paths:
       - tools/SelectTests/**
-      - eng/test-trigger-map.yml
-      - eng/testing/github-ci-trigger-patterns.txt
+      - eng/github-ci/test-trigger-map.yml
+      - eng/github-ci/ci-skip-entirely-patterns.txt
     targets: [test:Infrastructure.Tests]
-    reason: SelectTests acceptance/behavior tests live in Infrastructure.Tests/TestTriggerMap; the same project's verifier validates eng/test-trigger-map.yml and reads eng/testing/github-ci-trigger-patterns.txt (the prefilter source), so a change to any of them must run it
+    reason: SelectTests acceptance/behavior tests live in Infrastructure.Tests/TestTriggerMap; the same project's verifier validates eng/github-ci/test-trigger-map.yml and reads eng/github-ci/ci-skip-entirely-patterns.txt (the prefilter source), so a change to any of them must run it
   - paths:
       - .github/workflows/**
       - eng/pipelines/**

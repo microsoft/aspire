@@ -41,7 +41,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         uses: ./.github/actions/check-changed-files
         with:
-          patterns_file: eng/testing/github-ci-trigger-patterns.txt
+          patterns_file: eng/github-ci/ci-skip-entirely-patterns.txt
 
       - id: compute_version_suffix
         name: Compute version suffix for PRs

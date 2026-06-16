@@ -34,7 +34,7 @@ public sealed class SelectTestsCliTests
 
     // A synthetic map that carries job: targets in three shapes — referenced directly by a path
     // rule, only via a group, and only via a derived rule — so the run_* contract can be exercised
-    // without coupling to the real eng/test-trigger-map.yml. Token -> run_* name:
+    // without coupling to the real eng/github-ci/test-trigger-map.yml. Token -> run_* name:
     //   job:extension-e2e    -> run_extension_e2e   (direct; also pins the '-' -> '_' mapping)
     //   job:group-job        -> run_group_job       (reachable ONLY through GROUP_ONLY_JOB)
     //   job:derived-only-job -> run_derived_only_job (reachable ONLY through a derived_targets rule)

@@ -1,11 +1,12 @@
-# CI trigger patterns
+# CI skip-entirely patterns -- files whose changes skip the ENTIRE CI workflow.
 #
-# This file lists glob patterns for files whose changes do NOT require the full CI
-# to run (e.g. documentation, non-build pipeline scripts, or specific workflow files
-# that are unrelated to the build and test process).
+# This is the top-level skip gate, NOT the selective-test router. It lists glob
+# patterns for files whose changes do NOT require any CI to run (e.g. documentation,
+# non-build pipeline scripts, or specific workflow files unrelated to the build and
+# test process). For path -> specific test/job routing, see test-trigger-map.yml.
 #
-# When all files changed in a pull request match at least one pattern here, the CI
-# workflow is skipped.
+# When EVERY file changed in a pull request matches at least one pattern here, the
+# entire CI workflow is skipped (no build, no tests).
 #
 # Pattern syntax:
 #   **   matches any path including directory separators (recursive)
@@ -20,7 +21,7 @@
 # so take care when editing. Pattern conversion is validated by the
 # check-changed-files action at runtime.
 #
-# Interaction with selective CI: eng/test-trigger-map.yml routes a change to this
+# Interaction with selective CI: eng/github-ci/test-trigger-map.yml routes a change to this
 # file to Infrastructure.Tests (its TestTriggerMap suite reads this file as the
 # selector's prefilter source). That route only fires when this file changes
 # ALONGSIDE other non-skippable work, because the entry below makes a PR that
@@ -28,7 +29,7 @@
 # before the selector runs. That is intentional - editing the skip list alone
 # doesn't warrant a full CI run - but it means the Infrastructure.Tests route is
 # best-effort for this one file, not guaranteed.
-eng/testing/github-ci-trigger-patterns.txt
+eng/github-ci/ci-skip-entirely-patterns.txt
 
 # Documentation
 **.md

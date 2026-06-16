@@ -24,7 +24,7 @@ inputs:
   triggerMap:
     required: false
     default: ''
-    description: 'Path to the curated trigger map (forwarded as --map). Empty defaults to <repo-root>/eng/test-trigger-map.yml.'
+    description: 'Path to the curated trigger map (forwarded as --map). Empty defaults to <repo-root>/eng/github-ci/test-trigger-map.yml.'
   beforeBuildProps:
     required: false
     default: ''

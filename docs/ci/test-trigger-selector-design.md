@@ -7,7 +7,7 @@ matrix.
 Companion documents:
 
 - [`test-trigger-map.md`](./test-trigger-map.md) — the descriptive path → target map.
-- [`eng/test-trigger-map.yml`](../../eng/test-trigger-map.yml) — its machine-readable form.
+- [`eng/github-ci/test-trigger-map.yml`](../../eng/github-ci/test-trigger-map.yml) — its machine-readable form.
 
 **Status: audit.** `tests.yml`'s `setup_for_tests` runs the `select-tests` action
 *before* `enumerate-tests`. When its `enforce: 'true'` and the selection is
@@ -184,7 +184,7 @@ Only five selector matchers exist; `groups` are reusable target bundles:
 
 - **`prefilter`**: globs whose changed files are dropped *before* Layer 1 and
   Layer 2 run. The pattern list is **read at runtime** from
-  `eng/testing/github-ci-trigger-patterns.txt` — the same file the top-level
+  `eng/github-ci/ci-skip-entirely-patterns.txt` — the same file the top-level
   `ci.yml` skip gate uses — so the selector and the gate can never drift. Its
   glob syntax is the *action's*, not the map's (`**`→any incl. `/`, `*`→any
   except `/`, `.` literal, anchored), ported verbatim in `ChangedFileFilter`.
@@ -222,7 +222,7 @@ shards only those.
 Main options:
 
 - `--repo-root`: repository root, defaulting to the current directory.
-- `--map`: curated map path, defaulting to `eng/test-trigger-map.yml`.
+- `--map`: curated map path, defaulting to `eng/github-ci/test-trigger-map.yml`.
 - `--slnx`: path to the solution that defines the project universe, defaulting to
   `<repo-root>/Aspire.slnx`.
 - `--from` / `--to`: git refs for the PR diff.

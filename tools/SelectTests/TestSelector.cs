@@ -84,7 +84,7 @@ public sealed record SelectionResult(
 
 /// <summary>
 /// Filters the full CI matrix down to the subset relevant to a PR's changed files, using the
-/// curated <c>eng/test-trigger-map.yml</c> (Layer 2) unioned with a graph-derived affected set
+/// curated <c>eng/github-ci/test-trigger-map.yml</c> (Layer 2) unioned with a graph-derived affected set
 /// (Layer 1, from <see cref="GraphAffectedProjects"/>, supplied to <see cref="Select"/>).
 /// </summary>
 /// <remarks>
@@ -97,7 +97,7 @@ public sealed class TestSelector
     private readonly IReadOnlyCollection<string> _allTestProjects;
     private readonly IReadOnlyCollection<string> _projectDirectories;
 
-    /// <param name="mapPath">Path to <c>eng/test-trigger-map.yml</c>.</param>
+    /// <param name="mapPath">Path to <c>eng/github-ci/test-trigger-map.yml</c>.</param>
     /// <param name="allTestProjects">All matrix test project names — the universe an <c>ALL</c> selection expands to.</param>
     /// <param name="projectDirectories">
     /// Repo-relative, '/'-separated directories of every project in <c>Aspire.slnx</c> (the universe

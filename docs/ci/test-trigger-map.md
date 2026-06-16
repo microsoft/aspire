@@ -5,7 +5,7 @@ covering the .NET test projects and the validation/polyglot jobs in
 [`tests.yml`](../../.github/workflows/tests.yml).
 
 The machine-readable form lives at
-[`eng/test-trigger-map.yml`](../../eng/test-trigger-map.yml). The tool that consumes it and
+[`eng/github-ci/test-trigger-map.yml`](../../eng/github-ci/test-trigger-map.yml). The tool that consumes it and
 the rollout plan are in
 [`test-trigger-selector-design.md`](./test-trigger-selector-design.md).
 
@@ -43,7 +43,7 @@ paths.
 
 | Section | What it is |
 |---------|------------|
-| `prefilter` | `{ patterns_file, keep_routed }`. Changed files matched by a pattern in `patterns_file` are **dropped before both layers run** — unless carved out by `keep_routed`. `patterns_file` is `eng/testing/github-ci-trigger-patterns.txt`, the *same* list the top-level CI skip gate uses, read at runtime so the two can't drift; its glob syntax is the check-changed-files action's (ported in `ChangedFileFilter`). `keep_routed` are the files the selector routes to a target (`.github/workflows/**`, `eng/pipelines/**`, and the patterns file itself → `Infrastructure.Tests`), so they are never dropped. Unlike `ignore`, this also removes the file from Layer 1's input, so a packed `README.md` can never be attributed and fanned out. |
+| `prefilter` | `{ patterns_file, keep_routed }`. Changed files matched by a pattern in `patterns_file` are **dropped before both layers run** — unless carved out by `keep_routed`. `patterns_file` is `eng/github-ci/ci-skip-entirely-patterns.txt`, the *same* list the top-level CI skip gate uses, read at runtime so the two can't drift; its glob syntax is the check-changed-files action's (ported in `ChangedFileFilter`). `keep_routed` are the files the selector routes to a target (`.github/workflows/**`, `eng/pipelines/**`, and the patterns file itself → `Infrastructure.Tests`), so they are never dropped. Unlike `ignore`, this also removes the file from Layer 1's input, so a packed `README.md` can never be attributed and fanned out. |
 | `conventions` | `<name>`-capture pattern → target template, emitted only if the derived test exists (existence guard). Additive. Covers a test's own folder and the Hosting/Components integration dirs as a backstop for non-MSBuild files the graph cannot attribute. |
 | `ignore` | globs Layer 2 accounts for with **no** target, so they do not trip the run-all fallback. `ignore` only suppresses the fallback — Layer 1 still attributes the file — so it is now only needed for files Layer 1 *cannot* attribute (the inert `Vendoring/OpenTelemetry.Shared`). Link-compiled `src/Shared` / `tests/Shared` / `Components/Common` files are reported in Layer 1's attributed-paths set, and the fallback treats any attributed file as owned, so they need no `ignore` entry. |
 | `path_rules` | a path glob set → a target set (`test:` / `job:` / a group / `ALL`). The single general path matcher: catch-all-to-`ALL`, convention misses, non-.NET job loose-file triggers, and loose-file reads all live here under comment headers |

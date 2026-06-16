@@ -11,7 +11,7 @@ using Aspire.SelectTests;
 // Entry point for the selective-CI tool. Runs BEFORE enumerate-tests and computes the subset of
 // test projects (and the non-.NET jobs) relevant to a PR's changed files, by unioning:
 //   Layer 1 — the MSBuild ProjectGraph reverse-dependency closure (GraphAffectedProjects), and
-//   Layer 2 — the curated eng/test-trigger-map.yml resolved by TestSelector.
+//   Layer 2 — the curated eng/github-ci/test-trigger-map.yml resolved by TestSelector.
 // With --enforce and a non-ALL selection it writes an OverrideProjectToBuild props file
 // (--before-build-props) so the subsequent enumerate-tests `-test` build enumerates ONLY the
 // selected projects. In audit mode (no --enforce) it writes the run_* job booleans and an advisory
@@ -26,7 +26,7 @@ var repoRootOption = new Option<string>("--repo-root")
 
 var mapOption = new Option<string?>("--map")
 {
-    Description = "Path to eng/test-trigger-map.yml. Defaults to <repo-root>/eng/test-trigger-map.yml."
+    Description = "Path to eng/github-ci/test-trigger-map.yml. Defaults to <repo-root>/eng/github-ci/test-trigger-map.yml."
 };
 
 var slnxOption = new Option<string?>("--slnx")
@@ -86,7 +86,7 @@ rootCommand.SetAction(parseResult =>
 {
     var repoRoot = Path.GetFullPath(parseResult.GetValue(repoRootOption)!);
     var mapPath = parseResult.GetValue(mapOption)
-        ?? Path.Combine(repoRoot, "eng", "test-trigger-map.yml");
+        ?? Path.Combine(repoRoot, "eng", "github-ci", "test-trigger-map.yml");
     var slnxPath = parseResult.GetValue(slnxOption)
         ?? Path.Combine(repoRoot, "Aspire.slnx");
     var from = parseResult.GetValue(fromOption);

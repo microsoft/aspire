@@ -8,7 +8,7 @@ namespace Aspire.SelectTests;
 
 // The pre-filter stage of selective CI: drops changed files that require no CI at all (documentation,
 // agent skills/instructions, loose scripts, ...), reading the SAME pattern list the top-level ci.yml
-// skip gate uses -- eng/testing/github-ci-trigger-patterns.txt -- so the two can never drift.
+// skip gate uses -- eng/github-ci/ci-skip-entirely-patterns.txt -- so the two can never drift.
 //
 // Applied to the changed-file input of BOTH layers, BEFORE Layer 1 and Layer 2 run, so an excluded
 // file influences no selection. That is the crucial difference from `ignore:` (which only suppresses

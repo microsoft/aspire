@@ -8,7 +8,7 @@ using YamlDotNet.Serialization.NamingConventions;
 
 namespace Aspire.SelectTests;
 
-// Strongly-typed view of eng/test-trigger-map.yml, kept internal to the tool so it does not
+// Strongly-typed view of eng/github-ci/test-trigger-map.yml, kept internal to the tool so it does not
 // add to the public API surface. The verifier tests in Infrastructure.Tests have their own
 // parallel model (the test project references this tool, so the model cannot live there and be
 // shared without a circular dependency); the design doc sanctions the tool owning its own parse.
