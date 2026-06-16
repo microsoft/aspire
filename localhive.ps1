@@ -678,7 +678,7 @@ if ($Output) {
       Write-Log "  Expand-Archive -Path $(Split-Path $archivePath -Leaf) -DestinationPath `$HOME\.aspire"
       Write-Log "  `$HOME\.aspire\bin\aspire.exe"
       if ($stableBuild -and (-not $SkipCli)) {
-        Write-Log "  . `$HOME\.aspire\activate.ps1   # hermetic emulated stable $Version session"
+        Write-Log "  . `"`$HOME\.aspire\activate.ps1`"   # hermetic emulated stable $Version session"
       }
     } else {
       Write-Log "  mkdir -p ~/.aspire && tar -xzf $(Split-Path $archivePath -Leaf) -C ~/.aspire"
