@@ -287,7 +287,8 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     public async Task RunAsync_CliManagedSingleFileAppHostClearsStaleIntegrationEnvironmentVariables()
     {
         var appHostFile = CreateCliManagedSingleFileAppHost();
-        var workingDirectory = CliManagedAppHostIntegrationClosureRestorer.GetOrCreateWorkingDirectory(appHostFile);
+        var workingDirectory = IntegrationClosureBuilder.GetAppHostIntegrationCacheDirectory(appHostFile.Directory!);
+        Directory.CreateDirectory(workingDirectory.FullName);
         File.WriteAllText(Path.Combine(workingDirectory.FullName, IntegrationPackageProbeManifest.FileName), "{}");
 
         var runner = new TestDotNetCliRunner();
@@ -394,7 +395,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     public async Task RestoreAsync_CliManagedSingleFileAppHostDeletesStaleProbeManifestWhenPackageBackedIntegrationsAreRemoved()
     {
         var appHostFile = CreateCliManagedSingleFileAppHost();
-        var workingDirectory = CliManagedAppHostIntegrationClosureRestorer.GetOrCreateWorkingDirectory(appHostFile);
+        var workingDirectory = IntegrationClosureBuilder.GetAppHostIntegrationCacheDirectory(appHostFile.Directory!);
         var staleProbeManifestPath = Path.Combine(workingDirectory.FullName, IntegrationPackageProbeManifest.FileName);
         Directory.CreateDirectory(workingDirectory.FullName);
         File.WriteAllText(staleProbeManifestPath, "{}");

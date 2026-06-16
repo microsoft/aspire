@@ -54,12 +54,13 @@ internal sealed class CliManagedAppHostIntegrationClosureRestorer(
     /// </summary>
     public static CliManagedAppHostIntegrationClosureLayout? TryLoad(FileInfo appHostFile)
     {
-        var workingDirectory = TryGetWorkingDirectory(appHostFile);
-        if (workingDirectory is null)
+        var appHostDirectory = appHostFile.Directory;
+        if (appHostDirectory is null)
         {
             return null;
         }
 
+        var workingDirectory = IntegrationClosureBuilder.GetAppHostIntegrationCacheDirectory(appHostDirectory);
         var probeManifestPath = Path.Combine(workingDirectory.FullName, IntegrationPackageProbeManifest.FileName);
         var integrationLibsPath = TryReadIntegrationLibsPathFromState(workingDirectory.FullName);
         var manifestExists = File.Exists(probeManifestPath);
@@ -83,7 +84,10 @@ internal sealed class CliManagedAppHostIntegrationClosureRestorer(
         CliManagedAppHostIntegrationClosureRestoreOptions options,
         CancellationToken cancellationToken)
     {
-        var workingDirectory = GetOrCreateWorkingDirectory(appHostFile);
+        var appHostDirectory = appHostFile.Directory
+            ?? throw new InvalidOperationException($"AppHost file '{appHostFile.FullName}' has no parent directory.");
+        var workingDirectory = IntegrationClosureBuilder.GetAppHostIntegrationCacheDirectory(appHostDirectory);
+        Directory.CreateDirectory(workingDirectory.FullName);
         var restoreDir = Path.Combine(workingDirectory.FullName, IntegrationClosureBuilder.IntegrationRestoreFolderName);
         Directory.CreateDirectory(restoreDir);
 
@@ -219,36 +223,6 @@ internal sealed class CliManagedAppHostIntegrationClosureRestorer(
               ]
             }
             """;
-    }
-
-    // ─── Working-directory layout ────────────────────────────────────────────────
-
-    /// <summary>
-    /// Computes the per-AppHost cache directory under <c>.aspire/integrations/apphosts/</c>. The
-    /// directory name is a stable 12-character hash of the AppHost directory path so different
-    /// AppHosts in the same workspace get separate caches and so the same AppHost reuses its cache
-    /// across CLI runs. Mirrors <see cref="PrebuiltAppHostServer"/>'s working-directory layout so
-    /// the on-disk shape is identical between polyglot and CLI-managed C# modes.
-    /// </summary>
-    internal static DirectoryInfo? TryGetWorkingDirectory(FileInfo appHostFile)
-    {
-        var appHostDirectory = appHostFile.Directory;
-        if (appHostDirectory is null)
-        {
-            return null;
-        }
-
-        return IntegrationClosureBuilder.GetAppHostIntegrationCacheDirectory(appHostDirectory);
-    }
-
-    internal static DirectoryInfo GetOrCreateWorkingDirectory(FileInfo appHostFile)
-    {
-        var appHostDirectory = appHostFile.Directory
-            ?? throw new InvalidOperationException($"AppHost file '{appHostFile.FullName}' has no parent directory.");
-
-        var workingDirectory = IntegrationClosureBuilder.GetAppHostIntegrationCacheDirectory(appHostDirectory);
-        Directory.CreateDirectory(workingDirectory.FullName);
-        return workingDirectory;
     }
 
     private const string LibsPathStateFileName = "integration-libs-path.txt";

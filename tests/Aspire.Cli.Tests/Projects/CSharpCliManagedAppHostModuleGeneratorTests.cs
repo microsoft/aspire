@@ -67,7 +67,7 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
         Assert.Equal("false", propertyGroup.Element("IsPackable")?.Value);
         Assert.Equal("false", propertyGroup.Element("IsPublishable")?.Value);
         var restoreDir = Path.Combine(
-            CliManagedAppHostIntegrationClosureRestorer.GetOrCreateWorkingDirectory(appHostFile).FullName,
+            IntegrationClosureBuilder.GetAppHostIntegrationCacheDirectory(appHostFile.Directory!).FullName,
             IntegrationClosureBuilder.IntegrationRestoreFolderName);
         Assert.Null(propertyGroup.Element("BaseOutputPath"));
         Assert.Null(propertyGroup.Element("BaseIntermediateOutputPath"));
