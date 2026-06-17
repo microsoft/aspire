@@ -16,8 +16,8 @@ public sealed class OllamaIntegrationTests(ITestOutputHelper output)
 {
     private const string ProjectName = "AspireOllamaTest";
 
-    // Uses the same pre-release version as the Dapr test to ensure compatibility with the dev Aspire AppHost.
-    private const string OllamaPackageVersion = "13.4.0-beta.651";
+    // Uses an older version of Ollama integration to test using old integration with new Aspire AppHost.
+    private const string OllamaPackageVersion = "13.4.0";
 
     [CaptureWorkspaceOnFailure]
     [Fact]
@@ -70,10 +70,15 @@ public sealed class OllamaIntegrationTests(ITestOutputHelper output)
             output.WriteLine($"Modified AppHost.cs content:{Environment.NewLine}{content}");
         }
 
-        // Step 5: Start the AppHost and verify it comes up successfully
+        // Step 5: Enable crash diagnostics so the native stack trace is captured if the AppHost segfaults.
+        await auto.RunCommandAsync(
+            "export DOTNET_EnableCrashReport=1 DOTNET_DbgEnableMiniDump=1 DOTNET_DbgMiniDumpType=1 COREHOST_TRACE=1",
+            counter);
+
+        // Step 6: Start the AppHost and verify it comes up successfully
         await auto.AspireStartAsync(counter, startTimeout: TimeSpan.FromMinutes(5));
 
-        // Step 6: Wait for all resources to reach a running state.
+        // Step 7: Wait for all resources to reach a running state.
         // The Starter template (no Redis) produces apiservice and webfrontend.
         // AddOllama adds a container resource named "ollama".
         foreach (var resource in new[] { "apiservice", "webfrontend", "ollama" })
@@ -84,7 +89,7 @@ public sealed class OllamaIntegrationTests(ITestOutputHelper output)
             await auto.WaitForSuccessPromptAsync(counter);
         }
 
-        // Step 7: Stop the AppHost
+        // Step 8: Stop the AppHost
         await auto.AspireStopAsync(counter);
     }
 }
