@@ -107,12 +107,17 @@ internal static class TelemetryConstants
         /// Source that populates the <see cref="InternalMicrosoft"/> tag, used to differentiate between
         /// different heuristics or signals used to determine if the user/machine is Microsoft internal.
         /// </summary>
-        public const string InternalMicrosoftSource = "aspire.cli.is_microsoft_internal_source";
+        public const string InternalMicrosoftSource = "aspire.cli.microsoft_internal_source";
 
         /// <summary>
         /// Alias extracted by the probe that populates the <see cref="InternalMicrosoft"/> tag.
         /// </summary>
-        public const string InternalMicrosoftAlias = "aspire.cli.is_microsoft_internal_alias";
+        public const string InternalMicrosoftAlias = "aspire.cli.microsoft_internal_alias";
+
+        /// <summary>
+        /// Active Directory domain extracted by the probe that populates the <see cref="InternalMicrosoft"/> tag.
+        /// </summary>
+        public const string InternalMicrosoftDomain = "aspire.microsoft_internal_domain";
 
         /// <summary>
         /// Tag for the deployment environment name ("ci" or "local").

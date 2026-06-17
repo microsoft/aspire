@@ -71,11 +71,11 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         var cached = await TryReadFreshCacheAsync(cancellationToken).ConfigureAwait(false);
         if (cached is not null)
         {
-            return new InternalMicrosoftDetectionResult(cached.IsInternalMicrosoft, cached.Source, cached.Alias);
+            return new InternalMicrosoftDetectionResult(cached.IsInternalMicrosoft, cached.Source, cached.Alias, cached.Domain);
         }
 
         var result = await RunProbeStagesAsync(cancellationToken).ConfigureAwait(false) ??
-            new InternalMicrosoftDetectionResult(IsInternalMicrosoft: false, Source: null, Alias: null);
+            new InternalMicrosoftDetectionResult(IsInternalMicrosoft: false, Source: null, Alias: null, Domain: null);
         await TryWriteCacheAsync(result, cancellationToken).ConfigureAwait(false);
 
         return result;
@@ -207,7 +207,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 cancellationToken.ThrowIfCancellationRequested();
                 var result = await probe.DetectAsync(cancellationToken).ConfigureAwait(false);
                 return result.IsInternalMicrosoft
-                    ? new InternalMicrosoftDetectionResult(IsInternalMicrosoft: true, Source: probe.Name, Alias: result.Alias)
+                    ? new InternalMicrosoftDetectionResult(IsInternalMicrosoft: true, Source: probe.Name, Alias: result.Alias, Domain: result.Domain)
                     : null;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -296,6 +296,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 IsInternalMicrosoft = result.IsInternalMicrosoft,
                 Source = result.Source,
                 Alias = result.Alias,
+                Domain = result.Domain,
                 LastRunUtc = _timeProvider.GetUtcNow()
             };
             var json = JsonSerializer.Serialize(entry, JsonSourceGenerationContext.Default.InternalMicrosoftDetectorCacheEntry);
@@ -318,9 +319,10 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     private static Task<InternalMicrosoftProbeResult> CheckWindowsUserDnsDomainAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var isInternalMicrosoft = IsCorpMicrosoftDomain(Environment.GetEnvironmentVariable("USERDNSDOMAIN"));
-        return Task.FromResult(isInternalMicrosoft
-            ? Detected(Environment.GetEnvironmentVariable("USERNAME"))
+        var userDnsDomain = Environment.GetEnvironmentVariable("USERDNSDOMAIN");
+        var domain = ExtractAdDomainNameFromCorpDnsName(userDnsDomain);
+        return Task.FromResult(domain is not null
+            ? Detected(Environment.GetEnvironmentVariable("USERNAME"), domain)
             : InternalMicrosoftProbeResult.NotDetected);
     }
 
@@ -335,8 +337,9 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         var outputLines = result.Stdout.Split('\n', StringSplitOptions.TrimEntries);
         var userDnsDomain = outputLines.FirstOrDefault() ?? string.Empty;
         var userName = outputLines.Skip(1).FirstOrDefault() ?? string.Empty;
-        return result.ExitCode == 0 && IsCorpMicrosoftDomain(userDnsDomain)
-            ? Detected(userName)
+        var domain = ExtractAdDomainNameFromCorpDnsName(userDnsDomain);
+        return result.ExitCode == 0 && domain is not null
+            ? Detected(userName, domain)
             : InternalMicrosoftProbeResult.NotDetected;
     }
 
@@ -401,7 +404,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             ContainsJsonStringProperty(output, "tokenEndpointURL", expectedTokenEndpoint) &&
             PlatformSsoRealmRegex().IsMatch(output) &&
             upnMatch.Success
-                ? Detected(upnMatch.Groups["username"].Value)
+                ? Detected(upnMatch.Groups["username"].Value, upnMatch.Groups["domain"].Value)
                 : InternalMicrosoftProbeResult.NotDetected;
     }
 
@@ -442,7 +445,10 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
         var result = await RunProcessAsync("dsregcmd", "/status", cancellationToken).ConfigureAwait(false);
         return result.ExitCode == 0
-            ? EvaluateWindowsWorkplaceJoin(result.Stdout, Environment.GetEnvironmentVariable("USERNAME"))
+            ? EvaluateWindowsWorkplaceJoin(
+                result.Stdout,
+                Environment.GetEnvironmentVariable("USERNAME"),
+                Environment.GetEnvironmentVariable("USERDNSDOMAIN"))
             : InternalMicrosoftProbeResult.NotDetected;
     }
 
@@ -455,7 +461,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
         var result = await RunProcessAsync("cmd.exe", "/c dsregcmd /status", cancellationToken).ConfigureAwait(false);
         return result.ExitCode == 0
-            ? EvaluateWindowsWorkplaceJoin(result.Stdout, fallbackAlias: null)
+            ? EvaluateWindowsWorkplaceJoin(result.Stdout, fallbackAlias: null, fallbackDomain: null)
             : InternalMicrosoftProbeResult.NotDetected;
     }
 
@@ -646,7 +652,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         return new ProcessResult(result.ExitCode, result.Capture.Stdout, result.Capture.Stderr);
     }
 
-    private static InternalMicrosoftProbeResult EvaluateWindowsWorkplaceJoin(string output, string? fallbackAlias)
+    private static InternalMicrosoftProbeResult EvaluateWindowsWorkplaceJoin(string output, string? fallbackAlias, string? fallbackDomain)
     {
         if (string.IsNullOrWhiteSpace(output))
         {
@@ -659,9 +665,10 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         var workplaceJoined = IsYes(values.GetValueOrDefault("WorkplaceJoined"));
         var alias = ExtractAliasFromAccountIdentifier(GetFirstValue(values, "UserEmail", "User Email", "UserPrincipalName", "User Principal Name", "UPN")) ??
             NormalizeAlias(fallbackAlias);
+        var domain = ExtractAdDomainNameFromDsReg(values) ?? ExtractAdDomainNameFromCorpDnsName(fallbackDomain);
 
         return (azureAdJoined || workplaceJoined) && tenantId?.Equals(MicrosoftTenantId, StringComparison.OrdinalIgnoreCase) == true
-            ? Detected(alias)
+            ? Detected(alias, domain)
             : InternalMicrosoftProbeResult.NotDetected;
     }
 
@@ -1038,17 +1045,12 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
     }
 
-    private static bool IsCorpMicrosoftDomain(string? value)
+    private static InternalMicrosoftProbeResult Detected(string? alias, string? domain = null)
     {
-        return value?.EndsWith(CorpMicrosoftDomainSuffix, StringComparison.OrdinalIgnoreCase) == true;
+        return new InternalMicrosoftProbeResult(IsInternalMicrosoft: true, Alias: NormalizeAlias(alias), Domain: NormalizeAdDomainName(domain));
     }
 
-    private static InternalMicrosoftProbeResult Detected(string? alias)
-    {
-        return new InternalMicrosoftProbeResult(IsInternalMicrosoft: true, NormalizeAlias(alias));
-    }
-
-    private static string? GetFirstValue(Dictionary<string, string> values, params string[] keys)
+    private static string? GetFirstValue(IReadOnlyDictionary<string, string> values, params string[] keys)
     {
         foreach (var key in keys)
         {
@@ -1059,6 +1061,55 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
 
         return null;
+    }
+
+    private static string? ExtractAdDomainNameFromDsReg(IReadOnlyDictionary<string, string> values)
+    {
+        var domain = GetFirstValue(
+            values,
+            "DomainName",
+            "Domain Name",
+            "OnPremisesDomainName",
+            "On Premises Domain Name",
+            "OnPremDomainName",
+            "UserDnsDomain",
+            "User DNS Domain");
+
+        return ExtractAdDomainNameFromCorpDnsName(domain) ?? NormalizeAdDomainName(domain);
+    }
+
+    private static string? ExtractAdDomainNameFromCorpDnsName(string? dnsDomain)
+    {
+        if (string.IsNullOrWhiteSpace(dnsDomain))
+        {
+            return null;
+        }
+
+        var trimmed = dnsDomain.Trim().TrimEnd('.');
+        if (!trimmed.EndsWith(CorpMicrosoftDomainSuffix, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return NormalizeAdDomainName(trimmed[..^CorpMicrosoftDomainSuffix.Length]);
+    }
+
+    private static string? NormalizeAdDomainName(string? domain)
+    {
+        if (string.IsNullOrWhiteSpace(domain))
+        {
+            return null;
+        }
+
+        var normalized = domain.Trim().TrimEnd('.');
+        if (normalized.EndsWith(CorpMicrosoftDomainSuffix, StringComparison.OrdinalIgnoreCase))
+        {
+            return ExtractAdDomainNameFromCorpDnsName(normalized);
+        }
+
+        return normalized.All(c => char.IsLetterOrDigit(c) || c is '.' or '_' or '-')
+            ? normalized.ToUpperInvariant()
+            : null;
     }
 
     private static string? ExtractAliasFromAccountIdentifier(string? value)
@@ -1132,7 +1183,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     [GeneratedRegex(@"""realm""\s*:\s*""[A-Z0-9.-]+\.CORP\.MICROSOFT\.COM""", RegexOptions.IgnoreCase)]
     private static partial Regex PlatformSsoRealmRegex();
 
-    [GeneratedRegex(@"""upn""\s*:\s*""(?<username>[^""@\s]+)@[A-Z0-9.-]+\.CORP\.MICROSOFT\.COM""", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"""upn""\s*:\s*""(?<username>[^""@\s]+)@(?<domain>[A-Z0-9.-]+\.CORP\.MICROSOFT\.COM)""", RegexOptions.IgnoreCase)]
     private static partial Regex PlatformSsoUpnRegex();
 
     private readonly record struct ProcessResult(int ExitCode, string Stdout, string Stderr);
@@ -1143,17 +1194,18 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
 internal sealed record InternalMicrosoftProbe(string Name, Func<CancellationToken, Task<InternalMicrosoftProbeResult>> DetectAsync);
 
-internal readonly record struct InternalMicrosoftProbeResult(bool IsInternalMicrosoft, string? Alias)
+internal readonly record struct InternalMicrosoftProbeResult(bool IsInternalMicrosoft, string? Alias, string? Domain)
 {
-    public static InternalMicrosoftProbeResult NotDetected { get; } = new(IsInternalMicrosoft: false, Alias: null);
+    public static InternalMicrosoftProbeResult NotDetected { get; } = new(IsInternalMicrosoft: false, Alias: null, Domain: null);
 }
 
-internal sealed record InternalMicrosoftDetectionResult(bool IsInternalMicrosoft, string? Source, string? Alias);
+internal sealed record InternalMicrosoftDetectionResult(bool IsInternalMicrosoft, string? Source, string? Alias, string? Domain);
 
 internal sealed record InternalMicrosoftDetectorCacheEntry
 {
     public bool IsInternalMicrosoft { get; init; }
     public string? Source { get; init; }
     public string? Alias { get; init; }
+    public string? Domain { get; init; }
     public DateTimeOffset LastRunUtc { get; init; }
 }

@@ -20,6 +20,7 @@ public sealed class InternalMicrosoftDetectorTests
               "isInternalMicrosoft": true,
               "source": "cached source",
               "alias": "cached.alias",
+              "domain": "CACHED",
               "lastRunUtc": "2026-06-16T11:00:00+00:00"
             }
             """);
@@ -42,6 +43,7 @@ public sealed class InternalMicrosoftDetectorTests
         Assert.True(result.IsInternalMicrosoft);
         Assert.Equal("cached source", result.Source);
         Assert.Equal("cached.alias", result.Alias);
+        Assert.Equal("CACHED", result.Domain);
         Assert.False(probeRan);
     }
 
@@ -62,7 +64,7 @@ public sealed class InternalMicrosoftDetectorTests
             cacheFilePath,
             now,
             [
-                [new InternalMicrosoftProbe("positive", _ => Task.FromResult(new InternalMicrosoftProbeResult(IsInternalMicrosoft: true, Alias: "stale.alias")))]
+                [new InternalMicrosoftProbe("positive", _ => Task.FromResult(new InternalMicrosoftProbeResult(IsInternalMicrosoft: true, Alias: "stale.alias", Domain: "STALE")))]
             ]);
 
         var result = await detector.IsInternalMicrosoftMachineAsync();
@@ -70,11 +72,13 @@ public sealed class InternalMicrosoftDetectorTests
         Assert.True(result.IsInternalMicrosoft);
         Assert.Equal("positive", result.Source);
         Assert.Equal("stale.alias", result.Alias);
+        Assert.Equal("STALE", result.Domain);
 
         var updatedCache = await File.ReadAllTextAsync(cacheFilePath);
         Assert.Contains("\"isInternalMicrosoft\": true", updatedCache, StringComparison.Ordinal);
         Assert.Contains("\"source\": \"positive\"", updatedCache, StringComparison.Ordinal);
         Assert.Contains("\"alias\": \"stale.alias\"", updatedCache, StringComparison.Ordinal);
+        Assert.Contains("\"domain\": \"STALE\"", updatedCache, StringComparison.Ordinal);
         Assert.Contains("\"lastRunUtc\": \"2026-06-16T12:00:00+00:00\"", updatedCache, StringComparison.Ordinal);
     }
 
@@ -95,12 +99,12 @@ public sealed class InternalMicrosoftDetectorTests
                 [new InternalMicrosoftProbe("stage 2", _ =>
                 {
                     calls.Add("stage 2");
-                    return Task.FromResult(new InternalMicrosoftProbeResult(IsInternalMicrosoft: true, Alias: "stage.alias"));
+                    return Task.FromResult(new InternalMicrosoftProbeResult(IsInternalMicrosoft: true, Alias: "stage.alias", Domain: "STAGE"));
                 })],
                 [new InternalMicrosoftProbe("stage 3", _ =>
                 {
                     calls.Add("stage 3");
-                    return Task.FromResult(new InternalMicrosoftProbeResult(IsInternalMicrosoft: true, Alias: "unused.alias"));
+                    return Task.FromResult(new InternalMicrosoftProbeResult(IsInternalMicrosoft: true, Alias: "unused.alias", Domain: "UNUSED"));
                 })]
             ]);
 
@@ -109,6 +113,7 @@ public sealed class InternalMicrosoftDetectorTests
         Assert.True(result.IsInternalMicrosoft);
         Assert.Equal("stage 2", result.Source);
         Assert.Equal("stage.alias", result.Alias);
+        Assert.Equal("STAGE", result.Domain);
         Assert.Equal(["stage 1", "stage 2"], calls);
     }
 
@@ -126,7 +131,7 @@ public sealed class InternalMicrosoftDetectorTests
                     new InternalMicrosoftProbe("positive", async _ =>
                     {
                         await slowProbeStarted.Task;
-                        return new InternalMicrosoftProbeResult(IsInternalMicrosoft: true, Alias: "positive.alias");
+                        return new InternalMicrosoftProbeResult(IsInternalMicrosoft: true, Alias: "positive.alias", Domain: "POSITIVE");
                     }),
                     new InternalMicrosoftProbe("slow", async cancellationToken =>
                     {
@@ -152,6 +157,7 @@ public sealed class InternalMicrosoftDetectorTests
         Assert.True(result.IsInternalMicrosoft);
         Assert.Equal("positive", result.Source);
         Assert.Equal("positive.alias", result.Alias);
+        Assert.Equal("POSITIVE", result.Domain);
         await slowProbeCancelled.Task.WaitAsync(TimeSpan.FromSeconds(5));
     }
 
@@ -168,7 +174,7 @@ public sealed class InternalMicrosoftDetectorTests
                     new InternalMicrosoftProbe("positive", async _ =>
                     {
                         await faultingProbeStarted.Task;
-                        return new InternalMicrosoftProbeResult(IsInternalMicrosoft: true, Alias: "fault.alias");
+                        return new InternalMicrosoftProbeResult(IsInternalMicrosoft: true, Alias: "fault.alias", Domain: "FAULT");
                     }),
                     new InternalMicrosoftProbe("faulting", async cancellationToken =>
                     {
@@ -193,6 +199,7 @@ public sealed class InternalMicrosoftDetectorTests
         Assert.True(result.IsInternalMicrosoft);
         Assert.Equal("positive", result.Source);
         Assert.Equal("fault.alias", result.Alias);
+        Assert.Equal("FAULT", result.Domain);
     }
 
     private static InternalMicrosoftDetector CreateDetector(string cacheFilePath, DateTimeOffset now, IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>> probeStages)

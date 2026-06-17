@@ -122,12 +122,13 @@ internal sealed class TelemetryFixture : IDisposable
         public bool IsInternalMicrosoft { get; set; }
         public string? Source { get; set; }
         public string? Alias { get; set; }
+        public string? Domain { get; set; }
         public int InvocationCount { get; private set; }
 
         public Task<InternalMicrosoftDetectionResult> IsInternalMicrosoftMachineAsync(CancellationToken cancellationToken = default)
         {
             InvocationCount++;
-            return Task.FromResult(new InternalMicrosoftDetectionResult(IsInternalMicrosoft, Source, Alias));
+            return Task.FromResult(new InternalMicrosoftDetectionResult(IsInternalMicrosoft, Source, Alias, Domain));
         }
     }
 }

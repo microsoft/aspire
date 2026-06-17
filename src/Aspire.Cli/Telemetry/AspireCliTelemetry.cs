@@ -276,6 +276,11 @@ internal sealed class AspireCliTelemetry : IHostedService
                 {
                     _tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoftAlias, internalMicrosoftTask.Result.Alias));
                 }
+
+                if (!string.IsNullOrEmpty(internalMicrosoftTask.Result.Domain))
+                {
+                    _tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoftDomain, internalMicrosoftTask.Result.Domain));
+                }
             }
 
             // This is consistent with dashboard version data.

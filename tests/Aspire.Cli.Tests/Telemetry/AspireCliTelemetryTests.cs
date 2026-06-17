@@ -267,11 +267,16 @@ public class AspireCliTelemetryTests
     [Fact]
     public void InitializeAsync_AddsInternalMicrosoftTag()
     {
+        Assert.Equal("aspire.cli.microsoft_internal_source", TelemetryConstants.Tags.InternalMicrosoftSource);
+        Assert.Equal("aspire.cli.microsoft_internal_alias", TelemetryConstants.Tags.InternalMicrosoftAlias);
+        Assert.Equal("aspire.microsoft_internal_domain", TelemetryConstants.Tags.InternalMicrosoftDomain);
+
         var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
         {
             IsInternalMicrosoft = true,
             Source = "test source",
-            Alias = "test.alias"
+            Alias = "test.alias",
+            Domain = "TEST"
         };
         using var fixture = new TelemetryFixture(internalMicrosoftDetector: internalMicrosoftDetector);
 
@@ -280,10 +285,11 @@ public class AspireCliTelemetryTests
         Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.InternalMicrosoft && t.Value is true);
         Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.InternalMicrosoftSource && (string?)t.Value == "test source");
         Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.InternalMicrosoftAlias && (string?)t.Value == "test.alias");
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.InternalMicrosoftDomain && (string?)t.Value == "TEST");
     }
 
     [Fact]
-    public void InitializeAsync_DoesNotAddInternalMicrosoftAliasTag_WhenAliasIsNotDetected()
+    public void InitializeAsync_DoesNotAddOptionalInternalMicrosoftTags_WhenValuesAreNotDetected()
     {
         var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
         {
@@ -296,6 +302,7 @@ public class AspireCliTelemetryTests
 
         Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.InternalMicrosoft && t.Value is true);
         Assert.DoesNotContain(tags, t => t.Key == TelemetryConstants.Tags.InternalMicrosoftAlias);
+        Assert.DoesNotContain(tags, t => t.Key == TelemetryConstants.Tags.InternalMicrosoftDomain);
     }
 
     [Fact]
