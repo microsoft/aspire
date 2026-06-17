@@ -1,4 +1,3 @@
-import { randomBytes } from 'crypto';
 import * as vscode from 'vscode';
 import { getRunSessionInfo, getSupportedCapabilities } from '../capabilities';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
@@ -7,6 +6,7 @@ import { extensionLogOutputChannel } from '../utils/logging';
 import type AspireRpcServer from '../server/AspireRpcServer';
 import { generateToken } from '../utils/security';
 import { DcpServerConnectionInfo, RunSessionInfo } from './types';
+import { generateDcpIdPrefix } from './AspireDcpServer';
 import type AspireDcpServer from './AspireDcpServer';
 
 export interface TestRunSessionAcquireOptions {
@@ -44,12 +44,12 @@ export class TestRunSessionManager {
     private readonly leases = new Map<string, TestRunSessionLease>();
     private readonly leaseLifetimeMs?: number;
     private readonly now: () => number;
-    private connectionInfo?: Pick<DcpServerConnectionInfo, 'address' | 'certificate'>;
+    private connectionInfo?: DcpServerConnectionInfo;
     private debugSessionStartSubscription?: vscode.Disposable;
     private readonly leasedDebugSessionRemovers = new Map<string, () => void>();
 
     constructor(
-        connectionInfo?: Pick<DcpServerConnectionInfo, 'address' | 'certificate'>,
+        connectionInfo?: DcpServerConnectionInfo,
         private readonly getSupportedLaunchConfigurations: () => string[] = getSupportedCapabilities,
         options: TestRunSessionManagerOptions = {}) {
         this.connectionInfo = connectionInfo;
@@ -57,7 +57,7 @@ export class TestRunSessionManager {
         this.now = options.now ?? Date.now;
     }
 
-    initializeConnectionInfo(connectionInfo: Pick<DcpServerConnectionInfo, 'address' | 'certificate'>): void {
+    initializeConnectionInfo(connectionInfo: DcpServerConnectionInfo): void {
         this.connectionInfo = connectionInfo;
     }
 
@@ -102,21 +102,20 @@ export class TestRunSessionManager {
         this.removeExpiredLeases();
 
         const id = generateToken();
-        const sessionId = `aspire-extension-test-run-${randomBytes(16).toString('hex')}`;
-        const token = generateToken();
+        const sessionId = generateDcpIdPrefix();
         const runSessionInfo: RunSessionInfo = {
             ...getRunSessionInfo(),
             supported_launch_configurations: this.getSupportedLaunchConfigurations()
         };
 
-        this.leases.set(id, { id, sessionId, token, expiresAt: this.getExpiresAt() });
+        this.leases.set(id, { id, sessionId, token: this.connectionInfo.token, expiresAt: this.getExpiresAt() });
 
         return {
             id,
             sessionId,
             env: {
                 DEBUG_SESSION_PORT: this.connectionInfo.address,
-                DEBUG_SESSION_TOKEN: token,
+                DEBUG_SESSION_TOKEN: this.connectionInfo.token,
                 DEBUG_SESSION_SERVER_CERTIFICATE: this.connectionInfo.certificate,
                 DCP_INSTANCE_ID_PREFIX: `${sessionId}-`,
                 DEBUG_SESSION_RUN_MODE: options.debug ? 'Debug' : 'NoDebug',

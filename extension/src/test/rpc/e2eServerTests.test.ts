@@ -2,6 +2,7 @@ import * as assert from 'assert';
 import waitForExpect from 'wait-for-expect';
 import * as vscode from 'vscode';
 import * as tls from 'tls';
+import * as https from 'https';
 
 import { createMessageConnection } from 'vscode-jsonrpc';
 import { StreamMessageReader, StreamMessageWriter } from 'vscode-jsonrpc/node';
@@ -61,6 +62,7 @@ suite('End-to-end RPC server auth tests', () => {
 		assert.ok(lease.env.DEBUG_SESSION_TOKEN);
 		assert.ok(lease.env.DEBUG_SESSION_PORT);
 		assert.strictEqual(lease.env.DCP_INSTANCE_ID_PREFIX, `${lease.sessionId}-`);
+		assert.strictEqual(await getDcpInfoStatusCode(lease), 200);
 
 		await api.releaseTestRunSession(lease.id);
 	});
@@ -91,5 +93,28 @@ suite('End-to-end RPC server auth tests', () => {
 
 		connection.listen();
 		return { connection, rpcServerInfo, client };
+	}
+
+	async function getDcpInfoStatusCode(lease: AcquiredTestRunSession): Promise<number | undefined> {
+		const [host, port] = lease.env.DEBUG_SESSION_PORT.split(':');
+
+		return await new Promise<number | undefined>((resolve, reject) => {
+			const request = https.request({
+				host,
+				port: Number(port),
+				path: '/info',
+				method: 'GET',
+				rejectUnauthorized: false,
+				headers: {
+					Authorization: `Bearer ${lease.env.DEBUG_SESSION_TOKEN}`,
+					'Microsoft-Developer-DCP-Instance-ID': `${lease.sessionId}-test`
+				}
+			}, response => {
+				response.resume();
+				response.on('end', () => resolve(response.statusCode));
+			});
+			request.on('error', reject);
+			request.end();
+		});
 	}
 });
