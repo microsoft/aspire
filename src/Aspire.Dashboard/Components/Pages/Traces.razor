@@ -87,7 +87,7 @@
             }
         </ToolbarSection>
         <MainSection>
-            <div id="tracesScrollContainer" class="datagrid-overflow-area continuous-scroll-overflow" tabindex="0" role="region" aria-label="@Loc[nameof(Dashboard.Resources.Traces.TracesHeader)]">
+            <div id="@ScrollContainerId" class="datagrid-overflow-area continuous-scroll-overflow" tabindex="0" role="region" aria-label="@Loc[nameof(Dashboard.Resources.Traces.TracesHeader)]">
                 <GridColumnManager @ref="_manager" Columns="@_gridColumns">
                     <FluentDataGrid @ref="_dataGrid"
                                     ColumnResizeLabels="@_resizeLabels"

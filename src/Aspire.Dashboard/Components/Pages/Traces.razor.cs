@@ -26,6 +26,7 @@ namespace Aspire.Dashboard.Components.Pages;
 
 public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlState<Traces.TracesPageViewModel, Traces.TracesPageState>
 {
+    private const string ScrollContainerId = "tracesScrollContainer";
     private const string TimestampColumn = nameof(TimestampColumn);
     private const string NameColumn = nameof(NameColumn);
     private const string SpansColumn = nameof(SpansColumn);
@@ -282,7 +283,7 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
         if (firstRender)
         {
             await JS.InvokeVoidAsync("initializeContinuousScroll");
-            await JS.InvokeVoidAsync("focusElement", "tracesScrollContainer");
+            await JS.InvokeVoidAsync("focusElement", ScrollContainerId);
             DimensionManager.OnViewportInformationChanged += OnBrowserResize;
         }
     }

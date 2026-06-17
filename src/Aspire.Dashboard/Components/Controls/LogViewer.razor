@@ -8,7 +8,7 @@
 @implements IAsyncDisposable
 
 @* Console logs always have a dark background. Set data-theme="dark" so dark theme accent colors are used *@
-<div id="logScrollContainer" class="log-overflow console-overflow continuous-scroll-overflow" tabindex="0" role="region" aria-label="@Loc[nameof(ConsoleLogs.ConsoleLogsHeader)]" data-theme="dark">
+<div id="@ScrollContainerId" class="log-overflow console-overflow continuous-scroll-overflow" tabindex="0" role="region" aria-label="@Loc[nameof(ConsoleLogs.ConsoleLogsHeader)]" data-theme="dark">
     <div class="@GetLogContainerClass()" id="logContainer">
         @if (LogEntries is { } logEntries)
         {

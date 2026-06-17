@@ -157,7 +157,7 @@
                         }
 
                         <div id="@ScrollContainerId" class="tracedetails-grid-container continuous-scroll-overflow" tabindex="0" role="region" aria-label="@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailTraceStartHeader)]">
-                        <GridColumnManager @ref="_manager" Columns="@_gridColumns">
+                            <GridColumnManager @ref="_manager" Columns="@_gridColumns">
                             <FluentDataGrid @ref="_dataGrid"
                                             Virtualize="true"
                                             GenerateHeader="GenerateHeaderOption.Sticky"
@@ -374,7 +374,7 @@
                                     <FluentIcon Icon="Icons.Regular.Size24.GanttChart" />&nbsp;@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailNoSpans)]
                                 </EmptyContent>
                             </FluentDataGrid>
-                        </GridColumnManager>
+                            </GridColumnManager>
                         </div>
                     </Summary>
                     <Details>

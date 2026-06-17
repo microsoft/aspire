@@ -17,6 +17,7 @@ namespace Aspire.Dashboard.Components;
 /// </summary>
 public sealed partial class LogViewer
 {
+    private const string ScrollContainerId = "logScrollContainer";
     private static readonly MarkupString s_spaceMarkup = new MarkupString("&#32;");
 
     private LogEntries? _logEntries;
@@ -111,7 +112,7 @@ public sealed partial class LogViewer
             Logger.LogDebug("Initializing log viewer.");
 
             await JS.InvokeVoidAsync("initializeContinuousScroll");
-            await JS.InvokeVoidAsync("focusElement", "logScrollContainer");
+            await JS.InvokeVoidAsync("focusElement", ScrollContainerId);
             DimensionManager.OnViewportInformationChanged += OnBrowserResize;
         }
     }
