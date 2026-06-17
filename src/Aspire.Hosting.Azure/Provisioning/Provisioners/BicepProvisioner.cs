@@ -149,7 +149,14 @@ internal sealed class BicepProvisioner(
         return true;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Adopts a cached ARM deployment that was still running when the AppHost last stopped or was canceled.
+    /// </summary>
+    /// <remarks>
+    /// The persisted state only tells us which deployment belongs to this resource. ARM remains the source of
+    /// truth, so reconciliation probes the deployment, follows it while it is still active, applies outputs if it
+    /// succeeded, records terminal failure/cancellation, or clears stale local state so normal provisioning can retry.
+    /// </remarks>
     public async Task<bool> ReconcileDeploymentStateAsync(AzureBicepResource resource, ProvisioningContext context, CancellationToken cancellationToken)
     {
         if (!context.ExecutionContext.IsRunMode)
