@@ -5,7 +5,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Resources;
@@ -666,7 +665,7 @@ public sealed class ParameterProcessor(
         {
             return s with
             {
-                Properties = s.Properties.SetResourceProperty(KnownProperties.Parameter.Value, value, parameterResource.Secret),
+                Properties = s.Properties.SetResourcePropertyRange([parameterResource.CreateValueSnapshotProperty(value)]),
                 State = state
             };
         }).ConfigureAwait(false);

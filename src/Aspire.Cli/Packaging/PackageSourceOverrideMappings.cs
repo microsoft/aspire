@@ -5,7 +5,7 @@ namespace Aspire.Cli.Packaging;
 
 internal static class PackageSourceOverrideMappings
 {
-    public static PackageMapping[] Create(string packageSourceOverride, PackageChannel? requestedChannel)
+    public static PackageMapping[] Create(string packageSourceOverride, PackageChannel? requestedChannel, string? nugetServiceIndexOverride)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(packageSourceOverride);
         if (HasCredentialMaterial(packageSourceOverride))
@@ -33,7 +33,13 @@ internal static class PackageSourceOverrideMappings
 
         if (!mappings.Any(static mapping => mapping.PackageFilter == PackageMapping.AllPackages))
         {
-            mappings.Add(new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg));
+            // Honor the runtime service-index override (env / sidecar) when the
+            // CLI emits a fresh fallback mapping. Reads from existing user
+            // configs are not rewritten — see docs/specs/cli-identity-sidecar.md.
+            var fallbackSource = string.IsNullOrEmpty(nugetServiceIndexOverride)
+                ? PackageSources.NuGetOrg
+                : nugetServiceIndexOverride;
+            mappings.Add(new PackageMapping(PackageMapping.AllPackages, fallbackSource));
         }
 
         return [.. mappings.DistinctBy(static mapping => $"{mapping.PackageFilter}\0{mapping.Source}")];

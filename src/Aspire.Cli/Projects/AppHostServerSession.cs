@@ -280,4 +280,18 @@ internal sealed class AppHostServerSessionFactory : IAppHostServerSessionFactory
             BuildOutput: prepareResult.Output,
             ChannelName: prepareResult.ChannelName);
     }
+
+    /// <inheritdoc />
+    public IAppHostServerSession Start(
+        IAppHostServerProject appHostServerProject,
+        Dictionary<string, string>? environmentVariables,
+        bool debug)
+    {
+        return AppHostServerSession.Start(
+            appHostServerProject,
+            environmentVariables,
+            debug,
+            _logger,
+            _profilingTelemetry);
+    }
 }

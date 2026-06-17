@@ -98,19 +98,15 @@ public static class DotnetToolResourceExtensions
         async Task BeforeResourceStarted(T resource, BeforeResourceStartedEvent evt, CancellationToken ct)
         {
             var rns = evt.Services.GetRequiredService<ResourceNotificationService>();
-            var toolConfig = resource.ToolConfiguration;
-            if (toolConfig == null)
+            var properties = resource.CreateSnapshotProperties().ToArray();
+            if (properties.Length == 0)
             {
                 return;
             }
 
             await rns.PublishUpdateAsync(resource, x => x with
             {
-                Properties = x.Properties.SetResourcePropertyRange([
-                    new (KnownProperties.Tool.Package, toolConfig.PackageId),
-                    new (KnownProperties.Tool.Version, toolConfig.Version),
-                    new (KnownProperties.Resource.Source, resource.ToolConfiguration?.PackageId)
-                    ])
+                Properties = x.Properties.SetResourcePropertyRange(properties)
             }).ConfigureAwait(false);
         }
 
