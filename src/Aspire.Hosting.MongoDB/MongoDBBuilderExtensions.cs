@@ -311,6 +311,7 @@ public static class MongoDBBuilderExtensions
     )
     {
         ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(keyValue);
         ArgumentException.ThrowIfNullOrEmpty(keyFilePath);
 
         return builder
