@@ -171,7 +171,22 @@ internal interface IArmClient
     /// <summary>
     /// Deletes the specified Azure resource.
     /// </summary>
-    Task DeleteResourceAsync(string resourceId, string? resourceLocation = null, string? fallbackResourceLocation = null, CancellationToken cancellationToken = default);
+    /// <param name="resourceId">The Azure resource ID to delete.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    Task DeleteResourceAsync(string resourceId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Purges a soft-deleted Azure Key Vault tombstone in the specified location.
+    /// </summary>
+    /// <remarks>
+    /// Key Vault soft-delete tombstones are location-scoped and can remain after the
+    /// live vault resource no longer exists, so purge is modeled separately from delete.
+    /// </remarks>
+    /// <param name="resourceId">The Azure Key Vault resource ID whose deleted tombstone should be purged.</param>
+    /// <param name="location">The Azure location that owns the deleted Key Vault tombstone.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns><c>true</c> when a tombstone was found and purged; otherwise, <c>false</c>.</returns>
+    Task<bool> PurgeDeletedKeyVaultAsync(string resourceId, string location, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Cancels the specified Azure deployment.

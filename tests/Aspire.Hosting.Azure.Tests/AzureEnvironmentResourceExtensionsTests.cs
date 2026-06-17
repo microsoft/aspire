@@ -1670,7 +1670,7 @@ public class AzureEnvironmentResourceExtensionsTests
         var builder = CreateBuilder(isRunMode: true);
         var deploymentStateManager = new TestDeploymentStateManager();
         var deletedResourceIds = new List<string>();
-        var deletedResources = new List<(string ResourceId, string? ResourceLocation, string? FallbackResourceLocation)>();
+        var purgedDeletedKeyVaults = new List<(string ResourceId, string Location)>();
         var canceledDeploymentIds = new List<string>();
         const string subscriptionId = "12345678-1234-1234-1234-123456789012";
         const string resourceGroup = "test-rg";
@@ -1691,7 +1691,7 @@ public class AzureEnvironmentResourceExtensionsTests
             deletedResourceIds: deletedResourceIds,
             deploymentTargetResourceIds: [partialIdentityResourceId, nestedDeploymentResourceId],
             canceledDeploymentIds: canceledDeploymentIds,
-            deletedResources: deletedResources));
+            purgedDeletedKeyVaults: purgedDeletedKeyVaults));
         builder.Services.AddSingleton<ITokenCredentialProvider>(ProvisioningTestHelpers.CreateTokenCredentialProvider());
 
         var storage = builder.AddBicepTemplateString("storage", "resource storage 'Microsoft.Storage/storageAccounts@2024-01-01' = {}");
@@ -1749,11 +1749,7 @@ public class AzureEnvironmentResourceExtensionsTests
         Assert.Contains(storageResourceId, deletedResourceIds);
         Assert.Contains(partialIdentityResourceId, deletedResourceIds);
         Assert.DoesNotContain(nestedDeploymentResourceId, deletedResourceIds);
-        Assert.All(deletedResources, static resource =>
-        {
-            Assert.Equal("westus3", resource.ResourceLocation);
-            Assert.Equal("westus2", resource.FallbackResourceLocation);
-        });
+        Assert.Empty(purgedDeletedKeyVaults);
 
         var resultData = AssertCommandJsonData(result);
         Assert.Equal(2, resultData["deletedResourceCount"]?.GetValue<int>());
@@ -3963,7 +3959,7 @@ public class AzureEnvironmentResourceExtensionsTests
         const string subscriptionId = "12345678-1234-1234-1234-123456789012";
         const string resourceGroup = "test-rg";
         const string keyVaultResourceId = $"/subscriptions/{subscriptionId}/resourceGroups/{resourceGroup}/providers/Microsoft.KeyVault/vaults/kv-test";
-        var deletedResources = new List<(string ResourceId, string? ResourceLocation, string? FallbackResourceLocation)>();
+        var purgedDeletedKeyVaults = new List<(string ResourceId, string Location)>();
         var testBicepProvisioner = new KeyVaultSoftDeleteConflictThenSuccessProvisioner(keyVaultResourceId);
 
         builder.Configuration["Azure:SubscriptionId"] = subscriptionId;
@@ -3977,7 +3973,7 @@ public class AzureEnvironmentResourceExtensionsTests
             deletedResourceIds: null,
             deploymentTargetResourceIds: null,
             canceledDeploymentIds: null,
-            deletedResources: deletedResources));
+            purgedDeletedKeyVaults: purgedDeletedKeyVaults));
         builder.Services.RemoveAll<AzureProvisioningController>();
         builder.Services.AddSingleton(sp => new AzureProvisioningController(
             sp.GetRequiredService<IConfiguration>(),
@@ -4023,10 +4019,9 @@ public class AzureEnvironmentResourceExtensionsTests
 
         Assert.True(result.Success);
         Assert.Equal(2, testBicepProvisioner.GetOrCreateResourceCallCount);
-        var deletedResource = Assert.Single(deletedResources);
-        Assert.Equal(keyVaultResourceId, deletedResource.ResourceId);
-        Assert.Equal("ukwest", deletedResource.ResourceLocation);
-        Assert.Equal("westus2", deletedResource.FallbackResourceLocation);
+        var purgedDeletedKeyVault = Assert.Single(purgedDeletedKeyVaults);
+        Assert.Equal(keyVaultResourceId, purgedDeletedKeyVault.ResourceId);
+        Assert.Equal("ukwest", purgedDeletedKeyVault.Location);
 
         Assert.True(notifications.TryGetCurrentState(keyVault.Resource.Name, out var keyVaultEvent));
         Assert.Equal("Running", keyVaultEvent.Snapshot.State?.Text);
@@ -5248,7 +5243,10 @@ public class AzureEnvironmentResourceExtensionsTests
         public Task<bool> ResourceExistsAsync(string resourceId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
-        public Task DeleteResourceAsync(string resourceId, string? resourceLocation = null, string? fallbackResourceLocation = null, CancellationToken cancellationToken = default)
+        public Task DeleteResourceAsync(string resourceId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<bool> PurgeDeletedKeyVaultAsync(string resourceId, string location, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
         public Task CancelDeploymentAsync(string deploymentId, CancellationToken cancellationToken = default)
@@ -5658,7 +5656,10 @@ public class AzureEnvironmentResourceExtensionsTests
         public Task<bool> ResourceExistsAsync(string resourceId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
-        public Task DeleteResourceAsync(string resourceId, string? resourceLocation = null, string? fallbackResourceLocation = null, CancellationToken cancellationToken = default)
+        public Task DeleteResourceAsync(string resourceId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<bool> PurgeDeletedKeyVaultAsync(string resourceId, string location, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
         public Task CancelDeploymentAsync(string deploymentId, CancellationToken cancellationToken = default)
@@ -5740,7 +5741,7 @@ public class AzureEnvironmentResourceExtensionsTests
         public Task<bool> ResourceExistsAsync(string resourceId, CancellationToken cancellationToken = default)
             => Task.FromResult(true);
 
-        public async Task DeleteResourceAsync(string resourceId, string? resourceLocation = null, string? fallbackResourceLocation = null, CancellationToken cancellationToken = default)
+        public async Task DeleteResourceAsync(string resourceId, CancellationToken cancellationToken = default)
         {
             lock (_lock)
             {
@@ -5750,6 +5751,9 @@ public class AzureEnvironmentResourceExtensionsTests
             DeleteStarted.TrySetResult();
             await AllowDeleteToComplete.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
         }
+
+        public Task<bool> PurgeDeletedKeyVaultAsync(string resourceId, string location, CancellationToken cancellationToken = default)
+            => Task.FromResult(true);
 
         public Task CancelDeploymentAsync(string deploymentId, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
@@ -5814,7 +5818,10 @@ public class AzureEnvironmentResourceExtensionsTests
         public Task<bool> ResourceExistsAsync(string resourceId, CancellationToken cancellationToken = default)
             => Task.FromException<bool>(new global::Azure.Identity.CredentialUnavailableException("Credential unavailable."));
 
-        public Task DeleteResourceAsync(string resourceId, string? resourceLocation = null, string? fallbackResourceLocation = null, CancellationToken cancellationToken = default)
+        public Task DeleteResourceAsync(string resourceId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<bool> PurgeDeletedKeyVaultAsync(string resourceId, string location, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
         public Task CancelDeploymentAsync(string deploymentId, CancellationToken cancellationToken = default)
@@ -5879,8 +5886,11 @@ public class AzureEnvironmentResourceExtensionsTests
         public Task<bool> ResourceExistsAsync(string resourceId, CancellationToken cancellationToken = default)
             => Task.FromException<bool>(exception);
 
-        public Task DeleteResourceAsync(string resourceId, string? resourceLocation = null, string? fallbackResourceLocation = null, CancellationToken cancellationToken = default)
-            => _inner.DeleteResourceAsync(resourceId, resourceLocation, fallbackResourceLocation, cancellationToken);
+        public Task DeleteResourceAsync(string resourceId, CancellationToken cancellationToken = default)
+            => _inner.DeleteResourceAsync(resourceId, cancellationToken);
+
+        public Task<bool> PurgeDeletedKeyVaultAsync(string resourceId, string location, CancellationToken cancellationToken = default)
+            => _inner.PurgeDeletedKeyVaultAsync(resourceId, location, cancellationToken);
 
         public Task CancelDeploymentAsync(string deploymentId, CancellationToken cancellationToken = default)
             => _inner.CancelDeploymentAsync(deploymentId, cancellationToken);
@@ -5938,10 +5948,13 @@ public class AzureEnvironmentResourceExtensionsTests
         public Task<bool> ResourceExistsAsync(string resourceId, CancellationToken cancellationToken = default)
             => Task.FromResult(string.Equals(resourceId, existingResourceId, StringComparison.OrdinalIgnoreCase));
 
-        public Task DeleteResourceAsync(string resourceId, string? resourceLocation = null, string? fallbackResourceLocation = null, CancellationToken cancellationToken = default)
+        public Task DeleteResourceAsync(string resourceId, CancellationToken cancellationToken = default)
             => string.Equals(resourceId, existingResourceId, StringComparison.OrdinalIgnoreCase)
                 ? Task.FromException(deleteException)
-                : _inner.DeleteResourceAsync(resourceId, resourceLocation, fallbackResourceLocation, cancellationToken);
+                : _inner.DeleteResourceAsync(resourceId, cancellationToken);
+
+        public Task<bool> PurgeDeletedKeyVaultAsync(string resourceId, string location, CancellationToken cancellationToken = default)
+            => _inner.PurgeDeletedKeyVaultAsync(resourceId, location, cancellationToken);
 
         public Task CancelDeploymentAsync(string deploymentId, CancellationToken cancellationToken = default)
             => _inner.CancelDeploymentAsync(deploymentId, cancellationToken);

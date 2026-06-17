@@ -65,7 +65,7 @@ internal static class ProvisioningTestHelpers
     public static IArmClientProvider CreateArmClientProvider(Func<string, Dictionary<string, object>> deploymentOutputsProvider) => new TestArmClientProvider(deploymentOutputsProvider);
     public static IArmClientProvider CreateArmClientProvider(IEnumerable<string> existingResourceIds) => new TestArmClientProvider(existingResourceIds: existingResourceIds);
     public static IArmClientProvider CreateArmClientProvider(IEnumerable<string> existingResourceIds, List<string> deletedResourceIds) => new TestArmClientProvider(existingResourceIds: existingResourceIds, deletedResourceIds: deletedResourceIds);
-    public static IArmClientProvider CreateArmClientProvider(IEnumerable<string> existingResourceIds, List<string>? deletedResourceIds, IEnumerable<string>? deploymentTargetResourceIds, List<string>? canceledDeploymentIds, List<(string ResourceId, string? ResourceLocation, string? FallbackResourceLocation)>? deletedResources = null) => new TestArmClientProvider(existingResourceIds: existingResourceIds, deletedResourceIds: deletedResourceIds, deploymentTargetResourceIds: deploymentTargetResourceIds, canceledDeploymentIds: canceledDeploymentIds, deletedResources: deletedResources);
+    public static IArmClientProvider CreateArmClientProvider(IEnumerable<string> existingResourceIds, List<string>? deletedResourceIds, IEnumerable<string>? deploymentTargetResourceIds, List<string>? canceledDeploymentIds, List<(string ResourceId, string Location)>? purgedDeletedKeyVaults = null) => new TestArmClientProvider(existingResourceIds: existingResourceIds, deletedResourceIds: deletedResourceIds, deploymentTargetResourceIds: deploymentTargetResourceIds, canceledDeploymentIds: canceledDeploymentIds, purgedDeletedKeyVaults: purgedDeletedKeyVaults);
     public static IArmClientProvider CreateArmClientProviderForMissingResourceGroup() => new TestArmClientProvider(resourceGroupLookupReturnsNotFound: true);
     public static ITokenCredentialProvider CreateTokenCredentialProvider() => new TestTokenCredentialProvider();
     public static ISecretClientProvider CreateSecretClientProvider() => new TestSecretClientProvider(CreateTokenCredentialProvider());
@@ -192,7 +192,7 @@ internal sealed class TestArmClient : IArmClient
     private readonly ITenantResource? _tenant;
     private readonly HashSet<string>? _existingResourceIds;
     private readonly List<string>? _deletedResourceIds;
-    private readonly List<(string ResourceId, string? ResourceLocation, string? FallbackResourceLocation)>? _deletedResources;
+    private readonly List<(string ResourceId, string Location)>? _purgedDeletedKeyVaults;
     private readonly IEnumerable<string>? _deploymentTargetResourceIds;
     private readonly IReadOnlyList<AzureDeploymentOperationDetails>? _deploymentOperations;
     private readonly IReadOnlyDictionary<string, IEnumerable<string>>? _supportedLocationsByResourceType;
@@ -243,11 +243,11 @@ internal sealed class TestArmClient : IArmClient
         List<string>? deletedResourceIds = null,
         IEnumerable<string>? deploymentTargetResourceIds = null,
         List<string>? canceledDeploymentIds = null,
-        List<(string ResourceId, string? ResourceLocation, string? FallbackResourceLocation)>? deletedResources = null)
+        List<(string ResourceId, string Location)>? purgedDeletedKeyVaults = null)
     {
         _existingResourceIds = new HashSet<string>(existingResourceIds, StringComparer.OrdinalIgnoreCase);
         _deletedResourceIds = deletedResourceIds;
-        _deletedResources = deletedResources;
+        _purgedDeletedKeyVaults = purgedDeletedKeyVaults;
         _deploymentTargetResourceIds = deploymentTargetResourceIds;
         _canceledDeploymentIds = canceledDeploymentIds;
     }
@@ -372,12 +372,17 @@ internal sealed class TestArmClient : IArmClient
         return Task.FromResult(exists);
     }
 
-    public Task DeleteResourceAsync(string resourceId, string? resourceLocation = null, string? fallbackResourceLocation = null, CancellationToken cancellationToken = default)
+    public Task DeleteResourceAsync(string resourceId, CancellationToken cancellationToken = default)
     {
         _existingResourceIds?.Remove(resourceId);
         _deletedResourceIds?.Add(resourceId);
-        _deletedResources?.Add((resourceId, resourceLocation, fallbackResourceLocation));
         return Task.CompletedTask;
+    }
+
+    public Task<bool> PurgeDeletedKeyVaultAsync(string resourceId, string location, CancellationToken cancellationToken = default)
+    {
+        _purgedDeletedKeyVaults?.Add((resourceId, location));
+        return Task.FromResult(true);
     }
 
     public Task CancelDeploymentAsync(string deploymentId, CancellationToken cancellationToken = default)
@@ -896,7 +901,7 @@ internal sealed class TestArmClientProvider : IArmClientProvider
     private readonly TestResourceGroupResource? _resourceGroup;
     private readonly IEnumerable<string>? _existingResourceIds;
     private readonly List<string>? _deletedResourceIds;
-    private readonly List<(string ResourceId, string? ResourceLocation, string? FallbackResourceLocation)>? _deletedResources;
+    private readonly List<(string ResourceId, string Location)>? _purgedDeletedKeyVaults;
     private readonly IEnumerable<string>? _deploymentTargetResourceIds;
     private readonly List<string>? _canceledDeploymentIds;
     private readonly bool _resourceGroupLookupReturnsNotFound;
@@ -928,11 +933,11 @@ internal sealed class TestArmClientProvider : IArmClientProvider
         List<string>? deletedResourceIds = null,
         IEnumerable<string>? deploymentTargetResourceIds = null,
         List<string>? canceledDeploymentIds = null,
-        List<(string ResourceId, string? ResourceLocation, string? FallbackResourceLocation)>? deletedResources = null)
+        List<(string ResourceId, string Location)>? purgedDeletedKeyVaults = null)
     {
         _existingResourceIds = existingResourceIds;
         _deletedResourceIds = deletedResourceIds;
-        _deletedResources = deletedResources;
+        _purgedDeletedKeyVaults = purgedDeletedKeyVaults;
         _deploymentTargetResourceIds = deploymentTargetResourceIds;
         _canceledDeploymentIds = canceledDeploymentIds;
     }
@@ -949,7 +954,7 @@ internal sealed class TestArmClientProvider : IArmClientProvider
         }
         if (_existingResourceIds is not null)
         {
-            return new TestArmClient(_existingResourceIds, _deletedResourceIds, _deploymentTargetResourceIds, _canceledDeploymentIds, _deletedResources);
+            return new TestArmClient(_existingResourceIds, _deletedResourceIds, _deploymentTargetResourceIds, _canceledDeploymentIds, _purgedDeletedKeyVaults);
         }
         return new TestArmClient(_deploymentOutputs!, _resourceGroup, _resourceGroupLookupReturnsNotFound);
     }

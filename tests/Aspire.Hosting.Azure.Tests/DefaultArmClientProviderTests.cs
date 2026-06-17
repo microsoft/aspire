@@ -23,7 +23,7 @@ public class DefaultArmClientProviderTests
     private const string DeletedKeyVaultPath = $"/subscriptions/{SubscriptionId}/providers/Microsoft.KeyVault/locations/westus2/deletedVaults/kv-test";
     private const string DeletedKeyVaultPurgePath = $"/subscriptions/{SubscriptionId}/providers/Microsoft.KeyVault/locations/westus2/deletedVaults/kv-test/purge";
     private static readonly TimeSpan s_keyVaultPollInterval = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan s_keyVaultDeleteTimeout = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan s_keyVaultDeleteTimeout = TimeSpan.FromMinutes(1);
 
     [Fact]
     public async Task GetSupportedLocationsAsyncUsesConfiguredArmEnvironment()
@@ -128,7 +128,7 @@ public class DefaultArmClientProviderTests
     }
 
     [Fact]
-    public async Task DeleteResourceAsyncPurgesDeletedKeyVault()
+    public async Task DeleteResourceAsyncDeletesKeyVaultAndPurgeDeletedKeyVaultAsyncPurgesDeletedKeyVault()
     {
         var transport = new ProviderMetadataTransport();
         var provider = new DefaultArmClientProvider(new ArmClientOptions
@@ -138,7 +138,9 @@ public class DefaultArmClientProviderTests
         var armClient = provider.GetArmClient(new CapturingTokenCredential(), SubscriptionId);
 
         await armClient.DeleteResourceAsync(KeyVaultResourceId, cancellationToken: CancellationToken.None);
+        var purged = await armClient.PurgeDeletedKeyVaultAsync(KeyVaultResourceId, "westus2", CancellationToken.None);
 
+        Assert.True(purged);
         Assert.Contains(transport.Requests, static request => request.Method == RequestMethod.Get.ToString() && request.Uri.AbsolutePath == KeyVaultResourceId);
         Assert.Contains(transport.Requests, static request => request.Method == RequestMethod.Delete.ToString() && request.Uri.AbsolutePath == KeyVaultResourceId);
         Assert.Contains(transport.Requests, static request =>
@@ -151,33 +153,27 @@ public class DefaultArmClientProviderTests
     }
 
     [Fact]
-    public async Task DeleteResourceAsyncPurgesDeletedKeyVaultWithFallbackLocationWhenLiveVaultIsAlreadyDeleted()
+    public async Task PurgeDeletedKeyVaultAsyncReturnsFalseWhenDeletedKeyVaultIsAbsentFromLocation()
     {
-        var transport = new ProviderMetadataTransport(keyVaultGetStatus: 404, keyVaultDeleteStatus: 404);
+        var transport = new ProviderMetadataTransport();
         var provider = new DefaultArmClientProvider(new ArmClientOptions
         {
             Transport = transport
         });
         var armClient = provider.GetArmClient(new CapturingTokenCredential(), SubscriptionId);
 
-        await armClient.DeleteResourceAsync(KeyVaultResourceId, resourceLocation: "ukwest", fallbackResourceLocation: "westus2", cancellationToken: CancellationToken.None);
+        var purged = await armClient.PurgeDeletedKeyVaultAsync(KeyVaultResourceId, "ukwest", CancellationToken.None);
 
-        Assert.Contains(transport.Requests, static request => request.Method == RequestMethod.Get.ToString() && request.Uri.AbsolutePath == KeyVaultResourceId);
+        Assert.False(purged);
         Assert.DoesNotContain(transport.Requests, static request => request.Method == RequestMethod.Delete.ToString() && request.Uri.AbsolutePath == KeyVaultResourceId);
         Assert.Contains(transport.Requests, static request =>
             request.Method == RequestMethod.Post.ToString() &&
             request.Uri.AbsolutePath.Contains("/locations/ukwest/deletedVaults/kv-test/purge", StringComparison.Ordinal));
-        Assert.Contains(transport.Requests, static request =>
-            request.Method == RequestMethod.Post.ToString() &&
-            request.Uri.AbsolutePath == DeletedKeyVaultPurgePath &&
-            request.Uri.Query.Contains("api-version=", StringComparison.Ordinal));
-        Assert.Contains(transport.Requests, static request =>
-            request.Method == RequestMethod.Get.ToString() &&
-            request.Uri.AbsolutePath == DeletedKeyVaultPath);
+        Assert.DoesNotContain(transport.Requests, static request => request.Uri.AbsolutePath == DeletedKeyVaultPurgePath);
     }
 
     [Fact]
-    public async Task DeleteResourceAsyncPollsKeyVaultDeletionAndPurgeWithConfiguredTimeProvider()
+    public async Task DeleteResourceAsyncAndPurgeDeletedKeyVaultAsyncPollWithConfiguredTimeProvider()
     {
         var timeProvider = new ManualTimeProvider();
         var transport = new ProviderMetadataTransport(keyVaultDeletePollsBeforeDeleted: 1, deletedKeyVaultPurgePollsBeforePurged: 1);
@@ -195,14 +191,19 @@ public class DefaultArmClientProviderTests
 
         timeProvider.FireTimer(s_keyVaultPollInterval);
 
+        await deleteTask;
+
+        var purgeTask = armClient.PurgeDeletedKeyVaultAsync(KeyVaultResourceId, "westus2", CancellationToken.None);
+
         await transport.WaitForDeletedKeyVaultPurgePollAsync();
         await timeProvider.WaitForTimerAsync(s_keyVaultPollInterval);
-        Assert.False(deleteTask.IsCompleted);
+        Assert.False(purgeTask.IsCompleted);
 
         timeProvider.FireTimer(s_keyVaultPollInterval);
 
-        await deleteTask;
+        var purged = await purgeTask;
 
+        Assert.True(purged);
         Assert.Contains(transport.Requests, static request =>
             request.Method == RequestMethod.Post.ToString() &&
             request.Uri.AbsolutePath == DeletedKeyVaultPurgePath &&

@@ -2620,13 +2620,54 @@ internal sealed class AzureProvisioningController(
 
             try
             {
-                await armClient.DeleteResourceAsync(resourceId, resourceLocation, fallbackResourceLocation, cancellationToken).ConfigureAwait(false);
+                await armClient.DeleteResourceAsync(resourceId, cancellationToken).ConfigureAwait(false);
             }
             catch (RequestFailedException ex) when (ex.Status == 404)
             {
                 _logger.LogInformation(ex, "Azure resource {ResourceId} was already absent while deleting resources for {ResourceName}.", resourceId, resourceName);
             }
+
+            await PurgeDeletedKeyVaultAsync(armClient, resourceId, resourceName, resourceLocation, fallbackResourceLocation, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    private async Task PurgeDeletedKeyVaultAsync(IArmClient armClient, string resourceId, string resourceName, string? resourceLocation, string? fallbackResourceLocation, CancellationToken cancellationToken)
+    {
+        if (!IsKeyVaultResourceId(resourceId))
+        {
+            return;
+        }
+
+        var keyVaultLocations = new List<string>();
+        AddLocationIfPresent(keyVaultLocations, resourceLocation);
+        AddLocationIfPresent(keyVaultLocations, fallbackResourceLocation);
+
+        foreach (var keyVaultLocation in keyVaultLocations)
+        {
+            if (await armClient.PurgeDeletedKeyVaultAsync(resourceId, keyVaultLocation, cancellationToken).ConfigureAwait(false))
+            {
+                _logger.LogInformation("Purged deleted Azure Key Vault {ResourceId} in {Location} for {ResourceName}.", resourceId, keyVaultLocation, resourceName);
+                return;
+            }
+        }
+    }
+
+    private static bool IsKeyVaultResourceId(string resourceId)
+    {
+        return ResourceIdentifier.TryParse(resourceId, out var parsedResourceId) &&
+            parsedResourceId is not null &&
+            string.Equals(parsedResourceId.ResourceType.ToString(), KeyVaultVaultResourceType, StringComparisons.AzureResourceType);
+    }
+
+    private static void AddLocationIfPresent(List<string> locations, string? location)
+    {
+        if (string.IsNullOrWhiteSpace(location) ||
+            locations.Contains(location, StringComparers.AzureLocation))
+        {
+            return;
+        }
+
+        locations.Add(location);
     }
 
     private async Task<IArmClient> GetArmClientForResourceIdAsync(string resourceId, CancellationToken cancellationToken)
@@ -3022,7 +3063,7 @@ internal sealed class AzureProvisioningController(
 
         try
         {
-            await armClient.DeleteResourceAsync(resourceId, currentLocation, cancellationToken: cancellationToken).ConfigureAwait(false);
+            await armClient.DeleteResourceAsync(resourceId, cancellationToken).ConfigureAwait(false);
         }
         catch (RequestFailedException ex) when (ex.Status == 404)
         {
@@ -3033,6 +3074,8 @@ internal sealed class AzureProvisioningController(
                 currentLocation,
                 requestedLocation);
         }
+
+        await PurgeDeletedKeyVaultAsync(armClient, resourceId, resource.Name, currentLocation, null, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<string?> TryGetPersistedResourceLocationAsync(AzureBicepResource resource, CancellationToken cancellationToken)

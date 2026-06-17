@@ -19,10 +19,15 @@ namespace Aspire.Hosting.Azure.Provisioning.Internal;
 /// </summary>
 internal sealed class DefaultArmClientProvider : IArmClientProvider
 {
+    // Key Vault delete and purge operations are started through Azure SDK LROs, then
+    // observed with ARM GET polling because real Azure can expose the live-vault deletion
+    // and deleted-vault purge state before the SDK's completed wait returns.
+    // Keep the local poll budget short so a dashboard or CLI command does not sit blocked
+    // for the full service-side duration; if ARM needs longer, the user can retry.
     private static readonly TimeSpan s_keyVaultPurgePollInterval = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan s_keyVaultPurgeTimeout = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan s_keyVaultPurgeTimeout = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan s_keyVaultDeletePollInterval = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan s_keyVaultDeleteTimeout = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan s_keyVaultDeleteTimeout = TimeSpan.FromMinutes(1);
 
     private readonly ArmClientOptions? _options;
     private readonly TimeProvider _timeProvider;
@@ -223,7 +228,7 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
             }
         }
 
-        public async Task DeleteResourceAsync(string resourceId, string? resourceLocation = null, string? fallbackResourceLocation = null, CancellationToken cancellationToken = default)
+        public async Task DeleteResourceAsync(string resourceId, CancellationToken cancellationToken = default)
         {
             var resourceIdentifier = new ResourceIdentifier(resourceId);
             var resource = armClient.GetGenericResource(resourceIdentifier);
@@ -233,45 +238,8 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
                 return;
             }
 
-            var keyVaultLocations = new List<string>();
-            AddLocationIfPresent(keyVaultLocations, resourceLocation);
-            AddLocationIfPresent(keyVaultLocations, fallbackResourceLocation);
-
-            var liveVaultExists = true;
-            try
-            {
-                var response = await resource.GetAsync(cancellationToken).ConfigureAwait(false);
-                AddLocationIfPresent(keyVaultLocations, response.Value.Data.Location.Name, insertFirst: true);
-            }
-            catch (RequestFailedException ex) when (ex.Status == 404 && keyVaultLocations.Count > 0)
-            {
-                // Continue with the caller-provided locations. This handles retrying after the live
-                // vault was already deleted, while the soft-delete tombstone still reserves the name.
-                liveVaultExists = false;
-            }
-
-            if (liveVaultExists)
-            {
-                try
-                {
-                    await resource.DeleteAsync(WaitUntil.Started, cancellationToken).ConfigureAwait(false);
-                    await WaitForKeyVaultToBeDeletedAsync(resource, timeProvider, cancellationToken).ConfigureAwait(false);
-                }
-                catch (RequestFailedException ex) when (ex.Status == 404)
-                {
-                    // A retry can arrive after the live vault was deleted but before the soft-deleted
-                    // vault was purged. Keep going so the delete command can still make the deterministic
-                    // vault name reusable.
-                }
-            }
-
-            foreach (var keyVaultLocation in keyVaultLocations)
-            {
-                if (await TryPurgeDeletedKeyVaultAsync(resourceIdentifier, keyVaultLocation, cancellationToken).ConfigureAwait(false))
-                {
-                    return;
-                }
-            }
+            await resource.DeleteAsync(WaitUntil.Started, cancellationToken).ConfigureAwait(false);
+            await WaitForKeyVaultToBeDeletedAsync(resource, timeProvider, cancellationToken).ConfigureAwait(false);
         }
 
         public async Task CancelDeploymentAsync(string deploymentId, CancellationToken cancellationToken = default)
@@ -280,8 +248,9 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
             await deployment.CancelAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        private async Task<bool> TryPurgeDeletedKeyVaultAsync(ResourceIdentifier vaultResourceId, string location, CancellationToken cancellationToken)
+        public async Task<bool> PurgeDeletedKeyVaultAsync(string resourceId, string location, CancellationToken cancellationToken = default)
         {
+            var vaultResourceId = new ResourceIdentifier(resourceId);
             if (string.IsNullOrWhiteSpace(vaultResourceId.SubscriptionId))
             {
                 throw new InvalidOperationException($"Unable to purge deleted Azure Key Vault '{vaultResourceId}' because the subscription ID is missing or invalid.");
@@ -369,24 +338,6 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
 
         private static bool IsKeyVaultResource(ResourceIdentifier resourceId)
             => string.Equals(resourceId.ResourceType.ToString(), KeyVaultResourceType, StringComparison.OrdinalIgnoreCase);
-
-        private static void AddLocationIfPresent(List<string> locations, string? location, bool insertFirst = false)
-        {
-            if (string.IsNullOrWhiteSpace(location) ||
-                locations.Contains(location, StringComparers.AzureLocation))
-            {
-                return;
-            }
-
-            if (insertFirst)
-            {
-                locations.Insert(0, location);
-            }
-            else
-            {
-                locations.Add(location);
-            }
-        }
 
         public async Task<AzureDeploymentState?> GetDeploymentAsync(string deploymentId, CancellationToken cancellationToken = default)
         {
