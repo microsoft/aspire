@@ -274,6 +274,7 @@ public static class MongoDBBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
 
         return builder
+            .WithAnnotation(new MongoDBServerBindAllIpAnnotation())
             .WithArgs("--bind_ip_all");
     }
 
@@ -315,7 +316,7 @@ public static class MongoDBBuilderExtensions
         ArgumentException.ThrowIfNullOrEmpty(keyFilePath);
 
         return builder
-            .WithAnnotation(new MongoDBServerKeyfileAnnotation(keyValue, keyFilePath))
+            .WithAnnotation(new MongoDBServerKeyFileAnnotation(keyValue, keyFilePath))
             .WithContainerFiles(
                 destinationPath: Path.GetDirectoryName(keyFilePath)!,
                 callback: async (_, ct) => [new ContainerFile
@@ -424,6 +425,11 @@ public enum MongoDBTlsMode
 }
 
 /// <summary>
+/// Represents the intent to configure a MongoDB server resource to bind to and listen on all network interfaces.
+/// </summary>
+internal sealed record MongoDBServerBindAllIpAnnotation : IResourceAnnotation;
+
+/// <summary>
 /// Represents the intent to configure a MongoDB server resource as a member of a replica set with the specified name.
 /// </summary>
 internal sealed record MongoDBServerReplicaSetAnnotation(
@@ -433,7 +439,7 @@ internal sealed record MongoDBServerReplicaSetAnnotation(
 /// <summary>
 /// Represents the intent to configure a MongoDB server resource with a keyfile for internal authentication between members of a replica set, with the specified <paramref name="Value"/> as the content of the keyfile and the specified <paramref name="FilePath"/> as the path to the keyfile in the container.
 /// </summary>
-internal sealed record MongoDBServerKeyfileAnnotation(
+internal sealed record MongoDBServerKeyFileAnnotation(
     IExpressionValue Value,
     string FilePath
 ) : IResourceAnnotation;
