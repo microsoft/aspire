@@ -241,7 +241,9 @@ internal sealed class BicepProvisioner(
             }
         }
 
-        if (await HandleTerminalReconciledDeploymentStateAsync(resource, stateSection, deploymentResourceId, deployment, currentLocation, cancellationToken).ConfigureAwait(false))
+        // At this point the cached deployment is no longer active. Adopt known
+        // terminal outcomes; leave unknown states to the reprovision fallback below.
+        if (await TryApplyTerminalReconciledDeploymentStateAsync(resource, stateSection, deploymentResourceId, deployment, currentLocation, cancellationToken).ConfigureAwait(false))
         {
             return true;
         }
@@ -373,7 +375,7 @@ internal sealed class BicepProvisioner(
         return await ConfigureResourceAsync(resource, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<bool> HandleTerminalReconciledDeploymentStateAsync(
+    private async Task<bool> TryApplyTerminalReconciledDeploymentStateAsync(
         AzureBicepResource resource,
         DeploymentStateSection stateSection,
         ResourceIdentifier deploymentId,
@@ -381,6 +383,11 @@ internal sealed class BicepProvisioner(
         string currentLocation,
         CancellationToken cancellationToken)
     {
+        // Terminal deployment states are the only states we can safely adopt. A
+        // succeeded deployment updates cached outputs and configures the resource.
+        // Canceled/failed deployments persist the ARM terminal state and throw so
+        // the dashboard shows the original outcome. Any other state returns false
+        // so the caller can reprovision from the current model.
         if (string.Equals(deployment.ProvisioningState, DeploymentStateProvisioningStateSucceeded, StringComparisons.AzureProvisioningState))
         {
             // Successful adoption replays the deployment outputs into the resource
@@ -882,7 +889,10 @@ internal sealed class BicepProvisioner(
             }
         }
 
-        if (await HandleTerminalReconciledDeploymentStateAsync(resource, stateSection, deploymentId, deployment, currentLocation, cancellationToken).ConfigureAwait(false))
+        // The conflict pointed at an existing deployment for this model. If it has
+        // now reached a known terminal state, adopt that result instead of starting
+        // another deployment.
+        if (await TryApplyTerminalReconciledDeploymentStateAsync(resource, stateSection, deploymentId, deployment, currentLocation, cancellationToken).ConfigureAwait(false))
         {
             return true;
         }
