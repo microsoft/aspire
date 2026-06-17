@@ -104,8 +104,12 @@ internal static class ProfilingJsonRpcExtensions
         {
             // CurlyRpc streams plain IAsyncEnumerable<T> lazily: InvokeAsyncEnumerable returns the
             // enumerable without a blocking round-trip, so request items are pulled during enumeration.
+            // Unlike the non-streaming overloads (which await a real response before emitting it), there is
+            // no response to await here, so we deliberately do NOT emit a "response received" event: it would
+            // only carry the request-sent timestamp and make streaming telemetry misleading. The meaningful
+            // first-response marker is AddJsonRpcStreamFirstItemEvent, emitted from EnumerateWithProfiling
+            // when the first item actually arrives over the wire.
             var response = rpc.InvokeAsyncEnumerable<T>(methodName, arguments, cancellationToken);
-            activity.AddJsonRpcResponseReceivedEvent();
 
             return Task.FromResult(EnumerateWithProfiling(response, activity, spanLifetime, cancellationToken));
         }
