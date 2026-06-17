@@ -269,7 +269,7 @@ public class AspireCliTelemetryTests
     {
         Assert.Equal("aspire.cli.microsoft_internal_source", TelemetryConstants.Tags.InternalMicrosoftSource);
         Assert.Equal("aspire.cli.microsoft_internal_alias", TelemetryConstants.Tags.InternalMicrosoftAlias);
-        Assert.Equal("aspire.microsoft_internal_domain", TelemetryConstants.Tags.InternalMicrosoftDomain);
+        Assert.Equal("aspire.cli.microsoft_internal_domain", TelemetryConstants.Tags.InternalMicrosoftDomain);
 
         var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
         {

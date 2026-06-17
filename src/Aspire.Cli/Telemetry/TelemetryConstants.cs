@@ -117,7 +117,7 @@ internal static class TelemetryConstants
         /// <summary>
         /// Active Directory domain extracted by the probe that populates the <see cref="InternalMicrosoft"/> tag.
         /// </summary>
-        public const string InternalMicrosoftDomain = "aspire.microsoft_internal_domain";
+        public const string InternalMicrosoftDomain = "aspire.cli.microsoft_internal_domain";
 
         /// <summary>
         /// Tag for the deployment environment name ("ci" or "local").
