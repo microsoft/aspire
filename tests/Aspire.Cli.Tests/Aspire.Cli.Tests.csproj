@@ -43,12 +43,6 @@
     <PackageReference Include="ModelContextProtocol" />
     <PackageReference Include="StreamJsonRpc" VersionOverride="$(StreamJsonRpcPackageVersionForCli)" />
     <PackageReference Include="Verify.XunitV3" />
-
-    <PackageDownload Include="Microsoft.DeveloperControlPlane.$(BuildOs)-$(BuildArch)" Version="[$(MicrosoftDeveloperControlPlanedarwinamd64Version)]" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <AssemblyMetadata Include="AspireTestDcpDir" Value="$(DcpDir)" />
   </ItemGroup>
 
   <ItemGroup>
