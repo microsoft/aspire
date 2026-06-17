@@ -34,7 +34,7 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
 
         var result = Assert.Single(await check.CheckAsync());
 
-        Assert.Equal("dcp-bundle", result.Name);
+        Assert.Equal(DcpConnectionHealthCheck.BundleCheckName, result.Name);
         Assert.Equal(EnvironmentCheckStatus.Warning, result.Status);
     }
 
@@ -51,7 +51,7 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
 
         var result = Assert.Single(await check.CheckAsync());
 
-        Assert.Equal("dcp-bundle", result.Name);
+        Assert.Equal(DcpConnectionHealthCheck.BundleCheckName, result.Name);
         Assert.Equal(EnvironmentCheckStatus.Fail, result.Status);
         Assert.Contains("DCP executable not found", result.Message, StringComparison.Ordinal);
     }
@@ -82,12 +82,12 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
         Assert.Collection(results,
             result =>
             {
-                Assert.Equal("dcp-ephemeral-certificate", result.Name);
+                Assert.Equal(DcpConnectionHealthCheck.EphemeralCertificateCheckName, result.Name);
                 Assert.Equal(EnvironmentCheckStatus.Pass, result.Status);
             },
             result =>
             {
-                Assert.Equal("dcp-developer-certificate", result.Name);
+                Assert.Equal(DcpConnectionHealthCheck.DeveloperCertificateCheckName, result.Name);
                 Assert.Equal(EnvironmentCheckStatus.Pass, result.Status);
             });
         Assert.Equal([DcpConnectionSecurityMode.EphemeralCertificate, DcpConnectionSecurityMode.DeveloperCertificate], seenModes);
@@ -114,7 +114,7 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
 
         var results = await check.CheckAsync();
 
-        var developerCertificateResult = results.Single(result => result.Name == "dcp-developer-certificate");
+        var developerCertificateResult = results.Single(result => result.Name == DcpConnectionHealthCheck.DeveloperCertificateCheckName);
         Assert.Equal(EnvironmentCheckStatus.Fail, developerCertificateResult.Status);
         Assert.Equal("TLS failed", developerCertificateResult.Details);
         Assert.Equal("Run `aspire certs trust`.", developerCertificateResult.Fix);
@@ -230,7 +230,8 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
             cacheDirectory: workspace.WorkspaceRoot.CreateSubdirectory(".aspire-cache"),
             sdksDirectory: workspace.WorkspaceRoot.CreateSubdirectory(".aspire-sdks"),
             logsDirectory: workspace.WorkspaceRoot.CreateSubdirectory(".aspire-logs"),
-            logFilePath: "test.log");
+            logFilePath: "test.log",
+            identityChannel: "local");
 
     private sealed class TestLayoutDiscovery(string? dcpPath) : ILayoutDiscovery
     {
