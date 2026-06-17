@@ -50,6 +50,32 @@ func main() {
 		log.Fatalf(aspire.FormatError(err))
 	}
 
+	// Test 11: Test WithBindIpAll
+	builder.AddMongoDB("mongo-bind-all").WithBindIpAll()
+
+	// Test 12: Test WithReplicaSet
+	mongoRs := builder.AddMongoDB("mongo-rs").WithReplicaSet("rs0")
+	if err = mongoRs.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
+
+	// Test 13: Test WithTls with default mode
+	builder.AddMongoDB("mongo-tls").WithTls()
+
+	// Test 14: Test WithTls with specific mode
+	builder.AddMongoDB("mongo-tls-allow").WithTls(&aspire.WithTlsOptions{Mode: aspire.StringPtr("allowTls")})
+
+	// Test 15: Test WithKeyFile for replica set member
+	keyFileParam := builder.AddParameter("rs-keyfile", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true), Value: aspire.StringPtr("my-secret-key")})
+	builder.AddMongoDB("mongo-rs-secured").WithReplicaSet("rs-secure").WithKeyFile(keyFileParam, "/etc/rs.key")
+
+	// Test 16: Complete replica set with security - TLS + KeyFile + ReplicaSet
+	tlsKeyFileParam := builder.AddParameter("rs-tls-key", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true), Value: aspire.StringPtr("tls-secret")})
+	mongoRsFull := builder.AddMongoDB("mongo-rs-full").WithReplicaSet("rs-full").WithKeyFile(tlsKeyFileParam, "/etc/rs.key").WithTls(&aspire.WithTlsOptions{Mode: aspire.StringPtr("requireTls")})
+	if err = mongoRsFull.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
+
 	_ = mongo.PrimaryEndpoint()
 	_ = mongo.Host()
 	_ = mongo.Port()

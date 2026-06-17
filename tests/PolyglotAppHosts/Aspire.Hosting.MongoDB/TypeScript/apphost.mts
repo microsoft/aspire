@@ -47,6 +47,35 @@ const mongoChained = await builder.addMongoDB("mongo-chained")
 await mongoChained.addDatabase("app-db");
 await mongoChained.addDatabase("analytics-db", { databaseName: "analytics" });
 
+// Test 11: Test withBindIpAll
+await builder.addMongoDB("mongo-bind-all")
+    .withBindIpAll();
+
+// Test 12: Test withReplicaSet
+const mongoRs = await builder.addMongoDB("mongo-rs")
+    .withReplicaSet("rs0");
+
+// Test 13: Test withTls with default mode
+await builder.addMongoDB("mongo-tls")
+    .withTls();
+
+// Test 14: Test withTls with specific mode
+await builder.addMongoDB("mongo-tls-allow")
+    .withTls({ mode: "allowTls" });
+
+// Test 15: Test withKeyFile for replica set member
+const keyFileParam = await builder.addParameter("rs-keyfile", { secret: true, value: "my-secret-key" });
+await builder.addMongoDB("mongo-rs-secured")
+    .withReplicaSet("rs-secure")
+    .withKeyFile(keyFileParam, "/etc/rs.key");
+
+// Test 16: Complete replica set with security - TLS + KeyFile + ReplicaSet
+const tlsKeyFileParam = await builder.addParameter("rs-tls-key", { secret: true, value: "tls-secret" });
+await builder.addMongoDB("mongo-rs-full")
+    .withReplicaSet("rs-full")
+    .withKeyFile(tlsKeyFileParam, "/etc/rs.key")
+    .withTls({ mode: "requireTls" });
+
 // ---- Property access on MongoDBServerResource ----
 const _endpoint = await mongo.primaryEndpoint();
 const _host = await mongo.host();

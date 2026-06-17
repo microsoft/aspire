@@ -34,6 +34,29 @@ void main() throws Exception {
         // Test 10: Add multiple databases to same server
         mongoChained.addDatabase("app-db");
         mongoChained.addDatabase("analytics-db", "analytics");
+        // Test 11: Test withBindIpAll
+        builder.addMongoDB("mongo-bind-all")
+            .withBindIpAll();
+        // Test 12: Test withReplicaSet
+        var mongoRs = builder.addMongoDB("mongo-rs")
+            .withReplicaSet("rs0");
+        // Test 13: Test withTls with default mode
+        builder.addMongoDB("mongo-tls")
+            .withTls();
+        // Test 14: Test withTls with specific mode
+        builder.addMongoDB("mongo-tls-allow")
+            .withTls(new WithTlsOptions().mode("allowTls"));
+        // Test 15: Test withKeyFile for replica set member
+        var keyFileParam = builder.addParameter("rs-keyfile", new AddParameterOptions().secret(true).value("my-secret-key"));
+        builder.addMongoDB("mongo-rs-secured")
+            .withReplicaSet("rs-secure")
+            .withKeyFile(keyFileParam, "/etc/rs.key");
+        // Test 16: Complete replica set with security - TLS + KeyFile + ReplicaSet
+        var tlsKeyFileParam = builder.addParameter("rs-tls-key", new AddParameterOptions().secret(true).value("tls-secret"));
+        builder.addMongoDB("mongo-rs-full")
+            .withReplicaSet("rs-full")
+            .withKeyFile(tlsKeyFileParam, "/etc/rs.key")
+            .withTls(new WithTlsOptions().mode("requireTls"));
         // ---- Property access on MongoDBServerResource ----
         var _endpoint = mongo.primaryEndpoint();
         var _host = mongo.host();
