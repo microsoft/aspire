@@ -675,6 +675,7 @@ fluent-switch.table-switch::part(label) {
 .resources-grid-container:focus,
 .tracedetails-grid-container:focus {
     outline: none;
+    box-shadow: inset 0 0 0 1px var(--accent-fill-rest);
 }
 
 .log-overflow {
