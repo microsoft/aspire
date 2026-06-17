@@ -93,7 +93,8 @@ public class TelemetryConfigurationTests
             new TelemetryFixture.TestCIEnvironmentDetector(),
             new TelemetryFixture.TestCodingAgentDetector(),
             internalMicrosoftDetector,
-            telemetryManager);
+            telemetryManager,
+            Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)));
 
         await telemetry.InitializeAsync().DefaultTimeout();
 
@@ -122,7 +123,8 @@ public class TelemetryConfigurationTests
             new TelemetryFixture.TestCIEnvironmentDetector(),
             new TelemetryFixture.TestCodingAgentDetector(),
             internalMicrosoftDetector,
-            telemetryManager);
+            telemetryManager,
+            Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)));
 
         await telemetry.InitializeAsync().DefaultTimeout();
 
