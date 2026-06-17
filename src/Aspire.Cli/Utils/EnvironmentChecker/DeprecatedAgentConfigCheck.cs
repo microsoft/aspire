@@ -15,6 +15,8 @@ internal sealed class DeprecatedAgentConfigCheck : IEnvironmentCheck
 {
     private readonly CliExecutionContext _executionContext;
 
+    internal static string GetCheckName(string agentName) => $"agent-config-{agentName.ToLowerInvariant().Replace(" ", "-")}";
+
     // Define the agent config locations and their detection patterns
     private static readonly AgentConfigLocation[] s_configLocations =
     [
@@ -62,8 +64,8 @@ internal sealed class DeprecatedAgentConfigCheck : IEnvironmentCheck
                 {
                     results.Add(new EnvironmentCheckResult
                     {
-                        Category = "environment",
-                        Name = $"agent-config-{location.AgentName.ToLowerInvariant().Replace(" ", "-")}",
+                        Category = EnvironmentCheckCategories.Environment,
+                        Name = GetCheckName(location.AgentName),
                         Status = EnvironmentCheckStatus.Warning,
                         Message = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.DeprecatedConfigWarning, location.AgentName),
                         Fix = AgentCommandStrings.DeprecatedConfigFix

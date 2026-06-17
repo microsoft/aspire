@@ -93,6 +93,11 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
             // non-empty when resolution fails on a malformed input.
             Path = canonicalPath ?? processPath ?? string.Empty,
             CanonicalPath = canonicalPath,
+            // physical-binary-version-by-design (see docs/specs/cli-identity-sidecar.md):
+            // `aspire doctor --self` reports the REAL build installed on disk, so this must read
+            // the assembly's stamped version even when ASPIRE_CLI_VERSION / the sidecar override
+            // the CLI's runtime identity. Routing this through CliExecutionContext.IdentityVersion
+            // would make doctor lie about what is physically installed.
             Version = VersionHelper.GetDefaultTemplateVersion(),
             Channel = TryReadChannel(),
             Route = route,

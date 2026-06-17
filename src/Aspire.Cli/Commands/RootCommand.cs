@@ -177,7 +177,8 @@ internal sealed class RootCommand : BaseRootCommand
         IBundleService bundleService,
         IInteractionService interactionService,
         IFeatures features,
-        IAnsiConsole ansiConsole)
+        IAnsiConsole ansiConsole,
+        CliExecutionContext executionContext)
         : base(RootCommandStrings.Description)
     {
         _interactionService = interactionService;
@@ -298,6 +299,10 @@ internal sealed class RootCommand : BaseRootCommand
             else if (option is VersionOption versionOption)
             {
                 versionOption.Aliases.Add("-v");
+                // Report the resolved identity version so --version honors ASPIRE_CLI_VERSION /
+                // the install sidecar. Without an override this resolves to the assembly's
+                // informational version, matching the built-in action's output.
+                versionOption.Action = new IdentityVersionAction(executionContext);
             }
         }
 

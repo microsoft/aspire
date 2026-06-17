@@ -319,9 +319,9 @@ public sealed class DisplayedResourcePropertyViewModel : IPropertyGridItem
 
     public string ToolTip => _tooltip.Value;
     public KnownProperty? KnownProperty => _propertyViewModel.KnownProperty;
-    public int Priority => _propertyViewModel.Priority;
     public Value Value => _propertyViewModel.Value;
     public bool IsHighlighted => _propertyViewModel.IsHighlighted;
+    public int SortOrder => _propertyViewModel.SortOrder;
     public string DisplayName => _propertyViewModel.DisplayName ?? _propertyViewModel.KnownProperty?.GetDisplayName(_loc) ?? _propertyViewModel.Name;
 
     string IPropertyGridItem.Name => DisplayName;
@@ -338,7 +338,7 @@ public sealed class DisplayedResourcePropertyViewModel : IPropertyGridItem
         _browserTimeProvider = browserTimeProvider;
 
         // Known and unknown properties are displayed together. Avoid any duplicate keys.
-        _key = propertyViewModel.KnownProperty != null ? propertyViewModel.KnownProperty.Key : $"unknown-{propertyViewModel.Name}";
+        _key = propertyViewModel.KnownProperty != null ? propertyViewModel.KnownProperty.Key : GetUnknownKey(propertyViewModel.Name);
 
         _tooltip = new(() => propertyViewModel.Value.HasStringValue ? propertyViewModel.Value.StringValue : propertyViewModel.Value.ToString());
 
@@ -371,13 +371,15 @@ public sealed class DisplayedResourcePropertyViewModel : IPropertyGridItem
         });
     }
 
+    internal static string GetUnknownKey(string propertyName) => $"unknown-{propertyName}";
+
     public bool MatchesFilter(string filter) =>
         _propertyViewModel.Name.Contains(filter, StringComparison.CurrentCultureIgnoreCase) ||
         DisplayName.Contains(filter, StringComparison.CurrentCultureIgnoreCase) ||
         ToolTip.Contains(filter, StringComparison.CurrentCultureIgnoreCase);
 }
 
-[DebuggerDisplay("Name = {Name}, Value = {Value}, IsValueSensitive = {IsValueSensitive}, IsValueMasked = {IsValueMasked}")]
+[DebuggerDisplay("Name = {Name}, Value = {Value}, IsValueSensitive = {IsValueSensitive}, IsValueMasked = {IsValueMasked}, IsHighlighted = {IsHighlighted}, SortOrder = {SortOrder}")]
 public sealed class ResourcePropertyViewModel
 {
     public string Name { get; }
@@ -387,9 +389,9 @@ public sealed class ResourcePropertyViewModel
     public bool IsValueSensitive { get; }
     public bool IsValueMasked { get; set; }
     public bool IsHighlighted { get; }
-    public int Priority { get; }
+    public int SortOrder { get; }
 
-    public ResourcePropertyViewModel(string name, Value value, bool isValueSensitive, KnownProperty? knownProperty, int priority, string? displayName = null, bool isHighlighted = false)
+    public ResourcePropertyViewModel(string name, Value value, bool isValueSensitive, KnownProperty? knownProperty, int sortOrder, string? displayName, bool isHighlighted)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
@@ -398,8 +400,8 @@ public sealed class ResourcePropertyViewModel
         DisplayName = displayName;
         IsValueSensitive = isValueSensitive;
         KnownProperty = knownProperty;
-        Priority = priority;
         IsHighlighted = isHighlighted;
+        SortOrder = sortOrder;
         IsValueMasked = isValueSensitive;
     }
 }

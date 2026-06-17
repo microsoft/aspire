@@ -180,7 +180,12 @@ if [ ${#actInt[@]} -eq 0 ]; then
 fi
 
 if [[ "${TreatWarningsAsErrors:-}" == "false" ]]; then
-    arguments="$arguments -warnAsError 0"
+    # Arcade forwards this value directly into /p:TreatWarningsAsErrors=...,
+    # and the Csc task only accepts boolean literals (true/false). The
+    # earlier '0' worked as a shell-truthy switch but produced
+    # 'MSB4030: "0" is an invalid value for the "TreatWarningsAsErrors"
+    # parameter' once it reached the inner MSBuild call.
+    arguments="$arguments -warnAsError false"
 fi
 
 arguments="$arguments $extraargs"

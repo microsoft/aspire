@@ -516,6 +516,7 @@ The following specialized skills are available in `.agents/skills/`:
 - **ci-test-failures**: Diagnoses GitHub Actions test failures, extracts failed tests from runs, and creates or updates failing-test issues
 - **code-review**: Reviews a GitHub pull request for problems (bugs, security, correctness, convention violations). Use this when asked to review a PR or do a code review.
 - **fix-flaky-test**: Reproduces and fixes flaky/quarantined tests using the CI reproduce workflow (`reproduce-flaky-tests.yml`). Use this when investigating, reproducing, or fixing a flaky or quarantined test.
+- **cli-channel-debugging**: Emulates any Aspire CLI build identity (channel/version/commit/package source) from a locally built CLI via `ASPIRE_CLI_*` env vars or the install sidecar, to reproduce and fix channel/version-specific bugs locally. Use when asked to simulate a daily/staging/stable/PR build or decide which override knobs to set.
 - **dashboard-testing**: Guide for writing tests for the Aspire Dashboard using xUnit and bUnit
 - **test-management**: Quarantines or disables flaky/problematic tests using the QuarantineTools utility
 - **connection-properties**: Expert for creating and improving Connection Properties in Aspire resources
