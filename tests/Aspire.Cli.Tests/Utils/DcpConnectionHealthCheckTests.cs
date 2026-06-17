@@ -1,10 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Reflection;
 using System.Text;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using Aspire.Cli.Certificates;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Utils.EnvironmentChecker;
@@ -22,12 +25,12 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
     public async Task CheckAsync_WhenNoDcpBundleIsDiscovered_ReturnsWarningAndSkipsConnectionTests()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var tester = new TestDcpConnectionTester
+        var tester = new TestDcpConnectionChecker
         {
             TestConnectionAsyncCallback = (_, _, _) => throw new InvalidOperationException("Should not be called.")
         };
         var check = new DcpConnectionHealthCheck(
-            new TestLayoutDiscovery(dcpPath: null),
+            new NullLayoutDiscovery(),
             tester,
             CreateExecutionContext(workspace),
             NullLogger<DcpConnectionHealthCheck>.Instance);
@@ -44,8 +47,8 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var dcpDirectory = workspace.WorkspaceRoot.CreateSubdirectory("dcp");
         var check = new DcpConnectionHealthCheck(
-            new TestLayoutDiscovery(dcpDirectory.FullName),
-            new TestDcpConnectionTester(),
+            new FixedLayoutDiscovery(LayoutComponent.Dcp, dcpDirectory.FullName),
+            new TestDcpConnectionChecker(),
             CreateExecutionContext(workspace),
             NullLogger<DcpConnectionHealthCheck>.Instance);
 
@@ -53,7 +56,7 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(DcpConnectionHealthCheck.BundleCheckName, result.Name);
         Assert.Equal(EnvironmentCheckStatus.Fail, result.Status);
-        Assert.Contains("DCP executable not found", result.Message, StringComparison.Ordinal);
+        Assert.Contains("Developer Control Plane (DCP) executable not found", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -61,18 +64,18 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var dcpDirectory = GetRestoredDcpDirectory();
-        var seenModes = new List<DcpConnectionSecurityMode>();
-        var tester = new TestDcpConnectionTester
+        var seenUseDeveloperCertificateValues = new ConcurrentBag<bool>();
+        var tester = new TestDcpConnectionChecker
         {
-            TestConnectionAsyncCallback = (path, mode, _) =>
+            TestConnectionAsyncCallback = (path, useDeveloperCertificate, _) =>
             {
                 Assert.Equal(dcpDirectory.FullName, path);
-                seenModes.Add(mode);
-                return Task.FromResult(new DcpConnectionTestResult(mode, EnvironmentCheckStatus.Pass, $"{mode} passed"));
+                seenUseDeveloperCertificateValues.Add(useDeveloperCertificate);
+                return Task.FromResult(TestDcpConnectionChecker.CreateResult(useDeveloperCertificate, EnvironmentCheckStatus.Pass, $"useDeveloperCertificate={useDeveloperCertificate} passed"));
             }
         };
         var check = new DcpConnectionHealthCheck(
-            new TestLayoutDiscovery(dcpDirectory.FullName),
+            new FixedLayoutDiscovery(LayoutComponent.Dcp, dcpDirectory.FullName),
             tester,
             CreateExecutionContext(workspace),
             NullLogger<DcpConnectionHealthCheck>.Instance);
@@ -90,7 +93,9 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
                 Assert.Equal(DcpConnectionHealthCheck.DeveloperCertificateCheckName, result.Name);
                 Assert.Equal(EnvironmentCheckStatus.Pass, result.Status);
             });
-        Assert.Equal([DcpConnectionSecurityMode.EphemeralCertificate, DcpConnectionSecurityMode.DeveloperCertificate], seenModes);
+        Assert.Equal(
+            [false, true],
+            seenUseDeveloperCertificateValues.Order().ToArray());
     }
 
     [Fact]
@@ -98,16 +103,15 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var dcpDirectory = GetRestoredDcpDirectory();
-        var tester = new TestDcpConnectionTester
+        var tester = new TestDcpConnectionChecker
         {
-            TestConnectionAsyncCallback = (_, mode, _) => Task.FromResult(mode switch
-            {
-                DcpConnectionSecurityMode.EphemeralCertificate => new DcpConnectionTestResult(mode, EnvironmentCheckStatus.Pass, "ephemeral passed"),
-                _ => new DcpConnectionTestResult(mode, EnvironmentCheckStatus.Fail, "dev cert failed", "TLS failed", "Run `aspire certs trust`.")
-            })
+            TestConnectionAsyncCallback = (_, useDeveloperCertificate, _) => Task.FromResult(
+                useDeveloperCertificate
+                    ? TestDcpConnectionChecker.CreateResult(useDeveloperCertificate, EnvironmentCheckStatus.Fail, "dev cert failed", "TLS failed", "Run `aspire certs trust`.")
+                    : TestDcpConnectionChecker.CreateResult(useDeveloperCertificate, EnvironmentCheckStatus.Pass, "ephemeral passed"))
         };
         var check = new DcpConnectionHealthCheck(
-            new TestLayoutDiscovery(dcpDirectory.FullName),
+            new FixedLayoutDiscovery(LayoutComponent.Dcp, dcpDirectory.FullName),
             tester,
             CreateExecutionContext(workspace),
             NullLogger<DcpConnectionHealthCheck>.Instance);
@@ -121,18 +125,18 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task DcpConnectionTester_WhenUsingEphemeralCertificate_ConnectsToRestoredDcp()
+    public async Task DcpConnectionChecker_WhenUsingEphemeralCertificate_ConnectsToRestoredDcp()
     {
-        var result = await TestRealDcpConnectionAsync(DcpConnectionSecurityMode.EphemeralCertificate);
+        var result = await TestRealDcpConnectionAsync(useDeveloperCertificate: false);
 
         Assert.Equal(EnvironmentCheckStatus.Pass, result.Status);
     }
 
     [Fact]
     [RequiresFeature(TestFeature.DevCert)]
-    public async Task DcpConnectionTester_WhenUsingDeveloperCertificate_ConnectsToRestoredDcp()
+    public async Task DcpConnectionChecker_WhenUsingDeveloperCertificate_ConnectsToRestoredDcp()
     {
-        var result = await TestRealDcpConnectionAsync(DcpConnectionSecurityMode.DeveloperCertificate);
+        var result = await TestRealDcpConnectionAsync(useDeveloperCertificate: true);
 
         Assert.SkipWhen(
             result.Status == EnvironmentCheckStatus.Warning,
@@ -182,8 +186,8 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
                 DateTimeOffset.UtcNow.AddDays(-1),
                 DateTimeOffset.UtcNow.AddDays(30));
 
-            var lookup = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(certificate.Thumbprint)));
-            var cacheDirectory = Path.Combine(homePath, ".aspire", "dev-certs", "https");
+            var lookup = CertificateHelpers.GetAspireCertificateHash(certificate);
+            var cacheDirectory = CertificateHelpers.AspireDevCertsHttpsCacheDirectory;
             Directory.CreateDirectory(cacheDirectory);
             var certificatePath = Path.Combine(cacheDirectory, $"{lookup}.crt");
             var keyPath = Path.Combine(cacheDirectory, $"{lookup}.key");
@@ -197,17 +201,18 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
         }, homeDirectory.Path, options).Dispose();
     }
 
-    private async Task<DcpConnectionTestResult> TestRealDcpConnectionAsync(DcpConnectionSecurityMode mode)
+    private async Task<EnvironmentCheckResult> TestRealDcpConnectionAsync(bool useDeveloperCertificate)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var dcpDirectory = GetRestoredDcpDirectory();
         var certificateManager = CertificateManager.Create(NullLogger.Instance);
-        var tester = new DcpConnectionTester(
+        var tester = new DcpConnectionChecker(
             certificateManager,
+            new ProcessExecutionFactory(NullLogger<ProcessExecutionFactory>.Instance),
             CreateExecutionContext(workspace),
-            NullLogger<DcpConnectionTester>.Instance);
+            NullLogger<DcpConnectionChecker>.Instance);
 
-        return await tester.TestConnectionAsync(dcpDirectory.FullName, mode, TestContext.Current.CancellationToken);
+        return await tester.TestConnectionAsync(dcpDirectory.FullName, useDeveloperCertificate, TestContext.Current.CancellationToken);
     }
 
     private static DirectoryInfo GetRestoredDcpDirectory()
@@ -235,16 +240,6 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
             logsDirectory: workspace.WorkspaceRoot.CreateSubdirectory(".aspire-logs"),
             logFilePath: "test.log",
             identityChannel: "local");
-
-    private sealed class TestLayoutDiscovery(string? dcpPath) : ILayoutDiscovery
-    {
-        public LayoutConfiguration? DiscoverLayout(string? projectDirectory = null) => null;
-
-        public string? GetComponentPath(LayoutComponent component, string? projectDirectory = null) =>
-            component == LayoutComponent.Dcp ? dcpPath : null;
-
-        public bool IsBundleModeAvailable(string? projectDirectory = null) => dcpPath is not null;
-    }
 
     private static string CreateTestCertificatePem()
     {

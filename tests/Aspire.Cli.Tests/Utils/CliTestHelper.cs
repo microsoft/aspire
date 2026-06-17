@@ -195,7 +195,7 @@ internal static class CliTestHelper
         services.AddSingleton<IEnvironmentCheck, DeprecatedWorkloadCheck>();
         services.AddSingleton<IEnvironmentCheck, DevCertsCheck>();
         services.AddSingleton<IEnvironmentCheck, ContainerRuntimeCheck>();
-        services.AddSingleton<IDcpConnectionTester, TestDcpConnectionTester>();
+        services.AddSingleton<IDcpConnectionChecker, TestDcpConnectionChecker>();
         services.AddSingleton<IEnvironmentCheck, DcpConnectionHealthCheck>();
         services.AddSingleton<IEnvironmentCheck, DeprecatedAgentConfigCheck>();
         services.AddSingleton<IEnvironmentChecker, EnvironmentChecker>();
@@ -696,6 +696,30 @@ internal sealed class NullLayoutDiscovery : ILayoutDiscovery
     public string? GetComponentPath(LayoutComponent component, string? projectDirectory = null) => null;
 
     public bool IsBundleModeAvailable(string? projectDirectory = null) => false;
+}
+
+internal sealed class FixedLayoutDiscovery : ILayoutDiscovery
+{
+    private readonly LayoutConfiguration? _layout;
+    private readonly Dictionary<LayoutComponent, string> _componentPaths = [];
+
+    public FixedLayoutDiscovery(LayoutConfiguration layout)
+    {
+        _layout = layout;
+    }
+
+    public FixedLayoutDiscovery(LayoutComponent component, string componentPath)
+    {
+        _componentPaths.Add(component, componentPath);
+    }
+
+    public LayoutConfiguration? DiscoverLayout(string? projectDirectory = null) => _layout;
+
+    public string? GetComponentPath(LayoutComponent component, string? projectDirectory = null) =>
+        _layout?.GetComponentPath(component) ??
+        (_componentPaths.TryGetValue(component, out var componentPath) ? componentPath : null);
+
+    public bool IsBundleModeAvailable(string? projectDirectory = null) => _layout is not null || _componentPaths.Count > 0;
 }
 
 /// <summary>

@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Cli.Layout;
+using Aspire.Cli.Resources;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
@@ -12,7 +14,7 @@ namespace Aspire.Cli.Utils.EnvironmentChecker;
 /// </summary>
 internal sealed class DcpConnectionHealthCheck(
     ILayoutDiscovery layoutDiscovery,
-    IDcpConnectionTester connectionTester,
+    IDcpConnectionChecker connectionTester,
     CliExecutionContext executionContext,
     ILogger<DcpConnectionHealthCheck> logger) : IEnvironmentCheck
 {
@@ -36,8 +38,8 @@ internal sealed class DcpConnectionHealthCheck(
                     Category = EnvironmentCheckCategories.Aspire,
                     Name = BundleCheckName,
                     Status = EnvironmentCheckStatus.Warning,
-                    Message = "DCP bundle not found; skipping DCP connection health checks",
-                    Details = "The running Aspire CLI is not associated with a bundle layout that contains DCP."
+                    Message = DoctorCommandStrings.DcpBundleNotFoundMessage,
+                    Details = DoctorCommandStrings.DcpBundleNotFoundDetails
                 }];
             }
 
@@ -49,26 +51,22 @@ internal sealed class DcpConnectionHealthCheck(
                     Category = EnvironmentCheckCategories.Aspire,
                     Name = BundleCheckName,
                     Status = EnvironmentCheckStatus.Fail,
-                    Message = "DCP executable not found",
-                    Details = $"Expected DCP at '{dcpExecutablePath}'."
+                    Message = DoctorCommandStrings.DcpExecutableNotFoundMessage,
+                    Details = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DcpExecutableNotFoundDetailsFormat, dcpExecutablePath)
                 }];
             }
 
-            var ephemeralCertificateResult = await connectionTester.TestConnectionAsync(
+            var ephemeralCertificateTask = connectionTester.TestConnectionAsync(
                 dcpDirectory,
-                DcpConnectionSecurityMode.EphemeralCertificate,
+                useDeveloperCertificate: false,
                 cancellationToken);
 
-            var developerCertificateResult = await connectionTester.TestConnectionAsync(
+            var developerCertificateTask = connectionTester.TestConnectionAsync(
                 dcpDirectory,
-                DcpConnectionSecurityMode.DeveloperCertificate,
+                useDeveloperCertificate: true,
                 cancellationToken);
 
-            return
-            [
-                ToEnvironmentCheckResult(ephemeralCertificateResult),
-                ToEnvironmentCheckResult(developerCertificateResult)
-            ];
+            return await Task.WhenAll(ephemeralCertificateTask, developerCertificateTask).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -82,27 +80,10 @@ internal sealed class DcpConnectionHealthCheck(
                 Category = EnvironmentCheckCategories.Aspire,
                 Name = ConnectionCheckName,
                 Status = EnvironmentCheckStatus.Fail,
-                Message = "Failed to check DCP connection health",
+                Message = DoctorCommandStrings.DcpConnectionCheckFailedMessage,
                 Details = ex.Message
             }];
         }
     }
 
-    private static EnvironmentCheckResult ToEnvironmentCheckResult(DcpConnectionTestResult result)
-    {
-        return new EnvironmentCheckResult
-        {
-            Category = EnvironmentCheckCategories.Aspire,
-            Name = result.Mode switch
-            {
-                DcpConnectionSecurityMode.EphemeralCertificate => EphemeralCertificateCheckName,
-                DcpConnectionSecurityMode.DeveloperCertificate => DeveloperCertificateCheckName,
-                _ => ConnectionCheckName
-            },
-            Status = result.Status,
-            Message = result.Message,
-            Details = result.Details,
-            Fix = result.Fix
-        };
-    }
 }

@@ -391,6 +391,213 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsOldVersionDetailsFormat", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Developer Control Plane (DCP) bundle not found; skipping connection health checks.
+        /// </summary>
+        public static string DcpBundleNotFoundMessage {
+            get {
+                return ResourceManager.GetString("DcpBundleNotFoundMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The running Aspire CLI is not associated with a bundle layout that contains the Developer Control Plane (DCP)..
+        /// </summary>
+        public static string DcpBundleNotFoundDetails {
+            get {
+                return ResourceManager.GetString("DcpBundleNotFoundDetails", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Developer Control Plane (DCP) executable not found.
+        /// </summary>
+        public static string DcpExecutableNotFoundMessage {
+            get {
+                return ResourceManager.GetString("DcpExecutableNotFoundMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Expected Developer Control Plane (DCP) executable at '{0}'..
+        /// </summary>
+        public static string DcpExecutableNotFoundDetailsFormat {
+            get {
+                return ResourceManager.GetString("DcpExecutableNotFoundDetailsFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Failed to check Developer Control Plane (DCP) connection health.
+        /// </summary>
+        public static string DcpConnectionCheckFailedMessage {
+            get {
+                return ResourceManager.GetString("DcpConnectionCheckFailedMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Developer Control Plane (DCP) API server returned HTTP {0} ({1})..
+        /// </summary>
+        public static string DcpApiServerReturnedHttpStatusMessageFormat {
+            get {
+                return ResourceManager.GetString("DcpApiServerReturnedHttpStatusMessageFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate succeeded.
+        /// </summary>
+        public static string DcpEphemeralCertificateConnectionSucceededMessage {
+            get {
+                return ResourceManager.GetString("DcpEphemeralCertificateConnectionSucceededMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Developer Control Plane (DCP) connection using the developer certificate succeeded.
+        /// </summary>
+        public static string DcpDeveloperCertificateConnectionSucceededMessage {
+            get {
+                return ResourceManager.GetString("DcpDeveloperCertificateConnectionSucceededMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Developer Control Plane (DCP) connection succeeded.
+        /// </summary>
+        public static string DcpConnectionSucceededMessage {
+            get {
+                return ResourceManager.GetString("DcpConnectionSucceededMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Timed out after {0} seconds while checking Developer Control Plane (DCP) connection health..
+        /// </summary>
+        public static string DcpConnectionTimedOutMessageFormat {
+            get {
+                return ResourceManager.GetString("DcpConnectionTimedOutMessageFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No trusted developer certificate was available for the Developer Control Plane (DCP) developer certificate connection check.
+        /// </summary>
+        public static string DcpDeveloperCertificateUnavailableMessage {
+            get {
+                return ResourceManager.GetString("DcpDeveloperCertificateUnavailableMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Run `aspire certs trust` to create and trust a developer certificate..
+        /// </summary>
+        public static string DcpDeveloperCertificateTrustFix {
+            get {
+                return ResourceManager.GetString("DcpDeveloperCertificateTrustFix", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Run `aspire certs trust` to repair developer certificate trust..
+        /// </summary>
+        public static string DcpDeveloperCertificateRepairTrustFix {
+            get {
+                return ResourceManager.GetString("DcpDeveloperCertificateRepairTrustFix", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to TLS authentication failed: {0}.
+        /// </summary>
+        public static string DcpTlsAuthenticationFailedDetailsFormat {
+            get {
+                return ResourceManager.GetString("DcpTlsAuthenticationFailedDetailsFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Developer Control Plane (DCP) connection failed.
+        /// </summary>
+        public static string DcpConnectionFailedMessage {
+            get {
+                return ResourceManager.GetString("DcpConnectionFailedMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Failed to start Developer Control Plane (DCP)..
+        /// </summary>
+        public static string DcpStartFailedMessage {
+            get {
+                return ResourceManager.GetString("DcpStartFailedMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Developer Control Plane (DCP) exited before writing kubeconfig. Exit code: {0}.{1}{2}.
+        /// </summary>
+        public static string DcpExitedBeforeKubeconfigDetailsFormat {
+            get {
+                return ResourceManager.GetString("DcpExitedBeforeKubeconfigDetailsFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Developer Control Plane (DCP) did not write any output..
+        /// </summary>
+        public static string DcpNoOutputDetails {
+            get {
+                return ResourceManager.GetString("DcpNoOutputDetails", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Developer Control Plane (DCP) kubeconfig did not contain a valid server URI..
+        /// </summary>
+        public static string DcpKubeconfigMissingServerDetails {
+            get {
+                return ResourceManager.GetString("DcpKubeconfigMissingServerDetails", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The developer certificate could not be cached because it was not valid..
+        /// </summary>
+        public static string DcpDeveloperCertificateInvalidForCacheDetails {
+            get {
+                return ResourceManager.GetString("DcpDeveloperCertificateInvalidForCacheDetails", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The developer certificate could not be cached because the user profile directory could not be determined..
+        /// </summary>
+        public static string DcpDeveloperCertificateUserProfileMissingDetails {
+            get {
+                return ResourceManager.GetString("DcpDeveloperCertificateUserProfileMissingDetails", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No fully trusted exportable developer certificate with a private key was found..
+        /// </summary>
+        public static string DcpDeveloperCertificateNoTrustedExportableDetails {
+            get {
+                return ResourceManager.GetString("DcpDeveloperCertificateNoTrustedExportableDetails", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The developer certificate did not have a thumbprint..
+        /// </summary>
+        public static string DcpDeveloperCertificateMissingThumbprintDetails {
+            get {
+                return ResourceManager.GetString("DcpDeveloperCertificateMissingThumbprintDetails", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to [trusted].
