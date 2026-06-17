@@ -244,7 +244,7 @@ internal sealed class AppHostInfoDiskCache : IAppHostInfoDiskCache
         var sb = new StringBuilder(512);
         sb.Append(SchemaVersion);
         sb.Append('|');
-        sb.Append(projectFile.FullName);
+        sb.Append(NormalizePathForHash(projectFile.FullName));
         sb.Append('|');
         AppendMtime(sb, projectFile.FullName, "csproj");
 
@@ -326,6 +326,25 @@ internal sealed class AppHostInfoDiskCache : IAppHostInfoDiskCache
             // marker. Worst case we get a cache miss until the situation resolves.
             sb.Append('-');
         }
+    }
+
+    // Normalize path casing on case-insensitive filesystems so differently-cased paths
+    // (for example, `c:\...` vs `C:\...`) resolve to the same cache key. This prevents
+    // cache misses between callers that supply different casing for the same project path.
+    // Match ProjectLocator's pathComparison convention: Windows/macOS insensitive, Linux sensitive.
+    private static string NormalizePathForHash(string path)
+    {
+        var canonical = Path.TrimEndingDirectorySeparator(path);
+
+        if (OperatingSystem.IsWindows() &&
+            canonical.Length >= 2 &&
+            canonical[1] == ':' &&
+            char.IsLetter(canonical[0]))
+        {
+            canonical = char.ToUpperInvariant(canonical[0]) + canonical[1..];
+        }
+
+        return canonical;
     }
 }
 

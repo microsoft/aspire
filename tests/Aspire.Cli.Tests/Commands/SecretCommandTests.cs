@@ -86,10 +86,10 @@ public class SecretCommandTests(ITestOutputHelper outputHelper)
 
     private sealed class TestProjectLocator(FileInfo appHostFile) : IProjectLocator
     {
-        public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, bool noEvaluate, CancellationToken cancellationToken)
             => Task.FromResult<List<AppHostProjectCandidate>>([new(appHostFile, "test")]);
 
-        public Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        public Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, bool noEvaluate, CancellationToken cancellationToken)
             => Task.FromResult<List<FileInfo>>([appHostFile]);
 
         public Task<FileInfo?> GetAppHostFromSettingsAsync(CancellationToken cancellationToken = default)
@@ -127,7 +127,7 @@ public class SecretCommandTests(ITestOutputHelper outputHelper)
         public Task<int> PublishAsync(PublishContext context, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<int> RunAsync(AppHostProjectContext context, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<UpdatePackagesResult> UpdatePackagesAsync(UpdatePackagesContext context, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, bool noEvaluate, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<string?> GetAspireHostingVersionAsync(FileInfo appHostFile, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 }

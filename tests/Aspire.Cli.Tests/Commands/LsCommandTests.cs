@@ -753,6 +753,64 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task LsCommand_DefaultsToEvaluateWhenNoEvaluateFlagIsNotSet()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        bool? capturedNoEvaluate = null;
+        var projectLocator = new TestProjectLocator
+        {
+            FindAppHostProjectsWithNoEvaluateAsyncCallback = (_, _, noEvaluate, _) =>
+            {
+                capturedNoEvaluate = noEvaluate;
+                return Task.FromResult(new List<AppHostProjectCandidate>());
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("ls --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(capturedNoEvaluate);
+    }
+
+    [Fact]
+    public async Task LsCommand_NoEvaluate_PassesNoEvaluateFlagToStreamDiscovery()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        bool? capturedNoEvaluate = null;
+        var projectLocator = new TestProjectLocator
+        {
+            FindAppHostProjectsStreamWithNoEvaluateAsyncCallback = (_, _, noEvaluate, _, _) =>
+            {
+                capturedNoEvaluate = noEvaluate;
+                return ToAsyncEnumerable();
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("ls --format json --stream --no-evaluate");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(capturedNoEvaluate);
+    }
+
+    [Fact]
     public async Task LsCommand_EmitsProfilingActivities()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

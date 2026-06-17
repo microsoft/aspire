@@ -321,7 +321,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     // ═══════════════════════════════════════════════════════════════
 
     /// <inheritdoc />
-    public Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+    public Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, bool noEvaluate, CancellationToken cancellationToken)
     {
         if (IsUnsupported)
         {

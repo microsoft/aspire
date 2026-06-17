@@ -117,6 +117,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string LsNoEvaluateOptionDescription {
+            get {
+                return ResourceManager.GetString("LsNoEvaluateOptionDescription", resourceCulture);
+            }
+        }
+
         internal static string LsStreamRequiresJson {
             get {
                 return ResourceManager.GetString("LsStreamRequiresJson", resourceCulture);

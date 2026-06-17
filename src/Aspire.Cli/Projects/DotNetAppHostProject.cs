@@ -186,7 +186,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     // ═══════════════════════════════════════════════════════════════
 
     /// <inheritdoc />
-    public async Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+    public async Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, bool noEvaluate, CancellationToken cancellationToken)
     {
         if (IsUnsupported)
         {
@@ -206,9 +206,14 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // The resolver owns the cache/MSBuild fallback so validation and later run/publish
         // decisions share a single source of truth for AppHost project metadata.
         using var cliBundleLease = await AcquireCliBundleLayoutAsync(cancellationToken);
-        var information = await _appHostInfoResolver.GetAppHostInfoAsync(appHostFile, cancellationToken);
+        var information = await _appHostInfoResolver.GetAppHostInfoAsync(appHostFile, noEvaluate, cancellationToken);
 
-        if (information.ExitCode == 0 && information.IsAspireHost)
+        if (information.IsAspireHost == null)
+        {
+            return new AppHostValidationResult(IsValid: information.ExitCode == 0, IsNotEvaluated: true);
+        }
+
+        if (information.ExitCode == 0 && information.IsAspireHost == true)
         {
             return new AppHostValidationResult(IsValid: true, AspireHostingVersion: information.AspireHostingVersion);
         }
@@ -228,8 +233,8 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // follows the project model that run/publish already rely on, including
         // SDK-style projects, package references, and Central Package Management.
         using var cliBundleLease = await AcquireCliBundleLayoutAsync(cancellationToken);
-        var information = await _appHostInfoResolver.GetAppHostInfoAsync(appHostFile, cancellationToken);
-        return information.ExitCode == 0 && information.IsAspireHost
+        var information = await _appHostInfoResolver.GetAppHostInfoAsync(appHostFile, noEvaluate: false, cancellationToken);
+        return information.ExitCode == 0 && information.IsAspireHost == true
             ? information.AspireHostingVersion
             : null;
     }
@@ -545,10 +550,10 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // second `dotnet msbuild -getProperty/-getItem` invocation just to gate compatibility.
         // Issue #17197: the legacy code path went runner → MSBuild for both validation and
         // the compatibility gate, doubling project inspection cost on every `aspire run`.
-        var info = await _appHostInfoResolver.GetAppHostInfoAsync(effectiveAppHostFile, cancellationToken);
+        var info = await _appHostInfoResolver.GetAppHostInfoAsync(effectiveAppHostFile, noEvaluate: false, cancellationToken);
         var appHostCompatibilityCheck = AppHostHelper.EvaluateAppHostCompatibility(
             info.ExitCode,
-            info.IsAspireHost,
+            info.IsAspireHost ?? throw new ArgumentException("IsAspireHost is null", nameof(effectiveAppHostFile)),
             info.AspireHostingVersion,
             _interactionService,
             _fileLoggerProvider.LogFilePath);
@@ -581,7 +586,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // ComputeRunArguments probe before RunCommand is used. If a project relies on custom
         // imports outside that tracked set, the cache can be disabled with
         // dotnetAppHostInfoCacheDisabled rather than paying an extra MSBuild evaluation on every run.
-        var info = await _appHostInfoResolver.GetAppHostInfoAsync(effectiveAppHostFile, cancellationToken).ConfigureAwait(false);
+        var info = await _appHostInfoResolver.GetAppHostInfoAsync(effectiveAppHostFile, noEvaluate: false, cancellationToken).ConfigureAwait(false);
         var arguments = ParseArguments(info.RunArguments);
         var hasRunArguments = arguments.Count > 0;
 
@@ -1256,7 +1261,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             // Read UserSecretsId from the shared AppHost build info cache so isolated mode
             // does not pay for a second `dotnet msbuild -getProperty` invocation when the
             // run path already fetched the AppHost metadata for validation/compat.
-            var info = await _appHostInfoResolver.GetAppHostInfoAsync(projectFile, cancellationToken);
+            var info = await _appHostInfoResolver.GetAppHostInfoAsync(projectFile, noEvaluate: false, cancellationToken);
             return info.UserSecretsId;
         }
         catch (Exception ex)
@@ -1270,7 +1275,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     {
         // Reuse the cached MSBuild result so `AspireUseCliBundle` is fetched alongside the
         // IsAspireHost/version inspection rather than triggering a third project evaluation.
-        var info = await _appHostInfoResolver.GetAppHostInfoAsync(projectFile, cancellationToken);
+        var info = await _appHostInfoResolver.GetAppHostInfoAsync(projectFile, noEvaluate: false, cancellationToken);
         return info.IsUsingCliBundle;
     }
 

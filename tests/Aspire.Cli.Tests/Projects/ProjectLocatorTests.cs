@@ -1403,7 +1403,7 @@ builder.Build().Run();");
             public Task<IReadOnlyList<(string PackageId, string Version)>> GetPackageReferencesAsync(FileInfo appHostFile, CancellationToken cancellationToken)
                 => throw new NotImplementedException();
 
-            public Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+            public Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, bool noEvaluate, CancellationToken cancellationToken)
                 => Task.FromResult(new AppHostValidationResult(IsValid: appHostFile.Name.Equals(supportedFileName, StringComparison.OrdinalIgnoreCase)));
 
             public Task<string?> GetAspireHostingVersionAsync(FileInfo appHostFile, CancellationToken cancellationToken)
@@ -1761,7 +1761,7 @@ builder.Build().Run();");
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var projectLocator = CreateProjectLocator(executionContext, interactionService: interactionService, sdkInstaller: sdkInstaller);
 
-        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, false, CancellationToken.None).DefaultTimeout();
 
         Assert.Empty(found);
         Assert.Empty(interactionService.DisplayedErrors);
@@ -2188,7 +2188,7 @@ builder.Build().Run();");
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
 
-        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, false, CancellationToken.None).DefaultTimeout();
 
         Assert.Single(found);
         Assert.Equal(realAppHost.FullName, found[0].AppHostFile.FullName);
@@ -2215,7 +2215,7 @@ builder.Build().Run();");
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
 
-        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.AllFiles, CancellationToken.None).DefaultTimeout();
+        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.AllFiles, false, CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(2, found.Count);
         var paths = found.Select(c => c.AppHostFile.FullName).ToHashSet();
@@ -2265,23 +2265,32 @@ builder.Build().Run();");
         Directory.CreateDirectory(unbuildableAppHost.DirectoryName!);
         await File.WriteAllTextAsync(unbuildableAppHost.FullName, "Not a real project file.");
 
+        var notEvaluatedAppHost = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "NotEvaluatedValid", "AppHost.csproj"));
+        Directory.CreateDirectory(notEvaluatedAppHost.DirectoryName!);
+        await File.WriteAllTextAsync(notEvaluatedAppHost.FullName, "Not a real project file.");
+
         var projectFactory = new TestAppHostProjectFactory
         {
-            ValidateAppHostCallback = projectFile => projectFile.FullName == buildableAppHost.FullName
-                ? new AppHostValidationResult(IsValid: true)
-                : new AppHostValidationResult(IsValid: false, IsPossiblyUnbuildable: true)
+            ValidateAppHostCallback = projectFile => projectFile.FullName == buildableAppHost.FullName ? new AppHostValidationResult(IsValid: true) : 
+                projectFile.FullName == unbuildableAppHost.FullName ? new AppHostValidationResult(IsValid: false, IsPossiblyUnbuildable: true) : 
+                projectFile.FullName == notEvaluatedAppHost.FullName ? new AppHostValidationResult(IsValid: true, IsNotEvaluated: true) : new AppHostValidationResult(IsValid: false, IsNotEvaluated: true)
         };
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
 
-        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.AllFiles, CancellationToken.None).DefaultTimeout();
+        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.AllFiles, true, CancellationToken.None).DefaultTimeout();
 
         Assert.Collection(found.OrderBy(candidate => candidate.AppHostFile.FullName),
             candidate =>
             {
                 Assert.Equal(buildableAppHost.FullName, candidate.AppHostFile.FullName);
                 Assert.Equal(AppHostProjectCandidateStatus.Buildable, candidate.Status);
+            },
+            candidate =>
+            {
+                Assert.Equal(notEvaluatedAppHost.FullName, candidate.AppHostFile.FullName);
+                Assert.Equal(AppHostProjectCandidateStatus.PossiblyBuildable, candidate.Status);
             },
             candidate =>
             {
@@ -2324,7 +2333,7 @@ builder.Build().Run();");
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory, gitRepository: sentinelGit);
 
-        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.ExplicitDirectory, CancellationToken.None).DefaultTimeout();
+        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.ExplicitDirectory, false, CancellationToken.None).DefaultTimeout();
 
         Assert.Single(found);
         Assert.Equal(realAppHost.FullName, found[0].AppHostFile.FullName);
@@ -2360,7 +2369,7 @@ builder.Build().Run();");
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory, gitRepository: fakeGit);
 
-        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, false, CancellationToken.None).DefaultTimeout();
 
         Assert.Single(found);
         Assert.Equal(trackedAppHost.FullName, found[0].AppHostFile.FullName);
@@ -2397,7 +2406,7 @@ builder.Build().Run();");
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory, gitRepository: fakeGit);
 
-        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, false, CancellationToken.None).DefaultTimeout();
 
         Assert.Single(found);
         Assert.Equal(realAppHost.FullName, found[0].AppHostFile.FullName);
@@ -2432,7 +2441,7 @@ builder.Build().Run();");
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory, gitRepository: fakeGit);
 
-        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, false, CancellationToken.None).DefaultTimeout();
 
         Assert.Single(found);
         Assert.Equal(realAppHost.FullName, found[0].AppHostFile.FullName);
@@ -2627,7 +2636,7 @@ builder.Build().Run();");
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var projectLocator = CreateProjectLocator(executionContext, interactionService: interactionService);
 
-        await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+        await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, false, CancellationToken.None).DefaultTimeout();
 
         var warning = Assert.Single(interactionService.DisplayedMessages);
         Assert.Equal(KnownEmojis.Warning, warning.Emoji);
@@ -2662,7 +2671,7 @@ builder.Build().Run();");
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var projectLocator = CreateProjectLocator(executionContext, interactionService: interactionService, logger: logger);
 
-        await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+        await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, false, CancellationToken.None).DefaultTimeout();
 
         var error = Assert.Single(interactionService.DisplayedErrors);
         Assert.Contains(configPath, error);
@@ -2688,7 +2697,7 @@ builder.Build().Run();");
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var projectLocator = CreateProjectLocator(executionContext, interactionService: interactionService);
 
-        await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+        await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, false, CancellationToken.None).DefaultTimeout();
 
         var error = Assert.Single(interactionService.DisplayedErrors);
         Assert.Contains(aspireSettingsFile.FullName, error);
@@ -2715,7 +2724,7 @@ builder.Build().Run();");
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var projectLocator = CreateProjectLocator(executionContext, interactionService: interactionService);
 
-        await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+        await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, false, CancellationToken.None).DefaultTimeout();
 
         var error = Assert.Single(interactionService.DisplayedErrors);
         Assert.Contains(configPath, error);
@@ -2740,7 +2749,7 @@ builder.Build().Run();");
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var projectLocator = CreateProjectLocator(executionContext, interactionService: interactionService);
 
-        await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+        await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, false, CancellationToken.None).DefaultTimeout();
 
         var error = Assert.Single(interactionService.DisplayedErrors);
         Assert.Contains(aspireSettingsFile.FullName, error);
@@ -2924,7 +2933,7 @@ builder.Build().Run();");
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
 
-        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, false, CancellationToken.None).DefaultTimeout();
 
         // Exactly one candidate: the settings-derived path through the symlink must be
         // recognized as the same file as the walk-discovered real path.
@@ -2964,9 +2973,44 @@ builder.Build().Run();");
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
 
-        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, false, CancellationToken.None).DefaultTimeout();
 
         Assert.Single(found);
+    }
+
+    [Fact]
+    public async Task FindAppHostProjectsAsync_DefaultFiltered_SettingsCandidateNotEvaluated_IsPossiblyBuildable()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configuredAppHost = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "node_modules", "Configured", "AppHost.csproj"));
+        Directory.CreateDirectory(configuredAppHost.DirectoryName!);
+        await File.WriteAllTextAsync(configuredAppHost.FullName, "Not a real project file.");
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, JsonSerializer.Serialize(new
+        {
+            appHost = new
+            {
+                path = Path.GetRelativePath(workspace.WorkspaceRoot.FullName, configuredAppHost.FullName).Replace(Path.DirectorySeparatorChar, '/')
+            }
+        }));
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostCallback = _ => new AppHostValidationResult(IsValid: true, IsNotEvaluated: true)
+        };
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
+
+        // DefaultFiltered discovery skips node_modules, so this candidate is included only
+        // through the configured settings path.
+        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, true, CancellationToken.None).DefaultTimeout();
+
+        var candidate = Assert.Single(found);
+        Assert.Equal(configuredAppHost.FullName, candidate.AppHostFile.FullName);
+        Assert.Equal(AppHostProjectCandidateStatus.PossiblyBuildable, candidate.Status);
     }
 
     private static ProjectLocator CreateProjectLocator(

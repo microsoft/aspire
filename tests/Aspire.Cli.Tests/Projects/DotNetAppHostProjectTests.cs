@@ -9,6 +9,7 @@ using Aspire.Cli.Utils;
 using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Text.Json;
 
 namespace Aspire.Cli.Tests.Projects;
@@ -38,6 +39,82 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
 
         _workspace.Dispose();
         GC.SuppressFinalize(this);
+    }
+
+    [Fact]
+    public async Task ValidateAppHostAsync_NoEvaluate_UsesCachedInfoWhenAvailable()
+    {
+        var appHostFile = CreateProjectAppHost();
+        var runner = new TestDotNetCliRunner();
+        var resolver = new TestAppHostInfoResolver
+        {
+            GetAppHostInfoAsyncCallback = (_, noEvaluate, _) =>
+            {
+                Assert.True(noEvaluate);
+                return Task.FromResult(new AppHostProjectInfo(
+                ExitCode: 0,
+                IsAspireHost: true,
+                AspireHostingVersion: "13.0.0",
+                IsUsingCliBundle: false,
+                UserSecretsId: null,
+                RunCommand: null,
+                TargetPath: null,
+                RunWorkingDirectory: null,
+                RunArguments: null,
+                TargetFramework: "net10.0",
+                TargetFrameworks: null));
+            }
+        };
+        var project = CreateDotNetAppHostProject(runner, appHostInfoResolver: resolver);
+
+        var validation = await project.ValidateAppHostAsync(appHostFile, noEvaluate: true, CancellationToken.None);
+
+        Assert.True(validation.IsValid);
+        Assert.False(validation.IsNotEvaluated);
+        Assert.Equal(1, resolver.NoEvaluateCallCount);
+        Assert.Equal(0, resolver.EvaluateCallCount);
+    }
+
+    [Fact]
+    public async Task ValidateAppHostAsync_NoEvaluate_WhenCacheMiss_UsesHeuristicFallback()
+    {
+        var appHostFile = CreateProjectAppHost();
+        var nonAppHostFile = CreateProjectAppHost("Web.csproj");
+        var runner = new TestDotNetCliRunner();
+        var resolver = new TestAppHostInfoResolver
+        {
+            GetAppHostInfoAsyncCallback = (projectFile, noEvaluate, _) =>
+            {
+                Assert.True(noEvaluate);
+                var isLikelyAppHost = projectFile.Name.EndsWith("AppHost.csproj", StringComparison.OrdinalIgnoreCase) ||
+                    projectFile.Directory!.EnumerateFiles("*", SearchOption.TopDirectoryOnly)
+                        .Any(f => f.Name.Equals("AppHost.cs", StringComparison.OrdinalIgnoreCase));
+                return Task.FromResult(new AppHostProjectInfo(
+                    ExitCode: isLikelyAppHost ? 0 : 1,
+                    IsAspireHost: null,
+                    AspireHostingVersion: null,
+                    IsUsingCliBundle: false,
+                    UserSecretsId: null,
+                    RunCommand: null,
+                    TargetPath: null,
+                    RunWorkingDirectory: null,
+                    RunArguments: null,
+                    TargetFramework: null,
+                    TargetFrameworks: null));
+            }
+        };
+        var project = CreateDotNetAppHostProject(runner, appHostInfoResolver: resolver);
+
+        var appHostValidation = await project.ValidateAppHostAsync(appHostFile, noEvaluate: true, CancellationToken.None);
+        var nonAppHostValidation = await project.ValidateAppHostAsync(nonAppHostFile, noEvaluate: true, CancellationToken.None);
+
+        Assert.True(appHostValidation.IsValid);
+        Assert.False(nonAppHostValidation.IsValid);
+        Assert.False(nonAppHostValidation.IsPossiblyUnbuildable);
+        Assert.True(appHostValidation.IsNotEvaluated);
+        Assert.True(nonAppHostValidation.IsNotEvaluated);
+        Assert.Equal(2, resolver.NoEvaluateCallCount);
+        Assert.Equal(0, resolver.EvaluateCallCount);
     }
 
     [Fact]
@@ -1767,6 +1844,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     private DotNetAppHostProject CreateDotNetAppHostProject(
         TestDotNetCliRunner runner,
         LayoutConfiguration? layout = null,
+        IAppHostInfoResolver? appHostInfoResolver = null,
         Action<CliServiceCollectionTestOptions>? configureServices = null)
     {
         var services = CliTestHelper.CreateServiceCollection(_workspace, outputHelper, options =>
@@ -1783,6 +1861,12 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             configureServices?.Invoke(options);
         });
 
+        if (appHostInfoResolver is not null)
+        {
+            services.RemoveAll<IAppHostInfoResolver>();
+            services.AddSingleton(appHostInfoResolver);
+        }
+
         var provider = services.BuildServiceProvider();
         _serviceProviders.Add(provider);
         return provider.GetRequiredService<DotNetAppHostProject>();
@@ -1790,4 +1874,31 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
 
     private static void WriteAspireConfigJson(string directory, string content)
         => File.WriteAllText(Path.Combine(directory, "aspire.config.json"), content);
+
+    private sealed class TestAppHostInfoResolver : IAppHostInfoResolver
+    {
+        public Func<FileInfo, bool, CancellationToken, Task<AppHostProjectInfo>>? GetAppHostInfoAsyncCallback { get; init; }
+
+        public int EvaluateCallCount { get; private set; }
+        public int NoEvaluateCallCount { get; private set; }
+
+        public Task<AppHostProjectInfo> GetAppHostInfoAsync(FileInfo projectFile, bool noEvaluate, CancellationToken cancellationToken)
+        {
+            if (noEvaluate)
+            {
+                NoEvaluateCallCount++;
+            }
+            else
+            {
+                EvaluateCallCount++;
+            }
+
+            if (GetAppHostInfoAsyncCallback is not null)
+            {
+                return GetAppHostInfoAsyncCallback(projectFile, noEvaluate, cancellationToken);
+            }
+
+            throw new InvalidOperationException("GetAppHostInfoAsync should not be called in this test.");
+        }
+    }
 }

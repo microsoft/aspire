@@ -381,6 +381,7 @@ internal sealed class AspireVersionCheck(
         var candidates = await projectLocator.FindAppHostProjectFilesAsync(
             executionContext.WorkingDirectory,
             AppHostDiscoveryScope.ExplicitDirectory,
+            noEvaluate: false,
             maxDepth: 0,
             cancellationToken);
 
@@ -403,7 +404,7 @@ internal sealed class AspireVersionCheck(
             return (false, null);
         }
 
-        var validationResult = await project.ValidateAppHostAsync(appHostFile, cancellationToken);
+        var validationResult = await project.ValidateAppHostAsync(appHostFile, noEvaluate: false, cancellationToken);
         if (validationResult.IsValid)
         {
             return (true, validationResult.AspireHostingVersion ?? await project.GetAspireHostingVersionAsync(appHostFile, cancellationToken));

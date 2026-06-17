@@ -39,6 +39,11 @@ internal sealed class LsCommand : BaseCommand
         Description = SharedCommandStrings.LsStreamOptionDescription
     };
 
+    private static readonly Option<bool> s_noEvaluateOption = new("--no-evaluate")
+    {
+        Description = SharedCommandStrings.LsNoEvaluateOptionDescription
+    };
+
     public LsCommand(
         IProjectLocator projectLocator,
         ICliHostEnvironment hostEnvironment,
@@ -58,6 +63,7 @@ internal sealed class LsCommand : BaseCommand
         Options.Add(s_formatOption);
         Options.Add(s_allOption);
         Options.Add(s_streamOption);
+        Options.Add(s_noEvaluateOption);
 
         Validators.Add(result =>
         {
@@ -75,6 +81,7 @@ internal sealed class LsCommand : BaseCommand
         var format = parseResult.GetValue(s_formatOption);
         var includeAll = parseResult.GetValue(s_allOption);
         var stream = parseResult.GetValue(s_streamOption);
+        var noEvaluate = parseResult.GetValue(s_noEvaluateOption);
         using var profilingActivity = _profilingTelemetry.StartLsCommand(format.ToString().ToLowerInvariant(), includeAll);
 
         // `aspire ls` is ambient discovery from the working directory by default, so
@@ -100,9 +107,9 @@ internal sealed class LsCommand : BaseCommand
             {
                 appHosts = (useInteractiveStatus, useJsonStream) switch
                 {
-                    (true, _) => await FindAppHostsWithStatusAsync(scope, cancellationToken).ConfigureAwait(false),
-                    (_, true) => await FindAppHostsWithJsonStreamAsync(scope, cancellationToken).ConfigureAwait(false),
-                    _ => await _projectLocator.FindAppHostProjectsAsync(_executionContext.WorkingDirectory, scope, cancellationToken).ConfigureAwait(false)
+                    (true, _) => await FindAppHostsWithStatusAsync(scope, noEvaluate, cancellationToken).ConfigureAwait(false),
+                    (_, true) => await FindAppHostsWithJsonStreamAsync(scope, noEvaluate, cancellationToken).ConfigureAwait(false),
+                    _ => await _projectLocator.FindAppHostProjectsAsync(_executionContext.WorkingDirectory, scope, noEvaluate, cancellationToken).ConfigureAwait(false)
                 };
                 findAppHostsActivity.SetAppHostCandidateCount(appHosts.Count);
             }
@@ -142,7 +149,7 @@ internal sealed class LsCommand : BaseCommand
         }
     }
 
-    private async Task<List<AppHostProjectCandidate>> FindAppHostsWithJsonStreamAsync(AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+    private async Task<List<AppHostProjectCandidate>> FindAppHostsWithJsonStreamAsync(AppHostDiscoveryScope scope, bool noEvaluate, CancellationToken cancellationToken)
     {
         var appHosts = new List<AppHostProjectCandidate>();
 
@@ -153,7 +160,7 @@ internal sealed class LsCommand : BaseCommand
         // any post-loop sort would only reorder this in-memory list — which the caller does not
         // use for stream output. Pipe to `sort` / `jq -s 'sort_by(.path)'` for ordered output.
         // See https://github.com/microsoft/aspire/issues/17621.
-        await foreach (var candidate in _projectLocator.FindAppHostProjectsStreamAsync(_executionContext.WorkingDirectory, scope, cancellationToken: cancellationToken).ConfigureAwait(false))
+        await foreach (var candidate in _projectLocator.FindAppHostProjectsStreamAsync(_executionContext.WorkingDirectory, scope, noEvaluate, cancellationToken: cancellationToken).ConfigureAwait(false))
         {
             cancellationToken.ThrowIfCancellationRequested();
             appHosts.Add(candidate);
@@ -179,7 +186,7 @@ internal sealed class LsCommand : BaseCommand
         writer.Flush();
     }
 
-    private async Task<List<AppHostProjectCandidate>> FindAppHostsWithStatusAsync(AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+    private async Task<List<AppHostProjectCandidate>> FindAppHostsWithStatusAsync(AppHostDiscoveryScope scope, bool noEvaluate, CancellationToken cancellationToken)
     {
         var appHosts = new List<AppHostProjectCandidate>();
         // Counters are mutated from the discovery worker thread (directory enumeration is single-threaded, and
@@ -205,6 +212,7 @@ internal sealed class LsCommand : BaseCommand
                         .FindAppHostProjectsStreamAsync(
                             _executionContext.WorkingDirectory,
                             scope,
+                            noEvaluate,
                             onDirectoryEnumerated: count => Volatile.Write(ref directoriesSearched, count),
                             cancellationToken: cancellationToken)
                         .ConfigureAwait(false))
@@ -293,6 +301,7 @@ internal sealed class LsCommand : BaseCommand
         {
             AppHostProjectCandidateStatus.Buildable => "buildable",
             AppHostProjectCandidateStatus.PossiblyUnbuildable => "possibly-unbuildable",
+            AppHostProjectCandidateStatus.PossiblyBuildable => "possibly-buildable",
             _ => status.ToString().ToLowerInvariant()
         };
     }
@@ -302,6 +311,7 @@ internal sealed class LsCommand : BaseCommand
         return status switch
         {
             "buildable" => "[green]buildable[/]",
+            "possibly-buildable" => "[grey]possibly-buildable[/]",
             "possibly-unbuildable" => "[yellow]possibly-unbuildable[/]",
             _ => Markup.Escape(status)
         };
