@@ -835,6 +835,10 @@ internal sealed class BicepProvisioner(
         .ConfigureAwait(false);
     }
 
+    // Handles ARM 409 DeploymentActive responses by adopting the deployment that Azure says is
+    // already running, but only when persisted state proves it belongs to the same resource model.
+    // If any proof is missing, stale, or unreadable, return false so the caller uses the normal
+    // failure path instead of accidentally adopting an unrelated deployment.
     private async Task<bool> TryAdoptActiveDeploymentConflictAsync(
         AzureBicepResource resource,
         ProvisioningContext context,
@@ -848,6 +852,9 @@ internal sealed class BicepProvisioner(
         var cachedDeploymentId = stateSection.Data[BicepUtilities.DeploymentStateIdKey]?.GetValue<string>();
         var cachedChecksum = stateSection.Data[BicepUtilities.DeploymentStateChecksumKey]?.GetValue<string>();
 
+        // The active deployment must be the same ARM deployment and the same compiled model checksum
+        // that this AppHost is trying to run. Otherwise, the 409 could be from another command or a
+        // previous model, and adopting it would publish the wrong outputs.
         if (!IsRunningCachedDeployment(stateSection) ||
             !StringComparers.AzureResourceId.Equals(cachedDeploymentId, deploymentId.ToString()) ||
             !string.Equals(cachedChecksum, checksum, StringComparison.Ordinal))
@@ -859,6 +866,8 @@ internal sealed class BicepProvisioner(
         AzureDeploymentState? deployment;
         try
         {
+            // ARM is the source of truth after the 409. The cache proves ownership, but ARM tells us
+            // whether the deployment is still active, terminal, or already gone.
             deployment = await context.ArmClient.GetDeploymentAsync(deploymentId.ToString(), cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -878,6 +887,9 @@ internal sealed class BicepProvisioner(
 
         if (deployment is null)
         {
+            // The active-deployment conflict raced with deletion or cleanup. Do not clear local state
+            // here because this path runs while handling a failed create attempt; let the caller surface
+            // the original ARM failure.
             logger.LogDebug("Unable to adopt active Azure deployment {DeploymentId} for {ResourceName} because it could not be found.", deploymentId, resource.Name);
             return false;
         }
@@ -885,6 +897,8 @@ internal sealed class BicepProvisioner(
         var currentLocation = GetConfiguredLocation(stateSection, effectiveLocation);
         if (IsActiveDeploymentProvisioningState(deployment.ProvisioningState))
         {
+            // The deployment is still running, so wait on the existing ARM operation rather than
+            // starting a duplicate deployment with the same name.
             logger.LogInformation("Azure deployment {DeploymentId} for {ResourceName} is already active. Waiting for the existing deployment to complete.", deploymentId, resource.Name);
             deployment = await WaitForCachedRunningDeploymentAsync(
                 resource,
@@ -896,6 +910,8 @@ internal sealed class BicepProvisioner(
 
             if (deployment is null)
             {
+                // If the deployment disappears while we are waiting, adoption is no longer possible.
+                // Return false so the caller keeps the original conflict behavior.
                 logger.LogDebug("Unable to adopt active Azure deployment {DeploymentId} for {ResourceName} because it disappeared while waiting.", deploymentId, resource.Name);
                 return false;
             }
@@ -909,6 +925,8 @@ internal sealed class BicepProvisioner(
             return true;
         }
 
+        // A non-terminal or unknown ARM state cannot be safely mapped to resource outputs or a dashboard
+        // terminal state, so leave it unadopted and let the original active-deployment failure stand.
         logger.LogDebug("Unable to adopt active Azure deployment {DeploymentId} for {ResourceName} because provisioning state is {ProvisioningState}.", deploymentId, resource.Name, deployment.ProvisioningState);
         return false;
     }
