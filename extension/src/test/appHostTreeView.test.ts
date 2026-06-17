@@ -73,7 +73,6 @@ function makeTreeProvider(appHosts: readonly AppHostDisplayInfo[], viewMode: Vie
         workspaceAppHostCandidates: [],
         workspaceAppHostName: undefined,
         workspaceAppHostDescription,
-        refresh: () => { },
         onDidChangeData,
     } as unknown as AppHostDataRepository;
 
@@ -99,10 +98,8 @@ function makeTreeProviderWithLaunchService(appHosts: readonly AppHostDisplayInfo
         workspaceResources: [],
         workspaceAppHostPath: undefined,
         workspaceAppHostCandidates: [],
-        workspaceAppHostStatus: undefined,
         workspaceAppHostName: undefined,
         workspaceAppHostDescription: undefined,
-        refresh: () => { },
         onDidChangeData,
     } as unknown as AppHostDataRepository;
 
@@ -121,10 +118,8 @@ function makeWorkspaceTreeProvider(workspaceAppHostDescription: string): AspireA
             language: 'csharp',
             status: 'buildable',
         }],
-        workspaceAppHostStatus: undefined,
         workspaceAppHostName: 'AppHost.csproj',
         workspaceAppHostDescription,
-        refresh: () => { },
         onDidChangeData,
     } as unknown as AppHostDataRepository;
 
@@ -506,7 +501,11 @@ suite('AspireAppHostTreeProvider', () => {
             workspaceResources: [],
             workspaceAppHost: makeAppHost({ appHostPath, resources: [] }),
             workspaceAppHostPath: appHostPath,
-            workspaceAppHostCandidates: [{ path: appHostPath, language: 'csharp', status: 'buildable' }],
+            workspaceAppHostCandidates: [{
+                path: appHostPath,
+                language: 'csharp',
+                status: 'buildable',
+            }],
             workspaceAppHostName: 'Store',
             workspaceAppHostDescription: undefined,
             requestAppHostStopRefresh,
@@ -535,7 +534,11 @@ suite('AspireAppHostTreeProvider', () => {
             workspaceResources: [],
             workspaceAppHost: makeAppHost({ appHostPath, resources: [] }),
             workspaceAppHostPath: appHostPath,
-            workspaceAppHostCandidates: [{ path: appHostPath, language: 'csharp', status: 'buildable' }],
+            workspaceAppHostCandidates: [{
+                path: appHostPath,
+                language: 'csharp',
+                status: 'buildable',
+            }],
             workspaceAppHostName: 'Store',
             workspaceAppHostDescription: undefined,
             requestAppHostStopRefresh,
@@ -565,7 +568,11 @@ suite('AspireAppHostTreeProvider', () => {
             workspaceResources: [],
             workspaceAppHost: undefined,
             workspaceAppHostPath: appHostPath,
-            workspaceAppHostCandidates: [{ path: appHostPath, language: 'csharp', status: 'buildable' }],
+            workspaceAppHostCandidates: [{
+                path: appHostPath,
+                language: 'csharp',
+                status: 'buildable',
+            }],
             workspaceAppHostName: 'Store',
             workspaceAppHostDescription: undefined,
             requestAppHostStopRefresh,
@@ -627,6 +634,7 @@ suite('AspireAppHostTreeProvider', () => {
     test('workspace AppHost candidate shows stopping state immediately after stop command', () => {
         const commands: AspireSubcommand[] = [];
         const appHostPath = path.resolve('workspace', 'apps', 'Store', 'AppHost.csproj');
+        const alternateCandidatePath = path.resolve('workspace', 'apps', 'Billing', 'AppHost.csproj');
         const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
         const repository = {
             viewMode: 'workspace' as ViewMode,
@@ -636,6 +644,11 @@ suite('AspireAppHostTreeProvider', () => {
             workspaceAppHostPath: appHostPath,
             workspaceAppHostCandidates: [{
                 path: appHostPath,
+                language: 'csharp',
+                status: 'buildable',
+            },
+            {
+                path: alternateCandidatePath,
                 language: 'csharp',
                 status: 'buildable',
             }],
@@ -1893,8 +1906,6 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             workspaceAppHostPath: hostPath,
             workspaceAppHostCandidates: [],
             workspaceAppHostName: undefined,
-            workspaceAppHostStatus: undefined,
-            refresh: () => { },
             onDidChangeData,
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
@@ -1916,8 +1927,6 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             workspaceAppHostPath: hostPath,
             workspaceAppHostCandidates: [],
             workspaceAppHostName: undefined,
-            workspaceAppHostStatus: undefined,
-            refresh: () => { },
             onDidChangeData,
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
@@ -1941,8 +1950,6 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
                 status: 'buildable',
             }],
             workspaceAppHostName: undefined,
-            workspaceAppHostStatus: undefined,
-            refresh: () => { },
             onDidChangeData,
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
@@ -1995,7 +2002,6 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             ],
             workspaceAppHostDescription: 'Workspace view selected because aspire ls found 2 buildable AppHosts.',
             workspaceAppHostName: undefined,
-            workspaceAppHostStatus: undefined,
             onDidChangeData,
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
@@ -2038,7 +2044,6 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
                 status: 'buildable',
             }],
             workspaceAppHostName: undefined,
-            workspaceAppHostStatus: undefined,
             onDidChangeData,
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), launchService);
@@ -2072,7 +2077,6 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
                 status: 'buildable',
             }],
             workspaceAppHostName: undefined,
-            workspaceAppHostStatus: undefined,
             onDidChangeData,
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
@@ -2121,7 +2125,6 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
                 status: 'buildable',
             }],
             workspaceAppHostName: undefined,
-            workspaceAppHostStatus: undefined,
             onDidChangeData,
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
@@ -2176,7 +2179,6 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
                 status: 'buildable',
             }],
             workspaceAppHostName: undefined,
-            workspaceAppHostStatus: undefined,
             onDidChangeData,
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), launchService);
@@ -2216,8 +2218,6 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
                 }
             ],
             workspaceAppHostName: undefined,
-            workspaceAppHostStatus: undefined,
-            refresh: () => { },
             onDidChangeData,
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), launchService);
@@ -2369,7 +2369,6 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             workspaceAppHost: undefined,
             workspaceAppHostPath: undefined,
             workspaceAppHostName: undefined,
-            workspaceAppHostStatus: undefined,
             workspaceAppHostCandidates: [
                 {
                     path: runningHostPath,

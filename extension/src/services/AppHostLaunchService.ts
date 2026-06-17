@@ -167,9 +167,6 @@ export class AppHostLaunchService implements vscode.Disposable {
             return;
         }
 
-        // E2E-only: simulate a build/launch failure so tests can exercise the failure path
-        // (e.g. removing an AppHost that no longer builds) without needing a genuinely broken
-        // project on disk. Mirrors the suppress hook but throws instead of returning success.
         const isFailureSimulated = isE2eDebugLaunchFailureSimulated();
         if (isFailureSimulated) {
             this.clearLaunching(appHostPath);

@@ -513,6 +513,12 @@ suite('AppHostDataRepository', () => {
                 all_project_file_candidates: [
                     '/workspace/apps/Store/AppHost.csproj',
                 ],
+                app_host_candidates: [{
+                    relativePath: 'apps/Store/AppHost.csproj',
+                    path: '/workspace/apps/Store/AppHost.csproj',
+                    language: 'csharp',
+                    status: 'buildable',
+                }],
             }));
             await waitForAppHostDiscovery();
 
@@ -559,6 +565,12 @@ suite('AppHostDataRepository', () => {
                 all_project_file_candidates: [
                     '/workspace/apps/Store/AppHost.csproj',
                 ],
+                app_host_candidates: [{
+                    relativePath: 'apps/Store/AppHost.csproj',
+                    path: '/workspace/apps/Store/AppHost.csproj',
+                    language: 'csharp',
+                    status: 'buildable',
+                }],
             }));
             await waitForAppHostDiscovery();
 
@@ -633,6 +645,12 @@ suite('AppHostDataRepository', () => {
                 all_project_file_candidates: [
                     '/workspace/apps/Store/AppHost.csproj',
                 ],
+                app_host_candidates: [{
+                    relativePath: 'apps/Store/AppHost.csproj',
+                    path: '/workspace/apps/Store/AppHost.csproj',
+                    language: 'csharp',
+                    status: 'buildable',
+                }],
             }));
             await waitForAppHostDiscovery();
 

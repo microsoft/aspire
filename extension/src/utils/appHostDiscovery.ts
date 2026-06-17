@@ -6,13 +6,11 @@ import { spawnCliProcess } from '../debugger/languages/cli';
 import { lsNoEvaluateCapability } from '../types/configInfo';
 import { AspireTerminalProvider } from './AspireTerminalProvider';
 import { ConfigInfoProvider } from './configInfoProvider';
-import { isBuildableAppHostCandidate } from './appHostStatus';
 import { aspireConfigFileName, getAppHostPathFromConfig, readJsonFile } from './cliTypes';
 import { EnvironmentVariables } from './environment';
 import { extensionLogOutputChannel } from './logging';
 import { getAppHostDiscoveryTimeoutMs } from './settings';
 import { appHostDiscoveryFindFilesMaxResults, getAppHostDiscoveryExcludeGlob, isExcludedDiscoveryUri } from './workspaceFileSearch';
-import type { AppHostCandidate } from '../types/appHostCandidate';
 
 // Mirrors the `aspire ls --format json` candidate shape documented in
 // docs/specs/cli-output-formats.md. Older CLI fallback results are adapted into
@@ -22,6 +20,13 @@ export interface CandidateAppHostDisplayInfo {
     language: string | null;
     status: string | null;
     selected?: boolean;
+}
+
+export interface AppHostCandidate {
+    relativePath: string;
+    path: string;
+    language: string;
+    status: string;
 }
 
 export interface AppHostProjectSearchResult {
@@ -437,6 +442,10 @@ export function getWorkspaceAppHostProjectSearchResult(workspaceFolder: vscode.W
         all_project_file_candidates: buildableCandidates.map(candidate => candidate.path),
         app_host_candidates: effectiveAppHostCandidates,
     };
+}
+
+export function isBuildableAppHostCandidate(candidate: AppHostCandidate): boolean {
+    return candidate.status === 'buildable' || candidate.status === 'possibly-buildable';
 }
 
 export function formatAppHostLanguage(language: string): string | undefined {

@@ -125,6 +125,9 @@ export function createE2eStateFileBridge(
           if (typeof payload.suppressDebugLaunch === 'boolean') {
             process.env.ASPIRE_EXTENSION_E2E_SUPPRESS_DEBUG_LAUNCH = payload.suppressDebugLaunch ? 'true' : 'false';
           }
+          if (typeof payload.failDebugLaunch === 'boolean') {
+            process.env.ASPIRE_EXTENSION_E2E_FAIL_DEBUG_LAUNCH = payload.failDebugLaunch ? 'true' : 'false';
+          }
           if (payload.showStatusDelayMs === null) {
             delete process.env.ASPIRE_EXTENSION_E2E_SHOW_STATUS_DELAY_MS;
           }

@@ -1,6 +1,6 @@
 import * as assert from 'assert';
-import { getCommandInvocationCount, getResources, getTerminalCommandCount, getTreeAppHostLabel, waitForCommandOutcome, waitForDashboardUrl, waitForExtensionState, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
-import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setDebugLaunchFailureForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, writeLsSequenceCliWrapper } from './helpers/fixtures';
+import { getCommandInvocationCount, getResources, getTerminalCommandCount, getTreeAppHostLabel, isSamePath, waitForCommandOutcome, waitForDashboardUrl, waitForExtensionState, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
+import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setDebugLaunchFailureForE2E, setTerminalCommandExecutionSuppressedForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { cancelActiveInput, clickTreeItem, executeCommandFromPalette, openAspireView, waitForTreeItem } from './helpers/vscode';
 
@@ -83,86 +83,6 @@ suite('Aspire AppHost tree E2E', function () {
         await waitForNoRunningAppHost();
     });
 
-    test('promotes a possibly-buildable idle candidate to buildable after stop', async () => {
-        const appHostPath = getPrimaryAppHostProjectPath();
-        const wrapperPath = writeLsSequenceCliWrapper([
-            [{ path: appHostPath, language: 'csharp', status: 'possibly-buildable', selected: true }],
-            [{ path: appHostPath, language: 'csharp', status: 'buildable', selected: true }],
-        ], 'aspire-ls-sequence-auto-buildable');
-        await setE2eCliPathForE2E(wrapperPath);
-
-        await openAspireView();
-        await waitForRepositoryIdle();
-        const refreshInvocationBefore = await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 60000).then(event => event.sequence).catch(() => 0);
-        await executeE2eControlCommand({ name: 'refreshAppHosts' });
-        await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 60000, refreshInvocationBefore);
-
-        await waitForExtensionState(
-            file => file.state.workspaceAppHostCandidates.some(candidate => candidate.path === appHostPath && candidate.status === 'possibly-buildable'),
-            'possibly-buildable workspace candidate',
-            60000);
-
-        const runBefore = await waitForCommandOutcome('aspire-vscode.runAppHost', 'success', 1000).then(event => event.sequence).catch(() => 0);
-        await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });
-        await waitForCommandOutcome('aspire-vscode.runAppHost', 'success', 120000, runBefore);
-        await waitForRunningAppHost();
-
-        // Snapshot the latest manual-refresh command sequence before stopping. The automatic
-        // refresh on debug-session-end calls dataRepository.refresh() directly and never raises the
-        // aspire-vscode.refreshAppHosts command, so this sequence must not advance.
-        const refreshSequenceBeforeStop = await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 1000).then(event => event.sequence).catch(() => 0);
-
-        const stopBefore = await waitForCommandOutcome('aspire-vscode.stopAppHost', 'success', 1000).then(event => event.sequence).catch(() => 0);
-        await executeE2eControlCommand({ name: 'stopAppHost', appHostPath }, { waitFor: 'started' });
-        await waitForCommandOutcome('aspire-vscode.stopAppHost', 'success', 120000, stopBefore);
-        await waitForNoRunningAppHost();
-
-        const stateWithBuildableCandidate = await waitForExtensionState(
-            file => file.state.workspaceAppHostCandidates.some(candidate => candidate.path === appHostPath && candidate.status === 'buildable'),
-            'buildable workspace candidate after automatic refresh',
-            60000);
-
-        const refreshSequenceAfterStop = await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 1000).then(event => event.sequence).catch(() => 0);
-        assert.strictEqual(
-            refreshSequenceAfterStop,
-            refreshSequenceBeforeStop,
-            'No manual refreshAppHosts command should run after stop; promotion must come from the automatic debug-session-end refresh.');
-
-        const appHostLabel = getTreeAppHostLabel(stateWithBuildableCandidate.state);
-        const section = await openAspireView();
-        const appHostItem = await waitForTreeItem(section, appHostLabel);
-        await appHostItem.expand();
-        await waitForTreeItem(section, 'Status: Buildable');
-    });
-
-    test('removes idle workspace candidate after a failed build', async () => {
-        const appHostPath = getPrimaryAppHostProjectPath();
-        const wrapperPath = writeLsSequenceCliWrapper([
-            [{ path: appHostPath, language: 'csharp', status: 'possibly-buildable', selected: true }],
-            [{ path: appHostPath, language: 'csharp', status: 'possibly-unbuildable', selected: true }],
-        ], 'aspire-ls-sequence-failed-build');
-        await setE2eCliPathForE2E(wrapperPath);
-
-        await openAspireView();
-        await waitForRepositoryIdle();
-        const refreshInvocationBefore = await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 60000).then(event => event.sequence).catch(() => 0);
-        await executeE2eControlCommand({ name: 'refreshAppHosts' });
-        await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 60000, refreshInvocationBefore);
-
-        await waitForExtensionState(
-            file => file.state.workspaceAppHostCandidates.some(candidate => candidate.path === appHostPath && candidate.status === 'possibly-buildable'),
-            'possibly-buildable workspace candidate',
-            60000);
-
-        await setDebugLaunchFailureForE2E(true);
-        await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });
-
-        await waitForExtensionState(
-            file => file.state.workspaceAppHostCandidates.every(candidate => candidate.path !== appHostPath),
-            'workspace candidate removed after failed build',
-            60000);
-    });
-
     test('workspace view return clears stale stopped AppHost after returning to Aspire view', async () => {
         await openAspireView();
         await waitForRepositoryIdle();
@@ -214,4 +134,75 @@ suite('Aspire AppHost tree E2E', function () {
         await openAspireView();
         await waitForNoRunningAppHost(120000, appHostPath);
     });
+
+    test('refreshes idle workspace candidate after stop without running manual refresh', async () => {
+        await openAspireView();
+        await waitForRepositoryIdle();
+        const discovered = await waitForWorkspaceAppHost();
+        const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
+
+        const runBefore = getCommandInvocationCount('aspire-vscode.runAppHost');
+        await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });
+        await waitForCommandOutcome('aspire-vscode.runAppHost', 'success', 120000, runBefore);
+        await waitForRunningAppHost();
+
+        // Snapshot the latest manual-refresh command sequence before stopping. The automatic
+        // refresh on debug-session-end calls dataRepository.refresh() directly and never raises the
+        // aspire-vscode.refreshAppHosts command, so this sequence must not advance.
+        const refreshSequenceBeforeStop = getCommandInvocationCount('aspire-vscode.refreshAppHosts');
+
+        const stopBefore = getCommandInvocationCount('aspire-vscode.stopAppHost');
+        await executeE2eControlCommand({ name: 'stopAppHost', appHostPath }, { waitFor: 'started' });
+        await waitForCommandOutcome('aspire-vscode.stopAppHost', 'success', 120000, stopBefore);
+        await waitForNoRunningAppHost(120000, appHostPath);
+
+        const stateAfterStop = await waitForExtensionState(
+            file => file.state.workspaceAppHostCandidates.some(candidate => isSamePath(candidate.path, appHostPath)),
+            'workspace candidate after automatic refresh',
+            60000);
+
+        const refreshSequenceAfterStop = getCommandInvocationCount('aspire-vscode.refreshAppHosts');
+        assert.strictEqual(
+            refreshSequenceAfterStop,
+            refreshSequenceBeforeStop,
+            'No manual refreshAppHosts command should run after stop; the update must come from the automatic debug-session-end refresh.');
+
+        const appHostLabel = getTreeAppHostLabel(stateAfterStop.state);
+        const candidate = stateAfterStop.state.workspaceAppHostCandidates.find(candidate => isSamePath(candidate.path, appHostPath));
+        assert.ok(candidate);
+        const section = await openAspireView();
+        const appHostItem = await waitForTreeItem(section, appHostLabel);
+        await appHostItem.expand();
+        await waitForTreeItem(section, `Status: ${formatStatusLabel(candidate.status)}`);
+    });
+
+    test('clears launching state after a failed debug launch', async () => {
+        await openAspireView();
+        await waitForRepositoryIdle();
+        const discovered = await waitForWorkspaceAppHost();
+        const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
+
+        await setDebugLaunchFailureForE2E(true);
+        try {
+            const runBefore = getCommandInvocationCount('aspire-vscode.runAppHost');
+            await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });
+            await waitForCommandOutcome('aspire-vscode.runAppHost', 'error', 60000, runBefore);
+            await waitForNoRunningAppHost(120000, appHostPath);
+
+            await waitForExtensionState(
+                file => file.state.workspaceAppHostCandidates.some(candidate => isSamePath(candidate.path, appHostPath)),
+                'workspace candidate after failed debug launch',
+                60000);
+        } finally {
+            await setDebugLaunchFailureForE2E(false);
+        }
+    });
 });
+
+function formatStatusLabel(status: string): string {
+    return status
+        .split(/[-_\s]+/)
+        .filter(part => part.length > 0)
+        .map(part => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+        .join(' ');
+}
