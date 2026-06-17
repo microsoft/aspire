@@ -23,7 +23,7 @@ export async function waitForWorkspaceAppHost(timeoutMs = 120000): Promise<Exten
     const deadline = createDeadline(timeoutMs);
     await ensureWorkspaceFolderOpen(deadline);
     return await waitForExtensionState(
-        file => file.state.workspaceAppHostCandidatePaths.some(candidate => isSamePath(candidate, getPrimaryAppHostProjectPath())),
+        file => file.state.workspaceAppHostCandidates.some(candidate => isSamePath(candidate.path, getPrimaryAppHostProjectPath())),
         'workspace AppHost candidate',
         getRemainingTimeout(deadline, 'workspace AppHost candidate'));
 }

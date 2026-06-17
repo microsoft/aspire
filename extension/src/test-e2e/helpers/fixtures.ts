@@ -58,6 +58,10 @@ export async function setDebugLaunchSuppressedForE2E(suppressDebugLaunch: boolea
     await applyE2eControl({ suppressDebugLaunch });
 }
 
+export async function setDebugLaunchFailureForE2E(failDebugLaunch: boolean): Promise<void> {
+    await applyE2eControl({ failDebugLaunch });
+}
+
 export async function setShowStatusDelayForE2E(delayMs: number | undefined): Promise<void> {
     await applyE2eControl({ showStatusDelayMs: delayMs ?? null });
 }
@@ -195,6 +199,15 @@ export function writeConfigInfoUnsupportedCliWrapper(name = 'aspire-no-config-in
     return writeCliWrapper(name, {
         configInfoExitCode: 42,
         configInfoStderr: 'config info is not available in this simulated old CLI',
+    });
+}
+
+export function writeLsSequenceCliWrapper(
+    lsResponses: unknown[],
+    name = 'aspire-ls-sequence',
+): string {
+    return writeCliWrapper(name, {
+        lsResponses,
     });
 }
 
@@ -517,7 +530,7 @@ function getLegacyAspireSettingsPath(): string {
 
 function writeCliWrapper(
     name: string,
-    options: { configInfoJson?: unknown; configInfoExitCode?: number; configInfoStderr?: string },
+    options: { configInfoJson?: unknown; configInfoExitCode?: number; configInfoStderr?: string; lsResponses?: unknown[]; },
 ): string {
     const wrapperDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers');
     fs.mkdirSync(wrapperDirectory, { recursive: true });
@@ -525,6 +538,8 @@ function writeCliWrapper(
     const scriptPath = path.join(wrapperDirectory, `${name}.js`);
     fs.writeFileSync(scriptPath, `#!/usr/bin/env node
 const { spawnSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 const realCli = ${JSON.stringify(getCliPath())};
 const args = process.argv.slice(2);
 
@@ -539,6 +554,16 @@ ${options.configInfoJson === undefined
   process.exit(${options.configInfoExitCode ?? 1});`
         : `  console.log(${JSON.stringify(JSON.stringify(options.configInfoJson))});
   process.exit(0);`}
+}
+
+const lsResponses = ${JSON.stringify(options.lsResponses ?? null)};
+if (Array.isArray(lsResponses) && args.length >= 3 && args[0] === 'ls' && args[1] === '--format' && args[2] === 'json') {
+  const indexFile = path.join(path.dirname(${JSON.stringify(scriptPath)}), ${JSON.stringify(`${name}.ls-index`)});
+  const index = fs.existsSync(indexFile) ? Number(fs.readFileSync(indexFile, 'utf8') || '0') : 0;
+  const boundedIndex = Math.min(index, lsResponses.length - 1);
+  fs.writeFileSync(indexFile, String(index + 1));
+  console.log(JSON.stringify(lsResponses[boundedIndex] ?? []));
+  process.exit(0);
 }
 
 const result = spawnSync(realCli, args, {

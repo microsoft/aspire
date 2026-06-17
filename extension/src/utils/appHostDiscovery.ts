@@ -3,12 +3,16 @@ import * as fs from 'fs';
 import * as vscode from 'vscode';
 import type { ChildProcessWithoutNullStreams } from 'child_process';
 import { spawnCliProcess } from '../debugger/languages/cli';
+import { lsNoEvaluateCapability } from '../types/configInfo';
 import { AspireTerminalProvider } from './AspireTerminalProvider';
+import { ConfigInfoProvider } from './configInfoProvider';
+import { isBuildableAppHostCandidate } from './appHostStatus';
 import { aspireConfigFileName, getAppHostPathFromConfig, readJsonFile } from './cliTypes';
 import { EnvironmentVariables } from './environment';
 import { extensionLogOutputChannel } from './logging';
 import { getAppHostDiscoveryTimeoutMs } from './settings';
 import { appHostDiscoveryFindFilesMaxResults, getAppHostDiscoveryExcludeGlob, isExcludedDiscoveryUri } from './workspaceFileSearch';
+import type { AppHostCandidate } from '../types/appHostCandidate';
 
 // Mirrors the `aspire ls --format json` candidate shape documented in
 // docs/specs/cli-output-formats.md. Older CLI fallback results are adapted into
@@ -18,13 +22,6 @@ export interface CandidateAppHostDisplayInfo {
     language: string | null;
     status: string | null;
     selected?: boolean;
-}
-
-export interface AppHostCandidate {
-    relativePath: string;
-    path: string;
-    language: string;
-    status: string;
 }
 
 export interface AppHostProjectSearchResult {
@@ -47,10 +44,14 @@ export class AppHostDiscoveryService implements vscode.Disposable {
     private readonly _pendingInvalidationTimers = new Map<string, ReturnType<typeof setTimeout>>();
     private readonly _activeCliProcesses = new Set<ChildProcessWithoutNullStreams>();
     private readonly _cancelActiveCliProcesses = new Set<(error: Error) => void>();
+    private _supportsNoEvaluateCapabilityResolved = false;
+    private _supportsNoEvaluateCapability = false;
+    private _configInfoProvider: ConfigInfoProvider | undefined;
     private _disposed = false;
     readonly onDidChangeCandidates = this._onDidChangeCandidates.event;
 
-    constructor(private readonly _terminalProvider: AspireTerminalProvider) {
+    constructor(private readonly _terminalProvider: AspireTerminalProvider, configInfoProvider?: ConfigInfoProvider) {
+        this._configInfoProvider = configInfoProvider;
     }
 
     async discover(workspaceFolder: vscode.WorkspaceFolder, forceRefresh = false, cancellationToken?: vscode.CancellationToken): Promise<CandidateAppHostDisplayInfo[]> {
@@ -130,7 +131,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
     private async _discoverCore(workspaceFolder: vscode.WorkspaceFolder): Promise<CandidateAppHostDisplayInfo[]> {
         try {
             const appHosts = await this._discoverWithLs(workspaceFolder);
-            extensionLogOutputChannel.info(`Discovered ${appHosts.length} AppHost candidate(s) via aspire ls`);
+            extensionLogOutputChannel.info(`Discovered ${appHosts.length} AppHost candidate(s) via aspire ls${this._supportsNoEvaluateCapability ? ' --no-evaluate' : ''}`);
             return appHosts;
         }
         catch (error) {
@@ -168,6 +169,10 @@ export class AppHostDiscoveryService implements vscode.Disposable {
 
         const cliPath = await this._terminalProvider.getAspireCliExecutablePath();
         const args = ['ls', '--format', 'json'];
+        const supportsNoEvaluateCapability = await this._resolveSupportsNoEvaluateCapabilityAsync();
+        if (supportsNoEvaluateCapability) {
+            args.push('--no-evaluate');
+        }
         if (process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true') {
             args.push('--cli-wait-for-debugger');
         }
@@ -240,6 +245,22 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             return watcher;
         });
         this._watchers.set(key, watchers);
+    }
+
+    private async _resolveSupportsNoEvaluateCapabilityAsync(): Promise<boolean> {
+        if (this._supportsNoEvaluateCapabilityResolved) {
+            return this._supportsNoEvaluateCapability;
+        }
+
+        // Reuse the injected ConfigInfoProvider so this probe shares its cache instead of issuing
+        // a second `aspire config info` invocation. That matters here because discovery runs in
+        // large workspaces where avoiding redundant CLI work is the whole point of --no-evaluate.
+        // hasCapability with suppressErrors never throws; a missing or older CLI degrades to false.
+        this._configInfoProvider ??= new ConfigInfoProvider(this._terminalProvider);
+        this._supportsNoEvaluateCapability = await this._configInfoProvider.hasCapability(lsNoEvaluateCapability, { suppressErrors: true });
+        this._supportsNoEvaluateCapabilityResolved = true;
+        extensionLogOutputChannel.info(`CLI capability '${lsNoEvaluateCapability}' ${this._supportsNoEvaluateCapability ? 'advertised' : 'not advertised'}; aspire ls --no-evaluate ${this._supportsNoEvaluateCapability ? 'enabled' : 'disabled'}.`);
+        return this._supportsNoEvaluateCapability;
     }
 
     private _throwIfDisposed(): void {
@@ -416,10 +437,6 @@ export function getWorkspaceAppHostProjectSearchResult(workspaceFolder: vscode.W
         all_project_file_candidates: buildableCandidates.map(candidate => candidate.path),
         app_host_candidates: effectiveAppHostCandidates,
     };
-}
-
-export function isBuildableAppHostCandidate(candidate: AppHostCandidate): boolean {
-    return candidate.status === 'buildable';
 }
 
 export function formatAppHostLanguage(language: string): string | undefined {

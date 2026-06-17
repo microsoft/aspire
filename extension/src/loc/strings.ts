@@ -102,6 +102,7 @@ export const workspaceViewSelectedSingleAppHost = (language?: string) => languag
 export const workspaceViewSelectedMultipleAppHosts = (count: number) => vscode.l10n.t('Workspace view selected because aspire ls found {0} buildable AppHosts.', count);
 export const tooltipType = (type: string) => vscode.l10n.t('Type: {0}', type);
 export const tooltipState = (state: string) => vscode.l10n.t('State: {0}', state);
+export const tooltipStatus = (status: string) => vscode.l10n.t('Status: {0}', status);
 export const tooltipHealth = (health: string) => vscode.l10n.t('Health: {0}', health);
 export const tooltipEndpoints = vscode.l10n.t('Endpoints:');
 export const healthChecksLabel = vscode.l10n.t('Health Checks');

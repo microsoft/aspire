@@ -4,6 +4,7 @@ import type { CommandInvocationEvent } from '../utils/telemetry';
 import type { AspireTerminalCommandEvent } from '../utils/AspireTerminalProvider';
 import type { AppHostLaunchRequestedEvent } from '../services/AppHostLaunchService';
 import type { AcquiredTestRunSession, TestRunSessionAcquireOptions } from '../dcp/TestRunSessionManager';
+import { AppHostCandidate } from './appHostCandidate';
 
 export interface AspireExtensionStateSnapshot {
     viewMode: ViewMode;
@@ -14,6 +15,12 @@ export interface AspireExtensionStateSnapshot {
     workspaceAppHost: AspireAppHostState | undefined;
     workspaceAppHostName: string | undefined;
     workspaceAppHostPath: string | undefined;
+    workspaceAppHostCandidates: readonly AppHostCandidate[];
+    /**
+     * @deprecated Prefer {@link workspaceAppHostCandidates}, which also exposes candidate status
+     * and metadata. Retained so v1 API consumers can keep reading the snapshot without an API
+     * version bump.
+     */
     workspaceAppHostCandidatePaths: readonly string[];
     workspaceAppHostDescription: string | undefined;
     workspaceResources: readonly AspireResourceState[];
@@ -139,6 +146,7 @@ export interface AspireExtensionE2EControlPayload {
     forceCliUnavailable?: boolean;
     suppressTerminalCommandExecution?: boolean;
     suppressDebugLaunch?: boolean;
+    failDebugLaunch?: boolean;
     showStatusDelayMs?: number | null;
     command?: AspireExtensionE2EControlCommand;
 }

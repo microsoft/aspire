@@ -143,6 +143,15 @@ export class AppHostLaunchService implements vscode.Disposable {
             return;
         }
 
+        // E2E-only: simulate a build/launch failure so tests can exercise the failure path
+        // (e.g. removing an AppHost that no longer builds) without needing a genuinely broken
+        // project on disk. Mirrors the suppress hook but throws instead of returning success.
+        const isFailureSimulated = isE2eDebugLaunchFailureSimulated();
+        if (isFailureSimulated) {
+            this.clearLaunching(appHostPath);
+            throw new Error(`Simulated build failure for ${vscode.workspace.asRelativePath(appHostPath)} (E2E).`);
+        }
+
         try {
             const started = await vscode.debug.startDebugging(undefined, config);
             if (!started) {
@@ -160,6 +169,13 @@ function isE2eDebugLaunchSuppressed(): boolean {
         !!process.env.ASPIRE_EXTENSION_E2E_STATE_FILE &&
         !!process.env.ASPIRE_EXTENSION_E2E_CONTROL_FILE &&
         process.env.ASPIRE_EXTENSION_E2E_SUPPRESS_DEBUG_LAUNCH === 'true';
+}
+
+function isE2eDebugLaunchFailureSimulated(): boolean {
+    return process.env.ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE === 'true' &&
+        !!process.env.ASPIRE_EXTENSION_E2E_STATE_FILE &&
+        !!process.env.ASPIRE_EXTENSION_E2E_CONTROL_FILE &&
+        process.env.ASPIRE_EXTENSION_E2E_FAIL_DEBUG_LAUNCH === 'true';
 }
 
 function isMatchingAppHostPath(left: string, right: string): boolean {

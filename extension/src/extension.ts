@@ -509,7 +509,8 @@ function createStateSnapshot(
     workspaceAppHost: dataRepository.workspaceAppHost ? cloneAppHostState(dataRepository.workspaceAppHost, includeSensitiveDashboardUrls) : undefined,
     workspaceAppHostName: dataRepository.workspaceAppHostName,
     workspaceAppHostPath: dataRepository.workspaceAppHostPath,
-    workspaceAppHostCandidatePaths: [...dataRepository.workspaceAppHostCandidatePaths],
+    workspaceAppHostCandidatePaths: dataRepository.workspaceAppHostCandidates.map(candidate => candidate.path),
+    workspaceAppHostCandidates: dataRepository.workspaceAppHostCandidates.map(candidate => ({ ...candidate })),
     workspaceAppHostDescription: dataRepository.workspaceAppHostDescription,
     workspaceResources: dataRepository.workspaceResources.map(resource => cloneResourceState(resource, includeSensitiveDashboardUrls)),
     appHosts: dataRepository.appHosts.map(appHost => cloneAppHostState(appHost, includeSensitiveDashboardUrls)),
@@ -627,6 +628,9 @@ function createE2eStateFileBridge(
           }
           if (typeof payload.suppressDebugLaunch === 'boolean') {
             process.env.ASPIRE_EXTENSION_E2E_SUPPRESS_DEBUG_LAUNCH = payload.suppressDebugLaunch ? 'true' : 'false';
+          }
+          if (typeof payload.failDebugLaunch === 'boolean') {
+            process.env.ASPIRE_EXTENSION_E2E_FAIL_DEBUG_LAUNCH = payload.failDebugLaunch ? 'true' : 'false';
           }
           if (payload.showStatusDelayMs === null) {
             delete process.env.ASPIRE_EXTENSION_E2E_SHOW_STATUS_DELAY_MS;

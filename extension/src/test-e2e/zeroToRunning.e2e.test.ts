@@ -35,7 +35,7 @@ suite('Aspire zero-to-running E2E', function () {
         let section = await openAspireView();
         await waitForRepositoryIdle();
         await waitForExtensionState(
-            file => file.state.workspaceAppHostPath === undefined && file.state.workspaceAppHostCandidatePaths.length === 0,
+            file => file.state.workspaceAppHostPath === undefined && file.state.workspaceAppHostCandidates.length === 0,
             'no workspace AppHost before zero-to-running project creation',
             60000);
 

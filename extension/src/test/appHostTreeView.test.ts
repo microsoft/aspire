@@ -70,7 +70,7 @@ function makeTreeProvider(appHosts: readonly AppHostDisplayInfo[], viewMode: Vie
         appHosts,
         workspaceResources: [],
         workspaceAppHostPath: undefined,
-        workspaceAppHostCandidatePaths: [],
+        workspaceAppHostCandidates: [],
         workspaceAppHostName: undefined,
         workspaceAppHostDescription,
         onDidChangeData,
@@ -97,7 +97,8 @@ function makeTreeProviderWithLaunchService(appHosts: readonly AppHostDisplayInfo
         appHosts,
         workspaceResources: [],
         workspaceAppHostPath: undefined,
-        workspaceAppHostCandidatePaths: [],
+        workspaceAppHostCandidates: [],
+        workspaceAppHostStatus: undefined,
         workspaceAppHostName: undefined,
         workspaceAppHostDescription: undefined,
         onDidChangeData,
@@ -113,7 +114,12 @@ function makeWorkspaceTreeProvider(workspaceAppHostDescription: string): AspireA
         appHosts: [],
         workspaceResources: [makeResource()],
         workspaceAppHostPath: '/workspace/apps/Store/AppHost.csproj',
-        workspaceAppHostCandidatePaths: ['/workspace/apps/Store/AppHost.csproj'],
+        workspaceAppHostCandidates: [{
+            path: '/workspace/apps/Store/AppHost.csproj',
+            language: 'csharp',
+            status: 'buildable',
+        }],
+        workspaceAppHostStatus: undefined,
         workspaceAppHostName: 'AppHost.csproj',
         workspaceAppHostDescription,
         onDidChangeData,
@@ -402,7 +408,7 @@ suite('AspireAppHostTreeProvider', () => {
             appHosts: [makeAppHost({ appHostPath })],
             workspaceResources: [],
             workspaceAppHostPath: undefined,
-            workspaceAppHostCandidatePaths: [],
+            workspaceAppHostCandidates: [],
             workspaceAppHostName: undefined,
             workspaceAppHostDescription: undefined,
             onDidChangeData,
@@ -435,7 +441,11 @@ suite('AspireAppHostTreeProvider', () => {
             workspaceResources: [],
             workspaceAppHost: makeAppHost({ appHostPath, resources: [] }),
             workspaceAppHostPath: appHostPath,
-            workspaceAppHostCandidatePaths: [appHostPath],
+            workspaceAppHostCandidates: [{
+                path: appHostPath,
+                language: 'csharp',
+                status: 'buildable',
+            }],
             workspaceAppHostName: 'Store',
             workspaceAppHostDescription: undefined,
             onDidChangeData,
@@ -468,7 +478,11 @@ suite('AspireAppHostTreeProvider', () => {
             workspaceResources: [],
             workspaceAppHost: undefined,
             workspaceAppHostPath: appHostPath,
-            workspaceAppHostCandidatePaths: [appHostPath],
+            workspaceAppHostCandidates: [{
+                path: appHostPath,
+                language: 'csharp',
+                status: 'buildable',
+            }],
             workspaceAppHostName: 'Store',
             workspaceAppHostDescription: undefined,
             onDidChangeData,
@@ -511,7 +525,11 @@ suite('AspireAppHostTreeProvider', () => {
             workspaceResources: [resource],
             workspaceAppHost: makeAppHost({ appHostPath, resources: [resource] }),
             workspaceAppHostPath: appHostPath,
-            workspaceAppHostCandidatePaths: [appHostPath],
+            workspaceAppHostCandidates: [{
+                path: appHostPath,
+                language: 'csharp',
+                status: 'buildable',
+            }],
             workspaceAppHostName: 'AppHost.csproj',
             workspaceAppHostDescription: undefined,
             onDidChangeData,
@@ -558,7 +576,11 @@ suite('AspireAppHostTreeProvider', () => {
             workspaceResources: [resource],
             workspaceAppHost: makeAppHost({ appHostPath, resources: [resource] }),
             workspaceAppHostPath: appHostPath,
-            workspaceAppHostCandidatePaths: [appHostPath],
+            workspaceAppHostCandidates: [{
+                path: appHostPath,
+                language: 'csharp',
+                status: 'buildable',
+            }],
             workspaceAppHostName: 'AppHost.csproj',
             workspaceAppHostDescription: undefined,
             onDidChangeData,
@@ -600,7 +622,11 @@ suite('AspireAppHostTreeProvider', () => {
             workspaceResources: [resource],
             workspaceAppHost: makeAppHost({ appHostPath, resources: [resource] }),
             workspaceAppHostPath: appHostPath,
-            workspaceAppHostCandidatePaths: [appHostPath],
+            workspaceAppHostCandidates: [{
+                path: appHostPath,
+                language: 'csharp',
+                status: 'buildable',
+            }],
             workspaceAppHostName: 'AppHost.csproj',
             workspaceAppHostDescription: undefined,
             onDidChangeData,
@@ -637,7 +663,7 @@ suite('AspireAppHostTreeProvider', () => {
             },
             workspaceResources: [],
             workspaceAppHostPath: undefined,
-            workspaceAppHostCandidatePaths: [],
+            workspaceAppHostCandidates: [],
             workspaceAppHostName: undefined,
             workspaceAppHostDescription: undefined,
             onDidChangeData: changeEmitter.event,
@@ -763,6 +789,58 @@ suite('AspireAppHostTreeProvider', () => {
             'apps/Store/AppHost.csproj',
             'samples/Store/AppHost.csproj',
         ]);
+    });
+
+    test('workspace apphost shows green status child when candidate is buildable', () => {
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        const repository = {
+            viewMode: 'workspace' as ViewMode,
+            appHosts: [],
+            workspaceResources: [],
+            workspaceAppHostPath: '/workspace/apps/Store/AppHost.csproj',
+            workspaceAppHostCandidates: [{
+                path: '/workspace/apps/Store/AppHost.csproj',
+                language: 'csharp',
+                status: 'buildable',
+            }],
+            workspaceAppHostName: 'AppHost.csproj',
+            workspaceAppHostDescription: undefined,
+            onDidChangeData,
+        } as unknown as AppHostDataRepository;
+        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
+
+        const [workspaceGroup] = provider.getChildren();
+        const [workspaceAppHost] = provider.getChildren(workspaceGroup);
+        const [statusItem] = provider.getChildren(workspaceAppHost);
+
+        assert.strictEqual(statusItem.label, 'Status: Buildable');
+        assert.strictEqual((statusItem.iconPath as vscode.ThemeIcon).id, 'pass');
+    });
+
+    test('workspace apphost shows warn status child when candidate is likely buildable', () => {
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        const repository = {
+            viewMode: 'workspace' as ViewMode,
+            appHosts: [],
+            workspaceResources: [],
+            workspaceAppHostPath: '/workspace/apps/Store/AppHost.csproj',
+            workspaceAppHostCandidates: [{
+                path: '/workspace/apps/Store/AppHost.csproj',
+                language: 'csharp',
+                status: 'possibly-buildable',
+            }],
+            workspaceAppHostName: 'AppHost.csproj',
+            workspaceAppHostDescription: undefined,
+            onDidChangeData,
+        } as unknown as AppHostDataRepository;
+        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
+
+        const [workspaceGroup] = provider.getChildren();
+        const [workspaceAppHost] = provider.getChildren(workspaceGroup);
+        const [statusItem] = provider.getChildren(workspaceAppHost);
+
+        assert.strictEqual(statusItem.label, 'Status: Possibly Buildable');
+        assert.strictEqual((statusItem.iconPath as vscode.ThemeIcon).id, 'warning');
     });
 
     test('openDashboard stays silent when dashboard selection is canceled', async () => {
@@ -998,7 +1076,7 @@ suite('AspireAppHostTreeProvider', () => {
             ],
             workspaceResources: [],
             workspaceAppHostPath: undefined,
-            workspaceAppHostCandidatePaths: [],
+            workspaceAppHostCandidates: [],
             workspaceAppHostName: undefined,
             onDidChangeData,
         } as unknown as AppHostDataRepository;
@@ -1657,7 +1735,9 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             appHosts: [],
             workspaceResources: [makeResource()],
             workspaceAppHostPath: hostPath,
+            workspaceAppHostCandidates: [],
             workspaceAppHostName: undefined,
+            workspaceAppHostStatus: undefined,
             onDidChangeData,
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
@@ -1677,7 +1757,9 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             appHosts: [],
             workspaceResources: [makeResource()],
             workspaceAppHostPath: hostPath,
+            workspaceAppHostCandidates: [],
             workspaceAppHostName: undefined,
+            workspaceAppHostStatus: undefined,
             onDidChangeData,
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
@@ -1695,8 +1777,13 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             appHosts: [],
             workspaceResources: [],
             workspaceAppHostPath: '/repo/AppHost/AppHost.csproj',
-            workspaceAppHostCandidatePaths: ['/repo/AppHost/AppHost.csproj'],
+            workspaceAppHostCandidates: [{
+                path: '/repo/AppHost/AppHost.csproj',
+                language: 'csharp',
+                status: 'buildable',
+            }],
             workspaceAppHostName: undefined,
+            workspaceAppHostStatus: undefined,
             onDidChangeData,
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
@@ -1711,12 +1798,14 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         assert.strictEqual(appHostItem.contextValue, 'workspaceAppHost');
         assert.strictEqual(appHostItem.collapsibleState, vscode.TreeItemCollapsibleState.Collapsed);
         assert.deepStrictEqual(provider.getChildren(appHostItem).map(item => item.contextValue), [
+            'workspaceAppHostStatus',
             'workspaceAppHostAction:openSource',
             'workspaceAppHostAction:run',
             'workspaceAppHostAction:debug',
             'workspaceAppHostPath',
         ]);
         assert.deepStrictEqual(provider.getChildren(appHostItem).map(item => item.command?.command), [
+            undefined,
             'aspire-vscode.openAppHostSource',
             'aspire-vscode.runAppHost',
             'aspire-vscode.debugAppHost',
@@ -1733,12 +1822,21 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             appHosts: [],
             workspaceResources: [],
             workspaceAppHostPath: undefined,
-            workspaceAppHostCandidatePaths: [
-                '/repo/apps/Store/AppHost.csproj',
-                '/repo/samples/Store/AppHost.csproj',
+            workspaceAppHostCandidates: [
+                {
+                    path: '/repo/apps/Store/AppHost.csproj',
+                    language: 'csharp',
+                    status: 'buildable',
+                },
+                {
+                    path: '/repo/samples/Store/AppHost.csproj',
+                    language: 'csharp',
+                    status: 'buildable',
+                },
             ],
             workspaceAppHostDescription: 'Workspace view selected because aspire ls found 2 buildable AppHosts.',
             workspaceAppHostName: undefined,
+            workspaceAppHostStatus: undefined,
             onDidChangeData,
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
@@ -1775,8 +1873,13 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             appHosts: [],
             workspaceResources: [],
             workspaceAppHostPath: undefined,
-            workspaceAppHostCandidatePaths: [appHostPath],
+            workspaceAppHostCandidates: [{
+                path: appHostPath,
+                language: 'csharp',
+                status: 'buildable',
+            }],
             workspaceAppHostName: undefined,
+            workspaceAppHostStatus: undefined,
             onDidChangeData,
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), launchService);
@@ -1800,8 +1903,17 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             appHosts: [makeAppHost({ appHostPath: runningPath, appHostPid: 1234, cliPid: 5678, resources: [makeResource()] })],
             workspaceResources: [],
             workspaceAppHostPath: runningPath,
-            workspaceAppHostCandidatePaths: [runningPath, idlePath],
+            workspaceAppHostCandidates: [{
+                path: runningPath,
+                language: 'csharp',
+                status: 'buildable',
+            }, {
+                path: idlePath,
+                language: 'csharp',
+                status: 'buildable',
+            }],
             workspaceAppHostName: undefined,
+            workspaceAppHostStatus: undefined,
             onDidChangeData,
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
@@ -1840,8 +1952,17 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             appHosts: [makeAppHost({ appHostPath: runningSourceFile, appHostPid: 1234, cliPid: 5678, resources: [] })],
             workspaceResources: [makeResource({ name: 'workspace-service' })],
             workspaceAppHostPath: candidateCsproj,
-            workspaceAppHostCandidatePaths: [candidateCsproj, idlePath],
+            workspaceAppHostCandidates: [{
+                path: candidateCsproj,
+                language: 'csharp',
+                status: 'buildable',
+            }, {
+                path: idlePath,
+                language: 'csharp',
+                status: 'buildable',
+            }],
             workspaceAppHostName: undefined,
+            workspaceAppHostStatus: undefined,
             onDidChangeData,
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
@@ -1890,8 +2011,13 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             appHosts: [],
             workspaceResources: [],
             workspaceAppHostPath: undefined,
-            workspaceAppHostCandidatePaths: [appHostPath],
+            workspaceAppHostCandidates: [{
+                path: appHostPath,
+                language: 'csharp',
+                status: 'buildable',
+            }],
             workspaceAppHostName: undefined,
+            workspaceAppHostStatus: undefined,
             onDidChangeData,
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), launchService);
@@ -1923,8 +2049,15 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             appHosts: [],
             workspaceResources: [],
             workspaceAppHostPath: undefined,
-            workspaceAppHostCandidatePaths: [appHostPath],
+            workspaceAppHostCandidates: [
+                {
+                    path: appHostPath,
+                    language: 'csharp',
+                    status: 'buildable',
+                }
+            ],
             workspaceAppHostName: undefined,
+            workspaceAppHostStatus: undefined,
             onDidChangeData,
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), launchService);
@@ -1957,7 +2090,11 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             }),
             workspaceAppHostPath: hostPath,
             workspaceAppHostName: 'AppHost.csproj',
-            workspaceAppHostCandidatePaths: [hostPath],
+            workspaceAppHostCandidates: [{
+                path: hostPath,
+                language: 'csharp',
+                status: 'buildable',
+            }],
             onDidChangeData,
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
@@ -1986,7 +2123,15 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             workspaceAppHost: undefined,
             workspaceAppHostPath: undefined,
             workspaceAppHostName: undefined,
-            workspaceAppHostCandidatePaths: ['/repo/apps/Store/AppHost.csproj', '/repo/samples/Store/AppHost.csproj'],
+            workspaceAppHostCandidates: [{
+                path: '/repo/apps/Store/AppHost.csproj',
+                language: 'csharp',
+                status: 'buildable',
+            }, {
+                path: '/repo/samples/Store/AppHost.csproj',
+                language: 'csharp',
+                status: 'buildable',
+            }],
             workspaceAppHostDescription: 'Workspace view selected because aspire ls found 2 buildable AppHosts.',
             onDidChangeData,
         } as unknown as AppHostDataRepository;
@@ -2016,7 +2161,15 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             workspaceAppHost: makeAppHost({ appHostPath: selectedHostPath, appHostPid: 1234, resources: [] }),
             workspaceAppHostPath: selectedHostPath,
             workspaceAppHostName: 'apps/Store/AppHost.csproj',
-            workspaceAppHostCandidatePaths: [selectedHostPath, otherHostPath],
+            workspaceAppHostCandidates: [{
+                path: selectedHostPath,
+                language: 'csharp',
+                status: 'buildable',
+            }, {
+                path: otherHostPath,
+                language: 'csharp',
+                status: 'buildable',
+            }],
             workspaceAppHostDescription: 'Workspace view selected because aspire ls found 2 buildable AppHosts.',
             onDidChangeData,
         } as unknown as AppHostDataRepository;
@@ -2056,7 +2209,19 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             workspaceAppHost: undefined,
             workspaceAppHostPath: undefined,
             workspaceAppHostName: undefined,
-            workspaceAppHostCandidatePaths: [runningHostPath, idleHostPath],
+            workspaceAppHostStatus: undefined,
+            workspaceAppHostCandidates: [
+                {
+                    path: runningHostPath,
+                    language: 'csharp',
+                    status: 'buildable',
+                },
+                {
+                    path: idleHostPath,
+                    language: 'csharp',
+                    status: 'buildable',
+                },
+            ],
             workspaceAppHostDescription: 'Workspace view selected because aspire ls found 2 buildable AppHosts.',
             onDidChangeData,
         } as unknown as AppHostDataRepository;
@@ -2094,7 +2259,18 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             workspaceAppHost: makeAppHost({ appHostPath: selectedHostPath, appHostPid: 1234, resources: undefined }),
             workspaceAppHostPath: selectedHostPath,
             workspaceAppHostName: 'AppHost.csproj',
-            workspaceAppHostCandidatePaths: [selectedHostPath, '/repo/samples/Store/AppHost.csproj'],
+            workspaceAppHostCandidates: [
+                {
+                    path: selectedHostPath,
+                    language: 'csharp',
+                    status: 'buildable',
+                },
+                {
+                    path: '/repo/samples/Store/AppHost.csproj',
+                    language: 'csharp',
+                    status: 'buildable',
+                },
+            ],
             workspaceAppHostDescription: 'Workspace view selected because aspire ls found 2 buildable AppHosts.',
             onDidChangeData,
         } as unknown as AppHostDataRepository;
@@ -2122,7 +2298,18 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             workspaceAppHost: makeAppHost({ appHostPath: selectedHostPath, appHostPid: 1234, resources: [] }),
             workspaceAppHostPath: selectedHostPath,
             workspaceAppHostName: 'AppHost.csproj',
-            workspaceAppHostCandidatePaths: [selectedHostPath, '/repo/samples/Store/AppHost.csproj'],
+            workspaceAppHostCandidates: [
+                {
+                    path: selectedHostPath,
+                    language: 'csharp',
+                    status: 'buildable',
+                },
+                {
+                    path: '/repo/samples/Store/AppHost.csproj',
+                    language: 'csharp',
+                    status: 'buildable',
+                },
+            ],
             workspaceAppHostDescription: 'Workspace view selected because aspire ls found 2 buildable AppHosts.',
             onDidChangeData,
         } as unknown as AppHostDataRepository;
@@ -2157,6 +2344,7 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             }),
             workspaceAppHostPath: hostPath,
             workspaceAppHostName: 'AppHost.csproj',
+            workspaceAppHostCandidates: [],
             onDidChangeData,
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
@@ -2317,6 +2505,7 @@ suite('LogFileItem in tree', () => {
             }),
             workspaceAppHostPath: hostPath,
             workspaceAppHostName: 'AppHost.csproj',
+            workspaceAppHostCandidates: [],
             onDidChangeData,
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
@@ -2344,6 +2533,7 @@ suite('LogFileItem in tree', () => {
             }),
             workspaceAppHostPath: hostPath,
             workspaceAppHostName: 'AppHost.csproj',
+            workspaceAppHostCandidates: [],
             onDidChangeData,
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());

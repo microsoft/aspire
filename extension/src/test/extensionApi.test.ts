@@ -18,6 +18,7 @@ suite('extension exports', () => {
 
         const state = api.state;
         assert.strictEqual(state.viewMode, 'workspace');
+        assert.strictEqual(Array.isArray(state.workspaceAppHostCandidates), true);
         assert.strictEqual(Array.isArray(state.workspaceAppHostCandidatePaths), true);
         assert.strictEqual(Array.isArray(state.workspaceResources), true);
         assert.strictEqual(Array.isArray(state.appHosts), true);

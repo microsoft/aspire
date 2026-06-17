@@ -5,7 +5,9 @@ import { spawnCliProcess } from '../debugger/languages/cli';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { appHostDescribeMayNotBeSupported, appHostPathMustBeNonEmptyAbsolute, aspireCliCommandFailed, aspireCliCommandTimedOut, aspireCliDescribeNotSupported, aspireCliOutputParseFailed, aspireDescribeMinimumVersion, errorFetchingAppHosts, workspaceViewSelectedMultipleAppHosts, workspaceViewSelectedSingleAppHost } from '../loc/strings';
-import { AppHostCandidate, AppHostDiscoveryService, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult, isBuildableAppHostCandidate } from '../utils/appHostDiscovery';
+import { AppHostCandidate } from '../types/appHostCandidate';
+import { AppHostDiscoveryService, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult } from '../utils/appHostDiscovery';
+import { isBuildableAppHostCandidate } from '../utils/appHostStatus';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { describeIncludeDisabledCommandsCapability } from '../types/configInfo';
 
@@ -211,7 +213,7 @@ export class AppHostDataRepository {
     // `aspire ps` polling can filter and render multiple running workspace AppHosts.
     private _workspaceAppHostName: string | undefined;
     private _workspaceAppHostPath: string | undefined;
-    private _workspaceAppHostCandidatePaths: string[] = [];
+    private _workspaceAppHostCandidates: AppHostCandidate[] = [];
     private _workspaceAppHostDescription: string | undefined;
     private _workspaceAppHostDiscoveryComplete = false;
     private _workspaceAppHostDiscoveryUsesWorkspaceRoot = false;
@@ -237,9 +239,11 @@ export class AppHostDataRepository {
     private _disposed = false;
 
     constructor(private readonly _terminalProvider: AspireTerminalProvider, appHostDiscoveryService?: AppHostDiscoveryService) {
-        this._appHostDiscoveryService = appHostDiscoveryService ?? new AppHostDiscoveryService(_terminalProvider);
-        this._ownsAppHostDiscoveryService = appHostDiscoveryService === undefined;
+        // Create the ConfigInfoProvider first so the repository-owned discovery service can share
+        // its cache, avoiding a second `aspire config info` probe for the --no-evaluate capability.
         this._configInfoProvider = new ConfigInfoProvider(_terminalProvider);
+        this._appHostDiscoveryService = appHostDiscoveryService ?? new AppHostDiscoveryService(_terminalProvider, this._configInfoProvider);
+        this._ownsAppHostDiscoveryService = appHostDiscoveryService === undefined;
         this._appHostDiscoveryChangeDisposable = this._appHostDiscoveryService.onDidChangeCandidates(workspaceFolder => {
             const rootFolder = vscode.workspace.workspaceFolders?.[0];
             if (rootFolder?.uri.toString() === workspaceFolder.uri.toString()) {
@@ -297,8 +301,8 @@ export class AppHostDataRepository {
         return this._workspaceAppHostPath;
     }
 
-    get workspaceAppHostCandidatePaths(): readonly string[] {
-        return this._workspaceAppHostCandidatePaths;
+    get workspaceAppHostCandidates(): readonly AppHostCandidate[] {
+        return this._workspaceAppHostCandidates;
     }
 
     get workspaceAppHostDescription(): string | undefined {
@@ -443,7 +447,7 @@ export class AppHostDataRepository {
         return this._dataActive
             && (this._viewMode === 'global'
                 || !this._workspaceAppHostDiscoveryComplete
-                || this._workspaceAppHostCandidatePaths.length > 0);
+                || this._workspaceAppHostCandidates.length > 0);
     }
 
     private get _shouldWatchWorkspace(): boolean {
@@ -567,7 +571,7 @@ export class AppHostDataRepository {
             this._clearWorkspaceAppHostDiscovery();
             this._clearWorkspaceAppHostData();
             if (appHostCandidates.length > 0) {
-                extensionLogOutputChannel.info(`aspire ls found ${appHostCandidates.length} AppHost candidates, but none are buildable`);
+                extensionLogOutputChannel.info(`aspire ls found ${appHostCandidates.length} AppHost candidates, but none are buildable or possibly buildable`);
             }
             this._clearErrors();
             this._syncPolling();
@@ -576,14 +580,14 @@ export class AppHostDataRepository {
         }
 
         if (buildableAppHostCandidates.length > 1) {
-            this._setWorkspaceAppHostCandidatePaths(buildableAppHostCandidates);
+            this._setWorkspaceAppHostCandidates(buildableAppHostCandidates);
             if (selectedAppHostPath) {
-                this._setWorkspaceAppHostPath(selectedAppHostPath, buildableAppHostCandidates);
+                this._setWorkspaceAppHostPath(selectedAppHostPath);
             } else {
                 this._clearWorkspaceAppHostSelection();
             }
             this._workspaceAppHostDescription = workspaceViewSelectedMultipleAppHosts(buildableAppHostCandidates.length);
-            extensionLogOutputChannel.info(`Workspace contains ${buildableAppHostCandidates.length} buildable AppHosts`);
+            extensionLogOutputChannel.info(`Workspace contains ${buildableAppHostCandidates.length} buildable or possibly-buildable AppHosts`);
             if (this._viewMode === 'workspace') {
                 this.setViewMode('workspace');
             }
@@ -596,8 +600,8 @@ export class AppHostDataRepository {
             ? buildableAppHostCandidates.find(candidate => isMatchingAppHostPath(candidate.path, selectedAppHostPath))
             : buildableAppHostCandidates[0];
         if (selectedAppHostCandidate) {
-            this._setWorkspaceAppHostCandidatePaths(buildableAppHostCandidates);
-            this._setWorkspaceAppHostPath(selectedAppHostCandidate.path, buildableAppHostCandidates);
+            this._setWorkspaceAppHostCandidates(buildableAppHostCandidates);
+            this._setWorkspaceAppHostPath(selectedAppHostCandidate.path);
             this._workspaceAppHostDescription = workspaceViewSelectedSingleAppHost(formatAppHostLanguage(selectedAppHostCandidate.language));
             extensionLogOutputChannel.info(`Workspace apphost resolved: ${selectedAppHostCandidate.path} (${selectedAppHostCandidate.language}, ${selectedAppHostCandidate.status})`);
             this._syncPolling();
@@ -617,23 +621,16 @@ export class AppHostDataRepository {
             && rootFolder?.uri.toString() === workspaceFolder.uri.toString();
     }
 
-    private _setWorkspaceAppHostPath(appHostPath: string, appHostCandidates: readonly AppHostCandidate[]): void {
+    private _setWorkspaceAppHostPath(appHostPath: string): void {
         this._workspaceAppHostPath = appHostPath;
-        const appHostCandidatePaths = appHostCandidates.map(candidate => candidate.path);
-        const appHostLabels = shortenPaths(appHostCandidatePaths);
-        const candidateIndex = appHostCandidatePaths.findIndex(candidatePath => isMatchingAppHostPath(candidatePath, appHostPath));
+        const candidatePaths = this._workspaceAppHostCandidates.map(candidate => candidate.path);
+        const appHostLabels = shortenPaths(candidatePaths);
+        const candidateIndex = candidatePaths.findIndex(candidatePath => isMatchingAppHostPath(candidatePath, appHostPath));
         this._workspaceAppHostName = candidateIndex >= 0 ? appHostLabels[candidateIndex] : shortenPath(appHostPath);
     }
 
-    private _setWorkspaceAppHostPathFromCurrentCandidates(appHostPath: string): void {
-        this._workspaceAppHostPath = appHostPath;
-        const appHostLabels = shortenPaths(this._workspaceAppHostCandidatePaths);
-        const candidateIndex = this._workspaceAppHostCandidatePaths.findIndex(candidatePath => isMatchingAppHostPath(candidatePath, appHostPath));
-        this._workspaceAppHostName = candidateIndex >= 0 ? appHostLabels[candidateIndex] : shortenPath(appHostPath);
-    }
-
-    private _setWorkspaceAppHostCandidatePaths(appHostCandidates: readonly AppHostCandidate[]): void {
-        this._workspaceAppHostCandidatePaths = appHostCandidates.map(candidate => candidate.path);
+    private _setWorkspaceAppHostCandidates(appHostCandidates: readonly AppHostCandidate[]): void {
+        this._workspaceAppHostCandidates = [...appHostCandidates];
     }
 
     private _clearWorkspaceAppHostSelection(): void {
@@ -643,7 +640,7 @@ export class AppHostDataRepository {
 
     private _clearWorkspaceAppHostDiscovery(): void {
         this._clearWorkspaceAppHostSelection();
-        this._workspaceAppHostCandidatePaths = [];
+        this._workspaceAppHostCandidates = [];
         this._workspaceAppHostDescription = undefined;
     }
 
@@ -1172,7 +1169,7 @@ export class AppHostDataRepository {
         const hasDashboardUrl = Boolean(this._workspaceAppHost?.dashboardUrl)
             || Array.from(this._workspaceResources.values()).some(resource => Boolean(resource.dashboardUrl))
             || this._appHosts.some(appHost => Boolean(appHost.dashboardUrl));
-        const hasWorkspaceCandidates = this._workspaceAppHostCandidatePaths.length > 0;
+        const hasWorkspaceCandidates = this._workspaceAppHostCandidates.length > 0;
         vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', !hasWorkspaceAppHost && !hasResources && !hasRunningAppHosts && !hasWorkspaceCandidates);
         // Keep this distinct from `noAppHosts`, which also considers discovered idle
         // candidates that have no live dashboard URL.
@@ -1454,10 +1451,10 @@ export class AppHostDataRepository {
         let workspaceAppHostPath = this._workspaceAppHostPath;
         const discoveryPending = !this._workspaceAppHostDiscoveryComplete;
         let workspaceAppHosts: AppHostDisplayInfo[];
-        if (this._workspaceAppHostCandidatePaths.length === 0 && discoveryPending) {
+        if (this._workspaceAppHostCandidates.length === 0 && discoveryPending) {
             workspaceAppHosts = appHosts.filter(appHost => isPathInWorkspace(appHost.appHostPath));
-        } else if (this._workspaceAppHostCandidatePaths.length > 0) {
-            workspaceAppHosts = appHosts.filter(appHost => this._workspaceAppHostCandidatePaths.some(candidatePath => isMatchingAppHostPath(appHost.appHostPath, candidatePath)));
+        } else if (this._workspaceAppHostCandidates.length > 0) {
+            workspaceAppHosts = appHosts.filter(appHost => this._workspaceAppHostCandidates.some(candidate => isMatchingAppHostPath(appHost.appHostPath, candidate.path)));
         } else {
             workspaceAppHosts = [];
         }
@@ -1472,7 +1469,7 @@ export class AppHostDataRepository {
             if (workspaceAppHostPathChanged) {
                 extensionLogOutputChannel.info(`Retargeting workspace AppHost describe to running AppHost ${workspaceAppHost.appHostPath}`);
                 this._stopDescribeWatch({ clearWorkspaceResources: true });
-                this._setWorkspaceAppHostPathFromCurrentCandidates(workspaceAppHost.appHostPath);
+                this._setWorkspaceAppHostPath(workspaceAppHost.appHostPath);
                 workspaceAppHostPath = this._workspaceAppHostPath;
                 this._setDescribeError(undefined);
                 this._describeRestartDelay = 5000;
@@ -1494,7 +1491,7 @@ export class AppHostDataRepository {
         // streams for running AppHosts that are NOT the selected one (the workspace
         // describe stream already handles the selected AppHost). This ensures every
         // running AppHost displayed in the multi-AppHost workspace tree has resources.
-        if (this._workspaceAppHostCandidatePaths.length > 1) {
+        if (this._workspaceAppHostCandidates.length > 1) {
             this._reconcileWorkspaceDescribes(workspaceAppHosts);
         }
 

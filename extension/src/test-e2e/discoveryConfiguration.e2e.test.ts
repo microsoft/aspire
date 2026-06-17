@@ -31,10 +31,10 @@ suite('Aspire workspace discovery and configuration E2E', function () {
         await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 60000, refreshWithoutConfigBefore);
 
         const primaryCandidate = await waitForExtensionState(
-            file => file.state.workspaceAppHostCandidatePaths.some(candidate => isSamePath(candidate, getPrimaryAppHostProjectPath())) && !file.state.hasError,
+            file => file.state.workspaceAppHostCandidates.some(candidate => isSamePath(candidate.path, getPrimaryAppHostProjectPath())) && !file.state.hasError,
             'primary AppHost candidate after removing aspire.config.json',
             60000);
-        assert.ok(primaryCandidate.state.workspaceAppHostCandidatePaths.length >= 1);
+        assert.ok(primaryCandidate.state.workspaceAppHostCandidates.length >= 1);
 
         const secondaryAppHostPath = createAdditionalAppHostCandidate('AspireE2E.SecondAppHost', 'single-file');
         const refreshWithSecondCandidateBefore = getCommandInvocationCount('aspire-vscode.refreshAppHosts');
@@ -42,10 +42,10 @@ suite('Aspire workspace discovery and configuration E2E', function () {
         await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 60000, refreshWithSecondCandidateBefore);
 
         const multipleCandidates = await waitForExtensionState(
-            file => file.state.workspaceAppHostCandidatePaths.some(candidate => isSamePath(candidate, secondaryAppHostPath)),
+            file => file.state.workspaceAppHostCandidates.some(candidate => isSamePath(candidate.path, secondaryAppHostPath)),
             'secondary AppHost candidate',
             60000);
-        assert.ok(multipleCandidates.state.workspaceAppHostCandidatePaths.length >= 2);
+        assert.ok(multipleCandidates.state.workspaceAppHostCandidates.length >= 2);
 
         restoreWorkspaceAppHostConfig();
         removeAdditionalAppHostCandidate();
@@ -56,11 +56,11 @@ suite('Aspire workspace discovery and configuration E2E', function () {
         const restored = await waitForExtensionState(
             file => file.state.workspaceAppHostPath !== undefined
                 && isSamePath(file.state.workspaceAppHostPath, getPrimaryAppHostProjectPath())
-                && file.state.workspaceAppHostCandidatePaths.some(candidate => isSamePath(candidate, getPrimaryAppHostProjectPath()))
-                && !file.state.workspaceAppHostCandidatePaths.some(candidate => isSamePath(candidate, secondaryAppHostPath)),
+                && file.state.workspaceAppHostCandidates.some(candidate => isSamePath(candidate.path, getPrimaryAppHostProjectPath()))
+                && !file.state.workspaceAppHostCandidates.some(candidate => isSamePath(candidate.path, secondaryAppHostPath)),
             'restored primary AppHost without stale secondary candidate',
             60000);
-        assert.ok(restored.state.workspaceAppHostCandidatePaths.some(candidate => isSamePath(candidate, getPrimaryAppHostProjectPath())));
+        assert.ok(restored.state.workspaceAppHostCandidates.some(candidate => isSamePath(candidate.path, getPrimaryAppHostProjectPath())));
     });
 
     test('handles malformed, JSONC, absolute, and legacy AppHost configuration files', async () => {
@@ -76,10 +76,10 @@ suite('Aspire workspace discovery and configuration E2E', function () {
         await executeE2eControlCommand({ name: 'refreshAppHosts' });
         await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 60000, before);
         const malformedFallback = await waitForExtensionState(
-            file => file.state.workspaceAppHostCandidatePaths.some(candidate => isSamePath(candidate, getPrimaryAppHostProjectPath())),
+            file => file.state.workspaceAppHostCandidates.some(candidate => isSamePath(candidate.path, getPrimaryAppHostProjectPath())),
             'CLI-discovered AppHost after malformed aspire.config.json',
             60000);
-        assert.ok(malformedFallback.state.workspaceAppHostCandidatePaths.length >= 1);
+        assert.ok(malformedFallback.state.workspaceAppHostCandidates.length >= 1);
 
         writeWorkspaceAppHostConfigRaw(`{
   // JSONC comments are supported by the shared config parser.
@@ -137,13 +137,13 @@ suite('Aspire workspace discovery and configuration E2E', function () {
             const emptyWorkspace = await waitForExtensionState(
                 file => file.state.isWorkspaceAppHostDiscoveryComplete
                     && !file.state.isRepositoryLoading
-                    && file.state.workspaceAppHostCandidatePaths.length === 0
+                    && file.state.workspaceAppHostCandidates.length === 0
                     && file.state.workspaceResources.length === 0
                     && file.state.appHosts.length === 0
                     && !file.state.hasError,
                 'empty workspace discovery to complete without loading forever',
                 60000);
-            assert.deepStrictEqual(emptyWorkspace.state.workspaceAppHostCandidatePaths, []);
+            assert.deepStrictEqual(emptyWorkspace.state.workspaceAppHostCandidates, []);
 
             await waitForWorkbenchText('No Aspire AppHosts detected in this workspace.', 30000);
         } catch (error) {

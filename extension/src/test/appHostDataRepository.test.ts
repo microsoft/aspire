@@ -1402,7 +1402,7 @@ suite('AppHostDataRepository', () => {
             }]);
             await waitForCondition(() => repository.isWorkspaceAppHostDiscoveryComplete, 'workspace discovery did not complete');
 
-            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, [
+            assert.deepStrictEqual(repository.workspaceAppHostCandidates.map(c => c.path), [
                 '/workspace/apps/Store/AppHost.csproj',
             ]);
             assert.strictEqual(repository.appHosts.length, 1);
@@ -1622,6 +1622,56 @@ suite('AppHostDataRepository', () => {
             secondDiscovery.resolve([]);
             await waitForAppHostDiscovery();
 
+            assert.strictEqual(discoverStub.callCount, 2);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('updates workspace app host candidates status when discovery results change', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const candidatePath = '/workspace/AppHost/AppHost.csproj';
+        const discoverStub = sinon.stub();
+        // Initial discovery: the AppHost has not been built yet, so its buildability is unconfirmed.
+        discoverStub.onFirstCall().resolves([{
+            path: candidatePath,
+            language: 'csharp',
+            status: 'possibly-buildable',
+        }]);
+        // After a runtime transition (an AppHost debug session ending) the build output lands in the
+        // disk cache, so the refresh must confirm the candidate is buildable.
+        discoverStub.onSecondCall().callsFake((_folder: vscode.WorkspaceFolder, forceRefresh?: boolean) => {
+            assert.strictEqual(forceRefresh, true);
+            return Promise.resolve([{
+                path: candidatePath,
+                language: 'csharp',
+                status: 'buildable',
+            }]);
+        });
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: discoverStub,
+            dispose: () => { },
+        };
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            await waitForCondition(
+                () => repository.workspaceAppHostCandidates.length === 1 && repository.workspaceAppHostCandidates[0].status === 'possibly-buildable',
+                'initial workspace discovery did not apply possibly-buildable status');
+            assert.strictEqual(discoverStub.callCount, 1);
+
+            repository.refresh();
+
+            await waitForCondition(
+                () => repository.workspaceAppHostCandidates.length === 1 && repository.workspaceAppHostCandidates[0].status === 'buildable',
+                'forced workspace discovery did not apply updated buildable status');
             assert.strictEqual(discoverStub.callCount, 2);
         } finally {
             repository.dispose();
@@ -2796,7 +2846,7 @@ suite('AppHostDataRepository global polling', () => {
             await waitForAppHostDiscovery();
 
             assert.strictEqual(repository.viewMode, 'global');
-            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, [
+            assert.deepStrictEqual(repository.workspaceAppHostCandidates.map(c => c.path), [
                 '/workspace/apps/Store/AppHost.csproj',
                 '/workspace/samples/Store/AppHost.csproj',
             ]);

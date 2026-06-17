@@ -21,6 +21,7 @@ import {
     resourceCountDescription,
     tooltipType,
     tooltipState,
+    tooltipStatus,
     tooltipHealth,
     tooltipEndpoints,
     appHostSourceNotFound,
@@ -41,6 +42,7 @@ import {
     errorMessage,
 } from '../loc/strings';
 import { isLinkableUrl } from '../utils/urlSchemes';
+import { appHostCandidateStatusIcon, formatAppHostCandidateStatusLabel } from '../utils/appHostStatus';
 import {
     AppHostDataRepository,
     AppHostDisplayInfo,
@@ -55,9 +57,19 @@ import { collectResourceCommandArguments, ResourceCommandArgumentValue } from '.
 import { createResourceCommandArgumentLoader } from './ResourceCommandArgumentsLoader';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 
-type TreeElement = AppHostItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | WorkspaceAppHostItem | WorkspaceAppHostsGroupItem | RunningAppHostsGroupItem | WorkspaceAppHostActionItem | WorkspaceAppHostPathItem | HealthChecksGroupItem | HealthCheckItem | LogFileItem | CommandsGroupItem | ResourceCommandItem;
+type TreeElement = AppHostItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | WorkspaceAppHostItem | WorkspaceAppHostsGroupItem | RunningAppHostsGroupItem | WorkspaceAppHostStatusItem | WorkspaceAppHostActionItem | WorkspaceAppHostPathItem | HealthChecksGroupItem | HealthCheckItem | LogFileItem | CommandsGroupItem | ResourceCommandItem;
 
 const integratedBrowserOpenCommand = 'workbench.action.browser.open';
+
+/**
+ * A workspace AppHost candidate prepared for the tree: its full path, the CLI-reported buildability
+ * status (absent when derived from already-known AppHosts), and the shortened label shown in the UI.
+ */
+interface WorkspaceAppHostCandidateEntry {
+    path: string;
+    status?: string;
+    label: string;
+}
 
 function sortResources(resources: ResourceJson[]): ResourceJson[] {
     return [...resources].sort((a, b) => {
@@ -184,6 +196,7 @@ class WorkspaceAppHostItem extends vscode.TreeItem {
         public readonly appHostPath: string,
         appHostName?: string,
         appHostDescription?: string,
+        public readonly appHostStatus?: string,
         public readonly launching?: boolean,
         public readonly stopping = false
     ) {
@@ -207,6 +220,15 @@ class WorkspaceAppHostItem extends vscode.TreeItem {
         }
 
         this.tooltip = appHostDescription;
+    }
+}
+
+class WorkspaceAppHostStatusItem extends vscode.TreeItem {
+    constructor(parent: WorkspaceAppHostItem, status: string) {
+        super(tooltipStatus(formatAppHostCandidateStatusLabel(status)), vscode.TreeItemCollapsibleState.None);
+        this.id = `${parent.id}:status`;
+        this.iconPath = appHostCandidateStatusIcon(status);
+        this.contextValue = 'workspaceAppHostStatus';
     }
 }
 
@@ -937,33 +959,28 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         if (!element) {
             const workspaceResources = [...this._repository.workspaceResources];
             const workspaceAppHost = this._repository.workspaceAppHost;
-            const workspaceCandidatePaths = this._repository.workspaceAppHostCandidatePaths ?? [];
-            const workspaceAppHostPaths = workspaceCandidatePaths.length > 0
-                ? workspaceCandidatePaths
-                : this._repository.appHosts.map(appHost => appHost.appHostPath);
+            const candidates = this._buildWorkspaceAppHostCandidates();
 
-            if (workspaceAppHostPaths.length > 1 || (workspaceResources.length === 0 && !workspaceAppHost)) {
+            if (candidates.length > 1 || (workspaceResources.length === 0 && !workspaceAppHost)) {
                 const selectedAppHostPath = workspaceAppHost?.appHostPath ?? this._repository.workspaceAppHostPath;
-                const labels = shortenPaths(workspaceAppHostPaths);
 
                 // When multiple workspace AppHosts are running, use global-style AppHostItem (nested view).
                 // When only one is running, use flat WorkspaceResourcesItem.
                 const runningItems: (AppHostItem | WorkspaceResourcesItem)[] = [];
                 const workspaceItems: WorkspaceAppHostItem[] = [];
 
-                for (let i = 0; i < workspaceAppHostPaths.length; i++) {
-                    const candidatePath = workspaceAppHostPaths[i];
+                for (const candidate of candidates) {
                     // Use directory-equivalent matching (not exact path) because `aspire ls`
                     // resolves to a `.csproj` while `aspire ps` can report the AppHost source file
                     // (e.g. Program.cs) in the same directory. AppHostDataRepository uses the same
                     // helper when filtering running AppHosts into _appHosts.
                     const runningAppHost = this._repository.appHosts.find(
-                        appHost => isMatchingAppHostPath(appHost.appHostPath, candidatePath)
+                        appHost => isMatchingAppHostPath(appHost.appHostPath, candidate.path)
                     );
-                    const launching = this._launchService.isLaunching(candidatePath);
+                    const launching = this._launchService.isLaunching(candidate.path);
 
                     if (!runningAppHost) {
-                        workspaceItems.push(new WorkspaceAppHostItem(candidatePath, labels[i], vscode.workspace.asRelativePath(candidatePath), launching, this._isStoppingAppHost(candidatePath)));
+                        workspaceItems.push(new WorkspaceAppHostItem(candidate.path, candidate.label, vscode.workspace.asRelativePath(candidate.path), candidate.status, launching, this._isStoppingAppHost(candidate.path)));
                         continue;
                     }
 
@@ -978,12 +995,12 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
                     if (runningItems.length > 0) {
                         // Multiple running — use global-style AppHostItem (nested view)
-                        runningItems.push(new AppHostItem(appHost, labels[i], this._repository.workspaceAppHostDescription, this._isStoppingAppHost(appHost.appHostPath)));
+                        runningItems.push(new AppHostItem(appHost, candidate.label, this._repository.workspaceAppHostDescription, this._isStoppingAppHost(appHost.appHostPath)));
                     } else {
                         const resources = [...appHost.resources ?? []];
                         const rawDashboardUrl = appHost.dashboardUrl ?? resources.find(r => r.dashboardUrl)?.dashboardUrl ?? null;
                         const dashboardUrl = rawDashboardUrl ? stripResourceSuffix(rawDashboardUrl) : null;
-                        runningItems.push(new WorkspaceResourcesItem(resources, dashboardUrl, appHost.appHostPath, appHost, labels[i], this._repository.workspaceAppHostDescription, this._isStoppingAppHost(appHost.appHostPath)));
+                        runningItems.push(new WorkspaceResourcesItem(resources, dashboardUrl, appHost.appHostPath, appHost, candidate.label, this._repository.workspaceAppHostDescription, this._isStoppingAppHost(appHost.appHostPath)));
                     }
                 }
 
@@ -1032,7 +1049,11 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         }
 
         if (element instanceof WorkspaceAppHostItem) {
-            const items: TreeElement[] = [new WorkspaceAppHostActionItem(element, 'openSource')];
+            const items: TreeElement[] = [];
+            if (element.appHostStatus) {
+                items.push(new WorkspaceAppHostStatusItem(element, element.appHostStatus));
+            }
+            items.push(new WorkspaceAppHostActionItem(element, 'openSource'));
             if (!element.launching && !element.stopping) {
                 items.push(new WorkspaceAppHostActionItem(element, 'run'));
                 items.push(new WorkspaceAppHostActionItem(element, 'debug'));
@@ -1083,6 +1104,19 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         }
 
         return [];
+    }
+
+    private _buildWorkspaceAppHostCandidates(): WorkspaceAppHostCandidateEntry[] {
+        // Prefer discovered candidates (they carry a status); otherwise fall back to already-known
+        // running AppHosts (no status). shortenPaths needs the full path list up front, so we gather
+        // the path/status sources first, then zip the shortened labels back on.
+        const candidates = this._repository.workspaceAppHostCandidates;
+        const sources = candidates.length > 0
+            ? candidates.map(candidate => ({ path: candidate.path, status: candidate.status }))
+            : this._repository.appHosts.map(appHost => ({ path: appHost.appHostPath, status: undefined as string | undefined }));
+
+        const labels = shortenPaths(sources.map(source => source.path));
+        return sources.map((source, index) => ({ ...source, label: labels[index] }));
     }
 
     // ── Global mode tree ──
@@ -1296,6 +1330,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             await this._launchService.launch(appHostPath, 'run', noDebug);
         } catch (err) {
             vscode.window.showErrorMessage(errorMessage(err));
+            this._repository.refresh();
             throw err;
         }
     }

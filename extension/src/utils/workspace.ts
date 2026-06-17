@@ -5,7 +5,6 @@ import { AspireConfigFile, aspireConfigFileName, getAppHostPathFromConfig, readJ
 import { extensionLogOutputChannel } from './logging';
 import { resolveCliPath } from './cliPath';
 import { AppHostDiscoveryService, AppHostProjectSearchResult, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult } from './appHostDiscovery';
-import type { AppHostCandidate } from './appHostDiscovery';
 import { getCommonExcludeGlob } from './workspaceFileSearch';
 
 export { getCommonExcludeGlob } from './workspaceFileSearch';
@@ -70,10 +69,6 @@ export function getRelativePathToWorkspace(filePath: string): string {
 
 interface AppHostQuickPickItem extends vscode.QuickPickItem {
     appHostPath: string;
-}
-
-export function isBuildableAppHostCandidate(candidate: AppHostCandidate): boolean {
-    return candidate.status === 'buildable';
 }
 
 function createAppHostQuickPickItems(result: AppHostProjectSearchResult, rootFolder: vscode.WorkspaceFolder): AppHostQuickPickItem[] {

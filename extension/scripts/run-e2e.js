@@ -1386,7 +1386,7 @@ function printFailureDiagnosticsSummary() {
       hasError: state.state.hasError,
       errorMessage: state.state.errorMessage,
       workspaceAppHostPath: state.state.workspaceAppHostPath,
-      workspaceAppHostCandidatePaths: state.state.workspaceAppHostCandidatePaths,
+      workspaceAppHostCandidatePaths: state.state.workspaceAppHostCandidates.map(candidate => candidate.path),
       workspaceResources: state.state.workspaceResources?.map(resource => `${resource.name}:${resource.state}`),
       appHosts: state.state.appHosts?.map(appHost => appHost.appHostPath),
       launchingPaths: state.state.launchingPaths,

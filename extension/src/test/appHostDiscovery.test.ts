@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import * as cliModule from '../debugger/languages/cli';
 import { AppHostDiscoveryService, findCandidateForEditorFile, findConfiguredAppHostPaths, getDebugTargetForCandidate, selectWorkspaceAppHostPath } from '../utils/appHostDiscovery';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
+import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { appHostDiscoveryFindFilesMaxResults } from '../utils/workspaceFileSearch';
 
 suite('AppHost discovery', () => {
@@ -107,6 +108,7 @@ suite('AppHost discovery', () => {
         setup(() => {
             sandbox = sinon.createSandbox();
             findFilesStub = sandbox.stub(vscode.workspace, 'findFiles').resolves([]);
+            sandbox.stub(ConfigInfoProvider.prototype, 'hasCapability').resolves(false);
         });
 
         teardown(() => {
@@ -573,6 +575,57 @@ suite('AppHost discovery', () => {
                     language: 'csharp',
                     status: 'buildable',
                 }]);
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
+        test('appends --no-evaluate to aspire ls when the CLI advertises the capability', async () => {
+            stubFileSystemWatchers(sandbox);
+            // The service-suite setup() stubs hasCapability => false; reconfigure that same stub to
+            // simulate a current CLI that advertises ls-no-evaluate.v1.
+            (ConfigInfoProvider.prototype.hasCapability as sinon.SinonStub).resolves(true);
+            const lsArgs: string[][] = [];
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
+                if (args[0] === 'ls') {
+                    lsArgs.push(args);
+                }
+                options?.stdoutCallback?.('[]');
+                options?.exitCallback?.(0);
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+            try {
+                await service.discover(makeWorkspaceFolder(buildPath('workspace')));
+
+                assert.deepStrictEqual(lsArgs, [['ls', '--format', 'json', '--no-evaluate']]);
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
+        test('omits --no-evaluate from aspire ls when the CLI lacks the capability', async () => {
+            stubFileSystemWatchers(sandbox);
+            // The service-suite setup() already stubs hasCapability => false, simulating an older CLI
+            // that does not advertise ls-no-evaluate.v1, so the flag must not be appended.
+            const lsArgs: string[][] = [];
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
+                if (args[0] === 'ls') {
+                    lsArgs.push(args);
+                }
+                options?.stdoutCallback?.('[]');
+                options?.exitCallback?.(0);
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+            try {
+                await service.discover(makeWorkspaceFolder(buildPath('workspace')));
+
+                assert.deepStrictEqual(lsArgs, [['ls', '--format', 'json']]);
             }
             finally {
                 service.dispose();

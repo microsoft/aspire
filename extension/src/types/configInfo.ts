@@ -43,3 +43,10 @@ export interface ConfigInfo {
  * `KnownCapabilities.DescribeIncludeDisabledCommands` in src/Aspire.Cli/Utils/ExtensionHelper.cs.
  */
 export const describeIncludeDisabledCommandsCapability = 'describe-include-disabled-commands.v1';
+
+/**
+ * Capability advertised by the CLI when `aspire ls` supports `--no-evaluate`. The extension uses
+ * this to avoid design-time project evaluation for unvalidated AppHost discovery in large workspaces.
+ * Keep in sync with `KnownCapabilities.LsNoEvaluate` in src/Aspire.Cli/Utils/ExtensionHelper.cs.
+ */
+export const lsNoEvaluateCapability = 'ls-no-evaluate.v1';
