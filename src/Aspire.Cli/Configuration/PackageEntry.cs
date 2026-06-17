@@ -13,11 +13,14 @@ namespace Aspire.Cli.Configuration;
 ///
 /// <list type="bullet">
 ///   <item>
-///     <b>Short form (string)</b> — always NuGet. An empty string means the SDK version; a
-///     non-empty string is an explicit NuGet package version.
+///     <b>Short form (string)</b> — NuGet by default. An empty string means the SDK version; a
+///     non-empty string is an explicit NuGet package version. As a legacy shorthand, a value that
+///     ends in <c>.csproj</c> is treated as a local project reference (path to the <c>.csproj</c>),
+///     mirroring <see cref="AspireConfigFile.FromLegacy"/> and the original settings.json behavior.
 ///     <code>
-///     "Aspire.Hosting.Redis": "",         // NuGet, SDK version
-///     "Aspire.Hosting.Kafka": "9.2.0"     // NuGet, explicit version
+///     "Aspire.Hosting.Redis": "",                 // NuGet, SDK version
+///     "Aspire.Hosting.Kafka": "9.2.0",            // NuGet, explicit version
+///     "Aspire.Hosting.Local": "../Local/Local.csproj" // project reference (legacy shorthand)
 ///     </code>
 ///   </item>
 ///   <item>
@@ -87,8 +90,9 @@ internal sealed class PackageEntry
 
 /// <summary>
 /// Reads the string-or-object polymorphic shape for <see cref="PackageEntry"/>. A bare string
-/// token is interpreted as a NuGet version (empty = SDK version). An object token requires a
-/// <c>source</c> discriminator and per-source fields.
+/// token is interpreted as a NuGet version (empty = SDK version), except for the legacy shorthand
+/// where a value ending in <c>.csproj</c> is treated as a local project reference. An object token
+/// requires a <c>source</c> discriminator and per-source fields.
 /// </summary>
 internal sealed class PackageEntryConverter : JsonConverter<PackageEntry>
 {
@@ -96,10 +100,24 @@ internal sealed class PackageEntryConverter : JsonConverter<PackageEntry>
     {
         if (reader.TokenType == JsonTokenType.String)
         {
-            var versionString = reader.GetString();
+            var stringValue = reader.GetString();
             // Empty string means "use the SDK version" — stored as null so the caller can
             // substitute the effective SDK version at resolution time.
-            return PackageEntry.Nuget(string.IsNullOrWhiteSpace(versionString) ? null : versionString);
+            if (string.IsNullOrWhiteSpace(stringValue))
+            {
+                return PackageEntry.Nuget(null);
+            }
+
+            // Legacy shorthand: a string value ending in ".csproj" is a local project reference,
+            // not a NuGet version. This mirrors AspireConfigFile.FromLegacy and the original
+            // settings.json behavior (AspireJsonConfiguration.GetIntegrationReferences), so configs
+            // written with the bare-string project path (e.g. "MyExt/MyExt.csproj") keep working.
+            if (stringValue.Trim().EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+            {
+                return PackageEntry.Project(stringValue.Trim());
+            }
+
+            return PackageEntry.Nuget(stringValue);
         }
 
         if (reader.TokenType != JsonTokenType.StartObject)

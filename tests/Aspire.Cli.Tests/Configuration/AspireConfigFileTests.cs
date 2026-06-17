@@ -357,6 +357,68 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void Load_ParsesStringCsprojShorthandAsProjectReference()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        // Legacy/shorthand: a bare string value ending in ".csproj" is a local project reference,
+        // not a NuGet version. Regression coverage for the polyglot AppHost restore path, where a
+        // value like "DeadlockExtension/DeadlockExtension.csproj" must not be treated as a NuGet
+        // package version (which would fail with "not a valid version string").
+        File.WriteAllText(configPath, """
+            {
+              "packages": {
+                "DeadlockExtension": "DeadlockExtension/DeadlockExtension.csproj"
+              }
+            }
+            """);
+
+        var config = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+
+        Assert.NotNull(config);
+        var entry = config.Packages!["DeadlockExtension"];
+        Assert.Equal(IntegrationSource.Project, entry.Source);
+        Assert.Equal("DeadlockExtension/DeadlockExtension.csproj", entry.Path);
+        Assert.Null(entry.Version);
+
+        var projectRef = config.GetIntegrationReferences("13.2.0", workspace.WorkspaceRoot.FullName)
+            .Single(r => r.Name == "DeadlockExtension");
+        Assert.Equal(IntegrationSource.Project, projectRef.Source);
+        Assert.Equal(
+            Path.GetFullPath(Path.Combine(workspace.WorkspaceRoot.FullName, "DeadlockExtension/DeadlockExtension.csproj")),
+            projectRef.Path);
+    }
+
+    [Fact]
+    public void Load_ParsesStringShorthandAsNugetVersion()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(configPath, """
+            {
+              "packages": {
+                "Aspire.Hosting.Redis": "9.2.0",
+                "Aspire.Hosting.Kafka": ""
+              }
+            }
+            """);
+
+        var config = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+
+        Assert.NotNull(config);
+        var redis = config.Packages!["Aspire.Hosting.Redis"];
+        Assert.Equal(IntegrationSource.Nuget, redis.Source);
+        Assert.Equal("9.2.0", redis.Version);
+
+        // Empty string short form means "use the SDK version" (stored as null).
+        var kafka = config.Packages!["Aspire.Hosting.Kafka"];
+        Assert.Equal(IntegrationSource.Nuget, kafka.Source);
+        Assert.Null(kafka.Version);
+    }
+
+    [Fact]
     public void Load_ReturnsConfig_WhenFeaturesAreBooleans()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
