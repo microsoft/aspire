@@ -159,11 +159,15 @@ internal sealed class BicepProvisioner(
     /// </remarks>
     public async Task<bool> ReconcileDeploymentStateAsync(AzureBicepResource resource, ProvisioningContext context, CancellationToken cancellationToken)
     {
+        // Reconciliation is a run-mode recovery step. Publish should not revive state
+        // left behind by a previous local command.
         if (!context.ExecutionContext.IsRunMode)
         {
             return false;
         }
 
+        // The cache stores the ARM deployment ID that was running before the AppHost
+        // stopped or a command was canceled.
         var sectionName = $"Azure:Deployments:{resource.Name}";
         var stateSection = await deploymentStateManager.AcquireSectionAsync(sectionName, cancellationToken).ConfigureAwait(false);
         if (!IsRunningCachedDeployment(stateSection) ||
@@ -177,6 +181,8 @@ internal sealed class BicepProvisioner(
         AzureDeploymentState? deployment;
         try
         {
+            // Probe ARM before mutating cached state. If the probe cannot run, leave
+            // the cache intact and let normal provisioning decide.
             deployment = await context.ArmClient.GetDeploymentAsync(deploymentId, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -196,6 +202,8 @@ internal sealed class BicepProvisioner(
 
         if (deployment is null)
         {
+            // ARM no longer has the cached deployment, so the local "running" marker
+            // is stale and should not block a fresh deployment.
             logger.LogInformation("Cached Azure deployment {DeploymentId} for {ResourceName} no longer exists. Reprovisioning.", deploymentId, resource.Name);
             await ClearCachedRunningDeploymentStateAsync(stateSection, cancellationToken).ConfigureAwait(false);
             return false;
@@ -204,6 +212,8 @@ internal sealed class BicepProvisioner(
         var currentLocation = GetConfiguredLocation(stateSection, context.Location.Name);
         if (IsActiveDeploymentProvisioningState(deployment.ProvisioningState))
         {
+            // A still-active ARM deployment should be adopted and observed to
+            // completion instead of starting a duplicate deployment.
             deployment = await WaitForCachedRunningDeploymentAsync(
                 resource,
                 context,
@@ -214,6 +224,8 @@ internal sealed class BicepProvisioner(
 
             if (deployment is null)
             {
+                // The deployment disappeared while we were watching it; clear the
+                // stale marker so the caller reprovisions from the model.
                 logger.LogInformation("Cached Azure deployment {DeploymentId} for {ResourceName} no longer exists after reconciliation started. Reprovisioning.", deploymentId, resource.Name);
                 await ClearCachedRunningDeploymentStateAsync(stateSection, cancellationToken).ConfigureAwait(false);
                 return false;
@@ -222,6 +234,8 @@ internal sealed class BicepProvisioner(
 
         if (string.Equals(deployment.ProvisioningState, DeploymentStateProvisioningStateSucceeded, StringComparisons.AzureProvisioningState))
         {
+            // Successful adoption replays the deployment outputs into the resource
+            // state exactly as normal provisioning would.
             return await ConfigureSucceededReconciledDeploymentAsync(
                 resource,
                 stateSection,
@@ -233,6 +247,8 @@ internal sealed class BicepProvisioner(
 
         if (string.Equals(deployment.ProvisioningState, DeploymentStateProvisioningStateCanceled, StringComparisons.AzureProvisioningState))
         {
+            // Preserve ARM's terminal cancellation so the dashboard explains why this
+            // resource stopped instead of silently retrying.
             await PersistReconciledProvisioningStateAsync(stateSection, DeploymentStateProvisioningStateCanceled, cancellationToken).ConfigureAwait(false);
             await PublishReconciledTerminalStateAsync(resource, "Azure deployment canceled").ConfigureAwait(false);
             throw new InvalidOperationException($"Azure deployment for {resource.Name} was canceled.");
@@ -240,6 +256,8 @@ internal sealed class BicepProvisioner(
 
         if (string.Equals(deployment.ProvisioningState, DeploymentStateProvisioningStateFailed, StringComparisons.AzureProvisioningState))
         {
+            // Preserve ARM's terminal failure for the same reason as cancellation:
+            // this is the outcome of the adopted deployment.
             await PersistReconciledProvisioningStateAsync(stateSection, DeploymentStateProvisioningStateFailed, cancellationToken).ConfigureAwait(false);
             await PublishReconciledTerminalStateAsync(resource, "Azure deployment failed").ConfigureAwait(false);
             throw new InvalidOperationException($"Azure deployment for {resource.Name} failed.");
