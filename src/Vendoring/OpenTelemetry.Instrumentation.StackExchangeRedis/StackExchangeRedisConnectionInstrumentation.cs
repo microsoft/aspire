@@ -18,13 +18,14 @@ internal sealed class StackExchangeRedisConnectionInstrumentation : IDisposable
 {
     internal const string RedisDatabaseIndexKeyName = "db.redis.database_index";
 
+    internal const string ActivitySourceName = "OpenTelemetry.Instrumentation.StackExchangeRedis";
     internal static readonly Version SemanticConventionsVersion = new(1, 23, 0);
-    internal static readonly ActivitySource ActivitySource = ActivitySourceFactory.Create<StackExchangeRedisConnectionInstrumentation>(SemanticConventionsVersion);
+    internal static readonly ActivitySource ActivitySource = ActivitySourceFactory.Create(typeof(StackExchangeRedisConnectionInstrumentation), SemanticConventionsVersion, name: ActivitySourceName);
 
     internal static readonly Version SemanticConventionsVersionNew = new(1, 28, 0);
-    internal static readonly ActivitySource ActivitySourceNew = ActivitySourceFactory.Create<StackExchangeRedisConnectionInstrumentation>(SemanticConventionsVersionNew);
+    internal static readonly ActivitySource ActivitySourceNew = ActivitySourceFactory.Create(typeof(StackExchangeRedisConnectionInstrumentation), SemanticConventionsVersionNew, name: ActivitySourceName);
 
-    internal static readonly ActivitySource ActivitySourceBoth = ActivitySourceFactory.Create<StackExchangeRedisConnectionInstrumentation>(null);
+    internal static readonly ActivitySource ActivitySourceBoth = ActivitySourceFactory.Create(typeof(StackExchangeRedisConnectionInstrumentation), null, name: ActivitySourceName);
 
     internal static readonly string ActivityName = $"{ActivitySource.Name}.Execute";
 

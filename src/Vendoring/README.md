@@ -29,7 +29,7 @@ git checkout tags/Instrumentation.StackExchangeRedis-1.15.1-beta.2
 ### Instructions
 
 - Copy files from `src/OpenTelemetry.Instrumentation.StackExchangeRedis` to `src/Vendoring/OpenTelemetry.Instrumentation.StackExchangeRedis`:
-    - `**\*.cs`
+    - `**\*.cs` minus `IsExternalInit.cs`
 - Copy files from `src/Shared` to `src/Vendoring/OpenTelemetry.Instrumentation.StackExchangeRedis/Shared`:
     - `ActivitySourceFactory.cs`
     - `AssemblyVersionExtensions.cs`
@@ -37,6 +37,7 @@ git checkout tags/Instrumentation.StackExchangeRedis-1.15.1-beta.2
     - `Guard.cs`
     - `PropertyFetcher.cs`
     - `SemanticConventions.cs`
+- In `StackExchangeRedisConnectionInstrumentation.cs` ensure that the activity source name is overridden to `OpenTelemetry.Instrumentation.StackExchangeRedis`.
 
 ## Customizations
 
