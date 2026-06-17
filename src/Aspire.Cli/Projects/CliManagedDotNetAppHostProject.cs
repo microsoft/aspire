@@ -45,6 +45,7 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
         IConfigurationService configurationService,
         IPackagingService packagingService,
         ILogger<CSharpCliManagedAppHostModuleGenerator> cliManagedModuleGeneratorLogger,
+        CliExecutionContext executionContext,
         TimeProvider? timeProvider = null)
         : base(
             runner,
@@ -61,6 +62,7 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
             loggingOptions,
             appHostInfoResolver,
             configurationService,
+            executionContext,
             timeProvider)
     {
         _features = features;

@@ -472,7 +472,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
     }
 
     private Task<IntegrationRestoreSources> ResolveIntegrationRestoreSourcesAsync(string? requestedChannel, string? packageSourceOverride, CancellationToken cancellationToken)
-        => new IntegrationRestoreSourceResolver(_packagingService, _logger)
+        => new IntegrationRestoreSourceResolver(_packagingService, _logger, _executionContext.NuGetServiceIndexOverride)
             .ResolveAsync(requestedChannel, packageSourceOverride, cancellationToken);
 
     private static IEnumerable<string>? GetNuGetSources(IntegrationRestoreSources restoreSources)

@@ -128,8 +128,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     [SupplyParameterFromQuery]
     public long? LogEntryId { get; set; }
 
-    public StructureLogsDetailsViewModel? SelectedLogEntry { get; set; }
-
     private async ValueTask<GridItemsProviderResult<OtlpLogEntry>> GetData(GridItemsProviderRequest<OtlpLogEntry> request)
     {
         ViewModel.StartIndex = request.StartIndex;
@@ -200,19 +198,19 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         _allResource = new()
         {
             Id = null,
-            Name = ControlsStringsLoc[nameof(Dashboard.Resources.ControlsStrings.LabelAll)]
+            Name = ControlsStringsLoc[nameof(ControlsStrings.LabelAll)]
         };
 
-        _logLevels = new List<SelectViewModel<LogLevel?>>
-        {
-            new SelectViewModel<LogLevel?> { Id = null, Name = ControlsStringsLoc[nameof(Dashboard.Resources.ControlsStrings.LabelAll)] },
-            new SelectViewModel<LogLevel?> { Id = LogLevel.Trace, Name = "Trace" },
-            new SelectViewModel<LogLevel?> { Id = LogLevel.Debug, Name = "Debug" },
-            new SelectViewModel<LogLevel?> { Id = LogLevel.Information, Name = "Information" },
-            new SelectViewModel<LogLevel?> { Id = LogLevel.Warning, Name = "Warning" },
-            new SelectViewModel<LogLevel?> { Id = LogLevel.Error, Name = "Error" },
-            new SelectViewModel<LogLevel?> { Id = LogLevel.Critical, Name = "Critical" },
-        };
+        _logLevels =
+        [
+            new() { Id = null, Name = ControlsStringsLoc[nameof(ControlsStrings.LabelAll)] },
+            new() { Id = LogLevel.Trace, Name = "Trace" },
+            new() { Id = LogLevel.Debug, Name = "Debug" },
+            new() { Id = LogLevel.Information, Name = "Information" },
+            new() { Id = LogLevel.Warning, Name = "Warning" },
+            new() { Id = LogLevel.Error, Name = "Error" },
+            new() { Id = LogLevel.Critical, Name = "Critical" },
+        ];
 
         PageViewModel = new StructuredLogsPageViewModel
         {
@@ -292,7 +290,11 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     {
         _resourceChanged = true;
 
-        await ClearSelectedLogEntryAsync();
+        if (PageViewModel.IsSelectedLogEntryExcludedByFilters(_filter, ViewModel.Filters))
+        {
+            await ClearSelectedLogEntryAsync();
+        }
+
         await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
     }
 
@@ -314,7 +316,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     {
         _elementIdBeforeDetailsViewOpened = buttonId;
 
-        if (SelectedLogEntry?.LogEntry.InternalId == entry.InternalId)
+        if (PageViewModel.SelectedLogEntry?.LogEntry.InternalId == entry.InternalId)
         {
             await ClearSelectedLogEntryAsync();
         }
@@ -325,13 +327,13 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
                 LogEntry = entry
             };
 
-            SelectedLogEntry = logEntryViewModel;
+            PageViewModel.SelectedLogEntry = logEntryViewModel;
         }
     }
 
     private async Task ClearSelectedLogEntryAsync(bool causedByUserAction = false)
     {
-        SelectedLogEntry = null;
+        PageViewModel.SelectedLogEntry = null;
 
         if (_elementIdBeforeDetailsViewOpened is not null && causedByUserAction)
         {
@@ -378,7 +380,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             else if (filterResult.Add)
             {
                 ViewModel.AddFilter(filter);
-                await ClearSelectedLogEntryAsync();
             }
             else if (filterResult.Enable)
             {
@@ -390,6 +391,11 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             }
         }
 
+        if (PageViewModel.IsSelectedLogEntryExcludedByFilters(_filter, ViewModel.Filters))
+        {
+            await ClearSelectedLogEntryAsync();
+        }
+
         await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false);
     }
 
@@ -398,19 +404,17 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         ViewModel.FilterText = _filter;
         await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
 
-        if (string.IsNullOrEmpty(_filter))
+        if (PageViewModel.IsSelectedLogEntryExcludedByFilters(_filter, ViewModel.Filters))
         {
-            return;
+            await ClearSelectedLogEntryAsync();
         }
-
-        await ClearSelectedLogEntryAsync();
     }
 
     private string GetResourceName(OtlpResourceView app) => OtlpHelpers.GetResourceName(app.Resource, _resources);
 
     private string GetRowClass(OtlpLogEntry entry)
     {
-        if (entry.InternalId == SelectedLogEntry?.LogEntry.InternalId)
+        if (entry.InternalId == PageViewModel.SelectedLogEntry?.LogEntry.InternalId)
         {
             return "selected-row";
         }
@@ -603,6 +607,34 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     {
         public required SelectViewModel<ResourceTypeDetails> SelectedResource { get; set; }
         public SelectViewModel<LogLevel?> SelectedLogLevel { get; set; } = default!;
+        public StructureLogsDetailsViewModel? SelectedLogEntry { get; set; }
+
+        /// <summary>
+        /// Returns true when the selected log entry is excluded by any of the active filters
+        /// (log level, text filter, or field filters).
+        /// Delegates to <see cref="StructuredLogsViewModel.BuildFilters"/> to ensure consistent
+        /// behavior with the grid query.
+        /// </summary>
+        public bool IsSelectedLogEntryExcludedByFilters(string textFilter, IReadOnlyList<FieldTelemetryFilter> fieldFilters)
+        {
+            if (SelectedLogEntry is null)
+            {
+                return false;
+            }
+
+            var entry = SelectedLogEntry.LogEntry;
+            var filters = StructuredLogsViewModel.BuildFilters(fieldFilters, textFilter, SelectedLogLevel.Id);
+
+            foreach (var filter in filters.GetEnabledFilters())
+            {
+                if (!filter.Apply([entry]).Any())
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
     }
 
     public class StructuredLogsPageState

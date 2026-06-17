@@ -516,12 +516,14 @@ The following specialized skills are available in `.agents/skills/`:
 - **ci-test-failures**: Diagnoses GitHub Actions test failures, extracts failed tests from runs, and creates or updates failing-test issues
 - **code-review**: Reviews a GitHub pull request for problems (bugs, security, correctness, convention violations). Use this when asked to review a PR or do a code review.
 - **fix-flaky-test**: Reproduces and fixes flaky/quarantined tests using the CI reproduce workflow (`reproduce-flaky-tests.yml`). Use this when investigating, reproducing, or fixing a flaky or quarantined test.
+- **cli-channel-debugging**: Emulates any Aspire CLI build identity (channel/version/commit/package source) from a locally built CLI via `ASPIRE_CLI_*` env vars or the install sidecar, to reproduce and fix channel/version-specific bugs locally. Use when asked to simulate a daily/staging/stable/PR build or decide which override knobs to set.
 - **dashboard-testing**: Guide for writing tests for the Aspire Dashboard using xUnit and bUnit
 - **test-management**: Quarantines or disables flaky/problematic tests using the QuarantineTools utility
 - **connection-properties**: Expert for creating and improving Connection Properties in Aspire resources
 - **dependency-update**: Guides dependency version updates by checking nuget.org, triggering the dotnet-migrate-package Azure DevOps pipeline, and monitoring runs
 - **api-review**: Reviews .NET API surface area PRs for design guideline violations, applies rules from .NET Framework Design Guidelines and Aspire conventions, and attributes findings to the author who introduced each API
 - **backport-pr**: Triggers the `/backport` bot on a source PR, waits for the bot-created backport PR, and fills in the shiproom template (Customer Impact, Testing, Risk, Regression?). Use when backporting a fix to a release branch.
+- **azdo-internal**: Triggers, monitors, and validates changes to the Aspire internal Azure DevOps pipeline (`microsoft-aspire`, definition 1602) on `dnceng/internal`. Use when asked to trigger an internal/AzDO build, check build status, push to the internal mirror, or validate `eng/` pipeline changes.
 - **startup-perf**: Measures Aspire startup profiling with CLI self-profile capture and dashboard export traces
 - **reviewing-aspire-architecture**: Reviews PRs for Aspire-specific architectural patterns across 15 dimensions including API design, resource model, Azure provisioning, pattern conformance, dashboard UX, CLI behavior, and more. Complements the code-review skill with domain knowledge that generic review cannot catch.
 - **vscode-extension**: Guide for developing, building, testing, and debugging the Aspire VS Code extension under `extension/`. Use when investigating an issue in, debugging, or working on a feature for the VS Code extension.

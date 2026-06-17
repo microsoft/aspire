@@ -46,7 +46,7 @@
 
                                 <DesktopToolbarDivider />
                             }
-                            <FluentSearch @bind-Value="_filter"
+                            <FluentSearch @bind-Value="PageViewModel.Filter"
                                           @bind-Value:after="HandleAfterFilterBindAsync"
                                           Name="spans-search"
                                           Immediate="true"
@@ -57,20 +57,20 @@
                             <DesktopToolbarDivider />
 
                             <SpanTypeSelect slot="end"
-                                            @bind-SpanType="@_selectedSpanType"
+                                            @bind-SpanType="@PageViewModel.SelectedSpanType"
                                             SpanTypes="@_spanTypes"
                                             HandleSelectedSpanTypeChangedAsync="@HandleSelectedSpanTypeChangedAsync" />
 
                             <DesktopToolbarDivider />
 
-                            @if (_filters.Count == 0)
+                            @if (PageViewModel.Filters.Count == 0)
                             {
                                 <span slot="end">@FilterLoc[nameof(StructuredFiltering.NoFilters)]</span>
                             }
                             else
                             {
                                 <div slot="end">
-                                    <FluentCounterBadge HorizontalPosition="70" Count="@(_filters.GetEnabledFilters().Count())" Appearance="Appearance.Accent">
+                                    <FluentCounterBadge HorizontalPosition="70" Count="@(PageViewModel.Filters.GetEnabledFilters().Count())" Appearance="Appearance.Accent">
                                         <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" Items="@GetFilterMenuItems()" />
                                     </FluentCounterBadge>
                                 </div>
@@ -91,20 +91,20 @@
                 }
                 else
                 {
-                    <FluentSearch @bind-Value="_filter"
+                    <FluentSearch @bind-Value="PageViewModel.Filter"
                                   @bind-Value:after="HandleAfterFilterBindAsync"
                                   Name="spans-search"
                                   Immediate="true"
                                   ImmediateDelay="@FluentUIExtensions.InputDelay"
                                   Placeholder="@ControlStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
                                   title="@Loc[nameof(Dashboard.Resources.Traces.TracesNameFilter)]"/>
-                    <SpanTypeSelect @bind-SpanType="@_selectedSpanType"
+                    <SpanTypeSelect @bind-SpanType="@PageViewModel.SelectedSpanType"
                                     SpanTypes="@_spanTypes"
                                     HandleSelectedSpanTypeChangedAsync="@HandleSelectedSpanTypeChangedAsync" />
-                    @if (_filters.Count > 0)
+                    @if (PageViewModel.Filters.Count > 0)
                     {
                         <div slot="end">
-                            <FluentCounterBadge HorizontalPosition="70" Count="@(_filters.GetEnabledFilters().Count())" Appearance="Appearance.Accent">
+                            <FluentCounterBadge HorizontalPosition="70" Count="@(PageViewModel.Filters.GetEnabledFilters().Count())" Appearance="Appearance.Accent">
                                 <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" Items="@GetFilterMenuItems()" />
                             </FluentCounterBadge>
                         </div>
@@ -219,7 +219,7 @@
                                                 {
                                                     <FluentIcon Icon="Icons.Filled.Size12.ErrorCircle" Color="Color.Error" Class="trace-tag-icon"/>
                                                 }
-                                                <FluentHighlighter HighlightedText="@_filter" Text="@context.Span.GetDisplaySummary()" />
+                                                <FluentHighlighter HighlightedText="@PageViewModel.Filter" Text="@context.Span.GetDisplaySummary()" />
                                                 @if (context.HasUninstrumentedPeer)
                                                 {
                                                     <span class="uninstrumented-peer">
@@ -243,7 +243,7 @@
                                                             Style="@($"fill: {ColorGenerator.Instance.GetColorVariableByKey(context.UninstrumentedPeer)};")"
                                                             Value="icon"
                                                             Class="uninstrumented-peer-icon"/>
-                                                        <FluentHighlighter HighlightedText="@_filter" Text="@context.UninstrumentedPeer" />
+                                                        <FluentHighlighter HighlightedText="@PageViewModel.Filter" Text="@context.UninstrumentedPeer" />
                                                     </span>
                                                 }
                                             </span>
@@ -263,7 +263,7 @@
                                     </AspireTemplateColumn>
                                     <AspireTemplateColumn ColumnId="@ResourceColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailResourceHeader)]" Tooltip="true" TooltipText="@(c => GetResourceName(c.Span.Source))" Class="expand-col">
                                         <div class="resource-name">
-                                            <FluentHighlighter HighlightedText="@_filter" Text="@GetResourceName(context.Span.Source)" />
+                                            <FluentHighlighter HighlightedText="@PageViewModel.Filter" Text="@GetResourceName(context.Span.Source)" />
                                         </div>
                                     </AspireTemplateColumn>
                                     <AspireTemplateColumn ColumnId="@TicksColumn" ColumnManager="@_manager">

@@ -71,6 +71,12 @@ async function dispatch(operation, payload) {
         case 'formatMatchedPatternForMarkdown':
             return rerunWorkflow.formatMatchedPatternForMarkdown(payload.matchedPattern);
 
+        case 'promoteTestExecutionFailureJobs':
+            return rerunWorkflow.promoteTestExecutionFailureJobs(
+                payload.retryableJobs ?? [],
+                payload.skippedJobs ?? [],
+                payload.allMatchedTests ?? []);
+
         case 'getCheckRunIdForJob':
             return rerunWorkflow.getCheckRunIdForJob({
                 job: payload.job,
@@ -124,12 +130,6 @@ async function dispatch(operation, payload) {
             return rerunWorkflow.analyzeTrxFiles(
                 payload.trxFileContents,
                 payload.testFailurePatterns);
-
-        case 'promoteTestExecutionFailureJobs':
-            return rerunWorkflow.promoteTestExecutionFailureJobs(
-                payload.retryableJobs ?? [],
-                payload.skippedJobs ?? [],
-                payload.allMatchedTests ?? []);
 
         case 'selectTestResultsArtifact':
             return rerunWorkflow.selectTestResultsArtifact(payload.artifacts);

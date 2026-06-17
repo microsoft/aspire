@@ -486,7 +486,8 @@ internal sealed class CliServiceCollectionTestOptions
         var languageDiscovery = serviceProvider.GetRequiredService<ILanguageDiscovery>();
         var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
         var logger = serviceProvider.GetRequiredService<ILogger<ScaffoldingService>>();
-        return new ScaffoldingService(appHostServerProjectFactory, languageDiscovery, interactionService, logger);
+        var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
+        return new ScaffoldingService(appHostServerProjectFactory, languageDiscovery, interactionService, logger, executionContext);
     };
 
     public Func<IServiceProvider, IProcessExecutionFactory> DotNetCliExecutionFactoryFactory { get; set; } = (IServiceProvider serviceProvider) =>
@@ -534,7 +535,8 @@ internal sealed class CliServiceCollectionTestOptions
     public Func<IServiceProvider, IExtensionRpcTarget> ExtensionRpcTargetFactory { get; set; } = (IServiceProvider serviceProvider) =>
     {
         var configuration = serviceProvider.GetRequiredService<IConfiguration>();
-        return new ExtensionRpcTarget(configuration);
+        var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
+        return new ExtensionRpcTarget(configuration, executionContext);
     };
 
     public Func<IServiceProvider, IExtensionBackchannel> ExtensionBackchannelFactory { get; set; } = serviceProvider =>

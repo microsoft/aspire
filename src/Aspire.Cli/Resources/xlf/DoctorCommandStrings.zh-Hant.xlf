@@ -212,6 +212,18 @@
         <target state="needs-review-translation">輸出結果為 JSON 以用於工具整合</target>
         <note />
       </trans-unit>
+      <trans-unit id="LegacySettingsDetectedFix">
+        <source>Run 'aspire init' (or any aspire run/add/update/pipeline command) to migrate to aspire.config.json.
+The legacy file continues to work — this is a non-blocking warning.</source>
+        <target state="new">Run 'aspire init' (or any aspire run/add/update/pipeline command) to migrate to aspire.config.json.
+The legacy file continues to work — this is a non-blocking warning.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LegacySettingsDetectedMessageFormat">
+        <source>Legacy .aspire/settings.json detected at {0}</source>
+        <target state="new">Legacy .aspire/settings.json detected at {0}</target>
+        <note>{0} is the full path to the legacy settings file.</note>
+      </trans-unit>
       <trans-unit id="SdkCategoryHeader">
         <source>.NET SDK</source>
         <target state="translated">.NET SDK</target>

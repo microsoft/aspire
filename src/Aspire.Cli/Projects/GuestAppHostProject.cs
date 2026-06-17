@@ -118,8 +118,9 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             return configuredVersion;
         }
 
-        _logger.LogDebug("Using default SDK version: {Version}", DotNetBasedAppHostServerProject.DefaultSdkVersion);
-        return DotNetBasedAppHostServerProject.DefaultSdkVersion;
+        var defaultSdkVersion = _executionContext.IdentitySdkVersion;
+        _logger.LogDebug("Using default SDK version: {Version}", defaultSdkVersion);
+        return defaultSdkVersion;
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -151,6 +152,21 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     /// <inheritdoc />
     public bool IsUsingProjectReferences(FileInfo appHostFile)
     {
+        // When the CLI is emulating a different build via ASPIRE_CLI_* identity overrides (or the
+        // install sidecar), it must behave like the installed CLI it is impersonating — and an
+        // installed CLI never resolves Aspire packages through in-repo project references. Without
+        // this guard a source (DEBUG) build run from inside the Aspire repo trips
+        // AspireRepositoryDetector via its Environment.ProcessPath fallback (it walks up from the
+        // CLI binary, not the apphost, and finds the repo's Aspire.slnx), so project-reference mode
+        // is reported for an apphost that lives in an arbitrary directory. That short-circuits
+        // channel resolution (see IntegrationPackageSearchService.GetConfiguredChannel) and an
+        // emulated staging/daily apphost would silently resolve stable nuget.org packages instead of
+        // its pinned channel's feed. See docs/specs/cli-identity-sidecar.md.
+        if (_executionContext.IdentityOverridden)
+        {
+            return false;
+        }
+
         return AspireRepositoryDetector.DetectRepositoryRoot(appHostFile.Directory?.FullName) is not null;
     }
 
@@ -1663,7 +1679,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 return;
             }
 
-            var cliVersion = VersionHelper.GetDefaultSdkVersion();
+            var cliVersion = _executionContext.IdentitySdkVersion;
             if (!IsKnownIncompatibleSkew(cliVersion, configuredSdkVersion))
             {
                 return;

@@ -201,5 +201,6 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
             cacheDirectory: workspace.WorkspaceRoot.CreateSubdirectory(".aspire-cache"),
             sdksDirectory: workspace.WorkspaceRoot.CreateSubdirectory(".aspire-sdks"),
             logsDirectory: workspace.WorkspaceRoot.CreateSubdirectory(".aspire-logs"),
-            logFilePath: "test.log");
+            logFilePath: "test.log",
+            identityChannel: "local");
 }

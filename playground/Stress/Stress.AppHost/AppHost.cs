@@ -122,5 +122,6 @@ builder.AddProject<Projects.Stress_Empty>("empty-profile-2", launchProfileName: 
     .WithArgs("arg_from_apphost");
 
 builder.AddNoStatusResource("no-status-resource");
+builder.AddPropertyStressResource("property-stress-resource");
 
 builder.Build().Run();

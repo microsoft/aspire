@@ -8,7 +8,8 @@ namespace Aspire.Cli.Projects;
 
 internal sealed class IntegrationRestoreSourceResolver(
     IPackagingService packagingService,
-    ILogger logger)
+    ILogger logger,
+    string? nugetServiceIndexOverride = null)
 {
     public async Task<IntegrationRestoreSources> ResolveAsync(
         string? requestedChannel,
@@ -87,7 +88,7 @@ internal sealed class IntegrationRestoreSourceResolver(
 
         if (hasOverride)
         {
-            packageSourceMappings = PackageSourceOverrideMappings.Create(safePackageSourceOverride!, matchedChannel);
+            packageSourceMappings = PackageSourceOverrideMappings.Create(safePackageSourceOverride!, matchedChannel, nugetServiceIndexOverride);
             configureGlobalPackagesFolder = matchedChannel?.ConfigureGlobalPackagesFolder == true;
             globalPackagesFolderSource = configureGlobalPackagesFolder ? safePackageSourceOverride : null;
 

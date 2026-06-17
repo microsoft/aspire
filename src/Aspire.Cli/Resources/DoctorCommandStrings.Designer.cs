@@ -526,5 +526,23 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InstallationDiscoveryFailedReason", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Legacy .aspire/settings.json detected at {0}.
+        /// </summary>
+        public static string LegacySettingsDetectedMessageFormat {
+            get {
+                return ResourceManager.GetString("LegacySettingsDetectedMessageFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Run 'aspire init' (or any aspire run/add/update/pipeline command) to migrate to aspire.config.json....
+        /// </summary>
+        public static string LegacySettingsDetectedFix {
+            get {
+                return ResourceManager.GetString("LegacySettingsDetectedFix", resourceCulture);
+            }
+        }
     }
 }

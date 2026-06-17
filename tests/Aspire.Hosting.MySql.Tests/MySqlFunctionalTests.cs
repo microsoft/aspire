@@ -671,6 +671,13 @@ public class MySqlFunctionalTests(ITestOutputHelper testOutputHelper)
 
         await app.ResourceNotifications.WaitForResourceHealthyAsync(newDb.Resource.Name, cts.Token);
 
+        // Verify that the resource logger emitted feedback about the custom creation script.
+        // Logs are attributed to the parent server resource, not the database resource.
+        await app.WaitForAllTextAsync(
+            ["Executing custom creation script for database", "Completed custom creation script for database"],
+            resourceName: mysql.Resource.Name,
+            cts.Token);
+
         // Test SqlConnection
         await pipeline.ExecuteAsync(async token =>
         {

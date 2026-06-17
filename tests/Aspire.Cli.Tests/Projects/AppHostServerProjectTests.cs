@@ -250,19 +250,6 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
-    public void DefaultSdkVersion_ReturnsValidVersion()
-    {
-        // Act
-        var version = DotNetBasedAppHostServerProject.DefaultSdkVersion;
-
-        // Assert
-        Assert.NotNull(version);
-        Assert.NotEmpty(version);
-        // Should not contain '+' (commit hash should be stripped)
-        Assert.DoesNotContain("+", version);
-    }
-
-    [Fact]
     public void ProjectModelPath_IsStableForSameAppPath()
     {
         // Arrange

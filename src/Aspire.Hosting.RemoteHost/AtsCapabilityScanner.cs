@@ -616,6 +616,14 @@ public static class AtsCapabilityScanner
         CollectEnumClrTypes(typeRef.ElementType, enumTypes);
         CollectEnumClrTypes(typeRef.KeyType, enumTypes);
         CollectEnumClrTypes(typeRef.ValueType, enumTypes);
+
+        if (typeRef.UnionTypes is not null)
+        {
+            foreach (var unionType in typeRef.UnionTypes)
+            {
+                CollectEnumClrTypes(unionType, enumTypes);
+            }
+        }
     }
 
     /// <summary>

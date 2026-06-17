@@ -427,7 +427,7 @@ internal sealed class UpdateCommand : BaseCommand
 
         var targetSdkVersion = await GetLatestGuestSdkVersionAsync(channel, projectDirectory, cancellationToken);
         if (targetSdkVersion is null ||
-            !SemVersion.TryParse(VersionHelper.GetDefaultSdkVersion(), SemVersionStyles.Strict, out var currentCliVersion) ||
+            !SemVersion.TryParse(ExecutionContext.IdentitySdkVersion, SemVersionStyles.Strict, out var currentCliVersion) ||
             SemVersion.PrecedenceComparer.Compare(targetSdkVersion, currentCliVersion) <= 0)
         {
             return null;
@@ -510,13 +510,41 @@ internal sealed class UpdateCommand : BaseCommand
             var channels = isStagingEnabled
                 ? new[] { PackageChannelNames.Stable, PackageChannelNames.Staging, PackageChannelNames.Daily }
                 : new[] { PackageChannelNames.Stable, PackageChannelNames.Daily };
-            var channelBinding = PromptBinding.Create(parseResult, _channelOption);
-            channel = await InteractionService.PromptForSelectionAsync(
-                "Select the channel to update to:",
-                channels,
-                q => q,
-                binding: channelBinding,
-                cancellationToken: cancellationToken);
+
+            // In non-interactive mode, avoid prompting. Prefer the CLI identity channel when it
+            // maps to an update channel; use stable for local dev builds; otherwise require --channel.
+            var nonInteractive = parseResult.GetValue(RootCommand.NonInteractiveOption);
+            if (nonInteractive)
+            {
+                var identityChannel = ExecutionContext.IdentityChannel;
+                if (!string.IsNullOrWhiteSpace(identityChannel)
+                    && !string.Equals(identityChannel, PackageChannelNames.Local, StringComparisons.ChannelName)
+                    && channels.FirstOrDefault(c => string.Equals(c, identityChannel, StringComparisons.ChannelName)) is { } matchedChannel)
+                {
+                    channel = matchedChannel;
+                }
+                else if (string.Equals(identityChannel, PackageChannelNames.Local, StringComparisons.ChannelName))
+                {
+                    channel = PackageChannelNames.Stable;
+                }
+                else
+                {
+                    var channelOptionDisplayName = $"'{_channelOption.Name}'";
+                    InteractionService.DisplayError(
+                        string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveOptionRequired, channelOptionDisplayName));
+                    throw new NonInteractiveException(channelOptionDisplayName);
+                }
+            }
+            else
+            {
+                var channelBinding = PromptBinding.Create(parseResult, _channelOption);
+                channel = await InteractionService.PromptForSelectionAsync(
+                    "Select the channel to update to:",
+                    channels,
+                    q => q,
+                    binding: channelBinding,
+                    cancellationToken: cancellationToken);
+            }
         }
 
         try

@@ -53,7 +53,7 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
 
         var repoRoot = AspireRepositoryDetector.DetectRepositoryRoot(appHostDirectory.FullName);
         var integrationReferences = config
-            .GetIntegrationReferences(DotNetBasedAppHostServerProject.DefaultSdkVersion, configDirectory.FullName)
+            .GetIntegrationReferences(VersionHelper.GetDefaultSdkVersion(), configDirectory.FullName)
             .ToList();
         var restoreSources = await new IntegrationRestoreSourceResolver(packagingService, logger)
             .ResolveAsync(config.Channel, packageSourceOverride, cancellationToken)

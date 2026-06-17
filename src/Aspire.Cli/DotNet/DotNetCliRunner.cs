@@ -1302,7 +1302,9 @@ internal sealed class DotNetCliRunner(
                 }
 
                 // Build a cache key using the main discriminators, including CLI version.
-                var cliVersion = VersionHelper.GetDefaultTemplateVersion();
+                // Use the identity version so emulated identities (ASPIRE_CLI_VERSION / sidecar)
+                // don't share cached search results with the physical binary's version.
+                var cliVersion = executionContext.IdentityVersion;
                 rawKey = $"query={query}|exactMatch={exactMatch}|prerelease={prerelease}|take={take}|skip={skip}|nugetConfigHash={nugetConfigHash}|cliVersion={cliVersion}";
                 var cached = await _diskCache.GetAsync(rawKey, cancellationToken).ConfigureAwait(false);
                 if (cached is not null)

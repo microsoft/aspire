@@ -422,12 +422,7 @@ internal sealed class AzureResourcePreparer(
                 ProvisioningBuildOptions = options.Value.ProvisioningBuildOptions,
             };
 
-            // existing resource role assignments need to be scoped to the resource's resource group
-            if (targetResource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAnnotation) &&
-                existingAnnotation.ResourceGroup is not null)
-            {
-                roleAssignmentResource.Scope = new(existingAnnotation.ResourceGroup);
-            }
+            ApplyExistingResourceScope(roleAssignmentResource, targetResource);
 
             roleAssignmentResources.Add(roleAssignmentResource);
         }
@@ -560,14 +555,18 @@ internal sealed class AzureResourcePreparer(
             ProvisioningBuildOptions = options.Value.ProvisioningBuildOptions,
         };
 
-        // existing resource role assignments need to be scoped to the resource's resource group
-        if (targetResource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAnnotation) &&
-            existingAnnotation.ResourceGroup is not null)
-        {
-            roleAssignmentResource.Scope = new(existingAnnotation.ResourceGroup);
-        }
+        ApplyExistingResourceScope(roleAssignmentResource, targetResource);
 
         return roleAssignmentResource;
+    }
+
+    private static void ApplyExistingResourceScope(AzureBicepResource roleAssignmentResource, AzureProvisioningResource targetResource)
+    {
+        if (targetResource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAnnotation) &&
+            AzureBicepResourceScope.FromExistingResourceAnnotation(existingAnnotation) is { } scope)
+        {
+            roleAssignmentResource.Scope = scope;
+        }
     }
 
     private void AddGlobalRoleAssignmentsInfrastructure(

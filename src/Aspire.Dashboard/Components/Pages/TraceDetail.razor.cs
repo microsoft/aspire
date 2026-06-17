@@ -36,7 +36,6 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     private readonly List<IDisposable> _peerChangesSubscriptions = new();
     private OtlpTrace? _trace;
     private Subscription? _tracesSubscription;
-    private List<SpanWaterfallViewModel>? _spanWaterfallViewModels;
     private int _maxDepth;
     private int _resourceCount;
     private List<OtlpResource> _resources = default!;
@@ -46,12 +45,11 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     private GridColumnManager _manager = null!;
     private AIContext? _aiContext;
     private IList<GridColumn> _gridColumns = null!;
-    private string _filter = string.Empty;
-    private readonly List<FieldTelemetryFilter> _filters = [];
     private readonly List<MenuButtonItem> _traceActionsMenuItems = [];
     private AspirePageContentLayout? _layout;
     private List<SelectViewModel<SpanType>> _spanTypes = default!;
-    private SelectViewModel<SpanType> _selectedSpanType = default!;
+
+    public TraceDetailPageViewModel PageViewModel { get; set; } = new();
 
     [Parameter]
     public required string TraceId { get; set; }
@@ -130,7 +128,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         UpdateTraceActionsMenu();
 
         _spanTypes = SpanType.CreateKnownSpanTypes(ControlStringsLoc);
-        _selectedSpanType = _spanTypes[0];
+        PageViewModel.SelectedSpanType = _spanTypes[0];
     }
 
     private void UpdateTraceActionsMenu()
@@ -188,244 +186,9 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
     private IEnumerable<SpanWaterfallViewModel> GetVisibleSpanViewModels()
     {
-        Debug.Assert(_spanWaterfallViewModels != null);
+        Debug.Assert(PageViewModel.SpanWaterfallViewModels != null);
 
-        return ApplySpanFilters(_spanWaterfallViewModels, _filter, _selectedSpanType.Id?.Filter, _filters, GetResourceName);
-    }
-
-    internal static IEnumerable<SpanWaterfallViewModel> ApplySpanFilters(
-        IReadOnlyList<SpanWaterfallViewModel> spanWaterfallViewModels,
-        string filter,
-        TelemetryFilter? typeFilter,
-        IReadOnlyList<FieldTelemetryFilter> filters,
-        Func<OtlpResourceView, string> getResourceName)
-    {
-        // Trace Detail has two different filter semantics; the agreed behavior is:
-        //
-        // 1. Context filters (name, kind, status, resource, attributes, etc.):
-        //    Preserve surrounding context. When a span matches, both its ancestors AND
-        //    its descendants stay visible so the waterfall remains navigable around the
-        //    interesting span. This is the existing tree-aware behavior implemented in
-        //    SpanWaterfallViewModel.MatchesFilter.
-        //
-        // 2. Duration filters are per-span "noise" filters. They hide spans below a
-        //    duration threshold so slow work stands out. The asymmetric rule is:
-        //
-        //      - Every span must INDIVIDUALLY satisfy the duration filter to be shown.
-        //      - A matching ancestor (e.g. a long root span) does NOT automatically
-        //        retain its short descendants; a descendant is only kept if it
-        //        independently meets the threshold. Otherwise "min duration" would be
-        //        a no-op for descendants whenever any ancestor was long enough.
-        //      - Ancestors of a matching descendant ARE retained for context so the
-        //        matching span has a navigable path back to the root, even when those
-        //        ancestors don't themselves satisfy the duration filter.
-        List<FieldTelemetryFilter>? contextFilters = null;
-        List<DurationFilter>? durationFilters = null;
-        foreach (var candidate in filters)
-        {
-            if (!candidate.Enabled)
-            {
-                continue;
-            }
-
-            if (candidate.Field == KnownTraceFields.DurationField)
-            {
-                durationFilters ??= [];
-                durationFilters.Add(new DurationFilter(candidate.Condition, candidate.Value));
-            }
-            else
-            {
-                contextFilters ??= [];
-                contextFilters.Add(candidate);
-            }
-        }
-
-        Dictionary<SpanWaterfallViewModel, SpanWaterfallViewModel>? parentMap = null;
-        var hasContextFilters = !string.IsNullOrWhiteSpace(filter) || typeFilter is not null || contextFilters is { Count: > 0 };
-        if (!hasContextFilters && durationFilters is null)
-        {
-            return spanWaterfallViewModels.Where(vm => !vm.IsHidden);
-        }
-
-        var visibleViewModels = hasContextFilters
-            ? BuildContextVisibleSet(spanWaterfallViewModels, filter, typeFilter, contextFilters ?? [], getResourceName, GetParentMap())
-            : new HashSet<SpanWaterfallViewModel>(spanWaterfallViewModels.Where(vm => !vm.IsHidden));
-
-        if (durationFilters is null)
-        {
-            return spanWaterfallViewModels.Where(visibleViewModels.Contains);
-        }
-
-        // Per-span noise filter pass. Narrow the context-visible set down to spans that
-        // INDIVIDUALLY satisfy every duration filter — short descendants of a long
-        // matching ancestor drop out here. Then walk parents of each direct match to
-        // keep the ancestor chain visible for navigation, but only ancestors that were
-        // already in the context-visible set, so the duration pass never widens what
-        // the context filters allowed.
-        var directMatches = visibleViewModels
-            .Where(vm => durationFilters.All(f => f.Apply(vm.Span)))
-            .ToList();
-
-        var finalVisible = new HashSet<SpanWaterfallViewModel>(directMatches);
-
-        foreach (var match in directMatches)
-        {
-            var current = match;
-            while (GetParentMap().TryGetValue(current, out var parent) && visibleViewModels.Contains(parent) && finalVisible.Add(parent))
-            {
-                current = parent;
-            }
-        }
-
-        return spanWaterfallViewModels.Where(finalVisible.Contains);
-
-        Dictionary<SpanWaterfallViewModel, SpanWaterfallViewModel> GetParentMap()
-        {
-            return parentMap ??= BuildParentMap(spanWaterfallViewModels);
-        }
-    }
-
-    private static HashSet<SpanWaterfallViewModel> BuildContextVisibleSet(
-        IReadOnlyList<SpanWaterfallViewModel> spanWaterfallViewModels,
-        string filter,
-        TelemetryFilter? typeFilter,
-        IReadOnlyList<FieldTelemetryFilter> contextFilters,
-        Func<OtlpResourceView, string> getResourceName,
-        Dictionary<SpanWaterfallViewModel, SpanWaterfallViewModel> parentMap)
-    {
-        var visibleViewModels = new HashSet<SpanWaterfallViewModel>();
-
-        foreach (var viewModel in spanWaterfallViewModels)
-        {
-            if (visibleViewModels.Contains(viewModel))
-            {
-                continue;
-            }
-
-            // Only context filters participate in tree-aware expansion. Direct matches
-            // keep their descendants visible and matching descendants keep their
-            // ancestors visible, but the scan itself stays linear instead of recursively
-            // walking each subtree from every flat-list row.
-            if (viewModel.MatchesFilterDirect(filter, typeFilter, contextFilters, getResourceName))
-            {
-                AddContextMatch(viewModel, visibleViewModels, parentMap);
-            }
-        }
-
-        return visibleViewModels;
-    }
-
-    private static Dictionary<SpanWaterfallViewModel, SpanWaterfallViewModel> BuildParentMap(IReadOnlyList<SpanWaterfallViewModel> spans)
-    {
-        var map = new Dictionary<SpanWaterfallViewModel, SpanWaterfallViewModel>();
-        foreach (var parent in spans)
-        {
-            foreach (var child in parent.Children)
-            {
-                map[child] = parent;
-            }
-        }
-
-        return map;
-    }
-
-    private static void AddContextMatch(
-        SpanWaterfallViewModel match,
-        HashSet<SpanWaterfallViewModel> visibleViewModels,
-        Dictionary<SpanWaterfallViewModel, SpanWaterfallViewModel> parentMap)
-    {
-        if (!match.IsHidden)
-        {
-            visibleViewModels.Add(match);
-            AddVisibleDescendents(match, visibleViewModels);
-        }
-
-        var current = match;
-        while (parentMap.TryGetValue(current, out var parent))
-        {
-            if (!parent.IsHidden)
-            {
-                visibleViewModels.Add(parent);
-            }
-
-            current = parent;
-        }
-    }
-
-    private static void AddVisibleDescendents(SpanWaterfallViewModel match, HashSet<SpanWaterfallViewModel> visibleViewModels)
-    {
-        var stack = new Stack<SpanWaterfallViewModel>();
-        foreach (var child in match.Children)
-        {
-            stack.Push(child);
-        }
-
-        while (stack.Count > 0)
-        {
-            var current = stack.Pop();
-            if (!current.IsHidden)
-            {
-                visibleViewModels.Add(current);
-            }
-
-            foreach (var child in current.Children)
-            {
-                stack.Push(child);
-            }
-        }
-    }
-
-    private readonly record struct DurationFilter
-    {
-        private readonly FilterCondition _condition;
-        private readonly double _value;
-        private readonly bool _isValid;
-
-        public DurationFilter(FilterCondition condition, string value)
-        {
-            _condition = condition;
-            _isValid = IsSupported(condition) &&
-                double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out _value) &&
-                double.IsFinite(_value);
-        }
-
-        public bool Apply(OtlpSpan span)
-        {
-            if (!_isValid)
-            {
-                return false;
-            }
-
-            // Duration filtering is the hot profiling path, so compare the numeric
-            // duration directly instead of formatting and parsing once per span.
-            var duration = span.Duration.TotalMilliseconds;
-            if (!double.IsFinite(duration))
-            {
-                return false;
-            }
-
-            return _condition switch
-            {
-                FilterCondition.Equals => duration == _value,
-                FilterCondition.GreaterThan => duration > _value,
-                FilterCondition.LessThan => duration < _value,
-                FilterCondition.GreaterThanOrEqual => duration >= _value,
-                FilterCondition.LessThanOrEqual => duration <= _value,
-                FilterCondition.NotEqual => duration != _value,
-                _ => false
-            };
-        }
-
-        private static bool IsSupported(FilterCondition condition)
-        {
-            return condition is
-                FilterCondition.Equals or
-                FilterCondition.GreaterThan or
-                FilterCondition.LessThan or
-                FilterCondition.GreaterThanOrEqual or
-                FilterCondition.LessThanOrEqual or
-                FilterCondition.NotEqual;
-        }
+        return TraceDetailPageViewModel.ApplySpanFilters(PageViewModel.SpanWaterfallViewModels, PageViewModel.Filter, PageViewModel.SelectedSpanType.Id?.Filter, PageViewModel.Filters, GetResourceName);
     }
 
     private string? GetPageTitle()
@@ -443,6 +206,10 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     {
         if (TraceId != _trace?.TraceId)
         {
+            // Close the span detail pane when navigating between traces (e.g. browser back/forward).
+            // If the new trace has a SpanId query parameter, it will be re-opened below.
+            PageViewModel.SelectedData = null;
+
             UpdateDetailViewData();
             UpdateSubscription();
 
@@ -454,9 +221,9 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
             _aiContext?.ContextHasChanged();
         }
 
-        if (SpanId is not null && _spanWaterfallViewModels is not null)
+        if (SpanId is not null && PageViewModel.SpanWaterfallViewModels is not null)
         {
-            var spanVm = _spanWaterfallViewModels.SingleOrDefault(vm => vm.Span.SpanId == SpanId);
+            var spanVm = PageViewModel.SpanWaterfallViewModels.SingleOrDefault(vm => vm.Span.SpanId == SpanId);
             if (spanVm != null)
             {
                 await OnShowPropertiesAsync(spanVm, buttonId: null);
@@ -511,7 +278,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         if (_trace == null)
         {
             Logger.LogInformation("Couldn't find trace '{TraceId}'.", TraceId);
-            _spanWaterfallViewModels = null;
+            PageViewModel.SpanWaterfallViewModels = null;
             _maxDepth = 0;
             _resourceCount = 0;
             UpdateTraceActionsMenu();
@@ -524,8 +291,8 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         var result = TelemetryRepository.GetLogsForTrace(_trace.TraceId);
 
         Logger.LogInformation("Trace '{TraceId}' has {SpanCount} spans.", _trace.TraceId, _trace.Spans.Count);
-        _spanWaterfallViewModels = SpanWaterfallViewModel.Create(_trace, result, new SpanWaterfallViewModel.TraceDetailState(OutgoingPeerResolvers.ToArray(), _collapsedSpanIds, _resources));
-        _maxDepth = _spanWaterfallViewModels.Max(s => s.Depth);
+        PageViewModel.SpanWaterfallViewModels = SpanWaterfallViewModel.Create(_trace, result, new SpanWaterfallViewModel.TraceDetailState(OutgoingPeerResolvers.ToArray(), _collapsedSpanIds, _resources));
+        _maxDepth = PageViewModel.SpanWaterfallViewModels.Max(s => s.Depth);
 
         var apps = new HashSet<OtlpResource>();
         foreach (var span in _trace.Spans)
@@ -543,7 +310,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
     private async Task HandleAfterFilterBindAsync()
     {
-        SelectedData = null;
+        ClearSelectedDataIfNotVisible();
         await InvokeAsync(StateHasChanged);
 
         await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
@@ -551,7 +318,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
     private async Task HandleSelectedSpanTypeChangedAsync()
     {
-        SelectedData = null;
+        ClearSelectedDataIfNotVisible();
         await InvokeAsync(StateHasChanged);
 
         await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
@@ -593,11 +360,11 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     private string GetRowClass(SpanWaterfallViewModel viewModel)
     {
         // Test with id rather than the object reference because the data and view model objects are recreated on trace updates.
-        if (SelectedData?.SpanViewModel is { } selectedSpan && selectedSpan.Span.SpanId == viewModel.Span.SpanId)
+        if (PageViewModel.SelectedData?.SpanViewModel is { } selectedSpan && selectedSpan.Span.SpanId == viewModel.Span.SpanId)
         {
             return "selected-row";
         }
-        else if (SelectedData?.LogEntryViewModel is { } selectedLog && viewModel.SpanLogs.Any(l => l.LogEntry.InternalId == selectedLog.LogEntry.InternalId))
+        else if (PageViewModel.SelectedData?.LogEntryViewModel is { } selectedLog && viewModel.SpanLogs.Any(l => l.LogEntry.InternalId == selectedLog.LogEntry.InternalId))
         {
             return "selected-row";
         }
@@ -605,7 +372,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         return string.Empty;
     }
 
-    public TraceDetailSelectedDataViewModel? SelectedData { get; set; }
+    public TraceDetailSelectedDataViewModel? SelectedData => PageViewModel.SelectedData;
 
     private async Task OnToggleCollapse(SpanWaterfallViewModel viewModel)
     {
@@ -645,7 +412,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     {
         _elementIdBeforeDetailsViewOpened = buttonId;
 
-        if (SelectedData?.SpanViewModel?.Span.SpanId == viewModel.Span.SpanId)
+        if (PageViewModel.SelectedData?.SpanViewModel?.Span.SpanId == viewModel.Span.SpanId)
         {
             await ClearSelectedSpanAsync();
         }
@@ -653,7 +420,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         {
             var spanDetailsViewModel = SpanDetailsViewModel.Create(viewModel.Span, TelemetryRepository, _resources);
 
-            SelectedData = new TraceDetailSelectedDataViewModel
+            PageViewModel.SelectedData = new TraceDetailSelectedDataViewModel
             {
                 SpanViewModel = spanDetailsViewModel
             };
@@ -662,7 +429,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
     private async Task ClearSelectedSpanAsync(bool causedByUserAction = false)
     {
-        SelectedData = null;
+        PageViewModel.SelectedData = null;
 
         if (_elementIdBeforeDetailsViewOpened is not null && causedByUserAction)
         {
@@ -674,33 +441,33 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
     private bool HasCollapsedSpans()
     {
-        if (_spanWaterfallViewModels is null)
+        if (PageViewModel.SpanWaterfallViewModels is null)
         {
             return false;
         }
 
-        return _spanWaterfallViewModels.Any(vm => vm.IsCollapsed);
+        return PageViewModel.SpanWaterfallViewModels.Any(vm => vm.IsCollapsed);
     }
 
     private bool HasExpandedSpans()
     {
-        if (_spanWaterfallViewModels is null)
+        if (PageViewModel.SpanWaterfallViewModels is null)
         {
             return false;
         }
 
         // Don't consider root spans (depth 0) when determining if collapse all should be enabled
-        return _spanWaterfallViewModels.Any(vm => vm.Depth > RootSpanDepth && !vm.IsCollapsed && vm.Children.Count > 0);
+        return PageViewModel.SpanWaterfallViewModels.Any(vm => vm.Depth > RootSpanDepth && !vm.IsCollapsed && vm.Children.Count > 0);
     }
 
     private async Task CollapseAllSpansAsync()
     {
-        if (_spanWaterfallViewModels is null)
+        if (PageViewModel.SpanWaterfallViewModels is null)
         {
             return;
         }
 
-        foreach (var viewModel in _spanWaterfallViewModels)
+        foreach (var viewModel in PageViewModel.SpanWaterfallViewModels)
         {
             // Don't collapse root spans.
             if (viewModel.Depth > RootSpanDepth && viewModel.Children.Count > 0 && !viewModel.IsCollapsed)
@@ -714,12 +481,12 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
     private async Task ExpandAllSpansAsync()
     {
-        if (_spanWaterfallViewModels is null)
+        if (PageViewModel.SpanWaterfallViewModels is null)
         {
             return;
         }
 
-        foreach (var viewModel in _spanWaterfallViewModels)
+        foreach (var viewModel in PageViewModel.SpanWaterfallViewModels)
         {
             if (viewModel.IsCollapsed)
             {
@@ -734,13 +501,13 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
     private async Task ToggleSpanLogsAsync(OtlpLogEntry logEntry)
     {
-        if (SelectedData?.LogEntryViewModel?.LogEntry.InternalId == logEntry.InternalId)
+        if (PageViewModel.SelectedData?.LogEntryViewModel?.LogEntry.InternalId == logEntry.InternalId)
         {
             await ClearSelectedSpanAsync();
         }
         else
         {
-            SelectedData = new TraceDetailSelectedDataViewModel
+            PageViewModel.SelectedData = new TraceDetailSelectedDataViewModel
             {
                 LogEntryViewModel = new StructureLogsDetailsViewModel { LogEntry = logEntry }
             };
@@ -813,11 +580,11 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         {
             if (filterResult.Delete)
             {
-                _filters.Remove(filter);
+                PageViewModel.Filters.Remove(filter);
             }
             else if (filterResult.Add)
             {
-                _filters.Add(filter);
+                PageViewModel.Filters.Add(filter);
             }
             else if (filterResult.Enable)
             {
@@ -834,9 +601,32 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
     private async Task RefreshAfterFilterChangeAsync()
     {
-        SelectedData = null;
+        ClearSelectedDataIfNotVisible();
         await InvokeAsync(StateHasChanged);
         await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
+    }
+
+    /// <summary>
+    /// Clears the selected span or log entry only if it is no longer visible after a filter change.
+    /// Preserving the selection when the entry is still in the filtered results avoids losing
+    /// user context when filters are relaxed or when restrictive filters still include the entry.
+    /// </summary>
+    private void ClearSelectedDataIfNotVisible()
+    {
+        if (PageViewModel.SpanWaterfallViewModels is null)
+        {
+            return;
+        }
+
+        if (PageViewModel.SelectedData is null)
+        {
+            return;
+        }
+
+        if (PageViewModel.IsSelectedDataExcludedByFilters(GetVisibleSpanViewModels()))
+        {
+            PageViewModel.SelectedData = null;
+        }
     }
 
     // Computed fresh on each dialog open. A single trace typically has a small number of spans,
@@ -874,8 +664,8 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     private List<MenuButtonItem> GetFilterMenuItems()
     {
         return FilterHelpers.GetFilterMenuItems(
-            _filters,
-            clearFilters: _filters.Clear,
+            PageViewModel.Filters,
+            clearFilters: PageViewModel.Filters.Clear,
             openFilterAsync: OpenFilterAsync,
             afterChangeAsync: RefreshAfterFilterChangeAsync,
             filterLoc: FilterLoc,
@@ -896,4 +686,271 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
     // IComponentWithTelemetry impl
     public ComponentTelemetryContext TelemetryContext { get; } = new(ComponentType.Page, TelemetryComponentIds.TraceDetail);
+
+    public class TraceDetailPageViewModel
+    {
+        public TraceDetailSelectedDataViewModel? SelectedData { get; set; }
+        public List<SpanWaterfallViewModel>? SpanWaterfallViewModels { get; set; }
+        public string Filter { get; set; } = string.Empty;
+        public List<FieldTelemetryFilter> Filters { get; } = [];
+        public SelectViewModel<SpanType> SelectedSpanType { get; set; } = default!;
+
+        /// <summary>
+        /// Returns true when the selected span or log entry is not present in the visible span set.
+        /// </summary>
+        public bool IsSelectedDataExcludedByFilters(IEnumerable<SpanWaterfallViewModel> visibleSpans)
+        {
+            if (SelectedData is null)
+            {
+                return false;
+            }
+
+            if (SelectedData.SpanViewModel is { } spanVm)
+            {
+                return !visibleSpans.Any(vm => vm.Span.SpanId == spanVm.Span.SpanId);
+            }
+
+            if (SelectedData.LogEntryViewModel is { } logVm)
+            {
+                return !visibleSpans.Any(vm => vm.SpanLogs.Any(l => l.LogEntry.InternalId == logVm.LogEntry.InternalId));
+            }
+
+            return false;
+        }
+
+        internal static IEnumerable<SpanWaterfallViewModel> ApplySpanFilters(
+            IReadOnlyList<SpanWaterfallViewModel> spanWaterfallViewModels,
+            string filter,
+            TelemetryFilter? typeFilter,
+            IReadOnlyList<FieldTelemetryFilter> filters,
+            Func<OtlpResourceView, string> getResourceName)
+        {
+            // Trace Detail has two different filter semantics; the agreed behavior is:
+            //
+            // 1. Context filters (name, kind, status, resource, attributes, etc.):
+            //    Preserve surrounding context. When a span matches, both its ancestors AND
+            //    its descendants stay visible so the waterfall remains navigable around the
+            //    interesting span. This is the existing tree-aware behavior implemented in
+            //    SpanWaterfallViewModel.MatchesFilter.
+            //
+            // 2. Duration filters are per-span "noise" filters. They hide spans below a
+            //    duration threshold so slow work stands out. The asymmetric rule is:
+            //
+            //      - Every span must INDIVIDUALLY satisfy the duration filter to be shown.
+            //      - A matching ancestor (e.g. a long root span) does NOT automatically
+            //        retain its short descendants; a descendant is only kept if it
+            //        independently meets the threshold. Otherwise "min duration" would be
+            //        a no-op for descendants whenever any ancestor was long enough.
+            //      - Ancestors of a matching descendant ARE retained for context so the
+            //        matching span has a navigable path back to the root, even when those
+            //        ancestors don't themselves satisfy the duration filter.
+            List<FieldTelemetryFilter>? contextFilters = null;
+            List<DurationFilter>? durationFilters = null;
+            foreach (var candidate in filters)
+            {
+                if (!candidate.Enabled)
+                {
+                    continue;
+                }
+
+                if (candidate.Field == KnownTraceFields.DurationField)
+                {
+                    durationFilters ??= [];
+                    durationFilters.Add(new DurationFilter(candidate.Condition, candidate.Value));
+                }
+                else
+                {
+                    contextFilters ??= [];
+                    contextFilters.Add(candidate);
+                }
+            }
+
+            Dictionary<SpanWaterfallViewModel, SpanWaterfallViewModel>? parentMap = null;
+            var hasContextFilters = !string.IsNullOrWhiteSpace(filter) || typeFilter is not null || contextFilters is { Count: > 0 };
+            if (!hasContextFilters && durationFilters is null)
+            {
+                return spanWaterfallViewModels.Where(vm => !vm.IsHidden);
+            }
+
+            var visibleViewModels = hasContextFilters
+                ? BuildContextVisibleSet(spanWaterfallViewModels, filter, typeFilter, contextFilters ?? [], getResourceName, GetParentMap())
+                : [.. spanWaterfallViewModels.Where(vm => !vm.IsHidden)];
+
+            if (durationFilters is null)
+            {
+                return spanWaterfallViewModels.Where(visibleViewModels.Contains);
+            }
+
+            // Per-span noise filter pass. Narrow the context-visible set down to spans that
+            // INDIVIDUALLY satisfy every duration filter — short descendants of a long
+            // matching ancestor drop out here. Then walk parents of each direct match to
+            // keep the ancestor chain visible for navigation, but only ancestors that were
+            // already in the context-visible set, so the duration pass never widens what
+            // the context filters allowed.
+            var directMatches = visibleViewModels
+                .Where(vm => durationFilters.All(f => f.Apply(vm.Span)))
+                .ToList();
+
+            var finalVisible = new HashSet<SpanWaterfallViewModel>(directMatches);
+
+            foreach (var match in directMatches)
+            {
+                var current = match;
+                while (GetParentMap().TryGetValue(current, out var parent) && visibleViewModels.Contains(parent) && finalVisible.Add(parent))
+                {
+                    current = parent;
+                }
+            }
+
+            return spanWaterfallViewModels.Where(finalVisible.Contains);
+
+            Dictionary<SpanWaterfallViewModel, SpanWaterfallViewModel> GetParentMap()
+            {
+                return parentMap ??= BuildParentMap(spanWaterfallViewModels);
+            }
+        }
+
+        private static HashSet<SpanWaterfallViewModel> BuildContextVisibleSet(
+            IReadOnlyList<SpanWaterfallViewModel> spanWaterfallViewModels,
+            string filter,
+            TelemetryFilter? typeFilter,
+            IReadOnlyList<FieldTelemetryFilter> contextFilters,
+            Func<OtlpResourceView, string> getResourceName,
+            Dictionary<SpanWaterfallViewModel, SpanWaterfallViewModel> parentMap)
+        {
+            var visibleViewModels = new HashSet<SpanWaterfallViewModel>();
+
+            foreach (var viewModel in spanWaterfallViewModels)
+            {
+                if (visibleViewModels.Contains(viewModel))
+                {
+                    continue;
+                }
+
+                // Only context filters participate in tree-aware expansion. Direct matches
+                // keep their descendants visible and matching descendants keep their
+                // ancestors visible, but the scan itself stays linear instead of recursively
+                // walking each subtree from every flat-list row.
+                if (viewModel.MatchesFilterDirect(filter, typeFilter, contextFilters, getResourceName))
+                {
+                    AddContextMatch(viewModel, visibleViewModels, parentMap);
+                }
+            }
+
+            return visibleViewModels;
+        }
+
+        private static Dictionary<SpanWaterfallViewModel, SpanWaterfallViewModel> BuildParentMap(IReadOnlyList<SpanWaterfallViewModel> spans)
+        {
+            var map = new Dictionary<SpanWaterfallViewModel, SpanWaterfallViewModel>();
+            foreach (var parent in spans)
+            {
+                foreach (var child in parent.Children)
+                {
+                    map[child] = parent;
+                }
+            }
+
+            return map;
+        }
+
+        private static void AddContextMatch(
+            SpanWaterfallViewModel match,
+            HashSet<SpanWaterfallViewModel> visibleViewModels,
+            Dictionary<SpanWaterfallViewModel, SpanWaterfallViewModel> parentMap)
+        {
+            if (!match.IsHidden)
+            {
+                visibleViewModels.Add(match);
+                AddVisibleDescendents(match, visibleViewModels);
+            }
+
+            var current = match;
+            while (parentMap.TryGetValue(current, out var parent))
+            {
+                if (!parent.IsHidden)
+                {
+                    visibleViewModels.Add(parent);
+                }
+
+                current = parent;
+            }
+        }
+
+        private static void AddVisibleDescendents(SpanWaterfallViewModel match, HashSet<SpanWaterfallViewModel> visibleViewModels)
+        {
+            var stack = new Stack<SpanWaterfallViewModel>();
+            foreach (var child in match.Children)
+            {
+                stack.Push(child);
+            }
+
+            while (stack.Count > 0)
+            {
+                var current = stack.Pop();
+                if (!current.IsHidden)
+                {
+                    visibleViewModels.Add(current);
+                }
+
+                foreach (var child in current.Children)
+                {
+                    stack.Push(child);
+                }
+            }
+        }
+
+        private readonly record struct DurationFilter
+        {
+            private readonly FilterCondition _condition;
+            private readonly double _value;
+            private readonly bool _isValid;
+
+            public DurationFilter(FilterCondition condition, string value)
+            {
+                _condition = condition;
+                _isValid = IsSupported(condition) &&
+                    double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out _value) &&
+                    double.IsFinite(_value);
+            }
+
+            public bool Apply(OtlpSpan span)
+            {
+                if (!_isValid)
+                {
+                    return false;
+                }
+
+                // Duration filtering is the hot profiling path, so compare the numeric
+                // duration directly instead of formatting and parsing once per span.
+                var duration = span.Duration.TotalMilliseconds;
+                if (!double.IsFinite(duration))
+                {
+                    return false;
+                }
+
+                return _condition switch
+                {
+                    FilterCondition.Equals => duration == _value,
+                    FilterCondition.GreaterThan => duration > _value,
+                    FilterCondition.LessThan => duration < _value,
+                    FilterCondition.GreaterThanOrEqual => duration >= _value,
+                    FilterCondition.LessThanOrEqual => duration <= _value,
+                    FilterCondition.NotEqual => duration != _value,
+                    _ => false
+                };
+            }
+
+            private static bool IsSupported(FilterCondition condition)
+            {
+                return condition is
+                    FilterCondition.Equals or
+                    FilterCondition.GreaterThan or
+                    FilterCondition.LessThan or
+                    FilterCondition.GreaterThanOrEqual or
+                    FilterCondition.LessThanOrEqual or
+                    FilterCondition.NotEqual;
+            }
+        }
+    }
 }
