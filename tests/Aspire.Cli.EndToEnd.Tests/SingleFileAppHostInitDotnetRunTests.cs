@@ -91,9 +91,8 @@ public sealed class SingleFileAppHostInitDotnetRunTests(ITestOutputHelper output
         Assert.False(string.IsNullOrWhiteSpace(httpsEnv["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]?.GetValue<string>()));
         Assert.False(string.IsNullOrWhiteSpace(httpsEnv["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]?.GetValue<string>()));
 
-        // `dotnet run apphost.cs` is routed through the Aspire CLI run hook when the CLI
-        // bundle is enabled, so the AppHost-ready signal is the CLI's run summary rather
-        // than the raw DistributedApplication lifecycle log.
+        // `dotnet run apphost.cs` is intercepted by the Aspire CLI run hook when the CLI
+        // bundle is active; the CLI run summary is the AppHost-ready signal.
         await auto.TypeAsync("dotnet run apphost.cs");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync(
