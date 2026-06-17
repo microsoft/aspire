@@ -21,7 +21,7 @@ internal interface IInternalMicrosoftDetector
     /// <summary>
     /// Gets whether the current user or machine appears to be Microsoft internal.
     /// </summary>
-    Task<bool> IsInternalMicrosoftMachineAsync(CancellationToken cancellationToken = default);
+    Task<InternalMicrosoftDetectionResult> IsInternalMicrosoftMachineAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -66,18 +66,19 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         _probeStages = probeStages ?? CreateDefaultProbeStages();
     }
 
-    public async Task<bool> IsInternalMicrosoftMachineAsync(CancellationToken cancellationToken = default)
+    public async Task<InternalMicrosoftDetectionResult> IsInternalMicrosoftMachineAsync(CancellationToken cancellationToken = default)
     {
         var cached = await TryReadFreshCacheAsync(cancellationToken).ConfigureAwait(false);
         if (cached is not null)
         {
-            return cached.IsInternalMicrosoft;
+            return new InternalMicrosoftDetectionResult(cached.IsInternalMicrosoft, cached.Source);
         }
 
-        var isInternalMicrosoft = await RunProbeStagesAsync(cancellationToken).ConfigureAwait(false);
-        await TryWriteCacheAsync(isInternalMicrosoft, cancellationToken).ConfigureAwait(false);
+        var source = await RunProbeStagesAsync(cancellationToken).ConfigureAwait(false);
+        var result = new InternalMicrosoftDetectionResult(source is not null, source);
+        await TryWriteCacheAsync(result, cancellationToken).ConfigureAwait(false);
 
-        return isInternalMicrosoft;
+        return result;
     }
 
     private IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>> CreateDefaultProbeStages()
@@ -116,7 +117,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         return [stage1, stage2, stage3];
     }
 
-    private async Task<bool> RunProbeStagesAsync(CancellationToken cancellationToken)
+    private async Task<string?> RunProbeStagesAsync(CancellationToken cancellationToken)
     {
         foreach (var stage in _probeStages)
         {
@@ -127,16 +128,17 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 continue;
             }
 
-            if (await RunProbeStageAsync(stage, cancellationToken).ConfigureAwait(false))
+            var source = await RunProbeStageAsync(stage, cancellationToken).ConfigureAwait(false);
+            if (source is not null)
             {
-                return true;
+                return source;
             }
         }
 
-        return false;
+        return null;
     }
 
-    private async Task<bool> RunProbeStageAsync(IReadOnlyList<InternalMicrosoftProbe> probes, CancellationToken cancellationToken)
+    private async Task<string?> RunProbeStageAsync(IReadOnlyList<InternalMicrosoftProbe> probes, CancellationToken cancellationToken)
     {
         using var stageCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var probeTasks = probes.Select(probe => RunProbeAsync(probe, stageCancellation.Token)).ToList();
@@ -147,29 +149,30 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             var completedTask = await Task.WhenAny(pendingTasks).ConfigureAwait(false);
             pendingTasks.Remove(completedTask);
 
-            if (await completedTask.ConfigureAwait(false))
+            var source = await completedTask.ConfigureAwait(false);
+            if (source is not null)
             {
                 await stageCancellation.CancelAsync().ConfigureAwait(false);
                 await DrainCancelledProbesAsync(probeTasks).ConfigureAwait(false);
-                return true;
+                return source;
             }
         }
 
-        return false;
+        return null;
     }
 
-    private Task<bool> RunProbeAsync(InternalMicrosoftProbe probe, CancellationToken cancellationToken)
+    private Task<string?> RunProbeAsync(InternalMicrosoftProbe probe, CancellationToken cancellationToken)
     {
         return Task.Run(async () =>
         {
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                return await probe.DetectAsync(cancellationToken).ConfigureAwait(false);
+                return await probe.DetectAsync(cancellationToken).ConfigureAwait(false) ? probe.Name : null;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                return false;
+                return null;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or InvalidOperationException or JsonException or HttpRequestException or TaskCanceledException)
             {
@@ -177,12 +180,12 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 {
                     _logger.LogDebug(ex, "Microsoft internal probe '{ProbeName}' failed.", probe.Name);
                 }
-                return false;
+                return null;
             }
         }, CancellationToken.None);
     }
 
-    private async Task DrainCancelledProbesAsync(IReadOnlyList<Task<bool>> probeTasks)
+    private async Task DrainCancelledProbesAsync(IReadOnlyList<Task<string?>> probeTasks)
     {
         try
         {
@@ -220,7 +223,8 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 return null;
             }
 
-            return _timeProvider.GetUtcNow() - entry.LastRunUtc < s_cacheRefreshInterval
+            var hasRequiredSource = !entry.IsInternalMicrosoft || !string.IsNullOrEmpty(entry.Source);
+            return hasRequiredSource && _timeProvider.GetUtcNow() - entry.LastRunUtc < s_cacheRefreshInterval
                 ? entry
                 : null;
         }
@@ -234,7 +238,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
     }
 
-    private async Task TryWriteCacheAsync(bool isInternalMicrosoft, CancellationToken cancellationToken)
+    private async Task TryWriteCacheAsync(InternalMicrosoftDetectionResult result, CancellationToken cancellationToken)
     {
         var directory = Path.GetDirectoryName(_cacheFilePath);
         if (string.IsNullOrEmpty(directory))
@@ -249,7 +253,8 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
             var entry = new InternalMicrosoftDetectorCacheEntry
             {
-                IsInternalMicrosoft = isInternalMicrosoft,
+                IsInternalMicrosoft = result.IsInternalMicrosoft,
+                Source = result.Source,
                 LastRunUtc = _timeProvider.GetUtcNow()
             };
             var json = JsonSerializer.Serialize(entry, JsonSourceGenerationContext.Default.InternalMicrosoftDetectorCacheEntry);
@@ -983,8 +988,11 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
 internal sealed record InternalMicrosoftProbe(string Name, Func<CancellationToken, Task<bool>> DetectAsync);
 
+internal sealed record InternalMicrosoftDetectionResult(bool IsInternalMicrosoft, string? Source);
+
 internal sealed record InternalMicrosoftDetectorCacheEntry
 {
     public bool IsInternalMicrosoft { get; init; }
+    public string? Source { get; init; }
     public DateTimeOffset LastRunUtc { get; init; }
 }

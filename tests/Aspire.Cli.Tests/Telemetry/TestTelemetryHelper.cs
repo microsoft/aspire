@@ -69,6 +69,7 @@ internal static class TestTelemetryHelper
 
     private sealed class TestInternalMicrosoftDetector : IInternalMicrosoftDetector
     {
-        public Task<bool> IsInternalMicrosoftMachineAsync(CancellationToken cancellationToken = default) => Task.FromResult(false);
+        public Task<InternalMicrosoftDetectionResult> IsInternalMicrosoftMachineAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(new InternalMicrosoftDetectionResult(false, Source: null));
     }
 }

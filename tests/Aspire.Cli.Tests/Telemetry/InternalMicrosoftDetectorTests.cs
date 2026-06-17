@@ -18,6 +18,7 @@ public sealed class InternalMicrosoftDetectorTests
         await File.WriteAllTextAsync(cacheFilePath, """
             {
               "isInternalMicrosoft": true,
+              "source": "cached source",
               "lastRunUtc": "2026-06-16T11:00:00+00:00"
             }
             """);
@@ -37,7 +38,8 @@ public sealed class InternalMicrosoftDetectorTests
 
         var result = await detector.IsInternalMicrosoftMachineAsync();
 
-        Assert.True(result);
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Equal("cached source", result.Source);
         Assert.False(probeRan);
     }
 
@@ -63,10 +65,12 @@ public sealed class InternalMicrosoftDetectorTests
 
         var result = await detector.IsInternalMicrosoftMachineAsync();
 
-        Assert.True(result);
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Equal("positive", result.Source);
 
         var updatedCache = await File.ReadAllTextAsync(cacheFilePath);
         Assert.Contains("\"isInternalMicrosoft\": true", updatedCache, StringComparison.Ordinal);
+        Assert.Contains("\"source\": \"positive\"", updatedCache, StringComparison.Ordinal);
         Assert.Contains("\"lastRunUtc\": \"2026-06-16T12:00:00+00:00\"", updatedCache, StringComparison.Ordinal);
     }
 
@@ -98,7 +102,8 @@ public sealed class InternalMicrosoftDetectorTests
 
         var result = await detector.IsInternalMicrosoftMachineAsync();
 
-        Assert.True(result);
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Equal("stage 2", result.Source);
         Assert.Equal(["stage 1", "stage 2"], calls);
     }
 
@@ -139,7 +144,8 @@ public sealed class InternalMicrosoftDetectorTests
 
         var result = await detector.IsInternalMicrosoftMachineAsync();
 
-        Assert.True(result);
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Equal("positive", result.Source);
         await slowProbeCancelled.Task.WaitAsync(TimeSpan.FromSeconds(5));
     }
 
@@ -178,7 +184,8 @@ public sealed class InternalMicrosoftDetectorTests
 
         var result = await detector.IsInternalMicrosoftMachineAsync();
 
-        Assert.True(result);
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Equal("positive", result.Source);
     }
 
     private static InternalMicrosoftDetector CreateDetector(string cacheFilePath, DateTimeOffset now, IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>> probeStages)

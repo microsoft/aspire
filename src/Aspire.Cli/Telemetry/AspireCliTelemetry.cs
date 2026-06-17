@@ -251,7 +251,7 @@ internal sealed class AspireCliTelemetry : IHostedService
             var macAddressHashTask = _machineInformationProvider.GetMacAddressHash();
             var deviceIdTask = _machineInformationProvider.GetOrCreateDeviceId();
 
-            Task<bool>? internalMicrosoftTask = null;
+            Task<InternalMicrosoftDetectionResult>? internalMicrosoftTask = null;
             if (_isReportedTelemetryEnabled())
             {
                 // The internal Microsoft check can be slow and can perform multiple async operations in parallel, so only run it if reported
@@ -263,9 +263,13 @@ internal sealed class AspireCliTelemetry : IHostedService
 
             _tagsList.Add(new(TelemetryConstants.Tags.MacAddressHash, macAddressHashTask.Result));
             _tagsList.Add(new(TelemetryConstants.Tags.DeviceId, deviceIdTask.Result));
-            if (internalMicrosoftTask is not null)
+            if (internalMicrosoftTask is not null && internalMicrosoftTask.Result.IsInternalMicrosoft)
             {
-                _tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoft, internalMicrosoftTask.Result));
+                _tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoft, internalMicrosoftTask.Result.IsInternalMicrosoft));
+                if (!string.IsNullOrEmpty(internalMicrosoftTask.Result.Source))
+                {
+                    _tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoftSource, internalMicrosoftTask.Result.Source));
+                }
             }
 
             // This is consistent with dashboard version data.

@@ -269,13 +269,15 @@ public class AspireCliTelemetryTests
     {
         var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
         {
-            IsInternalMicrosoft = true
+            IsInternalMicrosoft = true,
+            Source = "test source"
         };
         using var fixture = new TelemetryFixture(internalMicrosoftDetector: internalMicrosoftDetector);
 
         var tags = fixture.Telemetry.GetDefaultTags();
 
         Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.InternalMicrosoft && t.Value is true);
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.InternalMicrosoftSource && (string?)t.Value == "test source");
     }
 
     [Fact]
