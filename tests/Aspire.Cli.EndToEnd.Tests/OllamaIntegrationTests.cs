@@ -40,7 +40,7 @@ public sealed class OllamaIntegrationTests(ITestOutputHelper output)
         await auto.RunCommandAsync($"cd {ProjectName}", counter);
 
         // Step 3: Add the CommunityToolkit Ollama hosting integration with a specific version
-        await auto.TypeAsync($"aspire add ollama --source CommunityToolkit --version {OllamaPackageVersion}");
+        await auto.TypeAsync($"aspire add communitytoolkit-ollama --version {OllamaPackageVersion}");
         await auto.EnterAsync();
         await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromMinutes(2));
 
