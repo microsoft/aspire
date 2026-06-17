@@ -3000,6 +3000,91 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("Aspire.Hosting.Redis", integration.Package);
     }
 
+    [Fact]
+    public async Task IntegrationListPolyglotAppHostShowsHiddenIntegrationCountMessage()
+    {
+        // When the polyglot filter removes integrations, list/search tells the user how many were
+        // hidden and that --all reveals them, matching `aspire add`.
+        string? displayedSubtleMessage = null;
+        var testInteractionService = new TestInteractionService
+        {
+            DisplaySubtleMessageCallback = message => displayedSubtleMessage = message
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
+        File.WriteAllText(appHostFile.FullName, string.Empty);
+
+        var implicitCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(
+                [CreatePackage("Aspire.Hosting.Redis", "1.0.0"), CreatePackage("Aspire.Hosting.Foo", "1.0.0")]),
+            GetPackagesAsyncCallback = (_, query, _, _, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(
+                query == "tags:polyglot" ? [CreatePackage("Aspire.Hosting.Redis", "1.0.0")] : [])
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([
+                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures())
+                ])
+            };
+        });
+        services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true)));
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"integration list --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(string.Format(AddCommandStrings.PolyglotIntegrationsHidden, 1), displayedSubtleMessage);
+    }
+
+    [Fact]
+    public async Task IntegrationListPolyglotAppHostWithNoCompatibleIntegrationsShowsAllHint()
+    {
+        // When every integration is filtered out, the user gets the polyglot-specific "use --all"
+        // error instead of a generic "no packages found".
+        var testInteractionService = new TestInteractionService();
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
+        File.WriteAllText(appHostFile.FullName, string.Empty);
+
+        var implicitCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(
+                [CreatePackage("Aspire.Hosting.Redis", "1.0.0"), CreatePackage("Aspire.Hosting.Foo", "1.0.0")]),
+            GetPackagesAsyncCallback = (_, _, _, _, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([])
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([
+                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures())
+                ])
+            };
+        });
+        services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true)));
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"integration list --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Contains(AddCommandStrings.NoPolyglotCompatibleIntegrationsFound, testInteractionService.DisplayedErrors);
+    }
+
     private static NuGetPackage CreatePackage(string id, string version)
     {
         return new NuGetPackage

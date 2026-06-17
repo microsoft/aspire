@@ -1,8 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.CommandLine;
 using System.Collections.Immutable;
+using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Interaction;
@@ -92,12 +92,21 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
 
             if (applyPolyglotFilter)
             {
-                packagesWithShortName = packagesWithShortName
+                var compatiblePackagesWithShortName = packagesWithShortName
                     .Where(p => polyglotCompatibleIds.Contains(p.Package.Id))
                     .ToArray();
+                var hiddenIntegrationCount = packagesWithShortName.Length - compatiblePackagesWithShortName.Length;
+                packagesWithShortName = compatiblePackagesWithShortName;
+
+                // Mirror `aspire add`: tell the user when the polyglot filter removed integrations and how to
+                // reveal them. Skip for JSON so the machine-readable payload on stdout stays clean.
+                if (hiddenIntegrationCount > 0 && format is not OutputFormat.Json)
+                {
+                    InteractionService.DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.PolyglotIntegrationsHidden, hiddenIntegrationCount));
+                }
             }
 
-            return CommandResult.FromExitCode(DisplayIntegrationResults(packagesWithShortName, searchTerm, format));
+            return CommandResult.FromExitCode(DisplayIntegrationResults(packagesWithShortName, searchTerm, format, applyPolyglotFilter));
         }
         catch (ProjectLocatorException ex)
         {
@@ -115,7 +124,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
         }
     }
 
-    private int DisplayIntegrationResults(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, string? searchTerm, OutputFormat format)
+    private int DisplayIntegrationResults(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, string? searchTerm, OutputFormat format, bool polyglotFilterApplied)
     {
         var matches = (searchTerm is null
             ? packages.Select(p => (p.FriendlyName, p.Package, p.Channel, SearchScore: 0.0))
@@ -145,7 +154,13 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
 
         if (results.Length == 0)
         {
-            if (searchTerm is not null)
+            if (polyglotFilterApplied)
+            {
+                // The polyglot filter removed every result, so point the user at --all rather than
+                // implying no integrations exist at all.
+                InteractionService.DisplayError(AddCommandStrings.NoPolyglotCompatibleIntegrationsFound);
+            }
+            else if (searchTerm is not null)
             {
                 InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.NoIntegrationPackagesMatchedSearchTerm, searchTerm));
             }
