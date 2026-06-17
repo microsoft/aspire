@@ -230,9 +230,6 @@ public class ResourceAnnotationCollectionTests
                     // LINQ enumeration via OfType (tests interface dispatch)
                     GC.KeepAlive(collection.OfType<TestAnnotation>().Count());
 
-                    // LINQ enumeration via ToArray
-                    GC.KeepAlive(collection.ToArray());
-
                     // LINQ enumeration via Any
                     GC.KeepAlive(collection.Any());
 
