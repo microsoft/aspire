@@ -94,6 +94,7 @@
     <MicrosoftExtensionsCachingMemoryPreviewVersion>10.0.9</MicrosoftExtensionsCachingMemoryPreviewVersion>
     <MicrosoftExtensionsConfigurationAbstractionsPreviewVersion>10.0.9</MicrosoftExtensionsConfigurationAbstractionsPreviewVersion>
     <MicrosoftExtensionsConfigurationBinderPreviewVersion>10.0.9</MicrosoftExtensionsConfigurationBinderPreviewVersion>
+    <MicrosoftExtensionsConfigurationEnvironmentVariablesPreviewVersion>10.0.9</MicrosoftExtensionsConfigurationEnvironmentVariablesPreviewVersion>
     <MicrosoftExtensionsDependencyInjectionAbstractionsPreviewVersion>10.0.9</MicrosoftExtensionsDependencyInjectionAbstractionsPreviewVersion>
     <MicrosoftExtensionsFileSystemGlobbingPreviewVersion>10.0.9</MicrosoftExtensionsFileSystemGlobbingPreviewVersion>
     <MicrosoftExtensionsLoggingAbstractionsPreviewVersion>10.0.9</MicrosoftExtensionsLoggingAbstractionsPreviewVersion>
