@@ -162,6 +162,27 @@ public static class AgentResourceBuilderExtensions
         return WithAgentReference(builder, source, name);
     }
 
+    /// <summary>
+    /// Adds a reference from the destination resource to an agent resource with endpoints.
+    /// </summary>
+    /// <typeparam name="TDestination">The type of the destination resource.</typeparam>
+    /// <typeparam name="TSource">The type of the agent resource.</typeparam>
+    /// <param name="builder">The destination resource builder.</param>
+    /// <param name="source">The agent resource builder to reference.</param>
+    /// <param name="name">An optional name used for the injected environment variables.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>This overload is not available in polyglot app hosts. Use the standard <c>WithReference</c> overload instead.</remarks>
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference dispatcher export from Aspire.Hosting.")]
+    public static IResourceBuilder<TDestination> WithReference<TDestination, TSource>(
+        this IResourceBuilder<TDestination> builder,
+        IResourceBuilder<TSource> source,
+        string? name = null)
+        where TDestination : IResourceWithEnvironment
+        where TSource : IResourceWithEndpoints
+    {
+        return WithAgentReference(builder, source, name);
+    }
+
     internal static string GetAgentCardEnvironmentVariableName(string agentName)
     {
         return $"{EnvironmentVariableNameEncoder.Encode(agentName).ToUpperInvariant()}_AGENTCARD_URL";
@@ -192,22 +213,102 @@ public static class AgentResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(source);
 
-        var referenceAnnotations = source.Resource.Annotations.OfType<IResourceWithReferenceAnnotation>()
-            .Where(a => a.CanApplyReference(source.Resource))
+        var agentAnnotations = source.Resource.Annotations.OfType<AgentResourceAnnotation>()
+            .Where(a => IsA2AProtocol(a.Protocol))
             .ToArray();
 
-        if (referenceAnnotations.Length == 0)
+        if (agentAnnotations.Length == 0)
         {
             throw new InvalidOperationException($"The resource '{source.Resource.Name}' can't be used with withReference because it doesn't provide a connection string, service discovery, or a custom withReference implementation.");
         }
 
         var referenceName = name ?? source.Resource.Name;
-        foreach (var referenceAnnotation in referenceAnnotations)
+        builder.WithReferenceRelationship(source.Resource);
+
+        if (source.Resource is IResourceWithServiceDiscovery)
         {
-            builder = referenceAnnotation.WithReference(builder, source.Resource, referenceName);
+            builder = AddServiceDiscoveryReference(builder, source.Resource, referenceName);
+        }
+
+        foreach (var agentAnnotation in agentAnnotations)
+        {
+            builder = builder.WithEnvironment(context =>
+            {
+                context.Resource.TryGetLastAnnotation<ReferenceEnvironmentInjectionAnnotation>(out var injectionAnnotation);
+                var flags = injectionAnnotation?.Flags ?? ReferenceEnvironmentInjectionFlags.All;
+                if (!flags.HasFlag(ReferenceEnvironmentInjectionFlags.Endpoints))
+                {
+                    return;
+                }
+
+                var network = context.Resource.IsContainer()
+                    ? KnownNetworkIdentifiers.DefaultAspireContainerNetwork
+                    : KnownNetworkIdentifiers.LocalhostNetwork;
+                var endpoint = GetDefaultAgentEndpoint(source.Resource, network);
+                var envVarName = GetAgentCardEnvironmentVariableName(referenceName);
+                context.EnvironmentVariables[envVarName] = CreateA2AAgentCardUrl(endpoint, GetA2AAgentCardPath(agentAnnotation));
+            });
         }
 
         return builder;
+    }
+
+    private static IResourceBuilder<TDestination> AddServiceDiscoveryReference<TDestination>(
+        IResourceBuilder<TDestination> builder,
+        IResourceWithEndpoints source,
+        string referenceName)
+        where TDestination : IResourceWithEnvironment
+    {
+        return builder.WithEnvironment(context =>
+        {
+            context.Resource.TryGetLastAnnotation<ReferenceEnvironmentInjectionAnnotation>(out var injectionAnnotation);
+            var flags = injectionAnnotation?.Flags ?? ReferenceEnvironmentInjectionFlags.All;
+
+            var network = context.Resource.IsContainer()
+                ? KnownNetworkIdentifiers.DefaultAspireContainerNetwork
+                : KnownNetworkIdentifiers.LocalhostNetwork;
+            var schemeIndexTracker = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var endpoint in source.GetEndpoints(network))
+            {
+                if (endpoint.Exists && flags.HasFlag(ReferenceEnvironmentInjectionFlags.Endpoints))
+                {
+                    var encodedEndpointName = EnvironmentVariableNameEncoder.Encode(endpoint.EndpointName);
+                    context.EnvironmentVariables[$"{EnvironmentVariableNameEncoder.Encode(referenceName).ToUpperInvariant()}_{encodedEndpointName.ToUpperInvariant()}"] = endpoint;
+                }
+
+                if (endpoint.Exists && flags.HasFlag(ReferenceEnvironmentInjectionFlags.ServiceDiscovery))
+                {
+                    var schemeKey = endpoint.IsHttpSchemeNamedEndpoint ? endpoint.Scheme : endpoint.EndpointName;
+                    if (!schemeIndexTracker.TryGetValue(schemeKey, out var index))
+                    {
+                        index = 0;
+                    }
+
+                    var key = $"services__{referenceName}__{schemeKey}__{index}";
+                    while (context.EnvironmentVariables.ContainsKey(key))
+                    {
+                        index++;
+                        key = $"services__{referenceName}__{schemeKey}__{index}";
+                    }
+
+                    context.EnvironmentVariables[key] = endpoint;
+                    schemeIndexTracker[schemeKey] = index + 1;
+                }
+            }
+        });
+    }
+
+    private static EndpointReference GetDefaultAgentEndpoint(IResourceWithEndpoints source, NetworkIdentifier network)
+    {
+        var endpointName = source.Annotations
+            .OfType<EndpointAnnotation>()
+            .Where(e => e.UriScheme is "http" or "https")
+            .OrderByDescending(e => string.Equals(e.UriScheme, "https", StringComparison.OrdinalIgnoreCase))
+            .Select(e => e.Name)
+            .FirstOrDefault() ?? "http";
+
+        return new EndpointReference(source, endpointName, network);
     }
 
     private static void ConfigureA2A<T>(
