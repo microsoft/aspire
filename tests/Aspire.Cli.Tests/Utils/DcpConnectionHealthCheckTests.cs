@@ -60,7 +60,7 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task CheckAsync_WhenDcpConnectionsSucceed_ReturnsOneResultForEachCertificateMode()
+    public async Task CheckAsync_WhenDcpConnectionsSucceed_ReturnsSingleSuccessResult()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var dcpDirectory = GetRestoredDcpDirectory();
@@ -82,17 +82,10 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
 
         var results = await check.CheckAsync();
 
-        Assert.Collection(results,
-            result =>
-            {
-                Assert.Equal(DcpConnectionHealthCheck.EphemeralCertificateCheckName, result.Name);
-                Assert.Equal(EnvironmentCheckStatus.Pass, result.Status);
-            },
-            result =>
-            {
-                Assert.Equal(DcpConnectionHealthCheck.DeveloperCertificateCheckName, result.Name);
-                Assert.Equal(EnvironmentCheckStatus.Pass, result.Status);
-            });
+        var result = Assert.Single(results);
+        Assert.Equal(DcpConnectionHealthCheck.ConnectionCheckName, result.Name);
+        Assert.Equal(EnvironmentCheckStatus.Pass, result.Status);
+        Assert.Contains("Developer Control Plane (DCP) connection health checks succeeded", result.Message, StringComparison.Ordinal);
         Assert.Equal(
             [false, true],
             seenUseDeveloperCertificateValues.Order().ToArray());

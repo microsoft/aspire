@@ -66,7 +66,19 @@ internal sealed class DcpConnectionHealthCheck(
                 useDeveloperCertificate: true,
                 cancellationToken);
 
-            return await Task.WhenAll(ephemeralCertificateTask, developerCertificateTask).ConfigureAwait(false);
+            var results = await Task.WhenAll(ephemeralCertificateTask, developerCertificateTask).ConfigureAwait(false);
+            if (results.All(result => result.Status == EnvironmentCheckStatus.Pass))
+            {
+                return [new EnvironmentCheckResult
+                {
+                    Category = EnvironmentCheckCategories.Aspire,
+                    Name = ConnectionCheckName,
+                    Status = EnvironmentCheckStatus.Pass,
+                    Message = DoctorCommandStrings.DcpConnectionSucceededMessage
+                }];
+            }
+
+            return results;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

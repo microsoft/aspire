@@ -107,6 +107,11 @@
         <target state="new">Failed to check Developer Control Plane (DCP) connection health</target>
         <note />
       </trans-unit>
+      <trans-unit id="DcpConnectionSucceededMessage">
+        <source>Developer Control Plane (DCP) connection health checks succeeded</source>
+        <target state="new">Developer Control Plane (DCP) connection health checks succeeded</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DcpConnectionTimedOutMessageFormat">
         <source>Timed out after {0} seconds while checking Developer Control Plane (DCP) connection health.</source>
         <target state="new">Timed out after {0} seconds while checking Developer Control Plane (DCP) connection health.</target>

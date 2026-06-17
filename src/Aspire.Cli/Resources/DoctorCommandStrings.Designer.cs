@@ -465,6 +465,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Developer Control Plane (DCP) connection health checks succeeded.
+        /// </summary>
+        public static string DcpConnectionSucceededMessage {
+            get {
+                return ResourceManager.GetString("DcpConnectionSucceededMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Timed out after {0} seconds while checking Developer Control Plane (DCP) connection health..
         /// </summary>
         public static string DcpConnectionTimedOutMessageFormat {

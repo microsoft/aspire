@@ -205,6 +205,9 @@
   <data name="DcpDeveloperCertificateConnectionSucceededMessage" xml:space="preserve">
     <value>Developer Control Plane (DCP) connection using the developer certificate succeeded</value>
   </data>
+  <data name="DcpConnectionSucceededMessage" xml:space="preserve">
+    <value>Developer Control Plane (DCP) connection health checks succeeded</value>
+  </data>
   <data name="DcpConnectionTimedOutMessageFormat" xml:space="preserve">
     <value>Timed out after {0} seconds while checking Developer Control Plane (DCP) connection health.</value>
     <comment>{0} is the timeout in seconds.</comment>
