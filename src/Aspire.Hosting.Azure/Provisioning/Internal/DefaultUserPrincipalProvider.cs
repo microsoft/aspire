@@ -3,6 +3,7 @@
 
 using System.Text.Json;
 using Azure.Core;
+using Azure.Provisioning.Authorization;
 
 namespace Aspire.Hosting.Azure.Provisioning.Internal;
 
@@ -18,9 +19,15 @@ internal sealed class DefaultUserPrincipalProvider(ITokenCredentialProvider toke
 
         static UserPrincipal ParseToken(in AccessToken response)
         {
-            // Parse the access token to get the user's object id (this is their principal id)
+            // Parse Azure access-token payloads to get the object id and principal type.
+            // User tokens typically include:
+            //   { "oid": "<object-id>", "upn": "user@contoso.com" }
+            // App-only tokens typically include:
+            //   { "oid": "<service-principal-object-id>", "idtyp": "app", "appid": "<client-id>" }
             var oid = string.Empty;
-            var upn = string.Empty;
+            var principalName = string.Empty;
+            var appId = string.Empty;
+            var isAppPrincipal = false;
             var parts = response.Token.Split('.');
             var part = parts[1];
             var convertedToken = part.ToString().Replace('_', '/').Replace('-', '+');
@@ -45,19 +52,21 @@ internal sealed class DefaultUserPrincipalProvider(ITokenCredentialProvider toke
                     {
                         reader.Read();
                         oid = reader.GetString()!;
-                        if (!string.IsNullOrEmpty(upn))
-                        {
-                            break;
-                        }
                     }
                     else if (header is "upn" or "email")
                     {
                         reader.Read();
-                        upn = reader.GetString()!;
-                        if (!string.IsNullOrEmpty(oid))
-                        {
-                            break;
-                        }
+                        principalName = reader.GetString()!;
+                    }
+                    else if (header == "appid")
+                    {
+                        reader.Read();
+                        appId = reader.GetString()!;
+                    }
+                    else if (header == "idtyp")
+                    {
+                        reader.Read();
+                        isAppPrincipal = string.Equals(reader.GetString(), "app", StringComparison.OrdinalIgnoreCase);
                     }
                     else
                     {
@@ -65,7 +74,18 @@ internal sealed class DefaultUserPrincipalProvider(ITokenCredentialProvider toke
                     }
                 }
             }
-            return new UserPrincipal(Guid.Parse(oid), upn);
+
+            var hasAppId = !string.IsNullOrEmpty(appId);
+            var principalType = isAppPrincipal || (string.IsNullOrEmpty(principalName) && hasAppId)
+                ? RoleManagementPrincipalType.ServicePrincipal
+                : RoleManagementPrincipalType.User;
+
+            if (string.IsNullOrEmpty(principalName) && hasAppId)
+            {
+                principalName = appId;
+            }
+
+            return new UserPrincipal(Guid.Parse(oid), principalName, principalType);
         }
 
         return ParseToken(response);

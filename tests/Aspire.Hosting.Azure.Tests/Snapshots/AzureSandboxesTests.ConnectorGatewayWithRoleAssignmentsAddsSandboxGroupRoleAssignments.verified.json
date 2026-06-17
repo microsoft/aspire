@@ -1,0 +1,9 @@
+﻿{
+  "type": "azure.bicep.v0",
+  "path": "hostgroup.module.bicep",
+  "params": {
+    "gateway_principalId": "{gateway.outputs.principalId}",
+    "userPrincipalId": "",
+    "principalType": ""
+  }
+}

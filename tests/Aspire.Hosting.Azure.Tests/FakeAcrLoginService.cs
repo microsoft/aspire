@@ -36,4 +36,16 @@ internal sealed class FakeAcrLoginService : IAcrLoginService
         var containerRuntime = await _containerRuntimeResolver.ResolveAsync(cancellationToken);
         await containerRuntime.LoginToRegistryAsync(registryEndpoint, AcrUsername, "fake-refresh-token", cancellationToken);
     }
+
+    public Task<AcrRefreshToken> GetRefreshTokenAsync(
+        string registryEndpoint,
+        string tenantId,
+        TokenCredential credential,
+        CancellationToken cancellationToken = default)
+    {
+        LastRegistryEndpoint = registryEndpoint;
+        LastTenantId = tenantId;
+
+        return Task.FromResult(new AcrRefreshToken(AcrUsername, "fake-refresh-token"));
+    }
 }

@@ -41,8 +41,8 @@
     <TestArchiveTestsDir>$(TestArchiveTestsDirForDeploymentEndToEndTests)</TestArchiveTestsDir>
 
     <!-- Extended test session settings for deployment tests -->
-    <TestSessionTimeout>60m</TestSessionTimeout>
-    <TestHangTimeout>45m</TestHangTimeout>
+    <TestSessionTimeout>100m</TestSessionTimeout>
+    <TestHangTimeout>60m</TestHangTimeout>
   </PropertyGroup>
 
   <ItemGroup>

@@ -45,6 +45,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Aspire.Hosting.Azure.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Azure.ContainerRegistry" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Azure.Sandboxes" />
     <InternalsVisibleTo Include="Aspire.Hosting.Foundry" />
   </ItemGroup>
 

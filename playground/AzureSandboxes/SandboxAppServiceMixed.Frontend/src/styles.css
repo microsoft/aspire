@@ -1,0 +1,76 @@
+:root {
+  color-scheme: light dark;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #101827;
+  color: #e5edf8;
+}
+
+body {
+  display: grid;
+  min-height: 100vh;
+  margin: 0;
+  place-items: center;
+  background:
+    radial-gradient(circle at top left, rgba(56, 189, 248, 0.22), transparent 28rem),
+    radial-gradient(circle at bottom right, rgba(168, 85, 247, 0.2), transparent 26rem),
+    #101827;
+}
+
+.card {
+  box-sizing: border-box;
+  width: min(880px, calc(100vw - 32px));
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-radius: 28px;
+  padding: 32px;
+  background: rgba(15, 23, 42, 0.78);
+  box-shadow: 0 24px 70px rgba(2, 6, 23, 0.4);
+}
+
+.eyebrow {
+  margin: 0 0 10px;
+  color: #7dd3fc;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(2rem, 7vw, 4.4rem);
+  line-height: 0.96;
+  letter-spacing: -0.055em;
+}
+
+.lead {
+  max-width: 720px;
+  color: #cbd5e1;
+  font-size: 1.08rem;
+  line-height: 1.7;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 12px 18px;
+  margin: 28px 0 0;
+}
+
+dt {
+  color: #93c5fd;
+  font-weight: 800;
+}
+
+dd {
+  margin: 0;
+  color: #f8fafc;
+  word-break: break-word;
+}
+
+code {
+  color: #bae6fd;
+}
+
+.error {
+  border-color: rgba(248, 113, 113, 0.6);
+}

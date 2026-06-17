@@ -833,8 +833,7 @@ public static class JavaScriptHostingExtensions
             return builder;
         }
 
-        // YARP listens on port 5000 by default in the base image, so configure an endpoint for that port
-        // and set ASPNETCORE_URLS to ensure Kestrel listens on the correct port as well for static file serving and API reverse-proxy to work correctly.
+        // YARP listens on port 5000 by default in the base image, so configure an endpoint for that port.
         builder.WithEndpoint("http", e => e.TargetPort = 5000, createIfNotExists: true);
 
         var annotation = new JavaScriptPublishModeAnnotation(JavaScriptPublishMode.StaticWebsite)

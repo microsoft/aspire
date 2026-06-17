@@ -59,6 +59,22 @@ public interface IContainerRuntime
     Task PushImageAsync(IResource resource, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Inspects a container image and returns the runtime-specific image configuration as JSON.
+    /// </summary>
+    /// <param name="imageName">The image name or reference to inspect.</param>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
+    /// <returns>The image configuration JSON.</returns>
+    Task<string> InspectImageConfigAsync(string imageName, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Inspects a container image manifest and returns the runtime-specific manifest as JSON.
+    /// </summary>
+    /// <param name="imageName">The image name or reference to inspect.</param>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
+    /// <returns>The image manifest JSON.</returns>
+    Task<string> InspectImageManifestAsync(string imageName, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Logs in to a container registry.
     /// </summary>
     /// <param name="registryServer">The registry server URL.</param>

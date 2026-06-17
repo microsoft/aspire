@@ -13,6 +13,7 @@ using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 using Azure;
 using Azure.Core;
+using Azure.Provisioning.Authorization;
 using Azure.ResourceManager;
 using Azure.ResourceManager.Resources;
 using Azure.ResourceManager.Resources.Models;
@@ -1305,6 +1306,38 @@ public class AzureBicepProvisionerTests
     }
 
     [Fact]
+    public void PopulateWellKnownParameters_InPublishMode_BindsUserPrincipalParameter()
+    {
+        var resource = new AzureBicepResource("sandbox-group", templateString: "output id string = 'ok'");
+        resource.Parameters[AzureBicepResource.KnownParameters.UserPrincipalId] = null;
+
+        var principalId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var context = ProvisioningTestHelpers.CreateTestProvisioningContext(
+            principal: new UserPrincipal(principalId, "test@example.com"),
+            executionContext: new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish));
+
+        PopulateWellKnownParameters(resource, context);
+
+        Assert.Equal(principalId, resource.Parameters[AzureBicepResource.KnownParameters.UserPrincipalId]);
+    }
+
+    [Fact]
+    public void PopulateWellKnownParameters_BindsPrincipalTypeFromCurrentPrincipal()
+    {
+        var resource = new AzureBicepResource("sandbox-group", templateString: "output id string = 'ok'");
+        resource.Parameters[AzureBicepResource.KnownParameters.UserPrincipalId] = null;
+        resource.Parameters[AzureBicepResource.KnownParameters.PrincipalType] = null;
+
+        var context = ProvisioningTestHelpers.CreateTestProvisioningContext(
+            principal: new UserPrincipal(Guid.NewGuid(), "app", RoleManagementPrincipalType.ServicePrincipal),
+            executionContext: new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish));
+
+        PopulateWellKnownParameters(resource, context);
+
+        Assert.Equal("ServicePrincipal", resource.Parameters[AzureBicepResource.KnownParameters.PrincipalType]);
+    }
+
+    [Fact]
     public async Task BicepCliExecutor_CompilesBicepToArm()
     {
         // Test the mock bicep executor behavior
@@ -1439,6 +1472,16 @@ public class AzureBicepProvisionerTests
             public override ValueTask<AccessToken> GetTokenAsync(TokenRequestContext requestContext, CancellationToken cancellationToken) =>
                 ValueTask.FromResult(new AccessToken("mock-token", DateTimeOffset.UtcNow.AddHours(1)));
         }
+    }
+
+    private static void PopulateWellKnownParameters(AzureBicepResource resource, ProvisioningContext context)
+    {
+        var method = typeof(BicepProvisioner).GetMethod(
+            "PopulateWellKnownParameters",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+
+        Assert.NotNull(method);
+        method.Invoke(null, [resource, context]);
     }
 
     private sealed class TestBicepCliExecutor : IBicepCompiler

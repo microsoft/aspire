@@ -14,7 +14,7 @@ namespace Aspire.Hosting.Publishing;
 
 internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContainerRuntime>
 {
-    public PodmanContainerRuntime(ILogger<PodmanContainerRuntime> logger) : base(logger)
+    public PodmanContainerRuntime(ILogger<PodmanContainerRuntime> logger, IProcessRunner processRunner) : base(logger, processRunner)
     {
     }
 
@@ -55,7 +55,7 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
             }
         };
 
-        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
+        var (pendingProcessResult, processDisposable) = ProcessRunner.Run(spec);
 
         await using (processDisposable)
         {

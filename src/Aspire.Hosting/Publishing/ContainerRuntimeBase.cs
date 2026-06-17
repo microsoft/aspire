@@ -19,16 +19,23 @@ namespace Aspire.Hosting.Publishing;
 internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where TLogger : class
 {
     private readonly ILogger<TLogger> _logger;
+    private readonly IProcessRunner _processRunner;
 
-    protected ContainerRuntimeBase(ILogger<TLogger> logger)
+    protected ContainerRuntimeBase(ILogger<TLogger> logger, IProcessRunner processRunner)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _processRunner = processRunner ?? throw new ArgumentNullException(nameof(processRunner));
     }
 
     /// <summary>
     /// Gets the logger instance for use in derived classes.
     /// </summary>
     protected ILogger<TLogger> Logger => _logger;
+
+    /// <summary>
+    /// Gets the process runner instance for use in derived classes.
+    /// </summary>
+    protected IProcessRunner ProcessRunner => _processRunner;
 
     /// <summary>
     /// Gets the name of the container runtime executable (e.g., "docker", "podman").
@@ -88,6 +95,28 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
             remoteImageName).ConfigureAwait(false);
     }
 
+    public virtual Task<string> InspectImageConfigAsync(string imageName, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(imageName);
+
+        return ExecuteContainerCommandForOutputAsync(
+            $"image inspect \"{imageName}\" --format \"{{{{json .Config}}}}\"",
+            "inspect image config",
+            imageName,
+            cancellationToken);
+    }
+
+    public virtual Task<string> InspectImageManifestAsync(string imageName, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(imageName);
+
+        return ExecuteContainerCommandForOutputAsync(
+            $"manifest inspect \"{imageName}\"",
+            "inspect image manifest",
+            imageName,
+            cancellationToken);
+    }
+
     public virtual async Task LoginToRegistryAsync(string registryServer, string username, string password, CancellationToken cancellationToken)
     {
         // Escape quotes in arguments to prevent command injection
@@ -114,7 +143,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
 
         _logger.LogDebug("Running {RuntimeName} with arguments: {Arguments}", RuntimeExecutable, arguments);
         _logger.LogDebug("Password length being passed to stdin: {PasswordLength}", password?.Length ?? 0);
-        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
+        var (pendingProcessResult, processDisposable) = _processRunner.Run(spec);
 
         await using (processDisposable)
         {
@@ -159,7 +188,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
         var spec = CreateProcessSpec(arguments, retainOutput: true);
 
         _logger.LogDebug("Running {RuntimeName} with arguments: {ArgumentList}", Name, spec.Arguments);
-        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
+        var (pendingProcessResult, processDisposable) = _processRunner.Run(spec);
 
         await using (processDisposable)
         {
@@ -291,7 +320,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
         }
 
         _logger.LogDebug("Running {RuntimeName} with arguments: {ArgumentList}", Name, spec.Arguments);
-        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
+        var (pendingProcessResult, processDisposable) = _processRunner.Run(spec);
 
         await using (processDisposable)
         {
@@ -313,16 +342,50 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
         }
     }
 
-    private ProcessSpec CreateProcessSpec(string arguments, bool retainOutput = false)
+    protected async Task<string> ExecuteContainerCommandForOutputAsync(
+        string arguments,
+        string operationName,
+        string imageName,
+        CancellationToken cancellationToken)
+    {
+        var stdout = new List<string>();
+        var spec = CreateProcessSpec(arguments, retainOutput: true, onOutputData: output =>
+        {
+            stdout.Add(output);
+            _logger.LogDebug("{RuntimeName} (stdout): {Output}", RuntimeExecutable, output);
+        });
+
+        _logger.LogDebug("Running {RuntimeName} with arguments: {ArgumentList}", Name, spec.Arguments);
+        var (pendingProcessResult, processDisposable) = _processRunner.Run(spec);
+
+        ProcessResult processResult;
+        await using (processDisposable)
+        {
+            processResult = await pendingProcessResult
+                .WaitAsync(cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        if (processResult.ExitCode != 0)
+        {
+            _logger.LogError("{RuntimeName} {OperationName} for {ImageName} failed with exit code {ExitCode}.", Name, operationName, imageName, processResult.ExitCode);
+            throw new DistributedApplicationException($"{Name} {operationName} for '{imageName}' failed with exit code {processResult.ExitCode}.{Environment.NewLine}{processResult.GetFormattedOutput()}");
+        }
+
+        _logger.LogDebug("{RuntimeName} {OperationName} for {ImageName} succeeded.", Name, operationName, imageName);
+        return string.Join(Environment.NewLine, stdout);
+    }
+
+    private ProcessSpec CreateProcessSpec(string arguments, bool retainOutput = false, Action<string>? onOutputData = null)
     {
         return new ProcessSpec(RuntimeExecutable)
         {
             Arguments = arguments,
             RetainedOutputLineCount = retainOutput ? ProcessSpec.DefaultRetainedOutputLineCount : null,
-            OnOutputData = output =>
+            OnOutputData = onOutputData ?? (output =>
             {
                 _logger.LogDebug("{RuntimeName} (stdout): {Output}", RuntimeExecutable, output);
-            },
+            }),
             OnErrorData = error =>
             {
                 _logger.LogDebug("{RuntimeName} (stderr): {Error}", RuntimeExecutable, error);
@@ -359,7 +422,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
             },
         };
 
-        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
+        var (pendingProcessResult, processDisposable) = _processRunner.Run(spec);
 
         await using (processDisposable)
         {
@@ -418,7 +481,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
             },
         };
 
-        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
+        var (pendingProcessResult, processDisposable) = _processRunner.Run(spec);
 
         await using (processDisposable)
         {
@@ -469,7 +532,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
             }
         };
 
-        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
+        var (pendingProcessResult, processDisposable) = _processRunner.Run(spec);
 
         await using (processDisposable)
         {
@@ -601,7 +664,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
                 InheritEnv = true
             };
 
-            var (pendingResult, processDisposable) = ProcessUtil.Run(spec);
+            var (pendingResult, processDisposable) = _processRunner.Run(spec);
             await using (processDisposable)
             {
                 var result = await pendingResult.ConfigureAwait(false);
