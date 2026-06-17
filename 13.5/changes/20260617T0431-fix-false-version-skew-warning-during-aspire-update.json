@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixes a false positive version-mismatch warning that appeared during `aspire update`. The in-memory configuration was already updated to the CLI's current version but had not yet been flushed to disk, causing an incorrect version-skew warning to be shown to users.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔧",
+  "firstMergedAt": "2026-06-17T04:31:11Z",
+  "lastMergedAt": "2026-06-17T04:31:11Z",
+  "name": "Fix false version-skew warning during aspire update",
+  "owner": "JamesNK",
+  "prs": [
+    18208
+  ]
+}

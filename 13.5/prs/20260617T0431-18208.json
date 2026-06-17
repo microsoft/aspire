@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Fixes false positive version-skew warning shown during aspire update",
+  "mergedAt": "2026-06-17T04:31:11Z",
+  "number": 18208,
+  "runDate": "2026-06-17T07:46:38Z",
+  "status": "included",
+  "title": "Fix stale version-skew warning during aspire update"
+}

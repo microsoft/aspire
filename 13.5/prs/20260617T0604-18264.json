@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "AGENTS.md only - developer/agent instructions, no user-facing impact",
+  "mergedAt": "2026-06-17T06:04:13Z",
+  "number": 18264,
+  "runDate": "2026-06-17T07:46:51Z",
+  "status": "excluded",
+  "title": "Add agent instructions for optional parameters and test assertions"
+}

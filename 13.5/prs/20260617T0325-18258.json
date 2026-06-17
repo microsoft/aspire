@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Test-only changes fixing flaky CI test timeouts, no user-facing impact",
+  "mergedAt": "2026-06-17T03:25:09Z",
+  "number": 18258,
+  "runDate": "2026-06-17T07:46:31Z",
+  "status": "excluded",
+  "title": "Fix flaky CLI test timeouts on loaded CI agents"
+}

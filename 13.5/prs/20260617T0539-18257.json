@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Fixes text alignment/wrapping in aspire doctor output",
+  "mergedAt": "2026-06-17T05:39:37Z",
+  "number": 18257,
+  "runDate": "2026-06-17T07:46:44Z",
+  "status": "included",
+  "title": "Fix doctor command text wrapping under emoji icons"
+}

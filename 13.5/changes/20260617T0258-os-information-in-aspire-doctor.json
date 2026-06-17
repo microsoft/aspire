@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The `aspire doctor` command now reports the current operating system, including the OS version and, on Linux, the distro name from `/etc/os-release`. This information appears in both human-readable and structured JSON (`--format json`) output.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🖥️",
+  "firstMergedAt": "2026-06-17T02:58:20Z",
+  "lastMergedAt": "2026-06-17T02:58:20Z",
+  "name": "OS information in aspire doctor",
+  "owner": "danegsta",
+  "prs": [
+    18252
+  ]
+}
