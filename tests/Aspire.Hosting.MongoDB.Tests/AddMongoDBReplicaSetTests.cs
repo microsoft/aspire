@@ -5,6 +5,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using MongoDB.Driver;
 
 namespace Aspire.Hosting.MongoDB.Tests;
 
@@ -57,7 +58,7 @@ public class AddMongoDBReplicaSetTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task ReplicaSetConnectionStringHasCorrectFormat()
+    public async Task ReplicaSetConnectionStringHasCorrectContents()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var mongo1 = builder.AddMongoDB("mongo1")
@@ -75,8 +76,9 @@ public class AddMongoDBReplicaSetTests(ITestOutputHelper testOutputHelper)
 
         var connectionString = await replicaSetResource.ConnectionStringExpression.GetValueAsync(CancellationToken.None);
 
-        // Must have no trailing comma before the query string delimiter, correct replicaSet name (not member count)
-        Assert.Equal("mongodb://localhost:27017,localhost:27018/?replicaSet=rs0", connectionString);
+        var connectionStringObj = new MongoUrl(connectionString);
+        Assert.Equal("rs0", connectionStringObj.ReplicaSetName);
+        Assert.Equal(["localhost:27017", "localhost:27018"], connectionStringObj.Servers.Select(s => s.ToString()));
     }
 
     [Fact]
@@ -95,8 +97,9 @@ public class AddMongoDBReplicaSetTests(ITestOutputHelper testOutputHelper)
 
         var connectionString = await replicaSetResource.ConnectionStringExpression.GetValueAsync(CancellationToken.None);
 
-        Assert.DoesNotContain(",?", connectionString);
-        Assert.Equal("mongodb://localhost:27017/?replicaSet=rs0", connectionString);
+        var connectionStringObj = new MongoUrl(connectionString);
+        Assert.Equal("rs0", connectionStringObj.ReplicaSetName);
+        Assert.Equal(["localhost:27017"], connectionStringObj.Servers.Select(s => s.ToString()));
     }
 
     [Fact]

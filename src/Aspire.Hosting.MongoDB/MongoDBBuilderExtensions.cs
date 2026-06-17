@@ -422,15 +422,24 @@ public enum MongoDBTlsMode
     RequireTls,
 }
 
+/// <summary>
+/// Represents the intent to configure a MongoDB server resource as a member of a replica set with the specified name.
+/// </summary>
 internal sealed record MongoDBServerReplicaSetAnnotation(
     string Name
 ) : IResourceAnnotation;
 
+/// <summary>
+/// Represents the intent to configure a MongoDB server resource with a keyfile for internal authentication between members of a replica set, with the specified <paramref name="Value"/> as the content of the keyfile and the specified <paramref name="FilePath"/> as the path to the keyfile in the container.
+/// </summary>
 internal sealed record MongoDBServerKeyfileAnnotation(
     IExpressionValue Value,
     string FilePath
 ) : IResourceAnnotation;
 
+/// <summary>
+/// Represents the intent to configure a MongoDB server resource to use encrypted network transport via TLS.
+/// </summary>
 internal sealed record MongoDBServerTlsAnnotation(
     MongoDBTlsMode Mode
 ) : IResourceAnnotation;
