@@ -477,43 +477,43 @@ namespace Aspire.Hosting.Azure.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to This requests cancellation of the cached Azure deployment for this resource. Any Azure resources already created by the deployment are not deleted. Do you want to continue?.
+        ///   Looks up a localized string similar to This requests cancellation of the active Azure operation that includes this resource, or the active Azure deployment for this resource. If the operation includes other Azure resources, they will be canceled too. Azure may continue work that cannot be canceled immediately, and resources already created are not deleted. Do you want to continue?.
         /// </summary>
-        internal static string CancelDeploymentCommandConfirmation {
+        internal static string CancelCommandConfirmation {
             get {
-                return ResourceManager.GetString("CancelDeploymentCommandConfirmation", resourceCulture);
+                return ResourceManager.GetString("CancelCommandConfirmation", resourceCulture);
             }
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Requests cancellation of the cached Azure deployment for this resource..
+        ///   Looks up a localized string similar to Requests cancellation of the active Azure operation or deployment for this resource..
         /// </summary>
-        internal static string CancelDeploymentCommandDescription {
+        internal static string CancelCommandDescription {
             get {
-                return ResourceManager.GetString("CancelDeploymentCommandDescription", resourceCulture);
+                return ResourceManager.GetString("CancelCommandDescription", resourceCulture);
             }
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Cancel deployment.
+        ///   Looks up a localized string similar to Cancel.
         /// </summary>
-        internal static string CancelDeploymentCommandName {
+        internal static string CancelCommandName {
             get {
-                return ResourceManager.GetString("CancelDeploymentCommandName", resourceCulture);
+                return ResourceManager.GetString("CancelCommandName", resourceCulture);
             }
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Azure deployment cancellation requested..
+        ///   Looks up a localized string similar to Azure cancellation requested..
         /// </summary>
-        internal static string CancelDeploymentCommandSuccess {
+        internal static string CancelCommandSuccess {
             get {
-                return ResourceManager.GetString("CancelDeploymentCommandSuccess", resourceCulture);
+                return ResourceManager.GetString("CancelCommandSuccess", resourceCulture);
             }
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to This cancels the cached Azure deployment, deletes Azure resources targeted by this resource's deployment, and clears cached deployment state. Do you want to continue?.
+        ///   Looks up a localized string similar to This cancels the cached Azure deployment, deletes Azure resources targeted by this resource's deployment, purges recoverable Key Vaults so their names can be reused, and clears cached deployment state. Do you want to continue?.
         /// </summary>
         internal static string DeleteAzureResourceCommandConfirmation {
             get {
@@ -522,7 +522,7 @@ namespace Aspire.Hosting.Azure.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Cancels the cached Azure deployment, deletes Azure resources targeted by the deployment, and clears cached deployment state for this resource..
+        ///   Looks up a localized string similar to Cancels the cached Azure deployment, deletes Azure resources targeted by the deployment, purges recoverable Key Vaults so their names can be reused, and clears cached deployment state for this resource..
         /// </summary>
         internal static string DeleteAzureResourceCommandDescription {
             get {
@@ -716,6 +716,51 @@ namespace Aspire.Hosting.Azure.Resources {
         internal static string ContextPropertyTenantIdDisplayName {
             get {
                 return ResourceManager.GetString("ContextPropertyTenantIdDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure operation.
+        /// </summary>
+        internal static string OperationPropertyNameDisplayName {
+            get {
+                return ResourceManager.GetString("OperationPropertyNameDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure operation phase.
+        /// </summary>
+        internal static string OperationPropertyPhaseDisplayName {
+            get {
+                return ResourceManager.GetString("OperationPropertyPhaseDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure operation status.
+        /// </summary>
+        internal static string OperationPropertyStatusDisplayName {
+            get {
+                return ResourceManager.GetString("OperationPropertyStatusDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure operation target location.
+        /// </summary>
+        internal static string OperationPropertyTargetLocationDisplayName {
+            get {
+                return ResourceManager.GetString("OperationPropertyTargetLocationDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure operation started.
+        /// </summary>
+        internal static string OperationPropertyStartedAtDisplayName {
+            get {
+                return ResourceManager.GetString("OperationPropertyStartedAtDisplayName", resourceCulture);
             }
         }
 

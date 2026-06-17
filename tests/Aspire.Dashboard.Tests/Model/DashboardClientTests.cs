@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Configuration;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
 using Aspire.DashboardService.Proto.V1;
 using Google.Protobuf.WellKnownTypes;
@@ -397,10 +398,38 @@ public sealed class DashboardClientTests
         Assert.Contains("https://aka.ms/aspire/dashboard-apphost-connection-failed", errorLog.Message);
     }
 
+    [Fact]
+    public async Task ExecuteResourceCommandAsync_AppHostUnavailable_ReturnsClearFailure()
+    {
+        await using var instance = CreateResourceServiceClient();
+        instance.SetDashboardServiceClient(new MockDashboardServiceClient { FailOnExecuteResourceCommand = true });
+
+        var response = await instance.ExecuteResourceCommandAsync(
+            "api",
+            "Project",
+            new CommandViewModel(
+                "restart",
+                CommandViewModelState.Enabled,
+                "Restart",
+                "Restart API",
+                confirmationMessage: string.Empty,
+                [],
+                isHighlighted: false,
+                iconName: string.Empty,
+                iconVariant: Microsoft.FluentUI.AspNetCore.Components.IconVariant.Regular),
+            new ExecuteResourceCommandOptions(),
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(Aspire.Dashboard.Model.ResourceCommandResponseKind.Failed, response.Kind);
+        Assert.Equal("The AppHost disconnected while executing the command. Restart the AppHost and try again.", response.Message);
+        Assert.Equal(response.Message, response.ErrorMessage);
+    }
+
     private sealed class MockDashboardServiceClient : Aspire.DashboardService.Proto.V1.DashboardService.DashboardServiceClient
     {
         public bool FailOnWatchResources { get; init; }
         public bool FailOnGetApplicationInformation { get; init; }
+        public bool FailOnExecuteResourceCommand { get; init; }
 
         public override AsyncDuplexStreamingCall<WatchInteractionsRequestUpdate, WatchInteractionsResponseUpdate> WatchInteractions(CallOptions options)
         {
@@ -429,6 +458,29 @@ public sealed class DashboardClientTests
                 Task.FromResult(new ApplicationInformationResponse
                 {
                     ApplicationName = "TestApplication"
+                }),
+                Task.FromResult(new Metadata()),
+                () => Status.DefaultSuccess,
+                () => new Metadata(),
+                () => { });
+        }
+
+        public override AsyncUnaryCall<ResourceCommandResponse> ExecuteResourceCommandAsync(ResourceCommandRequest request, CallOptions options)
+        {
+            if (FailOnExecuteResourceCommand)
+            {
+                return new AsyncUnaryCall<ResourceCommandResponse>(
+                Task.FromException<ResourceCommandResponse>(new RpcException(new Status(StatusCode.Unavailable, "Service unavailable"))),
+                Task.FromResult(new Metadata()),
+                () => new Status(StatusCode.Unavailable, "Service unavailable"),
+                () => new Metadata(),
+                () => { });
+            }
+
+            return new AsyncUnaryCall<ResourceCommandResponse>(
+                Task.FromResult(new ResourceCommandResponse
+                {
+                Kind = Aspire.DashboardService.Proto.V1.ResourceCommandResponseKind.Succeeded
                 }),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,

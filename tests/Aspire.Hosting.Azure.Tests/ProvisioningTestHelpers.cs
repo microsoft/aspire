@@ -65,7 +65,7 @@ internal static class ProvisioningTestHelpers
     public static IArmClientProvider CreateArmClientProvider(Func<string, Dictionary<string, object>> deploymentOutputsProvider) => new TestArmClientProvider(deploymentOutputsProvider);
     public static IArmClientProvider CreateArmClientProvider(IEnumerable<string> existingResourceIds) => new TestArmClientProvider(existingResourceIds: existingResourceIds);
     public static IArmClientProvider CreateArmClientProvider(IEnumerable<string> existingResourceIds, List<string> deletedResourceIds) => new TestArmClientProvider(existingResourceIds: existingResourceIds, deletedResourceIds: deletedResourceIds);
-    public static IArmClientProvider CreateArmClientProvider(IEnumerable<string> existingResourceIds, List<string>? deletedResourceIds, IEnumerable<string>? deploymentTargetResourceIds, List<string>? canceledDeploymentIds) => new TestArmClientProvider(existingResourceIds: existingResourceIds, deletedResourceIds: deletedResourceIds, deploymentTargetResourceIds: deploymentTargetResourceIds, canceledDeploymentIds: canceledDeploymentIds);
+    public static IArmClientProvider CreateArmClientProvider(IEnumerable<string> existingResourceIds, List<string>? deletedResourceIds, IEnumerable<string>? deploymentTargetResourceIds, List<string>? canceledDeploymentIds, List<(string ResourceId, string? ResourceLocation, string? FallbackResourceLocation)>? deletedResources = null) => new TestArmClientProvider(existingResourceIds: existingResourceIds, deletedResourceIds: deletedResourceIds, deploymentTargetResourceIds: deploymentTargetResourceIds, canceledDeploymentIds: canceledDeploymentIds, deletedResources: deletedResources);
     public static IArmClientProvider CreateArmClientProviderForMissingResourceGroup() => new TestArmClientProvider(resourceGroupLookupReturnsNotFound: true);
     public static ITokenCredentialProvider CreateTokenCredentialProvider() => new TestTokenCredentialProvider();
     public static ISecretClientProvider CreateSecretClientProvider() => new TestSecretClientProvider(CreateTokenCredentialProvider());
@@ -192,6 +192,7 @@ internal sealed class TestArmClient : IArmClient
     private readonly ITenantResource? _tenant;
     private readonly HashSet<string>? _existingResourceIds;
     private readonly List<string>? _deletedResourceIds;
+    private readonly List<(string ResourceId, string? ResourceLocation, string? FallbackResourceLocation)>? _deletedResources;
     private readonly IEnumerable<string>? _deploymentTargetResourceIds;
     private readonly IReadOnlyList<AzureDeploymentOperationDetails>? _deploymentOperations;
     private readonly IReadOnlyDictionary<string, IEnumerable<string>>? _supportedLocationsByResourceType;
@@ -200,7 +201,11 @@ internal sealed class TestArmClient : IArmClient
     private readonly bool _resourceGroupLookupReturnsNotFound;
 
     public TestRoleAssignmentCollection RoleAssignments { get; } = new();
+    public Queue<object?> DeploymentProbeResults { get; } = new();
+    public Queue<AzureDeploymentState?> DeploymentStates { get; } = new();
+    public Exception? GetDeploymentException { get; set; }
     public int SupportedLocationsCallCount { get; private set; }
+    public int GetDeploymentCallCount { get; private set; }
     public int DeploymentOperationsCallCount { get; private set; }
 
     public TestArmClient(Dictionary<string, object> deploymentOutputs, TestResourceGroupResource? resourceGroup = null, bool resourceGroupLookupReturnsNotFound = false)
@@ -237,10 +242,12 @@ internal sealed class TestArmClient : IArmClient
         IEnumerable<string> existingResourceIds,
         List<string>? deletedResourceIds = null,
         IEnumerable<string>? deploymentTargetResourceIds = null,
-        List<string>? canceledDeploymentIds = null)
+        List<string>? canceledDeploymentIds = null,
+        List<(string ResourceId, string? ResourceLocation, string? FallbackResourceLocation)>? deletedResources = null)
     {
         _existingResourceIds = new HashSet<string>(existingResourceIds, StringComparer.OrdinalIgnoreCase);
         _deletedResourceIds = deletedResourceIds;
+        _deletedResources = deletedResources;
         _deploymentTargetResourceIds = deploymentTargetResourceIds;
         _canceledDeploymentIds = canceledDeploymentIds;
     }
@@ -365,10 +372,11 @@ internal sealed class TestArmClient : IArmClient
         return Task.FromResult(exists);
     }
 
-    public Task DeleteResourceAsync(string resourceId, CancellationToken cancellationToken = default)
+    public Task DeleteResourceAsync(string resourceId, CancellationToken cancellationToken = default, string? resourceLocation = null, string? fallbackResourceLocation = null)
     {
         _existingResourceIds?.Remove(resourceId);
         _deletedResourceIds?.Add(resourceId);
+        _deletedResources?.Add((resourceId, resourceLocation, fallbackResourceLocation));
         return Task.CompletedTask;
     }
 
@@ -376,6 +384,39 @@ internal sealed class TestArmClient : IArmClient
     {
         _canceledDeploymentIds?.Add(deploymentId);
         return Task.CompletedTask;
+    }
+
+    public Task<AzureDeploymentState?> GetDeploymentAsync(string deploymentId, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        GetDeploymentCallCount++;
+
+        if (GetDeploymentException is not null)
+        {
+            return Task.FromException<AzureDeploymentState?>(GetDeploymentException);
+        }
+
+        if (DeploymentProbeResults.Count > 0)
+        {
+            var result = DeploymentProbeResults.Count == 1 ? DeploymentProbeResults.Peek() : DeploymentProbeResults.Dequeue();
+            return result switch
+            {
+                Exception ex => Task.FromException<AzureDeploymentState?>(ex),
+                AzureDeploymentState deployment => Task.FromResult<AzureDeploymentState?>(deployment),
+                null => Task.FromResult<AzureDeploymentState?>(null),
+                _ => throw new InvalidOperationException($"Unexpected deployment probe result type '{result.GetType()}'.")
+            };
+        }
+
+        if (DeploymentStates.Count > 0)
+        {
+            var deployment = DeploymentStates.Count == 1 ? DeploymentStates.Peek() : DeploymentStates.Dequeue();
+            return Task.FromResult(deployment);
+        }
+
+        return Task.FromResult<AzureDeploymentState?>(new(
+            AzureDeploymentOperationDetails.SucceededState,
+            CreateDeploymentOutputs(deploymentId)));
     }
 
     public async IAsyncEnumerable<string> GetDeploymentTargetResourceIdsAsync(string deploymentId, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -413,6 +454,24 @@ internal sealed class TestArmClient : IArmClient
             cancellationToken.ThrowIfCancellationRequested();
             yield return operation;
         }
+    }
+
+    private JsonObject? CreateDeploymentOutputs(string deploymentId)
+    {
+        Dictionary<string, object>? data;
+        if (_deploymentOutputsProvider is not null)
+        {
+            var deploymentName = ResourceIdentifier.TryParse(deploymentId, out var parsedDeploymentId) && parsedDeploymentId is not null
+                ? parsedDeploymentId.Name
+                : deploymentId;
+            data = _deploymentOutputsProvider(deploymentName);
+        }
+        else
+        {
+            data = _deploymentOutputs;
+        }
+
+        return data is null ? null : JsonSerializer.SerializeToNode(data)?.AsObject();
     }
 }
 
@@ -837,6 +896,7 @@ internal sealed class TestArmClientProvider : IArmClientProvider
     private readonly TestResourceGroupResource? _resourceGroup;
     private readonly IEnumerable<string>? _existingResourceIds;
     private readonly List<string>? _deletedResourceIds;
+    private readonly List<(string ResourceId, string? ResourceLocation, string? FallbackResourceLocation)>? _deletedResources;
     private readonly IEnumerable<string>? _deploymentTargetResourceIds;
     private readonly List<string>? _canceledDeploymentIds;
     private readonly bool _resourceGroupLookupReturnsNotFound;
@@ -867,10 +927,12 @@ internal sealed class TestArmClientProvider : IArmClientProvider
         IEnumerable<string> existingResourceIds,
         List<string>? deletedResourceIds = null,
         IEnumerable<string>? deploymentTargetResourceIds = null,
-        List<string>? canceledDeploymentIds = null)
+        List<string>? canceledDeploymentIds = null,
+        List<(string ResourceId, string? ResourceLocation, string? FallbackResourceLocation)>? deletedResources = null)
     {
         _existingResourceIds = existingResourceIds;
         _deletedResourceIds = deletedResourceIds;
+        _deletedResources = deletedResources;
         _deploymentTargetResourceIds = deploymentTargetResourceIds;
         _canceledDeploymentIds = canceledDeploymentIds;
     }
@@ -887,7 +949,7 @@ internal sealed class TestArmClientProvider : IArmClientProvider
         }
         if (_existingResourceIds is not null)
         {
-            return new TestArmClient(_existingResourceIds, _deletedResourceIds, _deploymentTargetResourceIds, _canceledDeploymentIds);
+            return new TestArmClient(_existingResourceIds, _deletedResourceIds, _deploymentTargetResourceIds, _canceledDeploymentIds, _deletedResources);
         }
         return new TestArmClient(_deploymentOutputs!, _resourceGroup, _resourceGroupLookupReturnsNotFound);
     }

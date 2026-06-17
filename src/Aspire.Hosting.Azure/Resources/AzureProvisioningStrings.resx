@@ -258,26 +258,26 @@ To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/pro
   <data name="GetAzureResourceCommandSuccess" xml:space="preserve">
     <value>Azure resource information retrieved.</value>
   </data>
-  <data name="CancelDeploymentCommandName" xml:space="preserve">
-    <value>Cancel deployment</value>
+  <data name="CancelCommandName" xml:space="preserve">
+    <value>Cancel</value>
   </data>
-  <data name="CancelDeploymentCommandDescription" xml:space="preserve">
-    <value>Requests cancellation of the cached Azure deployment for this resource.</value>
+  <data name="CancelCommandDescription" xml:space="preserve">
+    <value>Requests cancellation of the active Azure operation or deployment for this resource.</value>
   </data>
-  <data name="CancelDeploymentCommandConfirmation" xml:space="preserve">
-    <value>This requests cancellation of the cached Azure deployment for this resource. Any Azure resources already created by the deployment are not deleted. Do you want to continue?</value>
+  <data name="CancelCommandConfirmation" xml:space="preserve">
+    <value>This requests cancellation of the active Azure operation that includes this resource, or the active Azure deployment for this resource. If the operation includes other Azure resources, they will be canceled too. Azure may continue work that cannot be canceled immediately, and resources already created are not deleted. Do you want to continue?</value>
   </data>
-  <data name="CancelDeploymentCommandSuccess" xml:space="preserve">
-    <value>Azure deployment cancellation requested.</value>
+  <data name="CancelCommandSuccess" xml:space="preserve">
+    <value>Azure cancellation requested.</value>
   </data>
   <data name="DeleteAzureResourceCommandName" xml:space="preserve">
     <value>Delete Azure resource</value>
   </data>
   <data name="DeleteAzureResourceCommandDescription" xml:space="preserve">
-    <value>Cancels the cached Azure deployment, deletes Azure resources targeted by the deployment, and clears cached deployment state for this resource.</value>
+    <value>Cancels the cached Azure deployment, deletes Azure resources targeted by the deployment, purges recoverable Key Vaults so their names can be reused, and clears cached deployment state for this resource.</value>
   </data>
   <data name="DeleteAzureResourceCommandConfirmation" xml:space="preserve">
-    <value>This cancels the cached Azure deployment, deletes Azure resources targeted by this resource's deployment, and clears cached deployment state. Do you want to continue?</value>
+    <value>This cancels the cached Azure deployment, deletes Azure resources targeted by this resource's deployment, purges recoverable Key Vaults so their names can be reused, and clears cached deployment state. Do you want to continue?</value>
   </data>
   <data name="DeleteAzureResourceCommandSuccess" xml:space="preserve">
     <value>Azure resources deleted and provisioning state reset.</value>
@@ -338,6 +338,21 @@ To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/pro
   </data>
   <data name="ContextPropertyTenantIdDisplayName" xml:space="preserve">
     <value>Azure tenant ID</value>
+  </data>
+  <data name="OperationPropertyNameDisplayName" xml:space="preserve">
+    <value>Azure operation</value>
+  </data>
+  <data name="OperationPropertyPhaseDisplayName" xml:space="preserve">
+    <value>Azure operation phase</value>
+  </data>
+  <data name="OperationPropertyStatusDisplayName" xml:space="preserve">
+    <value>Azure operation status</value>
+  </data>
+  <data name="OperationPropertyTargetLocationDisplayName" xml:space="preserve">
+    <value>Azure operation target location</value>
+  </data>
+  <data name="OperationPropertyStartedAtDisplayName" xml:space="preserve">
+    <value>Azure operation started</value>
   </data>
   <data name="FailurePropertyCodeDisplayName" xml:space="preserve">
     <value>Azure error code</value>

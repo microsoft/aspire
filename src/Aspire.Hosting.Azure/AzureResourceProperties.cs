@@ -14,6 +14,20 @@ internal static class AzureResourceProperties
     public const string Location = "azure.location";
     public const string TenantId = "azure.tenant.id";
     public const string TenantDomain = "azure.tenant.domain";
+    public const string OperationName = "azure.operation.name";
+    public const string OperationPhase = "azure.operation.phase";
+    public const string OperationStatus = "azure.operation.status";
+    public const string OperationTargetLocation = "azure.operation.target.location";
+    public const string OperationStartedAt = "azure.operation.started_at";
+
+    private static readonly string[] s_activeOperationProperties =
+    [
+        OperationName,
+        OperationPhase,
+        OperationStatus,
+        OperationTargetLocation,
+        OperationStartedAt
+    ];
 
     public static ImmutableArray<ResourcePropertySnapshot> CreateContextProperties(
         string? subscriptionId,
@@ -48,6 +62,34 @@ internal static class AzureResourceProperties
 
     public static ResourcePropertySnapshot CreateTenantDomain(string? value) =>
         CreateHighlighted(TenantDomain, value, AzureProvisioningStrings.ContextPropertyTenantDomainDisplayName);
+
+    public static ImmutableArray<ResourcePropertySnapshot> CreateActiveOperationProperties(
+        string operationName,
+        string phase,
+        string status,
+        string? targetLocation,
+        DateTimeOffset startedAt)
+    {
+        var properties = ImmutableArray.CreateBuilder<ResourcePropertySnapshot>();
+        properties.Add(CreateHighlighted(OperationName, operationName, AzureProvisioningStrings.OperationPropertyNameDisplayName));
+        properties.Add(CreateHighlighted(OperationPhase, phase, AzureProvisioningStrings.OperationPropertyPhaseDisplayName));
+        properties.Add(CreateHighlighted(OperationStatus, status, AzureProvisioningStrings.OperationPropertyStatusDisplayName));
+        Add(properties, value => CreateHighlighted(OperationTargetLocation, value, AzureProvisioningStrings.OperationPropertyTargetLocationDisplayName), targetLocation, includeEmptyProperties: false);
+        properties.Add(CreateHighlighted(OperationStartedAt, startedAt.ToString("O"), AzureProvisioningStrings.OperationPropertyStartedAtDisplayName));
+
+        return properties.ToImmutable();
+    }
+
+    public static ImmutableArray<ResourcePropertySnapshot> WithoutActiveOperationProperties(this ImmutableArray<ResourcePropertySnapshot> properties)
+    {
+        if (properties.IsDefaultOrEmpty ||
+            !properties.Any(static property => s_activeOperationProperties.Contains(property.Name, StringComparer.Ordinal)))
+        {
+            return properties;
+        }
+
+        return [.. properties.Where(static property => !s_activeOperationProperties.Contains(property.Name, StringComparer.Ordinal))];
+    }
 
     private static ResourcePropertySnapshot CreateHighlighted(string name, string? value, string displayName) =>
         new(name, value)

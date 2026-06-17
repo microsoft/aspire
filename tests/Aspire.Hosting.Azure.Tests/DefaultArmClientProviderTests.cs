@@ -19,6 +19,9 @@ public class DefaultArmClientProviderTests
     private const string RootDeploymentId = $"/subscriptions/{SubscriptionId}/resourceGroups/test-rg/providers/Microsoft.Resources/deployments/root";
     private const string NestedADeploymentId = $"/subscriptions/{SubscriptionId}/resourceGroups/test-rg/providers/Microsoft.Resources/deployments/nested-a";
     private const string NestedBDeploymentId = $"/subscriptions/{SubscriptionId}/resourceGroups/test-rg/providers/Microsoft.Resources/deployments/nested-b";
+    private const string KeyVaultResourceId = $"/subscriptions/{SubscriptionId}/resourceGroups/test-rg/providers/Microsoft.KeyVault/vaults/kv-test";
+    private const string DeletedKeyVaultPath = $"/subscriptions/{SubscriptionId}/providers/Microsoft.KeyVault/locations/westus2/deletedVaults/kv-test";
+    private const string DeletedKeyVaultPurgePath = $"/subscriptions/{SubscriptionId}/providers/Microsoft.KeyVault/locations/westus2/deletedVaults/kv-test/purge";
 
     [Fact]
     public async Task GetSupportedLocationsAsyncUsesConfiguredArmEnvironment()
@@ -105,6 +108,72 @@ public class DefaultArmClientProviderTests
         Assert.Equal(2, transport.MaxConcurrentNestedDeploymentOperationRequests);
     }
 
+    [Fact]
+    public async Task GetDeploymentAsyncReturnsProvisioningStateAndOutputs()
+    {
+        var transport = new ProviderMetadataTransport();
+        var provider = new DefaultArmClientProvider(new ArmClientOptions
+        {
+            Transport = transport
+        });
+        var armClient = provider.GetArmClient(new CapturingTokenCredential(), SubscriptionId);
+
+        var deployment = await armClient.GetDeploymentAsync(RootDeploymentId, CancellationToken.None);
+
+        Assert.NotNull(deployment);
+        Assert.Equal(AzureDeploymentOperationDetails.SucceededState, deployment.ProvisioningState);
+        Assert.Equal("https://storage.blob.core.windows.net/", deployment.Outputs?["blobEndpoint"]?["value"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task DeleteResourceAsyncPurgesDeletedKeyVault()
+    {
+        var transport = new ProviderMetadataTransport();
+        var provider = new DefaultArmClientProvider(new ArmClientOptions
+        {
+            Transport = transport
+        });
+        var armClient = provider.GetArmClient(new CapturingTokenCredential(), SubscriptionId);
+
+        await armClient.DeleteResourceAsync(KeyVaultResourceId, CancellationToken.None);
+
+        Assert.Contains(transport.Requests, static request => request.Method == RequestMethod.Get.ToString() && request.Uri.AbsolutePath == KeyVaultResourceId);
+        Assert.Contains(transport.Requests, static request => request.Method == RequestMethod.Delete.ToString() && request.Uri.AbsolutePath == KeyVaultResourceId);
+        Assert.Contains(transport.Requests, static request =>
+            request.Method == RequestMethod.Post.ToString() &&
+            request.Uri.AbsolutePath == DeletedKeyVaultPurgePath &&
+            request.Uri.Query.Contains("api-version=", StringComparison.Ordinal));
+        Assert.Contains(transport.Requests, static request =>
+            request.Method == RequestMethod.Get.ToString() &&
+            request.Uri.AbsolutePath == DeletedKeyVaultPath);
+    }
+
+    [Fact]
+    public async Task DeleteResourceAsyncPurgesDeletedKeyVaultWithFallbackLocationWhenLiveVaultIsAlreadyDeleted()
+    {
+        var transport = new ProviderMetadataTransport(keyVaultGetStatus: 404, keyVaultDeleteStatus: 404);
+        var provider = new DefaultArmClientProvider(new ArmClientOptions
+        {
+            Transport = transport
+        });
+        var armClient = provider.GetArmClient(new CapturingTokenCredential(), SubscriptionId);
+
+        await armClient.DeleteResourceAsync(KeyVaultResourceId, CancellationToken.None, resourceLocation: "ukwest", fallbackResourceLocation: "westus2");
+
+        Assert.Contains(transport.Requests, static request => request.Method == RequestMethod.Get.ToString() && request.Uri.AbsolutePath == KeyVaultResourceId);
+        Assert.DoesNotContain(transport.Requests, static request => request.Method == RequestMethod.Delete.ToString() && request.Uri.AbsolutePath == KeyVaultResourceId);
+        Assert.Contains(transport.Requests, static request =>
+            request.Method == RequestMethod.Post.ToString() &&
+            request.Uri.AbsolutePath.Contains("/locations/ukwest/deletedVaults/kv-test/purge", StringComparison.Ordinal));
+        Assert.Contains(transport.Requests, static request =>
+            request.Method == RequestMethod.Post.ToString() &&
+            request.Uri.AbsolutePath == DeletedKeyVaultPurgePath &&
+            request.Uri.Query.Contains("api-version=", StringComparison.Ordinal));
+        Assert.Contains(transport.Requests, static request =>
+            request.Method == RequestMethod.Get.ToString() &&
+            request.Uri.AbsolutePath == DeletedKeyVaultPath);
+    }
+
     private sealed class CapturingTokenCredential : TokenCredential
     {
         private readonly object _lock = new();
@@ -149,8 +218,12 @@ public class DefaultArmClientProviderTests
     {
         private readonly object _lock = new();
         private readonly List<Uri> _requestUris = [];
+        private readonly List<CapturedRequest> _requests = [];
         private readonly IReadOnlyList<(string Name, string DisplayName)> _locations;
         private readonly IReadOnlyList<string> _providerLocations;
+        private readonly int _keyVaultGetStatus;
+        private readonly int _keyVaultDeleteStatus;
+        private bool _keyVaultDeleteRequested;
         private readonly TaskCompletionSource _nestedDeploymentOperationRequestsStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private int _activeNestedDeploymentOperationRequests;
         private int _maxConcurrentNestedDeploymentOperationRequests;
@@ -158,7 +231,9 @@ public class DefaultArmClientProviderTests
 
         public ProviderMetadataTransport(
             IReadOnlyList<(string Name, string DisplayName)>? locations = null,
-            IReadOnlyList<string>? providerLocations = null)
+            IReadOnlyList<string>? providerLocations = null,
+            int keyVaultGetStatus = 200,
+            int keyVaultDeleteStatus = 200)
         {
             _locations = locations ??
             [
@@ -166,6 +241,8 @@ public class DefaultArmClientProviderTests
                 ("westus3", "West US 3")
             ];
             _providerLocations = providerLocations ?? ["East US", "West US 3"];
+            _keyVaultGetStatus = keyVaultGetStatus;
+            _keyVaultDeleteStatus = keyVaultDeleteStatus;
         }
 
         public IReadOnlyList<Uri> RequestUris
@@ -179,6 +256,17 @@ public class DefaultArmClientProviderTests
             }
         }
 
+        public IReadOnlyList<CapturedRequest> Requests
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _requests.ToArray();
+                }
+            }
+        }
+
         public int MaxConcurrentNestedDeploymentOperationRequests => Volatile.Read(ref _maxConcurrentNestedDeploymentOperationRequests);
 
         public override Request CreateRequest()
@@ -186,33 +274,36 @@ public class DefaultArmClientProviderTests
 
         public override void Process(HttpMessage message)
         {
-            message.Response = CreateResponse(CaptureUri(message.Request));
+            message.Response = CreateResponse(CaptureRequest(message.Request));
         }
 
         public override async ValueTask ProcessAsync(HttpMessage message)
         {
-            var uri = CaptureUri(message.Request);
-            if (IsNestedDeploymentOperationsPath(uri.AbsolutePath))
+            var request = CaptureRequest(message.Request);
+            if (IsNestedDeploymentOperationsPath(request.Uri.AbsolutePath))
             {
                 await WaitForConcurrentNestedDeploymentOperationRequestAsync().ConfigureAwait(false);
             }
 
-            message.Response = CreateResponse(uri);
+            message.Response = CreateResponse(request);
         }
 
-        private Uri CaptureUri(Request request)
+        private CapturedRequest CaptureRequest(Request request)
         {
             var uri = request.Uri.ToUri();
+            var capturedRequest = new CapturedRequest(request.Method.ToString(), uri);
             lock (_lock)
             {
                 _requestUris.Add(uri);
+                _requests.Add(capturedRequest);
             }
 
-            return uri;
+            return capturedRequest;
         }
 
-        private Response CreateResponse(Uri uri)
+        private Response CreateResponse(CapturedRequest request)
         {
+            var uri = request.Uri;
             var content = uri.AbsolutePath switch
             {
                 $"/subscriptions/{SubscriptionId}" => $$"""
@@ -226,6 +317,8 @@ public class DefaultArmClientProviderTests
                     """,
                 $"/subscriptions/{SubscriptionId}/locations" => CreateLocationsContent(),
                 $"/subscriptions/{SubscriptionId}/providers/Microsoft.Search" => CreateProviderContent(),
+                $"/subscriptions/{SubscriptionId}/providers/Microsoft.KeyVault" => CreateKeyVaultProviderContent(),
+                var path when string.Equals(path, RootDeploymentId, StringComparison.Ordinal) => CreateDeploymentContent(RootDeploymentId),
                 var path when string.Equals(path, $"{RootDeploymentId}/operations", StringComparison.Ordinal) => CreateDeploymentOperationsContent(
                     RootDeploymentId,
                     ("nested-a", NestedADeploymentId, AzureDeploymentOperationDetails.DeploymentResourceType, "nested-a"),
@@ -236,10 +329,45 @@ public class DefaultArmClientProviderTests
                 var path when string.Equals(path, $"{NestedBDeploymentId}/operations", StringComparison.Ordinal) => CreateDeploymentOperationsContent(
                     NestedBDeploymentId,
                     ("storage-b", $"/subscriptions/{SubscriptionId}/resourceGroups/test-rg/providers/Microsoft.Storage/storageAccounts/storage-b", "Microsoft.Storage/storageAccounts", "storage-b")),
+                var path when string.Equals(path, KeyVaultResourceId, StringComparison.Ordinal) && request.Method == RequestMethod.Get.ToString() => _keyVaultGetStatus == 404 || _keyVaultDeleteRequested ? null : CreateKeyVaultResourceContent(),
+                var path when string.Equals(path, KeyVaultResourceId, StringComparison.Ordinal) && request.Method == RequestMethod.Delete.ToString() => null,
+                var path when IsDeletedKeyVaultPath(path) && request.Method == RequestMethod.Get.ToString() => null,
+                var path when IsDeletedKeyVaultPurgePath(path) && request.Method == RequestMethod.Post.ToString() => null,
                 _ => throw new InvalidOperationException($"Unexpected ARM request: {uri}")
             };
 
-            return CreateJsonResponse(content);
+            if (request.Method == RequestMethod.Get.ToString() &&
+                string.Equals(uri.AbsolutePath, KeyVaultResourceId, StringComparison.Ordinal) &&
+                (_keyVaultGetStatus == 404 || _keyVaultDeleteRequested))
+            {
+                return CreateEmptyResponse(404);
+            }
+
+            if (request.Method == RequestMethod.Delete.ToString() &&
+                string.Equals(uri.AbsolutePath, KeyVaultResourceId, StringComparison.Ordinal))
+            {
+                if (_keyVaultDeleteStatus == 404)
+                {
+                    return CreateEmptyResponse(404);
+                }
+
+                _keyVaultDeleteRequested = true;
+            }
+
+            if (request.Method == RequestMethod.Post.ToString() &&
+                IsDeletedKeyVaultPurgePath(uri.AbsolutePath) &&
+                !string.Equals(uri.AbsolutePath, DeletedKeyVaultPurgePath, StringComparison.Ordinal))
+            {
+                return CreateEmptyResponse(404);
+            }
+
+            if (request.Method == RequestMethod.Get.ToString() &&
+                IsDeletedKeyVaultPath(uri.AbsolutePath))
+            {
+                return CreateEmptyResponse(404);
+            }
+
+            return content is null ? CreateEmptyResponse(200) : CreateJsonResponse(content);
         }
 
         private async Task WaitForConcurrentNestedDeploymentOperationRequestAsync()
@@ -279,6 +407,14 @@ public class DefaultArmClientProviderTests
             => string.Equals(path, $"{NestedADeploymentId}/operations", StringComparison.Ordinal) ||
                string.Equals(path, $"{NestedBDeploymentId}/operations", StringComparison.Ordinal);
 
+        private static bool IsDeletedKeyVaultPurgePath(string path)
+            => path.Contains("/providers/Microsoft.KeyVault/locations/", StringComparison.Ordinal) &&
+               path.EndsWith("/deletedVaults/kv-test/purge", StringComparison.Ordinal);
+
+        private static bool IsDeletedKeyVaultPath(string path)
+            => path.Contains("/providers/Microsoft.KeyVault/locations/", StringComparison.Ordinal) &&
+               path.EndsWith("/deletedVaults/kv-test", StringComparison.Ordinal);
+
         private string CreateLocationsContent()
         {
             return JsonSerializer.Serialize(new
@@ -310,6 +446,46 @@ public class DefaultArmClientProviderTests
             });
         }
 
+        private static string CreateKeyVaultProviderContent()
+        {
+            return JsonSerializer.Serialize(new
+            {
+                id = $"/subscriptions/{SubscriptionId}/providers/Microsoft.KeyVault",
+                @namespace = "Microsoft.KeyVault",
+                registrationState = "Registered",
+                resourceTypes = new[]
+                {
+                    new
+                    {
+                        resourceType = "vaults",
+                        locations = new[] { "West US 2" },
+                        apiVersions = new[] { "2023-07-01" }
+                    }
+                }
+            });
+        }
+
+        private static string CreateDeploymentContent(string deploymentId)
+        {
+            return JsonSerializer.Serialize(new
+            {
+                id = deploymentId,
+                name = "root",
+                type = AzureDeploymentOperationDetails.DeploymentResourceType,
+                properties = new
+                {
+                    provisioningState = AzureDeploymentOperationDetails.SucceededState,
+                    outputs = new
+                    {
+                        blobEndpoint = new
+                        {
+                            value = "https://storage.blob.core.windows.net/"
+                        }
+                    }
+                }
+            });
+        }
+
         private static string CreateDeploymentOperationsContent(
             string deploymentId,
             params (string OperationId, string TargetResourceId, string TargetResourceType, string TargetResourceName)[] operations)
@@ -336,6 +512,17 @@ public class DefaultArmClientProviderTests
             });
         }
 
+        private static string CreateKeyVaultResourceContent()
+        {
+            return JsonSerializer.Serialize(new
+            {
+                id = KeyVaultResourceId,
+                name = "kv-test",
+                type = "Microsoft.KeyVault/vaults",
+                location = "westus2"
+            });
+        }
+
         private static MockResponse CreateJsonResponse(string content)
         {
             var response = new MockResponse(200)
@@ -344,6 +531,11 @@ public class DefaultArmClientProviderTests
             };
             return response;
         }
+
+        private static MockResponse CreateEmptyResponse(int status)
+            => new(status);
+
+        public sealed record CapturedRequest(string Method, Uri Uri);
     }
 
     private sealed class TestRequest : Request

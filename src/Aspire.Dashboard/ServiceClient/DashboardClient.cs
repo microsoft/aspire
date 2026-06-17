@@ -964,11 +964,30 @@ internal sealed class DashboardClient : IDashboardClient
 
             return response.ToViewModel();
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return new ResourceCommandResponseViewModel()
+            {
+                Kind = ResourceCommandResponseKind.Cancelled
+            };
+        }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled && cancellationToken.IsCancellationRequested)
+        {
+            return new ResourceCommandResponseViewModel()
+            {
+                Kind = ResourceCommandResponseKind.Cancelled
+            };
+        }
         catch (RpcException ex)
         {
             _logger.LogError(ex, "Error executing command \"{CommandName}\" on resource \"{ResourceName}\": {StatusCode}", command.Name, resourceName, ex.StatusCode);
 
-            var errorMessage = ex.StatusCode == StatusCode.Unimplemented ? "Command not implemented" : "Unknown error. See logs for details";
+            var errorMessage = ex.StatusCode switch
+            {
+                StatusCode.Unimplemented => "Command not implemented",
+                StatusCode.Unavailable => "The AppHost disconnected while executing the command. Restart the AppHost and try again.",
+                _ => "Unknown error. See logs for details"
+            };
 
             return new ResourceCommandResponseViewModel()
             {

@@ -2,9 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREAZURE003
+#pragma warning disable ASPIREPIPELINES002
 
-using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Dashboard.Model;
 using Azure.Provisioning;
 using Azure.Provisioning.Authorization;
 using Microsoft.Extensions.DependencyInjection;

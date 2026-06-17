@@ -2,24 +2,24 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="pt-BR" original="../AzureProvisioningStrings.resx">
     <body>
-      <trans-unit id="CancelDeploymentCommandConfirmation">
-        <source>This requests cancellation of the cached Azure deployment for this resource. Any Azure resources already created by the deployment are not deleted. Do you want to continue?</source>
-        <target state="new">This requests cancellation of the cached Azure deployment for this resource. Any Azure resources already created by the deployment are not deleted. Do you want to continue?</target>
+      <trans-unit id="CancelCommandConfirmation">
+        <source>This requests cancellation of the active Azure operation that includes this resource, or the active Azure deployment for this resource. If the operation includes other Azure resources, they will be canceled too. Azure may continue work that cannot be canceled immediately, and resources already created are not deleted. Do you want to continue?</source>
+        <target state="new">This requests cancellation of the active Azure operation that includes this resource, or the active Azure deployment for this resource. If the operation includes other Azure resources, they will be canceled too. Azure may continue work that cannot be canceled immediately, and resources already created are not deleted. Do you want to continue?</target>
         <note />
       </trans-unit>
-      <trans-unit id="CancelDeploymentCommandDescription">
-        <source>Requests cancellation of the cached Azure deployment for this resource.</source>
-        <target state="new">Requests cancellation of the cached Azure deployment for this resource.</target>
+      <trans-unit id="CancelCommandDescription">
+        <source>Requests cancellation of the active Azure operation or deployment for this resource.</source>
+        <target state="new">Requests cancellation of the active Azure operation or deployment for this resource.</target>
         <note />
       </trans-unit>
-      <trans-unit id="CancelDeploymentCommandName">
-        <source>Cancel deployment</source>
-        <target state="new">Cancel deployment</target>
+      <trans-unit id="CancelCommandName">
+        <source>Cancel</source>
+        <target state="new">Cancel</target>
         <note />
       </trans-unit>
-      <trans-unit id="CancelDeploymentCommandSuccess">
-        <source>Azure deployment cancellation requested.</source>
-        <target state="new">Azure deployment cancellation requested.</target>
+      <trans-unit id="CancelCommandSuccess">
+        <source>Azure cancellation requested.</source>
+        <target state="new">Azure cancellation requested.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeAzureContextCommandConfirmation">
@@ -93,13 +93,13 @@
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourceCommandConfirmation">
-        <source>This cancels the cached Azure deployment, deletes Azure resources targeted by this resource's deployment, and clears cached deployment state. Do you want to continue?</source>
-        <target state="new">This cancels the cached Azure deployment, deletes Azure resources targeted by this resource's deployment, and clears cached deployment state. Do you want to continue?</target>
+        <source>This cancels the cached Azure deployment, deletes Azure resources targeted by this resource's deployment, purges recoverable Key Vaults so their names can be reused, and clears cached deployment state. Do you want to continue?</source>
+        <target state="new">This cancels the cached Azure deployment, deletes Azure resources targeted by this resource's deployment, purges recoverable Key Vaults so their names can be reused, and clears cached deployment state. Do you want to continue?</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourceCommandDescription">
-        <source>Cancels the cached Azure deployment, deletes Azure resources targeted by the deployment, and clears cached deployment state for this resource.</source>
-        <target state="new">Cancels the cached Azure deployment, deletes Azure resources targeted by the deployment, and clears cached deployment state for this resource.</target>
+        <source>Cancels the cached Azure deployment, deletes Azure resources targeted by the deployment, purges recoverable Key Vaults so their names can be reused, and clears cached deployment state for this resource.</source>
+        <target state="new">Cancels the cached Azure deployment, deletes Azure resources targeted by the deployment, purges recoverable Key Vaults so their names can be reused, and clears cached deployment state for this resource.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteAzureResourceCommandName">
@@ -289,6 +289,31 @@ Para saber mais, veja a [documentação de provisionamento do Azure](https://aka
       <trans-unit id="NotificationTitle">
         <source>Azure provisioning</source>
         <target state="translated">Provisionamento do Azure</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPropertyNameDisplayName">
+        <source>Azure operation</source>
+        <target state="new">Azure operation</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPropertyPhaseDisplayName">
+        <source>Azure operation phase</source>
+        <target state="new">Azure operation phase</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPropertyStartedAtDisplayName">
+        <source>Azure operation started</source>
+        <target state="new">Azure operation started</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPropertyStatusDisplayName">
+        <source>Azure operation status</source>
+        <target state="new">Azure operation status</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPropertyTargetLocationDisplayName">
+        <source>Azure operation target location</source>
+        <target state="new">Azure operation target location</target>
         <note />
       </trans-unit>
       <trans-unit id="ReprovisionAllCommandConfirmation">

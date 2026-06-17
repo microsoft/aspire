@@ -212,6 +212,13 @@
     <value>"{0}" canceled</value>
     <comment>{0} is the display name of the command.</comment>
   </data>
+  <data name="ResourceCommandCancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="ResourceCommandCanceling" xml:space="preserve">
+    <value>"{0}" canceling...</value>
+    <comment>{0} is the display name of the command.</comment>
+  </data>
   <data name="ResourceCommandFailed" xml:space="preserve">
     <value>"{0}" failed</value>
     <comment>{0} is the display name of the command.</comment>

@@ -9,6 +9,7 @@ using Azure.ResourceManager.Authorization.Models;
 using Azure.ResourceManager.Resources;
 using Azure.ResourceManager.Resources.Models;
 using Azure.Security.KeyVault.Secrets;
+using System.Text.Json.Nodes;
 
 namespace Aspire.Hosting.Azure.Provisioning.Internal;
 
@@ -170,12 +171,17 @@ internal interface IArmClient
     /// <summary>
     /// Deletes the specified Azure resource.
     /// </summary>
-    Task DeleteResourceAsync(string resourceId, CancellationToken cancellationToken = default);
+    Task DeleteResourceAsync(string resourceId, CancellationToken cancellationToken = default, string? resourceLocation = null, string? fallbackResourceLocation = null);
 
     /// <summary>
     /// Cancels the specified Azure deployment.
     /// </summary>
     Task CancelDeploymentAsync(string deploymentId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the specified Azure deployment, or <c>null</c> when it no longer exists.
+    /// </summary>
+    Task<AzureDeploymentState?> GetDeploymentAsync(string deploymentId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets Azure resource IDs targeted by the specified deployment.
@@ -304,6 +310,11 @@ internal interface IArmDeploymentCollection
     /// </summary>
     Task CancelAsync(string deploymentName, CancellationToken cancellationToken = default);
 }
+
+/// <summary>
+/// Captures the ARM deployment fields Aspire needs when reconciling cached deployment state.
+/// </summary>
+internal sealed record AzureDeploymentState(string ProvisioningState, JsonObject? Outputs);
 
 /// <summary>
 /// Abstraction for Azure TenantResource.
