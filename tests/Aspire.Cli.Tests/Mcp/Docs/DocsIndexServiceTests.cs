@@ -1355,7 +1355,7 @@ public class DocsIndexServiceTests
     public async Task SearchAsync_VersionQuery_MatchesSlugWithCollapsedVersion(string query)
     {
         var content = """
-            # Aspire 134 Release Notes
+            # Aspire 13.4 Release Notes
             > Release notes for Aspire.
 
             Upgrade details.
@@ -1372,7 +1372,7 @@ public class DocsIndexServiceTests
         var results = await service.SearchAsync(query);
 
         Assert.NotEmpty(results);
-        Assert.Equal("Aspire 134 Release Notes", results[0].Title);
+        Assert.Equal("Aspire 13.4 Release Notes", results[0].Title);
     }
 
     private sealed class MockDocsFetcher(string? content) : IDocsFetcher
