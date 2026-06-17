@@ -71,11 +71,11 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         var cached = await TryReadFreshCacheAsync(cancellationToken).ConfigureAwait(false);
         if (cached is not null)
         {
-            return new InternalMicrosoftDetectionResult(cached.IsInternalMicrosoft, cached.Source);
+            return new InternalMicrosoftDetectionResult(cached.IsInternalMicrosoft, cached.Source, cached.Alias);
         }
 
-        var source = await RunProbeStagesAsync(cancellationToken).ConfigureAwait(false);
-        var result = new InternalMicrosoftDetectionResult(source is not null, source);
+        var result = await RunProbeStagesAsync(cancellationToken).ConfigureAwait(false) ??
+            new InternalMicrosoftDetectionResult(IsInternalMicrosoft: false, Source: null, Alias: null);
         await TryWriteCacheAsync(result, cancellationToken).ConfigureAwait(false);
 
         return result;
@@ -83,41 +83,78 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
     private IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>> CreateDefaultProbeStages()
     {
+        // Fastest/strongest signal probes
         var stage1 = new List<InternalMicrosoftProbe>();
+        if (OperatingSystem.IsMacOS())
+        {
+            // Use the platform SSO service on MacOS as the strongest signal (indicates machine is enrolled in
+            // Microsoft Intune and user has a Microsoft account in the Microsoft tenant configured in their keychain)
+            stage1.Add(new("Mac Platform SSO", CheckMacPlatformSsoAsync));
+        }
+
+        // Probes that may require file I/O or process execution, but can still complete relatively quickly
         var stage2 = new List<InternalMicrosoftProbe>
         {
+            // Is the user signed into VS Code with a Microsoft account that belongs to the Microsoft tenant?
             new("VS Code Microsoft tenant", CheckVsCodeMicrosoftTenantAsync)
         };
+
+        // Probes that may involve more extensive process execution/network calls or are a weaker signal, run last
+        // to avoid delaying detection when faster/better quality signals are available
         var stage3 = new List<InternalMicrosoftProbe>
         {
+            // Is there a GitHub token in the environment that has an active membership in the Microsoft GitHub org?
             new("Environment GitHub token membership", CheckEnvironmentGitHubTokenAsync),
+
+            // Is there a GitHub token from the gh CLI that has an active membership in the Microsoft GitHub org?
             new("gh CLI GitHub org membership", CheckGhCliAsync),
+
+            // Is there a GitHub token from the Copilot CLI that has an active membership in the Microsoft GitHub org?
             new("Copilot CLI GitHub org membership", CheckCopilotCliAsync)
         };
 
         if (OperatingSystem.IsWindows())
         {
+            // Stage 1
+
+            // Check USERDNSDOMAIN for a corp.microsoft.com domain, which is a strong signal of being on a Microsoft corporate machine or VPN.
+            // This is much faster than checking workplace join status and doesn't require admin privileges, so we check it in stage 1.
             stage1.Add(new("Windows USERDNSDOMAIN", CheckWindowsUserDnsDomainAsync));
+
+            // Check for a Microsoft tenant in the Visual Studio account store, which is a strong signal of being a Microsoft employee.
+            // This is also relatively fast and doesn't require admin privileges, so we check it in stage 1.
             stage1.Add(new("Visual Studio Microsoft tenant", CheckVisualStudioMicrosoftTenantAsync));
+
+            // Stage 3
+
+            // Check if the machine is workplace joined to the Microsoft tenant, which is a strong signal of being on a Microsoft corporate machine,
+            // but can be slower to evaluate so we check it in stage 3.
             stage3.Add(new("Windows workplace join", CheckWindowsWorkplaceJoinAsync));
         }
         else if (IsWsl())
         {
+            // Stage 1
+
+            // Check USERDNSDOMAIN for a corp.microsoft.com domain on the Windows host, which is a strong signal of being on a Microsoft corporate machine or VPN.
+            // This is much faster than checking workplace join status and doesn't require admin privileges, so we check it in stage 1.
             stage1.Add(new("WSL Windows USERDNSDOMAIN", CheckWslWindowsUserDnsDomainAsync));
+
+            // Check for a Microsoft tenant in the Visual Studio account store on the Windows host, which is a strong signal of being a Microsoft employee.
+            // This is also relatively fast and doesn't require admin privileges, so we check it in stage 1.
             stage1.Add(new("WSL Visual Studio Microsoft tenant", CheckWslVisualStudioMicrosoftTenantAsync));
+
+            // Stage 3
+
+            // Check if the Windows host machine is workplace joined to the Microsoft tenant, which is a strong signal of being on a Microsoft corporate machine,
+            // but can be slower to evaluate so we check it in stage 3.
             stage3.Add(new("WSL Windows workplace join", CheckWslWindowsWorkplaceJoinAsync));
             stage3.Add(new("WSL Windows gh.exe GitHub org membership", CheckWslWindowsGhCliAsync));
-        }
-
-        if (OperatingSystem.IsMacOS())
-        {
-            stage1.Add(new("Mac Platform SSO", CheckMacPlatformSsoAsync));
         }
 
         return [stage1, stage2, stage3];
     }
 
-    private async Task<string?> RunProbeStagesAsync(CancellationToken cancellationToken)
+    private async Task<InternalMicrosoftDetectionResult?> RunProbeStagesAsync(CancellationToken cancellationToken)
     {
         foreach (var stage in _probeStages)
         {
@@ -128,17 +165,17 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 continue;
             }
 
-            var source = await RunProbeStageAsync(stage, cancellationToken).ConfigureAwait(false);
-            if (source is not null)
+            var result = await RunProbeStageAsync(stage, cancellationToken).ConfigureAwait(false);
+            if (result is not null)
             {
-                return source;
+                return result;
             }
         }
 
         return null;
     }
 
-    private async Task<string?> RunProbeStageAsync(IReadOnlyList<InternalMicrosoftProbe> probes, CancellationToken cancellationToken)
+    private async Task<InternalMicrosoftDetectionResult?> RunProbeStageAsync(IReadOnlyList<InternalMicrosoftProbe> probes, CancellationToken cancellationToken)
     {
         using var stageCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var probeTasks = probes.Select(probe => RunProbeAsync(probe, stageCancellation.Token)).ToList();
@@ -149,26 +186,29 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             var completedTask = await Task.WhenAny(pendingTasks).ConfigureAwait(false);
             pendingTasks.Remove(completedTask);
 
-            var source = await completedTask.ConfigureAwait(false);
-            if (source is not null)
+            var result = await completedTask.ConfigureAwait(false);
+            if (result is not null)
             {
                 await stageCancellation.CancelAsync().ConfigureAwait(false);
                 await DrainCancelledProbesAsync(probeTasks).ConfigureAwait(false);
-                return source;
+                return result;
             }
         }
 
         return null;
     }
 
-    private Task<string?> RunProbeAsync(InternalMicrosoftProbe probe, CancellationToken cancellationToken)
+    private Task<InternalMicrosoftDetectionResult?> RunProbeAsync(InternalMicrosoftProbe probe, CancellationToken cancellationToken)
     {
         return Task.Run(async () =>
         {
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                return await probe.DetectAsync(cancellationToken).ConfigureAwait(false) ? probe.Name : null;
+                var result = await probe.DetectAsync(cancellationToken).ConfigureAwait(false);
+                return result.IsInternalMicrosoft
+                    ? new InternalMicrosoftDetectionResult(IsInternalMicrosoft: true, Source: probe.Name, Alias: result.Alias)
+                    : null;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -185,7 +225,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }, CancellationToken.None);
     }
 
-    private async Task DrainCancelledProbesAsync(IReadOnlyList<Task<string?>> probeTasks)
+    private async Task DrainCancelledProbesAsync(IReadOnlyList<Task<InternalMicrosoftDetectionResult?>> probeTasks)
     {
         try
         {
@@ -255,6 +295,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             {
                 IsInternalMicrosoft = result.IsInternalMicrosoft,
                 Source = result.Source,
+                Alias = result.Alias,
                 LastRunUtc = _timeProvider.GetUtcNow()
             };
             var json = JsonSerializer.Serialize(entry, JsonSourceGenerationContext.Default.InternalMicrosoftDetectorCacheEntry);
@@ -274,47 +315,55 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
     }
 
-    private static Task<bool> CheckWindowsUserDnsDomainAsync(CancellationToken cancellationToken)
+    private static Task<InternalMicrosoftProbeResult> CheckWindowsUserDnsDomainAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult(IsCorpMicrosoftDomain(Environment.GetEnvironmentVariable("USERDNSDOMAIN")));
+        var isInternalMicrosoft = IsCorpMicrosoftDomain(Environment.GetEnvironmentVariable("USERDNSDOMAIN"));
+        return Task.FromResult(isInternalMicrosoft
+            ? Detected(Environment.GetEnvironmentVariable("USERNAME"))
+            : InternalMicrosoftProbeResult.NotDetected);
     }
 
-    private async Task<bool> CheckWslWindowsUserDnsDomainAsync(CancellationToken cancellationToken)
+    private async Task<InternalMicrosoftProbeResult> CheckWslWindowsUserDnsDomainAsync(CancellationToken cancellationToken)
     {
         if (!CommandExists("cmd.exe"))
         {
-            return false;
+            return InternalMicrosoftProbeResult.NotDetected;
         }
 
-        var result = await RunProcessAsync("cmd.exe", "/c echo %USERDNSDOMAIN%", cancellationToken).ConfigureAwait(false);
-        return result.ExitCode == 0 && IsCorpMicrosoftDomain(result.Stdout.Trim());
+        var result = await RunProcessAsync("cmd.exe", "/c \"echo %USERDNSDOMAIN%&echo %USERNAME%\"", cancellationToken).ConfigureAwait(false);
+        var outputLines = result.Stdout.Split('\n', StringSplitOptions.TrimEntries);
+        var userDnsDomain = outputLines.FirstOrDefault() ?? string.Empty;
+        var userName = outputLines.Skip(1).FirstOrDefault() ?? string.Empty;
+        return result.ExitCode == 0 && IsCorpMicrosoftDomain(userDnsDomain)
+            ? Detected(userName)
+            : InternalMicrosoftProbeResult.NotDetected;
     }
 
     [SupportedOSPlatform("windows")]
-    private async Task<bool> CheckVisualStudioMicrosoftTenantAsync(CancellationToken cancellationToken)
+    private async Task<InternalMicrosoftProbeResult> CheckVisualStudioMicrosoftTenantAsync(CancellationToken cancellationToken)
     {
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         if (string.IsNullOrWhiteSpace(localAppData))
         {
-            return false;
+            return InternalMicrosoftProbeResult.NotDetected;
         }
 
         var accountStore = Path.Combine(localAppData, ".IdentityService", "V3AccountStore.json");
         if (!File.Exists(accountStore))
         {
-            return false;
+            return InternalMicrosoftProbeResult.NotDetected;
         }
 
         var text = await TryReadAllTextAsync(accountStore, cancellationToken).ConfigureAwait(false);
-        return ContainsMicrosoftTenant(text, cancellationToken);
+        return DetectMicrosoftTenant(text, cancellationToken);
     }
 
-    private async Task<bool> CheckWslVisualStudioMicrosoftTenantAsync(CancellationToken cancellationToken)
+    private async Task<InternalMicrosoftProbeResult> CheckWslVisualStudioMicrosoftTenantAsync(CancellationToken cancellationToken)
     {
         if (!CommandExists("cmd.exe"))
         {
-            return false;
+            return InternalMicrosoftProbeResult.NotDetected;
         }
 
         var result = await RunProcessAsync(
@@ -322,21 +371,23 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             "/c if exist \"%LOCALAPPDATA%\\.IdentityService\\V3AccountStore.json\" type \"%LOCALAPPDATA%\\.IdentityService\\V3AccountStore.json\"",
             cancellationToken).ConfigureAwait(false);
 
-        return result.ExitCode == 0 && ContainsMicrosoftTenant(result.Stdout, cancellationToken);
+        return result.ExitCode == 0
+            ? DetectMicrosoftTenant(result.Stdout, cancellationToken)
+            : InternalMicrosoftProbeResult.NotDetected;
     }
 
     [SupportedOSPlatform("macos")]
-    private async Task<bool> CheckMacPlatformSsoAsync(CancellationToken cancellationToken)
+    private async Task<InternalMicrosoftProbeResult> CheckMacPlatformSsoAsync(CancellationToken cancellationToken)
     {
         if (!CommandExists("app-sso"))
         {
-            return false;
+            return InternalMicrosoftProbeResult.NotDetected;
         }
 
         var result = await RunProcessAsync("app-sso", "platform -s", cancellationToken).ConfigureAwait(false);
         if (result.ExitCode != 0)
         {
-            return false;
+            return InternalMicrosoftProbeResult.NotDetected;
         }
 
         var output = $"{result.Stdout}{Environment.NewLine}{result.Stderr}";
@@ -344,14 +395,17 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         var expectedKeyEndpoint = $"https://login.microsoftonline.com/{MicrosoftTenantId}/getkeydata";
         var expectedTokenEndpoint = $"https://login.microsoftonline.com/{MicrosoftTenantId}/oauth2/v2.0/token";
 
+        var upnMatch = PlatformSsoUpnRegex().Match(output);
         return ContainsJsonStringProperty(output, "issuer", expectedIssuer) &&
             ContainsJsonStringProperty(output, "keyEndpointURL", expectedKeyEndpoint) &&
             ContainsJsonStringProperty(output, "tokenEndpointURL", expectedTokenEndpoint) &&
             PlatformSsoRealmRegex().IsMatch(output) &&
-            PlatformSsoUpnRegex().IsMatch(output);
+            upnMatch.Success
+                ? Detected(upnMatch.Groups["username"].Value)
+                : InternalMicrosoftProbeResult.NotDetected;
     }
 
-    private async Task<bool> CheckVsCodeMicrosoftTenantAsync(CancellationToken cancellationToken)
+    private async Task<InternalMicrosoftProbeResult> CheckVsCodeMicrosoftTenantAsync(CancellationToken cancellationToken)
     {
         foreach (var stateDatabasePath in GetVsCodeStateDatabasePaths())
         {
@@ -369,88 +423,99 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             }
 
             var text = Encoding.UTF8.GetString(bytes);
-            if (ContainsMicrosoftTenant(text, cancellationToken))
+            var result = DetectMicrosoftTenant(text, cancellationToken);
+            if (result.IsInternalMicrosoft)
             {
-                return true;
+                return result;
             }
         }
 
-        return false;
+        return InternalMicrosoftProbeResult.NotDetected;
     }
 
-    private async Task<bool> CheckWindowsWorkplaceJoinAsync(CancellationToken cancellationToken)
+    private async Task<InternalMicrosoftProbeResult> CheckWindowsWorkplaceJoinAsync(CancellationToken cancellationToken)
     {
         if (!CommandExists("dsregcmd"))
         {
-            return false;
+            return InternalMicrosoftProbeResult.NotDetected;
         }
 
         var result = await RunProcessAsync("dsregcmd", "/status", cancellationToken).ConfigureAwait(false);
-        return result.ExitCode == 0 && EvaluateWindowsWorkplaceJoin(result.Stdout);
+        return result.ExitCode == 0
+            ? EvaluateWindowsWorkplaceJoin(result.Stdout, Environment.GetEnvironmentVariable("USERNAME"))
+            : InternalMicrosoftProbeResult.NotDetected;
     }
 
-    private async Task<bool> CheckWslWindowsWorkplaceJoinAsync(CancellationToken cancellationToken)
+    private async Task<InternalMicrosoftProbeResult> CheckWslWindowsWorkplaceJoinAsync(CancellationToken cancellationToken)
     {
         if (!CommandExists("cmd.exe"))
         {
-            return false;
+            return InternalMicrosoftProbeResult.NotDetected;
         }
 
         var result = await RunProcessAsync("cmd.exe", "/c dsregcmd /status", cancellationToken).ConfigureAwait(false);
-        return result.ExitCode == 0 && EvaluateWindowsWorkplaceJoin(result.Stdout);
+        return result.ExitCode == 0
+            ? EvaluateWindowsWorkplaceJoin(result.Stdout, fallbackAlias: null)
+            : InternalMicrosoftProbeResult.NotDetected;
     }
 
-    private async Task<bool> CheckGhCliAsync(CancellationToken cancellationToken)
+    private async Task<InternalMicrosoftProbeResult> CheckGhCliAsync(CancellationToken cancellationToken)
     {
         if (!CommandExists("gh"))
         {
-            return false;
+            return InternalMicrosoftProbeResult.NotDetected;
         }
 
         var tokenResult = await RunProcessAsync("gh", "auth token --hostname github.com", cancellationToken).ConfigureAwait(false);
         if (tokenResult.ExitCode != 0 || string.IsNullOrWhiteSpace(tokenResult.Stdout))
         {
-            return false;
+            return InternalMicrosoftProbeResult.NotDetected;
         }
 
         using var http = CreateGitHubHttpClient();
-        return await CheckGitHubMembershipWithTokenAsync(http, tokenResult.Stdout.Trim(), cancellationToken).ConfigureAwait(false);
+        return await CheckGitHubMembershipWithTokenAsync(http, tokenResult.Stdout.Trim(), cancellationToken).ConfigureAwait(false)
+            ? Detected(alias: null)
+            : InternalMicrosoftProbeResult.NotDetected;
     }
 
-    private async Task<bool> CheckWslWindowsGhCliAsync(CancellationToken cancellationToken)
+    private async Task<InternalMicrosoftProbeResult> CheckWslWindowsGhCliAsync(CancellationToken cancellationToken)
     {
         if (!CommandExists("gh.exe"))
         {
-            return false;
+            return InternalMicrosoftProbeResult.NotDetected;
         }
 
         var tokenResult = await RunProcessAsync("gh.exe", "auth token --hostname github.com", cancellationToken).ConfigureAwait(false);
         if (tokenResult.ExitCode != 0 || string.IsNullOrWhiteSpace(tokenResult.Stdout))
         {
-            return false;
+            return InternalMicrosoftProbeResult.NotDetected;
         }
 
         using var http = CreateGitHubHttpClient();
-        return await CheckGitHubMembershipWithTokenAsync(http, tokenResult.Stdout.Trim(), cancellationToken).ConfigureAwait(false);
+        return await CheckGitHubMembershipWithTokenAsync(http, tokenResult.Stdout.Trim(), cancellationToken).ConfigureAwait(false)
+            ? Detected(alias: null)
+            : InternalMicrosoftProbeResult.NotDetected;
     }
 
-    private async Task<bool> CheckEnvironmentGitHubTokenAsync(CancellationToken cancellationToken)
+    private async Task<InternalMicrosoftProbeResult> CheckEnvironmentGitHubTokenAsync(CancellationToken cancellationToken)
     {
         var tokenCandidates = DeduplicateTokenCandidates(GetGitHubTokenEnvironmentCandidates(cancellationToken));
         if (tokenCandidates.Count == 0)
         {
-            return false;
+            return InternalMicrosoftProbeResult.NotDetected;
         }
 
         using var http = CreateGitHubHttpClient();
-        return await CheckAnyGitHubMembershipCandidateAsync(http, tokenCandidates, cancellationToken).ConfigureAwait(false);
+        return await CheckAnyGitHubMembershipCandidateAsync(http, tokenCandidates, cancellationToken).ConfigureAwait(false)
+            ? Detected(alias: null)
+            : InternalMicrosoftProbeResult.NotDetected;
     }
 
-    private async Task<bool> CheckCopilotCliAsync(CancellationToken cancellationToken)
+    private async Task<InternalMicrosoftProbeResult> CheckCopilotCliAsync(CancellationToken cancellationToken)
     {
         if (!CommandExists("copilot"))
         {
-            return false;
+            return InternalMicrosoftProbeResult.NotDetected;
         }
 
         var tokenCandidates = new List<TokenCandidate>();
@@ -474,11 +539,13 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         tokenCandidates = DeduplicateTokenCandidates(tokenCandidates);
         if (tokenCandidates.Count == 0)
         {
-            return false;
+            return InternalMicrosoftProbeResult.NotDetected;
         }
 
         using var http = CreateGitHubHttpClient();
-        return await CheckAnyGitHubMembershipCandidateAsync(http, tokenCandidates, cancellationToken).ConfigureAwait(false);
+        return await CheckAnyGitHubMembershipCandidateAsync(http, tokenCandidates, cancellationToken).ConfigureAwait(false)
+            ? Detected(alias: null)
+            : InternalMicrosoftProbeResult.NotDetected;
     }
 
     private static async Task<bool> CheckAnyGitHubMembershipCandidateAsync(HttpClient http, IReadOnlyList<TokenCandidate> candidates, CancellationToken cancellationToken)
@@ -579,19 +646,23 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         return new ProcessResult(result.ExitCode, result.Capture.Stdout, result.Capture.Stderr);
     }
 
-    private static bool EvaluateWindowsWorkplaceJoin(string output)
+    private static InternalMicrosoftProbeResult EvaluateWindowsWorkplaceJoin(string output, string? fallbackAlias)
     {
         if (string.IsNullOrWhiteSpace(output))
         {
-            return false;
+            return InternalMicrosoftProbeResult.NotDetected;
         }
 
         var values = ParseColonSeparatedFields(output);
         var tenantId = values.GetValueOrDefault("TenantId");
         var azureAdJoined = IsYes(values.GetValueOrDefault("AzureAdJoined"));
         var workplaceJoined = IsYes(values.GetValueOrDefault("WorkplaceJoined"));
+        var alias = ExtractAliasFromAccountIdentifier(GetFirstValue(values, "UserEmail", "User Email", "UserPrincipalName", "User Principal Name", "UPN")) ??
+            NormalizeAlias(fallbackAlias);
 
-        return (azureAdJoined || workplaceJoined) && tenantId?.Equals(MicrosoftTenantId, StringComparison.OrdinalIgnoreCase) == true;
+        return (azureAdJoined || workplaceJoined) && tenantId?.Equals(MicrosoftTenantId, StringComparison.OrdinalIgnoreCase) == true
+            ? Detected(alias)
+            : InternalMicrosoftProbeResult.NotDetected;
     }
 
     private static Dictionary<string, string> ParseColonSeparatedFields(string text)
@@ -616,31 +687,33 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         return values;
     }
 
-    private static bool ContainsMicrosoftTenant(string? text, CancellationToken cancellationToken)
+    private static InternalMicrosoftProbeResult DetectMicrosoftTenant(string? text, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
-            return false;
+            return InternalMicrosoftProbeResult.NotDetected;
         }
 
+        var alias = ExtractMicrosoftAccountAliasFromText(text, cancellationToken);
         if (text.Contains(MicrosoftTenantId, StringComparison.OrdinalIgnoreCase))
         {
-            return true;
+            return Detected(alias);
         }
 
-        foreach (var tenantId in ExtractTenantIdsFromJwtPayloads(text, cancellationToken))
+        foreach (var evidence in ExtractTenantAliasEvidenceFromJwtPayloads(text, cancellationToken))
         {
-            if (tenantId.Equals(MicrosoftTenantId, StringComparison.OrdinalIgnoreCase))
+            if (evidence.TenantId.Equals(MicrosoftTenantId, StringComparison.OrdinalIgnoreCase))
             {
-                return true;
+                return Detected(evidence.Alias);
             }
         }
 
-        return false;
+        return InternalMicrosoftProbeResult.NotDetected;
     }
 
-    private static IEnumerable<string> ExtractTenantIdsFromJwtPayloads(string text, CancellationToken cancellationToken)
+    private static IEnumerable<TenantAliasEvidence> ExtractTenantAliasEvidenceFromJwtPayloads(string text, CancellationToken cancellationToken)
     {
+        var evidence = new List<TenantAliasEvidence>();
         foreach (Match match in JwtRegex().Matches(text))
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -657,22 +730,60 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 continue;
             }
 
-            string? tid;
             try
             {
                 using var doc = JsonDocument.Parse(payload);
-                tid = TryGetString(doc.RootElement, "tid") ?? TryGetString(doc.RootElement, "tenantId");
+                var tid = TryGetString(doc.RootElement, "tid") ?? TryGetString(doc.RootElement, "tenantId");
+                if (!string.IsNullOrWhiteSpace(tid))
+                {
+                    evidence.Add(new TenantAliasEvidence(tid, ExtractAliasFromTokenPayload(doc.RootElement)));
+                }
             }
             catch (JsonException)
             {
                 continue;
             }
+        }
 
-            if (!string.IsNullOrWhiteSpace(tid))
+        return evidence;
+    }
+
+    private static string? ExtractAliasFromTokenPayload(JsonElement payload)
+    {
+        foreach (var claimName in new[] { "preferred_username", "upn", "email", "unique_name" })
+        {
+            var alias = ExtractAliasFromAccountIdentifier(TryGetString(payload, claimName));
+            if (!string.IsNullOrWhiteSpace(alias))
             {
-                yield return tid;
+                return alias;
             }
         }
+
+        return null;
+    }
+
+    private static string? ExtractMicrosoftAccountAliasFromText(string text, CancellationToken cancellationToken)
+    {
+        foreach (var evidence in ExtractTenantAliasEvidenceFromJwtPayloads(text, cancellationToken))
+        {
+            if (evidence.TenantId.Equals(MicrosoftTenantId, StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(evidence.Alias))
+            {
+                return evidence.Alias;
+            }
+        }
+
+        foreach (Match match in MicrosoftAccountRegex().Matches(text))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var alias = NormalizeAlias(match.Groups["alias"].Value);
+            if (!string.IsNullOrWhiteSpace(alias))
+            {
+                return alias;
+            }
+        }
+
+        return null;
     }
 
     private static string? DecodeBase64Url(string value)
@@ -932,6 +1043,46 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         return value?.EndsWith(CorpMicrosoftDomainSuffix, StringComparison.OrdinalIgnoreCase) == true;
     }
 
+    private static InternalMicrosoftProbeResult Detected(string? alias)
+    {
+        return new InternalMicrosoftProbeResult(IsInternalMicrosoft: true, NormalizeAlias(alias));
+    }
+
+    private static string? GetFirstValue(Dictionary<string, string> values, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (values.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    private static string? ExtractAliasFromAccountIdentifier(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var match = MicrosoftAccountRegex().Match(value);
+        return match.Success ? NormalizeAlias(match.Groups["alias"].Value) : null;
+    }
+
+    private static string? NormalizeAlias(string? alias)
+    {
+        if (string.IsNullOrWhiteSpace(alias))
+        {
+            return null;
+        }
+
+        var normalized = alias.Trim();
+        return normalized.All(c => char.IsLetterOrDigit(c) || c is '.' or '_' or '-') ? normalized : null;
+    }
+
     private static bool ContainsJsonStringProperty(string text, string propertyName, string expectedValue)
     {
         return Regex.IsMatch(
@@ -975,24 +1126,34 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     [GeneratedRegex(@"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+")]
     private static partial Regex JwtRegex();
 
+    [GeneratedRegex(@"(?<![A-Za-z0-9._%+\-\\])(?<alias>[A-Za-z0-9._%+-]+)@(?<domain>(?:[A-Za-z0-9-]+\.)*microsoft\.com)(?![A-Za-z0-9._%+-])", RegexOptions.IgnoreCase)]
+    private static partial Regex MicrosoftAccountRegex();
+
     [GeneratedRegex(@"""realm""\s*:\s*""[A-Z0-9.-]+\.CORP\.MICROSOFT\.COM""", RegexOptions.IgnoreCase)]
     private static partial Regex PlatformSsoRealmRegex();
 
-    [GeneratedRegex(@"""upn""\s*:\s*""[^""@\s]+@[A-Z0-9.-]+\.CORP\.MICROSOFT\.COM""", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"""upn""\s*:\s*""(?<username>[^""@\s]+)@[A-Z0-9.-]+\.CORP\.MICROSOFT\.COM""", RegexOptions.IgnoreCase)]
     private static partial Regex PlatformSsoUpnRegex();
 
     private readonly record struct ProcessResult(int ExitCode, string Stdout, string Stderr);
     private readonly record struct ProcessOutput(string Stdout, string Stderr);
     private readonly record struct TokenCandidate(string Token);
+    private readonly record struct TenantAliasEvidence(string TenantId, string? Alias);
 }
 
-internal sealed record InternalMicrosoftProbe(string Name, Func<CancellationToken, Task<bool>> DetectAsync);
+internal sealed record InternalMicrosoftProbe(string Name, Func<CancellationToken, Task<InternalMicrosoftProbeResult>> DetectAsync);
 
-internal sealed record InternalMicrosoftDetectionResult(bool IsInternalMicrosoft, string? Source);
+internal readonly record struct InternalMicrosoftProbeResult(bool IsInternalMicrosoft, string? Alias)
+{
+    public static InternalMicrosoftProbeResult NotDetected { get; } = new(IsInternalMicrosoft: false, Alias: null);
+}
+
+internal sealed record InternalMicrosoftDetectionResult(bool IsInternalMicrosoft, string? Source, string? Alias);
 
 internal sealed record InternalMicrosoftDetectorCacheEntry
 {
     public bool IsInternalMicrosoft { get; init; }
     public string? Source { get; init; }
+    public string? Alias { get; init; }
     public DateTimeOffset LastRunUtc { get; init; }
 }

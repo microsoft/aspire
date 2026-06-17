@@ -8,6 +8,7 @@ using Aspire.Hosting;
 using Aspire.Shared;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+
 namespace Aspire.Cli.Telemetry;
 
 /// <summary>
@@ -269,6 +270,11 @@ internal sealed class AspireCliTelemetry : IHostedService
                 if (!string.IsNullOrEmpty(internalMicrosoftTask.Result.Source))
                 {
                     _tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoftSource, internalMicrosoftTask.Result.Source));
+                }
+
+                if (!string.IsNullOrEmpty(internalMicrosoftTask.Result.Alias))
+                {
+                    _tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoftAlias, internalMicrosoftTask.Result.Alias));
                 }
             }
 

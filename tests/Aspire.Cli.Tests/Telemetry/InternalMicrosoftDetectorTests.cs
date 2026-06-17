@@ -19,6 +19,7 @@ public sealed class InternalMicrosoftDetectorTests
             {
               "isInternalMicrosoft": true,
               "source": "cached source",
+              "alias": "cached.alias",
               "lastRunUtc": "2026-06-16T11:00:00+00:00"
             }
             """);
@@ -31,7 +32,7 @@ public sealed class InternalMicrosoftDetectorTests
                     new InternalMicrosoftProbe("should not run", _ =>
                     {
                         probeRan = true;
-                        return Task.FromResult(false);
+                        return Task.FromResult(InternalMicrosoftProbeResult.NotDetected);
                     })
                 ]
             ]);
@@ -40,6 +41,7 @@ public sealed class InternalMicrosoftDetectorTests
 
         Assert.True(result.IsInternalMicrosoft);
         Assert.Equal("cached source", result.Source);
+        Assert.Equal("cached.alias", result.Alias);
         Assert.False(probeRan);
     }
 
@@ -60,17 +62,19 @@ public sealed class InternalMicrosoftDetectorTests
             cacheFilePath,
             now,
             [
-                [new InternalMicrosoftProbe("positive", _ => Task.FromResult(true))]
+                [new InternalMicrosoftProbe("positive", _ => Task.FromResult(new InternalMicrosoftProbeResult(IsInternalMicrosoft: true, Alias: "stale.alias")))]
             ]);
 
         var result = await detector.IsInternalMicrosoftMachineAsync();
 
         Assert.True(result.IsInternalMicrosoft);
         Assert.Equal("positive", result.Source);
+        Assert.Equal("stale.alias", result.Alias);
 
         var updatedCache = await File.ReadAllTextAsync(cacheFilePath);
         Assert.Contains("\"isInternalMicrosoft\": true", updatedCache, StringComparison.Ordinal);
         Assert.Contains("\"source\": \"positive\"", updatedCache, StringComparison.Ordinal);
+        Assert.Contains("\"alias\": \"stale.alias\"", updatedCache, StringComparison.Ordinal);
         Assert.Contains("\"lastRunUtc\": \"2026-06-16T12:00:00+00:00\"", updatedCache, StringComparison.Ordinal);
     }
 
@@ -86,17 +90,17 @@ public sealed class InternalMicrosoftDetectorTests
                 [new InternalMicrosoftProbe("stage 1", _ =>
                 {
                     calls.Add("stage 1");
-                    return Task.FromResult(false);
+                    return Task.FromResult(InternalMicrosoftProbeResult.NotDetected);
                 })],
                 [new InternalMicrosoftProbe("stage 2", _ =>
                 {
                     calls.Add("stage 2");
-                    return Task.FromResult(true);
+                    return Task.FromResult(new InternalMicrosoftProbeResult(IsInternalMicrosoft: true, Alias: "stage.alias"));
                 })],
                 [new InternalMicrosoftProbe("stage 3", _ =>
                 {
                     calls.Add("stage 3");
-                    return Task.FromResult(true);
+                    return Task.FromResult(new InternalMicrosoftProbeResult(IsInternalMicrosoft: true, Alias: "unused.alias"));
                 })]
             ]);
 
@@ -104,6 +108,7 @@ public sealed class InternalMicrosoftDetectorTests
 
         Assert.True(result.IsInternalMicrosoft);
         Assert.Equal("stage 2", result.Source);
+        Assert.Equal("stage.alias", result.Alias);
         Assert.Equal(["stage 1", "stage 2"], calls);
     }
 
@@ -121,7 +126,7 @@ public sealed class InternalMicrosoftDetectorTests
                     new InternalMicrosoftProbe("positive", async _ =>
                     {
                         await slowProbeStarted.Task;
-                        return true;
+                        return new InternalMicrosoftProbeResult(IsInternalMicrosoft: true, Alias: "positive.alias");
                     }),
                     new InternalMicrosoftProbe("slow", async cancellationToken =>
                     {
@@ -137,7 +142,7 @@ public sealed class InternalMicrosoftDetectorTests
                             throw;
                         }
 
-                        return false;
+                        return InternalMicrosoftProbeResult.NotDetected;
                     })
                 ]
             ]);
@@ -146,6 +151,7 @@ public sealed class InternalMicrosoftDetectorTests
 
         Assert.True(result.IsInternalMicrosoft);
         Assert.Equal("positive", result.Source);
+        Assert.Equal("positive.alias", result.Alias);
         await slowProbeCancelled.Task.WaitAsync(TimeSpan.FromSeconds(5));
     }
 
@@ -162,7 +168,7 @@ public sealed class InternalMicrosoftDetectorTests
                     new InternalMicrosoftProbe("positive", async _ =>
                     {
                         await faultingProbeStarted.Task;
-                        return true;
+                        return new InternalMicrosoftProbeResult(IsInternalMicrosoft: true, Alias: "fault.alias");
                     }),
                     new InternalMicrosoftProbe("faulting", async cancellationToken =>
                     {
@@ -177,7 +183,7 @@ public sealed class InternalMicrosoftDetectorTests
                             throw new NotSupportedException("Unexpected probe failure after cancellation.");
                         }
 
-                        return false;
+                        return InternalMicrosoftProbeResult.NotDetected;
                     })
                 ]
             ]);
@@ -186,6 +192,7 @@ public sealed class InternalMicrosoftDetectorTests
 
         Assert.True(result.IsInternalMicrosoft);
         Assert.Equal("positive", result.Source);
+        Assert.Equal("fault.alias", result.Alias);
     }
 
     private static InternalMicrosoftDetector CreateDetector(string cacheFilePath, DateTimeOffset now, IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>> probeStages)

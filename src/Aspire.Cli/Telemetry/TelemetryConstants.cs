@@ -110,6 +110,11 @@ internal static class TelemetryConstants
         public const string InternalMicrosoftSource = "aspire.cli.is_microsoft_internal_source";
 
         /// <summary>
+        /// Alias extracted by the probe that populates the <see cref="InternalMicrosoft"/> tag.
+        /// </summary>
+        public const string InternalMicrosoftAlias = "aspire.cli.is_microsoft_internal_alias";
+
+        /// <summary>
         /// Tag for the deployment environment name ("ci" or "local").
         /// </summary>
         public const string DeploymentEnvironmentName = "deployment.environment.name";

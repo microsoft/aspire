@@ -270,7 +270,8 @@ public class AspireCliTelemetryTests
         var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
         {
             IsInternalMicrosoft = true,
-            Source = "test source"
+            Source = "test source",
+            Alias = "test.alias"
         };
         using var fixture = new TelemetryFixture(internalMicrosoftDetector: internalMicrosoftDetector);
 
@@ -278,6 +279,23 @@ public class AspireCliTelemetryTests
 
         Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.InternalMicrosoft && t.Value is true);
         Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.InternalMicrosoftSource && (string?)t.Value == "test source");
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.InternalMicrosoftAlias && (string?)t.Value == "test.alias");
+    }
+
+    [Fact]
+    public void InitializeAsync_DoesNotAddInternalMicrosoftAliasTag_WhenAliasIsNotDetected()
+    {
+        var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
+        {
+            IsInternalMicrosoft = true,
+            Source = "test source"
+        };
+        using var fixture = new TelemetryFixture(internalMicrosoftDetector: internalMicrosoftDetector);
+
+        var tags = fixture.Telemetry.GetDefaultTags();
+
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.InternalMicrosoft && t.Value is true);
+        Assert.DoesNotContain(tags, t => t.Key == TelemetryConstants.Tags.InternalMicrosoftAlias);
     }
 
     [Fact]
