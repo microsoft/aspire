@@ -38,23 +38,6 @@ export const browserDebuggerExtension: ResourceDebuggerExtension = {
 
         const projectPath = launchConfig.web_root;
         const url = launchConfig.url;
-        if (typeof projectPath === 'string' && projectPath.endsWith('.csproj') && url) {
-            extensionLogOutputChannel.info(`[WASM] Detected Blazor WASM project: ${projectPath}`);
-            debugConfiguration.type = 'blazorwasm';
-            debugConfiguration.request = 'attach';
-            debugConfiguration.projectPath = projectPath;
-            debugConfiguration.cwd = path.dirname(projectPath);
-            debugConfiguration.url = url;
-            debugConfiguration.browser = getBlazorWasmBrowser(launchConfig.browser);
-            debugConfiguration.noDebug = !launchOptions.debug;
-
-            delete debugConfiguration.program;
-            delete debugConfiguration.args;
-
-            extensionLogOutputChannel.info(`[WASM] Final debug config: type=${debugConfiguration.type}, request=${debugConfiguration.request}, projectPath=${debugConfiguration.projectPath}, cwd=${debugConfiguration.cwd}, url=${debugConfiguration.url}, browser=${debugConfiguration.browser}, noDebug=${debugConfiguration.noDebug}`);
-            registerBrowserSessionTerminationNotification(debugConfiguration, launchOptions);
-            return;
-        }
 
         // Map browser name to VS Code js-debug adapter type.
         // js-debug registers both 'msedge'/'chrome' and 'pwa-msedge'/'pwa-chrome'.
@@ -86,6 +69,24 @@ export const browserDebuggerExtension: ResourceDebuggerExtension = {
         delete debugConfiguration.program;
         delete debugConfiguration.args;
         delete debugConfiguration.cwd;
+
+        if (typeof projectPath === 'string' && projectPath.endsWith('.csproj') && url) {
+            extensionLogOutputChannel.info(`[WASM] Detected Blazor WASM project: ${projectPath}`);
+            debugConfiguration.type = 'blazorwasm';
+            debugConfiguration.request = 'attach';
+            debugConfiguration.projectPath = projectPath;
+            debugConfiguration.cwd = path.dirname(projectPath);
+            debugConfiguration.url = url;
+            debugConfiguration.browser = getBlazorWasmBrowser(launchConfig.browser);
+            debugConfiguration.noDebug = !launchOptions.debug;
+
+            delete debugConfiguration.program;
+            delete debugConfiguration.args;
+
+            extensionLogOutputChannel.info(`[WASM] Final debug config: name=${debugConfiguration.name}, type=${debugConfiguration.type}, request=${debugConfiguration.request}, projectPath=${debugConfiguration.projectPath}, cwd=${debugConfiguration.cwd}, url=${debugConfiguration.url}, browser=${debugConfiguration.browser}, noDebug=${debugConfiguration.noDebug}`);
+            registerBrowserSessionTerminationNotification(debugConfiguration, launchOptions);
+            return;
+        }
 
         extensionLogOutputChannel.info(`[Browser] Final debug config: type=${debugConfiguration.type}, url=${debugConfiguration.url}, webRoot=${debugConfiguration.webRoot}, noDebug=${debugConfiguration.noDebug}`);
 
