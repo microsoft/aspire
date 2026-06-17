@@ -18,6 +18,7 @@ using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Aspire.Shared.UserSecrets;
 using Microsoft.Extensions.Logging;
+using Semver;
 
 namespace Aspire.Cli.Projects;
 
@@ -263,23 +264,6 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
         var env = new Dictionary<string, string>(context.EnvironmentVariables);
 
-        // Handle isolated mode - randomize ports and isolate user secrets
-        string? isolatedUserSecretsId = null;
-        if (context.Isolated)
-        {
-            using var isolatedModeActivity = _profilingTelemetry.StartAppHostConfigureIsolatedMode();
-            try
-            {
-                isolatedUserSecretsId = await ConfigureIsolatedModeAsync(effectiveAppHostFile, env, cancellationToken);
-                _logger.LogInformation("Aspire run isolated. Isolated UserSecretsId: {IsolatedUserSecretsId}", isolatedUserSecretsId);
-            }
-            catch (Exception ex)
-            {
-                isolatedModeActivity.SetError(ex.Message);
-                throw;
-            }
-        }
-
         // Enable debug logging in the app host so that debug-level output is
         // captured in the CLI log file for diagnostics. Defaults to Debug but
         // can be overridden via --log-level.
@@ -306,6 +290,8 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         {
             return exitCode;
         }
+
+        using var legacyIsolatedUserSecretsLease = await ConfigureIsolatedModeIfNeededAsync(context, effectiveAppHostFile, isSingleFileAppHost, env, cancellationToken);
 
         // Two separate bundle interactions:
         //  - injectDcpAndDashboard: only true when the AppHost opted into AspireUseCliBundle.
@@ -352,52 +338,41 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             : null;
 
         // Start the apphost - the runner will signal the backchannel when ready
-        try
+        // The AppHost may already have been built above, but watch mode intentionally still
+        // runs with builds enabled. Passing --no-build through to dotnet watch breaks hot reload
+        // because watch owns the incremental build loop and its environment setup.
+        //
+        // This means watch mode can do a second no-op build after the CLI pre-build succeeds.
+        // That tradeoff is intentional: the pre-build makes initial compiler errors terminate
+        // aspire run instead of leaving dotnet watch idle waiting for edits before a backchannel
+        // ever becomes available.
+        //
+        // noRestore is only relevant when noBuild is false because --no-build implies --no-restore.
+        var noBuild = !watch || context.NoBuild;
+        using var runDotnetActivity = _profilingTelemetry.StartAppHostRunDotnetLifetime(watch, noBuild, context.NoRestore);
+        if (directRun is not null)
         {
-            // The AppHost may already have been built above, but watch mode intentionally still
-            // runs with builds enabled. Passing --no-build through to dotnet watch breaks hot reload
-            // because watch owns the incremental build loop and its environment setup.
-            //
-            // This means watch mode can do a second no-op build after the CLI pre-build succeeds.
-            // That tradeoff is intentional: the pre-build makes initial compiler errors terminate
-            // aspire run instead of leaving dotnet watch idle waiting for edits before a backchannel
-            // ever becomes available.
-            //
-            // noRestore is only relevant when noBuild is false because --no-build implies --no-restore.
-            var noBuild = !watch || context.NoBuild;
-            using var runDotnetActivity = _profilingTelemetry.StartAppHostRunDotnetLifetime(watch, noBuild, context.NoRestore);
-            if (directRun is not null)
-            {
-                return await _runner.RunAppHostCommandAsync(
-                    effectiveAppHostFile,
-                    directRun.Command,
-                    directRun.WorkingDirectory,
-                    directRun.Arguments,
-                    directRun.Environment,
-                    backchannelCompletionSource,
-                    runOptions,
-                    cancellationToken);
-            }
-
-            return await _runner.RunAsync(
+            return await _runner.RunAppHostCommandAsync(
                 effectiveAppHostFile,
-                watch,
-                noBuild,
-                context.NoRestore,
-                context.UnmatchedTokens,
-                env,
+                directRun.Command,
+                directRun.WorkingDirectory,
+                directRun.Arguments,
+                directRun.Environment,
                 backchannelCompletionSource,
                 runOptions,
                 cancellationToken);
         }
-        finally
-        {
-            // Clean up isolated user secrets when the run completes
-            if (!string.IsNullOrEmpty(isolatedUserSecretsId))
-            {
-                IsolatedUserSecretsHelper.CleanupIsolatedUserSecrets(isolatedUserSecretsId);
-            }
-        }
+
+        return await _runner.RunAsync(
+            effectiveAppHostFile,
+            watch,
+            noBuild,
+            context.NoRestore,
+            context.UnmatchedTokens,
+            env,
+            backchannelCompletionSource,
+            runOptions,
+            cancellationToken);
     }
 
     private async Task EnsureDevCertificatesTrustedAsync(AppHostProjectContext context, Dictionary<string, string> env, CancellationToken cancellationToken)
@@ -1245,9 +1220,9 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     {
         try
         {
-            // Read UserSecretsId from the shared AppHost build info cache so isolated mode
-            // does not pay for a second `dotnet msbuild -getProperty` invocation when the
-            // run path already fetched the AppHost metadata for validation/compat.
+            // Read UserSecretsId from the shared AppHost build info cache so callers do not pay
+            // for another `dotnet msbuild -getProperty` invocation when the run path already
+            // fetched the AppHost metadata for validation/compat.
             var info = await _appHostInfoResolver.GetAppHostInfoAsync(projectFile, cancellationToken);
             return info.UserSecretsId;
         }
@@ -1344,11 +1319,6 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     /// an Aspire repo checkout (typically <c>dotnet run --project src/Aspire.Cli</c>).
     /// Returns <c>null</c> in release builds and when no repo-local build exists.
     /// </summary>
-    /// <summary>
-    /// Resolves the repo-local <c>aspire-managed</c> binary when the CLI is running from
-    /// an Aspire repo checkout (typically <c>dotnet run --project src/Aspire.Cli</c>).
-    /// Returns <c>null</c> in release builds and when no repo-local build exists.
-    /// </summary>
     private static string? TryGetRepoLocalManagedPath()
     {
         if (RepoLocalManagedPathProviderOverride is { } overrideProvider)
@@ -1363,33 +1333,85 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     /// <summary>
     /// Configures isolated mode by enabling port randomization and isolating user secrets.
     /// </summary>
+    /// <param name="context">The AppHost run context.</param>
     /// <param name="appHostFile">The app host project file.</param>
+    /// <param name="isSingleFileAppHost">Whether the AppHost is file-based.</param>
     /// <param name="env">The environment variables dictionary to modify.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The isolated user secrets ID if created, or null if no isolation was needed.</returns>
+    /// <returns>A cleanup lease when the CLI used the legacy user-secrets isolation path; otherwise <see langword="null"/>.</returns>
+    private async Task<IDisposable?> ConfigureIsolatedModeIfNeededAsync(
+        AppHostProjectContext context,
+        FileInfo appHostFile,
+        bool isSingleFileAppHost,
+        Dictionary<string, string> env,
+        CancellationToken cancellationToken)
+    {
+        if (!context.Isolated)
+        {
+            return null;
+        }
+
+        using var isolatedModeActivity = _profilingTelemetry.StartAppHostConfigureIsolatedMode();
+        try
+        {
+            var isolatedUserSecretsId = await ConfigureIsolatedModeAsync(appHostFile, isSingleFileAppHost, env, cancellationToken).ConfigureAwait(false);
+            _logger.LogInformation("Aspire run isolated.");
+
+            return string.IsNullOrEmpty(isolatedUserSecretsId)
+                ? null
+                : new LegacyIsolatedUserSecretsLease(isolatedUserSecretsId);
+        }
+        catch (Exception ex)
+        {
+            isolatedModeActivity.SetError(ex.Message);
+            context.BuildCompletionSource?.TrySetResult(false);
+            throw;
+        }
+    }
+
     private async Task<string?> ConfigureIsolatedModeAsync(
         FileInfo appHostFile,
+        bool isSingleFileAppHost,
         Dictionary<string, string> env,
         CancellationToken cancellationToken)
     {
         // Enable port randomization for isolated mode
         env["DcpPublisher__RandomizePorts"] = "true";
 
-        // Get the UserSecretsId from the project and create isolated copy
-        var userSecretsId = await QueryUserSecretsIdAsync(appHostFile, cancellationToken);
-        if (!string.IsNullOrEmpty(userSecretsId))
+        if (isSingleFileAppHost || await AppHostSupportsNativeUserSecretsIsolationAsync(appHostFile, cancellationToken).ConfigureAwait(false))
         {
-            _interactionService.DisplayMessage(KnownEmojis.Key, RunCommandStrings.CopyingUserSecrets);
-            var isolatedUserSecretsId = IsolatedUserSecretsHelper.CreateIsolatedUserSecrets(userSecretsId);
-            if (!string.IsNullOrEmpty(isolatedUserSecretsId))
-            {
-                // Override the user secrets ID for this run
-                env["DOTNET_USER_SECRETS_ID"] = isolatedUserSecretsId;
-                return isolatedUserSecretsId;
-            }
+            env[KnownConfigNames.IsolateUserSecrets] = "true";
+            return null;
         }
 
-        return null;
+        var userSecretsId = await QueryUserSecretsIdAsync(appHostFile, cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(userSecretsId))
+        {
+            return null;
+        }
+
+        _interactionService.DisplayMessage(KnownEmojis.Key, RunCommandStrings.CopyingUserSecrets);
+        var isolatedUserSecretsId = IsolatedUserSecretsHelper.CreateIsolatedUserSecrets(userSecretsId);
+        if (!string.IsNullOrEmpty(isolatedUserSecretsId))
+        {
+            // Older AppHosts do not understand ASPIRE_ISOLATE_USER_SECRETS, so the CLI preserves
+            // the original --isolated behavior by overriding the user-secrets ID for that run.
+            env["DOTNET_USER_SECRETS_ID"] = isolatedUserSecretsId;
+        }
+
+        return isolatedUserSecretsId;
+    }
+
+    private async Task<bool> AppHostSupportsNativeUserSecretsIsolationAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+    {
+        var info = await _appHostInfoResolver.GetAppHostInfoAsync(appHostFile, cancellationToken).ConfigureAwait(false);
+        if (!SemVersion.TryParse(info.AspireHostingVersion, SemVersionStyles.Any, out var appHostVersion) ||
+            !SemVersion.TryParse(VersionHelper.GetDefaultSdkVersion(), SemVersionStyles.Any, out var currentVersion))
+        {
+            return true;
+        }
+
+        return SemVersion.ComparePrecedence(appHostVersion, currentVersion) >= 0;
     }
 
     private sealed record DirectAppHostRunSpec(
@@ -1397,4 +1419,12 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         DirectoryInfo WorkingDirectory,
         string[] Arguments,
         Dictionary<string, string> Environment);
+
+    private sealed class LegacyIsolatedUserSecretsLease(string isolatedUserSecretsId) : IDisposable
+    {
+        public void Dispose()
+        {
+            IsolatedUserSecretsHelper.CleanupIsolatedUserSecrets(isolatedUserSecretsId);
+        }
+    }
 }

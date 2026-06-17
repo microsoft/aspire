@@ -3,15 +3,15 @@
 
 using Aspire.Shared.UserSecrets;
 
-namespace Aspire.Cli.Tests.Utils;
+namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "2")]
 public class IsolatedUserSecretsHelperTests : IDisposable
 {
     private readonly List<string> _createdSecretIds = [];
 
     public void Dispose()
     {
-        // Clean up any secrets created during tests
         foreach (var secretId in _createdSecretIds)
         {
             IsolatedUserSecretsHelper.CleanupIsolatedUserSecrets(secretId);
@@ -43,19 +43,23 @@ public class IsolatedUserSecretsHelperTests : IDisposable
     }
 
     [Fact]
-    public void CreateIsolatedUserSecrets_WithNonExistentSecrets_ReturnsNull()
+    public void CreateIsolatedUserSecrets_WithNonExistentSecrets_CreatesIsolatedIdWithoutCopy()
     {
         var nonExistentId = Guid.NewGuid().ToString();
 
         var result = IsolatedUserSecretsHelper.CreateIsolatedUserSecrets(nonExistentId);
 
-        Assert.Null(result);
+        Assert.NotNull(result);
+        Assert.NotEqual(nonExistentId, result);
+        _createdSecretIds.Add(result);
+
+        var isolatedPath = UserSecretsPathHelper.GetSecretsPathFromSecretsId(result);
+        Assert.False(File.Exists(isolatedPath));
     }
 
     [Fact]
     public void CreateIsolatedUserSecrets_WithExistingSecrets_CreatesIsolatedCopy()
     {
-        // Arrange - create a source secrets file
         var sourceId = Guid.NewGuid().ToString();
         var sourcePath = UserSecretsPathHelper.GetSecretsPathFromSecretsId(sourceId);
         var sourceDir = Path.GetDirectoryName(sourcePath)!;
@@ -63,10 +67,8 @@ public class IsolatedUserSecretsHelperTests : IDisposable
         File.WriteAllText(sourcePath, """{"TestKey": "TestValue"}""");
         _createdSecretIds.Add(sourceId);
 
-        // Act
         var isolatedId = IsolatedUserSecretsHelper.CreateIsolatedUserSecrets(sourceId);
 
-        // Assert
         Assert.NotNull(isolatedId);
         Assert.NotEqual(sourceId, isolatedId);
         _createdSecretIds.Add(isolatedId);
@@ -108,23 +110,18 @@ public class IsolatedUserSecretsHelperTests : IDisposable
     [Fact]
     public void CleanupIsolatedUserSecrets_WithExistingSecrets_DeletesSecretsFileAndDirectory()
     {
-        // Arrange - create a secrets file
         var secretId = Guid.NewGuid().ToString();
         var secretsPath = UserSecretsPathHelper.GetSecretsPathFromSecretsId(secretId);
         var secretsDir = Path.GetDirectoryName(secretsPath)!;
         Directory.CreateDirectory(secretsDir);
         File.WriteAllText(secretsPath, """{"TestKey": "TestValue"}""");
 
-        // Verify file exists before cleanup
         Assert.True(File.Exists(secretsPath));
         Assert.True(Directory.Exists(secretsDir));
 
-        // Act
         IsolatedUserSecretsHelper.CleanupIsolatedUserSecrets(secretId);
 
-        // Assert
         Assert.False(File.Exists(secretsPath));
         Assert.False(Directory.Exists(secretsDir));
     }
-
 }

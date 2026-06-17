@@ -55,6 +55,23 @@ internal sealed class UserSecretsManagerFactory
     }
 
     /// <summary>
+    /// Creates a user secrets manager backed by an isolated user secrets ID.
+    /// </summary>
+    public IUserSecretsManager CreateIsolatedFromId(string userSecretsId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userSecretsId);
+
+        var isolatedUserSecretsId = IsolatedUserSecretsHelper.CreateIsolatedUserSecrets(userSecretsId);
+        if (isolatedUserSecretsId is null)
+        {
+            return NoopUserSecretsManager.Instance;
+        }
+
+        var filePath = UserSecretsPathHelper.GetSecretsPathFromSecretsId(isolatedUserSecretsId);
+        return new UserSecretsManager(filePath, _fileSystemService, isolatedUserSecretsId);
+    }
+
+    /// <summary>
     /// Gets or creates a user secrets manager for the specified user secrets ID.
     /// </summary>
     public IUserSecretsManager GetOrCreateFromId(string? userSecretsId)
@@ -77,17 +94,20 @@ internal sealed class UserSecretsManagerFactory
         return GetOrCreateFromId(userSecretsId);
     }
 
-    private sealed class UserSecretsManager : IUserSecretsManager
+    private sealed class UserSecretsManager : IUserSecretsManager, IDisposable, IAsyncDisposable
     {
         private static readonly JsonSerializerOptions s_jsonSerializerOptions = new() { WriteIndented = true };
 
         private readonly SemaphoreSlim _semaphore = new(1, 1);
         private readonly IFileSystemService _fileSystemService;
+        private readonly string? _isolatedUserSecretsId;
+        private bool _disposed;
 
-        public UserSecretsManager(string filePath, IFileSystemService fileSystemService)
+        public UserSecretsManager(string filePath, IFileSystemService fileSystemService, string? isolatedUserSecretsId = null)
         {
             FilePath = filePath;
             _fileSystemService = fileSystemService;
+            _isolatedUserSecretsId = isolatedUserSecretsId;
         }
 
         public bool IsAvailable => true;
@@ -174,6 +194,24 @@ internal sealed class UserSecretsManagerFactory
             {
                 _semaphore.Release();
             }
+        }
+
+        public void Dispose()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            _semaphore.Dispose();
+            IsolatedUserSecretsHelper.CleanupIsolatedUserSecrets(_isolatedUserSecretsId);
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            Dispose();
+            return ValueTask.CompletedTask;
         }
 
         private void SetSecretCore(string name, string value)

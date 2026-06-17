@@ -30,11 +30,13 @@ using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Pipelines.Internal;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.UserSecrets;
+using Aspire.Hosting.VersionChecking;
 using Aspire.Shared;
 using Aspire.Shared.UserSecrets;
-using Microsoft.Extensions.Configuration.UserSecrets;
-using Aspire.Hosting.VersionChecking;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration.CommandLine;
+using Microsoft.Extensions.Configuration.EnvironmentVariables;
+using Microsoft.Extensions.Configuration.UserSecrets;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -202,8 +204,22 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder = new HostApplicationBuilder(innerBuilderOptions);
 
         var configuredUserSecretsId = _innerBuilder.Configuration[KnownConfigNames.AspireUserSecretsId];
+        var assemblyUserSecretsId = AppHostAssembly?.GetCustomAttribute<UserSecretsIdAttribute>()?.UserSecretsId;
         var userSecretsId = ResolveUserSecretsId(AppHostAssembly, _innerBuilder.Configuration);
-        AddConfiguredUserSecrets(_innerBuilder.Configuration, AppHostAssembly, configuredUserSecretsId, _innerBuilder.Environment.IsDevelopment());
+        var isolateUserSecrets = _innerBuilder.Configuration.GetValue(KnownConfigNames.IsolateUserSecrets, false);
+        var isolatedUserSecretsSourceIndex = -1;
+        if (isolateUserSecrets)
+        {
+            isolatedUserSecretsSourceIndex = RemoveUserSecretsSource(_innerBuilder.Configuration, assemblyUserSecretsId);
+            if (isolatedUserSecretsSourceIndex < 0)
+            {
+                isolatedUserSecretsSourceIndex = FindUserSecretsSourceInsertionIndex(_innerBuilder.Configuration);
+            }
+        }
+        else
+        {
+            AddConfiguredUserSecrets(_innerBuilder.Configuration, AppHostAssembly, configuredUserSecretsId, _innerBuilder.Environment.IsDevelopment());
+        }
 
         _innerBuilder.Services.AddSingleton(TimeProvider.System);
 
@@ -340,15 +356,28 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             return _directoryService;
         });
 
-        // Create and register the user secrets manager (uses the userSecretsId resolved at top of constructor)
+        // Create and register the user secrets manager. Isolated mode redirects generated parameter
+        // writes to a per-run user-secrets ID so parallel AppHost instances don't share state.
         var userSecretsFactory = new UserSecretsManagerFactory(_directoryService);
 
-        _userSecretsManager = !string.IsNullOrEmpty(userSecretsId)
-            ? userSecretsFactory.GetOrCreateFromId(userSecretsId)
-            : NoopUserSecretsManager.Instance;
+        if (isolateUserSecrets && !string.IsNullOrEmpty(userSecretsId))
+        {
+            _userSecretsManager = userSecretsFactory.CreateIsolatedFromId(userSecretsId);
 
-        // Always register IUserSecretsManager so dependencies can resolve
-        _innerBuilder.Services.AddSingleton(_userSecretsManager);
+            if (_innerBuilder.Environment.IsDevelopment())
+            {
+                AddJsonFileAt(_innerBuilder.Configuration, _userSecretsManager.FilePath, isolatedUserSecretsSourceIndex);
+            }
+        }
+        else
+        {
+            _userSecretsManager = !string.IsNullOrEmpty(userSecretsId)
+                ? userSecretsFactory.GetOrCreateFromId(userSecretsId)
+                : NoopUserSecretsManager.Instance;
+        }
+
+        // Always register IUserSecretsManager so dependencies can resolve.
+        _innerBuilder.Services.AddSingleton<IUserSecretsManager>(_ => _userSecretsManager);
 
         _innerBuilder.Services.AddSingleton(sp => new DistributedApplicationModel(Resources));
         _innerBuilder.Services.AddSingleton<PipelineExecutor>();
@@ -791,31 +820,52 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
     /// <inheritdoc />
     public DistributedApplication Build()
     {
-        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostBuildStarted, _innerBuilder.Configuration);
-        LogAppBuilding(this);
+        DistributedApplication? application = null;
 
-        // ResourceCollection enforces unique names on Add/Insert/Set, but IResourceCollection
-        // could have a different implementation that doesn't. Validate as a safety net.
-        foreach (var duplicateResourceName in Resources.GroupBy(r => r.Name, StringComparers.ResourceName)
-            .Where(g => g.Count() > 1)
-            .Select(g => g.Key))
+        try
         {
-            throw new DistributedApplicationException($"Multiple resources with the name '{duplicateResourceName}'. Resource names are case-insensitive.");
-        }
+            ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostBuildStarted, _innerBuilder.Configuration);
+            LogAppBuilding(this);
 
-        // Validate resource names. Resources added directly to the collection bypass AddResource validation.
-        foreach (var resource in Resources)
+            // ResourceCollection enforces unique names on Add/Insert/Set, but IResourceCollection
+            // could have a different implementation that doesn't. Validate as a safety net.
+            foreach (var duplicateResourceName in Resources.GroupBy(r => r.Name, StringComparers.ResourceName)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key))
+            {
+                throw new DistributedApplicationException($"Multiple resources with the name '{duplicateResourceName}'. Resource names are case-insensitive.");
+            }
+
+            // Validate resource names. Resources added directly to the collection bypass AddResource validation.
+            foreach (var resource in Resources)
+            {
+                ValidateResourceName(resource);
+            }
+
+            application = new DistributedApplication(_innerBuilder.Build());
+
+            _executionContextOptions.Services = application.Services.GetRequiredService<IServiceProvider>();
+            // UserSecretsManager can own isolated stores allocated while configuring the builder. Resolve it
+            // after the host is built so DI tracks and disposes those stores with the host.
+            application.Services.GetRequiredService<IUserSecretsManager>();
+
+            LogAppBuilt(application);
+            ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostBuildCompleted, _innerBuilder.Configuration);
+            return application;
+        }
+        catch
         {
-            ValidateResourceName(resource);
+            if (application is not null)
+            {
+                application.Dispose();
+            }
+            else if (_userSecretsManager is IDisposable disposable)
+            {
+                disposable.Dispose();
+            }
+
+            throw;
         }
-
-        var application = new DistributedApplication(_innerBuilder.Build());
-
-        _executionContextOptions.Services = application.Services.GetRequiredService<IServiceProvider>();
-
-        LogAppBuilt(application);
-        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostBuildCompleted, _innerBuilder.Configuration);
-        return application;
     }
 
     /// <inheritdoc />
@@ -865,16 +915,17 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         }
     }
 
-    internal static void RemoveUserSecretsSource(IConfigurationManager configuration, string? userSecretsId)
+    internal static int RemoveUserSecretsSource(IConfigurationManager configuration, string? userSecretsId)
     {
         ArgumentNullException.ThrowIfNull(configuration);
 
         if (string.IsNullOrWhiteSpace(userSecretsId))
         {
-            return;
+            return -1;
         }
 
         var userSecretsFilePath = Path.GetFullPath(UserSecretsPathHelper.GetSecretsPathFromSecretsId(userSecretsId));
+        var removedSourceIndex = -1;
 
         for (var i = configuration.Sources.Count - 1; i >= 0; i--)
         {
@@ -893,8 +944,39 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             if (filePath is not null && PathsEqual(filePath, userSecretsFilePath))
             {
                 configuration.Sources.RemoveAt(i);
+                removedSourceIndex = i;
             }
         }
+
+        return removedSourceIndex;
+    }
+
+    private static void AddJsonFileAt(IConfigurationManager configuration, string filePath, int sourceIndex)
+    {
+        var sourceCount = configuration.Sources.Count;
+        configuration.AddJsonFile(filePath, optional: true, reloadOnChange: false);
+
+        if (sourceIndex < 0 || sourceIndex >= sourceCount)
+        {
+            return;
+        }
+
+        var source = configuration.Sources[configuration.Sources.Count - 1];
+        configuration.Sources.RemoveAt(configuration.Sources.Count - 1);
+        configuration.Sources.Insert(sourceIndex, source);
+    }
+
+    private static int FindUserSecretsSourceInsertionIndex(IConfigurationManager configuration)
+    {
+        for (var i = 0; i < configuration.Sources.Count; i++)
+        {
+            if (configuration.Sources[i] is EnvironmentVariablesConfigurationSource { Prefix: null or "" } or CommandLineConfigurationSource)
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     private static void ValidateResourceName(IResource resource)
