@@ -312,6 +312,9 @@ internal sealed class BicepProvisioner(
         var deploymentResourceId = new ResourceIdentifier(deploymentId);
         var deploymentUrl = GetDeploymentUrl(deploymentResourceId);
 
+        // A cached deployment can be adopted after the original AppHost process is gone,
+        // so rebuild the dashboard's "waiting for deployment" state from persisted ARM
+        // metadata before publishing more detailed operation progress.
         await notificationService.PublishUpdateAsync(resource, state => state with
         {
             State = new(AzureProvisioningController.WaitingForDeploymentState, KnownResourceStateStyles.Info),
@@ -321,6 +324,10 @@ internal sealed class BicepProvisioner(
                 .SetResourceProperty(CustomResourceKnownProperties.Source, deploymentId)
         }).ConfigureAwait(false);
 
+        // Deployment operations carry provider-level progress and failure details that
+        // are not present on the deployment resource itself. Publish a best-effort
+        // summary so the adopted deployment looks like an in-flight deployment started
+        // by the current AppHost run.
         await PublishDeploymentOperationSummaryAsync(resource, context, deploymentResourceId, currentLocation, tracker, force: false, cancellationToken).ConfigureAwait(false);
     }
 
