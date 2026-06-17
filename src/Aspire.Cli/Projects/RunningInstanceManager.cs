@@ -65,6 +65,20 @@ internal sealed class RunningInstanceManager
             if (stopped)
             {
                 _interactionService.DisplaySuccess(RunCommandStrings.RunningInstanceStopped);
+                // Clean up the socket file now that the instance has been stopped.
+                // Leaving it behind would cause subsequent operations to fail when trying to connect to a dead process.
+                try
+                {
+                    if (File.Exists(socketPath))
+                    {
+                        File.Delete(socketPath);
+                        _logger.LogDebug("Cleaned up socket file after stopping instance: {SocketPath}", socketPath);
+                    }
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    _logger.LogDebug(ex, "Failed to clean up socket file after stopping instance (this may be safe to ignore)");
+                }
             }
             else
             {
