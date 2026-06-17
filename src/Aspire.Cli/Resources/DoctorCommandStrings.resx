@@ -199,8 +199,11 @@
     <value>Developer Control Plane (DCP) API server returned HTTP {0} ({1}).</value>
     <comment>{0} is the numeric HTTP status code. {1} is the HTTP status code name.</comment>
   </data>
-  <data name="DcpConnectionSucceededMessage" xml:space="preserve">
-    <value>Developer Control Plane (DCP) connection succeeded</value>
+  <data name="DcpEphemeralCertificateConnectionSucceededMessage" xml:space="preserve">
+    <value>Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate succeeded</value>
+  </data>
+  <data name="DcpDeveloperCertificateConnectionSucceededMessage" xml:space="preserve">
+    <value>Developer Control Plane (DCP) connection using the developer certificate succeeded</value>
   </data>
   <data name="DcpConnectionTimedOutMessageFormat" xml:space="preserve">
     <value>Timed out after {0} seconds while checking Developer Control Plane (DCP) connection health.</value>

@@ -72,7 +72,9 @@ internal sealed class DcpConnectionChecker(
 
             await session.StopDcpAsync(client, kubeconfig, timeoutCts.Token).ConfigureAwait(false);
 
-            return Passed(useDeveloperCertificate, DoctorCommandStrings.DcpConnectionSucceededMessage);
+            return useDeveloperCertificate
+                ? Passed(useDeveloperCertificate, DoctorCommandStrings.DcpDeveloperCertificateConnectionSucceededMessage)
+                : Passed(useDeveloperCertificate, DoctorCommandStrings.DcpEphemeralCertificateConnectionSucceededMessage);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

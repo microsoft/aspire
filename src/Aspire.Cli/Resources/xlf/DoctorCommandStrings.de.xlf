@@ -112,15 +112,15 @@
         <target state="new">Developer Control Plane (DCP) connection failed</target>
         <note />
       </trans-unit>
-      <trans-unit id="DcpConnectionSucceededMessage">
-        <source>Developer Control Plane (DCP) connection succeeded</source>
-        <target state="new">Developer Control Plane (DCP) connection succeeded</target>
-        <note />
-      </trans-unit>
       <trans-unit id="DcpConnectionTimedOutMessageFormat">
         <source>Timed out after {0} seconds while checking Developer Control Plane (DCP) connection health.</source>
         <target state="new">Timed out after {0} seconds while checking Developer Control Plane (DCP) connection health.</target>
         <note>{0} is the timeout in seconds.</note>
+      </trans-unit>
+      <trans-unit id="DcpDeveloperCertificateConnectionSucceededMessage">
+        <source>Developer Control Plane (DCP) connection using the developer certificate succeeded</source>
+        <target state="new">Developer Control Plane (DCP) connection using the developer certificate succeeded</target>
+        <note />
       </trans-unit>
       <trans-unit id="DcpDeveloperCertificateInvalidForCacheDetails">
         <source>The developer certificate could not be cached because it was not valid.</source>
@@ -155,6 +155,11 @@
       <trans-unit id="DcpDeveloperCertificateUserProfileMissingDetails">
         <source>The developer certificate could not be cached because the user profile directory could not be determined.</source>
         <target state="new">The developer certificate could not be cached because the user profile directory could not be determined.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpEphemeralCertificateConnectionSucceededMessage">
+        <source>Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate succeeded</source>
+        <target state="new">Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate succeeded</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpExecutableNotFoundDetailsFormat">
