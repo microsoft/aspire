@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Microsoft.Extensions.Logging;
+
 namespace Aspire.Cli.Projects;
 
 /// <summary>
@@ -93,5 +95,59 @@ internal static class LegacyTypeScriptAppHost
         }
 
         return rewritten;
+    }
+
+    /// <summary>
+    /// Resolves the TypeScript AppHost entry point for the current working directory, if any.
+    /// Prefers the AppHost recorded in settings (<c>aspire.config.json</c>) and falls back to a
+    /// recursive file-system scan. Returns <see langword="null"/> when no TypeScript AppHost can
+    /// be located. Both <c>aspire migrate</c> and the <c>aspire doctor</c> legacy-layout check
+    /// share this so detection stays in lockstep.
+    /// </summary>
+    /// <param name="projectLocator">Used to read the configured AppHost from settings.</param>
+    /// <param name="languageDiscovery">Used to detect the language and locate the AppHost file.</param>
+    /// <param name="workingDirectory">The directory to resolve the AppHost relative to.</param>
+    /// <param name="logger">Logs diagnostics when resolution fails unexpectedly.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    internal static async Task<FileInfo?> ResolveTypeScriptAppHostAsync(
+        IProjectLocator projectLocator,
+        ILanguageDiscovery languageDiscovery,
+        DirectoryInfo workingDirectory,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var configuredAppHost = await projectLocator.GetAppHostFromSettingsAsync(cancellationToken);
+            if (configuredAppHost is not null &&
+                TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(languageDiscovery.GetLanguageByFile(configuredAppHost)))
+            {
+                return configuredAppHost;
+            }
+
+            var detectedLanguageId = await languageDiscovery.DetectLanguageRecursiveAsync(workingDirectory, cancellationToken);
+            if (detectedLanguageId is null)
+            {
+                return null;
+            }
+
+            var detectedLanguage = languageDiscovery.GetLanguageById(detectedLanguageId.Value);
+            if (!TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(detectedLanguage))
+            {
+                return null;
+            }
+
+            var discoveredPath = detectedLanguage?.FindInDirectory(workingDirectory.FullName);
+            return discoveredPath is not null ? new FileInfo(discoveredPath) : null;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Failed to resolve TypeScript AppHost");
+            return null;
+        }
     }
 }

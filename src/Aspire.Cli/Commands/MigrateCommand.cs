@@ -63,7 +63,8 @@ internal sealed class MigrateCommand : BaseCommand
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
-        var appHostFile = await ResolveLegacyTypeScriptAppHostAsync(cancellationToken);
+        var appHostFile = await LegacyTypeScriptAppHost.ResolveTypeScriptAppHostAsync(
+            _projectLocator, _languageDiscovery, ExecutionContext.WorkingDirectory, _logger, cancellationToken);
         if (appHostFile?.Directory is not { Exists: true } appHostDirectory ||
             !LegacyTypeScriptAppHost.IsLegacyAppHostFile(appHostFile) ||
             !LegacyTypeScriptAppHost.IsLegacyLayout(appHostDirectory.FullName))
@@ -257,43 +258,6 @@ internal sealed class MigrateCommand : BaseCommand
                 KnownEmojis.Warning,
                 $"[yellow]{Markup.Escape(MigrateCommandStrings.RegenerateFailedWarning)}[/]",
                 allowMarkup: true);
-        }
-    }
-
-    private async Task<FileInfo?> ResolveLegacyTypeScriptAppHostAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            var configuredAppHost = await _projectLocator.GetAppHostFromSettingsAsync(cancellationToken);
-            if (configuredAppHost is not null &&
-                TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(_languageDiscovery.GetLanguageByFile(configuredAppHost)))
-            {
-                return configuredAppHost;
-            }
-
-            var detectedLanguageId = await _languageDiscovery.DetectLanguageRecursiveAsync(ExecutionContext.WorkingDirectory, cancellationToken);
-            if (detectedLanguageId is null)
-            {
-                return null;
-            }
-
-            var detectedLanguage = _languageDiscovery.GetLanguageById(detectedLanguageId.Value);
-            if (!TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(detectedLanguage))
-            {
-                return null;
-            }
-
-            var discoveredPath = detectedLanguage?.FindInDirectory(ExecutionContext.WorkingDirectory.FullName);
-            return discoveredPath is not null ? new FileInfo(discoveredPath) : null;
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "Failed to resolve TypeScript AppHost for migration");
-            return null;
         }
     }
 }

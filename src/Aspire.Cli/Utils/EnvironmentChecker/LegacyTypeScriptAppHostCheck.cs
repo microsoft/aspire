@@ -47,7 +47,8 @@ internal sealed class LegacyTypeScriptAppHostCheck : IEnvironmentCheck
     /// <inheritdoc />
     public async Task<IReadOnlyList<EnvironmentCheckResult>> CheckAsync(CancellationToken cancellationToken = default)
     {
-        var appHostFile = await ResolveTypeScriptAppHostAsync(cancellationToken);
+        var appHostFile = await LegacyTypeScriptAppHost.ResolveTypeScriptAppHostAsync(
+            _projectLocator, _languageDiscovery, _executionContext.WorkingDirectory, _logger, cancellationToken);
         if (appHostFile?.Directory is not { Exists: true } appHostDirectory)
         {
             return [];
@@ -74,42 +75,5 @@ internal sealed class LegacyTypeScriptAppHostCheck : IEnvironmentCheck
         };
 
         return [result];
-    }
-
-    private async Task<FileInfo?> ResolveTypeScriptAppHostAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            var configuredAppHost = await _projectLocator.GetAppHostFromSettingsAsync(cancellationToken);
-            if (configuredAppHost is not null &&
-                TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(_languageDiscovery.GetLanguageByFile(configuredAppHost)))
-            {
-                return configuredAppHost;
-            }
-
-            var detectedLanguageId = await _languageDiscovery.DetectLanguageRecursiveAsync(_executionContext.WorkingDirectory, cancellationToken);
-            if (detectedLanguageId is null)
-            {
-                return null;
-            }
-
-            var detectedLanguage = _languageDiscovery.GetLanguageById(detectedLanguageId.Value);
-            if (!TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(detectedLanguage))
-            {
-                return null;
-            }
-
-            var discoveredPath = detectedLanguage?.FindInDirectory(_executionContext.WorkingDirectory.FullName);
-            return discoveredPath is not null ? new FileInfo(discoveredPath) : null;
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "Failed to resolve TypeScript AppHost for legacy layout environment check");
-            return null;
-        }
     }
 }
