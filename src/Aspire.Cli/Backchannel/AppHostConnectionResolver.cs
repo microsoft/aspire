@@ -135,12 +135,18 @@ internal sealed class AppHostConnectionResolver(
                 };
             }
 
-            // Canonicalize the path to handle symlinks (e.g., /tmp -> /private/tmp on macOS).
-            // This ensures the socket lookup uses the same path as the running AppHost,
-            // which canonicalizes paths when computing backchannel socket keys.
-            var targetPath = PathNormalizer.ResolveToFilesystemPath(projectFile.FullName);
+            // Resolve symlinks before computing the backchannel socket key so the lookup
+            // matches the path the running AppHost used. A running AppHost keys its socket
+            // off Path.GetFullPath(appHostPath) evaluated against its own process working
+            // directory, which the OS already reports in physical (symlink-resolved) form
+            // (getcwd canonicalizes, e.g. /tmp -> /private/tmp on macOS). The producer side
+            // therefore hashes the canonical path, so the consumer must resolve symlinks too.
+            // ResolveToFilesystemPath only fixes Windows casing and is a no-op on Linux/macOS,
+            // so it cannot bridge the /tmp -> /private/tmp gap; ResolveSymlinks does.
+            // See https://github.com/microsoft/aspire/issues/17618.
+            var socketLookupPath = PathNormalizer.ResolveSymlinks(projectFile.FullName);
             var matchingSockets = AppHostHelper.FindMatchingNonOrphanedSockets(
-                targetPath,
+                socketLookupPath,
                 executionContext.HomeDirectory.FullName,
                 Environment.ProcessId,
                 logger);
@@ -165,7 +171,9 @@ internal sealed class AppHostConnectionResolver(
                 }
             }
 
-            var displayPath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, targetPath);
+            // Display the path the user supplied (not the symlink-resolved lookup path) so the
+            // error message stays relative to the working directory and matches what they typed.
+            var displayPath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, projectFile.FullName);
 
             return new AppHostConnectionResult
             {
