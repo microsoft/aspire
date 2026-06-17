@@ -11,6 +11,7 @@ using Aspire.Cli.Utils.EnvironmentChecker;
 using Aspire.Shared;
 using Aspire.TestUtilities;
 using Microsoft.AspNetCore.Certificates.Generation;
+using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Utils;
@@ -159,6 +160,40 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
         Assert.Equal(new Uri("https://127.0.0.1:12345"), parsed.Server);
         Assert.Equal("dcp-test-token", parsed.Token);
         Assert.Single(parsed.CertificateAuthorityCertificates);
+    }
+
+    [Fact]
+    public void DcpDeveloperCertificateCache_WhenCachedKeyExists_ReturnsCachedKeyAndPublicCertificatePath()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "Only supported on Linux in CI.");
+
+        using var homeDirectory = new TestTempDirectory();
+        var options = new RemoteInvokeOptions();
+        options.StartInfo.Environment["HOME"] = homeDirectory.Path;
+        options.StartInfo.Environment["USERPROFILE"] = homeDirectory.Path;
+
+        RemoteExecutor.Invoke(static homePath =>
+        {
+            var certificateManager = CertificateManager.Create(NullLogger.Instance);
+            using var certificate = certificateManager.CreateAspNetCoreHttpsDevelopmentCertificate(
+                DateTimeOffset.UtcNow.AddDays(-1),
+                DateTimeOffset.UtcNow.AddDays(30));
+
+            var lookup = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(certificate.Thumbprint)));
+            var cacheDirectory = Path.Combine(homePath, ".aspire", "dev-certs", "https");
+            var sessionDirectory = Path.Combine(homePath, "session");
+            Directory.CreateDirectory(cacheDirectory);
+            Directory.CreateDirectory(sessionDirectory);
+            var keyPath = Path.Combine(cacheDirectory, $"{lookup}.key");
+            File.WriteAllText(keyPath, "cached key");
+
+            var paths = DcpDeveloperCertificateCache.TryPrepareCertificateFilePaths(certificate, sessionDirectory);
+
+            Assert.NotNull(paths);
+            Assert.Equal(Path.Combine(sessionDirectory, "dcp-dev-cert.crt"), paths.Value.CertificatePath);
+            Assert.Equal(certificate.ExportCertificatePem(), File.ReadAllText(paths.Value.CertificatePath));
+            Assert.Equal(keyPath, paths.Value.KeyPath);
+        }, homeDirectory.Path, options).Dispose();
     }
 
     private async Task<DcpConnectionTestResult> TestRealDcpConnectionAsync(DcpConnectionSecurityMode mode)
