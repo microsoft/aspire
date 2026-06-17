@@ -38,7 +38,9 @@ internal sealed class OperatingSystemCheck : IEnvironmentCheck
         {
             Category = "environment",
             Name = "operating-system",
-            Status = EnvironmentCheckStatus.Pass,
+            Status = details.Type.Equals("Unknown", StringComparison.OrdinalIgnoreCase)
+                ? EnvironmentCheckStatus.Warning
+                : EnvironmentCheckStatus.Pass,
             Message = string.Format(
                 CultureInfo.CurrentCulture,
                 DoctorCommandStrings.OperatingSystemMessageFormat,

@@ -29,6 +29,26 @@ public class OperatingSystemCheckTests
         Assert.Equal("Ubuntu 24.04.2 LTS", result.Metadata["description"]!.GetValue<string>());
     }
 
+    [Fact]
+    public async Task CheckAsync_ReturnsWarningForUnknownOperatingSystem()
+    {
+        var check = new OperatingSystemCheck(() => new OperatingSystemDetails(
+            Type: "Unknown",
+            Name: "Unknown OS",
+            Version: "1.2.3",
+            Description: "Unknown OS description"));
+
+        var result = Assert.Single(await check.CheckAsync(TestContext.Current.CancellationToken));
+
+        Assert.Equal(EnvironmentCheckStatus.Warning, result.Status);
+        Assert.Equal("Operating system: Unknown OS 1.2.3", result.Message);
+        Assert.NotNull(result.Metadata);
+        Assert.Equal("Unknown", result.Metadata["osType"]!.GetValue<string>());
+        Assert.Equal("Unknown OS", result.Metadata["displayName"]!.GetValue<string>());
+        Assert.Equal("1.2.3", result.Metadata["version"]!.GetValue<string>());
+        Assert.Equal("Unknown OS description", result.Metadata["description"]!.GetValue<string>());
+    }
+
     [Theory]
     [InlineData(10, 0, 19045)]
     [InlineData(10, 0, 22631)]
