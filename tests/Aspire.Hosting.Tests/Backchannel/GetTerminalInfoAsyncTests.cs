@@ -166,7 +166,7 @@ public class GetTerminalInfoAsyncTests : IAsyncDisposable
     [Fact]
     public async Task ReturnsAliveForEverySequentialProbe_AgainstSingleSlotHost()
     {
-        // Regression for the StreamJsonRpc -> CurlyRpc migration. The per-replica control client
+        // Regression for the JSON-RPC stream-ownership behavior. The per-replica control client
         // (TerminalHostControlClient) opens a fresh connection per probe and disposes its JsonRpc
         // when done. The terminal host's control listener serves a single active slot and only
         // frees it when the client's connection closes (it observes EOF and its rpc.Completion

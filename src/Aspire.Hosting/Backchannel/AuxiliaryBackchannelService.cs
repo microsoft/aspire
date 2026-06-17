@@ -162,9 +162,8 @@ internal sealed class AuxiliaryBackchannelService(
             // Set up JSON-RPC over the client socket
             using var stream = new NetworkStream(clientSocket, ownsSocket: true);
 
-            // Create JSON-RPC connection with proper System.Text.Json options so it doesn't use Newtonsoft.Json
-            // and handles correct MCP SDK type serialization
-            // Configure to use camelCase naming to match CLI's MCP SDK options
+            // Create JSON-RPC connection with System.Text.Json options that match the CLI's MCP SDK
+            // serialization (camelCase naming) so MCP SDK types round-trip correctly.
             var serializerOptions = new System.Text.Json.JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true,
@@ -172,7 +171,7 @@ internal sealed class AuxiliaryBackchannelService(
             };
 
             var handler = new HeaderDelimitedMessageHandler(stream, stream);
-            // CurlyRpc emits OpenTelemetry Activity spans natively, so the SJR ActivityTracingStrategy is no longer required.
+            // CurlyRpc emits OpenTelemetry Activity spans natively, so no explicit activity-tracing configuration is required.
             using var rpc = new JsonRpc(handler, new JsonRpcOptions { SerializerOptions = serializerOptions });
             rpc.AddLocalRpcTarget(rpcTarget);
             rpc.StartListening();

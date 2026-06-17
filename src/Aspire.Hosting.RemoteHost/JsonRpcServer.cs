@@ -215,11 +215,11 @@ internal sealed class JsonRpcServer : BackgroundService
 
         try
         {
-            // Replicate StreamJsonRpc's SystemTextJsonFormatter default serialization behavior
-            // (PascalCase property names, case-sensitive) so the wire payload for user data is
-            // byte-for-byte compatible with the previous formatter. The JSON-RPC envelope itself
-            // (method/params/result/error) is handled internally by CurlyRpc and is unaffected by
-            // these options. RemoteHost is not AOT-compiled, so reflection-based serialization is fine.
+            // Use the default System.Text.Json serialization behavior (PascalCase property names,
+            // case-sensitive) so the wire payload for user data is byte-for-byte compatible with peers
+            // from earlier Aspire versions. The JSON-RPC envelope itself (method/params/result/error)
+            // is handled internally by CurlyRpc and is unaffected by these options. RemoteHost is not
+            // AOT-compiled, so reflection-based serialization is fine.
             var serializerOptions = new JsonSerializerOptions();
             var handler = new HeaderDelimitedMessageHandler(clientStream, clientStream);
             using var jsonRpc = new JsonRpc(handler, new JsonRpcOptions

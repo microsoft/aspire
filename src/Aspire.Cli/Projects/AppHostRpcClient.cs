@@ -49,7 +49,7 @@ internal sealed class AppHostRpcClient : IAppHostRpcClient
         try
         {
             var handler = new HeaderDelimitedMessageHandler(stream, stream);
-            // CurlyRpc emits OpenTelemetry Activity spans natively, so the SJR ActivityTracingStrategy is no longer required.
+            // CurlyRpc emits OpenTelemetry Activity spans natively, so no explicit activity-tracing configuration is required.
             jsonRpc = new JsonRpc(handler, new JsonRpcOptions
             {
                 SerializerOptions = BackchannelJsonSerializerContext.CreateJsonSerializerOptions()

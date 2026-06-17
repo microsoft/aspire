@@ -72,14 +72,12 @@ internal static class TerminalHostControlClient
                 // the terminal-host control listener only frees its single active slot when the peer's
                 // connection closes (it observes EOF and completes its rpc.Completion). With the default
                 // ownsStreams: false the socket would stay open after dispose, the host would never see
-                // EOF, and every probe after the first would be refused. StreamJsonRpc closed the stream
-                // on dispose by default, so this preserves the pre-migration behavior.
+                // EOF, and every probe after the first would be refused.
                 var handler = new HeaderDelimitedMessageHandler(stream, stream, ownsStreams: true);
-                // Replicate StreamJsonRpc's SystemTextJsonFormatter default serialization
-                // (PascalCase property names, case-sensitive) so the terminal-host control wire stays
-                // byte-for-byte compatible with hosts that have not yet migrated off StreamJsonRpc.
-                // The protocol DTOs (TerminalHostSessionInfo, TerminalHostInfoResponse) are PascalCase
-                // with no [JsonPropertyName], so changing the casing would break version-skewed peers.
+                // Use the default System.Text.Json serialization (PascalCase property names, case-sensitive)
+                // so the terminal-host control wire stays byte-for-byte compatible with hosts from earlier
+                // Aspire versions. The protocol DTOs (TerminalHostSessionInfo, TerminalHostInfoResponse) are
+                // PascalCase with no [JsonPropertyName], so changing the casing would break version-skewed peers.
                 var rpc = new JsonRpc(handler, new JsonRpcOptions
                 {
                     SerializerOptions = new System.Text.Json.JsonSerializerOptions()

@@ -209,10 +209,9 @@ internal sealed class TerminalHostControlListener : IAsyncDisposable
         {
             await using var stream = new NetworkStream(client, ownsSocket: true);
 
-            // Replicate StreamJsonRpc's SystemTextJsonFormatter default serialization (PascalCase
-            // property names, case-sensitive) so the control wire stays byte-for-byte compatible with
-            // clients that have not yet migrated off StreamJsonRpc. See TerminalHostControlClient for
-            // the matching client-side options.
+            // Use the default System.Text.Json serialization (PascalCase property names, case-sensitive)
+            // so the control wire stays byte-for-byte compatible with clients from earlier Aspire versions.
+            // See TerminalHostControlClient for the matching client-side options.
             var handler = new HeaderDelimitedMessageHandler(stream, stream);
 
             rpc = new JsonRpc(handler, new JsonRpcOptions
