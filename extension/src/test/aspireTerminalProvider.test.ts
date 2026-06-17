@@ -225,6 +225,7 @@ suite('AspireTerminalProvider tests', () => {
                 show: () => { },
                 dispose: () => { },
             } as unknown as vscode.Terminal;
+            const createEnvironmentStub = sinon.stub(terminalProvider, 'createEnvironment').returns({});
             const createTerminalStub = sinon.stub(vscode.window, 'createTerminal').returns(createdTerminal);
             const sharedTerminalStub = sinon.stub(terminalProvider, 'getAspireTerminal');
 
@@ -237,6 +238,7 @@ suite('AspireTerminalProvider tests', () => {
                 assert.strictEqual(options.location, vscode.TerminalLocation.Editor);
             }
             finally {
+                createEnvironmentStub.restore();
                 createTerminalStub.restore();
                 sharedTerminalStub.restore();
             }
