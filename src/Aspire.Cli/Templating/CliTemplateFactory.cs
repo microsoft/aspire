@@ -235,7 +235,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
     private bool IsTemplateAvailable(ITemplate template)
     {
         if (string.Equals(template.Name, KnownTemplateId.CSharpCliManagedEmptyAppHost, StringComparisons.CliInputOrOutput) &&
-            !_features.IsFeatureEnabled(KnownFeatures.CSharpCliManagedAppHostEnabled, defaultValue: false))
+            !_features.IsFeatureEnabled(KnownFeatures.ExperimentalCliManagedAppHost, defaultValue: false))
         {
             return false;
         }

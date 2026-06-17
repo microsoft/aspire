@@ -139,7 +139,7 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper)
         var buildCalled = false;
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.EnabledFeatures = [KnownFeatures.CSharpCliManagedAppHostEnabled];
+            options.EnabledFeatures = [KnownFeatures.ExperimentalCliManagedAppHost];
             options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
             {
                 BuildAsyncCallback = (projectFilePath, _, _, _) =>
@@ -195,7 +195,7 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => new TestInteractionService();
-            options.EnabledFeatures = [KnownFeatures.CSharpCliManagedAppHostEnabled];
+            options.EnabledFeatures = [KnownFeatures.ExperimentalCliManagedAppHost];
             options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
             {
                 BuildAsyncCallback = (_, _, invocationOptions, _) =>

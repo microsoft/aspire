@@ -3,7 +3,7 @@
     "path": "apphost.cs"
   },
   "features": {
-    "csharpCliManagedAppHostEnabled": true
+    "experimentalCliManagedAppHost": true
   },
   "packages": {
     "Aspire.Hosting.Redis": ""

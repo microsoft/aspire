@@ -191,7 +191,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         var runner = new TestDotNetCliRunner();
         var project = CreateCliManagedDotNetAppHostProject(runner, configureServices: options =>
         {
-            options.EnabledFeatures = [KnownFeatures.CSharpCliManagedAppHostEnabled];
+            options.EnabledFeatures = [KnownFeatures.ExperimentalCliManagedAppHost];
         });
 
         runner.BuildAsyncCallback = (projectFile, noRestore, options, _) =>
@@ -249,7 +249,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         WriteAspireConfigJson(_workspace.WorkspaceRoot.FullName, """
             {
               "features": {
-                "csharpCliManagedAppHostEnabled": true
+                "experimentalCliManagedAppHost": true
               },
               "packages": {
                 "Aspire.Hosting.Redis": "13.2.1"
@@ -294,7 +294,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         var runner = new TestDotNetCliRunner();
         var project = CreateCliManagedDotNetAppHostProject(runner, configureServices: options =>
         {
-            options.EnabledFeatures = [KnownFeatures.CSharpCliManagedAppHostEnabled];
+            options.EnabledFeatures = [KnownFeatures.ExperimentalCliManagedAppHost];
         });
 
         runner.BuildAsyncCallback = (_, _, _, _) => 0;
@@ -334,7 +334,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         var runner = new TestDotNetCliRunner();
         var project = CreateCliManagedDotNetAppHostProject(runner, configureServices: options =>
         {
-            options.EnabledFeatures = [KnownFeatures.CSharpCliManagedAppHostEnabled];
+            options.EnabledFeatures = [KnownFeatures.ExperimentalCliManagedAppHost];
             options.PackagingServiceFactory = _ => packagingService;
         });
 
@@ -373,7 +373,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         var runner = new TestDotNetCliRunner();
         var project = CreateCliManagedDotNetAppHostProject(runner, configureServices: options =>
         {
-            options.EnabledFeatures = [KnownFeatures.CSharpCliManagedAppHostEnabled];
+            options.EnabledFeatures = [KnownFeatures.ExperimentalCliManagedAppHost];
             options.PackagingServiceFactory = _ => packagingService;
         });
 
@@ -403,7 +403,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         var runner = new TestDotNetCliRunner();
         var project = CreateCliManagedDotNetAppHostProject(runner, configureServices: options =>
         {
-            options.EnabledFeatures = [KnownFeatures.CSharpCliManagedAppHostEnabled];
+            options.EnabledFeatures = [KnownFeatures.ExperimentalCliManagedAppHost];
         });
 
         runner.BuildAsyncCallback = (_, _, _, _) =>
@@ -425,7 +425,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         WriteAspireConfigJson(_workspace.WorkspaceRoot.FullName, """
             {
               "features": {
-                "csharpCliManagedAppHostEnabled": true
+                "experimentalCliManagedAppHost": true
               }
             }
             """);
@@ -442,7 +442,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         var runner = new TestDotNetCliRunner();
         var project = CreateCliManagedDotNetAppHostProject(runner, configureServices: options =>
         {
-            options.EnabledFeatures = [KnownFeatures.CSharpCliManagedAppHostEnabled];
+            options.EnabledFeatures = [KnownFeatures.ExperimentalCliManagedAppHost];
         });
 
         runner.GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => throw new InvalidOperationException("CLI-managed file-based AppHosts should not query SDK AppHost metadata.");
@@ -484,7 +484,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         var runner = new TestDotNetCliRunner();
         var project = CreateCliManagedDotNetAppHostProject(runner, configureServices: options =>
         {
-            options.EnabledFeatures = [KnownFeatures.CSharpCliManagedAppHostEnabled];
+            options.EnabledFeatures = [KnownFeatures.ExperimentalCliManagedAppHost];
         });
 
         runner.BuildAsyncCallback = (projectFile, _, _, _) =>

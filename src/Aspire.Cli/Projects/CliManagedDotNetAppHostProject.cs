@@ -113,7 +113,7 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
 
     internal static bool IsCliManagedSingleFileAppHost(FileInfo candidateFile, IFeatures features)
     {
-        return IsCSharpCliManagedAppHostEnabled(candidateFile, features)
+        return IsExperimentalCliManagedAppHostEnabled(candidateFile, features)
             && IsSingleFileAppHostCandidate(candidateFile)
             && !HasAspireAppHostSdkDirective(candidateFile);
     }
@@ -196,9 +196,9 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
         return options;
     }
 
-    private static bool IsCSharpCliManagedAppHostEnabled(FileInfo candidateFile, IFeatures features)
+    private static bool IsExperimentalCliManagedAppHostEnabled(FileInfo candidateFile, IFeatures features)
     {
-        if (features.IsFeatureEnabled(KnownFeatures.CSharpCliManagedAppHostEnabled, defaultValue: false))
+        if (features.IsFeatureEnabled(KnownFeatures.ExperimentalCliManagedAppHost, defaultValue: false))
         {
             return true;
         }
@@ -210,7 +210,7 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
 
         var configDirectory = ConfigurationHelper.GetConfigRootDirectory(appHostDirectory);
         var config = AspireConfigFile.Load(configDirectory.FullName);
-        return config?.Features?.TryGetValue(KnownFeatures.CSharpCliManagedAppHostEnabled, out var enabled) == true && enabled;
+        return config?.Features?.TryGetValue(KnownFeatures.ExperimentalCliManagedAppHost, out var enabled) == true && enabled;
     }
 
     private async Task<BundleLayoutLease?> ConfigureCliManagedAppHostEnvironmentAsync(FileInfo appHostFile, Dictionary<string, string> env, CancellationToken cancellationToken)

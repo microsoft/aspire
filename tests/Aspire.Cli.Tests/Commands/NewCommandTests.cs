@@ -958,7 +958,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var services = CreateServiceCollection(workspace, options =>
         {
             options.FeatureFlagsFactory = _ => new TestFeatures()
-                .SetFeature(KnownFeatures.CSharpCliManagedAppHostEnabled, true);
+                .SetFeature(KnownFeatures.ExperimentalCliManagedAppHost, true);
         });
 
         using var provider = services.BuildServiceProvider();
@@ -976,7 +976,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var services = CreateServiceCollection(workspace, options =>
         {
             options.FeatureFlagsFactory = _ => new TestFeatures()
-                .SetFeature(KnownFeatures.CSharpCliManagedAppHostEnabled, true);
+                .SetFeature(KnownFeatures.ExperimentalCliManagedAppHost, true);
         });
 
         using var provider = services.BuildServiceProvider();
@@ -993,7 +993,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.True(File.Exists(aspireConfigPath));
         using var aspireConfig = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(aspireConfigPath));
         Assert.True(aspireConfig.RootElement.TryGetProperty("features", out var features));
-        Assert.True(features.GetProperty(KnownFeatures.CSharpCliManagedAppHostEnabled).GetBoolean());
+        Assert.True(features.GetProperty(KnownFeatures.ExperimentalCliManagedAppHost).GetBoolean());
         Assert.False(File.Exists(Path.Combine(outputPath, "apphost.run.json")));
         Assert.False(File.Exists(Path.Combine(outputPath, "AppHost.csproj")));
         Assert.False(File.Exists(Path.Combine(outputPath, "nuget.config")));
