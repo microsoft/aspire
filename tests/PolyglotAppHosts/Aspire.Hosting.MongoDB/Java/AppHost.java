@@ -37,26 +37,23 @@ void main() throws Exception {
         // Test 11: Test withBindIpAll
         builder.addMongoDB("mongo-bind-all")
             .withBindIpAll();
-        // Test 12: Test withReplicaSet
-        var mongoRs = builder.addMongoDB("mongo-rs")
-            .withReplicaSet("rs0");
-        // Test 13: Test withTls with default mode
-        builder.addMongoDB("mongo-tls")
-            .withTls();
-        // Test 14: Test withTls with specific mode
-        builder.addMongoDB("mongo-tls-allow")
-            .withTls(new WithTlsOptions().mode("allowTls"));
-        // Test 15: Test withKeyFile for replica set member
+        // Test 12: Test withReplicaSet with withKeyFile and withTls
         var keyFileParam = builder.addParameter("rs-keyfile", new AddParameterOptions().secret(true).value("my-secret-key"));
-        builder.addMongoDB("mongo-rs-secured")
-            .withReplicaSet("rs-secure")
-            .withKeyFile(keyFileParam, "/etc/rs.key");
-        // Test 16: Complete replica set with security - TLS + KeyFile + ReplicaSet
-        var tlsKeyFileParam = builder.addParameter("rs-tls-key", new AddParameterOptions().secret(true).value("tls-secret"));
-        builder.addMongoDB("mongo-rs-full")
-            .withReplicaSet("rs-full")
-            .withKeyFile(tlsKeyFileParam, "/etc/rs.key")
-            .withTls(new WithTlsOptions().mode("requireTls"));
+        builder.addMongoDB("mongo-rs-member")
+            .withReplicaSet("rs0")
+            .withKeyFile(keyFileParam, "/etc/rs.key")
+            .withTls();
+        // Test 13: Test addMongoDBReplicaSet with withMember
+        var rsKeyFileParam = builder.addParameter("rs-shared-key", new AddParameterOptions().secret(true).value("replica-set-key"));
+        var mongo1 = builder.addMongoDB("mongo-rs-1")
+            .withKeyFile(rsKeyFileParam, "/etc/rs.key")
+            .withTls();
+        var mongo2 = builder.addMongoDB("mongo-rs-2")
+            .withKeyFile(rsKeyFileParam, "/etc/rs.key")
+            .withTls();
+        var replicaSet = builder.addMongoDBReplicaSet("rs0")
+            .withMember(mongo1)
+            .withMember(mongo2);
         // ---- Property access on MongoDBServerResource ----
         var _endpoint = mongo.primaryEndpoint();
         var _host = mongo.host();

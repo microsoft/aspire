@@ -31,18 +31,14 @@ with create_builder() as builder:
     mongo_chained.add_database("analytics-db", database_name="analytics")
     # Test 11: Test with_bind_ip_all
     builder.add_mongo_db("mongo-bind-all").with_bind_ip_all()
-    # Test 12: Test with_replica_set
-    mongo_rs = builder.add_mongo_db("mongo-rs").with_replica_set("rs0")
-    # Test 13: Test with_tls with default mode
-    builder.add_mongo_db("mongo-tls").with_tls()
-    # Test 14: Test with_tls with specific mode
-    builder.add_mongo_db("mongo-tls-allow").with_tls(mode="allow_tls")
-    # Test 15: Test with_key_file for replica set member
+    # Test 12: Test with_replica_set with with_tls and with_key_file
     key_file_param = builder.add_parameter("rs-keyfile", secret=True, value="my-secret-key")
-    builder.add_mongo_db("mongo-rs-secured").with_replica_set("rs-secure").with_key_file(key_file_param, "/etc/rs.key")
-    # Test 16: Complete replica set with security - TLS + KeyFile + ReplicaSet
-    tls_key_file_param = builder.add_parameter("rs-tls-key", secret=True, value="tls-secret")
-    builder.add_mongo_db("mongo-rs-full").with_replica_set("rs-full").with_key_file(tls_key_file_param, "/etc/rs.key").with_tls(mode="require_tls")
+    builder.add_mongo_db("mongo-rs-member").with_replica_set("rs0").with_key_file(key_file_param, "/etc/rs.key").with_tls()
+    # Test 13: Test add_mongo_db_replica_set with with_member
+    rs_key_file_param = builder.add_parameter("rs-shared-key", secret=True, value="replica-set-key")
+    mongo1 = builder.add_mongo_db("mongo-rs-1").with_key_file(rs_key_file_param, "/etc/rs.key").with_tls()
+    mongo2 = builder.add_mongo_db("mongo-rs-2").with_key_file(rs_key_file_param, "/etc/rs.key").with_tls()
+    replica_set = builder.add_mongo_db_replica_set("rs0").with_member(mongo1).with_member(mongo2)
     # ---- Property access on MongoDBServerResource ----
     _endpoint = mongo.primary_endpoint
     _host = mongo.host

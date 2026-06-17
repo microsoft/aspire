@@ -51,30 +51,26 @@ await mongoChained.addDatabase("analytics-db", { databaseName: "analytics" });
 await builder.addMongoDB("mongo-bind-all")
     .withBindIpAll();
 
-// Test 12: Test withReplicaSet
-const mongoRs = await builder.addMongoDB("mongo-rs")
-    .withReplicaSet("rs0");
-
-// Test 13: Test withTls with default mode
-await builder.addMongoDB("mongo-tls")
+// Test 12: Test withReplicaSet with TLS and KeyFile
+const keyFileParam = await builder.addParameter("rs-keyfile", { secret: true, value: "my-secret-key" });
+await builder.addMongoDB("mongo-rs-member")
+    .withReplicaSet("rs0")
+    .withKeyFile(keyFileParam, "/etc/rs.key")
     .withTls();
 
-// Test 14: Test withTls with specific mode
-await builder.addMongoDB("mongo-tls-allow")
-    .withTls({ mode: "allowTls" });
+// Test 13: Test AddMongoDBReplicaSet with WithMember
+const rsKeyFileParam = await builder.addParameter("rs-shared-key", { secret: true, value: "replica-set-key" });
+const mongo1 = await builder.addMongoDB("mongo-rs-1")
+    .withKeyFile(rsKeyFileParam, "/etc/rs.key")
+    .withTls();
 
-// Test 15: Test withKeyFile for replica set member
-const keyFileParam = await builder.addParameter("rs-keyfile", { secret: true, value: "my-secret-key" });
-await builder.addMongoDB("mongo-rs-secured")
-    .withReplicaSet("rs-secure")
-    .withKeyFile(keyFileParam, "/etc/rs.key");
+const mongo2 = await builder.addMongoDB("mongo-rs-2")
+    .withKeyFile(rsKeyFileParam, "/etc/rs.key")
+    .withTls();
 
-// Test 16: Complete replica set with security - TLS + KeyFile + ReplicaSet
-const tlsKeyFileParam = await builder.addParameter("rs-tls-key", { secret: true, value: "tls-secret" });
-await builder.addMongoDB("mongo-rs-full")
-    .withReplicaSet("rs-full")
-    .withKeyFile(tlsKeyFileParam, "/etc/rs.key")
-    .withTls({ mode: "requireTls" });
+const replicaSet = await builder.addMongoDBReplicaSet("rs0")
+    .withMember(mongo1)
+    .withMember(mongo2);
 
 // ---- Property access on MongoDBServerResource ----
 const _endpoint = await mongo.primaryEndpoint();

@@ -53,26 +53,20 @@ func main() {
 	// Test 11: Test WithBindIpAll
 	builder.AddMongoDB("mongo-bind-all").WithBindIpAll()
 
-	// Test 12: Test WithReplicaSet
-	mongoRs := builder.AddMongoDB("mongo-rs").WithReplicaSet("rs0")
-	if err = mongoRs.Err(); err != nil {
+	// Test 12: Test WithReplicaSet with WithKeyFile and WithTls
+	keyFileParam := builder.AddParameter("rs-keyfile", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true), Value: aspire.StringPtr("my-secret-key")})
+	mongoRsMember := builder.AddMongoDB("mongo-rs-member").WithReplicaSet("rs0").WithKeyFile(keyFileParam, "/etc/rs.key").WithTls()
+	if err = mongoRsMember.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
 
-	// Test 13: Test WithTls with default mode
-	builder.AddMongoDB("mongo-tls").WithTls()
-
-	// Test 14: Test WithTls with specific mode
-	builder.AddMongoDB("mongo-tls-allow").WithTls(&aspire.WithTlsOptions{Mode: aspire.StringPtr("allowTls")})
-
-	// Test 15: Test WithKeyFile for replica set member
-	keyFileParam := builder.AddParameter("rs-keyfile", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true), Value: aspire.StringPtr("my-secret-key")})
-	builder.AddMongoDB("mongo-rs-secured").WithReplicaSet("rs-secure").WithKeyFile(keyFileParam, "/etc/rs.key")
-
-	// Test 16: Complete replica set with security - TLS + KeyFile + ReplicaSet
-	tlsKeyFileParam := builder.AddParameter("rs-tls-key", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true), Value: aspire.StringPtr("tls-secret")})
-	mongoRsFull := builder.AddMongoDB("mongo-rs-full").WithReplicaSet("rs-full").WithKeyFile(tlsKeyFileParam, "/etc/rs.key").WithTls(&aspire.WithTlsOptions{Mode: aspire.StringPtr("requireTls")})
-	if err = mongoRsFull.Err(); err != nil {
+	// Test 13: Test AddMongoDBReplicaSet with WithMember
+	rsKeyFileParam := builder.AddParameter("rs-shared-key", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true), Value: aspire.StringPtr("replica-set-key")})
+	mongo1 := builder.AddMongoDB("mongo-rs-1").WithKeyFile(rsKeyFileParam, "/etc/rs.key").WithTls()
+	mongo2 := builder.AddMongoDB("mongo-rs-2").WithKeyFile(rsKeyFileParam, "/etc/rs.key").WithTls()
+	
+	replicaSet := builder.AddMongoDBReplicaSet("rs0").WithMember(mongo1).WithMember(mongo2)
+	if err = replicaSet.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
 
