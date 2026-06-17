@@ -23,6 +23,12 @@ jobs:
     # separate comment_selection job below, which runs no PR code and holds the write scope instead.
     permissions:
       contents: read
+    env:
+      # Single source of truth for the selection-summary path: passed to the select-tests action
+      # (so it writes here) and reused by the upload step below (so it uploads the same file).
+      # Mirrors the action's own default; keeping it here lets one value drive both the write and
+      # the upload instead of repeating the literal path.
+      SELECT_TESTS_COMMENT_FILE: ${{ github.workspace }}/artifacts/select-tests-comment.md
     outputs:
       tests_matrix_no_nugets: ${{ steps.split_matrix.outputs.tests_matrix_no_nugets }}
       tests_matrix_no_nugets_overflow: ${{ steps.split_matrix.outputs.tests_matrix_no_nugets_overflow }}
@@ -60,6 +66,7 @@ jobs:
         with:
           checkout: 'false'
           enforce: 'false'
+          commentFile: ${{ env.SELECT_TESTS_COMMENT_FILE }}
           prBody: ${{ github.event.pull_request.body }}
           prBaseSha: ${{ github.event.pull_request.base.sha }}
           headSha: ${{ github.sha }}
@@ -72,7 +79,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: select-tests-comment
-          path: ${{ github.workspace }}/artifacts/select-tests-comment.md
+          path: ${{ env.SELECT_TESTS_COMMENT_FILE }}
           if-no-files-found: ignore
           retention-days: 1
 
