@@ -69,10 +69,15 @@ public sealed class DaprIntegrationTests(ITestOutputHelper output)
             output.WriteLine($"Modified AppHost.cs content:{Environment.NewLine}{content}");
         }
 
-        // Step 5: Start the AppHost and verify it comes up successfully
+        // Step 5: Install the Dapr CLI and initialize it.
+        // The CommunityToolkit.Aspire.Hosting.Dapr lifecycle hook requires the `dapr` binary on PATH.
+        await auto.RunCommandAsync("curl -fsSL https://raw.githubusercontent.com/dapr/cli/master/install/install.sh | bash", counter, TimeSpan.FromSeconds(120));
+        await auto.RunCommandAsync("dapr init", counter, TimeSpan.FromSeconds(120));
+
+        // Step 6: Start the AppHost and verify it comes up successfully
         await auto.AspireStartAsync(counter, startTimeout: TimeSpan.FromMinutes(5));
 
-        // Step 6: Wait for all resources to reach a running state.
+        // Step 7: Wait for all resources to reach a running state.
         // The Starter template (no Redis) produces apiservice and webfrontend.
         // WithDaprSidecar() adds a Dapr sidecar resource named apiservice-dapr.
         foreach (var resource in new[] { "apiservice", "webfrontend", "apiservice-dapr" })
@@ -83,7 +88,7 @@ public sealed class DaprIntegrationTests(ITestOutputHelper output)
             await auto.WaitForSuccessPromptAsync(counter);
         }
 
-        // Step 7: Stop the AppHost
+        // Step 8: Stop the AppHost
         await auto.AspireStopAsync(counter);
     }
 }
