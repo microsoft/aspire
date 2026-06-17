@@ -1754,6 +1754,10 @@ internal sealed class AzureProvisioningController(
         }
     }
 
+    // Key Vault is special because deleting a vault leaves a location-scoped soft-delete tombstone.
+    // A later create with the same vault name can fail until that tombstone is purged, even though
+    // the live resource no longer exists. Detect that specific provisioning failure so reprovision
+    // can purge the recoverable vault for the same target resource ID and retry once.
     private static bool TryGetKeyVaultSoftDeleteConflictResourceId(Exception exception, out string keyVaultResourceId)
     {
         keyVaultResourceId = string.Empty;
@@ -1767,6 +1771,10 @@ internal sealed class AzureProvisioningController(
             return false;
         }
 
+        // Observed ARM shapes include:
+        //   code: ConflictError, message: "... is currently in a deleted state ... purge ..."
+        //   code: VaultAlreadyExists, message: "... is currently in a deleted state ..."
+        // Some providers vary the code, so keep the message check as the fallback signal.
         if (string.Equals(failure.ErrorCode, "ConflictError", StringComparisons.AzureProvisioningErrorCode) ||
             string.Equals(failure.ErrorCode, "VaultAlreadyExists", StringComparisons.AzureProvisioningErrorCode) ||
             (failure.ErrorMessage.Contains("deleted state", StringComparison.OrdinalIgnoreCase) &&
