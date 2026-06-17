@@ -8,7 +8,6 @@ using Aspire.Hosting;
 using Aspire.Shared;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-
 namespace Aspire.Cli.Telemetry;
 
 /// <summary>
@@ -235,7 +234,7 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// <inheritdoc />
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        await InitializeAsync().ConfigureAwait(false);
+        await InitializeAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -244,7 +243,7 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// <summary>
     /// Initializes the telemetry service by collecting machine information.
     /// </summary>
-    internal async Task InitializeAsync()
+    internal async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         if (_isInitialized)
         {
@@ -259,10 +258,12 @@ internal sealed class AspireCliTelemetry : IHostedService
             Task<bool>? internalMicrosoftTask = null;
             if (_isReportedTelemetryEnabled())
             {
-                internalMicrosoftTask = _internalMicrosoftDetector.IsInternalMicrosoftMachineAsync(CancellationToken.None);
+                // The internal Microsoft check can be slow and can perform multiple async operations in parallel, so only run it if reported
+                // telemetry is enabled and make sure we flow the cancellation token so it can be canceled if the application is shutting down.
+                internalMicrosoftTask = _internalMicrosoftDetector.IsInternalMicrosoftMachineAsync(cancellationToken);
             }
 
-            await Task.WhenAll(macAddressHashTask, deviceIdTask, internalMicrosoftTask ?? Task.CompletedTask).ConfigureAwait(false);
+            await Task.WhenAll(macAddressHashTask, deviceIdTask, internalMicrosoftTask ?? Task.CompletedTask).WaitAsync(cancellationToken).ConfigureAwait(false);
 
             _tagsList.Add(new(TelemetryConstants.Tags.MacAddressHash, macAddressHashTask.Result));
             _tagsList.Add(new(TelemetryConstants.Tags.DeviceId, deviceIdTask.Result));
@@ -286,6 +287,12 @@ internal sealed class AspireCliTelemetry : IHostedService
             _tagsList.Add(new(TelemetryConstants.Tags.OsName, GetOsName()));
             _tagsList.Add(new(TelemetryConstants.Tags.OsType, GetOsType()));
             _tagsList.Add(new(TelemetryConstants.Tags.OsVersion, Environment.OSVersion.Version.ToString()));
+        }
+        catch (OperationCanceledException)
+        {
+            // Initialization was canceled. This can happen if the application is shutting down before initialization completes.
+            // Log a warning but don't treat it as an error since it's expected during shutdown.
+            _logger.LogWarning("Telemetry initialization was canceled.");
         }
         catch (Exception ex)
         {

@@ -173,7 +173,10 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or InvalidOperationException or JsonException or HttpRequestException or TaskCanceledException)
             {
-                _logger.LogDebug(ex, "Microsoft internal probe '{ProbeName}' failed.", probe.Name);
+                if (_logger.IsEnabled(LogLevel.Debug))
+                {
+                    _logger.LogDebug(ex, "Microsoft internal probe '{ProbeName}' failed.", probe.Name);
+                }
                 return false;
             }
         }, CancellationToken.None);
@@ -187,11 +190,17 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
         catch (TimeoutException ex)
         {
-            _logger.LogDebug(ex, "Timed out waiting for cancelled Microsoft internal probes to drain.");
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug(ex, "Timed out waiting for cancelled Microsoft internal probes to drain.");
+            }
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "A cancelled Microsoft internal probe failed while draining.");
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug(ex, "A cancelled Microsoft internal probe failed while draining.");
+            }
         }
     }
 
@@ -217,7 +226,10 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
-            _logger.LogDebug(ex, "Failed to read Microsoft internal detector cache from {CacheFilePath}.", _cacheFilePath);
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug(ex, "Failed to read Microsoft internal detector cache from {CacheFilePath}.", _cacheFilePath);
+            }
             return null;
         }
     }
@@ -246,7 +258,10 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            _logger.LogDebug(ex, "Failed to write Microsoft internal detector cache to {CacheFilePath}.", _cacheFilePath);
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug(ex, "Failed to write Microsoft internal detector cache to {CacheFilePath}.", _cacheFilePath);
+            }
         }
         finally
         {
