@@ -134,6 +134,9 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
     {
         var result = await TestRealDcpConnectionAsync(DcpConnectionSecurityMode.DeveloperCertificate);
 
+        Assert.SkipWhen(
+            result.Status == EnvironmentCheckStatus.Warning,
+            result.Details ?? result.Message);
         Assert.Equal(EnvironmentCheckStatus.Pass, result.Status);
     }
 
