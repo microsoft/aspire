@@ -229,7 +229,7 @@ internal sealed class DcpConnectionTester(
 
                 if (mode == DcpConnectionSecurityMode.DeveloperCertificate)
                 {
-                    AddDeveloperCertificateArguments(startInfo, certificateManager, sessionDirectory);
+                    AddDeveloperCertificateArguments(startInfo, certificateManager);
                 }
 
                 var extensionsPath = Path.Combine(dcpDirectory, "ext");
@@ -377,7 +377,7 @@ internal sealed class DcpConnectionTester(
             }
         }
 
-        private static void AddDeveloperCertificateArguments(ProcessStartInfo startInfo, CertificateManager certificateManager, string sessionDirectory)
+        private static void AddDeveloperCertificateArguments(ProcessStartInfo startInfo, CertificateManager certificateManager)
         {
             var certificates = certificateManager.ListCertificates(StoreName.My, StoreLocation.CurrentUser, isValid: true);
             try
@@ -404,10 +404,8 @@ internal sealed class DcpConnectionTester(
                     return;
                 }
 
-                var cachedPaths = DcpDeveloperCertificateCache.TryPrepareCertificateFilePaths(certificate);
-                var (certificatePath, keyPath) = cachedPaths is null
-                    ? ExportDeveloperCertificate(certificateManager, certificate, sessionDirectory)
-                    : (cachedPaths.Value.CertificatePath, cachedPaths.Value.KeyPath);
+                var certificatePath = DcpDeveloperCertificateCache.EnsureDeveloperCertificateCache(certificateManager, certificate);
+                var keyPath = Path.ChangeExtension(certificatePath, ".key");
 
                 startInfo.ArgumentList.Add("--tls-cert-file");
                 startInfo.ArgumentList.Add(certificatePath);
@@ -420,17 +418,6 @@ internal sealed class DcpConnectionTester(
             }
         }
 
-        private static (string CertificatePath, string KeyPath) ExportDeveloperCertificate(
-            CertificateManager certificateManager,
-            X509Certificate2 certificate,
-            string sessionDirectory)
-        {
-            var certificatePath = Path.Combine(sessionDirectory, "dcp-dev-cert.crt");
-            certificateManager.ExportCertificate(certificate, certificatePath, includePrivateKey: true, password: null, CertificateKeyExportFormat.Pem);
-            var keyPath = Path.ChangeExtension(certificatePath, ".key");
-
-            return (certificatePath, keyPath);
-        }
     }
 
     private sealed class ProcessOutputBuffer
@@ -463,40 +450,43 @@ internal sealed class DcpDeveloperCertificateUnavailableException(string message
 
 internal static class DcpDeveloperCertificateCache
 {
-    public static DcpDeveloperCertificateCachePaths? TryPrepareCertificateFilePaths(X509Certificate2 certificate)
+    public static string EnsureDeveloperCertificateCache(CertificateManager certificateManager, X509Certificate2 certificate)
     {
         if (!certificate.IsAspNetCoreDevelopmentCertificate() || string.IsNullOrWhiteSpace(certificate.Thumbprint))
         {
-            return null;
+            throw new DcpDeveloperCertificateUnavailableException("The ASP.NET Core HTTPS development certificate could not be cached because it was not a valid development certificate.");
         }
 
         var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         if (string.IsNullOrWhiteSpace(userProfile))
         {
-            return null;
+            throw new DcpDeveloperCertificateUnavailableException("The ASP.NET Core HTTPS development certificate could not be cached because the user profile directory could not be determined.");
         }
 
         // This matches DeveloperCertificateService.GetKeyMaterialCacheLookup, which uses
         // SHA256(thumbprint) for unencrypted ASP.NET Core development certificate caches.
         var lookup = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(certificate.Thumbprint)));
         var cacheDirectory = Path.Combine(userProfile, ".aspire", "dev-certs", "https");
-        var keyPath = Path.Combine(cacheDirectory, $"{lookup}.key");
+        var certificatePath = Path.Combine(cacheDirectory, $"{lookup}.crt");
+        var keyPath = Path.ChangeExtension(certificatePath, ".key");
+
         if (!File.Exists(keyPath))
         {
-            return null;
+            certificateManager.ExportCertificate(certificate, certificatePath, includePrivateKey: true, password: null, CertificateKeyExportFormat.Pem);
         }
-
-        var certificatePath = Path.Combine(cacheDirectory, $"{lookup}.crt");
-        if (!File.Exists(certificatePath))
+        else
         {
-            File.WriteAllText(certificatePath, certificate.ExportCertificatePem());
+            // The public certificate does not require private key access, so fill older caches
+            // without re-exporting the cached key.
+            if (!File.Exists(certificatePath))
+            {
+                File.WriteAllText(certificatePath, certificate.ExportCertificatePem());
+            }
         }
 
-        return new DcpDeveloperCertificateCachePaths(certificatePath, keyPath);
+        return certificatePath;
     }
 }
-
-internal readonly record struct DcpDeveloperCertificateCachePaths(string CertificatePath, string KeyPath);
 
 internal sealed class DcpKubeconfig : IDisposable
 {

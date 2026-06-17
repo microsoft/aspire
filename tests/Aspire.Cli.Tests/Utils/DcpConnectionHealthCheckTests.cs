@@ -163,7 +163,7 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void DcpDeveloperCertificateCache_WhenCachedKeyExists_ReturnsCachedKeyAndPublicCertificatePath()
+    public void DcpDeveloperCertificateCache_WhenCachedKeyExists_WritesPublicCertificateToExistingCache()
     {
         Assert.SkipUnless(OperatingSystem.IsLinux(), "Only supported on Linux in CI.");
 
@@ -186,12 +186,11 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
             var keyPath = Path.Combine(cacheDirectory, $"{lookup}.key");
             File.WriteAllText(keyPath, "cached key");
 
-            var paths = DcpDeveloperCertificateCache.TryPrepareCertificateFilePaths(certificate);
+            var cachedCertificatePath = DcpDeveloperCertificateCache.EnsureDeveloperCertificateCache(certificateManager, certificate);
 
-            Assert.NotNull(paths);
-            Assert.Equal(certificatePath, paths.Value.CertificatePath);
+            Assert.Equal(certificatePath, cachedCertificatePath);
             Assert.Equal(certificate.ExportCertificatePem(), File.ReadAllText(certificatePath));
-            Assert.Equal(keyPath, paths.Value.KeyPath);
+            Assert.Equal("cached key", File.ReadAllText(keyPath));
         }, homeDirectory.Path, options).Dispose();
     }
 
