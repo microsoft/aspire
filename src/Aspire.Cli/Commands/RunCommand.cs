@@ -80,7 +80,13 @@ internal sealed class RunCommand : BaseCommand
 
     // Graceful shutdown budget for `aspire run`. DCP gets a cooperative window to drain
     // resources before the central drain budget arms and ladders escalate to forceful kill.
-    internal static readonly TimeSpan s_gracefulShutdownBudget = TimeSpan.FromSeconds(5);
+    // 10s gives the AppHost process enough time to actually shut down cleanly: a default
+    // starter template (apphost + 2 services + dashboard) consistently takes ~6s to drain
+    // all hosted services and exit, with built-in margin for slower hardware and AppHosts
+    // that own additional resources. Pre-bump (5s) was too tight — the budget consistently
+    // expired ~1s before clean exit, forcing a tree-kill in the final stretch of graceful
+    // shutdown and producing zombie-shaped exits with no SIGINT handler observation.
+    internal static readonly TimeSpan s_gracefulShutdownBudget = TimeSpan.FromSeconds(10);
 
     // Guest AppHosts can bring up the temporary server/backchannel and then fail immediately
     // afterward when the guest startup process hits a syntax, pre-execute, or model validation

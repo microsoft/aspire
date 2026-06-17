@@ -41,35 +41,23 @@ internal static class ProcessGracefulShutdownLadder
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(processDescription);
 
-        // Phase 1: best-effort graceful signal bounded by the central token. The DCP path on
-        // Windows shells out (layout discovery + DCP process launch + wait) and could consume
-        // the entire graceful window before we ever reach WaitForExitAsync. Sharing the central
-        // token means a 2nd-Ctrl+C Expire() interrupts the slow DCP shell-out exactly the same
-        // way it interrupts the WaitForExitAsync below.
-        try
-        {
-            // startTime is intentionally null: includeStartTimeForDcp is always false at this
-            // call site (the Unix branch ignores StartTime entirely; the Windows DCP branch
-            // only consults it when includeStartTimeForDcp is true). Querying Process.StartTime
-            // here would just risk an InvalidOperationException on a process whose handle has
-            // been closed or is in a state that disallows the read.
-            await signaler.RequestProcessTreeGracefulShutdownAsync(
-                process.Id,
-                startTime: null,
-                includeStartTimeForDcp: false,
-                gracefulToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (gracefulToken.IsCancellationRequested)
-        {
-            // Graceful budget expired before the signal could be issued; fall through to kill.
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Failed to issue graceful shutdown to {ProcessDescription} (pid {Pid}); escalating to kill.", processDescription, SafePid(process));
-        }
+        // Phase 1: fire-and-forget the graceful signal so its wait does not consume the
+        // graceful budget. On Windows, DCP's `stop-process-tree` delivers the Ctrl+C signal
+        // synchronously (in milliseconds) and then BLOCKS until the target process actually
+        // exits. Awaiting it sequentially would burn the entire graceful window inside DCP's
+        // wait, leaving zero time for Phase 2's WaitForExitAsync — which then forces a
+        // tree-kill at the budget boundary even when the AppHost was milliseconds away from
+        // exiting cleanly. By running the signaler in parallel, the apphost receives the
+        // signal immediately AND the full graceful budget is allocated to actual exit-wait.
+        // Important: the signaler is invoked unconditionally (not gated on the graceful
+        // token) so that when the token is already cancelled at ladder-entry the signal
+        // still goes out — callers like `aspire stop` Expire() the budget intentionally
+        // and rely on the signal still being dispatched best-effort.
+        var signalTask = InvokeSignalerAsync(signaler, SafePid(process), gracefulToken, processDescription, logger);
 
-        // Phase 2: wait for exit bounded by the same central token. Whoever initiated shutdown
-        // (user Ctrl+C via CCM.Cancel) already started the clock; we only consume the token.
+        // Phase 2: wait for exit with the FULL graceful budget. When the apphost exits,
+        // the signaler task observes the same exit and completes shortly after. Whoever
+        // triggered shutdown (CCM.Cancel) owns the timing of `gracefulToken`.
         try
         {
             await process.WaitForExitAsync(gracefulToken).ConfigureAwait(false);
@@ -81,6 +69,18 @@ internal static class ProcessGracefulShutdownLadder
 
         if (process.HasExited)
         {
+            // Best-effort: drain the signaler so its dcp shell-out doesn't outlive us as
+            // an orphan; safe because the process has already exited so dcp will return
+            // promptly. Bounded so a stuck dcp can't keep us pinned.
+            try
+            {
+                using var drainCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                await signalTask.WaitAsync(drainCts.Token).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Best-effort.
+            }
             return;
         }
 
@@ -118,6 +118,44 @@ internal static class ProcessGracefulShutdownLadder
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Error draining killed {ProcessDescription} (pid {Pid}).", processDescription, SafePid(process));
+        }
+    }
+
+    private static async Task InvokeSignalerAsync(
+        IProcessTreeGracefulShutdownSignaler signaler,
+        int pid,
+        CancellationToken gracefulToken,
+        string processDescription,
+        ILogger logger)
+    {
+        try
+        {
+            // startTime is intentionally null: includeStartTimeForDcp is always false at this
+            // call site (the Unix branch ignores StartTime entirely; the Windows DCP branch
+            // only consults it when includeStartTimeForDcp is true). Querying Process.StartTime
+            // here would just risk an InvalidOperationException on a process whose handle has
+            // been closed or is in a state that disallows the read.
+            //
+            // Yield onto the thread pool so we don't block the caller while the signaler
+            // performs its (sometimes slow) work — DCP's stop-process-tree blocks until the
+            // target process actually exits, which is exactly the wait we want to avoid
+            // serializing in front of Phase 2's WaitForExitAsync.
+            await Task.Yield();
+
+            await signaler.RequestProcessTreeGracefulShutdownAsync(
+                pid,
+                startTime: null,
+                includeStartTimeForDcp: false,
+                gracefulToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (gracefulToken.IsCancellationRequested)
+        {
+            // Graceful budget expired before the signal could be issued; the kill path
+            // is responsible for terminating the process.
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to issue graceful shutdown to {ProcessDescription} (pid {Pid}); escalating to kill.", processDescription, pid);
         }
     }
 
