@@ -170,6 +170,15 @@ internal sealed class BicepProvisioner(
         // stopped or a command was canceled.
         var sectionName = $"Azure:Deployments:{resource.Name}";
         var stateSection = await deploymentStateManager.AcquireSectionAsync(sectionName, cancellationToken).ConfigureAwait(false);
+
+        // Example cached section shape:
+        //   Azure:Deployments:cache
+        //     Id = /subscriptions/<subscription>/resourceGroups/<group>/providers/Microsoft.Resources/deployments/cache
+        //     Parameters = {"redisName":{"value":"cache"}}
+        //     Scope = {"subscriptionId":"<subscription>","resourceGroup":"<group>"}
+        //     CheckSum = <model-checksum>
+        //     ProvisioningState = Running
+        // Only sections that still claim a running deployment with a parseable ARM ID can be adopted.
         if (!IsRunningCachedDeployment(stateSection) ||
             stateSection.Data[BicepUtilities.DeploymentStateIdKey]?.GetValue<string>() is not { Length: > 0 } deploymentId ||
             !ResourceIdentifier.TryParse(deploymentId, out var deploymentResourceId) ||
