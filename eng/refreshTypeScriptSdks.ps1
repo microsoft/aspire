@@ -11,9 +11,14 @@ $PSNativeCommandUseErrorActionPreference = $true
 
 $scriptDir = $PSScriptRoot
 $repoRoot = Split-Path -Parent $scriptDir
-$playgroundRoot = Join-Path -Path $repoRoot -ChildPath 'playground/polyglot/TypeScript'
+# The TypeScript playground AppHosts live under these roots. Each AppHost is a directory
+# containing an entry point named 'apphost.mts' (or the legacy 'apphost.ts'). This replaced
+# the old 'playground/polyglot/TypeScript/<app>/ValidationAppHost/apphost.ts' layout.
+$playgroundRoots = @(
+    Join-Path -Path $repoRoot -ChildPath 'playground/TypeScriptAppHost'
+    Join-Path -Path $repoRoot -ChildPath 'playground/TypeScriptApps'
+)
 $cliProject = Join-Path -Path $repoRoot -ChildPath 'src/Aspire.Cli/Aspire.Cli.csproj'
-$requiredGeneratedFiles = @('aspire.ts', 'base.ts', 'transport.ts')
 
 function Invoke-RepoRestore {
     if ($IsWindows -or $env:OS -eq 'Windows_NT') {
@@ -25,27 +30,44 @@ function Invoke-RepoRestore {
 }
 
 function Get-ValidationAppHosts {
-    if (-not (Test-Path $playgroundRoot)) {
-        throw "TypeScript playground directory not found at '$playgroundRoot'."
-    }
-
-    $appHosts = foreach ($integrationDir in Get-ChildItem -Path $playgroundRoot -Directory | Sort-Object Name) {
-        if ($integrationDir.Name -notlike $AppPattern) {
+    # Discover TypeScript AppHosts by their entry point file. The CLI recognizes both the
+    # modern 'apphost.mts' and the legacy 'apphost.ts' (see TypeScriptLanguageSupport
+    # detection patterns). The directory containing the entry point is the working directory
+    # for npm install, 'aspire restore', and the generated '.aspire/modules' SDK output.
+    $appHosts = foreach ($root in $playgroundRoots) {
+        if (-not (Test-Path $root)) {
             continue
         }
 
-        $appHostDir = Join-Path $integrationDir.FullName 'ValidationAppHost'
-        $appHostEntryPoint = Join-Path $appHostDir 'apphost.ts'
-        if (Test-Path $appHostEntryPoint) {
-            Get-Item $appHostDir
+        foreach ($entryPoint in Get-ChildItem -Path $root -Recurse -File -Include 'apphost.mts', 'apphost.ts' | Sort-Object FullName) {
+            $appHostDir = $entryPoint.Directory
+            $relativeName = [System.IO.Path]::GetRelativePath($repoRoot, $appHostDir.FullName).Replace('\', '/')
+
+            if ($relativeName -notlike $AppPattern -and $appHostDir.Name -notlike $AppPattern) {
+                continue
+            }
+
+            [pscustomobject]@{
+                Directory   = $appHostDir.FullName
+                EntryPoint  = $entryPoint.Name
+                DisplayName = $relativeName
+            }
         }
     }
 
     if (@($appHosts).Count -eq 0) {
-        throw "No TypeScript playground ValidationAppHost directories matched '$AppPattern'."
+        throw "No TypeScript playground AppHost directories matched '$AppPattern'."
     }
 
     return @($appHosts)
+}
+
+function Get-RequiredGeneratedFiles([string]$entryPoint) {
+    # The CLI emits generated SDK module files whose extension mirrors the AppHost entry point:
+    # 'apphost.mts' produces '.mts' modules, while the legacy 'apphost.ts' produces '.ts'
+    # modules (see GuestAppHostProject.ConvertGeneratedFilesForLegacyTypeScriptAppHost).
+    $extension = if ($entryPoint -like '*.mts') { 'mts' } else { 'ts' }
+    return @("aspire.$extension", "base.$extension", "transport.$extension")
 }
 
 function Install-NodeDependencies([string]$appDir) {
@@ -64,7 +86,7 @@ function Install-NodeDependencies([string]$appDir) {
     }
 }
 
-function Assert-GeneratedSdkFiles([string]$appDir) {
+function Assert-GeneratedSdkFiles([string]$appDir, [string[]]$requiredGeneratedFiles) {
     $generatedDir = Join-Path $appDir '.aspire/modules'
     foreach ($file in $requiredGeneratedFiles) {
         $path = Join-Path $generatedDir $file
@@ -83,7 +105,7 @@ if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
 }
 
 Write-Host '=== Refreshing TypeScript playground SDKs ==='
-Write-Host "Playground root: $playgroundRoot"
+Write-Host "Playground roots: $($playgroundRoots -join ', ')"
 Write-Host "CLI project: $cliProject"
 
 Invoke-RepoRestore
@@ -97,19 +119,19 @@ $failures = [System.Collections.Generic.List[string]]::new()
 $updated = [System.Collections.Generic.List[string]]::new()
 
 foreach ($appHost in $appHosts) {
-    $appName = '{0}/{1}' -f (Split-Path -Path $appHost.FullName -Parent | Split-Path -Leaf), $appHost.Name
+    $appName = $appHost.DisplayName
 
     Write-Host ''
     Write-Host '----------------------------------------'
     Write-Host "Refreshing: $appName"
     Write-Host '----------------------------------------'
 
-    Push-Location $appHost.FullName
+    Push-Location $appHost.Directory
     try {
         Write-Host '  -> Installing npm dependencies...'
-        Install-NodeDependencies -appDir $appHost.FullName
+        Install-NodeDependencies -appDir $appHost.Directory
 
-        $generatedDir = Join-Path $appHost.FullName '.aspire/modules'
+        $generatedDir = Join-Path $appHost.Directory '.aspire/modules'
         if (Test-Path $generatedDir) {
             Write-Host '  -> Clearing existing generated SDK...'
             Remove-Item -Path $generatedDir -Recurse -Force
@@ -119,7 +141,7 @@ foreach ($appHost in $appHosts) {
         & dotnet run --no-build --project $cliProject -- restore
 
         Write-Host '  -> Verifying generated SDK...'
-        Assert-GeneratedSdkFiles -appDir $appHost.FullName
+        Assert-GeneratedSdkFiles -appDir $appHost.Directory -requiredGeneratedFiles (Get-RequiredGeneratedFiles $appHost.EntryPoint)
 
         Write-Host "  OK $appName refreshed"
         $updated.Add($appName)
