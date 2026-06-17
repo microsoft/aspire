@@ -636,6 +636,9 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
         if (launchProfileArgs is not null)
         {
+            // Launch profile args were originally before the app host args, separated by `--`.
+            // Once this path preserves the caller-provided `dotnet run` command, those args must
+            // move after the inserted SDK options so `dotnet run` parses them as application args.
             launchArgs.AddRange(launchProfileArgs);
         }
 
