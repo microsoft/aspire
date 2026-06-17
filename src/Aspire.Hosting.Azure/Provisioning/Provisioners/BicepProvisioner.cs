@@ -357,7 +357,15 @@ internal sealed class BicepProvisioner(
             return false;
         }
 
-        _ = TryGetDeploymentStateJsonObject(stateSection, BicepUtilities.DeploymentStateScopeKey, resource.Name, out var scope);
+        // Scope is optional cached state. If it is missing or malformed, we can still
+        // adopt the succeeded deployment because the current Azure context supplies
+        // the resource group scope when ConfigureResourceAsync reloads the outputs.
+        JsonObject? scope = null;
+        if (TryGetDeploymentStateJsonObject(stateSection, BicepUtilities.DeploymentStateScopeKey, resource.Name, out var cachedScope))
+        {
+            scope = cachedScope;
+        }
+
         var locationOverride = stateSection.Data[AzureProvisioningController.LocationOverrideKey]?.GetValue<string>();
 
         UpdateDeploymentState(
