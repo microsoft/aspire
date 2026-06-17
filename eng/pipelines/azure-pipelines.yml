@@ -357,6 +357,9 @@ extends:
             LclSource: lclFilesfromPackage
             LclPackageId: 'LCL-JUNO-PROD-ASPIRE'
             CreatePr: false
+            GitHubOrg: microsoft
+            MirrorRepo: aspire
+            MirrorBranch: main
 
     # ----------------------------------------------------------------
     # Template tests: validate that the packed Aspire.* nupkgs produce
