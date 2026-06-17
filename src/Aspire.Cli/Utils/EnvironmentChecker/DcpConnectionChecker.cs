@@ -312,8 +312,7 @@ internal sealed class DcpConnectionChecker(
         {
             await WaitForKubeconfigFileAsync(cancellationToken).ConfigureAwait(false);
 
-            var content = await File.ReadAllTextAsync(_kubeconfigPath, cancellationToken).ConfigureAwait(false);
-            return DcpKubeconfig.Parse(content);
+            return await DcpKubeconfig.ReadFileWithRetryAsync(_kubeconfigPath, cancellationToken).ConfigureAwait(false);
         }
 
         public async Task StopDcpAsync(HttpClient client, DcpKubeconfig kubeconfig, CancellationToken cancellationToken)

@@ -140,6 +140,35 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DcpKubeconfig_ReadFileWithRetryAsync_RetriesWhenInitialContentIsPartial()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var kubeconfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "kubeconfig");
+        await File.WriteAllTextAsync(kubeconfigPath, "clusters:", TestContext.Current.CancellationToken);
+
+        var retryCount = 0;
+        Task DelayAsync(TimeSpan _, CancellationToken cancellationToken)
+        {
+            retryCount++;
+            var completeKubeconfig = """
+                apiVersion: v1
+                kind: Config
+                clusters:
+                - name: dcp
+                  cluster:
+                    server: "https://127.0.0.1:12345"
+                """;
+
+            return File.WriteAllTextAsync(kubeconfigPath, completeKubeconfig, cancellationToken);
+        }
+
+        using var parsed = await DcpKubeconfig.ReadFileWithRetryAsync(kubeconfigPath, TestContext.Current.CancellationToken, DelayAsync);
+
+        Assert.Equal(1, retryCount);
+        Assert.Equal(new Uri("https://127.0.0.1:12345"), parsed.Server);
+    }
+
+    [Fact]
     public void DcpDeveloperCertificateCache_WhenCachedKeyExists_WritesPublicCertificateToExistingCache()
     {
         Assert.SkipUnless(OperatingSystem.IsLinux(), "Only supported on Linux in CI.");

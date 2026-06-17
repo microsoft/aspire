@@ -9,6 +9,9 @@ namespace Aspire.Cli.Utils.EnvironmentChecker;
 
 internal sealed class DcpKubeconfig : IDisposable
 {
+    private const int ReadAttempts = 3;
+    private static readonly TimeSpan s_readRetryDelay = TimeSpan.FromMilliseconds(100);
+
     public required Uri Server { get; init; }
 
     public string? Token { get; init; }
@@ -16,6 +19,26 @@ internal sealed class DcpKubeconfig : IDisposable
     public List<X509Certificate2> CertificateAuthorityCertificates { get; init; } = [];
 
     public X509Certificate2? ClientCertificate { get; init; }
+
+    internal static async Task<DcpKubeconfig> ReadFileWithRetryAsync(string path, CancellationToken cancellationToken, Func<TimeSpan, CancellationToken, Task>? delayAsync = null)
+    {
+        delayAsync ??= Task.Delay;
+
+        for (var attempt = 1; ; attempt++)
+        {
+            var content = await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                return Parse(content);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException && attempt < ReadAttempts)
+            {
+                // DCP creates the kubeconfig path before all content may be flushed. A brief retry
+                // avoids treating a transient partial file as a failed connection check.
+                await delayAsync(s_readRetryDelay, cancellationToken).ConfigureAwait(false);
+            }
+        }
+    }
 
     public static DcpKubeconfig Parse(string content)
     {
