@@ -8,6 +8,7 @@
     <IsPackable>true</IsPackable>
     <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
     <PackageTags>aspire maui hosting</PackageTags>
+    <IsAspirePolyglotCompatible>true</IsAspirePolyglotCompatible>
     <PackageIconFullPath>$(SharedDir)Maui_265x.png</PackageIconFullPath>
   </PropertyGroup>
 

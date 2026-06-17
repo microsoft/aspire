@@ -4,6 +4,7 @@
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
     <PackageTags>aspire integration hosting yarp reverse-proxy api</PackageTags>
+    <IsAspirePolyglotCompatible>true</IsAspirePolyglotCompatible>
     <Description>YARP support for Aspire.</Description>
   </PropertyGroup>
 

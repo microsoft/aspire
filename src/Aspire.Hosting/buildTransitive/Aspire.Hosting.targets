@@ -7,6 +7,20 @@
 
   <ItemGroup Condition="'$(EnableAspireIntegrationAnalyzers)' == 'true'">
     <Analyzer Include="$(_AspireIntegrationAnalyzerAssembly)" Condition="Exists('$(_AspireIntegrationAnalyzerAssembly)')" />
+    <!-- Make the polyglot opt-in visible to ASPIREEXPORT017 so authors who add [AspireExport]
+         coverage but forget <IsAspirePolyglotCompatible>true</IsAspirePolyglotCompatible> fail the build. -->
+    <CompilerVisibleProperty Include="IsAspirePolyglotCompatible" />
   </ItemGroup>
+
+  <!-- Opting in with <IsAspirePolyglotCompatible>true</IsAspirePolyglotCompatible> adds the well-known
+       'polyglot' NuGet tag so `aspire add` surfaces the package to non-C# (polyglot) AppHosts.
+       Evaluated at import time (this targets file is imported after the project body), so both
+       $(IsAspirePolyglotCompatible) and $(PackageTags) already hold their final values. The guard
+       space-pads $(PackageTags) and looks for a whole ' polyglot ' token so an unrelated tag that merely
+       contains the substring does not suppress the marker, and Concat(...).Trim() avoids a leading space
+       when $(PackageTags) was empty. -->
+  <PropertyGroup Condition="'$(IsAspirePolyglotCompatible)' == 'true' and !$([System.String]::Concat(' ', '$(PackageTags)', ' ').Contains(' polyglot '))">
+    <PackageTags>$([System.String]::Concat('$(PackageTags)', ' polyglot').Trim())</PackageTags>
+  </PropertyGroup>
 
 </Project>

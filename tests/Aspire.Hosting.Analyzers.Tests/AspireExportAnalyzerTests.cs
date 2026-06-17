@@ -2455,4 +2455,93 @@ public class AspireExportAnalyzerTests
 
         await test.RunAsync();
     }
+
+    [Fact]
+    public async Task ExportWithoutPolyglotMarker_ReportsASPIREEXPORT017()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_missingPolyglotCompatibleMarker;
+
+        // The marker is omitted entirely (isAspirePolyglotCompatible: null), simulating an integration
+        // that adds [AspireExport] coverage but forgets to opt in via <IsAspirePolyglotCompatible>.
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public static class TestExports
+            {
+                [AspireExport]
+                public static string TestMethod() => "test";
+            }
+            """,
+            [new DiagnosticResult(diagnostic).WithArguments("TestProject")],
+            includeAspireHostingReference: true,
+            isAspirePolyglotCompatible: null);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task ExportWithPolyglotMarkerFalse_ReportsASPIREEXPORT017()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_missingPolyglotCompatibleMarker;
+
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public static class TestExports
+            {
+                [AspireExport]
+                public static string TestMethod() => "test";
+            }
+            """,
+            [new DiagnosticResult(diagnostic).WithArguments("TestProject")],
+            includeAspireHostingReference: true,
+            isAspirePolyglotCompatible: "false");
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task ExportWithPolyglotMarker_NoDiagnostics()
+    {
+        // The marker defaults to "true" in the harness, so an assembly with export coverage that opts in
+        // must not report ASPIREEXPORT017.
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public static class TestExports
+            {
+                [AspireExport]
+                public static string TestMethod() => "test";
+            }
+            """, []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task NoExports_WithoutPolyglotMarker_NoDiagnostics()
+    {
+        // An assembly with no [AspireExport] coverage is not an integration, so the missing marker is fine.
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public static class TestHelpers
+            {
+                public static string TestMethod() => "test";
+            }
+            """,
+            [],
+            includeAspireHostingReference: true,
+            isAspirePolyglotCompatible: null);
+
+        await test.RunAsync();
+    }
 }

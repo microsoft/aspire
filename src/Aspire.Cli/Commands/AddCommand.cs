@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
+using System.Collections.Immutable;
 using System.Globalization;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
@@ -44,6 +45,10 @@ internal sealed class AddCommand : BaseCommand
     {
         Description = AddCommandStrings.SourceArgumentDescription
     };
+    private static readonly Option<bool> s_allOption = new("--all")
+    {
+        Description = AddCommandStrings.AllArgumentDescription
+    };
 
     public AddCommand(IProjectLocator projectLocator, IntegrationPackageSearchService integrationPackageSearchService, IAddCommandPrompter prompter, IDotNetSdkInstaller sdkInstaller, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, ProfilingTelemetry profilingTelemetry, CommonCommandServices services)
         : base("add", AddCommandStrings.Description, services)
@@ -60,6 +65,7 @@ internal sealed class AddCommand : BaseCommand
         Options.Add(s_appHostOption);
         Options.Add(s_versionOption);
         Options.Add(s_sourceOption);
+        Options.Add(s_allOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -96,6 +102,7 @@ internal sealed class AddCommand : BaseCommand
             var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
             var version = parseResult.GetValue(s_versionOption);
             var source = parseResult.GetValue(s_sourceOption);
+            var includeAllIntegrations = parseResult.GetValue(s_allOption);
             addActivity = _profilingTelemetry.StartAddCommand(integrationName, version, source, passedAppHostProjectFile);
 
             AppHostProjectSearchResult searchResult;
@@ -146,13 +153,34 @@ internal sealed class AddCommand : BaseCommand
                 return AddCommandFromExitCode(exitCode);
             }
 
+            // For non-C# (polyglot) AppHosts, only integrations with ATS export coverage are usable: a
+            // TypeScript/Python/Go/Java/Rust AppHost gets a generated SDK only for integrations marked
+            // <IsAspirePolyglotCompatible>, surfaced via the `polyglot` NuGet tag. Decide up front whether to
+            // hide the rest so the polyglot allow-list is resolved in the same discovery pass as the
+            // integration search rather than a second serial round. C# AppHosts consume the C# API directly
+            // and are never filtered; --all opts out of filtering entirely.
+            var applyPolyglotFilter = project.LanguageId != KnownLanguageId.CSharp && !includeAllIntegrations;
+
             List<(NuGetPackage Package, PackageChannel Channel)> packagesWithChannels;
+            IReadOnlySet<string> polyglotCompatibleIds = ImmutableHashSet<string>.Empty;
             using (var searchPackagesActivity = _profilingTelemetry.StartAddSearchPackages(configuredChannel))
             {
-                var discoveredPackages = await InteractionService.ShowStatusAsync(
-                    AddCommandStrings.SearchingForAspirePackages,
-                    async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(effectiveAppHostProjectFile.Directory!, configuredChannel, cancellationToken));
-                packagesWithChannels = discoveredPackages as List<(NuGetPackage Package, PackageChannel Channel)> ?? discoveredPackages.ToList();
+                if (applyPolyglotFilter)
+                {
+                    var (discoveredPackages, discoveredPolyglotIds) = await InteractionService.ShowStatusAsync(
+                        AddCommandStrings.SearchingForAspirePackages,
+                        async () => await _integrationPackageSearchService.GetIntegrationPackagesWithPolyglotCompatibilityAsync(effectiveAppHostProjectFile.Directory!, configuredChannel, cancellationToken));
+                    packagesWithChannels = discoveredPackages as List<(NuGetPackage Package, PackageChannel Channel)> ?? discoveredPackages.ToList();
+                    polyglotCompatibleIds = discoveredPolyglotIds;
+                }
+                else
+                {
+                    var discoveredPackages = await InteractionService.ShowStatusAsync(
+                        AddCommandStrings.SearchingForAspirePackages,
+                        async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(effectiveAppHostProjectFile.Directory!, configuredChannel, cancellationToken));
+                    packagesWithChannels = discoveredPackages as List<(NuGetPackage Package, PackageChannel Channel)> ?? discoveredPackages.ToList();
+                }
+
                 var packageCount = packagesWithChannels.Count;
                 searchPackagesActivity.SetAddPackageSearchResultCount(packageCount);
                 addActivity.SetAddPackageSearchResultCount(packageCount);
@@ -168,6 +196,38 @@ internal sealed class AddCommand : BaseCommand
             if (packagesWithShortName.Count == 0)
             {
                 return AddCommandFailure(CliExitCodes.FailedToAddPackage, AddCommandStrings.NoPackagesFound);
+            }
+
+            if (applyPolyglotFilter)
+            {
+                bool MatchesIntegrationName((string FriendlyName, NuGetPackage Package, PackageChannel Channel) p)
+                    => p.FriendlyName == integrationName || p.Package.Id == integrationName;
+
+                // If the user named a specific integration that exists but is not polyglot-compatible, give a
+                // precise, actionable error rather than silently dropping it and fuzzy-matching something else.
+                if (integrationName is not null
+                    && packagesWithShortName.Any(p => MatchesIntegrationName(p) && !polyglotCompatibleIds.Contains(p.Package.Id))
+                    && !packagesWithShortName.Any(p => MatchesIntegrationName(p) && polyglotCompatibleIds.Contains(p.Package.Id)))
+                {
+                    var notCompatibleMessage = string.Format(CultureInfo.CurrentCulture, AddCommandStrings.IntegrationNotPolyglotCompatible, integrationName, project.LanguageId);
+                    return AddCommandFailure(CliExitCodes.FailedToAddPackage, notCompatibleMessage);
+                }
+
+                var compatiblePackagesWithShortName = packagesWithShortName
+                    .Where(p => polyglotCompatibleIds.Contains(p.Package.Id))
+                    .ToList();
+                var hiddenIntegrationCount = packagesWithShortName.Count - compatiblePackagesWithShortName.Count;
+                packagesWithShortName = compatiblePackagesWithShortName;
+
+                if (packagesWithShortName.Count == 0)
+                {
+                    return AddCommandFailure(CliExitCodes.FailedToAddPackage, AddCommandStrings.NoPolyglotCompatibleIntegrationsFound);
+                }
+
+                if (hiddenIntegrationCount > 0)
+                {
+                    InteractionService.DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.PolyglotIntegrationsHidden, hiddenIntegrationCount));
+                }
             }
 
             var filteredPackagesWithShortName = packagesWithShortName

@@ -4,6 +4,7 @@
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
     <PackageTags>aspire integration hosting Node Nodejs javascript framework runtime</PackageTags>
+    <IsAspirePolyglotCompatible>true</IsAspirePolyglotCompatible>
     <Description>JavaScript support for Aspire.</Description>
   </PropertyGroup>
 

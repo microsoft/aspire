@@ -4,6 +4,7 @@
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
     <PackageTags>aspire integration hosting azure keyvault security secrets cloud</PackageTags>
+    <IsAspirePolyglotCompatible>true</IsAspirePolyglotCompatible>
     <Description>Azure resource types for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)AzureKeyVault_256x.png</PackageIconFullPath>
   </PropertyGroup>

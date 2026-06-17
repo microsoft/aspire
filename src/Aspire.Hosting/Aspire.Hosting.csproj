@@ -6,6 +6,7 @@
     <NoWarn>$(NoWarn);CS8002;IL3000</NoWarn>
     <IsPackable>true</IsPackable>
     <PackageTags>aspire hosting orchestration</PackageTags>
+    <IsAspirePolyglotCompatible>true</IsAspirePolyglotCompatible>
     <Description>Core abstractions for the Aspire application model.</Description>
   </PropertyGroup>
 

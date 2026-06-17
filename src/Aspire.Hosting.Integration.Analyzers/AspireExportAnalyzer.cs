@@ -3,6 +3,7 @@
 
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.Analyzers.Infrastructure;
 using Microsoft.CodeAnalysis;
@@ -150,16 +151,23 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
         var generatedMethodNames = new ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>>();
         AnalyzeAssemblyExportedTypes(context.Compilation, aspireExportAttribute, aspireExportIgnoreAttribute, capabilityIds, generatedMethodNames, context.CancellationToken);
 
+        // ASPIREEXPORT017: track whether this assembly has any [AspireExport] coverage so the
+        // compilation-end action can require the polyglot opt-in. Seeded from assembly-level and
+        // type-level exports; member-level exports flip it from the symbol actions below.
+        // Writing 'true' from concurrent symbol actions is safe because the value is monotonic.
+        var assemblyHasAspireExport = new StrongBox<bool>(
+            currentAssemblyExportedTypes.Count > 0 || HasAnyAspireExportAttribute(context.Compilation.Assembly, aspireExportAttribute));
+
         context.RegisterSymbolAction(
-            c => AnalyzeMethod(c, wellKnownTypes, aspireExportAttribute, aspireExportIgnoreAttribute, aspireUnionAttribute, currentAssemblyExportedTypes, exportsByKey, capabilityIds, generatedMethodNames),
+            c => AnalyzeMethod(c, wellKnownTypes, aspireExportAttribute, aspireExportIgnoreAttribute, aspireUnionAttribute, currentAssemblyExportedTypes, exportsByKey, capabilityIds, generatedMethodNames, assemblyHasAspireExport),
             SymbolKind.Method);
 
         context.RegisterSymbolAction(
-            c => AnalyzeNamedType(c, wellKnownTypes, aspireExportAttribute, aspireExportIgnoreAttribute, capabilityIds, generatedMethodNames),
+            c => AnalyzeNamedType(c, wellKnownTypes, aspireExportAttribute, aspireExportIgnoreAttribute, capabilityIds, generatedMethodNames, assemblyHasAspireExport),
             SymbolKind.NamedType);
 
         context.RegisterSymbolAction(
-            c => AnalyzeProperty(c, aspireExportAttribute),
+            c => AnalyzeProperty(c, aspireExportAttribute, assemblyHasAspireExport),
             SymbolKind.Property);
 
         context.RegisterCompilationEndAction(c => ReportAssemblyExportDescriptions(c, aspireExportAttribute));
@@ -168,6 +176,10 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
         context.RegisterCompilationEndAction(c => ReportDuplicateExports(c, exportsByKey));
         context.RegisterCompilationEndAction(c => ReportDuplicateCapabilityIds(c, capabilityIds));
         context.RegisterCompilationEndAction(c => ReportDuplicateGeneratedMethodNames(c, generatedMethodNames));
+
+        // ASPIREEXPORT017: an integration with [AspireExport] coverage must opt in to polyglot
+        // compatibility so the 'polyglot' NuGet tag is emitted and discovery can surface it.
+        context.RegisterCompilationEndAction(c => ReportMissingPolyglotCompatibleMarker(c, assemblyHasAspireExport));
 
         // Warn when exported builder methods invoke synchronous callback delegates inline. Deferred callbacks
         // that are stored for later execution are fine, and exports that opt into background-thread dispatch
@@ -218,7 +230,8 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
         HashSet<ITypeSymbol> currentAssemblyExportedTypes,
         ConcurrentDictionary<(string ExportId, string TargetType), ConcurrentBag<(IMethodSymbol Method, Location Location)>> exportsByKey,
         ConcurrentDictionary<string, ConcurrentBag<CapabilityExport>> capabilityIds,
-        ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>> generatedMethodNames)
+        ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>> generatedMethodNames,
+        StrongBox<bool> assemblyHasAspireExport)
     {
         var method = (IMethodSymbol)context.Symbol;
 
@@ -266,6 +279,9 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
         {
             return;
         }
+
+        // ASPIREEXPORT017: this assembly has at least one exported member.
+        assemblyHasAspireExport.Value = true;
 
         var attributeSyntax = exportAttribute.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken);
         var location = attributeSyntax?.GetLocation() ?? method.Locations.FirstOrDefault() ?? Location.None;
@@ -392,7 +408,8 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
         INamedTypeSymbol aspireExportAttribute,
         INamedTypeSymbol? aspireExportIgnoreAttribute,
         ConcurrentDictionary<string, ConcurrentBag<CapabilityExport>> capabilityIds,
-        ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>> generatedMethodNames)
+        ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>> generatedMethodNames,
+        StrongBox<bool> assemblyHasAspireExport)
     {
         var type = (INamedTypeSymbol)context.Symbol;
         AnalyzeDtoType(type, wellKnownTypes, aspireExportIgnoreAttribute, context);
@@ -400,6 +417,9 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
         var typeExportAttribute = GetContainingTypeAspireExportAttribute(type, aspireExportAttribute);
         if (typeExportAttribute is not null)
         {
+            // ASPIREEXPORT017: a type-level [AspireExport] is export coverage too.
+            assemblyHasAspireExport.Value = true;
+
             var location = GetAttributeLocation(typeExportAttribute, context.CancellationToken) ?? type.Locations.FirstOrDefault() ?? Location.None;
             AnalyzeExportDescription(context, typeExportAttribute, location);
         }
@@ -407,7 +427,7 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
         AnalyzeContextType(type, typeExportAttribute, context.Compilation.Assembly.Identity.Name, aspireExportAttribute, aspireExportIgnoreAttribute, capabilityIds, generatedMethodNames, context.CancellationToken);
     }
 
-    private static void AnalyzeProperty(SymbolAnalysisContext context, INamedTypeSymbol aspireExportAttribute)
+    private static void AnalyzeProperty(SymbolAnalysisContext context, INamedTypeSymbol aspireExportAttribute, StrongBox<bool> assemblyHasAspireExport)
     {
         var property = (IPropertySymbol)context.Symbol;
         var propertyExportAttribute = GetAspireExportAttribute(property, aspireExportAttribute);
@@ -415,6 +435,9 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
         {
             return;
         }
+
+        // ASPIREEXPORT017: a property-level [AspireExport] is export coverage too.
+        assemblyHasAspireExport.Value = true;
 
         var location = GetAttributeLocation(propertyExportAttribute, context.CancellationToken) ?? property.Locations.FirstOrDefault() ?? Location.None;
         AnalyzeExportDescription(context, propertyExportAttribute, location);
@@ -462,6 +485,50 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
                 context.ReportDiagnostic(Diagnostic.Create(Diagnostics.s_descriptionShouldUseXmlDocs, location));
             }
         }
+    }
+
+    // ASPIREEXPORT017: integrations that expose any [AspireExport] surface must opt in to polyglot
+    // compatibility via <IsAspirePolyglotCompatible>true</IsAspirePolyglotCompatible>. The opt-in adds the
+    // 'polyglot' NuGet tag so `aspire add` can surface the integration to non-C# AppHosts, and the build
+    // fails here when an author adds export coverage but forgets the marker.
+    private static void ReportMissingPolyglotCompatibleMarker(CompilationAnalysisContext context, StrongBox<bool> assemblyHasAspireExport)
+    {
+        if (!assemblyHasAspireExport.Value)
+        {
+            return;
+        }
+
+        if (IsPolyglotCompatibleMarkerSet(context.Options.AnalyzerConfigOptionsProvider.GlobalOptions))
+        {
+            return;
+        }
+
+        context.ReportDiagnostic(Diagnostic.Create(
+            Diagnostics.s_missingPolyglotCompatibleMarker,
+            Location.None,
+            context.Compilation.Assembly.Identity.Name));
+    }
+
+    private static bool IsPolyglotCompatibleMarkerSet(Microsoft.CodeAnalysis.Diagnostics.AnalyzerConfigOptions options)
+    {
+        // Exposed via <CompilerVisibleProperty Include="IsAspirePolyglotCompatible" /> in the build, surfaced
+        // to analyzers as the 'build_property.<name>' key.
+        return options.TryGetValue("build_property.IsAspirePolyglotCompatible", out var value)
+            && bool.TryParse(value, out var enabled)
+            && enabled;
+    }
+
+    private static bool HasAnyAspireExportAttribute(IAssemblySymbol assembly, INamedTypeSymbol aspireExportAttribute)
+    {
+        foreach (var attribute in assembly.GetAttributes())
+        {
+            if (SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, aspireExportAttribute))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void AnalyzeAssemblyExportedTypes(

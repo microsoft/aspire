@@ -4,6 +4,7 @@
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
     <PackageTags>aspire integration hosting azure monitoring observability cloud applicationinsights</PackageTags>
+    <IsAspirePolyglotCompatible>true</IsAspirePolyglotCompatible>
     <Description>Azure Application Insights resource types for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)AzureAppInsights_256x.png</PackageIconFullPath>
   </PropertyGroup>

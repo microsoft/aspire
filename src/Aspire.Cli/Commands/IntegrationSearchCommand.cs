@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
+using System.Collections.Immutable;
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Interaction;
@@ -22,6 +23,10 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
     {
         Description = AddCommandStrings.FormatOptionDescription
     };
+    private readonly Option<bool> _allOption = new("--all")
+    {
+        Description = AddCommandStrings.AllArgumentDescription
+    };
 
     protected IntegrationDiscoveryCommand(
         string name,
@@ -34,6 +39,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
 
         Options.Add(_appHostOption);
         Options.Add(_formatOption);
+        Options.Add(_allOption);
     }
 
     protected abstract string? GetSearchTerm(ParseResult parseResult);
@@ -47,22 +53,49 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
             var searchTerm = GetSearchTerm(parseResult);
             var passedAppHostProjectFile = parseResult.GetValue(_appHostOption);
             var format = parseResult.GetValue(_formatOption);
+            var includeAllIntegrations = parseResult.GetValue(_allOption);
 
-            var (workingDirectory, configuredChannel, contextExitCode) = await _integrationPackageSearchService.GetPackageSearchContextAsync(passedAppHostProjectFile, cancellationToken);
+            var (workingDirectory, configuredChannel, languageId, contextExitCode) = await _integrationPackageSearchService.GetPackageSearchContextAsync(passedAppHostProjectFile, cancellationToken);
             if (contextExitCode is { } exitCode)
             {
                 return CommandResult.FromExitCode(exitCode);
             }
 
-            var packagesWithChannels = (await InteractionService.ShowStatusAsync(
-                AddCommandStrings.SearchingForAspirePackages,
-                async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(workingDirectory, configuredChannel, cancellationToken)))
-                .ToArray();
+            // Match `aspire add`: a non-C# (polyglot) AppHost can only consume integrations with ATS
+            // export coverage (the `polyglot` NuGet tag), so list/search hide the rest unless --all is
+            // passed. The language is only known when an AppHost was resolved; otherwise show everything.
+            var applyPolyglotFilter = languageId is not null && languageId != KnownLanguageId.CSharp && !includeAllIntegrations;
+
+            (NuGetPackage Package, PackageChannel Channel)[] packagesWithChannels;
+            IReadOnlySet<string> polyglotCompatibleIds = ImmutableHashSet<string>.Empty;
+            if (applyPolyglotFilter)
+            {
+                // Resolve the integration list and the polyglot allow-list in a single discovery pass.
+                var (discoveredPackages, discoveredPolyglotIds) = await InteractionService.ShowStatusAsync(
+                    AddCommandStrings.SearchingForAspirePackages,
+                    async () => await _integrationPackageSearchService.GetIntegrationPackagesWithPolyglotCompatibilityAsync(workingDirectory, configuredChannel, cancellationToken));
+                packagesWithChannels = discoveredPackages.ToArray();
+                polyglotCompatibleIds = discoveredPolyglotIds;
+            }
+            else
+            {
+                packagesWithChannels = (await InteractionService.ShowStatusAsync(
+                    AddCommandStrings.SearchingForAspirePackages,
+                    async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(workingDirectory, configuredChannel, cancellationToken)))
+                    .ToArray();
+            }
 
             var packagesWithShortName = packagesWithChannels
                 .Select(IntegrationPackageSearchService.GenerateFriendlyName)
                 .OrderBy(p => p.FriendlyName, new CommunityToolkitFirstComparer())
                 .ToArray();
+
+            if (applyPolyglotFilter)
+            {
+                packagesWithShortName = packagesWithShortName
+                    .Where(p => polyglotCompatibleIds.Contains(p.Package.Id))
+                    .ToArray();
+            }
 
             return CommandResult.FromExitCode(DisplayIntegrationResults(packagesWithShortName, searchTerm, format));
         }

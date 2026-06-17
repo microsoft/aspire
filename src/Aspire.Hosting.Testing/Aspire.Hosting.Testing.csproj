@@ -7,6 +7,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <NoWarn>$(NoWarn);CS8002</NoWarn>
     <PackageTags>aspire testing</PackageTags>
+    <IsAspirePolyglotCompatible>true</IsAspirePolyglotCompatible>
     <Description>Testing support for the Aspire application model.</Description>
     <IsAspireHost>false</IsAspireHost>
   </PropertyGroup>

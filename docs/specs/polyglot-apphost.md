@@ -1276,6 +1276,12 @@ The CLI is **not** responsible for language-specific logic. A single `GuestAppHo
 
 > **Note:** The .NET AppHost (`DotNetAppHostProject`) currently has its logic in the CLI. We plan to migrate it to the guest model, where .NET becomes just another language with its own `ILanguageSupport` and `RuntimeSpec`. This will unify the architecture and allow the CLI to be truly language-agnostic.
 
+### Polyglot-Compatible Integration Discovery
+
+A guest (non-C#) AppHost can only consume integrations that expose their API surface through `[AspireExport]` (ATS) coverage. Integrations opt in by setting `<IsAspirePolyglotCompatible>true</IsAspirePolyglotCompatible>` in their project file, which appends the `polyglot` NuGet tag at pack time. The `ASPIREEXPORT017` analyzer rule fails the build if a project has `[AspireExport]` coverage but is missing the property, keeping the tag and the export surface in sync.
+
+When the active AppHost is not C#, `aspire add`, `aspire integration list`, and `aspire integration search` filter discovery down to integrations carrying the `polyglot` tag (resolved via a `tags:polyglot` search on remote feeds or by reading the nuspec `<tags>` for local package sources). Pass `--all` to bypass the filter — useful when an integration has not yet been marked. Naming an integration that exists but lacks the tag yields a clear "not available for this language" error.
+
 ```mermaid
 classDiagram
     class IAppHostProject {

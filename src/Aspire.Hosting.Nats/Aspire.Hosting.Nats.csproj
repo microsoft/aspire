@@ -4,6 +4,7 @@
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
     <PackageTags>aspire integration hosting NATS messaging eventing</PackageTags>
+    <IsAspirePolyglotCompatible>true</IsAspirePolyglotCompatible>
     <Description>NATS support for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)nats-icon.png</PackageIconFullPath>
   </PropertyGroup>

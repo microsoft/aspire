@@ -4,6 +4,7 @@
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
     <PackageTags>aspire integration hosting MySQL database data</PackageTags>
+    <IsAspirePolyglotCompatible>true</IsAspirePolyglotCompatible>
     <Description>MySQL support for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)MySQL_logo.png</PackageIconFullPath>
   </PropertyGroup>

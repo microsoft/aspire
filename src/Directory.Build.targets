@@ -25,6 +25,28 @@
                     OutputItemType="Analyzer" />
   </ItemGroup>
 
+  <!-- Polyglot-compatible integration marker.
+       Integration authors opt in with <IsAspirePolyglotCompatible>true</IsAspirePolyglotCompatible>.
+       Doing so (1) adds the well-known 'polyglot' NuGet tag so `aspire add` can surface the package
+       to non-C# (polyglot) AppHosts, and (2) makes the property visible to ASPIREEXPORT017, which
+       fails the build when an integration has [AspireExport] coverage but forgot the opt-in.
+       The shipped equivalent for external authors lives in
+       src/Aspire.Hosting/buildTransitive/Aspire.Hosting.targets. -->
+  <ItemGroup Condition="$([System.String]::Copy('$(MSBuildProjectName)').StartsWith('Aspire.Hosting'))
+                        and
+                        '$(SkipAspireIntegrationAnalyzersReference)' != 'true'">
+    <CompilerVisibleProperty Include="IsAspirePolyglotCompatible" />
+  </ItemGroup>
+
+  <!-- Evaluated at import time (Directory.Build.targets is imported after the project body), so both
+       $(IsAspirePolyglotCompatible) and $(PackageTags) already hold their final csproj-assigned values.
+       The guard space-pads $(PackageTags) and looks for a whole ' polyglot ' token so an unrelated tag that
+       merely contains the substring (e.g. 'monopolyglot') does not suppress the marker, and Concat(...).Trim()
+       avoids a leading space when $(PackageTags) was empty. -->
+  <PropertyGroup Condition="'$(IsAspirePolyglotCompatible)' == 'true' and !$([System.String]::Concat(' ', '$(PackageTags)', ' ').Contains(' polyglot '))">
+    <PackageTags>$([System.String]::Concat('$(PackageTags)', ' polyglot').Trim())</PackageTags>
+  </PropertyGroup>
+
   <!-- Used by Aspire.Templates.Testing.targets and by Aspire.RepoTesting.targets to
        dynamically compute per-package versions for Helix testing.
        Returns items with PackageId as Include and the per-project computed PackageVersion
