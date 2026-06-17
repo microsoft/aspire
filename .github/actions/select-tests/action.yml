@@ -33,6 +33,10 @@ inputs:
     required: false
     default: ''
     description: 'Where the selector writes the human-readable selection summary (also goes to the job step summary) so the caller can post it as a sticky PR comment. Empty defaults to $GITHUB_WORKSPACE/artifacts/select-tests-comment.md.'
+  selectionJsonFile:
+    required: false
+    default: ''
+    description: 'Where the selector writes the machine-readable selection record (mode, inputs, and every selected test/job with its per-item causes incl. the Layer 1 decision path). Uploaded as an artifact for post-hoc debugging. Empty defaults to $GITHUB_WORKSPACE/artifacts/select-tests-selection.json.'
   prBody:
     required: false
     default: ''
@@ -94,6 +98,7 @@ runs:
         HEAD_SHA: ${{ inputs.headSha }}
         BEFORE_BUILD_PROPS: ${{ inputs.beforeBuildProps }}
         SELECT_TESTS_COMMENT_FILE: ${{ inputs.commentFile }}
+        SELECT_TESTS_JSON_FILE: ${{ inputs.selectionJsonFile }}
         ENFORCE_SELECTION: ${{ inputs.enforce }}
         SLNX: ${{ inputs.slnx }}
         TRIGGER_MAP: ${{ inputs.triggerMap }}
@@ -106,6 +111,10 @@ runs:
         BEFORE_BUILD_PROPS="${BEFORE_BUILD_PROPS:-$GITHUB_WORKSPACE/artifacts/BeforeBuildProps.props}"
         SELECT_TESTS_COMMENT_FILE="${SELECT_TESTS_COMMENT_FILE:-$GITHUB_WORKSPACE/artifacts/select-tests-comment.md}"
         export SELECT_TESTS_COMMENT_FILE
+        # The machine-readable selection record (per-item causes + decision paths), uploaded below for
+        # post-hoc debugging of "why did this test/job run?" without re-running CI.
+        SELECT_TESTS_JSON_FILE="${SELECT_TESTS_JSON_FILE:-$GITHUB_WORKSPACE/artifacts/select-tests-selection.json}"
+        export SELECT_TESTS_JSON_FILE
 
         args=(--repo-root . --before-build-props "$BEFORE_BUILD_PROPS")
         [ -n "$SLNX" ] && args+=(--slnx "$SLNX")
@@ -144,3 +153,15 @@ runs:
         # Layer 1 graph failure -- under-selecting would silently skip tests). Let that fail the run
         # rather than mask the bug behind a silent fallback.
         ./dotnet.sh run --project tools/SelectTests/SelectTests.csproj -- "${args[@]}"
+
+    # Publish the machine-readable selection record so a maintainer can answer "why did this test/job
+    # run?" weeks later without re-running CI. always() so it is captured even when a later step fails;
+    # if no path was set, the default under artifacts/ is used. A missing file (e.g. the selector crashed
+    # before writing it) is tolerated rather than failing the upload.
+    - name: Upload selection record
+      if: always()
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+      with:
+        name: select-tests-selection-${{ runner.os }}
+        path: ${{ inputs.selectionJsonFile != '' && inputs.selectionJsonFile || 'artifacts/select-tests-selection.json' }}
+        if-no-files-found: ignore

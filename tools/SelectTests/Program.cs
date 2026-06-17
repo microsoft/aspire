@@ -120,17 +120,35 @@ internal static class Selection
 {
     public static int Run(RunOptions options)
     {
+        var trace = new SelectionTrace();
+        try
+        {
+            return RunCore(options, trace);
+        }
+        catch (Exception ex)
+        {
+            // Augment the failure with WHAT it was processing and HOW to re-run it, then rethrow so the
+            // CI step still exits non-zero -- a crash must never be downgraded to a silent under-select.
+            WriteFailureDiagnostics(options, trace, ex);
+            throw;
+        }
+    }
+
+    private static int RunCore(RunOptions options, SelectionTrace trace)
+    {
         // The universe an ALL selection expands to, and the existence guard for test: targets and
         // Layer 1 affected test projects: the test projects in Aspire.slnx (tests/<Name>/<Name>.csproj
         // with a .Tests suffix). Derived from the slnx -- NOT from an enumerated matrix -- because the
         // selector now runs BEFORE enumerate-tests. Maps each test project name to its repo-relative
         // .csproj path so a selected name can be written as an OverrideProjectToBuild item.
+        trace.EnterStage("load test projects from slnx");
         var testProjectsByName = LoadTestProjects(options.SlnxPath);
         var allTestProjects = testProjectsByName.Keys.ToHashSet(StringComparer.Ordinal);
 
         // The prefilter (the map's `prefilter` block): read the CI skip-gate patterns file at runtime
         // and drop matching changed files before BOTH layers, except the keep_routed carve-outs. So an
         // excluded file influences no selection. See ChangedFileFilter for why this must gate Layer 1 too.
+        trace.EnterStage("load trigger map and prefilter");
         var changedFileFilter = ChangedFileFilter.Create(options.RepoRoot, TriggerMap.Load(options.MapPath).Prefilter);
 
         // Under --force-all the selector returns ALL regardless of the diff (see below), so skip
@@ -138,6 +156,7 @@ internal static class Selection
         // wasted work: --force-all is the path taken when there is no usable diff base (or the
         // [full ci] kill switch fired), so ResolveChangedFiles would otherwise throw for lack of a
         // --from/--changed-files input.
+        trace.EnterStage("resolve changed files");
         var rawChangedFiles = options.ForceAll
             ? Array.Empty<string>()
             : ResolveChangedFiles(options);
@@ -152,9 +171,10 @@ internal static class Selection
             .Where(f => !changedFileFilter.IsExcluded(f))
             .ToList();
 
+        trace.EnterStage("compute Layer 1 affected-projects graph");
         var layer1 = (options.ForceAll || options.SkipLayer1)
             ? AffectedResult.Empty
-            : RunLayer1(options, changedFileFilter);
+            : RunLayer1(options, changedFileFilter, trace);
         var layer1Affected = layer1.AffectedProjects;
 
         // When Layer 1 is skipped there is no graph attribution, so the project-directory set must be
@@ -164,12 +184,15 @@ internal static class Selection
             ? Array.Empty<string>()
             : LoadProjectDirectories(options.SlnxPath);
 
+        trace.EnterStage("select (Layer 2 trigger map + Layer 1 union)");
         var selector = new TestSelector(options.MapPath, allTestProjects, projectDirectories);
-        var result = selector.Select(changedFiles, layer1Affected, new SelectorOptions(options.ForceAll), layer1.AttributedPaths);
+        var result = selector.Select(changedFiles, layer1Affected, new SelectorOptions(options.ForceAll), layer1.AttributedPaths, layer1.Paths);
 
+        trace.EnterStage("write summary and outputs");
         WriteSummary(options, result, allTestProjects, changedFiles, layer1Affected, excludedFiles);
         WriteJobBooleans(options, result);
         WriteSelectionComment(options, result, allTestProjects);
+        WriteSelectionJson(options, result, allTestProjects, changedFiles, layer1Affected, excludedFiles);
 
         // Enforce + a non-ALL selection restricts the downstream enumerate-tests build to the selected
         // test projects via an OverrideProjectToBuild props file. A selection with ZERO buildable test
@@ -351,7 +374,7 @@ internal static class Selection
     // *affected* (downstream dependents). We return the full set of project names: the selector
     // intersects the test projects into the matrix and matches the production projects against
     // project_rules. See GraphAffectedProjects for why this replaced dotnet-affected.
-    private static AffectedResult RunLayer1(RunOptions options, ChangedFileFilter filter)
+    private static AffectedResult RunLayer1(RunOptions options, ChangedFileFilter filter, SelectionTrace trace)
     {
         try
         {
@@ -360,19 +383,89 @@ internal static class Selection
             // it is not JITted until the call below, so registering here (once) is in time.
             GraphAffectedProjects.EnsureMSBuildRegistered();
 
-            return GraphAffectedProjects.Compute(options.RepoRoot, options.SlnxPath, options.From, options.To, options.ChangedFilesPath, filter);
+            return GraphAffectedProjects.Compute(options.RepoRoot, options.SlnxPath, options.From, options.To, options.ChangedFilesPath, filter, trace);
         }
         catch (Exception ex)
         {
-            return Layer1Failed(ex.Message);
+            return Layer1Failed(ex);
         }
     }
 
     // Layer 1 is not optional: under-selecting would silently skip real tests. Any failure to compute
     // the graph closure is fatal — surface it rather than masking it behind an empty (under-selecting)
-    // result.
-    private static AffectedResult Layer1Failed(string detail) =>
-        throw new InvalidOperationException($"Layer 1 (affected-projects graph) failed: {detail}");
+    // result. Preserve the original exception as InnerException so the crash diagnostics' stack trace
+    // points at where the MSBuild graph actually failed, not at this wrapper.
+    private static AffectedResult Layer1Failed(Exception inner) =>
+        throw new InvalidOperationException($"Layer 1 (affected-projects graph) failed: {inner.Message}", inner);
+
+    // On an unhandled crash, emit a diagnostics block to the step summary (and stderr) so the failure is
+    // debuggable from the run alone: which stage it died in, the concrete item in hand (when known), the
+    // exception, and the exact inputs needed to re-run locally. The block is appended even when the
+    // summary already has partial content; the caller rethrows so the step still fails.
+    private static void WriteFailureDiagnostics(RunOptions options, SelectionTrace trace, Exception ex)
+    {
+        var changeSource = options.ChangedFilesPath is not null
+            ? $"changed-files {options.ChangedFilesPath}"
+            : options.From is not null
+                ? $"git diff {options.From}{(options.To is null ? " (working tree)" : $"..{options.To}")}"
+                : "(none -- force-all or unset)";
+
+        var sb = new StringBuilder();
+        sb.AppendLine("## SelectTests FAILED");
+        sb.AppendLine();
+        sb.AppendLine("The selector crashed before completing. The CI step fails by design — a crash must");
+        sb.AppendLine("never be downgraded to a silent under-selection.");
+        sb.AppendLine();
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- failing stage: {trace.Stage}");
+        if (!string.IsNullOrEmpty(trace.Item))
+        {
+            sb.AppendLine(CultureInfo.InvariantCulture, $"- processing: `{trace.Item}`");
+        }
+
+        // Type + message on one line; the full stack follows in a collapsible for the deep cases.
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- error: {ex.GetType().Name}: {ex.Message}");
+        sb.AppendLine();
+        sb.AppendLine("### Inputs (to reproduce)");
+        sb.AppendLine();
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- mode: {(options.Enforce ? "enforcing" : "audit")}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- change source: {changeSource}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- repo root: {options.RepoRoot}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- slnx: {options.SlnxPath}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- map: {options.MapPath}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- force-all: {options.ForceAll}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- skip-layer1: {options.SkipLayer1}");
+        sb.AppendLine();
+        sb.AppendLine("<details><summary>stack trace</summary>");
+        sb.AppendLine();
+        sb.AppendLine("```");
+        sb.AppendLine(ex.ToString());
+        sb.AppendLine("```");
+        sb.AppendLine();
+        sb.AppendLine("</details>");
+        sb.AppendLine();
+
+        var markdown = sb.ToString();
+
+        // Echo to stderr first and unconditionally: it is the most reliable surface (a local run has no
+        // step summary) and must never be skipped by a failure writing the summary file.
+        Console.Error.Write(markdown);
+
+        // The step summary write is best-effort. This runs from the top-level catch handler, so a failure
+        // here (e.g. GITHUB_STEP_SUMMARY points at an unwritable path) must NOT throw a new exception that
+        // masks the original failure the caller is about to rethrow.
+        var summaryPath = Environment.GetEnvironmentVariable("GITHUB_STEP_SUMMARY");
+        if (summaryPath is not null)
+        {
+            try
+            {
+                File.AppendAllText(summaryPath, markdown);
+            }
+            catch (Exception writeEx)
+            {
+                Console.Error.WriteLine($"[SelectTests] could not write diagnostics to GITHUB_STEP_SUMMARY: {writeEx.Message}");
+            }
+        }
+    }
 
     // The non-.NET job gate, emitted as ONE JSON object under the `selection` output instead of one
     // run_* output per job, so neither this tool nor the select-tests action enumerates the concrete
@@ -403,6 +496,119 @@ internal static class Selection
 
         // ToJsonString() is single-line, which the key=value $GITHUB_OUTPUT format requires.
         WriteGitHubOutput("selection", selection.ToJsonString());
+    }
+
+    // Writes the durable, machine-readable record of the selection to SELECT_TESTS_JSON_FILE (when set):
+    // the mode, the inputs needed to reproduce, and EVERY selected test/job with its full per-item cause
+    // list (including the Layer 1 decision path). This is the artifact a maintainer downloads weeks later
+    // to answer "why did this run?" without re-running CI, and that tests can assert against. Built with
+    // JsonObject (not a serializer) to avoid reflection/trimming concerns and to mirror WriteJobBooleans.
+    private static void WriteSelectionJson(
+        RunOptions options,
+        SelectionResult result,
+        IReadOnlySet<string> allTestProjects,
+        IReadOnlyCollection<string> changedFiles,
+        IReadOnlyCollection<string> layer1Affected,
+        IReadOnlyCollection<string> excludedFiles)
+    {
+        var jsonPath = Environment.GetEnvironmentVariable("SELECT_TESTS_JSON_FILE");
+        if (string.IsNullOrEmpty(jsonPath))
+        {
+            return;
+        }
+
+        var changeSource = options.ChangedFilesPath is not null
+            ? $"changed-files {options.ChangedFilesPath}"
+            : options.From is not null
+                ? $"git diff {options.From}{(options.To is null ? " (working tree)" : $"..{options.To}")}"
+                : "(none -- force-all or unset)";
+
+        var root = new JsonObject
+        {
+            ["schemaVersion"] = 1,
+            ["mode"] = options.Enforce ? "enforcing" : "audit",
+            ["selectsAll"] = result.SelectsAll,
+            ["escalationReason"] = result.EscalationReason,
+            ["inputs"] = new JsonObject
+            {
+                ["changeSource"] = changeSource,
+                ["repoRoot"] = options.RepoRoot,
+                ["slnx"] = options.SlnxPath,
+                ["map"] = options.MapPath,
+                ["forceAll"] = options.ForceAll,
+                ["skipLayer1"] = options.SkipLayer1,
+            },
+            ["changedFiles"] = ToJsonArray(changedFiles.OrderBy(f => f, StringComparer.Ordinal)),
+            ["excludedFiles"] = ToJsonArray(excludedFiles.OrderBy(f => f, StringComparer.Ordinal)),
+            ["unattributedFiles"] = ToJsonArray(result.UnmatchedFiles.OrderBy(f => f, StringComparer.Ordinal)),
+            ["layer1AffectedProjects"] = ToJsonArray(layer1Affected.OrderBy(p => p, StringComparer.Ordinal)),
+            ["testProjects"] = ItemsWithCauses(result.TestProjects, result.TestCauses),
+            // The unselected matrix projects, so the artifact records what was skipped, not only what ran.
+            ["skippedTestProjects"] = ToJsonArray(
+                allTestProjects.Except(result.TestProjects, StringComparer.Ordinal).OrderBy(p => p, StringComparer.Ordinal)),
+            ["jobs"] = ItemsWithCauses(result.Jobs, result.JobCauses),
+        };
+
+        var dir = Path.GetDirectoryName(Path.GetFullPath(jsonPath));
+        if (!string.IsNullOrEmpty(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
+
+        File.WriteAllText(jsonPath, root.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+        static JsonArray ToJsonArray(IEnumerable<string> values)
+        {
+            var array = new JsonArray();
+            foreach (var value in values)
+            {
+                array.Add(value);
+            }
+
+            return array;
+        }
+
+        // One object per selected item: its name plus the ordered cause list. The key set of `causes`
+        // IS the selected set, so iterate the selected names and look each up (empty causes under ALL).
+        static JsonArray ItemsWithCauses(IReadOnlySet<string> items, IReadOnlyDictionary<string, IReadOnlyList<Cause>> causes)
+        {
+            var array = new JsonArray();
+            foreach (var name in items.OrderBy(n => n, StringComparer.Ordinal))
+            {
+                var causeArray = new JsonArray();
+                if (causes.TryGetValue(name, out var list))
+                {
+                    foreach (var cause in list.OrderBy(c => CausePriority(c.Kind)))
+                    {
+                        JsonArray? path = null;
+                        if (cause.Path is { Count: > 0 })
+                        {
+                            path = new JsonArray();
+                            foreach (var hop in cause.Path)
+                            {
+                                path.Add(hop);
+                            }
+                        }
+
+                        causeArray.Add(new JsonObject
+                        {
+                            ["kind"] = cause.Kind.ToString(),
+                            ["trigger"] = cause.Trigger,
+                            ["reason"] = cause.Reason,
+                            ["path"] = path,
+                        });
+                    }
+                }
+
+                array.Add(new JsonObject
+                {
+                    ["name"] = name,
+                    ["causes"] = causeArray,
+                });
+            }
+
+            return array;
+        }
     }
 
     // Builds the sticky PR comment: a terse, scannable view of exactly what runs for this PR -- the
@@ -683,10 +889,26 @@ internal static class Selection
         CauseKind.Convention => $"`{cause.Trigger}`",
         CauseKind.PathRule => $"`{cause.Trigger}`",
         CauseKind.AffectedProject => $"affected project `{cause.Trigger}`",
-        CauseKind.Layer1Graph => "changed source (graph)",
+        // Name the seed changed file (and hop count) rather than the full chain, which the summary
+        // carries -- the comment stays scannable. Falls back to a generic label when no path was tracked.
+        CauseKind.Layer1Graph => Layer1ShortCause(cause),
         CauseKind.DerivedFromTest => $"via test `{cause.Trigger}`",
         _ => cause.Trigger,
     };
+
+    // "via graph from `seed.cs`" (+ "(N hops)" when the reverse-dependency chain is more than one edge).
+    private static string Layer1ShortCause(Cause cause)
+    {
+        if (cause.Path is not { Count: > 0 } path)
+        {
+            return "changed source (graph)";
+        }
+
+        // path = [seedFile, project0, ..., affectedTest]; project edges = (count - 1 projects) - 1.
+        var hops = path.Count - 2;
+        var suffix = hops > 1 ? $" ({hops} hops)" : "";
+        return $"via graph from `{path[0]}`{suffix}";
+    }
 
     // Full cause for the step summary, including the curated rule reason when present.
     private static string VerboseCause(Cause cause)
@@ -696,7 +918,11 @@ internal static class Selection
             CauseKind.Convention => $"convention match `{cause.Trigger}`",
             CauseKind.PathRule => $"path rule `{cause.Trigger}`",
             CauseKind.AffectedProject => $"affected project `{cause.Trigger}`",
-            CauseKind.Layer1Graph => "affected by changed source (graph closure)",
+            // Render the full decision path (seed file -> ... -> affected test) when available, so the
+            // summary explains HOW the change reached the test, not just THAT it did.
+            CauseKind.Layer1Graph => cause.Path is { Count: > 0 } path
+                ? $"graph closure: {string.Join(" → ", path)}"
+                : "affected by changed source (graph closure)",
             CauseKind.DerivedFromTest => $"derived from selected test `{cause.Trigger}`",
             _ => cause.Trigger,
         };

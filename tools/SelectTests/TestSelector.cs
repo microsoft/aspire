@@ -45,7 +45,15 @@ public enum CauseKind
 /// <see cref="CauseKind.DerivedFromTest"/> — the selected test project that pulled this in.
 /// </param>
 /// <param name="Reason">The curated <c>reason</c> string from the map rule, when the rule carries one.</param>
-public sealed record Cause(CauseKind Kind, string Trigger, string? Reason = null);
+/// <param name="Path">
+/// The full decision path that led to the selection, when one is available. For
+/// <see cref="CauseKind.Layer1Graph"/> this is the seed changed file followed by the
+/// reverse-dependency project chain (e.g. <c>["src/Foo/Bar.cs", "Aspire.Foo", "Aspire.Mid",
+/// "Aspire.Mid.Tests"]</c>), so the summary can show HOW the change reached the test. Null for causes
+/// that have no multi-hop path (a direct file/rule match is already fully described by
+/// <see cref="Trigger"/>).
+/// </param>
+public sealed record Cause(CauseKind Kind, string Trigger, string? Reason = null, IReadOnlyList<string>? Path = null);
 
 /// <summary>
 /// The outcome of selecting which CI work to run for a set of changed files.
@@ -129,11 +137,18 @@ public sealed class TestSelector
     /// under a project directory (e.g. a link-compiled <c>src/Shared</c> file), so it does not trip the
     /// run-all fallback. Empty when Layer 1 did not run (<c>--skip-layer1</c> / <c>--force-all</c>).
     /// </param>
+    /// <param name="layer1Paths">
+    /// Per-affected-project decision paths from Layer 1 (<see cref="AffectedResult.Paths"/>), keyed by
+    /// project base name. When a selected test project has an entry, its <see cref="CauseKind.Layer1Graph"/>
+    /// cause carries the seed file + reverse-dependency chain so the summary can show the full path. Null
+    /// when Layer 1 did not run or produced no paths.
+    /// </param>
     public SelectionResult Select(
         IReadOnlyCollection<string> changedFiles,
         IReadOnlyCollection<string> layer1Affected,
         SelectorOptions options,
-        IReadOnlySet<string>? layer1AttributedPaths = null)
+        IReadOnlySet<string>? layer1AttributedPaths = null,
+        IReadOnlyDictionary<string, AffectedPath>? layer1Paths = null)
     {
         var map = TriggerMap.Load(_mapPath);
         var attributedPaths = layer1AttributedPaths ?? new HashSet<string>(StringComparer.Ordinal);
@@ -224,7 +239,15 @@ public sealed class TestSelector
         {
             if (_allTestProjects.Contains(project))
             {
-                AddCause(testCauses, project, new Cause(CauseKind.Layer1Graph, project));
+                // Attach the graph decision path (seed file + reverse-dependency chain) when Layer 1
+                // produced one, so the summary can render HOW the change reached this test.
+                IReadOnlyList<string>? path = null;
+                if (layer1Paths is not null && layer1Paths.TryGetValue(project, out var affectedPath))
+                {
+                    path = BuildLayer1CausePath(affectedPath);
+                }
+
+                AddCause(testCauses, project, new Cause(CauseKind.Layer1Graph, project, Path: path));
             }
         }
 
@@ -298,6 +321,16 @@ public sealed class TestSelector
 
     private static IReadOnlyDictionary<string, IReadOnlyList<Cause>> Freeze(Dictionary<string, List<Cause>> causes) =>
         causes.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<Cause>)kv.Value, StringComparer.Ordinal);
+
+    // Builds the rendered decision path for a Layer 1 cause: the seed changed file followed by the
+    // reverse-dependency project chain (directly-changed project ... affected test). The result reads
+    // left-to-right as "this file changed this project, which is depended on by ..., reaching this test".
+    private static IReadOnlyList<string> BuildLayer1CausePath(AffectedPath affectedPath)
+    {
+        var path = new List<string>(affectedPath.ProjectChain.Count + 1) { affectedPath.ChangedFile };
+        path.AddRange(affectedPath.ProjectChain);
+        return path;
+    }
 
     // Records one reason a test project / job was selected, de-duplicating identical causes (e.g. the
     // same derived rule re-fires across fixpoint passes).

@@ -95,13 +95,33 @@ and project-owned files that are not modeled as one of the indexed item types.
 
 ### Reverse closure and output
 
-After direct attribution, Layer 1 walks `ProjectGraphNode.ReferencingProjects`
-transitively. This produces every downstream project that can be broken by the
-change.
+After direct attribution, Layer 1 walks the reverse dependency edges
+transitively (BFS), producing every downstream project that can be broken by
+the change.
+
+The edges come from each project's **declared** `<ProjectReference>` items, not
+from `ProjectGraphNode.ReferencingProjects` / `ProjectReferences`. A
+solution-based `ProjectGraph` flattens those collections into the *transitive*
+closure (e.g. `AppTests → Mid → Core` surfaces as `AppTests` referencing both
+`Mid` and `Core` directly), which would lose the intermediate hops. The
+declared items are the real one-hop edges, so BFS over them yields both the
+correct affected set *and* the genuine shortest hop chain to each project.
 
 The output is the affected project base names: the `.csproj` filename without
 extension. `TestSelector.Select(...)` intersects test-project names with the
 matrix and matches production-project names against `affected_project_rules`.
+
+#### Decision paths (traceability)
+
+The BFS records each affected project's predecessor (set on first, shortest
+reach) plus the changed file that seeded its chain. `AffectedResult.Paths` thus
+carries, per affected project, an ordered chain
+`changed file → directly-changed project → … → affected test`. The selector
+attaches this to each Layer 1 cause (`Cause.Path`), and the renderers surface
+it: the step summary shows the full chain
+(`src/Core/Core.cs → Core → Core.Tests`), the PR comment a terse
+`via graph from <file>`. Only a single representative shortest path per project
+is tracked — alternate longer paths are not enumerated.
 
 ### Why a HEAD-only graph
 
@@ -334,6 +354,35 @@ The selector may still choose run-all intentionally for known-safe reasons:
 Those are explicit selections of the full matrix. They are not fallbacks for a
 crashed selector or a failed graph computation. (A PR whose base SHA cannot be
 fetched is *not* one of them — that fails the step; see above.)
+
+## Debuggability and traceability
+
+Because a crash fails the step (never silently under-selects), the selector
+makes failures and decisions easy to inspect after the fact.
+
+**Crash diagnostics.** `Selection.Run` threads a `SelectionTrace` (current stage
++ current item) through the run. On any unhandled exception it appends a
+`## SelectTests FAILED` block to the job step summary (and stderr) naming the
+failing stage, the concrete item in hand, the exception, and the exact inputs
+needed to re-run locally (change source, repo root, slnx, map, the mode flags),
+then rethrows so the step still fails. Set `SELECTTESTS_TRACE=1` to also echo
+every stage/item to stderr as it happens — a full ordered trail for the cases
+where the last breadcrumb alone isn't enough.
+
+**Per-item causes.** Every selected test project and job records *why* it was
+selected — the changed file (convention / path rule), the affected production
+project, the Layer 1 graph closure (with its full decision path), or the
+selected test that pulled it in via `derived_targets`. These render in both the
+step summary (verbose, with the full graph chain and the rule's reason text) and
+the sticky PR comment (terse).
+
+**Selection record (`select-tests-selection.json`).** The selector writes a
+machine-readable record — mode, the reproduce inputs, the changed / excluded /
+unattributed files, the Layer 1 affected set, and every selected/skipped test
+and job with its per-item causes (including decision paths) — to
+`SELECT_TESTS_JSON_FILE`. The `select-tests` action uploads it as the
+`select-tests-selection-<os>` artifact, so "why did this run?" can be answered
+weeks later without re-running CI, and acceptance tests can assert against it.
 
 ## Measured selectivity
 

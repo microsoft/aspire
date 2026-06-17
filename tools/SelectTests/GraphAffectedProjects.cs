@@ -20,13 +20,32 @@ namespace Aspire.SelectTests;
 /// Layer-1-owned, so a link-compiled <c>src/Shared</c>/<c>tests/Shared</c> file — attributed but not
 /// under a project directory — does not trip the run-all fallback without needing an <c>ignore</c> entry.
 /// </param>
+/// <param name="Paths">
+/// Per-affected-project provenance: how a change reached each entry of <see cref="AffectedProjects"/>,
+/// keyed by project base name. The value is the shortest reverse-dependency chain (in edges, since the
+/// closure is a BFS) from a directly-changed project to the affected one, plus the changed file that
+/// seeded that chain — the data the selector turns into a "why this test ran" path in the summary.
+/// </param>
 internal sealed record AffectedResult(
     IReadOnlyCollection<string> AffectedProjects,
-    IReadOnlySet<string> AttributedPaths)
+    IReadOnlySet<string> AttributedPaths,
+    IReadOnlyDictionary<string, AffectedPath> Paths)
 {
     public static readonly AffectedResult Empty =
-        new(Array.Empty<string>(), new HashSet<string>(StringComparer.Ordinal));
+        new(Array.Empty<string>(), new HashSet<string>(StringComparer.Ordinal),
+            new Dictionary<string, AffectedPath>(StringComparer.Ordinal));
 }
+
+/// <summary>
+/// How a change reached one affected project: the changed file that seeded the chain and the chain of
+/// project base names from the directly-changed project to the affected one (inclusive at both ends).
+/// For a directly-changed project the chain is just that project; the file is the change that hit it.
+/// </summary>
+/// <param name="ChangedFile">The repo-relative ('/'-separated) changed file that seeded the chain.</param>
+/// <param name="ProjectChain">
+/// Project base names from the directly-changed project (first) to the affected project (last).
+/// </param>
+public sealed record AffectedPath(string ChangedFile, IReadOnlyList<string> ProjectChain);
 
 /// <summary>
 /// Layer 1 of the selective-CI selector: computes the set of projects affected by a PR's changed
@@ -94,7 +113,11 @@ internal static class GraphAffectedProjects
     /// attribution, so an excluded file (e.g. a packed <c>README.md</c>) never maps to a project. The
     /// same filter is applied to the Layer 2 input in <c>Program</c>.
     /// </param>
-    public static AffectedResult Compute(string repoRoot, string solutionPath, string? from, string? to, string? changedFilesPath, ChangedFileFilter? filter = null)
+    /// <param name="trace">
+    /// Optional breadcrumb updated as the graph computation progresses (build graph, index inputs,
+    /// attribute changed files), so a crash inside the MSBuild engine reports the sub-step it died in.
+    /// </param>
+    public static AffectedResult Compute(string repoRoot, string solutionPath, string? from, string? to, string? changedFilesPath, ChangedFileFilter? filter = null, SelectionTrace? trace = null)
     {
         repoRoot = NormalizeFullPath(repoRoot);
         solutionPath = NormalizeFullPath(solutionPath);
@@ -103,16 +126,19 @@ internal static class GraphAffectedProjects
             throw new InvalidOperationException($"Solution was not found: {solutionPath}");
         }
 
+        trace?.Processing("resolve changed paths (git diff)");
         var changedPaths = ResolveChangedPaths(repoRoot, from, to, changedFilesPath, filter);
         if (changedPaths.Count == 0)
         {
             return AffectedResult.Empty;
         }
 
+        trace?.Processing($"build MSBuild ProjectGraph from {Path.GetFileName(solutionPath)}");
         var graph = BuildGraph(repoRoot, solutionPath);
         var graphNodes = graph.ProjectNodes.ToArray();
 
         var nodesByProjectPath = BuildNodesByProjectPath(graphNodes);
+        trace?.Processing("index project input files");
         var inputFileIndex = BuildInputFileIndex(graphNodes);
         // Project directories sorted longest-first so the containment fallback attributes a file to the
         // most-specific (deepest) owning project, not a parent directory that happens to share a prefix.
@@ -122,10 +148,14 @@ internal static class GraphAffectedProjects
             .OrderByDescending(d => d.Length)
             .ToArray();
 
+        trace?.Processing("attribute changed files to projects");
         var directlyChangedProjects = FindDirectlyChangedProjects(
-            changedPaths, nodesByProjectPath, inputFileIndex, projectDirectories, out var attributedPaths);
+            changedPaths, nodesByProjectPath, inputFileIndex, projectDirectories,
+            out var attributedPaths, out var originatingFileByProject);
 
-        var affectedProjects = ComputeReverseClosure(directlyChangedProjects, nodesByProjectPath);
+        trace?.Processing("compute reverse-dependency closure");
+        var affectedProjects = ComputeReverseClosure(
+            directlyChangedProjects, nodesByProjectPath, out var parentByProjectPath);
 
         var names = affectedProjects
             .Select(Path.GetFileNameWithoutExtension)
@@ -133,7 +163,51 @@ internal static class GraphAffectedProjects
             .Select(name => name!)
             .ToHashSet(StringComparer.Ordinal);
 
-        return new AffectedResult(names, attributedPaths);
+        var paths = BuildAffectedPaths(affectedProjects, parentByProjectPath, originatingFileByProject);
+
+        return new AffectedResult(names, attributedPaths, paths);
+    }
+
+    // Reconstructs, for each affected project path, the shortest reverse-dependency chain back to the
+    // directly-changed project that seeded it (walking the BFS parent pointers), plus that seed's
+    // originating changed file. BFS records each project's first (shortest-in-edges) predecessor, so a
+    // single representative path per project is enough -- alternate longer paths are not surfaced.
+    private static Dictionary<string, AffectedPath> BuildAffectedPaths(
+        IReadOnlyCollection<string> affectedProjectPaths,
+        IReadOnlyDictionary<string, string> parentByProjectPath,
+        IReadOnlyDictionary<string, string> originatingFileByProject)
+    {
+        var paths = new Dictionary<string, AffectedPath>(StringComparer.Ordinal);
+
+        foreach (var projectPath in affectedProjectPaths)
+        {
+            // Walk parent pointers from the affected project to its seed (a directly-changed project,
+            // which has no parent entry). chain is built target-first, then reversed to seed-first.
+            var chain = new List<string>();
+            var cursor = projectPath;
+            while (parentByProjectPath.TryGetValue(cursor, out var parent))
+            {
+                chain.Add(NameOf(cursor));
+                cursor = parent;
+            }
+
+            chain.Add(NameOf(cursor));
+            chain.Reverse();
+
+            // cursor is now the seed project. A seed always has an originating file; if some edge case
+            // left it unmapped, fall back to the chain's own name so the path is still renderable.
+            var seedFile = originatingFileByProject.TryGetValue(cursor, out var file) ? file : NameOf(cursor);
+
+            var name = NameOf(projectPath);
+            if (!string.IsNullOrEmpty(name))
+            {
+                paths[name] = new AffectedPath(seedFile, chain);
+            }
+        }
+
+        return paths;
+
+        static string NameOf(string projectPath) => Path.GetFileNameWithoutExtension(projectPath);
     }
 
     private static ProjectGraph BuildGraph(string repoRoot, string solutionPath)
@@ -233,12 +307,16 @@ internal static class GraphAffectedProjects
         IReadOnlyDictionary<string, List<ProjectGraphNode>> nodesByProjectPath,
         IReadOnlyDictionary<string, HashSet<string>> inputFileIndex,
         IReadOnlyList<string> projectDirectoriesLongestFirst,
-        out IReadOnlySet<string> attributedRepoRelativePaths)
+        out IReadOnlySet<string> attributedRepoRelativePaths,
+        out IReadOnlyDictionary<string, string> originatingFileByProject)
     {
         var directlyChanged = new HashSet<string>(s_pathComparer);
         // The repo-relative paths the graph actually attributed to a project (by either mechanism). The
         // selector treats these as Layer-1-owned so the run-all fallback does not fire for them.
         var attributed = new HashSet<string>(StringComparer.Ordinal);
+        // project path -> the changed file that first attributed it, so the reverse closure can report
+        // which change seeded each affected project's path. First write wins (changedPaths order).
+        var originatingFile = new Dictionary<string, string>(s_pathComparer);
 
         foreach (var changed in changedPaths)
         {
@@ -247,6 +325,7 @@ internal static class GraphAffectedProjects
                 foreach (var project in owningProjects)
                 {
                     directlyChanged.Add(project);
+                    originatingFile.TryAdd(project, changed.Relative);
                 }
 
                 attributed.Add(changed.Relative);
@@ -266,6 +345,7 @@ internal static class GraphAffectedProjects
                         if (s_pathComparer.Equals(NormalizeFullPath(Path.GetDirectoryName(project)!), directory))
                         {
                             directlyChanged.Add(project);
+                            originatingFile.TryAdd(project, changed.Relative);
                         }
                     }
 
@@ -276,46 +356,86 @@ internal static class GraphAffectedProjects
         }
 
         attributedRepoRelativePaths = attributed;
+        originatingFileByProject = originatingFile;
         return directlyChanged;
     }
 
     private static HashSet<string> ComputeReverseClosure(
         IEnumerable<string> directlyChangedProjects,
-        IReadOnlyDictionary<string, List<ProjectGraphNode>> nodesByProjectPath)
+        IReadOnlyDictionary<string, List<ProjectGraphNode>> nodesByProjectPath,
+        out IReadOnlyDictionary<string, string> parentByProjectPath)
     {
+        // Build DIRECT dependent edges from each project's declared <ProjectReference> items rather than
+        // from the graph's ProjectReferences / ReferencingProjects collections: a solution-based
+        // ProjectGraph flattens those into the TRANSITIVE closure (e.g. AppTests -> Mid -> Core surfaces
+        // as AppTests referencing BOTH Mid and Core directly), which loses the intermediate hops we need
+        // to render an accurate decision path. The declared items are the real one-hop edges
+        // (AppTests declares only Mid). dependents[X] = projects that directly reference X, so a change
+        // to X reaches each of them in exactly one edge -- giving BFS the true shortest hop chain.
+        var dependents = new Dictionary<string, List<string>>(s_pathComparer);
+        foreach (var (projectPath, nodes) in nodesByProjectPath)
+        {
+            foreach (var node in nodes)
+            {
+                foreach (var reference in node.ProjectInstance.GetItems("ProjectReference"))
+                {
+                    var target = NormalizeFullPath(reference.GetMetadataValue("FullPath"));
+                    // Skip references to projects outside the solution graph: they have no node to walk.
+                    if (string.IsNullOrEmpty(target) || !nodesByProjectPath.ContainsKey(target))
+                    {
+                        continue;
+                    }
+
+                    if (!dependents.TryGetValue(target, out var list))
+                    {
+                        list = new List<string>();
+                        dependents[target] = list;
+                    }
+
+                    if (!list.Contains(projectPath, s_pathComparer))
+                    {
+                        list.Add(projectPath);
+                    }
+                }
+            }
+        }
+
         var affected = new HashSet<string>(s_pathComparer);
-        var visited = new HashSet<ProjectGraphNode>();
-        var queue = new Queue<ProjectGraphNode>();
+        var queue = new Queue<string>();
+        // affected project path -> the project path one edge closer to the change (its BFS predecessor).
+        // Directly-changed projects are roots and get no entry. Set only on first reach, so the recorded
+        // predecessor lies on a shortest (fewest-edges) path back to the seed.
+        var parent = new Dictionary<string, string>(s_pathComparer);
 
         foreach (var project in directlyChangedProjects)
         {
-            affected.Add(project);
-            if (nodesByProjectPath.TryGetValue(project, out var nodes))
+            if (affected.Add(project))
             {
-                foreach (var node in nodes)
-                {
-                    queue.Enqueue(node);
-                }
+                queue.Enqueue(project);
             }
         }
 
         while (queue.Count > 0)
         {
             var current = queue.Dequeue();
-            if (!visited.Add(current))
+            if (!dependents.TryGetValue(current, out var deps))
             {
                 continue;
             }
 
-            // ReferencingProjects = the nodes that have a ProjectReference TO current, i.e. downstream
-            // dependents. Walking these transitively gives every project a change can break.
-            foreach (var referencing in current.ReferencingProjects)
+            // Walking direct dependents transitively (BFS) gives every project a change can break, and
+            // the first time each is reached records its predecessor on a shortest hop chain.
+            foreach (var dependent in deps)
             {
-                affected.Add(NormalizeFullPath(referencing.ProjectInstance.FullPath));
-                queue.Enqueue(referencing);
+                if (affected.Add(dependent))
+                {
+                    parent[dependent] = current;
+                    queue.Enqueue(dependent);
+                }
             }
         }
 
+        parentByProjectPath = parent;
         return affected;
     }
 

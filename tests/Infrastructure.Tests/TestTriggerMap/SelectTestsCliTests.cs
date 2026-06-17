@@ -233,6 +233,100 @@ public sealed class SelectTestsCliTests
         });
     }
 
+    // The JSON selection artifact (SELECT_TESTS_JSON_FILE) is the durable, machine-readable record of a
+    // selection: mode, inputs (to reproduce), and EVERY selected test/job with its per-item causes. It's
+    // what a maintainer downloads weeks later to see why something ran, without re-running CI. Pin the
+    // schema essentials and that per-item causes (with the triggering file) survive serialization.
+    [Fact]
+    public void WritesSelectionJsonArtifactWithPerItemCauses()
+    {
+        RunInTempRepo((repoRoot, propsPath, _) =>
+        {
+            var jsonPath = Path.Combine(repoRoot, "selection.json");
+            var previous = Environment.GetEnvironmentVariable("SELECT_TESTS_JSON_FILE");
+            Environment.SetEnvironmentVariable("SELECT_TESTS_JSON_FILE", jsonPath);
+            try
+            {
+                // trigger.txt -> test:Aspire.Hosting.Tests + job:extension-e2e (both via the same path rule).
+                var changed = WriteChangedFiles(repoRoot, "trigger.txt");
+
+                Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, enforce: true));
+
+                using var doc = JsonDocument.Parse(File.ReadAllText(jsonPath));
+                var root = doc.RootElement;
+                Assert.Equal(1, root.GetProperty("schemaVersion").GetInt32());
+                Assert.Equal("enforcing", root.GetProperty("mode").GetString());
+                Assert.False(root.GetProperty("selectsAll").GetBoolean());
+                Assert.Equal($"changed-files {changed}", root.GetProperty("inputs").GetProperty("changeSource").GetString());
+
+                var test = root.GetProperty("testProjects").EnumerateArray()
+                    .Single(t => t.GetProperty("name").GetString() == "Aspire.Hosting.Tests");
+                var testCause = test.GetProperty("causes").EnumerateArray().Single();
+                Assert.Equal("PathRule", testCause.GetProperty("kind").GetString());
+                Assert.Equal("trigger.txt", testCause.GetProperty("trigger").GetString());
+
+                var job = root.GetProperty("jobs").EnumerateArray()
+                    .Single(j => j.GetProperty("name").GetString() == "job:extension-e2e");
+                Assert.Equal("PathRule", job.GetProperty("causes").EnumerateArray().Single().GetProperty("kind").GetString());
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("SELECT_TESTS_JSON_FILE", previous);
+            }
+        });
+    }
+
+    // Crash traceability hardening: the diagnostics writer must be best-effort. If the step summary
+    // path is unwritable (the exact scenario where diagnostics matter), writing the block must NOT throw
+    // a NEW exception that masks the ORIGINAL failure. The original (FileNotFoundException from the
+    // missing --changed-files) must still propagate. Failure mode (before the fix): File.AppendAllText
+    // throws DirectoryNotFoundException from the catch handler, replacing the real root cause.
+    [Fact]
+    public void FailureDiagnosticsWriteFailureDoesNotMaskOriginalException()
+    {
+        RunInTempRepo((repoRoot, propsPath, _) =>
+        {
+            var missing = Path.Combine(repoRoot, "does-not-exist.txt");
+            // A summary path under a directory that does not exist -> File.AppendAllText throws.
+            var unwritableSummary = Path.Combine(repoRoot, "no", "such", "dir", "summary.md");
+            var previousSummary = Environment.GetEnvironmentVariable("GITHUB_STEP_SUMMARY");
+            Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", unwritableSummary);
+            try
+            {
+                // The ORIGINAL failure (missing changed-files) must surface, not a DirectoryNotFoundException
+                // about the summary path. FileNotFoundException : IOException; DirectoryNotFoundException
+                // also : IOException, so assert the concrete original type.
+                Assert.Throws<FileNotFoundException>(() =>
+                    Selection.Run(Options(repoRoot, propsPath, changedFilesPath: missing, skipLayer1: true, enforce: true)));
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", previousSummary);
+            }
+        });
+    }
+
+    // Traceability: when the Layer 1 graph computation crashes, the wrapper must PRESERVE the original
+    // exception as InnerException so the diagnostics' stack trace points at where MSBuild actually failed,
+    // not at Layer1Failed. The hermetic slnx references .csproj files that don't exist on disk, so
+    // building the ProjectGraph (skipLayer1:false) fails deterministically. Failure mode (before the fix):
+    // Layer1Failed(ex.Message) discards the original exception, so InnerException is null and the real
+    // crash location is lost.
+    [Fact]
+    public void Layer1FailurePreservesOriginalExceptionAsInner()
+    {
+        RunInTempRepo((repoRoot, propsPath, _) =>
+        {
+            var changed = WriteChangedFiles(repoRoot, "src/whatever/File.cs");
+
+            var ex = Assert.Throws<InvalidOperationException>(() =>
+                Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: false, enforce: true)));
+
+            Assert.Contains("Layer 1", ex.Message, StringComparison.Ordinal);
+            Assert.NotNull(ex.InnerException);
+        });
+    }
+
     // Audit mode (no --enforce) writes the run_* booleans and the summary but no restriction props,
     // so enumerate-tests enumerates the full matrix unchanged even when a subset was selected.
     [Fact]
@@ -373,6 +467,31 @@ public sealed class SelectTestsCliTests
                 Selection.Run(Options(repoRoot, propsPath, skipLayer1: true, enforce: true)));
 
             Assert.Contains("--changed-files", ex.Message, StringComparison.Ordinal);
+        });
+    }
+
+    // Crash traceability: when the selector throws mid-run, the CI step must still fail loudly (so a
+    // crash never silently under-selects), AND the failure must be debuggable -- a diagnostics block in
+    // the step summary naming the stage it died in and the inputs needed to reproduce. A non-existent
+    // --changed-files path fails deterministically in the "resolve changed files" stage. Failure mode:
+    // a bare stack trace with no record of WHAT it was processing or HOW to re-run it.
+    [Fact]
+    public void FailureEmitsDiagnosticsNamingStageAndInputsThenRethrows()
+    {
+        RunInTempRepo((repoRoot, propsPath, _) =>
+        {
+            var missing = Path.Combine(repoRoot, "does-not-exist.txt");
+
+            // The original failure must still surface (FileNotFoundException : IOException), not be
+            // swallowed -- the diagnostics augment it, they don't replace the non-zero exit.
+            Assert.ThrowsAny<IOException>(() =>
+                Selection.Run(Options(repoRoot, propsPath, changedFilesPath: missing, skipLayer1: true, enforce: true)));
+
+            var summary = File.ReadAllText(Path.Combine(repoRoot, "summary"));
+            Assert.Contains("SelectTests FAILED", summary);
+            Assert.Contains("resolve changed files", summary);
+            // The exact input that reproduces the crash.
+            Assert.Contains(missing, summary);
         });
     }
 

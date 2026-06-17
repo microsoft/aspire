@@ -54,6 +54,65 @@ public sealed class SelectTestsLayer1IntegrationTests
         });
     }
 
+    // Failure mode: the step summary reports THAT Core.Tests was selected but not HOW, so a reviewer
+    // can't see the decision path. The Layer 1 cause must render the full chain -- seed file then the
+    // reverse-dependency project chain -- so a change to src/Core/Core.cs shows as
+    // "src/Core/Core.cs -> Core -> Core.Tests" in the summary.
+    [Fact]
+    public void Layer1SelectionRendersFullDecisionPathInSummary()
+    {
+        using var fixture = new GraphRepoFixture();
+
+        var changed = fixture.WriteChangedFiles("src/Core/Core.cs");
+        var propsPath = System.IO.Path.Combine(fixture.Path, "BeforeBuildProps.props");
+
+        fixture.WithGitHubEnvRedirected(output =>
+        {
+            var commentPath = System.IO.Path.Combine(fixture.Path, "comment.md");
+            var jsonPath = System.IO.Path.Combine(fixture.Path, "selection.json");
+            var previousComment = Environment.GetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE");
+            var previousJson = Environment.GetEnvironmentVariable("SELECT_TESTS_JSON_FILE");
+            Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", commentPath);
+            Environment.SetEnvironmentVariable("SELECT_TESTS_JSON_FILE", jsonPath);
+            try
+            {
+                var exit = Selection.Run(new RunOptions(
+                    RepoRoot: fixture.Path,
+                    MapPath: System.IO.Path.Combine(fixture.Path, "map.yml"),
+                    SlnxPath: System.IO.Path.Combine(fixture.Path, "Aspire.slnx"),
+                    From: null,
+                    To: null,
+                    ChangedFilesPath: changed,
+                    SkipLayer1: false,
+                    ForceAll: false,
+                    Enforce: true,
+                    BeforeBuildProps: propsPath));
+
+                Assert.Equal(0, exit);
+                // Summary carries the full chain; the terse PR comment names just the seed file.
+                var summary = File.ReadAllText(System.IO.Path.Combine(fixture.Path, "summary"));
+                Assert.Contains("src/Core/Core.cs → Core → Core.Tests", summary);
+
+                var comment = File.ReadAllText(commentPath);
+                Assert.Contains("via graph from `src/Core/Core.cs`", comment);
+
+                // The JSON artifact preserves the decision path as a structured array.
+                using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(jsonPath));
+                var cause = doc.RootElement.GetProperty("testProjects").EnumerateArray()
+                    .Single(t => t.GetProperty("name").GetString() == "Core.Tests")
+                    .GetProperty("causes").EnumerateArray().Single();
+                Assert.Equal("Layer1Graph", cause.GetProperty("kind").GetString());
+                var path = cause.GetProperty("path").EnumerateArray().Select(e => e.GetString()).ToArray();
+                Assert.Equal(new[] { "src/Core/Core.cs", "Core", "Core.Tests" }, path);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", previousComment);
+                Environment.SetEnvironmentVariable("SELECT_TESTS_JSON_FILE", previousJson);
+            }
+        });
+    }
+
     /// <summary>
     /// A temp repo with a real, buildable MSBuild graph: <c>src/Core</c> (production) and
     /// <c>tests/Core.Tests</c> (a test project referencing it), plus an <c>Aspire.slnx</c> and an

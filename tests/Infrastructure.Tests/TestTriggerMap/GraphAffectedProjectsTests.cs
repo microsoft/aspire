@@ -76,6 +76,27 @@ public sealed class GraphAffectedProjectsTests
         Assert.Contains("Shared/Linked.cs", result.AttributedPaths);
     }
 
+    // Failure mode: the graph reports THAT a test is affected but not HOW, so the step summary cannot
+    // show the decision path. The reverse closure must record, per affected project, the shortest chain
+    // of project names from the directly-changed project to it, plus the changed file that seeded it.
+    // Core/Core.cs -> Core -> Mid -> AppTests, seeded by Core/Core.cs.
+    [Fact]
+    public void AffectedProjectCarriesTheChainAndSeedFile()
+    {
+        using var repo = new GraphFixture();
+
+        var result = repo.ComputeResult("Core/Core.cs");
+
+        var appTests = result.Paths["AppTests"];
+        Assert.Equal("Core/Core.cs", appTests.ChangedFile);
+        Assert.Equal(new[] { "Core", "Mid", "AppTests" }, appTests.ProjectChain);
+
+        // The directly-changed project's own chain is just itself.
+        var core = result.Paths["Core"];
+        Assert.Equal("Core/Core.cs", core.ChangedFile);
+        Assert.Equal(new[] { "Core" }, core.ProjectChain);
+    }
+
     // Failure mode: a changed .csproj is not attributed to its own project, so a project-file edit
     // (e.g. adding a dependency) selects nothing for that project.
     [Fact]

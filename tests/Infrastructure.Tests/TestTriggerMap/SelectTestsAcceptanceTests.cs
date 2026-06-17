@@ -495,6 +495,32 @@ public sealed class SelectTestsAcceptanceTests : IDisposable
         Assert.Equal("Layer1Only", cause.Trigger);
     }
 
+    // The Layer 1 cause must carry the full graph decision path -- the seed changed file followed by the
+    // reverse-dependency project chain -- so the summary can show HOW the change reached the test, not
+    // just THAT it did. Failure mode: dropping the path collapses the summary back to a bare name.
+    [Fact]
+    public void Layer1GraphCauseCarriesTheGraphPath()
+    {
+        var paths = new Dictionary<string, AffectedPath>(StringComparer.Ordinal)
+        {
+            ["Layer1Only"] = new AffectedPath("src/OwnedProj/Thing.cs", ["Aspire.OwnedProj", "Aspire.Mid", "Layer1Only"]),
+        };
+
+        var r = Selector(["src/OwnedProj"]).Select(
+            ["src/OwnedProj/Thing.cs"],
+            ["Layer1Only"],
+            new SelectorOptions(),
+            layer1AttributedPaths: null,
+            layer1Paths: paths);
+
+        var cause = Assert.Single(r.TestCauses["Layer1Only"]);
+        Assert.Equal(CauseKind.Layer1Graph, cause.Kind);
+        Assert.NotNull(cause.Path);
+        Assert.Equal(
+            new[] { "src/OwnedProj/Thing.cs", "Aspire.OwnedProj", "Aspire.Mid", "Layer1Only" },
+            cause.Path);
+    }
+
     [Fact]
     public void AffectedProjectCauseNamesTheMatchedProject()
     {
