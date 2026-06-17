@@ -844,6 +844,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
 
         JSInterop.SetupVoid("initializeContinuousScroll");
         JSInterop.SetupVoid("resetContinuousScrollPosition");
+        JSInterop.SetupVoid("focusElement", _ => true);
 
         FluentUISetupHelpers.AddCommonDashboardServices(this, browserTimeProvider: timeProvider);
 

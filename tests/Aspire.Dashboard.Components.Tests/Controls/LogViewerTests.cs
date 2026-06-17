@@ -106,5 +106,6 @@ public class LogViewerTests : DashboardTestContext
 
         JSInterop.SetupVoid("initializeContinuousScroll");
         JSInterop.SetupVoid("resetContinuousScrollPosition");
+        JSInterop.SetupVoid("focusElement", _ => true);
     }
 }

@@ -387,7 +387,9 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
         if (firstRender)
         {
-            await JS.InvokeVoidAsync("focusElement", ScrollContainerId);
+            // Focus the scroll container without showing the focus ring. The container is a large
+            // content area where a visible focus indicator would be visually noisy on initial load.
+            await JS.InvokeVoidAsync("focusElement", ScrollContainerId, true);
         }
 
         if (PageViewModel.SelectedViewKind == ResourceViewKind.Graph && !_graphInitialized)

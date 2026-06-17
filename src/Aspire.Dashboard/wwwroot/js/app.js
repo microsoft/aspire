@@ -323,11 +323,10 @@ window.getBrowserInfo = function () {
     };
 };
 
-window.focusElement = function (selector) {
+window.focusElement = function (selector, suppressFocusVisible) {
     const element = document.getElementById(selector);
     if (element) {
-        /* Focus the element without showing the focus ring. */
-        element.focus({ focusVisible: false });
+        element.focus({ focusVisible: !suppressFocusVisible });
     }
 };
 
