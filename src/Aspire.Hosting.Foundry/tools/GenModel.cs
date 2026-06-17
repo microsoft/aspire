@@ -915,6 +915,29 @@ public class ModelClient : IDisposable
             var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
             if (response.IsSuccessStatusCode)
             {
+                // A 200 can still carry partial-failure data (regionalErrors / resourceSkipReasons /
+                // shardErrors / numberOfResourcesNotIncludedInSearch). In practice this shows up right
+                // after the catalog API throttles us: the observed sequence is HTTP 429 -> 200 with
+                // populated error/skip fields, i.e. a transient symptom of load/rate-limiting rather
+                // than a stable catalog state. Retry it within the same budget as 429/5xx instead of
+                // hard-aborting, so a single throttled page doesn't fail the whole run. Only once the
+                // retry budget is exhausted do we refuse, preserving the "never overwrite the generated
+                // descriptors with a partial catalog" guarantee. See
+                // https://github.com/microsoft/aspire/issues/18285.
+                var partialFailureFields = TryGetPartialFailureFields(content);
+                if (partialFailureFields is { Count: > 0 })
+                {
+                    if (attempt < MaxRequestAttempts)
+                    {
+                        var partialDelay = GetRetryDelay(response, content, attempt);
+                        Console.WriteLine($"Microsoft Foundry model catalog request returned a partial catalog (populated {string.Join(", ", partialFailureFields)}). Retrying in {partialDelay.TotalSeconds:N0}s (attempt {attempt + 1}/{MaxRequestAttempts}).");
+                        await Task.Delay(partialDelay).ConfigureAwait(false);
+                        continue;
+                    }
+
+                    throw new InvalidOperationException($"The Microsoft Foundry model catalog response included partial failure data in {string.Join(", ", partialFailureFields)}. Refusing to overwrite the generated model descriptors with a partial catalog. Response: {GetResponseSnippet(content)}");
+                }
+
                 return content;
             }
 
@@ -1040,6 +1063,16 @@ public class ModelClient : IDisposable
 
     private static void ValidateSuccessfulCatalogResponse(ApiResponse apiResponse, string pageResponse)
     {
+        var partialFailureFields = GetPartialFailureFields(apiResponse);
+
+        if (partialFailureFields.Count > 0)
+        {
+            throw new InvalidOperationException($"The Microsoft Foundry model catalog response included partial failure data in {string.Join(", ", partialFailureFields)}. Refusing to overwrite the generated model descriptors with a partial catalog. Response: {GetResponseSnippet(pageResponse)}");
+        }
+    }
+
+    private static List<string> GetPartialFailureFields(ApiResponse apiResponse)
+    {
         var partialFailureFields = new List<string>();
 
         AddPopulatedJsonField(partialFailureFields, "regionalErrors", apiResponse.RegionalErrors);
@@ -1051,9 +1084,23 @@ public class ModelClient : IDisposable
             partialFailureFields.Add("numberOfResourcesNotIncludedInSearch");
         }
 
-        if (partialFailureFields.Count > 0)
+        return partialFailureFields;
+    }
+
+    // Inspect a 200 response body for partial-failure markers so the retry loop can treat a transient
+    // partial catalog as retryable. Returns null when the body can't be parsed as the catalog shape, so
+    // the caller falls back to its existing deserialize/validate path (which surfaces a clearer error)
+    // instead of silently retrying unparseable content.
+    private static List<string>? TryGetPartialFailureFields(string content)
+    {
+        try
         {
-            throw new InvalidOperationException($"The Microsoft Foundry model catalog response included partial failure data in {string.Join(", ", partialFailureFields)}. Refusing to overwrite the generated model descriptors with a partial catalog. Response: {GetResponseSnippet(pageResponse)}");
+            var apiResponse = JsonSerializer.Deserialize<ApiResponse>(content);
+            return apiResponse is null ? null : GetPartialFailureFields(apiResponse);
+        }
+        catch (JsonException)
+        {
+            return null;
         }
     }
 
