@@ -17,6 +17,8 @@ namespace Aspire.Hosting.Azure;
 /// <remarks>
 /// Use <see cref="AzureProvisioningResourceExtensions.ConfigureInfrastructure{T}(ApplicationModel.IResourceBuilder{T}, Action{AzureResourceInfrastructure})"/> to configure specific <see cref="Azure.Provisioning"/> properties.
 /// </remarks>
+/// <ats-remarks />
+[AspireExport]
 public class AzureSubnetResource : Resource, IResourceWithParent<AzureVirtualNetworkResource>
 {
     // Backing field holds either string or ParameterResource
@@ -77,6 +79,16 @@ public class AzureSubnetResource : Resource, IResourceWithParent<AzureVirtualNet
     /// </summary>
     public AzureVirtualNetworkResource Parent { get; }
 
+    /// <summary>
+    /// Gets or sets the NAT Gateway associated with the subnet.
+    /// </summary>
+    internal AzureNatGatewayResource? NatGateway { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Network Security Group associated with the subnet.
+    /// </summary>
+    internal AzureNetworkSecurityGroupResource? NetworkSecurityGroup { get; set; }
+
     private static string ThrowIfNullOrEmpty([NotNull] string? argument, [CallerArgumentExpression(nameof(argument))] string? paramName = null)
         => !string.IsNullOrEmpty(argument) ? argument : throw new ArgumentNullException(paramName);
 
@@ -116,6 +128,18 @@ public class AzureSubnetResource : Resource, IResourceWithParent<AzureVirtualNet
                 Name = serviceDelegationAnnotation.Name,
                 ServiceName = serviceDelegationAnnotation.ServiceName
             });
+        }
+
+        if (NatGateway is not null)
+        {
+            // The NAT Gateway lives in a separate bicep module, so reference its ID via parameter
+            subnet.NatGatewayId = NatGateway.Id.AsProvisioningParameter(infra);
+        }
+
+        if (NetworkSecurityGroup is not null)
+        {
+            // The NSG lives in a separate bicep module, so reference its ID via parameter
+            subnet.NetworkSecurityGroup.Id = NetworkSecurityGroup.Id.AsProvisioningParameter(infra);
         }
 
         // add a provisioning output for the subnet ID so it can be referenced by other resources

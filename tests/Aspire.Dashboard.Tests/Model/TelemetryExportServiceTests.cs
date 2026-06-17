@@ -4,15 +4,17 @@
 using System.Globalization;
 using System.IO.Compression;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Serialization;
 using Aspire.Dashboard.Otlp.Model;
-using Aspire.Dashboard.Otlp.Model.Serialization;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
+using Aspire.Otlp.Serialization;
 using Aspire.Dashboard.Tests.TelemetryRepositoryTests;
 using Aspire.Tests.Shared.DashboardModel;
 using Google.Protobuf.Collections;
+using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.InternalTesting;
 using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Trace.V1;
@@ -51,7 +53,7 @@ public sealed class TelemetryExportServiceTests
         var resource = resources[0];
         var logs = repository.GetLogs(new GetLogsContext
         {
-            ResourceKey = resource.ResourceKey,
+            ResourceKeys = [resource.ResourceKey],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters = []
@@ -284,10 +286,9 @@ public sealed class TelemetryExportServiceTests
         var resource = resources[0];
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resource.ResourceKey,
+            ResourceKeys = [resource.ResourceKey],
             StartIndex = 0,
             Count = int.MaxValue,
-            FilterText = string.Empty,
             Filters = []
         });
 
@@ -1184,6 +1185,17 @@ public sealed class TelemetryExportServiceTests
             state: KnownResourceState.Running,
             urls: [new UrlViewModel("http", new Uri("http://localhost:5000"), isInternal: false, isInactive: false, UrlDisplayPropertiesViewModel.Empty)],
             environment: [new EnvironmentVariableViewModel("MY_VAR", "my-value", fromSpec: true)],
+            properties: new Dictionary<string, ResourcePropertyViewModel>
+            {
+                [KnownProperties.Resource.WaitingFor] = new(
+                    KnownProperties.Resource.WaitingFor,
+                    Value.ForList(Value.ForString("dependency-resource")),
+                    isValueSensitive: false,
+                    knownProperty: null,
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false)
+            },
             relationships: [new RelationshipViewModel("dependency", "Reference")]);
 
         var allResources = new[] { resource, dependencyResource };
@@ -1198,6 +1210,12 @@ public sealed class TelemetryExportServiceTests
         Assert.Equal("Test Resource", deserialized.DisplayName);
         Assert.Equal("Container", deserialized.ResourceType);
         Assert.Equal("Running", deserialized.State);
+        Assert.NotNull(deserialized.WaitingFor);
+        Assert.Equal(["dependency"], deserialized.WaitingFor);
+        Assert.NotNull(deserialized.Properties);
+        var waitingForProperty = Assert.IsType<JsonArray>(deserialized.Properties[KnownProperties.Resource.WaitingFor]);
+        var waitingForPropertyValue = Assert.Single(waitingForProperty);
+        Assert.Equal("dependency-resource", waitingForPropertyValue?.GetValue<string>());
 
         Assert.NotNull(deserialized.Urls);
         Assert.Single(deserialized.Urls);
@@ -1205,7 +1223,7 @@ public sealed class TelemetryExportServiceTests
 
         Assert.NotNull(deserialized.Environment);
         Assert.Single(deserialized.Environment);
-        Assert.Equal("MY_VAR", deserialized.Environment[0].Name);
+        Assert.True(deserialized.Environment.ContainsKey("MY_VAR"));
 
         // Relationships are resolved by matching DisplayName. Since there's only one resource
         // with that display name (not a replica), the display name is used as the resource name.
@@ -1238,10 +1256,12 @@ public sealed class TelemetryExportServiceTests
         var deserialized = JsonSerializer.Deserialize(json, ResourceJsonSerializerContext.Default.ResourceJson);
         Assert.NotNull(deserialized);
         Assert.NotNull(deserialized.Environment);
-        Assert.Equal(2, deserialized.Environment.Length);
-        Assert.Contains(deserialized.Environment, e => e.Name == "FROM_SPEC_VAR" && e.Value == "spec-value");
-        Assert.Contains(deserialized.Environment, e => e.Name == "ANOTHER_SPEC_VAR" && e.Value == "another-spec-value");
-        Assert.DoesNotContain(deserialized.Environment, e => e.Name == "NOT_FROM_SPEC_VAR");
+        Assert.Equal(2, deserialized.Environment.Count);
+        Assert.Contains("FROM_SPEC_VAR", deserialized.Environment.Keys);
+        Assert.Equal("spec-value", deserialized.Environment["FROM_SPEC_VAR"]);
+        Assert.Contains("ANOTHER_SPEC_VAR", deserialized.Environment.Keys);
+        Assert.Equal("another-spec-value", deserialized.Environment["ANOTHER_SPEC_VAR"]);
+        Assert.DoesNotContain("NOT_FROM_SPEC_VAR", deserialized.Environment.Keys);
     }
 
     [Fact]
@@ -1275,6 +1295,66 @@ public sealed class TelemetryExportServiceTests
 
         Assert.NotNull(deserialized.Environment);
         Assert.Single(deserialized.Environment);
-        Assert.Equal(japaneseEnvValue, deserialized.Environment[0].Value);
+        Assert.Equal(japaneseEnvValue, deserialized.Environment["JAPANESE_VAR"]);
+    }
+
+    [Fact]
+    public void ConvertResourceToJson_NumberAndBoolProperties_ArePreserved()
+    {
+        // Arrange
+        var resource = ModelTestHelpers.CreateResource(
+            resourceName: "test-container",
+            displayName: "Test Container",
+            resourceType: "Container",
+            state: KnownResourceState.Running,
+            properties: new Dictionary<string, ResourcePropertyViewModel>
+            {
+                ["container.ports"] = new(
+                    "container.ports",
+                    Value.ForList(Value.ForNumber(6379), Value.ForNumber(6380)),
+                    isValueSensitive: false,
+                    knownProperty: null,
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false),
+                ["resource.exitCode"] = new(
+                    "resource.exitCode",
+                    Value.ForNumber(0),
+                    isValueSensitive: false,
+                    knownProperty: null,
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false),
+                ["resource.enabled"] = new(
+                    "resource.enabled",
+                    Value.ForBool(true),
+                    isValueSensitive: false,
+                    knownProperty: null,
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false)
+            });
+
+        // Act
+        var json = TelemetryExportService.ConvertResourceToJson(resource, [resource]);
+
+        // Assert
+        var deserialized = JsonSerializer.Deserialize(json, ResourceJsonSerializerContext.Default.ResourceJson);
+        Assert.NotNull(deserialized);
+        Assert.NotNull(deserialized.Properties);
+
+        // Number values in a list should be preserved
+        var portsArray = Assert.IsType<JsonArray>(deserialized.Properties["container.ports"]);
+        Assert.Equal(2, portsArray.Count);
+        Assert.Equal(6379, portsArray[0]!.GetValue<double>());
+        Assert.Equal(6380, portsArray[1]!.GetValue<double>());
+
+        // Scalar number value should be preserved
+        var exitCode = deserialized.Properties["resource.exitCode"]!.GetValue<double>();
+        Assert.Equal(0, exitCode);
+
+        // Bool value should be preserved
+        var enabled = deserialized.Properties["resource.enabled"]!.GetValue<bool>();
+        Assert.True(enabled);
     }
 }

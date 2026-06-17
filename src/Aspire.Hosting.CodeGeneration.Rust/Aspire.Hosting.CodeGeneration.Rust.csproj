@@ -23,7 +23,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Aspire.Hosting\Aspire.Hosting.csproj" />
+    <Compile Include="$(SharedDir)Json\AtsJsonCodeWriter.cs" Link="AtsJsonCodeWriter.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Aspire.TypeSystem\Aspire.TypeSystem.csproj" />
   </ItemGroup>
 
 </Project>

@@ -3,6 +3,7 @@
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "5")]
 public class DistributedApplicationOptionsTests
 {
     [Fact]
@@ -126,5 +127,46 @@ public class DistributedApplicationOptionsTests
         // Verify explicit name is used
         var expectedPath = Path.GetFullPath(Path.Join(projectDirectory, "ExplicitlySetName"));
         Assert.Equal(expectedPath, builder.AppHostPath);
+    }
+
+    [Fact]
+    public void DashboardApplicationName_UsesProjectDirectoryName_ForSourceFileAppHosts()
+    {
+        var projectDirectory = OperatingSystem.IsWindows() ? @"C:\projects\Contoso\" : "/projects/Contoso/";
+        var appHostFilePath = OperatingSystem.IsWindows() ? @"C:\projects\Contoso\apphost.ts" : "/projects/Contoso/apphost.ts";
+        var options = new DistributedApplicationOptions
+        {
+            ProjectDirectory = projectDirectory,
+            AppHostFilePath = appHostFilePath
+        };
+
+        Assert.Equal("Contoso", options.DashboardApplicationName);
+    }
+
+    [Fact]
+    public void DashboardApplicationName_UsesAppHostDirectory_WhenProjectDirectoryIsNotSet()
+    {
+        var appHostFilePath = OperatingSystem.IsWindows() ? @"C:\projects\Tailspin\apphost.cs" : "/projects/Tailspin/apphost.cs";
+        var options = new DistributedApplicationOptions
+        {
+            ProjectDirectory = null,
+            AppHostFilePath = appHostFilePath
+        };
+
+        Assert.Equal("Tailspin", options.DashboardApplicationName);
+    }
+
+    [Fact]
+    public void DashboardApplicationName_DoesNotOverrideCsprojAppHosts()
+    {
+        var projectDirectory = OperatingSystem.IsWindows() ? @"C:\projects\Fabrikam" : "/projects/Fabrikam";
+        var appHostFilePath = OperatingSystem.IsWindows() ? @"C:\projects\Fabrikam\Fabrikam.AppHost.csproj" : "/projects/Fabrikam/Fabrikam.AppHost.csproj";
+        var options = new DistributedApplicationOptions
+        {
+            ProjectDirectory = projectDirectory,
+            AppHostFilePath = appHostFilePath
+        };
+
+        Assert.Null(options.DashboardApplicationName);
     }
 }

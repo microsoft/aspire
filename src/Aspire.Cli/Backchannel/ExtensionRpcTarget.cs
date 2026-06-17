@@ -29,13 +29,13 @@ internal interface IExtensionRpcTarget
     Task<string[]> GetCliCapabilitiesAsync();
 }
 
-internal class ExtensionRpcTarget(IConfiguration configuration) : IExtensionRpcTarget
+internal class ExtensionRpcTarget(IConfiguration configuration, CliExecutionContext executionContext) : IExtensionRpcTarget
 {
     public Func<string, ValidationResult>? ValidationFunction { get; set; }
 
     public Task<string> GetCliVersionAsync()
     {
-        return Task.FromResult(VersionHelper.GetDefaultTemplateVersion());
+        return Task.FromResult(executionContext.IdentityVersion);
     }
 
     public Task<ValidationResult?> ValidatePromptInputStringAsync(string input)
@@ -45,7 +45,7 @@ internal class ExtensionRpcTarget(IConfiguration configuration) : IExtensionRpcT
 
     public Task StopCliAsync()
     {
-        Environment.Exit(ExitCodeConstants.Success);
+        Environment.Exit(CliExitCodes.Success);
         return Task.CompletedTask;
     }
 
@@ -56,6 +56,6 @@ internal class ExtensionRpcTarget(IConfiguration configuration) : IExtensionRpcT
 
     public Task<string[]> GetCliCapabilitiesAsync()
     {
-        return Task.FromResult(new[] { KnownCapabilities.BuildDotnetUsingCli });
+        return Task.FromResult(KnownCapabilities.GetAdvertisedCapabilities());
     }
 }

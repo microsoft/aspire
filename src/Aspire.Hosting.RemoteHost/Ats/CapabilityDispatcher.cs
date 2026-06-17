@@ -5,7 +5,9 @@ using System.Collections.Concurrent;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Aspire.Hosting.Ats;
+using System.Text.RegularExpressions;
+using Aspire.Hosting.RemoteHost.Diagnostics;
+using Aspire.TypeSystem;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.RemoteHost.Ats;
@@ -27,10 +29,16 @@ internal delegate Task<JsonNode?> CapabilityHandler(
 internal sealed class CapabilityDispatcher
 {
     private readonly ConcurrentDictionary<string, CapabilityRegistration> _capabilities = new();
+    private readonly Dictionary<string, HashSet<string>> _polyglotMethodNamesByClrName = new(StringComparer.Ordinal);
     private readonly HandleRegistry _handles;
     private readonly AtsMarshaller _marshaller;
     private readonly ILogger _logger;
-    private Hosting.Ats.AtsContext? _atsContext;
+    private readonly RemoteHostProfilingTelemetry _profilingTelemetry;
+    private AtsContext? _atsContext;
+    // Tracks whether any CapabilityDispatcher in this process has scanned yet. Recorded as a
+    // profiling tag so traces can distinguish the cold first scan (full reflection cost) from
+    // subsequent scans (cached metadata).
+    private static int s_hasScanned;
 
     /// <summary>
     /// Represents a registered capability.
@@ -40,6 +48,8 @@ internal sealed class CapabilityDispatcher
         public required string CapabilityId { get; init; }
         public required CapabilityHandler Handler { get; init; }
         public string? Description { get; init; }
+        public AtsCapabilityInfo? Capability { get; init; }
+        public string? ClrMemberName { get; init; }
     }
 
     /// <summary>
@@ -49,15 +59,18 @@ internal sealed class CapabilityDispatcher
     /// <param name="assemblyLoader">The assembly loader to get assemblies from.</param>
     /// <param name="marshaller">The marshaller for converting objects to/from JSON.</param>
     /// <param name="logger">The logger.</param>
+    /// <param name="profilingTelemetry">The remote host profiling telemetry helper.</param>
     public CapabilityDispatcher(
         HandleRegistry handles,
         AssemblyLoader assemblyLoader,
         AtsMarshaller marshaller,
-        ILogger<CapabilityDispatcher> logger)
+        ILogger<CapabilityDispatcher> logger,
+        RemoteHostProfilingTelemetry profilingTelemetry)
     {
         _handles = handles;
         _marshaller = marshaller;
         _logger = logger;
+        _profilingTelemetry = profilingTelemetry;
 
         // Scan for capabilities on initialization
         ScanAssemblies(assemblyLoader.GetAssemblies());
@@ -77,6 +90,7 @@ internal sealed class CapabilityDispatcher
         _handles = handles;
         _marshaller = marshaller;
         _logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<CapabilityDispatcher>.Instance;
+        _profilingTelemetry = RemoteHostProfilingTelemetry.Disabled;
 
         ScanAssemblies(assemblies);
     }
@@ -88,11 +102,20 @@ internal sealed class CapabilityDispatcher
     private void ScanAssemblies(IEnumerable<Assembly> assemblies)
     {
         var assemblyList = assemblies.ToList();
+        var firstScan = Interlocked.Exchange(ref s_hasScanned, 1) == 0;
+        using var activity = _profilingTelemetry.StartCapabilityScan(assemblyList.Count, firstScan);
 
         _logger.LogDebug("Scanning {AssemblyCount} assemblies for capabilities...", assemblyList.Count);
 
         // Scan all assemblies at once to get combined result with AtsContext
         var result = AtsCapabilityScanner.ScanAssemblies(assemblyList);
+        activity.SetAtsCounts(
+            result.Capabilities.Count,
+            result.HandleTypes.Count,
+            result.DtoTypes.Count,
+            result.EnumTypes.Count,
+            result.ExportedValues.Count,
+            result.Diagnostics.Count);
 
         // Store the AtsContext for capability registration
         _atsContext = result.ToAtsContext();
@@ -103,6 +126,10 @@ internal sealed class CapabilityDispatcher
             if (diagnostic.Severity == AtsDiagnosticSeverity.Error)
             {
                 _logger.LogError("{Message} at {Location}", diagnostic.Message, diagnostic.Location);
+            }
+            else if (diagnostic.Severity == AtsDiagnosticSeverity.Info)
+            {
+                _logger.LogDebug("{Message} at {Location}", diagnostic.Message, diagnostic.Location);
             }
             else
             {
@@ -169,7 +196,18 @@ internal sealed class CapabilityDispatcher
                     throw CapabilityException.HandleNotFound(handleRef.HandleId, capabilityId);
                 }
 
-                var value = prop.GetValue(contextObj);
+                // Bridge builder -> resource: if the handle contains an IResourceBuilder<T>
+                // but the property is declared on the resource type T, unwrap to the
+                // correct target object. See AtsCapabilityScanner.MapToAtsTypeId.
+                var target = ResolveContextTarget(
+                    capability,
+                    capabilityId,
+                    args,
+                    handles,
+                    contextObj!,
+                    prop.DeclaringType!);
+
+                var value = prop.GetValue(target);
                 return Task.FromResult(_marshaller.MarshalToJson(value, capability.ReturnType));
             };
 
@@ -177,8 +215,12 @@ internal sealed class CapabilityDispatcher
             {
                 CapabilityId = capabilityId,
                 Handler = getterHandler,
-                Description = capability.Description ?? $"Gets the {property.Name} property"
+                Description = capability.Description ?? $"Gets the {property.Name} property",
+                Capability = capability,
+                ClrMemberName = property.Name
             };
+
+            RegisterMethodAlias(property.Name, capability.MethodName);
         }
         else if (capability.CapabilityKind == AtsCapabilityKind.PropertySetter)
         {
@@ -211,8 +253,25 @@ internal sealed class CapabilityDispatcher
                     CapabilityId = capabilityId,
                     ParameterName = "value"
                 };
-                var value = _marshaller.UnmarshalFromJson(valueNode, prop.PropertyType, unmarshalContext);
-                prop.SetValue(contextObj, value);
+                var value = UnmarshalArgument(
+                    capability,
+                    "value",
+                    prop.PropertyType,
+                    valueNode,
+                    unmarshalContext,
+                    handles,
+                    args,
+                    GetUnionMemberClrTypes(prop, capability, "value"));
+
+                // Bridge builder -> resource for setter as well.
+                var setTarget = ResolveContextTarget(
+                    capability,
+                    capabilityId,
+                    args,
+                    handles,
+                    contextObj!,
+                    prop.DeclaringType!);
+                prop.SetValue(setTarget, value);
 
                 // Return the context handle for fluent chaining
                 return Task.FromResult<JsonNode?>(new JsonObject
@@ -226,8 +285,12 @@ internal sealed class CapabilityDispatcher
             {
                 CapabilityId = capabilityId,
                 Handler = setterHandler,
-                Description = capability.Description ?? $"Sets the {property.Name} property"
+                Description = capability.Description ?? $"Sets the {property.Name} property",
+                Capability = capability,
+                ClrMemberName = property.Name
             };
+
+            RegisterMethodAlias(property.Name, capability.MethodName);
         }
     }
 
@@ -272,7 +335,15 @@ internal sealed class CapabilityDispatcher
                         CapabilityId = capabilityId,
                         ParameterName = paramName
                     };
-                    methodArgs[i] = _marshaller.UnmarshalFromJson(argNode, param.ParameterType, context);
+                    methodArgs[i] = UnmarshalArgument(
+                        capability,
+                        paramName,
+                        param.ParameterType,
+                        argNode,
+                        context,
+                        handles,
+                        args,
+                        GetUnionMemberClrTypes(param, capability));
                 }
                 else if (param.HasDefaultValue)
                 {
@@ -292,40 +363,33 @@ internal sealed class CapabilityDispatcher
                 methodToInvoke = GenericMethodResolver.MakeGenericMethodFromArgs(method, methodArgs);
             }
 
+            // Bridge builder -> resource: if the handle contains an IResourceBuilder<T>
+            // but the method is declared on the resource type T, unwrap to the
+            // correct target object. See AtsCapabilityScanner.MapToAtsTypeId.
+            var invokeTarget = ResolveContextTarget(
+                capability,
+                capabilityId,
+                args,
+                handles,
+                contextObj!,
+                methodToInvoke.DeclaringType!);
+
             object? result;
             try
             {
-                // Invoke instance method on the context object
-                result = methodToInvoke.Invoke(contextObj, methodArgs);
+                result = await InvokeMethodAsync(methodToInvoke, invokeTarget, methodArgs, capability.RunSyncOnBackgroundThread).ConfigureAwait(false);
             }
             catch (TargetInvocationException tie) when (tie.InnerException is not null)
             {
                 throw tie.InnerException;
             }
-
-            // Handle async methods - await instead of blocking
-            if (result is Task task)
+            catch (ArgumentException ex)
             {
-                try
-                {
-                    await task.ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    throw new InvalidOperationException(ex.Message, ex);
-                }
-
-                var taskType = task.GetType();
-                if (taskType.IsGenericType)
-                {
-                    var resultProperty = taskType.GetProperty("Result");
-                    result = resultProperty?.GetValue(task);
-                }
-                else
-                {
-                    result = null;
-                }
+                var (mismatchParam, expected, actual) = FindMismatchedParameter(methodToInvoke.GetParameters(), methodArgs, ex);
+                throw CapabilityException.TypeMismatch(capabilityId, mismatchParam, expected, actual);
             }
+
+            result = await UnwrapAsyncResultAsync(result, methodToInvoke.ReturnType).ConfigureAwait(false);
 
             return _marshaller.MarshalToJson(result, capability.ReturnType);
         };
@@ -334,8 +398,12 @@ internal sealed class CapabilityDispatcher
         {
             CapabilityId = capabilityId,
             Handler = handler,
-            Description = capability.Description ?? $"Invokes the {method.Name} method"
+            Description = capability.Description ?? $"Invokes the {method.Name} method",
+            Capability = capability,
+            ClrMemberName = method.Name
         };
+
+        RegisterMethodAlias(method.Name, capability.MethodName);
     }
 
     /// <summary>
@@ -364,7 +432,15 @@ internal sealed class CapabilityDispatcher
                         CapabilityId = capabilityId,
                         ParameterName = paramName
                     };
-                    methodArgs[i] = _marshaller.UnmarshalFromJson(argNode, param.ParameterType, context);
+                    methodArgs[i] = UnmarshalArgument(
+                        capability,
+                        paramName,
+                        param.ParameterType,
+                        argNode,
+                        context,
+                        handles,
+                        args,
+                        GetUnionMemberClrTypes(param, capability));
                 }
                 else if (param.HasDefaultValue)
                 {
@@ -387,39 +463,20 @@ internal sealed class CapabilityDispatcher
             object? result;
             try
             {
-                result = methodToInvoke.Invoke(null, methodArgs);
+                result = await InvokeMethodAsync(methodToInvoke, target: null, methodArgs, capability.RunSyncOnBackgroundThread).ConfigureAwait(false);
             }
             catch (TargetInvocationException tie) when (tie.InnerException is not null)
             {
                 // Unwrap the TargetInvocationException to get the actual exception
                 throw tie.InnerException;
             }
-
-            // Handle async methods - await instead of blocking
-            if (result is Task task)
+            catch (ArgumentException ex)
             {
-                try
-                {
-                    await task.ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    // Rethrow the exception - it will be caught by the outer handler
-                    // and converted to a CapabilityException
-                    throw new InvalidOperationException(ex.Message, ex);
-                }
-
-                var taskType = task.GetType();
-                if (taskType.IsGenericType)
-                {
-                    var resultProperty = taskType.GetProperty("Result");
-                    result = resultProperty?.GetValue(task);
-                }
-                else
-                {
-                    result = null;
-                }
+                var (mismatchParam, expected, actual) = FindMismatchedParameter(methodToInvoke.GetParameters(), methodArgs, ex);
+                throw CapabilityException.TypeMismatch(capabilityId, mismatchParam, expected, actual);
             }
+
+            result = await UnwrapAsyncResultAsync(result, methodToInvoke.ReturnType).ConfigureAwait(false);
 
             return _marshaller.MarshalToJson(result, capability.ReturnType);
         };
@@ -428,8 +485,28 @@ internal sealed class CapabilityDispatcher
         {
             CapabilityId = capabilityId,
             Handler = handler,
-            Description = capability.Description
+            Description = capability.Description,
+            Capability = capability,
+            ClrMemberName = method.Name
         };
+
+        RegisterMethodAlias(method.Name, capability.MethodName);
+    }
+
+    private void RegisterMethodAlias(string? clrMemberName, string? polyglotMethodName)
+    {
+        if (string.IsNullOrEmpty(clrMemberName) || string.IsNullOrEmpty(polyglotMethodName))
+        {
+            return;
+        }
+
+        if (!_polyglotMethodNamesByClrName.TryGetValue(clrMemberName, out var names))
+        {
+            names = new(StringComparer.Ordinal);
+            _polyglotMethodNamesByClrName[clrMemberName] = names;
+        }
+
+        names.Add(polyglotMethodName);
     }
 
     /// <summary>
@@ -466,29 +543,72 @@ internal sealed class CapabilityDispatcher
             throw CapabilityException.CapabilityNotFound(capabilityId);
         }
 
+        using var activity = _profilingTelemetry.StartCapabilityInvoke(capabilityId, registration.Capability);
         args ??= new JsonObject();
 
         try
         {
             return await registration.Handler(args, _handles).ConfigureAwait(false);
         }
-        catch (CapabilityException)
+        catch (PolyglotCapabilityInvocationException ex)
         {
+            activity.SetError(ex);
+            throw ex.ToCapabilityException();
+        }
+        catch (CapabilityException ex)
+        {
+            activity.SetError(ex);
             throw;
         }
         catch (ArgumentException ex) when (IsTypeMismatchException(ex))
         {
-            // Convert CLR type mismatch to ATS error
-            throw CapabilityException.TypeMismatch(capabilityId, "argument", "expected type", ex.Message);
+            activity.SetError(ex);
+            throw PolyglotCapabilityErrorFormatter.CreateInternalError(
+                capabilityId,
+                registration.Capability?.MethodName,
+                registration.ClrMemberName,
+                args,
+                _handles,
+                ex,
+                _polyglotMethodNamesByClrName,
+                registration.Capability?.TargetParameterName,
+                errorCode: AtsErrorCodes.TypeMismatch).ToCapabilityException();
+        }
+        catch (ArgumentException ex)
+        {
+            activity.SetError(ex);
+            throw CapabilityException.InvalidArgument(
+                capabilityId,
+                ex.ParamName ?? registration.Capability?.TargetParameterName ?? "unknown",
+                ex.Message);
         }
         catch (InvalidCastException ex)
         {
-            // Convert CLR cast failures to ATS error
-            throw CapabilityException.TypeMismatch(capabilityId, "argument", "expected type", ex.Message);
+            activity.SetError(ex);
+            throw PolyglotCapabilityErrorFormatter.CreateInternalError(
+                capabilityId,
+                registration.Capability?.MethodName,
+                registration.ClrMemberName,
+                args,
+                _handles,
+                ex,
+                _polyglotMethodNamesByClrName,
+                registration.Capability?.TargetParameterName,
+                errorCode: AtsErrorCodes.TypeMismatch).ToCapabilityException();
         }
         catch (Exception ex)
         {
-            throw CapabilityException.InternalError(capabilityId, ex.Message, ex);
+            activity.SetError(ex);
+            _logger.LogError(ex, "Capability {CapabilityId} failed with {ExceptionType}: {Message}", capabilityId, ex.GetType().Name, ex.Message);
+            throw PolyglotCapabilityErrorFormatter.CreateInternalError(
+                capabilityId,
+                registration.Capability?.MethodName,
+                registration.ClrMemberName,
+                args,
+                _handles,
+                ex,
+                _polyglotMethodNamesByClrName,
+                registration.Capability?.TargetParameterName).ToCapabilityException();
         }
     }
 
@@ -505,16 +625,384 @@ internal sealed class CapabilityDispatcher
         return InvokeAsync(capabilityId, args).GetAwaiter().GetResult();
     }
 
+    private static async Task<object?> InvokeMethodAsync(MethodInfo method, object? target, object?[] methodArgs, bool runInvocationOnBackgroundThread)
+    {
+        if (runInvocationOnBackgroundThread)
+        {
+            // Async-returning exports can execute substantial synchronous setup before returning
+            // their Task or ValueTask. Run that invocation path off the JSON-RPC synchronization context so
+            // sync-over-async callback proxies can still receive nested RPC responses.
+            return await Task.Run(() => InvokeMethodCore(method, target, methodArgs)).ConfigureAwait(false);
+        }
+
+        return InvokeMethodCore(method, target, methodArgs);
+    }
+
+    private static async Task<object?> UnwrapAsyncResultAsync(object? result, Type returnType)
+    {
+        try
+        {
+            if (result is Task task)
+            {
+                await task.ConfigureAwait(false);
+                return GetAsyncResultValue(task);
+            }
+
+            if (returnType == typeof(ValueTask) && result is ValueTask valueTask)
+            {
+                await valueTask.ConfigureAwait(false);
+                return null;
+            }
+
+            if (returnType.IsGenericType && returnType.GetGenericTypeDefinition() == typeof(ValueTask<>))
+            {
+                var asTask = returnType.GetMethod(nameof(ValueTask<int>.AsTask), BindingFlags.Instance | BindingFlags.Public)
+                    ?? throw new InvalidOperationException($"Unable to await ValueTask result for return type '{returnType}'.");
+                var boxedTask = asTask.Invoke(result, null) as Task
+                    ?? throw new InvalidOperationException($"Unable to convert ValueTask result for return type '{returnType}' to Task.");
+
+                await boxedTask.ConfigureAwait(false);
+                return GetAsyncResultValue(boxedTask);
+            }
+
+            return result;
+        }
+        catch (Exception ex) when (ex is not InvalidOperationException)
+        {
+            throw new InvalidOperationException(ex.Message, ex);
+        }
+    }
+
+    private static object? GetAsyncResultValue(Task task)
+    {
+        var taskType = task.GetType();
+        if (!taskType.IsGenericType)
+        {
+            return null;
+        }
+
+        var resultProperty = taskType.GetProperty("Result");
+        return resultProperty?.GetValue(task);
+    }
+
+    private static object? InvokeMethodCore(MethodInfo method, object? target, object?[] methodArgs)
+    {
+        return method.Invoke(target, methodArgs);
+    }
+
     /// <summary>
     /// Checks if an exception indicates a type mismatch.
     /// </summary>
     private static bool IsTypeMismatchException(ArgumentException ex)
     {
-        // Check for common type mismatch patterns in exception messages
         var message = ex.Message;
         return message.Contains("cannot be converted") ||
+               message.Contains("could not be converted") ||
                message.Contains("is not assignable") ||
                message.Contains("type mismatch", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Finds the mismatched parameter by comparing actual argument types against expected parameter types.
+    /// Falls back to parsing the exception message if no mismatch is found by inspection.
+    /// </summary>
+    private static (string ParameterName, string ExpectedType, string ActualType) FindMismatchedParameter(
+        ParameterInfo[] parameters, object?[] args, ArgumentException ex)
+    {
+        // Inspect actual args vs parameter types to find the mismatch
+        for (int i = 0; i < parameters.Length && i < args.Length; i++)
+        {
+            var param = parameters[i];
+            var arg = args[i];
+            var paramType = param.ParameterType;
+
+            if (arg is null)
+            {
+                if (paramType.IsValueType && Nullable.GetUnderlyingType(paramType) is null)
+                {
+                    return (param.Name ?? $"arg{i}", paramType.ToString(), "null");
+                }
+            }
+            else if (!paramType.IsAssignableFrom(arg.GetType()))
+            {
+                return (param.Name ?? $"arg{i}", paramType.ToString(), arg.GetType().ToString());
+            }
+        }
+
+        // Fallback: parse the exception message for type names
+        var message = ex.Message;
+        var match = Regex.Match(message, @"type '([^']+)'.*(?:to|into) type '([^']+)'");
+        if (match.Success)
+        {
+            return (ex.ParamName ?? "unknown", match.Groups[2].Value, match.Groups[1].Value);
+        }
+
+        return (ex.ParamName ?? "unknown", "unknown", "unknown");
+    }
+
+    /// <summary>
+    /// Resolves the correct target object for a member invocation.
+    /// Handles the case where the handle contains an <c>IResourceBuilder&lt;T&gt;</c> but the
+    /// member is declared on the resource type <c>T</c>, since
+    /// <c>AtsCapabilityScanner.MapToAtsTypeId</c> maps both to the same type ID.
+    /// </summary>
+    private object? UnmarshalArgument(
+        AtsCapabilityInfo capability,
+        string parameterName,
+        Type parameterType,
+        JsonNode? argNode,
+        AtsMarshaller.UnmarshalContext context,
+        HandleRegistry handles,
+        JsonObject? args,
+        IReadOnlyList<Type>? unionMemberTypes = null)
+    {
+        if (unionMemberTypes is { Count: > 0 })
+        {
+            return UnmarshalUnionArgument(
+                capability,
+                parameterName,
+                argNode,
+                context,
+                handles,
+                args,
+                unionMemberTypes);
+        }
+
+        var handleRef = HandleRef.FromJsonNode(argNode);
+        if (handleRef is null)
+        {
+            return _marshaller.UnmarshalFromJson(argNode, parameterType, context);
+        }
+
+        if (!handles.TryGet(handleRef.HandleId, out var handleObject, out _))
+        {
+            throw CapabilityException.HandleNotFound(handleRef.HandleId, capability.CapabilityId);
+        }
+
+        return PolyglotCapabilityErrorFormatter.ResolveHandleArgument(
+            capability.CapabilityId,
+            capability.MethodName,
+            args,
+            handles,
+            parameterName,
+            parameterType,
+            handleObject!,
+            capability.TargetParameterName);
+    }
+
+    private object? UnmarshalUnionArgument(
+        AtsCapabilityInfo capability,
+        string parameterName,
+        JsonNode? argNode,
+        AtsMarshaller.UnmarshalContext context,
+        HandleRegistry handles,
+        JsonObject? args,
+        IReadOnlyList<Type> unionMemberTypes)
+    {
+        var handleRef = HandleRef.FromJsonNode(argNode);
+        if (handleRef is not null)
+        {
+            if (!handles.TryGet(handleRef.HandleId, out var handleObject, out _))
+            {
+                throw CapabilityException.HandleNotFound(handleRef.HandleId, capability.CapabilityId);
+            }
+
+            foreach (var unionMemberType in unionMemberTypes)
+            {
+                try
+                {
+                    return PolyglotCapabilityErrorFormatter.ResolveHandleArgument(
+                        capability.CapabilityId,
+                        capability.MethodName,
+                        args,
+                        handles,
+                        parameterName,
+                        unionMemberType,
+                        handleObject!,
+                        capability.TargetParameterName);
+                }
+                catch (PolyglotCapabilityInvocationException ex) when (ex.ErrorCode == AtsErrorCodes.TypeMismatch)
+                {
+                    continue;
+                }
+            }
+
+            throw CapabilityException.TypeMismatch(
+                capability.CapabilityId,
+                parameterName,
+                DescribeUnionTypes(unionMemberTypes),
+                handleObject!.GetType().Name);
+        }
+
+        foreach (var unionMemberType in unionMemberTypes)
+        {
+            try
+            {
+                var unmarshalledValue = _marshaller.UnmarshalFromJson(argNode, unionMemberType, context);
+                if (unmarshalledValue is not null || argNode is null)
+                {
+                    return unmarshalledValue;
+                }
+            }
+            catch (CapabilityException ex) when (ex.Error.Code is AtsErrorCodes.InvalidArgument or AtsErrorCodes.TypeMismatch)
+            {
+                continue;
+            }
+            catch (ArgumentException) when (IsRejectedEnumString(argNode, unionMemberType))
+            {
+                // Enum.Parse rejects unknown string values with ArgumentException. In a union,
+                // that only means this enum member did not match, so later members such as
+                // string still need a chance to accept the same JSON value.
+                continue;
+            }
+        }
+
+        throw CapabilityException.TypeMismatch(
+            capability.CapabilityId,
+            parameterName,
+            DescribeUnionTypes(unionMemberTypes),
+            DescribeJsonNode(argNode));
+    }
+
+    private static IReadOnlyList<Type>? GetUnionMemberClrTypes(ParameterInfo parameter, AtsCapabilityInfo capability)
+    {
+        if (TryGetUnionMemberClrTypes(parameter.CustomAttributes) is { Count: > 0 } unionMemberTypes)
+        {
+            return unionMemberTypes;
+        }
+
+        return TryGetUnionMemberClrTypes(capability, parameter.Name ?? string.Empty);
+    }
+
+    private static IReadOnlyList<Type>? GetUnionMemberClrTypes(PropertyInfo property, AtsCapabilityInfo capability, string parameterName)
+    {
+        if (TryGetUnionMemberClrTypes(property.CustomAttributes) is { Count: > 0 } unionMemberTypes)
+        {
+            return unionMemberTypes;
+        }
+
+        return TryGetUnionMemberClrTypes(capability, parameterName);
+    }
+
+    private static IReadOnlyList<Type>? TryGetUnionMemberClrTypes(IEnumerable<CustomAttributeData> attributes)
+    {
+        var unionAttribute = attributes.FirstOrDefault(static attribute => attribute.AttributeType.FullName is "Aspire.Hosting.AspireUnionAttribute");
+        if (unionAttribute?.ConstructorArguments.Count is not > 0)
+        {
+            return null;
+        }
+
+        var types = unionAttribute.ConstructorArguments[0].Value as IReadOnlyCollection<CustomAttributeTypedArgument>;
+        if (types is null)
+        {
+            return null;
+        }
+
+        var unionMemberTypes = types
+            .Select(static argument => argument.Value)
+            .OfType<Type>()
+            .ToArray();
+
+        return unionMemberTypes.Length > 0 ? unionMemberTypes : null;
+    }
+
+    private static IReadOnlyList<Type>? TryGetUnionMemberClrTypes(AtsCapabilityInfo capability, string parameterName)
+    {
+        var parameter = capability.Parameters.FirstOrDefault(p => string.Equals(p.Name, parameterName, StringComparison.Ordinal));
+
+        if (parameter?.Type?.UnionTypes is not { Count: > 0 } unionTypes)
+        {
+            return null;
+        }
+
+        var clrTypes = unionTypes
+            .Select(static unionType => unionType.ClrType)
+            .OfType<Type>()
+            .ToArray();
+
+        return clrTypes.Length > 0 ? clrTypes : null;
+    }
+
+    private static string DescribeUnionTypes(IReadOnlyList<Type> unionMemberTypes)
+    {
+        return string.Join(" | ", unionMemberTypes.Select(static type => type.Name));
+    }
+
+    /// <summary>
+    /// Determines if the given JSON node represents a rejected enum string for the specified union member type.
+    /// A rejected enum string occurs when the union member type is an enum, but the JSON node is a string that does not match any of the enum's defined names. In this case, the value may still be valid for another union member type (e.g., string), so it should not cause an immediate type mismatch failure for the entire union parameter.
+    /// </summary>
+    /// <param name="node">The JSON node to check.</param>
+    /// <param name="unionMemberType">The union member type to check against.</param>
+    /// <returns>True if the JSON node is a rejected enum string; otherwise, false.</returns>
+    private static bool IsRejectedEnumString(JsonNode? node, Type unionMemberType)
+    {
+        var underlyingType = Nullable.GetUnderlyingType(unionMemberType) ?? unionMemberType;
+        return underlyingType.IsEnum &&
+            node is JsonValue value &&
+            value.TryGetValue<string>(out _);
+    }
+
+    private static string DescribeJsonNode(JsonNode? node)
+    {
+        return node switch
+        {
+            null => "null",
+            JsonValue v when v.TryGetValue<string>(out _) => "string",
+            JsonValue v when v.TryGetValue<bool>(out _) => "bool",
+            JsonValue v when v.TryGetValue<long>(out _) => "number",
+            JsonValue v when v.TryGetValue<double>(out _) => "number",
+            JsonValue => "value",
+            JsonArray => "array",
+            JsonObject obj when obj.ContainsKey("$handle") => "handle",
+            JsonObject => "object",
+            _ => node.GetType().Name
+        };
+    }
+
+    private static object ResolveContextTarget(
+        AtsCapabilityInfo capability,
+        string capabilityId,
+        JsonObject? args,
+        HandleRegistry handles,
+        object contextObj,
+        Type declaringType)
+    {
+        if (declaringType.IsInstanceOfType(contextObj))
+        {
+            return contextObj;
+        }
+
+        // Handle is an open-generic builder (e.g., IResourceBuilder<T>) and the context is also a builder
+        if (declaringType.ContainsGenericParameters &&
+            HostingTypeHelpers.IsResourceBuilderType(declaringType) &&
+            PolyglotCapabilityErrorFormatter.CanUseOpenGenericResourceBuilder(declaringType, contextObj))
+        {
+            return contextObj;
+        }
+
+        // Handle is a builder, but the member is on the resource type - extract .Resource
+        if (HostingTypeHelpers.IsResourceBuilderType(contextObj.GetType()))
+        {
+            var resource = contextObj.GetType()
+                .GetProperty("Resource", BindingFlags.Instance | BindingFlags.Public)?
+                .GetValue(contextObj);
+
+            if (resource is not null && declaringType.IsInstanceOfType(resource))
+            {
+                return resource;
+            }
+        }
+
+        throw PolyglotCapabilityErrorFormatter.CreateTypeMismatch(
+            capabilityId,
+            capability.MethodName,
+            args,
+            handles,
+            capability.TargetParameterName ?? "context",
+            declaringType,
+            contextObj,
+            capability.TargetParameterName);
     }
 
     /// <summary>
@@ -533,11 +1021,6 @@ internal sealed class CapabilityDispatcher
 /// </summary>
 internal static class CapabilityJsonExtensions
 {
-    private static readonly JsonSerializerOptions s_jsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
 
     /// <summary>
     /// Gets a required string argument.
@@ -615,7 +1098,7 @@ internal static class CapabilityJsonExtensions
     {
         if (args.TryGetPropertyValue(name, out var node) && node is JsonObject obj)
         {
-            return JsonSerializer.Deserialize<T>(obj.ToJsonString(), s_jsonOptions);
+            return JsonSerializer.Deserialize<T>(obj.ToJsonString(), AtsMarshaller.JsonOptions);
         }
         return null;
     }

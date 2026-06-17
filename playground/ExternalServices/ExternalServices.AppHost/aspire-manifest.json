@@ -1,5 +1,4 @@
 {
-  "$schema": "https://json.schemastore.org/aspire-8.0.json",
   "resources": {
     "external-service-url": {
       "type": "parameter.v0",
@@ -12,7 +11,7 @@
     },
     "gateway": {
       "type": "container.v0",
-      "image": "mcr.microsoft.com/dotnet/nightly/yarp:2.3.0-preview.4",
+      "image": "mcr.microsoft.com/dotnet/nightly/yarp:2.3-preview",
       "entrypoint": "dotnet",
       "args": [
         "/app/yarp.dll"

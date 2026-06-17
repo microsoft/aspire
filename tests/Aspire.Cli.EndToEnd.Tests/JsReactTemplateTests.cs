@@ -3,8 +3,8 @@
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Tests.Utils;
-using Hex1b;
 using Hex1b.Automation;
+using Hex1b.Input;
 using Xunit;
 
 namespace Aspire.Cli.EndToEnd.Tests;
@@ -16,113 +16,40 @@ namespace Aspire.Cli.EndToEnd.Tests;
 public sealed class JsReactTemplateTests(ITestOutputHelper output)
 {
     [Fact]
+    [CaptureWorkspaceOnFailure]
     public async Task CreateAndRunJsReactProject()
     {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
-        var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
-        var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
-        var isCI = CliE2ETestHelpers.IsRunningInCI;
-        var recordingPath = CliE2ETestHelpers.GetTestResultsRecordingPath(nameof(CreateAndRunJsReactProject));
-
-        var builder = Hex1bTerminal.CreateBuilder()
-            .WithHeadless()
-            .WithDimensions(160, 48)
-            .WithAsciinemaRecording(recordingPath)
-            .WithPtyProcess("/bin/bash", ["--norc"]);
-
-        using var terminal = builder.Build();
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
-        // Pattern for template selection - we need to find and select "Starter App (ASP.NET Core/React)"
-        var waitingForTemplateSelectionPrompt = new CellPatternSearcher()
-            .FindPattern("> Starter App");
-
-        // Wait for the ASP.NET Core/React template to be highlighted (after pressing Down once)
-        // Use Find() instead of FindPattern() because parentheses and slashes are regex special characters
-        var waitingForJsReactTemplateSelected = new CellPatternSearcher()
-            .Find("> Starter App (ASP.NET Core/React)");
-
-        var waitingForProjectNamePrompt = new CellPatternSearcher()
-            .Find($"Enter the project name ({workspace.WorkspaceRoot.Name}): ");
-
-        var waitingForOutputPathPrompt = new CellPatternSearcher()
-            .Find($"Enter the output path: (./AspireJsReactApp): ");
-
-        var waitingForUrlsPrompt = new CellPatternSearcher()
-            .Find($"Use *.dev.localhost URLs");
-
-        var waitingForRedisPrompt = new CellPatternSearcher()
-            .Find($"Use Redis Cache");
-
-        var waitForCtrlCMessage = new CellPatternSearcher()
-            .Find($"Press CTRL+C to stop the apphost and exit.");
-
-        // Regression test for https://github.com/dotnet/aspire/issues/13971
-        // If this prompt appears, it means multiple apphosts were incorrectly detected
-        // (e.g., AppHost.cs was incorrectly treated as a single-file apphost)
-        var unexpectedAppHostSelectionPrompt = new CellPatternSearcher()
-            .Find("Select an apphost to use:");
-
-        // The purpose of this is to keep track of the number of actual shell commands we have
-        // executed. This is important because we customize the shell prompt to show either
-        // "[n OK] $ " or "[n ERR:exitcode] $ ". This allows us to deterministically wait for a
-        // command to complete and for the shell to be ready for more input rather than relying
-        // on arbitrary timeouts of mid-command strings.
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
         var counter = new SequenceCounter();
-        var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
-        sequenceBuilder.PrepareEnvironment(workspace, counter);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
-        if (isCI)
+        await auto.AspireNewAsync("AspireJsReactApp", counter, template: AspireTemplate.JsReact, useRedisCache: false);
+
+        // Run the project with aspire run
+        await auto.TypeAsync("aspire run");
+        await auto.EnterAsync();
+
+        // Regression test for https://github.com/microsoft/aspire/issues/13971
+        await auto.WaitUntilAsync(s =>
         {
-            sequenceBuilder.InstallAspireCliFromPullRequest(prNumber, counter);
-            sequenceBuilder.SourceAspireCliEnvironment(counter);
-            sequenceBuilder.VerifyAspireCliVersion(commitSha, counter);
-        }
-
-        sequenceBuilder.Type("aspire new")
-            .Enter()
-            .WaitUntil(s => waitingForTemplateSelectionPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(30))
-            // Navigate down to "Starter App (ASP.NET Core/React)" which is the 2nd option
-            .Key(Hex1b.Input.Hex1bKey.DownArrow)
-            .WaitUntil(s => waitingForJsReactTemplateSelected.Search(s).Count > 0, TimeSpan.FromSeconds(5))
-            .Enter() // select "Starter App (ASP.NET Core/React)"
-            .WaitUntil(s => waitingForProjectNamePrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .Type("AspireJsReactApp")
-            .Enter()
-            .WaitUntil(s => waitingForOutputPathPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .Enter() // accept default output path
-            .WaitUntil(s => waitingForUrlsPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            .Enter() // select "No" for localhost URLs (default)
-            .WaitUntil(s => waitingForRedisPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
-            // For Redis prompt, default is "Yes" so we need to select "No" by pressing Down
-            .Key(Hex1b.Input.Hex1bKey.DownArrow)
-            .Enter() // select "No" for Redis Cache
-            .WaitForSuccessPrompt(counter)
-            .Type("aspire run")
-            .Enter()
-            .WaitUntil(s =>
+            if (s.ContainsText("Select an AppHost to use:"))
             {
-                // Fail immediately if we see the apphost selection prompt (means duplicate detection)
-                if (unexpectedAppHostSelectionPrompt.Search(s).Count > 0)
-                {
-                    throw new InvalidOperationException(
-                        "Unexpected apphost selection prompt detected! " +
-                        "This indicates multiple apphosts were incorrectly detected.");
-                }
-                return waitForCtrlCMessage.Search(s).Count > 0;
-            }, TimeSpan.FromMinutes(2))
-            .Ctrl().Key(Hex1b.Input.Hex1bKey.C)
-            .WaitForSuccessPrompt(counter)
-            .Type("exit")
-            .Enter();
+                throw new InvalidOperationException(
+                    "Unexpected apphost selection prompt detected! " +
+                    "This indicates multiple apphosts were incorrectly detected.");
+            }
+            return s.ContainsText("Press CTRL+C to stop the AppHost and exit.");
+        }, timeout: TimeSpan.FromMinutes(2), description: "Press CTRL+C message (aspire run started)");
 
-        var sequence = sequenceBuilder.Build();
-
-        await sequence.ApplyAsync(terminal, TestContext.Current.CancellationToken);
-
-        await pendingRun;
+        await auto.Ctrl().KeyAsync(Hex1bKey.C);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 }

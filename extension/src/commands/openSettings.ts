@@ -2,23 +2,24 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
-import { getConfigInfo } from '../utils/configInfoProvider';
+import { ConfigInfoProvider } from '../utils/configInfoProvider';
 
 /**
- * Opens the local or global Aspire settings file.
+ * Opens the local or global Aspire configuration file.
  */
 
 /**
- * Opens the local Aspire settings file (.aspire/settings.json) in the current workspace.
+ * Opens the local Aspire configuration file (aspire.config.json or legacy .aspire/settings.json)
+ * in the current workspace. The path is resolved by the CLI via `aspire config info`.
  * Creates the file with an empty JSON object if it doesn't exist.
  */
 export async function openLocalSettingsCommand(terminalProvider: AspireTerminalProvider): Promise<void> {
-    const configInfo = await getConfigInfo(terminalProvider);
+    const configInfo = await new ConfigInfoProvider(terminalProvider).getConfigInfo();
     if (!configInfo) {
-        return;
+        throw new vscode.CancellationError();
     }
 
-    const settingsPath = configInfo.LocalSettingsPath;
+    const settingsPath = configInfo.localSettingsPath;
     await ensureFileExists(settingsPath);
     
     const document = await vscode.workspace.openTextDocument(settingsPath);
@@ -26,16 +27,17 @@ export async function openLocalSettingsCommand(terminalProvider: AspireTerminalP
 }
 
 /**
- * Opens the global Aspire settings file (~/.aspire/globalsettings.json).
+ * Opens the global Aspire configuration file (aspire.config.json or legacy ~/.aspire/globalsettings.json).
+ * The path is resolved by the CLI via `aspire config info`.
  * Creates the file with an empty JSON object if it doesn't exist.
  */
 export async function openGlobalSettingsCommand(terminalProvider: AspireTerminalProvider): Promise<void> {
-    const configInfo = await getConfigInfo(terminalProvider);
+    const configInfo = await new ConfigInfoProvider(terminalProvider).getConfigInfo();
     if (!configInfo) {
-        return;
+        throw new vscode.CancellationError();
     }
 
-    const settingsPath = configInfo.GlobalSettingsPath;
+    const settingsPath = configInfo.globalSettingsPath;
     await ensureFileExists(settingsPath);
     
     const document = await vscode.workspace.openTextDocument(settingsPath);

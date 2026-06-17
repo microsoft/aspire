@@ -7,6 +7,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// An Aspire resource that is a Seq server.
 /// </summary>
 /// <param name="name">The name of the Seq resource</param>
+[AspireExport(ExposeProperties = true)]
 public class SeqResource(string name) : ContainerResource(name), IResourceWithConnectionString
 {
     internal const string PrimaryEndpointName = "http";

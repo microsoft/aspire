@@ -672,7 +672,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
 
         // Assert
         Assert.Empty(vm.Items);
-        Assert.StartsWith("System.InvalidOperationException: ", vm.DisplayErrorMessage);
+        Assert.NotNull(vm.DisplayErrorMessage);
     }
 
     [Fact]
@@ -2128,5 +2128,225 @@ public sealed class GenAIVisualizerDialogViewModelTests
         var invalidParam = tool.ToolDefinition.Parameters.Properties["invalidParam"];
         Assert.Null(invalidParam.Type); // Type should be null since it couldn't be parsed
         Assert.Equal("A parameter with invalid type structure", invalidParam.Description);
+    }
+
+    [Fact]
+    public void Create_GenAISpanAttributes_TruncatedInputMessages_DisplaysAvailableMessages()
+    {
+        // Arrange
+        var repository = CreateRepository();
+
+        var inputMessages = JsonSerializer.Serialize(new List<ChatMessage>
+        {
+            new ChatMessage
+            {
+                Role = "user",
+                Parts = [new TextPart { Content = "First message" }]
+            },
+            new ChatMessage
+            {
+                Role = "assistant",
+                Parts = [new TextPart { Content = "Second message" }]
+            },
+            new ChatMessage
+            {
+                Role = "user",
+                Parts = [new TextPart { Content = "Third message that will be truncated" }]
+            }
+        }, GenAIMessagesContext.Default.ListChatMessage);
+
+        // Truncate the JSON mid-way through the third message
+        var truncatedInput = inputMessages.Substring(0, inputMessages.IndexOf("Third"));
+
+        var attributes = new KeyValuePair<string, string>[]
+        {
+            KeyValuePair.Create(GenAIHelpers.GenAISystem, "System!"),
+            KeyValuePair.Create("server.address", "ai-server.address"),
+            KeyValuePair.Create(GenAIHelpers.GenAIInputMessages, truncatedInput)
+        };
+
+        var addContext = new AddContext();
+        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(10), attributes: attributes)
+                        }
+                    }
+                }
+            }
+        });
+        Assert.Equal(0, addContext.FailureCount);
+
+        var span = repository.GetSpan(GetHexId("1"), GetHexId("1-1"))!;
+        var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
+
+        // Act
+        var vm = Create(repository, spanDetailsViewModel);
+
+        // Assert - first two messages parsed, third truncated, plus truncation indicator
+        Assert.Null(vm.DisplayErrorMessage);
+        Assert.Collection(vm.Items,
+            m =>
+            {
+                Assert.Equal(GenAIItemType.UserMessage, m.Type);
+                Assert.Collection(m.ItemParts,
+                    p => Assert.Equal("First message", Assert.IsType<TextPart>(p.MessagePart).Content));
+            },
+            m =>
+            {
+                Assert.Equal(GenAIItemType.AssistantMessage, m.Type);
+                Assert.Collection(m.ItemParts,
+                    p => Assert.Equal("Second message", Assert.IsType<TextPart>(p.MessagePart).Content));
+            },
+            m =>
+            {
+                Assert.Equal(GenAIItemType.UserMessage, m.Type);
+                Assert.Collection(m.ItemParts,
+                    p => Assert.Equal(Resources.Dialogs.GenAIUnexpectedOrTruncatedContent, p.ErrorMessage));
+            });
+    }
+
+    [Fact]
+    public void Create_GenAISpanAttributes_TruncatedSystemInstructions_DisplaysPartialContent()
+    {
+        // Arrange
+        var repository = CreateRepository();
+
+        var systemInstruction = JsonSerializer.Serialize(new List<MessagePart>
+        {
+            new TextPart { Content = "First instruction" },
+            new TextPart { Content = "Second instruction that will be truncated" }
+        }, GenAIMessagesContext.Default.ListMessagePart);
+
+        // Truncate the JSON mid-way through the second instruction
+        var truncatedInstruction = systemInstruction.Substring(0, systemInstruction.IndexOf("Second"));
+
+        var attributes = new KeyValuePair<string, string>[]
+        {
+            KeyValuePair.Create(GenAIHelpers.GenAISystem, "System!"),
+            KeyValuePair.Create("server.address", "ai-server.address"),
+            KeyValuePair.Create(GenAIHelpers.GenAISystemInstructions, truncatedInstruction)
+        };
+
+        var addContext = new AddContext();
+        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(10), attributes: attributes)
+                        }
+                    }
+                }
+            }
+        });
+        Assert.Equal(0, addContext.FailureCount);
+
+        var span = repository.GetSpan(GetHexId("1"), GetHexId("1-1"))!;
+        var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
+
+        // Act
+        var vm = Create(repository, spanDetailsViewModel);
+
+        // Assert - first instruction parsed, second truncated, plus truncation indicator
+        Assert.Null(vm.DisplayErrorMessage);
+        Assert.Collection(vm.Items,
+            m =>
+            {
+                Assert.Equal(GenAIItemType.SystemMessage, m.Type);
+                Assert.Collection(m.ItemParts,
+                    p => Assert.Equal("First instruction", Assert.IsType<TextPart>(p.MessagePart).Content),
+                    p => Assert.Equal(Resources.Dialogs.GenAIUnexpectedOrTruncatedContent, p.ErrorMessage));
+            });
+    }
+
+    [Fact]
+    public void Create_GenAISpanAttributes_TruncatedOutputMessages_DisplaysAvailableMessages()
+    {
+        // Arrange
+        var repository = CreateRepository();
+
+        var outputMessages = JsonSerializer.Serialize(new List<ChatMessage>
+        {
+            new ChatMessage
+            {
+                Role = "assistant",
+                Parts = [new TextPart { Content = "Complete output" }]
+            },
+            new ChatMessage
+            {
+                Role = "assistant",
+                Parts = [new TextPart { Content = "Truncated output message" }]
+            }
+        }, GenAIMessagesContext.Default.ListChatMessage);
+
+        // Truncate the JSON mid-way through the second message
+        var truncatedOutput = outputMessages.Substring(0, outputMessages.IndexOf("Truncated"));
+
+        var attributes = new KeyValuePair<string, string>[]
+        {
+            KeyValuePair.Create(GenAIHelpers.GenAISystem, "System!"),
+            KeyValuePair.Create("server.address", "ai-server.address"),
+            KeyValuePair.Create(GenAIHelpers.GenAIOutputInstructions, truncatedOutput)
+        };
+
+        var addContext = new AddContext();
+        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(10), attributes: attributes)
+                        }
+                    }
+                }
+            }
+        });
+        Assert.Equal(0, addContext.FailureCount);
+
+        var span = repository.GetSpan(GetHexId("1"), GetHexId("1-1"))!;
+        var spanDetailsViewModel = SpanDetailsViewModel.Create(span, repository, repository.GetResources());
+
+        // Act
+        var vm = Create(repository, spanDetailsViewModel);
+
+        // Assert - first output message parsed, second truncated, plus truncation indicator
+        Assert.Null(vm.DisplayErrorMessage);
+        Assert.Collection(vm.Items,
+            m =>
+            {
+                Assert.Equal(GenAIItemType.OutputMessage, m.Type);
+                Assert.Collection(m.ItemParts,
+                    p => Assert.Equal("Complete output", Assert.IsType<TextPart>(p.MessagePart).Content));
+            },
+            m =>
+            {
+                Assert.Equal(GenAIItemType.OutputMessage, m.Type);
+                Assert.Collection(m.ItemParts,
+                    p => Assert.Equal(Resources.Dialogs.GenAIUnexpectedOrTruncatedContent, p.ErrorMessage));
+            });
     }
 }

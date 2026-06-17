@@ -2,64 +2,69 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="fr" original="../ResourceCommandStrings.resx">
     <body>
+      <trans-unit id="ArgumentRequired">
+        <source>The '{0}' argument is required.</source>
+        <target state="new">The '{0}' argument is required.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AvailableResourceCommands">
+        <source>Available resource commands:</source>
+        <target state="new">Available resource commands:</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CommandDescription">
-        <source>Execute a command on a resource.</source>
-        <target state="translated">Exécuter une commande sur une ressource.</target>
+        <source>Execute a command on a resource (e.g. start, stop, restart)</source>
+        <target state="needs-review-translation">Exécuter une commande sur une ressource.</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandNameArgumentDescription">
-        <source>The name of the command to execute.</source>
-        <target state="translated">Le nom de la commande à exécuter.</target>
+        <source>The name of the command to execute (e.g. start, stop, restart)</source>
+        <target state="needs-review-translation">Le nom de la commande à exécuter.</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandResourceArgumentDescription">
-        <source>The name of the resource to execute the command on.</source>
-        <target state="translated">Nom de la ressource sur laquelle exécuter la commande.</target>
+        <source>The name of the resource to execute the command on</source>
+        <target state="needs-review-translation">Nom de la ressource sur laquelle exécuter la commande.</target>
         <note />
       </trans-unit>
-      <trans-unit id="NoInScopeAppHostsShowingAll">
-        <source>No in-scope AppHosts found. Showing all running AppHosts.</source>
-        <target state="translated">Aucun AppHost dans le périmètre n’a été trouvé. Affichage de tous les AppHosts en cours d’exécution.</target>
+      <trans-unit id="CommandSpecificHelpAllowedValues">
+        <source>Allowed values: {0}.</source>
+        <target state="new">Allowed values: {0}.</target>
         <note />
       </trans-unit>
-      <trans-unit id="NoRunningAppHostsFound">
-        <source>No running AppHosts found.</source>
-        <target state="translated">Désolé, aucun AppHost en cours d’exécution n’a été trouvé.</target>
+      <trans-unit id="CommandSpecificHelpCommandOptions">
+        <source>Command options:</source>
+        <target state="new">Command options:</target>
         <note />
       </trans-unit>
-      <trans-unit id="ProjectOptionDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">Chemin d’accès au fichier projet AppHost Aspire.</target>
+      <trans-unit id="CommandSpecificHelpDefaultValue">
+        <source>Default: {0}.</source>
+        <target state="new">Default: {0}.</target>
         <note />
       </trans-unit>
-      <trans-unit id="RestartDescription">
-        <source>Restart a running resource.</source>
-        <target state="translated">Redémarrer une ressource en cours d’exécution.</target>
+      <trans-unit id="CommandSpecificHelpDelimiterHint">
+        <source>Use `-- --{0}{1}` to pass this command option.</source>
+        <target state="new">Use `-- --{0}{1}` to pass this command option.</target>
         <note />
       </trans-unit>
-      <trans-unit id="RestartResourceArgumentDescription">
-        <source>The name of the resource to restart.</source>
-        <target state="translated">Le nom de la ressource à redémarrer.</target>
+      <trans-unit id="CommandSpecificHelpRequired">
+        <source>Required.</source>
+        <target state="new">Required.</target>
         <note />
       </trans-unit>
-      <trans-unit id="ScanningForRunningAppHosts">
-        <source>Scanning for running AppHosts...</source>
-        <target state="translated">Recherche des AppHosts en cours d’exécution...</target>
+      <trans-unit id="CommandSpecificHelpUsageSyntax">
+        <source>aspire resource {0} {1} [options] [[--] &lt;command-options&gt;...]</source>
+        <target state="new">aspire resource {0} {1} [options] [[--] &lt;command-options&gt;...]</target>
         <note />
       </trans-unit>
-      <trans-unit id="SelectAppHost">
-        <source>Select which AppHost to connect to:</source>
-        <target state="translated">Sélectionnez l’AppHost auquel vous connecter :</target>
+      <trans-unit id="CommandSpecificHelpValuePlaceholder">
+        <source>value</source>
+        <target state="new">value</target>
         <note />
       </trans-unit>
-      <trans-unit id="StartDescription">
-        <source>Start a stopped resource.</source>
-        <target state="translated">Démarrer une ressource arrêtée.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="StartResourceArgumentDescription">
-        <source>The name of the resource to start.</source>
-        <target state="translated">Le nom de la ressource à commencer.</target>
+      <trans-unit id="SelectAppHostAction">
+        <source>connect to</source>
+        <target state="translated">se connecter à</target>
         <note />
       </trans-unit>
     </body>

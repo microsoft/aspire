@@ -5,13 +5,13 @@ using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading.Channels;
 using Aspire.Cli.Backchannel;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
+using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
 
@@ -19,17 +19,33 @@ namespace Aspire.Cli.Commands;
 /// Represents information about a running AppHost for JSON serialization.
 /// Aligned with AppHostListInfo from ListAppHostsTool.
 /// </summary>
-internal sealed record AppHostDisplayInfo(
-    string AppHostPath,
-    int AppHostPid,
-    int? CliPid,
-    string? DashboardUrl);
+// `aspire ps --format json` uses this shape; keep docs/specs/cli-output-formats.md in sync when changing it.
+internal sealed class AppHostDisplayInfo
+{
+    public required string AppHostPath { get; init; }
+    public required int AppHostPid { get; init; }
+    public string Status { get; init; } = AppHostDisplayStatus.Running;
+    public string? SdkVersion { get; init; }
+    public int? CliPid { get; init; }
+    public string? DashboardUrl { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? LogFilePath { get; init; }
+}
+
+internal static class AppHostDisplayStatus
+{
+    public const string Running = "running";
+    public const string Stopped = "stopped";
+}
 
 [JsonSerializable(typeof(List<AppHostDisplayInfo>))]
+[JsonSerializable(typeof(AppHostDisplayInfo))]
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 internal sealed partial class PsCommandJsonContext : JsonSerializerContext
 {
     private static PsCommandJsonContext? s_relaxedEscaping;
+    private static PsCommandJsonContext? s_compactRelaxedEscaping;
 
     /// <summary>
     /// Gets a context with relaxed JSON escaping for non-ASCII character support.
@@ -40,11 +56,21 @@ internal sealed partial class PsCommandJsonContext : JsonSerializerContext
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     });
+
+    /// <summary>
+    /// Gets a compact context with relaxed JSON escaping for newline-delimited streaming output.
+    /// </summary>
+    public static PsCommandJsonContext CompactRelaxedEscaping => s_compactRelaxedEscaping ??= new(new JsonSerializerOptions
+    {
+        WriteIndented = false,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    });
 }
 
-internal sealed class PsCommand : BaseCommand
+internal sealed partial class PsCommand : BaseCommand
 {
-    private readonly IInteractionService _interactionService;
+    internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
     private readonly IAuxiliaryBackchannelMonitor _backchannelMonitor;
     private readonly ILogger<PsCommand> _logger;
     private static readonly Option<OutputFormat> s_formatOption = new("--format")
@@ -52,59 +78,55 @@ internal sealed class PsCommand : BaseCommand
         Description = PsCommandStrings.JsonOptionDescription
     };
 
-    public PsCommand(
-        IInteractionService interactionService,
-        IAuxiliaryBackchannelMonitor backchannelMonitor,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        AspireCliTelemetry telemetry,
-        ILogger<PsCommand> logger)
-        : base("ps", PsCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
+    private static readonly Option<bool> s_followOption = new("--follow", "-f")
     {
-        _interactionService = interactionService;
+        Description = PsCommandStrings.FollowOptionDescription
+    };
+
+    public PsCommand(
+        IAuxiliaryBackchannelMonitor backchannelMonitor,
+        ILogger<PsCommand> logger,
+        CommonCommandServices services)
+        : base("ps", PsCommandStrings.Description, services)
+    {
         _backchannelMonitor = backchannelMonitor;
         _logger = logger;
 
         Options.Add(s_formatOption);
+        Options.Add(s_followOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
         var format = parseResult.GetValue(s_formatOption);
 
-        // Scan for running AppHosts (same as ListAppHostsTool)
-        // Skip status display for JSON output to avoid contaminating stdout
-        List<IAppHostAuxiliaryBackchannel> connections;
-        if (format == OutputFormat.Json)
+        if (parseResult.GetValue(s_followOption))
         {
-            await _backchannelMonitor.ScanAsync(cancellationToken).ConfigureAwait(false);
-            connections = _backchannelMonitor.Connections.ToList();
+            return await ExecuteFollowAsync(format, cancellationToken).ConfigureAwait(false);
         }
-        else
-        {
-            connections = await _interactionService.ShowStatusAsync(
-                PsCommandStrings.ScanningForRunningAppHosts,
-                async () =>
-                {
-                    await _backchannelMonitor.ScanAsync(cancellationToken).ConfigureAwait(false);
-                    return _backchannelMonitor.Connections.ToList();
-                });
-        }
+
+        // Scan for running AppHosts (same as ListAppHostsTool). JSON output must not go
+        // through status rendering because non-interactive status text shares stdout.
+        var connections = format == OutputFormat.Json
+            ? await ScanForConnectionsAsync(cancellationToken).ConfigureAwait(false)
+            : await InteractionService.ShowStatusAsync(
+                SharedCommandStrings.ScanningForRunningAppHosts,
+                async () => await ScanForConnectionsAsync(cancellationToken).ConfigureAwait(false));
 
         if (connections.Count == 0)
         {
             if (format == OutputFormat.Json)
             {
-                _interactionService.DisplayPlainText("[]");
+                // Structured output always goes to stdout.
+                InteractionService.DisplayRawText("[]", ConsoleOutput.Standard);
             }
             else
             {
-                _interactionService.DisplayMessage("information", PsCommandStrings.NoRunningAppHostsFound);
+                InteractionService.DisplayMessage(KnownEmojis.Information, SharedCommandStrings.AppHostNotRunning);
             }
-            return ExitCodeConstants.Success;
+            return CommandResult.Success();
         }
 
         // Order: in-scope first, then out-of-scope
@@ -118,14 +140,175 @@ internal sealed class PsCommand : BaseCommand
         if (format == OutputFormat.Json)
         {
             var json = JsonSerializer.Serialize(appHostInfos, PsCommandJsonContext.RelaxedEscaping.ListAppHostDisplayInfo);
-            _interactionService.DisplayRawText(json);
+            // Structured output always goes to stdout.
+            InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
         }
         else
         {
             DisplayTable(appHostInfos);
         }
 
-        return ExitCodeConstants.Success;
+        return CommandResult.Success();
+    }
+
+    private async Task<List<IAppHostAuxiliaryBackchannel>> ScanForConnectionsAsync(CancellationToken cancellationToken)
+    {
+        await _backchannelMonitor.ScanAsync(cancellationToken).ConfigureAwait(false);
+
+        return _backchannelMonitor.Connections.ToList();
+    }
+
+    private abstract record PsFollowUpdate;
+
+    private sealed record ConnectionsUpdate(IReadOnlyList<IAppHostAuxiliaryBackchannel> Connections) : PsFollowUpdate;
+
+    private async Task<CommandResult> ExecuteFollowAsync(OutputFormat format, CancellationToken cancellationToken)
+    {
+        if (format != OutputFormat.Json)
+        {
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, PsCommandStrings.FollowRequiresJson);
+        }
+        using var followCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var followCancellationToken = followCancellationTokenSource.Token;
+        var updates = Channel.CreateUnbounded<PsFollowUpdate>(new UnboundedChannelOptions
+        {
+            SingleReader = true
+        });
+        var appHostKeyComparer = GetAppHostKeyComparer();
+        var activeAppHosts = new Dictionary<string, AppHostDisplayInfo>(appHostKeyComparer);
+        var lastJsonByAppHost = new Dictionary<string, string>(appHostKeyComparer);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await foreach (var connections in _backchannelMonitor.WatchConnectionsAsync(followCancellationToken).WithCancellation(followCancellationToken).ConfigureAwait(false))
+                {
+                    await updates.Writer.WriteAsync(new ConnectionsUpdate(connections), followCancellationToken).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException) when (followCancellationToken.IsCancellationRequested)
+            {
+                // Expected when the caller stops following.
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed while watching AppHost connections for ps --follow.");
+            }
+            finally
+            {
+                updates.Writer.TryComplete();
+            }
+        }, CancellationToken.None);
+
+        try
+        {
+            await foreach (var update in updates.Reader.ReadAllAsync(followCancellationToken).ConfigureAwait(false))
+            {
+                if (update is ConnectionsUpdate connectionsUpdate)
+                {
+                    var currentConnections = OrderConnections(connectionsUpdate.Connections);
+                    var currentAppHosts = await GatherAppHostInfosAsync(currentConnections, followCancellationToken).ConfigureAwait(false);
+                    var nextActiveAppHosts = new Dictionary<string, AppHostDisplayInfo>(appHostKeyComparer);
+
+                    foreach (var appHost in currentAppHosts)
+                    {
+                        nextActiveAppHosts[GetAppHostKey(appHost)] = appHost;
+                        if (!await TryWriteAppHostInfoAsync(appHost).ConfigureAwait(false))
+                        {
+                            return CommandResult.Success();
+                        }
+                    }
+
+                    foreach (var (key, appHost) in activeAppHosts)
+                    {
+                        if (!nextActiveAppHosts.ContainsKey(key) &&
+                            !await TryWriteAppHostInfoAsync(CopyWithStatus(appHost, AppHostDisplayStatus.Stopped)).ConfigureAwait(false))
+                        {
+                            return CommandResult.Success();
+                        }
+                    }
+
+                    activeAppHosts = nextActiveAppHosts;
+                }
+            }
+        }
+        catch (OperationCanceledException) when (followCancellationToken.IsCancellationRequested)
+        {
+            return CommandResult.Success();
+        }
+        catch (IOException ex)
+        {
+            _logger.LogDebug(ex, "Stopping ps --follow because the output stream is no longer writable.");
+            return CommandResult.Success();
+        }
+        finally
+        {
+            await followCancellationTokenSource.CancelAsync().ConfigureAwait(false);
+        }
+
+        return CommandResult.Success();
+
+        async Task<bool> TryWriteAppHostInfoAsync(AppHostDisplayInfo appHost)
+        {
+            var key = GetAppHostKey(appHost);
+            var json = JsonSerializer.Serialize(appHost, PsCommandJsonContext.CompactRelaxedEscaping.AppHostDisplayInfo);
+            if (lastJsonByAppHost.TryGetValue(key, out var lastJson) &&
+                string.Equals(json, lastJson, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            lastJsonByAppHost[key] = json;
+
+            try
+            {
+                InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
+                return true;
+            }
+            catch (Exception ex) when (ex is IOException or ObjectDisposedException)
+            {
+                _logger.LogDebug(ex, "Stopping ps --follow because the output stream is no longer writable.");
+                await followCancellationTokenSource.CancelAsync().ConfigureAwait(false);
+                return false;
+            }
+        }
+    }
+}
+
+internal sealed partial class PsCommand
+{
+    private static string GetAppHostKey(AppHostDisplayInfo appHost)
+    {
+        return string.Concat(appHost.AppHostPath, "\0", appHost.AppHostPid.ToString(CultureInfo.InvariantCulture));
+    }
+
+    private static StringComparer GetAppHostKeyComparer()
+    {
+        return OperatingSystem.IsWindows()
+            ? StringComparer.OrdinalIgnoreCase
+            : StringComparer.Ordinal;
+    }
+
+    private static AppHostDisplayInfo CopyWithStatus(AppHostDisplayInfo appHost, string status)
+    {
+        return new AppHostDisplayInfo
+        {
+            AppHostPath = appHost.AppHostPath,
+            AppHostPid = appHost.AppHostPid,
+            Status = status,
+            SdkVersion = appHost.SdkVersion,
+            CliPid = appHost.CliPid,
+            DashboardUrl = appHost.DashboardUrl,
+            LogFilePath = appHost.LogFilePath
+        };
+    }
+
+    private static List<IAppHostAuxiliaryBackchannel> OrderConnections(IEnumerable<IAppHostAuxiliaryBackchannel> connections)
+    {
+        return connections
+            .OrderByDescending(c => c.IsInScope)
+            .ToList();
     }
 
     private async Task<List<AppHostDisplayInfo>> GatherAppHostInfosAsync(List<IAppHostAuxiliaryBackchannel> connections, CancellationToken cancellationToken)
@@ -140,6 +323,36 @@ internal sealed class PsCommand : BaseCommand
                 continue;
             }
 
+            string? sdkVersion = null;
+            var appHostPath = info.AppHostPath;
+            var appHostPid = info.ProcessId;
+            var cliPid = info.CliProcessId;
+            var cliLogFilePath = info.CliLogFilePath;
+
+            try
+            {
+                if (connection.SupportsV2)
+                {
+                    var v2Info = await connection.GetAppHostInfoV2Async(cancellationToken).ConfigureAwait(false);
+                    if (v2Info is not null)
+                    {
+                        sdkVersion = GetSdkVersion(v2Info.AspireHostVersion);
+                        appHostPath = string.IsNullOrWhiteSpace(v2Info.AppHostPath) ? appHostPath : v2Info.AppHostPath;
+                        cliPid = v2Info.CliProcessId ?? cliPid;
+                        cliLogFilePath = v2Info.CliLogFilePath ?? cliLogFilePath;
+
+                        if (int.TryParse(v2Info.Pid, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedPid))
+                        {
+                            appHostPid = parsedPid;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to get AppHost SDK version for {AppHostPath}", info.AppHostPath);
+            }
+
             string? dashboardUrl = null;
 
             try
@@ -152,14 +365,30 @@ internal sealed class PsCommand : BaseCommand
                 _logger.LogDebug(ex, "Failed to get dashboard URL for {AppHostPath}", info.AppHostPath);
             }
 
-            appHostInfos.Add(new AppHostDisplayInfo(
-                info.AppHostPath ?? PsCommandStrings.UnknownPath,
-                info.ProcessId,
-                info.CliProcessId,
-                dashboardUrl));
+            appHostInfos.Add(new AppHostDisplayInfo
+            {
+                AppHostPath = appHostPath ?? PsCommandStrings.UnknownPath,
+                AppHostPid = appHostPid,
+                Status = AppHostDisplayStatus.Running,
+                SdkVersion = sdkVersion,
+                CliPid = cliPid,
+                DashboardUrl = dashboardUrl,
+                LogFilePath = cliLogFilePath
+            });
         }
 
         return appHostInfos;
+    }
+
+    private static string? GetSdkVersion(string? sdkVersion)
+    {
+        if (string.IsNullOrWhiteSpace(sdkVersion) ||
+            string.Equals(sdkVersion, "unknown", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return sdkVersion;
     }
 
     private void DisplayTable(List<AppHostDisplayInfo> appHosts)
@@ -169,61 +398,48 @@ internal sealed class PsCommand : BaseCommand
             return;
         }
 
-        const string NullCliPidDisplay = "-";
+        var shortPaths = FileSystemHelper.ShortenPaths(appHosts.Select(a => a.AppHostPath).ToList());
 
-        // Shorten paths appropriately
-        string ShortenPath(string path)
+        var table = new Table();
+        table.AddBoldColumn(PsCommandStrings.HeaderPath);
+        table.AddBoldColumn(SharedCommandStrings.HeaderStatus);
+        table.AddBoldColumn(PsCommandStrings.HeaderSdk);
+        table.AddBoldColumn(PsCommandStrings.HeaderPid);
+        table.AddBoldColumn(PsCommandStrings.HeaderCliPid);
+        table.AddBoldColumn(PsCommandStrings.HeaderDashboard);
+
+        foreach (var appHost in appHosts)
         {
-            var fileName = Path.GetFileName(path);
-            
-            if (string.IsNullOrEmpty(fileName))
+            var shortPath = shortPaths[appHost.AppHostPath];
+            var cliPid = appHost.CliPid?.ToString(CultureInfo.InvariantCulture) ?? "-";
+            var dashboard = "-";
+            if (!string.IsNullOrEmpty(appHost.DashboardUrl))
             {
-                return path;
+                if (Uri.TryCreate(appHost.DashboardUrl, UriKind.Absolute, out _))
+                {
+                    dashboard = MarkupHelpers.SafeLink(InteractionService, appHost.DashboardUrl);
+                }
+                else
+                {
+                    dashboard = Markup.Escape(appHost.DashboardUrl);
+                }
             }
 
-            // For .csproj files, just show the filename (folder often has same name)
-            if (fileName.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+            var columns = new List<string>
             {
-                return fileName;
-            }
+                Markup.Escape(shortPath),
+                Markup.Escape(appHost.Status),
+                Markup.Escape(appHost.SdkVersion ?? "-"),
+                appHost.AppHostPid.ToString(CultureInfo.InvariantCulture),
+                cliPid,
+            };
 
-            // For single-file AppHosts (.cs), show parent/filename
-            var directory = Path.GetDirectoryName(path);
-            var parentFolder = !string.IsNullOrEmpty(directory) 
-                ? Path.GetFileName(directory) 
-                : null;
+            columns.Add(dashboard);
 
-            return !string.IsNullOrEmpty(parentFolder)
-                ? $"{parentFolder}/{fileName}"
-                : fileName;
+            table.AddRow(columns.ToArray());
         }
 
-        // Format dashboard URL - just return the URL as-is since modern terminals auto-detect links
-        string FormatDashboardLink(string? url)
-        {
-            return string.IsNullOrEmpty(url) ? "-" : url;
-        }
-
-        var shortPaths = appHosts.Select(a => ShortenPath(a.AppHostPath)).ToList();
-
-        // Calculate column widths based on data
-        var pathWidth = Math.Max(PsCommandStrings.HeaderPath.Length, shortPaths.Max(p => p.Length));
-        var pidWidth = Math.Max(PsCommandStrings.HeaderPid.Length, appHosts.Max(a => a.AppHostPid.ToString(CultureInfo.InvariantCulture).Length));
-        var cliPidWidth = Math.Max(PsCommandStrings.HeaderCliPid.Length, appHosts.Max(a => a.CliPid?.ToString(CultureInfo.InvariantCulture).Length ?? NullCliPidDisplay.Length));
-
-        // Header
-        var header = $"{PsCommandStrings.HeaderPath.PadRight(pathWidth)}  {PsCommandStrings.HeaderPid.PadRight(pidWidth)}  {PsCommandStrings.HeaderCliPid.PadRight(cliPidWidth)}  {PsCommandStrings.HeaderDashboard}";
-        _interactionService.DisplayPlainText(header);
-
-        // Rows
-        for (var i = 0; i < appHosts.Count; i++)
-        {
-            var appHost = appHosts[i];
-            var shortPath = shortPaths[i];
-            var cliPidDisplay = appHost.CliPid?.ToString(CultureInfo.InvariantCulture) ?? NullCliPidDisplay;
-            var dashboardDisplay = FormatDashboardLink(appHost.DashboardUrl);
-            var row = $"{shortPath.PadRight(pathWidth)}  {appHost.AppHostPid.ToString(CultureInfo.InvariantCulture).PadRight(pidWidth)}  {cliPidDisplay.PadRight(cliPidWidth)}  {dashboardDisplay}";
-            _interactionService.DisplayPlainText(row);
-        }
+        InteractionService.DisplayRenderable(table);
     }
+
 }

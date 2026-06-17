@@ -68,6 +68,12 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SourceArgumentDescription", resourceCulture);
             }
         }
+
+        public static string SourceWithCredentialsCannotBePersisted {
+            get {
+                return ResourceManager.GetString("SourceWithCredentialsCannotBePersisted", resourceCulture);
+            }
+        }
         
         public static string VersionArgumentDescription {
             get {
@@ -100,6 +106,30 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("EnterTheProjectName", resourceCulture);
             }
         }
+
+        public static string SelectProjectCreationLocation
+        {
+            get
+            {
+                return ResourceManager.GetString("SelectProjectCreationLocation", resourceCulture);
+            }
+        }
+
+        public static string CreateProjectNameSubdirectoryChoice
+        {
+            get
+            {
+                return ResourceManager.GetString("CreateProjectNameSubdirectoryChoice", resourceCulture);
+            }
+        }
+
+        public static string CreateProjectDirectlyInSelectedFolderChoice
+        {
+            get
+            {
+                return ResourceManager.GetString("CreateProjectDirectlyInSelectedFolderChoice", resourceCulture);
+            }
+        }
         
         public static string InvalidProjectName {
             get {
@@ -124,10 +154,60 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ChannelOptionDescriptionWithStaging", resourceCulture);
             }
         }
+
+        public static string LanguageOptionDescription
+        {
+            get
+            {
+                return ResourceManager.GetString("LanguageOptionDescription", resourceCulture);
+            }
+        }
         
         public static string PromptToUsePrereleaseTemplates {
             get {
                 return ResourceManager.GetString("PromptToUsePrereleaseTemplates", resourceCulture);
+            }
+        }
+
+        public static string ResolvingTemplateVersion {
+            get {
+                return ResourceManager.GetString("ResolvingTemplateVersion", resourceCulture);
+            }
+        }
+
+        public static string NonInteractiveTemplateRequired {
+            get {
+                return ResourceManager.GetString("NonInteractiveTemplateRequired", resourceCulture);
+            }
+        }
+
+        public static string OutputDirectoryNotEmptyNonInteractive {
+            get {
+                return ResourceManager.GetString("OutputDirectoryNotEmptyNonInteractive", resourceCulture);
+            }
+        }
+
+        public static string OutputDirectoryNotEmptyInteractive {
+            get {
+                return ResourceManager.GetString("OutputDirectoryNotEmptyInteractive", resourceCulture);
+            }
+        }
+
+        public static string OutputPathContainsInvalidCharacters {
+            get {
+                return ResourceManager.GetString("OutputPathContainsInvalidCharacters", resourceCulture);
+            }
+        }
+
+        public static string NoPackageChannelsAvailable {
+            get {
+                return ResourceManager.GetString("NoPackageChannelsAvailable", resourceCulture);
+            }
+        }
+
+        public static string NoChannelFoundMatching {
+            get {
+                return ResourceManager.GetString("NoChannelFoundMatching", resourceCulture);
             }
         }
     }

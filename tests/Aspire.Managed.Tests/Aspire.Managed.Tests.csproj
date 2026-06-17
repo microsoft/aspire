@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="$(TestsSharedDir)TempDirectory.cs" Link="shared/TempDirectory.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Aspire.Managed\Aspire.Managed.csproj" />
+
+    <PackageReference Include="Microsoft.DotNet.RemoteExecutor" />
+  </ItemGroup>
+
+</Project>

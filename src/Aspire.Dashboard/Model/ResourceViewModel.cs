@@ -12,6 +12,7 @@ using Humanizer;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
+using InteractionInput = Aspire.DashboardService.Proto.V1.InteractionInput;
 
 namespace Aspire.Dashboard.Model;
 
@@ -209,14 +210,14 @@ public sealed class ResourceViewModelNameComparer : IComparer<ResourceViewModel>
         // Use display name by itself first.
         // This is to avoid the problem of using the full name where one resource is called "database" and another is called "database-admin".
         // The full names could end up "database-xyz" and "database-admin-xyz", which would put resources out of order.
-        var displayNameResult = StringComparers.ResourceName.Compare(x.DisplayName, y.DisplayName);
+        var displayNameResult = string.Compare(x.DisplayName, y.DisplayName, StringComparisons.ResourceName);
         if (displayNameResult != 0)
         {
             return displayNameResult;
         }
 
         // Display names are the same so compare with full names.
-        return StringComparers.ResourceName.Compare(x.Name, y.Name);
+        return string.Compare(x.Name, y.Name, StringComparisons.ResourceName);
     }
 }
 
@@ -225,10 +226,13 @@ public sealed class CommandViewModel
 {
     // Known resource command constants.
     // Keep in sync with KnownResourceCommands in Aspire.Hosting.
-    public const string StartCommand = "resource-start";
-    public const string StopCommand = "resource-stop";
-    public const string RestartCommand = "resource-restart";
-    private static readonly string[] s_knownResourceCommands = [StartCommand, StopCommand, RestartCommand];
+    public const string StartCommand = "start";
+    public const string StopCommand = "stop";
+    public const string RestartCommand = "restart";
+    public const string RebuildCommand = "rebuild";
+    public const string SetParameterCommand = "set-parameter";
+    public const string DeleteParameterCommand = "delete-parameter";
+    private static readonly string[] s_knownResourceCommands = [StartCommand, StopCommand, RestartCommand, RebuildCommand, SetParameterCommand, DeleteParameterCommand];
 
     public string Name { get; }
     public CommandViewModelState State { get; }
@@ -236,12 +240,12 @@ public sealed class CommandViewModel
     private string DisplayDescription { get; }
 
     public string ConfirmationMessage { get; }
-    public Value? Parameter { get; }
+    public ImmutableArray<InteractionInput> ArgumentInputs { get; }
     public bool IsHighlighted { get; }
     public string IconName { get; }
     public IconVariant IconVariant { get; }
 
-    public CommandViewModel(string name, CommandViewModelState state, string displayName, string displayDescription, string confirmationMessage, Value? parameter, bool isHighlighted, string iconName, IconVariant iconVariant)
+    public CommandViewModel(string name, CommandViewModelState state, string displayName, string displayDescription, string confirmationMessage, ImmutableArray<InteractionInput> argumentInputs, bool isHighlighted, string iconName, IconVariant iconVariant)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
@@ -251,7 +255,7 @@ public sealed class CommandViewModel
         DisplayName = displayName;
         DisplayDescription = displayDescription;
         ConfirmationMessage = confirmationMessage;
-        Parameter = parameter;
+        ArgumentInputs = argumentInputs;
         IsHighlighted = isHighlighted;
         IconName = iconName;
         IconVariant = iconVariant;
@@ -259,7 +263,7 @@ public sealed class CommandViewModel
 
     public static bool IsKnownCommand(string command)
     {
-        return s_knownResourceCommands.Contains(command);
+        return s_knownResourceCommands.Contains(command, StringComparers.CommandName);
     }
 
     public string GetDisplayName()
@@ -295,7 +299,7 @@ public sealed class EnvironmentVariableViewModel : IPropertyGridItem
     {
         // Name should always have a value, but somehow an empty/whitespace name can reach this point.
         // Better to allow the dashboard to run with an env var with no name than break when loading resources.
-        // https://github.com/dotnet/aspire/issues/5309
+        // https://github.com/microsoft/aspire/issues/5309
         Name = name;
         Value = value;
         FromSpec = fromSpec;
@@ -315,9 +319,10 @@ public sealed class DisplayedResourcePropertyViewModel : IPropertyGridItem
 
     public string ToolTip => _tooltip.Value;
     public KnownProperty? KnownProperty => _propertyViewModel.KnownProperty;
-    public int Priority => _propertyViewModel.Priority;
     public Value Value => _propertyViewModel.Value;
-    public string DisplayName => _propertyViewModel.KnownProperty?.GetDisplayName(_loc) ?? _propertyViewModel.Name;
+    public bool IsHighlighted => _propertyViewModel.IsHighlighted;
+    public int SortOrder => _propertyViewModel.SortOrder;
+    public string DisplayName => _propertyViewModel.DisplayName ?? _propertyViewModel.KnownProperty?.GetDisplayName(_loc) ?? _propertyViewModel.Name;
 
     string IPropertyGridItem.Name => DisplayName;
     string? IPropertyGridItem.Value => _displayValue.Value;
@@ -333,7 +338,7 @@ public sealed class DisplayedResourcePropertyViewModel : IPropertyGridItem
         _browserTimeProvider = browserTimeProvider;
 
         // Known and unknown properties are displayed together. Avoid any duplicate keys.
-        _key = propertyViewModel.KnownProperty != null ? propertyViewModel.KnownProperty.Key : $"unknown-{propertyViewModel.Name}";
+        _key = propertyViewModel.KnownProperty != null ? propertyViewModel.KnownProperty.Key : GetUnknownKey(propertyViewModel.Name);
 
         _tooltip = new(() => propertyViewModel.Value.HasStringValue ? propertyViewModel.Value.StringValue : propertyViewModel.Value.ToString());
 
@@ -366,30 +371,37 @@ public sealed class DisplayedResourcePropertyViewModel : IPropertyGridItem
         });
     }
 
+    internal static string GetUnknownKey(string propertyName) => $"unknown-{propertyName}";
+
     public bool MatchesFilter(string filter) =>
         _propertyViewModel.Name.Contains(filter, StringComparison.CurrentCultureIgnoreCase) ||
+        DisplayName.Contains(filter, StringComparison.CurrentCultureIgnoreCase) ||
         ToolTip.Contains(filter, StringComparison.CurrentCultureIgnoreCase);
 }
 
-[DebuggerDisplay("Name = {Name}, Value = {Value}, IsValueSensitive = {IsValueSensitive}, IsValueMasked = {IsValueMasked}")]
+[DebuggerDisplay("Name = {Name}, Value = {Value}, IsValueSensitive = {IsValueSensitive}, IsValueMasked = {IsValueMasked}, IsHighlighted = {IsHighlighted}, SortOrder = {SortOrder}")]
 public sealed class ResourcePropertyViewModel
 {
     public string Name { get; }
     public Value Value { get; }
     public KnownProperty? KnownProperty { get; }
+    public string? DisplayName { get; }
     public bool IsValueSensitive { get; }
     public bool IsValueMasked { get; set; }
-    public int Priority { get; }
+    public bool IsHighlighted { get; }
+    public int SortOrder { get; }
 
-    public ResourcePropertyViewModel(string name, Value value, bool isValueSensitive, KnownProperty? knownProperty, int priority)
+    public ResourcePropertyViewModel(string name, Value value, bool isValueSensitive, KnownProperty? knownProperty, int sortOrder, string? displayName, bool isHighlighted)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
         Name = name;
         Value = value;
+        DisplayName = displayName;
         IsValueSensitive = isValueSensitive;
         KnownProperty = knownProperty;
-        Priority = priority;
+        IsHighlighted = isHighlighted;
+        SortOrder = sortOrder;
         IsValueMasked = isValueSensitive;
     }
 }

@@ -10,6 +10,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 /// <param name="resources">The resource collection used to initiate the model.</param>
 [DebuggerDisplay("Resources = {Resources.Count}")]
+[AspireExport]
 public class DistributedApplicationModel(IResourceCollection resources)
 {
     /// <summary>

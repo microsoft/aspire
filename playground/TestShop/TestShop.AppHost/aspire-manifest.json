@@ -1,5 +1,4 @@
 {
-  "$schema": "https://json.schemastore.org/aspire-8.0.json",
   "resources": {
     "postgres": {
       "type": "container.v0",
@@ -33,8 +32,8 @@
     },
     "basketcache": {
       "type": "container.v0",
-      "connectionString": "{basketcache.bindings.tcp.host}:{basketcache.bindings.tcp.port},password={basketcache-password.value}",
-      "image": "docker.io/library/redis:8.2",
+      "connectionString": "{basketcache.bindings.tcp.host}:{basketcache.bindings.tcp.port},password={basketcache-password.value}{cond-basketcache-bindings-tcp-tlsenabled-8c2280ff.connectionString}",
+      "image": "docker.io/library/redis:8.6",
       "entrypoint": "/bin/sh",
       "args": [
         "-c",
@@ -52,7 +51,7 @@
       },
       "bindings": {
         "tcp": {
-          "scheme": "tcp",
+          "scheme": "redis",
           "protocol": "tcp",
           "transport": "tcp",
           "targetPort": 6379
@@ -158,7 +157,7 @@
         "BASKETCACHE_HOST": "{basketcache.bindings.tcp.host}",
         "BASKETCACHE_PORT": "{basketcache.bindings.tcp.port}",
         "BASKETCACHE_PASSWORD": "{basketcache-password.value}",
-        "BASKETCACHE_URI": "redis://:{basketcache-password-uri-encoded.value}@{basketcache.bindings.tcp.host}:{basketcache.bindings.tcp.port}",
+        "BASKETCACHE_URI": "{basketcache.bindings.tcp.scheme}://:{basketcache-password-uri-encoded.value}@{basketcache.bindings.tcp.host}:{basketcache.bindings.tcp.port}",
         "ConnectionStrings__messaging": "{messaging.connectionString}",
         "MESSAGING_HOST": "{messaging.bindings.tcp.host}",
         "MESSAGING_PORT": "{messaging.bindings.tcp.port}",
@@ -225,7 +224,7 @@
     },
     "apigateway": {
       "type": "container.v0",
-      "image": "mcr.microsoft.com/dotnet/nightly/yarp:2.3.0-preview.4",
+      "image": "mcr.microsoft.com/dotnet/nightly/yarp:2.3-preview",
       "entrypoint": "dotnet",
       "args": [
         "/app/yarp.dll"
@@ -315,6 +314,10 @@
       "type": "annotated.string",
       "value": "{messaging-password.value}",
       "filter": "uri"
+    },
+    "cond-basketcache-bindings-tcp-tlsenabled-8c2280ff": {
+      "type": "value.v0",
+      "connectionString": ""
     }
   }
 }

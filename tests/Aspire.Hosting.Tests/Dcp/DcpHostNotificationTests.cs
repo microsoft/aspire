@@ -1,20 +1,31 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Globalization;
+using System.Net.Sockets;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using Aspire.Hosting.Dcp;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Resources;
+using Aspire.Hosting.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Hosting.Tests.Dcp;
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
+[Trait("Partition", "4")]
 public sealed class DcpHostNotificationTests
 {
     private static Locations CreateTestLocations()
@@ -35,6 +46,9 @@ public sealed class DcpHostNotificationTests
         var applicationModel = new DistributedApplicationModel(new ResourceCollection());
         var timeProvider = new FakeTimeProvider();
 
+        var developerCertificateService = new TestDeveloperCertificateService([], false, false, false);
+        var configuration = new ConfigurationBuilder().Build();
+
         // Act & Assert - should not throw
         var dcpHost = new DcpHost(
             loggerFactory,
@@ -43,7 +57,9 @@ public sealed class DcpHostNotificationTests
             interactionService,
             locations,
             applicationModel,
-            timeProvider);
+            timeProvider,
+            developerCertificateService,
+            configuration);
 
         Assert.NotNull(dcpHost);
     }
@@ -73,6 +89,8 @@ public sealed class DcpHostNotificationTests
         var interactionService = new TestInteractionService { IsAvailable = true };
         var locations = CreateTestLocations();
         var timeProvider = new FakeTimeProvider();
+        var developerCertificateService = new TestDeveloperCertificateService([], false, false, false);
+        var configuration = new ConfigurationBuilder().Build();
 
         var dcpHost = new DcpHost(
             loggerFactory,
@@ -81,7 +99,9 @@ public sealed class DcpHostNotificationTests
             interactionService,
             locations,
             applicationModel,
-            timeProvider);
+            timeProvider,
+            developerCertificateService,
+            configuration);
 
         // Act
         await dcpHost.EnsureDcpContainerRuntimeAsync(CancellationToken.None).DefaultTimeout();
@@ -95,6 +115,50 @@ public sealed class DcpHostNotificationTests
         Assert.Contains(string.Format(CultureInfo.InvariantCulture, InteractionStrings.ContainerRuntimeUnhealthyMessage, "docker"), interaction.Message);
         var notificationOptions = Assert.IsType<NotificationInteractionOptions>(interaction.Options);
         Assert.Equal(MessageIntent.Error, notificationOptions.Intent);
+    }
+
+    [Fact]
+    public async Task DcpHost_WithUntrustedDeveloperCertificate_ShowsNotificationAndLogsWarning()
+    {
+        // Arrange
+        using var certificate = CreateUntrustedCertificate();
+        var testSink = new TestSink();
+        using var loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.AddProvider(new TestLoggerProvider(testSink));
+        });
+        var dcpOptions = Options.Create(new DcpOptions());
+        var dependencyCheckService = new TestDcpDependencyCheckService();
+        var interactionService = new TestInteractionService { IsAvailable = true };
+        var locations = CreateTestLocations();
+        var applicationModel = CreateApplicationModelWithHttpsEndpoint();
+        var timeProvider = new FakeTimeProvider();
+        var developerCertificateService = new TestDeveloperCertificateService([certificate], false, true, false, latestCertificateIsUntrusted: true);
+        var configuration = new ConfigurationBuilder().Build();
+
+        var dcpHost = new DcpHost(
+            loggerFactory,
+            dcpOptions,
+            dependencyCheckService,
+            interactionService,
+            locations,
+            applicationModel,
+            timeProvider,
+            developerCertificateService,
+            configuration);
+
+        // Act
+        await dcpHost.EnsureDevelopmentCertificateTrustAsync(CancellationToken.None).DefaultTimeout();
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var interaction = await interactionService.Interactions.Reader.ReadAsync(cts.Token);
+
+        // Assert
+        Assert.Equal(InteractionStrings.DeveloperCertificateNotFullyTrustedTitle, interaction.Title);
+        Assert.Equal(InteractionStrings.DeveloperCertificateNotFullyTrustedMessage, interaction.Message);
+        var notificationOptions = Assert.IsType<NotificationInteractionOptions>(interaction.Options);
+        Assert.Equal(MessageIntent.Error, notificationOptions.Intent);
+        Assert.Contains(testSink.Writes, w => w.LogLevel == LogLevel.Warning && w.Message is not null && w.Message.Contains("aka.ms/aspire/devcerts", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -122,6 +186,8 @@ public sealed class DcpHostNotificationTests
         var interactionService = new TestInteractionService { IsAvailable = true };
         var locations = CreateTestLocations();
         var timeProvider = new FakeTimeProvider();
+        var developerCertificateService = new TestDeveloperCertificateService([], false, false, false);
+        var configuration = new ConfigurationBuilder().Build();
 
         var dcpHost = new DcpHost(
             loggerFactory,
@@ -130,7 +196,9 @@ public sealed class DcpHostNotificationTests
             interactionService,
             locations,
             applicationModel,
-            timeProvider);
+            timeProvider,
+            developerCertificateService,
+            configuration);
 
         // Act
         await dcpHost.EnsureDcpContainerRuntimeAsync(CancellationToken.None).DefaultTimeout();
@@ -177,6 +245,8 @@ public sealed class DcpHostNotificationTests
         var interactionService = new TestInteractionService { IsAvailable = false }; // Dashboard disabled
         var locations = CreateTestLocations();
         var timeProvider = new FakeTimeProvider();
+        var developerCertificateService = new TestDeveloperCertificateService([], false, false, false);
+        var configuration = new ConfigurationBuilder().Build();
 
         var dcpHost = new DcpHost(
             loggerFactory,
@@ -185,7 +255,9 @@ public sealed class DcpHostNotificationTests
             interactionService,
             locations,
             applicationModel,
-            timeProvider);
+            timeProvider,
+            developerCertificateService,
+            configuration);
 
         // Act
         await dcpHost.EnsureDcpContainerRuntimeAsync(CancellationToken.None).DefaultTimeout();
@@ -232,6 +304,8 @@ public sealed class DcpHostNotificationTests
         var interactionService = new TestInteractionService { IsAvailable = true };
         var locations = CreateTestLocations();
         var timeProvider = new FakeTimeProvider();
+        var developerCertificateService = new TestDeveloperCertificateService([], false, false, false);
+        var configuration = new ConfigurationBuilder().Build();
 
         var dcpHost = new DcpHost(
             loggerFactory,
@@ -240,7 +314,9 @@ public sealed class DcpHostNotificationTests
             interactionService,
             locations,
             applicationModel,
-            timeProvider);
+            timeProvider,
+            developerCertificateService,
+            configuration);
 
         // Act
         await dcpHost.EnsureDcpContainerRuntimeAsync(CancellationToken.None).DefaultTimeout();
@@ -282,6 +358,8 @@ public sealed class DcpHostNotificationTests
         var interactionService = new TestInteractionService { IsAvailable = true };
         var locations = CreateTestLocations();
         var timeProvider = new FakeTimeProvider();
+        var developerCertificateService = new TestDeveloperCertificateService([], false, false, false);
+        var configuration = new ConfigurationBuilder().Build();
 
         var dcpHost = new DcpHost(
             loggerFactory,
@@ -290,7 +368,9 @@ public sealed class DcpHostNotificationTests
             interactionService,
             locations,
             applicationModel,
-            timeProvider);
+            timeProvider,
+            developerCertificateService,
+            configuration);
 
         // Act
         await dcpHost.EnsureDcpContainerRuntimeAsync(CancellationToken.None).DefaultTimeout();
@@ -350,6 +430,8 @@ public sealed class DcpHostNotificationTests
         var interactionService = new TestInteractionService { IsAvailable = true };
         var locations = CreateTestLocations();
         var timeProvider = new FakeTimeProvider();
+        var developerCertificateService = new TestDeveloperCertificateService([], false, false, false);
+        var configuration = new ConfigurationBuilder().Build();
 
         var dcpHost = new DcpHost(
             loggerFactory,
@@ -358,7 +440,9 @@ public sealed class DcpHostNotificationTests
             interactionService,
             locations,
             applicationModel,
-            timeProvider);
+            timeProvider,
+            developerCertificateService,
+            configuration);
 
         // Act
         await dcpHost.EnsureDcpContainerRuntimeAsync(CancellationToken.None).DefaultTimeout();
@@ -369,11 +453,11 @@ public sealed class DcpHostNotificationTests
         // Assert
         Assert.Equal(InteractionStrings.ContainerRuntimeNotInstalledTitle, interaction.Title);
         Assert.Contains(InteractionStrings.ContainerRuntimeNotInstalledMessage, interaction.Message);
-        Assert.Contains("https://aka.ms/dotnet/aspire/containers", interaction.Message);
+        Assert.Contains("https://aka.ms/aspire/containers", interaction.Message);
         var notificationOptions = Assert.IsType<NotificationInteractionOptions>(interaction.Options);
         Assert.Equal(MessageIntent.Error, notificationOptions.Intent);
         Assert.Equal(InteractionStrings.ContainerRuntimeLinkText, notificationOptions.LinkText);
-        Assert.Equal("https://aka.ms/dotnet/aspire/containers", notificationOptions.LinkUrl);
+        Assert.Equal("https://aka.ms/aspire/containers", notificationOptions.LinkUrl);
 
         // Verify that no polling is started by ensuring the cancellation token is not cancelled after a delay
         // This tests that the function returns immediately and doesn't start the polling task
@@ -381,11 +465,623 @@ public sealed class DcpHostNotificationTests
         Assert.False(interaction.CancellationToken.IsCancellationRequested);
     }
 
+    [Fact]
+    public void CreateDcpProcessSpec_WithoutTlsCertThumbprint_DoesNotIncludeThumbprintArgument()
+    {
+        // Arrange
+        var dcpHost = CreateDcpHostForProcessSpecTests();
+        var locations = CreateTestLocations();
+
+        // Act
+        var processSpec = dcpHost.CreateDcpProcessSpec(locations);
+
+        // Assert
+        Assert.DoesNotContain("--tls-cert-thumbprint", processSpec.Arguments);
+        Assert.DoesNotContain("--tls-cert-file", processSpec.Arguments);
+        Assert.DoesNotContain("--tls-key-file", processSpec.Arguments);
+    }
+
+    [Fact]
+    public async Task CreateDcpProcessSpec_WithDcpDeveloperCertificateDefault_IncludesDeveloperCertificateArguments()
+    {
+        var activities = new ConcurrentBag<Activity>();
+        using var listener = CreateActivityListener(ProfilingTelemetry.ActivitySourceName, activities.Add);
+        using var certificate = CreateExportableCertificate();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [KnownConfigNames.ProfilingEnabled] = "true"
+            })
+            .Build();
+        var dcpHost = CreateDcpHostForProcessSpecTests(
+            developerCertificateService: new TestDeveloperCertificateService([certificate], false, false, false),
+            configuration: configuration);
+        var locations = CreateTestLocations();
+
+        await dcpHost.PrepareDcpTlsCertificateAsync(CancellationToken.None);
+
+        // Act
+        var processSpec = dcpHost.CreateDcpProcessSpec(locations);
+
+        // Assert
+        Assert.Contains($"--tls-cert-thumbprint \"{certificate.Thumbprint}\"", processSpec.Arguments);
+        var certificateActivity = Assert.Single(activities, activity => activity.OperationName == ProfilingTelemetry.Activities.DcpPrepareTlsCertificate);
+        Assert.Equal(true, certificateActivity.GetTagItem(ProfilingTelemetry.Tags.DcpTlsDeveloperCertificateEnabled));
+        Assert.Equal(ProfilingTelemetry.Values.DcpTlsCertificateResultPrepared, certificateActivity.GetTagItem(ProfilingTelemetry.Tags.DcpTlsCertificateResult));
+        Assert.Equal(true, certificateActivity.GetTagItem(ProfilingTelemetry.Tags.DcpTlsCertificatePrepared));
+
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.DoesNotContain("--tls-cert-file", processSpec.Arguments);
+            Assert.DoesNotContain("--tls-key-file", processSpec.Arguments);
+            Assert.Equal(ProfilingTelemetry.Values.DcpTlsCertificateModeThumbprint, certificateActivity.GetTagItem(ProfilingTelemetry.Tags.DcpTlsCertificateMode));
+        }
+        else
+        {
+            var certificatePath = GetQuotedArgumentValue(processSpec.Arguments, "--tls-cert-file");
+            var keyPath = GetQuotedArgumentValue(processSpec.Arguments, "--tls-key-file");
+
+            Assert.Equal(certificate.ExportCertificatePem(), File.ReadAllText(certificatePath));
+            Assert.Contains("PRIVATE KEY", File.ReadAllText(keyPath));
+            Assert.Equal(ProfilingTelemetry.Values.DcpTlsCertificateModeFiles, certificateActivity.GetTagItem(ProfilingTelemetry.Tags.DcpTlsCertificateMode));
+        }
+    }
+
+    [Fact]
+    public async Task CreateDcpProcessSpec_WithDcpDeveloperCertificateDisabled_DoesNotIncludeThumbprintArgument()
+    {
+        using var certificate = CreateUntrustedCertificate();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [KnownConfigNames.DcpDeveloperCertificate] = "false"
+            })
+            .Build();
+        var dcpHost = CreateDcpHostForProcessSpecTests(
+            developerCertificateService: new TestDeveloperCertificateService([certificate], false, false, false),
+            configuration: configuration);
+        var locations = CreateTestLocations();
+
+        await dcpHost.PrepareDcpTlsCertificateAsync(CancellationToken.None);
+
+        // Act
+        var processSpec = dcpHost.CreateDcpProcessSpec(locations);
+
+        // Assert - thumbprint should not appear because config is explicitly disabled
+        Assert.DoesNotContain("--tls-cert-thumbprint", processSpec.Arguments);
+        Assert.DoesNotContain("--tls-cert-file", processSpec.Arguments);
+        Assert.DoesNotContain("--tls-key-file", processSpec.Arguments);
+    }
+
+    [Fact]
+    public void CreateDcpProcessSpec_WithContainerRuntime_IncludesContainerRuntimeArgument()
+    {
+        // Arrange
+        var resolvedOptions = GetDcpOptions();
+        resolvedOptions.ContainerRuntime = "podman";
+        var dcpHost = CreateDcpHostForProcessSpecTests(dcpOptions: resolvedOptions);
+        var locations = CreateTestLocations();
+
+        // Act
+        var processSpec = dcpHost.CreateDcpProcessSpec(locations);
+
+        // Assert
+        Assert.Contains("--container-runtime \"podman\"", processSpec.Arguments);
+    }
+
+    [Fact]
+    public void CreateDcpProcessSpec_DoesNotInheritExcludedEnvironmentVariables()
+    {
+        var excludedVars = new Dictionary<string, string>
+        {
+            ["aspnetcore_urls"] = "http://localhost:5000",
+            ["DOTNET_LAUNCH_PROFILE"] = "MyProfile",
+            ["ASPNETCORE_ENVIRONMENT"] = "Development",
+            ["DOTNET_ENVIRONMENT"] = "Development",
+            ["aspire_loglevel"] = "Debug",
+        };
+
+        var options = new RemoteInvokeOptions();
+        foreach (var (key, value) in excludedVars)
+        {
+            options.StartInfo.Environment[key] = value;
+        }
+
+        options.StartInfo.Environment["MY_CUSTOM_SETTING"] = "keep-me";
+        options.StartInfo.Environment["ASPNETCORE_URLS_FOO"] = "keep-me-too";
+        options.StartInfo.Environment["ASPIRE_LOGLEVEL_EXTRA"] = "keep-me-three";
+
+        RemoteExecutor.Invoke(static () =>
+        {
+            // Use the test assembly as a dummy CliPath since CreateDcpProcessSpec
+            // validates the file exists.
+            var dummyPath = typeof(DcpHostNotificationTests).Assembly.Location;
+            var dcpOptions = new DcpOptions { CliPath = dummyPath, DashboardPath = "/dummy/dashboard" };
+            var dcpHost = CreateDcpHostForProcessSpecTests(dcpOptions: dcpOptions);
+            var locations = CreateTestLocations();
+
+            var processSpec = dcpHost.CreateDcpProcessSpec(locations);
+
+            string[] expectedExcluded =
+            [
+                "aspnetcore_urls",
+                "DOTNET_LAUNCH_PROFILE",
+                "ASPNETCORE_ENVIRONMENT",
+                "DOTNET_ENVIRONMENT",
+                "aspire_loglevel",
+            ];
+
+            foreach (var key in expectedExcluded)
+            {
+                Assert.False(processSpec.EnvironmentVariables.ContainsKey(key),
+                    $"DCP process should not inherit '{key}' from the app host.");
+            }
+
+            Assert.True(processSpec.EnvironmentVariables.ContainsKey("MY_CUSTOM_SETTING"),
+                "DCP process should inherit environment variables that are not in the exclusion list.");
+            Assert.Equal("keep-me", processSpec.EnvironmentVariables["MY_CUSTOM_SETTING"]);
+            Assert.Equal("keep-me-too", processSpec.EnvironmentVariables["ASPNETCORE_URLS_FOO"]);
+            Assert.Equal("keep-me-three", processSpec.EnvironmentVariables["ASPIRE_LOGLEVEL_EXTRA"]);
+        }, options).Dispose();
+    }
+
+    [Fact]
+    public void CreateDcpProcessSpec_MapsAspireProfilingConfigurationToDcpOtelEnvironmentVariables()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [KnownConfigNames.ProfilingEnabled] = "true",
+                [KnownConfigNames.ProfilingSessionId] = "profile-session",
+                [KnownConfigNames.Legacy.StartupTraceParent] = "00-11111111111111111111111111111111-2222222222222222-01",
+                [KnownConfigNames.Legacy.StartupTraceState] = "vendor=value"
+            })
+            .Build();
+
+        var dcpHost = CreateDcpHostForProcessSpecTests(configuration: configuration);
+        var locations = CreateTestLocations();
+
+        var processSpec = dcpHost.CreateDcpProcessSpec(locations);
+
+        Assert.Equal("true", processSpec.EnvironmentVariables[KnownConfigNames.DcpOtelStartupProfilingEnabled]);
+        Assert.Equal("profile-session", processSpec.EnvironmentVariables[KnownConfigNames.DcpOtelProfilingSessionId]);
+        Assert.Equal("00-11111111111111111111111111111111-2222222222222222-01", processSpec.EnvironmentVariables[KnownConfigNames.DcpOtelStartupTraceParent]);
+        Assert.Equal("vendor=value", processSpec.EnvironmentVariables[KnownConfigNames.DcpOtelStartupTraceState]);
+    }
+
+    private static DcpHost CreateDcpHostForProcessSpecTests(
+        IDeveloperCertificateService? developerCertificateService = null,
+        IConfiguration? configuration = null,
+        DcpOptions? dcpOptions = null)
+    {
+        return new DcpHost(
+            new NullLoggerFactory(),
+            Options.Create(dcpOptions ?? GetDcpOptions()),
+            new TestDcpDependencyCheckService(),
+            new TestInteractionService(),
+            CreateTestLocations(),
+            new DistributedApplicationModel(new ResourceCollection()),
+            new FakeTimeProvider(),
+            developerCertificateService ?? new TestDeveloperCertificateService([], false, false, false),
+            configuration ?? new ConfigurationBuilder().Build());
+    }
+
+    private static DcpOptions GetDcpOptions()
+    {
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            DisableDashboard = true
+        });
+        using var host = builder.Build();
+        return host.Services.GetRequiredService<IOptions<DcpOptions>>().Value;
+    }
+
     private static DistributedApplication CreateAppWithContainers()
     {
         var builder = DistributedApplication.CreateBuilder();
         builder.AddContainer("test-container", "nginx:latest");
         return builder.Build();
+    }
+
+    private static DistributedApplicationModel CreateApplicationModelWithHttpsEndpoint()
+    {
+        var resource = new ContainerResource("test-resource");
+        resource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "https", name: "https"));
+        return new DistributedApplicationModel(new ResourceCollection([resource]));
+    }
+
+    private static DistributedApplicationModel CreateApplicationModelWithHttpEndpoint()
+    {
+        var resource = new ContainerResource("test-resource");
+        resource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "http", name: "http"));
+        return new DistributedApplicationModel(new ResourceCollection([resource]));
+    }
+
+    private static X509Certificate2 CreateUntrustedCertificate()
+    {
+        var searchPaths = new[]
+        {
+            Path.Combine(Directory.GetCurrentDirectory(), "tests", "Shared", "TestCertificates", "testCert.pfx"),
+            Path.Combine(AppContext.BaseDirectory, "shared", "TestCertificates", "testCert.pfx"),
+            Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "tests", "Shared", "TestCertificates", "testCert.pfx"))
+        };
+
+        foreach (var path in searchPaths)
+        {
+            if (File.Exists(path))
+            {
+                return new X509Certificate2(path, "testPassword");
+            }
+        }
+
+        throw new FileNotFoundException("Could not locate test certificate file 'testCert.pfx' in expected locations.");
+    }
+
+    private static X509Certificate2 CreateExportableCertificate()
+    {
+        var subject = new X500DistinguishedName($"CN=aspire-test-{Guid.NewGuid():N}");
+
+        using var rsa = RSA.Create(2048);
+        var request = new CertificateRequest(subject, rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        request.CertificateExtensions.Add(new X509Extension("1.3.6.1.4.1.311.84.1.1", [0], critical: false));
+        using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
+
+        return X509CertificateLoader.LoadPkcs12(certificate.Export(X509ContentType.Pfx), password: null, X509KeyStorageFlags.Exportable);
+    }
+
+    private static string GetQuotedArgumentValue(string? arguments, string option)
+    {
+        if (arguments is null)
+        {
+            throw new InvalidOperationException("Expected process arguments to be set.");
+        }
+
+        var prefix = $"{option} \"";
+        var start = arguments.IndexOf(prefix, StringComparison.Ordinal);
+        Assert.NotEqual(-1, start);
+        start += prefix.Length;
+
+        var end = arguments.IndexOf('"', start);
+        Assert.NotEqual(-1, end);
+
+        return arguments[start..end];
+    }
+
+    private static ActivityListener CreateActivityListener(string sourceName, Action<Activity> activityStopped)
+    {
+        var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == sourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = activityStopped
+        };
+        ActivitySource.AddActivityListener(listener);
+        return listener;
+    }
+
+    [Fact]
+    public async Task DcpHost_WithNoHttpsResources_DoesNotShowCertificateWarning()
+    {
+        // Arrange - only HTTP endpoints, no HTTPS
+        using var certificate = CreateUntrustedCertificate();
+        var testSink = new TestSink();
+        using var loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.AddProvider(new TestLoggerProvider(testSink));
+        });
+        var dcpOptions = Options.Create(new DcpOptions());
+        var dependencyCheckService = new TestDcpDependencyCheckService();
+        var interactionService = new TestInteractionService { IsAvailable = true };
+        var locations = CreateTestLocations();
+        var applicationModel = CreateApplicationModelWithHttpEndpoint();
+        var timeProvider = new FakeTimeProvider();
+        var developerCertificateService = new TestDeveloperCertificateService([certificate], false, true, false);
+        var configuration = new ConfigurationBuilder().Build();
+
+        var dcpHost = new DcpHost(
+            loggerFactory,
+            dcpOptions,
+            dependencyCheckService,
+            interactionService,
+            locations,
+            applicationModel,
+            timeProvider,
+            developerCertificateService,
+            configuration);
+
+        // Act
+        await dcpHost.EnsureDevelopmentCertificateTrustAsync(CancellationToken.None).DefaultTimeout();
+
+        // Assert - no notification or warning should be shown
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+        var hasInteraction = false;
+        try
+        {
+            await interactionService.Interactions.Reader.ReadAsync(cts.Token);
+            hasInteraction = true;
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected - no notification
+        }
+
+        Assert.False(hasInteraction);
+        Assert.DoesNotContain(testSink.Writes, w => w.LogLevel == LogLevel.Warning);
+    }
+
+    [Fact]
+    public async Task DcpHost_WithNoResources_DoesNotShowCertificateWarning()
+    {
+        // Arrange - empty resource model
+        using var certificate = CreateUntrustedCertificate();
+        var testSink = new TestSink();
+        using var loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.AddProvider(new TestLoggerProvider(testSink));
+        });
+        var dcpOptions = Options.Create(new DcpOptions());
+        var dependencyCheckService = new TestDcpDependencyCheckService();
+        var interactionService = new TestInteractionService { IsAvailable = true };
+        var locations = CreateTestLocations();
+        var applicationModel = new DistributedApplicationModel(new ResourceCollection());
+        var timeProvider = new FakeTimeProvider();
+        var developerCertificateService = new TestDeveloperCertificateService([certificate], false, true, false);
+        var configuration = new ConfigurationBuilder().Build();
+
+        var dcpHost = new DcpHost(
+            loggerFactory,
+            dcpOptions,
+            dependencyCheckService,
+            interactionService,
+            locations,
+            applicationModel,
+            timeProvider,
+            developerCertificateService,
+            configuration);
+
+        // Act
+        await dcpHost.EnsureDevelopmentCertificateTrustAsync(CancellationToken.None).DefaultTimeout();
+
+        // Assert - no notification or warning should be shown for empty model
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+        var hasInteraction = false;
+        try
+        {
+            await interactionService.Interactions.Reader.ReadAsync(cts.Token);
+            hasInteraction = true;
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected - no notification
+        }
+
+        Assert.False(hasInteraction);
+        Assert.DoesNotContain(testSink.Writes, w => w.LogLevel == LogLevel.Warning);
+    }
+
+    [Fact]
+    public async Task DcpHost_WithHttpsCertificateConfigCallback_ShowsCertificateWarning()
+    {
+        // Arrange - resource has HttpsCertificateConfigurationCallbackAnnotation but no HTTPS endpoint
+        using var certificate = CreateUntrustedCertificate();
+        var testSink = new TestSink();
+        using var loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.AddProvider(new TestLoggerProvider(testSink));
+        });
+        var dcpOptions = Options.Create(new DcpOptions());
+        var dependencyCheckService = new TestDcpDependencyCheckService();
+        var interactionService = new TestInteractionService { IsAvailable = true };
+        var locations = CreateTestLocations();
+
+        var resource = new ContainerResource("test-resource");
+        resource.Annotations.Add(new HttpsCertificateConfigurationCallbackAnnotation(_ => Task.CompletedTask));
+        var applicationModel = new DistributedApplicationModel(new ResourceCollection([resource]));
+
+        var timeProvider = new FakeTimeProvider();
+        var developerCertificateService = new TestDeveloperCertificateService([certificate], false, true, false, latestCertificateIsUntrusted: true);
+        var appHostDirectory = Path.Combine(Path.GetTempPath(), "aspire-apphost-test");
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AppHost:Directory"] = appHostDirectory
+            })
+            .Build();
+
+        var dcpHost = new DcpHost(
+            loggerFactory,
+            dcpOptions,
+            dependencyCheckService,
+            interactionService,
+            locations,
+            applicationModel,
+            timeProvider,
+            developerCertificateService,
+            configuration);
+
+        // Act
+        await dcpHost.EnsureDevelopmentCertificateTrustAsync(CancellationToken.None).DefaultTimeout();
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var interaction = await interactionService.Interactions.Reader.ReadAsync(cts.Token);
+
+        // Assert - warning should be shown because HttpsCertificateConfigurationCallbackAnnotation indicates TLS
+        Assert.Equal(InteractionStrings.DeveloperCertificateNotFullyTrustedTitle, interaction.Title);
+        Assert.Contains(testSink.Writes, w => w.LogLevel == LogLevel.Warning);
+    }
+
+    [Fact]
+    public async Task DcpHost_WithHttpsCertificateConfigCallbackDisabledByWithoutHttpsCertificate_DoesNotShowCertificateWarning()
+    {
+        // Arrange - resource has HttpsCertificateConfigurationCallbackAnnotation but disabled by WithoutHttpsCertificate
+        using var certificate = CreateUntrustedCertificate();
+        var testSink = new TestSink();
+        using var loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.AddProvider(new TestLoggerProvider(testSink));
+        });
+        var dcpOptions = Options.Create(new DcpOptions());
+        var dependencyCheckService = new TestDcpDependencyCheckService();
+        var interactionService = new TestInteractionService { IsAvailable = true };
+        var locations = CreateTestLocations();
+
+        var resource = new ContainerResource("test-resource");
+        resource.Annotations.Add(new HttpsCertificateConfigurationCallbackAnnotation(_ => Task.CompletedTask));
+        // This is the state set by WithoutHttpsCertificate()
+        resource.Annotations.Add(new HttpsCertificateAnnotation
+        {
+            Certificate = null,
+            UseDeveloperCertificate = false,
+        });
+        var applicationModel = new DistributedApplicationModel(new ResourceCollection([resource]));
+
+        var timeProvider = new FakeTimeProvider();
+        var developerCertificateService = new TestDeveloperCertificateService([certificate], false, true, false);
+        var configuration = new ConfigurationBuilder().Build();
+
+        var dcpHost = new DcpHost(
+            loggerFactory,
+            dcpOptions,
+            dependencyCheckService,
+            interactionService,
+            locations,
+            applicationModel,
+            timeProvider,
+            developerCertificateService,
+            configuration);
+
+        // Act
+        await dcpHost.EnsureDevelopmentCertificateTrustAsync(CancellationToken.None).DefaultTimeout();
+
+        // Assert - no warning because TLS was explicitly disabled
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+        var hasInteraction = false;
+        try
+        {
+            await interactionService.Interactions.Reader.ReadAsync(cts.Token);
+            hasInteraction = true;
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected - no notification
+        }
+
+        Assert.False(hasInteraction);
+        Assert.DoesNotContain(testSink.Writes, w => w.LogLevel == LogLevel.Warning);
+    }
+
+    [Fact]
+    public async Task DcpHost_WithHttpsCertificateAnnotationOnly_DoesNotShowCertificateWarning()
+    {
+        // Arrange - resource has HttpsCertificateAnnotation but NO HttpsCertificateConfigurationCallbackAnnotation
+        // HttpsCertificateAnnotation alone has no effect without the callback annotation
+        using var certificate = CreateUntrustedCertificate();
+        var testSink = new TestSink();
+        using var loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.AddProvider(new TestLoggerProvider(testSink));
+        });
+        var dcpOptions = Options.Create(new DcpOptions());
+        var dependencyCheckService = new TestDcpDependencyCheckService();
+        var interactionService = new TestInteractionService { IsAvailable = true };
+        var locations = CreateTestLocations();
+
+        var resource = new ContainerResource("test-resource");
+        resource.Annotations.Add(new HttpsCertificateAnnotation
+        {
+            UseDeveloperCertificate = true,
+        });
+        var applicationModel = new DistributedApplicationModel(new ResourceCollection([resource]));
+
+        var timeProvider = new FakeTimeProvider();
+        var developerCertificateService = new TestDeveloperCertificateService([certificate], false, true, false);
+        var configuration = new ConfigurationBuilder().Build();
+
+        var dcpHost = new DcpHost(
+            loggerFactory,
+            dcpOptions,
+            dependencyCheckService,
+            interactionService,
+            locations,
+            applicationModel,
+            timeProvider,
+            developerCertificateService,
+            configuration);
+
+        // Act
+        await dcpHost.EnsureDevelopmentCertificateTrustAsync(CancellationToken.None).DefaultTimeout();
+
+        // Assert - no warning because HttpsCertificateAnnotation alone has no effect
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+        var hasInteraction = false;
+        try
+        {
+            await interactionService.Interactions.Reader.ReadAsync(cts.Token);
+            hasInteraction = true;
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected - no notification
+        }
+
+        Assert.False(hasInteraction);
+        Assert.DoesNotContain(testSink.Writes, w => w.LogLevel == LogLevel.Warning);
+    }
+
+    [Fact]
+    public async Task DcpHost_WithHttpsCertificateConfigCallbackAndDevCert_ShowsCertificateWarning()
+    {
+        // Arrange - resource has both HttpsCertificateConfigurationCallbackAnnotation and HttpsCertificateAnnotation
+        // with UseDeveloperCertificate = true (not disabled)
+        using var certificate = CreateUntrustedCertificate();
+        var testSink = new TestSink();
+        using var loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.AddProvider(new TestLoggerProvider(testSink));
+        });
+        var dcpOptions = Options.Create(new DcpOptions());
+        var dependencyCheckService = new TestDcpDependencyCheckService();
+        var interactionService = new TestInteractionService { IsAvailable = true };
+        var locations = CreateTestLocations();
+
+        var resource = new ContainerResource("test-resource");
+        resource.Annotations.Add(new HttpsCertificateConfigurationCallbackAnnotation(_ => Task.CompletedTask));
+        resource.Annotations.Add(new HttpsCertificateAnnotation
+        {
+            UseDeveloperCertificate = true,
+        });
+        var applicationModel = new DistributedApplicationModel(new ResourceCollection([resource]));
+
+        var timeProvider = new FakeTimeProvider();
+        var developerCertificateService = new TestDeveloperCertificateService([certificate], false, true, false, latestCertificateIsUntrusted: true);
+        var appHostDirectory = Path.Combine(Path.GetTempPath(), "aspire-apphost-test");
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AppHost:Directory"] = appHostDirectory
+            })
+            .Build();
+
+        var dcpHost = new DcpHost(
+            loggerFactory,
+            dcpOptions,
+            dependencyCheckService,
+            interactionService,
+            locations,
+            applicationModel,
+            timeProvider,
+            developerCertificateService,
+            configuration);
+
+        // Act
+        await dcpHost.EnsureDevelopmentCertificateTrustAsync(CancellationToken.None).DefaultTimeout();
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var interaction = await interactionService.Interactions.Reader.ReadAsync(cts.Token);
+
+        // Assert - warning should be shown because TLS is active
+        Assert.Equal(InteractionStrings.DeveloperCertificateNotFullyTrustedTitle, interaction.Title);
+        Assert.Contains(testSink.Writes, w => w.LogLevel == LogLevel.Warning);
     }
 
     private sealed class TestDcpDependencyCheckService : IDcpDependencyCheckService
@@ -409,4 +1105,4 @@ public sealed class DcpHostNotificationTests
     }
 }
 
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning restore ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

@@ -69,6 +69,12 @@ The `EnrichSqlServerDbContext` won't make use of the `ConnectionStrings` configu
 
 See the [ConnectionString documentation](https://learn.microsoft.com/dotnet/api/system.data.sqlclient.sqlconnection.connectionstring#remarks) for more information on how to format this connection string.
 
+### Microsoft Entra ID (Azure AD) authentication
+
+To connect to Azure SQL using Microsoft Entra ID (for example, with managed identity), the connection string specifies an `Authentication` mode such as `Authentication="Active Directory Default"`. This is the connection string the `Aspire.Hosting.Azure.Sql` integration emits by default.
+
+Since [Microsoft.Data.SqlClient 7.0](https://techcommunity.microsoft.com/blog/sqlserver/microsoft-data-sqlclient-7-0-is-here-a-leaner-more-modular-driver-for-sql-server/4503173) (pulled in transitively by `Microsoft.EntityFrameworkCore.SqlServer`), the Entra ID authentication providers are no longer bundled in the core driver; they ship in the separate [Microsoft.Data.SqlClient.Extensions.Azure](https://www.nuget.org/packages/Microsoft.Data.SqlClient.Extensions.Azure) package. This integration references that package so those connection strings work out of the box, with no extra package or registration code required. As a result, this integration also brings in `Azure.Identity`.
+
 ### Use configuration providers
 
 The Aspire SQL Server EntityFrameworkCore SqlClient component supports [Microsoft.Extensions.Configuration](https://learn.microsoft.com/dotnet/api/microsoft.extensions.configuration). It loads the `MicrosoftEntityFrameworkCoreSqlServerSettings` from configuration by using the `Aspire:Microsoft:EntityFrameworkCore:SqlServer` key. Example `appsettings.json` that configures some of the options:
@@ -128,8 +134,8 @@ builder.AddSqlServerDbContext<MyDbContext>("sqldata");
 ## Additional documentation
 
 * https://learn.microsoft.com/ef/core/
-* https://github.com/dotnet/aspire/tree/main/src/Components/README.md
+* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

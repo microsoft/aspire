@@ -7,7 +7,6 @@ using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Mcp;
 using Aspire.Cli.Mcp.Tools;
-using Aspire.Cli.Otlp;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Dashboard.Otlp.Model;
@@ -34,7 +33,7 @@ public class ListStructuredLogsToolTests
     }
 
     [Fact]
-    public async Task ListStructuredLogsTool_ThrowsException_WhenDashboardApiNotAvailable()
+    public async Task ListStructuredLogsTool_ThrowsException_WhenDashboardNotAvailable()
     {
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var connection = new TestAppHostAuxiliaryBackchannel
@@ -48,7 +47,7 @@ public class ListStructuredLogsToolTests
         var exception = await Assert.ThrowsAsync<ModelContextProtocol.McpProtocolException>(
             () => tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).AsTask()).DefaultTimeout();
 
-        Assert.Contains("Dashboard is not available", exception.Message);
+        Assert.Contains(McpErrorMessages.DashboardNotAvailable, exception.Message);
     }
 
     [Fact]
@@ -87,7 +86,7 @@ public class ListStructuredLogsToolTests
         // Include aspire.log_id attribute to verify it's extracted to log_id field and filtered from attributes
         var apiResponseObj = new TelemetryApiResponse
         {
-            Data = new TelemetryDataJson
+            Data = new OtlpTelemetryDataJson
             {
                 ResourceLogs =
                 [
@@ -140,7 +139,7 @@ public class ListStructuredLogsToolTests
             ReturnedCount = 3
         };
 
-        var apiResponse = JsonSerializer.Serialize(apiResponseObj, OtlpCliJsonSerializerContext.Default.TelemetryApiResponse);
+        var apiResponse = JsonSerializer.Serialize(apiResponseObj, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
 
         // Create resources that match the OtlpResourceLogsJson entries
         var resources = new ResourceInfoJson[]
@@ -149,7 +148,7 @@ public class ListStructuredLogsToolTests
             new() { Name = "api-service", InstanceId = "instance-2", HasLogs = true, HasTraces = true, HasMetrics = true },
             new() { Name = "worker-service", InstanceId = "instance-1", HasLogs = true, HasTraces = true, HasMetrics = true }
         };
-        var resourcesResponse = JsonSerializer.Serialize(resources, OtlpCliJsonSerializerContext.Default.ResourceInfoJsonArray);
+        var resourcesResponse = JsonSerializer.Serialize(resources, OtlpJsonSerializerContext.Default.ResourceInfoJsonArray);
 
         using var mockHandler = new MockHttpMessageHandler(request =>
         {
@@ -185,7 +184,7 @@ public class ListStructuredLogsToolTests
         var textContent = result.Content[0] as TextContentBlock;
         Assert.NotNull(textContent);
 
-        // Parse the JSON array from the response to verify log_id extraction and attribute filtering
+        // Parse the JSON array from the response to verify logId extraction and attribute filtering
         var jsonStartIndex = textContent.Text.IndexOf('[');
         var jsonEndIndex = textContent.Text.LastIndexOf(']') + 1;
         var jsonText = textContent.Text[jsonStartIndex..jsonEndIndex];
@@ -194,46 +193,37 @@ public class ListStructuredLogsToolTests
         Assert.NotNull(logsArray);
         Assert.Equal(3, logsArray.Count);
 
-        // Verify first log entry has correct resource_name, log_id extracted, and aspire.log_id not in attributes
+        // Verify first log entry has correct resourceName, logId extracted, and aspire.log_id not in attributes
         var firstLog = logsArray[0]?.AsObject();
         Assert.NotNull(firstLog);
-        Assert.Equal("api-service-instance-1", firstLog["resource_name"]?.GetValue<string>());
-        Assert.Equal(42, firstLog["log_id"]?.GetValue<long>());
+        Assert.Equal("api-service-instance-1", firstLog["resourceName"]?.GetValue<string>());
+        Assert.Equal(42, firstLog["logId"]?.GetValue<long>());
         var firstLogAttributes = firstLog["attributes"]?.AsObject();
         Assert.NotNull(firstLogAttributes);
         Assert.False(firstLogAttributes.ContainsKey(OtlpHelpers.AspireLogIdAttribute), "aspire.log_id should be filtered from attributes");
         Assert.True(firstLogAttributes.ContainsKey("custom.attr"), "custom.attr should be present in attributes");
 
-        // Verify dashboard_link is included for each log entry with correct URLs
-        var firstDashboardLink = firstLog["dashboard_link"]?.AsObject();
-        Assert.NotNull(firstDashboardLink);
-        Assert.Equal("http://localhost:18888/structuredlogs?logEntryId=42", firstDashboardLink["url"]?.GetValue<string>());
-        Assert.Equal("log_id: 42", firstDashboardLink["text"]?.GetValue<string>());
+        // Verify dashboardUrl is included for each log entry with correct URLs
+        Assert.Equal("http://localhost:18888/structuredlogs?logEntryId=42", firstLog["dashboardUrl"]?.GetValue<string>());
 
-        // Verify second log entry has correct resource_name (different instance), log_id extracted (from intValue)
+        // Verify second log entry has correct resourceName (different instance), logId extracted (from intValue)
         var secondLog = logsArray[1]?.AsObject();
         Assert.NotNull(secondLog);
-        Assert.Equal("api-service-instance-2", secondLog["resource_name"]?.GetValue<string>());
-        Assert.Equal(43, secondLog["log_id"]?.GetValue<long>());
+        Assert.Equal("api-service-instance-2", secondLog["resourceName"]?.GetValue<string>());
+        Assert.Equal(43, secondLog["logId"]?.GetValue<long>());
         var secondLogAttributes = secondLog["attributes"]?.AsObject();
         Assert.NotNull(secondLogAttributes);
         Assert.False(secondLogAttributes.ContainsKey(OtlpHelpers.AspireLogIdAttribute), "aspire.log_id should be filtered from attributes");
 
-        var secondDashboardLink = secondLog["dashboard_link"]?.AsObject();
-        Assert.NotNull(secondDashboardLink);
-        Assert.Equal("http://localhost:18888/structuredlogs?logEntryId=43", secondDashboardLink["url"]?.GetValue<string>());
-        Assert.Equal("log_id: 43", secondDashboardLink["text"]?.GetValue<string>());
+        Assert.Equal("http://localhost:18888/structuredlogs?logEntryId=43", secondLog["dashboardUrl"]?.GetValue<string>());
 
-        // Verify third log entry has correct resource_name (no instance ID)
+        // Verify third log entry has correct resourceName (no instance ID)
         var thirdLog = logsArray[2]?.AsObject();
         Assert.NotNull(thirdLog);
-        Assert.Equal("worker-service", thirdLog["resource_name"]?.GetValue<string>());
-        Assert.Equal(44, thirdLog["log_id"]?.GetValue<long>());
+        Assert.Equal("worker-service", thirdLog["resourceName"]?.GetValue<string>());
+        Assert.Equal(44, thirdLog["logId"]?.GetValue<long>());
 
-        var thirdDashboardLink = thirdLog["dashboard_link"]?.AsObject();
-        Assert.NotNull(thirdDashboardLink);
-        Assert.Equal("http://localhost:18888/structuredlogs?logEntryId=44", thirdDashboardLink["url"]?.GetValue<string>());
-        Assert.Equal("log_id: 44", thirdDashboardLink["text"]?.GetValue<string>());
+        Assert.Equal("http://localhost:18888/structuredlogs?logEntryId=44", thirdLog["dashboardUrl"]?.GetValue<string>());
     }
 
     [Fact]
@@ -242,17 +232,17 @@ public class ListStructuredLogsToolTests
         // Arrange - Create mock HTTP handler with empty logs response
         var apiResponseObj = new TelemetryApiResponse
         {
-            Data = new TelemetryDataJson { ResourceLogs = [] },
+            Data = new OtlpTelemetryDataJson { ResourceLogs = [] },
             TotalCount = 0,
             ReturnedCount = 0
         };
-        var apiResponse = JsonSerializer.Serialize(apiResponseObj, OtlpCliJsonSerializerContext.Default.TelemetryApiResponse);
+        var apiResponse = JsonSerializer.Serialize(apiResponseObj, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
 
         var resources = new ResourceInfoJson[]
         {
             new() { Name = "api-service", InstanceId = null, HasLogs = true, HasTraces = true, HasMetrics = true }
         };
-        var resourcesResponse = JsonSerializer.Serialize(resources, OtlpCliJsonSerializerContext.Default.ResourceInfoJsonArray);
+        var resourcesResponse = JsonSerializer.Serialize(resources, OtlpJsonSerializerContext.Default.ResourceInfoJsonArray);
 
         using var mockHandler = new MockHttpMessageHandler(request =>
         {
@@ -299,15 +289,15 @@ public class ListStructuredLogsToolTests
         {
             new() { Name = "other-resource", InstanceId = null, HasLogs = true, HasTraces = true, HasMetrics = true }
         };
-        var resourcesResponse = JsonSerializer.Serialize(resources, OtlpCliJsonSerializerContext.Default.ResourceInfoJsonArray);
+        var resourcesResponse = JsonSerializer.Serialize(resources, OtlpJsonSerializerContext.Default.ResourceInfoJsonArray);
 
         var emptyLogsResponse = new TelemetryApiResponse
         {
-            Data = new TelemetryDataJson { ResourceLogs = [] },
+            Data = new OtlpTelemetryDataJson { ResourceLogs = [] },
             TotalCount = 0,
             ReturnedCount = 0
         };
-        var emptyLogsJson = JsonSerializer.Serialize(emptyLogsResponse, OtlpCliJsonSerializerContext.Default.TelemetryApiResponse);
+        var emptyLogsJson = JsonSerializer.Serialize(emptyLogsResponse, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
 
         using var mockHandler = new MockHttpMessageHandler(request =>
         {
@@ -399,8 +389,11 @@ public class ListStructuredLogsToolTests
         TestAuxiliaryBackchannelMonitor? monitor = null,
         IHttpClientFactory? httpClientFactory = null)
     {
+        var actualMonitor = monitor ?? new TestAuxiliaryBackchannelMonitor();
+        IDashboardInfoProvider dashboardInfoProvider = new BackchannelDashboardInfoProvider(actualMonitor, NullLogger<BackchannelDashboardInfoProvider>.Instance);
         return new ListStructuredLogsTool(
-            monitor ?? new TestAuxiliaryBackchannelMonitor(),
+            dashboardInfoProvider,
+            actualMonitor,
             httpClientFactory ?? s_httpClientFactory,
             NullLogger<ListStructuredLogsTool>.Instance);
     }
@@ -425,5 +418,71 @@ public class ListStructuredLogsToolTests
         };
         monitor.AddConnection("hash1", "socket.hash1", connection);
         return monitor;
+    }
+
+    [Fact]
+    public async Task ListStructuredLogsTool_WithSearch_PassesSearchToUrl()
+    {
+        var resources = new ResourceInfoJson[]
+        {
+            new() { Name = "api-service", InstanceId = null, HasLogs = true, HasTraces = true, HasMetrics = true }
+        };
+        var resourcesResponse = JsonSerializer.Serialize(resources, OtlpJsonSerializerContext.Default.ResourceInfoJsonArray);
+
+        var apiResponseObj = new TelemetryApiResponse
+        {
+            Data = new OtlpTelemetryDataJson { ResourceLogs = [] },
+            TotalCount = 0,
+            ReturnedCount = 0
+        };
+        var apiResponse = JsonSerializer.Serialize(apiResponseObj, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+
+        string? capturedUrl = null;
+        using var mockHandler = new MockHttpMessageHandler(request =>
+        {
+            var url = request.RequestUri!.ToString();
+            if (request.RequestUri?.AbsolutePath.Contains("/resources") == true)
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(resourcesResponse, System.Text.Encoding.UTF8, "application/json")
+                };
+            }
+
+            capturedUrl = url;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(apiResponse, System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+        var mockHttpClientFactory = new MockHttpClientFactory(mockHandler);
+
+        var monitor = CreateMonitorWithDashboard();
+        var tool = CreateTool(monitor, mockHttpClientFactory);
+
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["search"] = JsonDocument.Parse("\"timeout error\"").RootElement
+        };
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(arguments), CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.IsError is null or false);
+        Assert.NotNull(capturedUrl);
+        Assert.Contains("search=timeout", capturedUrl);
+    }
+
+    [Fact]
+    public void ListStructuredLogsTool_InputSchema_HasSearchProperty()
+    {
+        var tool = CreateTool();
+
+        var schema = tool.GetInputSchema();
+
+        Assert.Equal(JsonValueKind.Object, schema.ValueKind);
+        Assert.True(schema.TryGetProperty("properties", out var properties));
+        Assert.True(properties.TryGetProperty("search", out var search));
+        Assert.True(search.TryGetProperty("type", out var type));
+        Assert.Equal("string", type.GetString());
     }
 }

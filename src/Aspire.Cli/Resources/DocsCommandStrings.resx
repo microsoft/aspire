@@ -118,31 +118,31 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Browse and search Aspire documentation from aspire.dev.</value>
+    <value>Browse and search Aspire documentation and API reference from aspire.dev</value>
   </data>
   <data name="ListDescription" xml:space="preserve">
-    <value>List all available Aspire documentation pages.</value>
+    <value>List all available Aspire documentation pages</value>
   </data>
   <data name="SearchDescription" xml:space="preserve">
-    <value>Search Aspire documentation by keywords.</value>
+    <value>Search Aspire documentation by keywords</value>
   </data>
   <data name="GetDescription" xml:space="preserve">
-    <value>Get the full content of a documentation page by its slug.</value>
+    <value>Get the full content of a documentation page by its slug</value>
   </data>
   <data name="QueryArgumentDescription" xml:space="preserve">
-    <value>The search query.</value>
+    <value>The search query</value>
   </data>
   <data name="SlugArgumentDescription" xml:space="preserve">
-    <value>The slug of the documentation page (e.g., 'redis-integration').</value>
+    <value>The slug of the documentation page (e.g., 'redis-integration')</value>
   </data>
   <data name="FormatOptionDescription" xml:space="preserve">
-    <value>Output format (Table or Json).</value>
+    <value>Output format (Table or Json)</value>
   </data>
   <data name="LimitOptionDescription" xml:space="preserve">
-    <value>Maximum number of search results to return (default: 5, max: 10).</value>
+    <value>Maximum number of search results to return (default: 5, max: 10)</value>
   </data>
   <data name="SectionOptionDescription" xml:space="preserve">
-    <value>Return only the specified section of the page.</value>
+    <value>Return only the specified section of the page</value>
   </data>
   <data name="LoadingDocumentation" xml:space="preserve">
     <value>Loading documentation...</value>
@@ -161,5 +161,20 @@
   </data>
   <data name="FoundSearchResults" xml:space="preserve">
     <value>Found {0} results for '{1}'.</value>
+  </data>
+  <data name="HeaderTitle" xml:space="preserve">
+    <value>Title</value>
+  </data>
+  <data name="HeaderSlug" xml:space="preserve">
+    <value>Slug</value>
+  </data>
+  <data name="HeaderSummary" xml:space="preserve">
+    <value>Summary</value>
+  </data>
+  <data name="HeaderSection" xml:space="preserve">
+    <value>Section</value>
+  </data>
+  <data name="HeaderScore" xml:space="preserve">
+    <value>Score</value>
   </data>
 </root>

@@ -3,7 +3,7 @@ import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { createDebugAdapterTracker } from '../debugger/adapterTracker';
 import AspireDcpServer from '../dcp/AspireDcpServer';
-import { AspireResourceExtendedDebugConfiguration, SessionTerminatedNotification } from '../dcp/types';
+import { AspireResourceExtendedDebugConfiguration, ServiceLogsNotification, SessionTerminatedNotification } from '../dcp/types';
 
 suite('Debug Adapter Tracker Tests', () => {
     let dcpServer: sinon.SinonStubbedInstance<AspireDcpServer>;
@@ -184,6 +184,111 @@ suite('Debug Adapter Tracker Tests', () => {
         assert.strictEqual(dcpServer.sendNotification.calledOnce, true);
         const notification = dcpServer.sendNotification.firstCall.args[0] as SessionTerminatedNotification;
         assert.strictEqual(notification.exit_code, 0);
+
+        disposable.dispose();
+    });
+
+    test('non-telemetry output events are sent as service logs', async () => {
+        const disposable = createDebugAdapterTracker(dcpServer as any, 'node');
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker(debugSession);
+
+        const testCases: { category?: string, output: string, expectedIsStdErr: boolean, expectedLogMessage: string }[] = [
+            { category: 'stdout', output: 'stdout line\n', expectedIsStdErr: false, expectedLogMessage: 'stdout line' },
+            { category: 'stderr', output: 'stderr line\n', expectedIsStdErr: true, expectedLogMessage: 'stderr line' },
+            { category: 'console', output: 'VITE ready\n', expectedIsStdErr: false, expectedLogMessage: 'VITE ready' },
+            { category: 'important', output: 'important line\n', expectedIsStdErr: false, expectedLogMessage: 'important line' },
+            { category: 'debug', output: 'debug line\n', expectedIsStdErr: false, expectedLogMessage: 'debug line' },
+            { output: 'default console line\n', expectedIsStdErr: false, expectedLogMessage: 'default console line' }
+        ];
+
+        for (const testCase of testCases) {
+            dcpServer.sendNotification.resetHistory();
+
+            tracker.onDidSendMessage({
+                type: 'event',
+                event: 'output',
+                body: {
+                    category: testCase.category,
+                    output: testCase.output
+                }
+            });
+
+            assert.strictEqual(dcpServer.sendNotification.calledOnce, true);
+            const notification = dcpServer.sendNotification.firstCall.args[0] as ServiceLogsNotification;
+            assert.strictEqual(notification.notification_type, 'serviceLogs');
+            assert.strictEqual(notification.session_id, 'run-123');
+            assert.strictEqual(notification.dcp_id, 'debug-456');
+            assert.strictEqual(notification.is_std_err, testCase.expectedIsStdErr);
+            assert.strictEqual(notification.log_message, testCase.expectedLogMessage);
+        }
+
+        disposable.dispose();
+    });
+
+    test('telemetry output event is not sent as service log', async () => {
+        const disposable = createDebugAdapterTracker(dcpServer as any, 'node');
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker(debugSession);
+
+        tracker.onDidSendMessage({
+            type: 'event',
+            event: 'output',
+            body: {
+                category: 'telemetry',
+                output: '{"eventName":"nodeTelemetry"}'
+            }
+        });
+
+        assert.strictEqual(dcpServer.sendNotification.called, false);
+
+        disposable.dispose();
+    });
+
+    test('apphost output events are mirrored to output callback without service log notification', async () => {
+        const outputCallback = sinon.stub();
+        const disposable = createDebugAdapterTracker(dcpServer as any, 'pwa-node', undefined, outputCallback);
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker({
+            ...debugSession,
+            configuration: {
+                ...debugSession.configuration,
+                isApphost: true
+            }
+        });
+
+        tracker.onDidSendMessage({
+            type: 'event',
+            event: 'output',
+            body: {
+                category: 'stderr',
+                output: 'tsx compile error\n'
+            }
+        });
+
+        assert.strictEqual(outputCallback.calledOnceWith('tsx compile error\n', 'stderr'), true);
+        assert.strictEqual(dcpServer.sendNotification.called, false);
+
+        disposable.dispose();
+    });
+
+    test('resource output events are not mirrored to output callback', async () => {
+        const outputCallback = sinon.stub();
+        const disposable = createDebugAdapterTracker(dcpServer as any, 'pwa-node', undefined, outputCallback);
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker(debugSession);
+
+        tracker.onDidSendMessage({
+            type: 'event',
+            event: 'output',
+            body: {
+                category: 'stderr',
+                output: 'resource error\n'
+            }
+        });
+
+        assert.strictEqual(outputCallback.called, false);
+        assert.strictEqual(dcpServer.sendNotification.calledOnce, true);
 
         disposable.dispose();
     });

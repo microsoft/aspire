@@ -50,25 +50,66 @@ impl ResourceBuilderBase {
 }
 
 /// A reference expression for dynamic values.
+/// Supports value mode (format + args) and conditional mode (condition + whenTrue + whenFalse).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReferenceExpression {
-    pub format: String,
-    pub args: Vec<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub format: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub args: Option<Vec<Value>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    condition: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    when_true: Option<Box<ReferenceExpression>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    when_false: Option<Box<ReferenceExpression>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    match_value: Option<String>,
+    #[serde(default)]
+    is_conditional: bool,
 }
 
 impl ReferenceExpression {
     pub fn new(format: impl Into<String>, args: Vec<Value>) -> Self {
         Self {
-            format: format.into(),
-            args,
+            format: Some(format.into()),
+            args: Some(args),
+            condition: None,
+            when_true: None,
+            when_false: None,
+            match_value: None,
+            is_conditional: false,
+        }
+    }
+
+    /// Creates a conditional reference expression from its parts.
+    pub fn create_conditional(condition: Value, match_value: impl Into<String>, when_true: ReferenceExpression, when_false: ReferenceExpression) -> Self {
+        Self {
+            format: None,
+            args: None,
+            condition: Some(condition),
+            when_true: Some(Box::new(when_true)),
+            when_false: Some(Box::new(when_false)),
+            match_value: Some(match_value.into()),
+            is_conditional: true,
         }
     }
 
     pub fn to_json(&self) -> Value {
+        if self.is_conditional {
+            return json!({
+                "$expr": {
+                    "condition": serialize_value(self.condition.clone().unwrap()),
+                    "whenTrue": self.when_true.as_ref().unwrap().to_json(),
+                    "whenFalse": self.when_false.as_ref().unwrap().to_json(),
+                    "matchValue": self.match_value.as_ref().unwrap()
+                }
+            });
+        }
         json!({
-            "$refExpr": {
-                "format": self.format,
-                "args": self.args
+            "$expr": {
+                "format": self.format.as_deref().unwrap_or_default(),
+                "args": self.args.as_deref().unwrap_or_default()
             }
         })
     }

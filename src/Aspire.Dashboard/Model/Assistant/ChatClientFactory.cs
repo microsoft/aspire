@@ -175,7 +175,7 @@ public sealed class ChatClientFactory
             // An debug session connection isn't needed in this case.
             if (UseOpenAI())
             {
-                _logger.LogInformation("AI is enabled via OpenAI.");
+                _logger.LogDebug("AI is enabled via OpenAI.");
                 return true;
             }
 #endif
@@ -183,7 +183,7 @@ public sealed class ChatClientFactory
             // No debug session configured. Expected when the app host is started from CLI.
             if (!DebugSessionHelpers.HasDebugSession(_dashboardOptions.CurrentValue.DebugSession, out _, out _, out _))
             {
-                _logger.LogInformation("AI is disabled because there isn't a debug session.");
+                _logger.LogDebug("AI is disabled because there isn't a debug session.");
                 return false;
             }
 

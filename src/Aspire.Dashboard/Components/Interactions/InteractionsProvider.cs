@@ -388,6 +388,10 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                             {
                                 options.Title = WebUtility.HtmlEncode(item.Title);
                                 options.Body = GetMessageHtml(item);
+                                // Allow for HTML in title and body. This is needed to support Markdown output.
+                                // It's safe to enable because content is always either HTML-encoded or generated from Markdown which is sanitized.
+                                options.UseMarkupString = true;
+
                                 options.Intent = MapMessageIntent(notification.Intent);
                                 options.Section = DashboardUIHelpers.MessageBarSection;
                                 options.AllowDismiss = item.ShowDismiss;

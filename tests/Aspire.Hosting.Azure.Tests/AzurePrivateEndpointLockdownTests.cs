@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
@@ -179,6 +181,54 @@ public class AzurePrivateEndpointLockdownTests
         subnet.AddPrivateEndpoint(webPubSub);
 
         var manifest = await AzureManifestUtils.GetManifestWithBicep(webPubSub.Resource);
+
+        await Verify(manifest.BicepText, extension: "bicep");
+    }
+
+    [Fact]
+    public async Task AddAzureOpenAI_WithPrivateEndpoint_GeneratesCorrectBicep()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");
+        var openai = builder.AddAzureOpenAI("openai");
+
+        subnet.AddPrivateEndpoint(openai);
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(openai.Resource);
+
+        await Verify(manifest.BicepText, extension: "bicep");
+    }
+
+    [Fact]
+    public async Task AddFoundry_WithPrivateEndpoint_GeneratesCorrectBicep()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");
+        var foundry = builder.AddFoundry("foundry");
+
+        subnet.AddPrivateEndpoint(foundry);
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(foundry.Resource);
+
+        await Verify(manifest.BicepText, extension: "bicep");
+    }
+
+    [Fact]
+    public async Task AddAzureContainerRegistry_WithPrivateEndpoint_GeneratesCorrectBicep()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");
+        var acr = builder.AddAzureContainerRegistry("acr");
+
+        subnet.AddPrivateEndpoint(acr);
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(acr.Resource);
 
         await Verify(manifest.BicepText, extension: "bicep");
     }

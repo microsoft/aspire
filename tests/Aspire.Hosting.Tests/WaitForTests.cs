@@ -12,6 +12,7 @@ using System.Text.RegularExpressions;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "3")]
 public class WaitForTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
@@ -19,11 +20,10 @@ public class WaitForTests(ITestOutputHelper testOutputHelper)
     public async Task ResourceThatFailsToStartDueToExceptionDoesNotCauseStartAsyncToThrow()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(testOutputHelper);
-        var throwingResource = builder.AddContainer("throwingresource", "doesnotmatter")
-                              .WithEnvironment(ctx => throw new InvalidOperationException("BOOM!"));
-        var dependingContainerResource = builder.AddContainer("dependingcontainerresource", "doesnotmatter")
+        var throwingResource = builder.AddContainer("throwingresource", "nonexistent");
+        var dependingContainerResource = builder.AddContainer("dependingcontainerresource", "nonexistent2")
                                        .WaitFor(throwingResource);
-        var dependingExecutableResource = builder.AddExecutable("dependingexecutableresource", "doesnotmatter", "alsodoesntmatter")
+        var dependingExecutableResource = builder.AddExecutable("dependingexecutableresource", "nonexistent", "nonexistentdir")
                                        .WaitFor(throwingResource);
 
         var abortCts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);

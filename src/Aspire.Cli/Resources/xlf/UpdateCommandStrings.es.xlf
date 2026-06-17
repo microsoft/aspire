@@ -8,13 +8,13 @@
         <note />
       </trans-unit>
       <trans-unit id="AnalyzeAppHost">
-        <source>Analyze App Host</source>
-        <target state="translated">Analizar host de aplicación</target>
+        <source>Analyze AppHost</source>
+        <target state="needs-review-translation">Analizar host de aplicación</target>
         <note />
       </trans-unit>
       <trans-unit id="AnalyzeAppHostSdk">
-        <source>Analyze App Host SDK</source>
-        <target state="translated">Analizar el SDK de host de aplicaciones</target>
+        <source>Analyze AppHost SDK</source>
+        <target state="needs-review-translation">Analizar el SDK de host de aplicaciones</target>
         <note />
       </trans-unit>
       <trans-unit id="AnalyzeProjectFormat">
@@ -32,10 +32,20 @@
         <target state="translated">¿Aplicar estos cambios en NuGet.config?</target>
         <note />
       </trans-unit>
+      <trans-unit id="ApplyingUpdates">
+        <source>Applying updates...</source>
+        <target state="translated">Aplicando actualizaciones...</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CentralPackageManagementNotSupported">
         <source>Central package management is currently not supported by 'aspire update'.</source>
         <target state="translated">La administración central de paquetes no es compatible actualmente con "aspire update".</target>
         <note />
+      </trans-unit>
+      <trans-unit id="ChannelNonePlaceholder">
+        <source>(none)</source>
+        <target state="new">(none)</target>
+        <note>Displayed in place of the current channel value when aspire.config.json has no channel pinned.</note>
       </trans-unit>
       <trans-unit id="ChannelOptionDescription">
         <source>Channel to update to (stable, daily)</source>
@@ -45,6 +55,11 @@
       <trans-unit id="ChannelOptionDescriptionWithStaging">
         <source>Channel to update to (stable, staging, daily)</source>
         <target state="translated">Canal al que se va a actualizar (estable, de ensayo, diario)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CheckingForUpdates">
+        <source>Checking for updates...</source>
+        <target state="translated">Comprobando si hay actualizaciones...</target>
         <note />
       </trans-unit>
       <trans-unit id="CouldNotFindPackageVersionInDirectoryPackagesProps">
@@ -63,8 +78,8 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Update integrations in the Aspire project. (Preview)</source>
-        <target state="translated">Actualizar las integraciones en el proyecto Aspire. (Versión preliminar)</target>
+        <source>Update integrations in the Aspire project</source>
+        <target state="needs-review-translation">Actualizar las integraciones en el proyecto Aspire. (Versión preliminar)</target>
         <note />
       </trans-unit>
       <trans-unit id="DotNetToolSelfUpdateMessage">
@@ -77,6 +92,16 @@
         <target state="translated">Ejecutando: {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="ExtractedNewCli">
+        <source>Extracted new CLI</source>
+        <target state="translated">Nueva CLI extraída</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ExtractingNewCli">
+        <source>Extracting new CLI...</source>
+        <target state="translated">Extrayendo la nueva CLI...</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FailedDiscoverNuGetConfig">
         <source>Failed to discover NuGet.config files.</source>
         <target state="translated">Error al detectar los archivos NuGet.config.</target>
@@ -87,6 +112,11 @@
         <target state="translated">Error al capturar los elementos y propiedades del proyecto: {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="FailedToRestoreAfterUpdateFormat">
+        <source>Failed to restore packages for project {0} after update.</source>
+        <target state="new">Failed to restore packages for project {0} after update.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FailedUpdatePackageReferenceFormat">
         <source>Failed to update package reference for {0} in project {1}.</source>
         <target state="translated">No se pudo actualizar la referencia del paquete para {0} en el proyecto {1}.</target>
@@ -94,7 +124,7 @@
       </trans-unit>
       <trans-unit id="FallbackParsingWarning">
         <source>Note: Update plan generated using fallback parsing due to unresolvable AppHost SDK. Dependency analysis may have reduced accuracy.</source>
-        <target state="translated">Nota: El plan de actualización se generó usando un análisis alternativo debido a un SDK de AppHost no resoluble. El análisis de dependencias puede ser menos preciso.</target>
+        <target state="needs-review-translation">Nota: El plan de actualización se generó usando un análisis alternativo debido a un SDK de AppHost no resoluble. El análisis de dependencias puede ser menos preciso.</target>
         <note />
       </trans-unit>
       <trans-unit id="MappingAddedFormat">
@@ -119,12 +149,17 @@
       </trans-unit>
       <trans-unit id="NoAppHostFoundUpdateCliPrompt">
         <source>No Aspire AppHost project found. Would you like to update the Aspire CLI instead?</source>
-        <target state="translated">No se encontró ningún proyecto de AppHost. ¿Quiere actualizar la CLI de Aspire en su lugar?</target>
+        <target state="needs-review-translation">No se encontró ningún proyecto de AppHost. ¿Quiere actualizar la CLI de Aspire en su lugar?</target>
         <note />
       </trans-unit>
       <trans-unit id="NoChangesDetectedInNuGetConfig">
         <source>No changes detected in NuGet.config</source>
         <target state="translated">No se detectaron cambios en NuGet.config</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoChannelFoundMatching">
+        <source>No channel found matching '{0}'. Valid options are: {1}.</source>
+        <target state="new">No channel found matching '{0}'. Valid options are: {1}.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoPackageFoundFormat">
@@ -135,6 +170,21 @@
       <trans-unit id="NoWritePermissionToInstallDirectory">
         <source>Cannot write to installation directory '{0}'. Please run the update with elevated permissions (e.g., using sudo on Linux/macOS).</source>
         <target state="translated">No se puede escribir en el directorio de instalación '{0}'. Ejecute la actualización con permisos elevados (por ejemplo, con sudo en Linux o macOS).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NpmSelfUpdateMessage">
+        <source>To update the Aspire CLI when installed from npm, run:</source>
+        <target state="new">To update the Aspire CLI when installed from npm, run:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NuGetConfigDirOptionDescription">
+        <source>Directory to create or update the NuGet.config file in</source>
+        <target state="new">Directory to create or update the NuGet.config file in</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PackageNotFoundInChannelWarningFormat">
+        <source>No package found with ID '{0}' in channel '{1}'. Skipping.</source>
+        <target state="new">No package found with ID '{0}' in channel '{1}'. Skipping.</target>
         <note />
       </trans-unit>
       <trans-unit id="PackageReferenceNoIdentity">
@@ -153,8 +203,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file.</source>
-        <target state="translated">La ruta de acceso al archivo del proyecto host de la AppHost Aspire.</target>
+        <source>The path to the Aspire AppHost project file or a directory to search</source>
+        <target state="needs-review-translation">La ruta de acceso al archivo del proyecto host de la AppHost Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectReferenceNoFullPath">
@@ -167,6 +217,11 @@
         <target state="translated">¡El proyecto está al día! (no es necesario actualizar)</target>
         <note />
       </trans-unit>
+      <trans-unit id="ProjectUpdateSkippedAfterCliUpdateMessage">
+        <source>Project update skipped. Update the Aspire CLI, then re-run `aspire update`.</source>
+        <target state="new">Project update skipped. Update the Aspire CLI, then re-run `aspire update`.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="QualityOptionDescription">
         <source>Quality level to update to (stable, daily)</source>
         <target state="translated">Nivel de calidad a actualizar a (estable, diario)</target>
@@ -175,6 +230,16 @@
       <trans-unit id="QualityOptionDescriptionWithStaging">
         <source>Quality level to update to (stable, staging, daily)</source>
         <target state="translated">Nivel de calidad al que se va a actualizar (estable, de ensayo, diario)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RegeneratedSdkCode">
+        <source>Regenerated SDK code with updated packages.</source>
+        <target state="translated">Código de SDK regenerado con paquetes actualizados.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RegeneratingSdkCode">
+        <source>Regenerating SDK code with updated packages...</source>
+        <target state="translated">Regenerando código SDK con paquetes actualizados...</target>
         <note />
       </trans-unit>
       <trans-unit id="RemovedFeedFormat">
@@ -187,6 +252,11 @@
         <target state="translated">Se quitó la referencia al paquete en desuso Aspire.Hosting.AppHost</target>
         <note />
       </trans-unit>
+      <trans-unit id="RestoringPackagesAfterUpdate">
+        <source>Restoring packages...</source>
+        <target state="new">Restoring packages...</target>
+        <note />
+      </trans-unit>
       <trans-unit id="RetainedFeedFormat">
         <source>Retained: {0}</source>
         <target state="translated">Retenido: {0}</target>
@@ -197,14 +267,29 @@
         <target state="translated">Seleccionar un canal:</target>
         <note />
       </trans-unit>
+      <trans-unit id="SelfOptionDescription">
+        <source>Update the Aspire CLI itself to the latest version</source>
+        <target state="new">Update the Aspire CLI itself to the latest version</target>
+        <note />
+      </trans-unit>
       <trans-unit id="UnxpectedCodePath">
         <source>Unexpected code path.</source>
         <target state="translated">Ruta de acceso al código inesperada.</target>
         <note />
       </trans-unit>
+      <trans-unit id="UpdateChannelStepDescriptionFormat">
+        <source>Update aspire.config.json channel from '{0}' to '{1}'</source>
+        <target state="new">Update aspire.config.json channel from '{0}' to '{1}'</target>
+        <note>{0} = current channel name (or '(none)' if absent). {1} = new channel name.</note>
+      </trans-unit>
       <trans-unit id="UpdateCliAfterProjectUpdatePrompt">
         <source>An update is available for the Aspire CLI. Would you like to update it now?</source>
         <target state="translated">Hay una actualización disponible para la CLI de Aspire. ¿Quieres actualizarla ahora?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UpdateCliBeforeGuestProjectUpdatePrompt">
+        <source>The selected Aspire SDK is newer than this Aspire CLI. Update the Aspire CLI now and re-run `aspire update` to update this project?</source>
+        <target state="new">The selected Aspire SDK is newer than this Aspire CLI. Update the Aspire CLI now and re-run `aspire update` to update this project?</target>
         <note />
       </trans-unit>
       <trans-unit id="UpdatePackageFormat">
@@ -220,6 +305,11 @@
       <trans-unit id="WhichDirectoryNuGetConfigPrompt">
         <source>Which directory for NuGet.config file?</source>
         <target state="translated">¿Qué directorio del archivo NuGet.config?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="YesOptionDescription">
+        <source>Automatically confirm all update prompts without asking</source>
+        <target state="new">Automatically confirm all update prompts without asking</target>
         <note />
       </trans-unit>
     </body>

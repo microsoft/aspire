@@ -11,6 +11,7 @@
   <ItemGroup>
     <Compile Include="$(RepoRoot)src\Shared\AzureRoleAssignmentUtils.cs" />
     <Compile Include="$(SharedDir)StringComparers.cs" Link="StringComparers.cs" />
+    <Compile Include="$(SharedDir)AzureCredentialHelper.cs" Link="AzureCredentialHelper.cs" />
   </ItemGroup>
 
   <ItemGroup>

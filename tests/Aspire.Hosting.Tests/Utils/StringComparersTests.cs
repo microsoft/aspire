@@ -6,6 +6,7 @@ using System.Globalization;
 
 namespace Aspire.Hosting.Tests.Utils;
 
+[Trait("Partition", "4")]
 public sealed class StringComparersTests
 {
     [Fact]

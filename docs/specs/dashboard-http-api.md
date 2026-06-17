@@ -8,8 +8,8 @@ The Dashboard exposes telemetry data via a REST HTTP API that provides data in *
 
 **Related:**
 
-- Issue: <https://github.com/dotnet/aspire/issues/14138>
-- PR: <https://github.com/dotnet/aspire/pull/14168>
+- Issue: <https://github.com/microsoft/aspire/issues/14138>
+- PR: <https://github.com/microsoft/aspire/pull/14168>
 - MCP implementation: `src/Aspire.Dashboard/Mcp/AspireTelemetryMcpTools.cs`
 
 ## Design Philosophy
@@ -392,30 +392,30 @@ The streaming implementation uses a push-based architecture for efficiency:
 
 ## Part 4: CLI Commands
 
-### `aspire telemetry`
+### `aspire otel`
 
 Subcommand group for telemetry operations.
 
 ```text
-aspire telemetry logs [resource] [options]
-aspire telemetry spans [resource] [options]
-aspire telemetry trace [traceId] [options]
+aspire otel logs [resource] [options]
+aspire otel spans [resource] [options]
+aspire otel trace [traceId] [options]
 ```
 
 ### Commands
 
-#### `aspire telemetry logs`
+#### `aspire otel logs`
 
 List or stream structured logs.
 
 ```bash
-aspire telemetry logs                        # Recent logs
-aspire telemetry logs frontend               # Logs from frontend service
-aspire telemetry logs --severity error       # Errors and above
-aspire telemetry logs --trace-id 4bf92f...   # Logs correlated to a trace
-aspire telemetry logs --follow               # Stream in real-time
-aspire telemetry logs --limit 50             # Cap results
-aspire telemetry logs --json                 # Raw OTLP JSON output
+aspire otel logs                        # Recent logs
+aspire otel logs frontend               # Logs from frontend service
+aspire otel logs --severity error       # Errors and above
+aspire otel logs --trace-id 4bf92f...   # Logs correlated to a trace
+aspire otel logs --follow               # Stream in real-time
+aspire otel logs --limit 50             # Cap results
+aspire otel logs --json                 # Raw OTLP JSON output
 ```
 
 | Flag | Description |
@@ -427,17 +427,17 @@ aspire telemetry logs --json                 # Raw OTLP JSON output
 | `--has-error` | Filter to error logs |
 | `--json` | Output raw OTLP JSON |
 
-#### `aspire telemetry spans`
+#### `aspire otel spans`
 
 List or stream raw spans (power user / scripting).
 
 ```bash
-aspire telemetry spans                       # Recent spans
-aspire telemetry spans catalogdb             # Spans from catalogdb service
-aspire telemetry spans --trace-id 4bf92f...  # Spans in a trace
-aspire telemetry spans --has-error           # Failed spans only
-aspire telemetry spans --follow              # Stream in real-time
-aspire telemetry spans --json | jq ...       # Pipe to tools
+aspire otel spans                       # Recent spans
+aspire otel spans catalogdb             # Spans from catalogdb service
+aspire otel spans --trace-id 4bf92f...  # Spans in a trace
+aspire otel spans --has-error           # Failed spans only
+aspire otel spans --follow              # Stream in real-time
+aspire otel spans --json | jq ...       # Pipe to tools
 ```
 
 | Flag | Description |
@@ -448,15 +448,15 @@ aspire telemetry spans --json | jq ...       # Pipe to tools
 | `--has-error` | Filter to spans with error status |
 | `--json` | Output raw OTLP JSON |
 
-#### `aspire telemetry trace`
+#### `aspire otel trace`
 
 List traces or show a trace waterfall (snapshot only, no streaming).
 
 ```bash
-aspire telemetry trace                       # List recent traces
-aspire telemetry trace 4bf92f3577b34d        # Show waterfall view
-aspire telemetry trace --has-error           # Failed traces only
-aspire telemetry trace 4bf92f... --logs      # Include correlated logs
+aspire otel trace                       # List recent traces
+aspire otel trace 4bf92f3577b34d        # Show waterfall view
+aspire otel trace --has-error           # Failed traces only
+aspire otel trace 4bf92f... --logs      # Include correlated logs
 ```
 
 **Trace list output:**
@@ -495,9 +495,9 @@ c21a35b944...    3.7s      catalogdb→postgres    Initializing catalog     ✓
 
 | Command | `--follow` | Notes |
 |---------|------------|-------|
-| `telemetry logs` | ✅ | Natural - like `tail -f` |
-| `telemetry spans` | ✅ | Stream raw spans as they arrive |
-| `telemetry trace` | ❌ | Traces are groupings with no "complete" signal |
+| `otel logs` | ✅ | Natural - like `tail -f` |
+| `otel spans` | ✅ | Stream raw spans as they arrive |
+| `otel trace` | ❌ | Traces are groupings with no "complete" signal |
 
 ### Implementation Notes
 

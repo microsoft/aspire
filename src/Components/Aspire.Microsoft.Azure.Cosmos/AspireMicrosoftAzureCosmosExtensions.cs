@@ -1,9 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire;
 using Aspire.Hosting.Azure.CosmosDB;
 using Aspire.Microsoft.Azure.Cosmos;
-using Azure.Identity;
 using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -272,7 +272,7 @@ public static class AspireMicrosoftAzureCosmosExtensions
         }
         else if (settings.AccountEndpoint is not null)
         {
-            var credential = settings.Credential ?? new DefaultAzureCredential();
+            var credential = settings.Credential ?? AzureCredentialHelper.CreateDefaultAzureCredential();
             return new CosmosClient(settings.AccountEndpoint.OriginalString, credential, clientOptions);
         }
         else

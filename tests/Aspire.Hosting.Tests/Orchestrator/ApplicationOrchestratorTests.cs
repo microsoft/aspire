@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREINTERACTION001
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES002
 
@@ -22,6 +21,7 @@ using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Tests.Orchestrator;
 
+[Trait("Partition", "3")]
 public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
@@ -400,11 +400,50 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             return Task.CompletedTask;
         });
 
-        await events.PublishAsync(new OnResourceStartingContext(CancellationToken.None, KnownResourceTypes.Container, parentResource.Resource, parentResource.Resource.Name));
+        await events.PublishAsync(new OnConnectionStringAvailableContext(CancellationToken.None, parentResource.Resource));
 
         Assert.True(parentConnectionStringAvailable);
         Assert.True(childConnectionStringAvailable);
         Assert.True(grandChildConnectionStringAvailable);
+    }
+
+    [Fact]
+    public async Task ConnectionStringAvailableEventPublishesBeforeBeforeResourceStartedEvent()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var resource = builder.AddResource(new TestResourceWithConnectionString("test-resource", "Server=localhost:5432;Database=testdb"));
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var applicationEventing = new DistributedApplicationEventing();
+        var observedEvents = new List<string>();
+
+        applicationEventing.Subscribe<ConnectionStringAvailableEvent>(resource.Resource, (_, _) =>
+        {
+            observedEvents.Add(nameof(ConnectionStringAvailableEvent));
+            return Task.CompletedTask;
+        });
+        applicationEventing.Subscribe<BeforeResourceStartedEvent>(resource.Resource, (_, _) =>
+        {
+            observedEvents.Add(nameof(BeforeResourceStartedEvent));
+            return Task.CompletedTask;
+        });
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events, applicationEventing: applicationEventing);
+        await appOrchestrator.RunApplicationAsync();
+
+        await events.PublishAsync(new OnConnectionStringAvailableContext(CancellationToken.None, resource.Resource));
+        await events.PublishAsync(new OnResourceStartingContext(CancellationToken.None, KnownResourceTypes.Executable, resource.Resource, "test-resource-dcp"));
+
+        Assert.Collection(
+            observedEvents,
+            eventName => Assert.Equal(nameof(ConnectionStringAvailableEvent), eventName),
+            eventName => Assert.Equal(nameof(BeforeResourceStartedEvent), eventName));
     }
 
     [Fact]
@@ -453,6 +492,63 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         Assert.True(isSensitive);
     }
 
+    [Fact]
+    public async Task OnResourceFailedToStart_WithErrorMessage_SetsErrorStyleOnState()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var container = builder.AddContainer("api", "test-image");
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events);
+        await appOrchestrator.RunApplicationAsync();
+
+        await events.PublishAsync(new OnResourceFailedToStartContext(
+            CancellationToken.None,
+            KnownResourceTypes.Container,
+            container.Resource,
+            "api-dcp",
+            ErrorMessage: "The endpoint `https` is not defined for the resource `api`. Available endpoints: `http`."));
+
+        Assert.True(resourceNotificationService.TryGetCurrentState("api-dcp", out var snapshotEvent));
+        Assert.Equal(KnownResourceStates.FailedToStart, snapshotEvent.Snapshot.State?.Text);
+        Assert.Equal(KnownResourceStateStyles.Error, snapshotEvent.Snapshot.State?.Style);
+    }
+
+    [Fact]
+    public async Task OnResourceFailedToStart_WithoutErrorMessage_DoesNotSetErrorStyle()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var container = builder.AddContainer("api", "test-image");
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events);
+        await appOrchestrator.RunApplicationAsync();
+
+        await events.PublishAsync(new OnResourceFailedToStartContext(
+            CancellationToken.None,
+            KnownResourceTypes.Container,
+            container.Resource,
+            "api-dcp"));
+
+        Assert.True(resourceNotificationService.TryGetCurrentState("api-dcp", out var snapshotEvent));
+        Assert.Equal(KnownResourceStates.FailedToStart, snapshotEvent.Snapshot.State?.Text);
+        Assert.Null(snapshotEvent.Snapshot.State?.Style);
+    }
+
     private ApplicationOrchestrator CreateOrchestrator(
         DistributedApplicationModel distributedAppModel,
         ResourceNotificationService notificationService,
@@ -468,7 +564,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         resourceLoggerService ??= new ResourceLoggerService();
 
         var executionContext = new DistributedApplicationExecutionContext(
-            new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { ServiceProvider = serviceProvider });
+            new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { Services = serviceProvider });
 
         return new ApplicationOrchestrator(
             distributedAppModel,
@@ -515,6 +611,8 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         {
             return Task.CompletedTask;
         }
+
+        public Task ClearAllStateAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 
         public Task DeleteSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default)
         {

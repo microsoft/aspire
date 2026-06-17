@@ -1,15 +1,13 @@
-﻿{
+{
   "author": "Microsoft",
   "name": "Host AppHost z jednym plikiem platformy Aspire",
   "description": "Minimalna wersja hosta Aspire AppHost dla scenariuszy z pojedynczym plikiem (co najmniej .NET 10).",
   "symbols/Framework/choices/net10.0/description": "Docelowa platforma net10.0",
   "symbols/appHostHttpPort/description": "Numer portu do użycia dla punktu końcowego HTTP w pliku launchSettings.json projektu AppHost.",
   "symbols/appHostOtlpHttpPort/description": "Numer portu do użycia dla punktu końcowego HTTP OTLP w pliku launchSettings.json projektu AppHost.",
-  "symbols/appHostMcpHttpPort/description": "Numer portu do użycia dla punktu końcowego HTTP MCP w pliku launchSettings.json projektu AppHost.",
   "symbols/appHostResourceHttpPort/description": "Numer portu do użycia dla punktu końcowego HTTP usługi zasobów w pliku launchSettings.json projektu AppHost.",
   "symbols/appHostHttpsPort/description": "Numer portu do użycia dla punktu końcowego HTTPS w pliku launchSettings.json projektu AppHost. Ta opcja ma zastosowanie tylko wtedy, gdy parametr no-https nie jest używany.",
   "symbols/appHostOtlpHttpsPort/description": "Numer portu do użycia dla punktu końcowego HTTPS OTLP w pliku launchSettings.json projektu AppHost.",
-  "symbols/appHostMcpHttpsPort/description": "Numer portu do użycia dla punktu końcowego HTTPS MCP w pliku launchSettings.json projektu AppHost.",
   "symbols/appHostResourceHttpsPort/description": "Numer portu do użycia dla punktu końcowego HTTPS usługi zasobów w pliku launchSettings.json projektu AppHost.",
   "symbols/NoHttps/description": "Określa, czy wyłączyć protokół HTTPS.",
   "symbols/LocalhostTld/displayName": "Użyj pliku .dev.localhost TLD w adresie URL aplikacji",

@@ -80,5 +80,5 @@ public class AzureTableStorageResource(string name, AzureStorageResource storage
 
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["table"];
 
-    string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() => "privatelink.table.core.windows.net";
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() => ["privatelink.table.core.windows.net"];
 }

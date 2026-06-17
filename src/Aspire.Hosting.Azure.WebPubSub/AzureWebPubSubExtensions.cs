@@ -24,6 +24,7 @@ public static class AzureWebPubSubExtensions
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// By default references to the Azure Web PubSub resource will be assigned the following roles:
     ///
@@ -31,6 +32,8 @@ public static class AzureWebPubSubExtensions
     ///
     /// These can be replaced by calling <see cref="WithRoleAssignments{T}(IResourceBuilder{T}, IResourceBuilder{AzureWebPubSubResource}, WebPubSubBuiltInRole[])"/>.
     /// </remarks>
+    /// <ats-remarks />
+    [AspireExport]
     public static IResourceBuilder<AzureWebPubSubResource> AddAzureWebPubSub(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -156,6 +159,8 @@ public static class AzureWebPubSubExtensions
     /// <param name="builder">The builder for the distributed application.</param>
     /// <param name="hubName">The hub name. Hub name is case-insensitive.</param>
     /// <returns></returns>
+    /// <remarks>This overload is not available in polyglot app hosts. Use the named hub overload instead.</remarks>
+    [AspireExportIgnore(Reason = "Use the AddHub overload with the optional hubName parameter instead.")]
     public static IResourceBuilder<AzureWebPubSubHubResource> AddHub(this IResourceBuilder<AzureWebPubSubResource> builder, [ResourceName] string hubName)
     {
         return AddHub(builder, hubName, hubName);
@@ -168,6 +173,8 @@ public static class AzureWebPubSubExtensions
     /// <param name="name">The name of the Azure WebPubSub Hub resource.</param>
     /// <param name="hubName">The name of the Azure WebPubSub Hub. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureWebPubSubHubResource> AddHub(this IResourceBuilder<AzureWebPubSubResource> builder, [ResourceName] string name, string? hubName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -175,6 +182,8 @@ public static class AzureWebPubSubExtensions
 
         // Use the resource name as the hub name if it's not provided
         hubName ??= name;
+
+        ModelName.ValidateName(nameof(Resource), name);
 
         AzureWebPubSubHubResource? hubResource;
         if (!builder.Resource.Hubs.TryGetValue(hubName, out hubResource))
@@ -195,7 +204,9 @@ public static class AzureWebPubSubExtensions
     /// <param name="systemEvents">The system events for the event handler.</param>
     /// <param name="authSettings">The auth settings configured for the event handler.</param>
     /// <returns></returns>
-#pragma warning disable RS0026 // Do not add multiple public overloads with optional parameters
+    /// <remarks>This overload is not available in polyglot app hosts. Configure Web PubSub event handlers without auth settings in polyglot app hosts.</remarks>
+    #pragma warning disable RS0026 // Do not add multiple public overloads with optional parameters
+    [AspireExportIgnore(Reason = "ExpressionInterpolatedStringHandler and UpstreamAuthSettings are not ATS-compatible. Use the polyglot overload without auth settings instead.")]
     public static IResourceBuilder<AzureWebPubSubHubResource> AddEventHandler(
         this IResourceBuilder<AzureWebPubSubHubResource> builder,
 #pragma warning restore RS0026 // Do not add multiple public overloads with optional parameters
@@ -220,7 +231,9 @@ public static class AzureWebPubSubExtensions
     /// <param name="systemEvents">The system events for the event handler.</param>
     /// <param name="authSettings">The auth settings configured for the event handler.</param>
     /// <returns></returns>
-#pragma warning disable RS0026 // Do not add multiple public overloads with optional parameters
+    /// <remarks>This overload is not available in polyglot app hosts. Configure Web PubSub event handlers without auth settings in polyglot app hosts.</remarks>
+    #pragma warning disable RS0026 // Do not add multiple public overloads with optional parameters
+    [AspireExportIgnore(Reason = "UpstreamAuthSettings is not ATS-compatible. Use the polyglot overload without auth settings instead.")]
     public static IResourceBuilder<AzureWebPubSubHubResource> AddEventHandler(
         this IResourceBuilder<AzureWebPubSubHubResource> builder,
 #pragma warning restore RS0026 // Do not add multiple public overloads with optional parameters
@@ -235,6 +248,25 @@ public static class AzureWebPubSubExtensions
 
         builder.Resource.EventHandlers.Add((urlExpression, userEventPattern, systemEvents, authSettings));
         return builder;
+    }
+
+    /// <summary>
+    /// Adds an event handler to an Azure Web PubSub hub.
+    /// </summary>
+    /// <param name="builder">The builder for a Web PubSub hub.</param>
+    /// <param name="urlExpression">The expression to evaluate the URL template configured for the event handler.</param>
+    /// <param name="userEventPattern">The user event pattern for the event handler.</param>
+    /// <param name="systemEvents">The system events for the event handler.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{AzureWebPubSubHubResource}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport("addEventHandlerWithoutAuth", MethodName = "addEventHandler")]
+    internal static IResourceBuilder<AzureWebPubSubHubResource> AddEventHandlerForPolyglot(
+        this IResourceBuilder<AzureWebPubSubHubResource> builder,
+        ReferenceExpression urlExpression,
+        string userEventPattern = "*",
+        string[]? systemEvents = null)
+    {
+        return AddEventHandler(builder, urlExpression, userEventPattern, systemEvents, authSettings: null);
     }
 
     private static WebPubSubEventHandler GetWebPubSubEventHandler(BicepValue<string> urlValue, string userEventPattern, string[]? systemEvents, UpstreamAuthSettings? authSettings)
@@ -266,6 +298,9 @@ public static class AzureWebPubSubExtensions
     /// <param name="roles">The built-in Web PubSub roles to be assigned.</param>
     /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
     /// <remarks>
+    /// This overload is not available in polyglot app hosts. Use
+    /// <see cref="WithRoleAssignments{T}(IResourceBuilder{T}, IResourceBuilder{AzureWebPubSubResource}, AzureWebPubSubRole[])"/>
+    /// instead.
     /// <example>
     /// Assigns the WebPubSubServiceReader role to the 'Projects.Api' project.
     /// <code lang="csharp">
@@ -279,6 +314,7 @@ public static class AzureWebPubSubExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [AspireExportIgnore(Reason = "WebPubSubBuiltInRole is an Azure.Provisioning type not compatible with ATS. Use the AzureWebPubSubRole-based overload instead.")]
     public static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureWebPubSubResource> target,
@@ -286,5 +322,42 @@ public static class AzureWebPubSubExtensions
         where T : IResource
     {
         return builder.WithRoleAssignments(target, WebPubSubBuiltInRole.GetBuiltInRoleName, roles);
+    }
+
+    /// <summary>
+    /// Assigns the specified roles to the given resource, granting it the necessary permissions
+    /// on the target Azure Web PubSub resource. This replaces the default role assignments for the resource.
+    /// </summary>
+    /// <param name="builder">The resource to which the specified roles will be assigned.</param>
+    /// <param name="target">The target Azure Web PubSub resource.</param>
+    /// <param name="roles">The Web PubSub roles to be assigned.</param>
+    /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureWebPubSubRole"/> value.</exception>
+    [AspireExport("withWebPubSubRoleAssignments")]
+    internal static IResourceBuilder<T> WithRoleAssignments<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<AzureWebPubSubResource> target,
+        params AzureWebPubSubRole[] roles)
+        where T : IResource
+    {
+        if (roles is null || roles.Length == 0)
+        {
+            return builder.WithRoleAssignments(target, Array.Empty<WebPubSubBuiltInRole>());
+        }
+
+        var builtInRoles = new WebPubSubBuiltInRole[roles.Length];
+        for (var i = 0; i < roles.Length; i++)
+        {
+            builtInRoles[i] = roles[i] switch
+            {
+                AzureWebPubSubRole.WebPubSubContributor => WebPubSubBuiltInRole.WebPubSubContributor,
+                AzureWebPubSubRole.WebPubSubServiceOwner => WebPubSubBuiltInRole.WebPubSubServiceOwner,
+                AzureWebPubSubRole.WebPubSubServiceReader => WebPubSubBuiltInRole.WebPubSubServiceReader,
+                _ => throw new ArgumentException($"'{roles[i]}' is not a valid {nameof(AzureWebPubSubRole)} value.", nameof(roles))
+            };
+        }
+
+        return builder.WithRoleAssignments(target, builtInRoles);
     }
 }

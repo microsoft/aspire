@@ -22,7 +22,7 @@
 <div class="page-content-container">
     <AspirePageContentLayout @ref="@_contentLayout"
                              AddNewlineOnToolbar="true"
-                             IsSummaryDetailsViewOpen="@(SelectedLogEntry is not null)">
+                             IsSummaryDetailsViewOpen="@(PageViewModel.SelectedLogEntry is not null)">
         <PageTitleSection>
             <h1 class="page-header">@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsHeader)]</h1>
         </PageTitleSection>
@@ -42,6 +42,7 @@
             <ExplainErrorsButton @ref="_explainErrorsButton" OnClick="ExplainErrorsAsync" HasErrors="@ViewModel.HasErrors()" />
             <FluentSearch @bind-Value="_filter"
                           @bind-Value:after="HandleAfterFilterBindAsync"
+                          Name="structured-logs-search"
                           Immediate="true"
                           ImmediateDelay="@FluentUIExtensions.InputDelay"
                           Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
@@ -92,10 +93,10 @@
 
         <MainSection>
             <SummaryDetailsView
-                ShowDetails="@(SelectedLogEntry is not null)"
+                ShowDetails="@(PageViewModel.SelectedLogEntry is not null)"
                 OnDismiss="@(() => ClearSelectedLogEntryAsync(causedByUserAction: true))"
                 ViewKey="StructuredLogsList"
-                SelectedValue="@SelectedLogEntry"
+                SelectedValue="@PageViewModel.SelectedLogEntry"
                 OnResize="@(r => _manager.SetWidthFraction(r.Orientation == Orientation.Horizontal ? r.Panel1Fraction : 1))">
                 <DetailsTitleTemplate>
                     @{

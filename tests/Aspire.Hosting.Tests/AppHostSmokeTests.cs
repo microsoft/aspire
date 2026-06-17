@@ -13,6 +13,7 @@ using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "2")]
 public class AppHostSmokeTests
 {
     [Theory]

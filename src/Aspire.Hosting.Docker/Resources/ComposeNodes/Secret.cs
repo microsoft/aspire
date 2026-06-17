@@ -13,6 +13,7 @@ namespace Aspire.Hosting.Docker.Resources.ComposeNodes;
 /// such as passwords, keys, or certificates. These secrets can either be externally managed
 /// or provided locally from a specific file.
 /// </remarks>
+[AspireExport(ExposeProperties = true)]
 [YamlSerializable]
 public sealed class Secret
 {

@@ -68,7 +68,7 @@ public class TestingFactoryTests(DistributedApplicationFixture<Projects.TestingA
 
     [Fact]
     [RequiresFeature(TestFeature.Docker)]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/4650")]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/4650")]
     public async Task SelectsFirstLaunchProfile()
     {
         var config = _app.Services.GetRequiredService<IConfiguration>();

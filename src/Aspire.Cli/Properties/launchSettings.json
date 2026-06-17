@@ -56,6 +56,26 @@
       "dotnetRunMessages": true,
       "commandLineArgs": "new -d"
     },
+    "otel traces": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "commandLineArgs": "otel traces --dashboard-url http://localhost:15889"
+    },
+    "help": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "commandLineArgs": "--help"
+    },
+    "logs": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "commandLineArgs": "logs"
+    },
+    "render": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "commandLineArgs": "render"
+    },
     "run-testapphost": {
       "commandName": "Project",
       "dotnetRunMessages": true,

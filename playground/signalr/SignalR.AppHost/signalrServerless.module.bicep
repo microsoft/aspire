@@ -31,3 +31,5 @@ resource signalrServerless 'Microsoft.SignalRService/signalR@2024-03-01' = {
 output hostName string = signalrServerless.properties.hostName
 
 output name string = signalrServerless.name
+
+output id string = signalrServerless.id

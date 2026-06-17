@@ -1,9 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Xml.Linq;
-using System.Xml;
 using System.Diagnostics.CodeAnalysis;
+using System.Xml;
+using System.Xml.Linq;
 
 namespace Aspire.Cli.Packaging;
 
@@ -42,6 +42,27 @@ internal class NuGetConfigMerger
             return;
         }
 
+        await CreateOrUpdateAsync(targetDirectory, mappings, channel.ConfigureGlobalPackagesFolder, confirmationCallback, cancellationToken);
+    }
+
+    /// <summary>
+    /// Creates or updates a NuGet.config file in the specified directory based on the provided package source mappings.
+    /// </summary>
+    public static async Task CreateOrUpdateAsync(
+        DirectoryInfo targetDirectory,
+        PackageMapping[] mappings,
+        bool configureGlobalPackagesFolder = false,
+        Func<FileInfo, XmlDocument?, XmlDocument, CancellationToken, Task<bool>>? confirmationCallback = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(targetDirectory);
+        ArgumentNullException.ThrowIfNull(mappings);
+
+        if (mappings.Length == 0)
+        {
+            return;
+        }
+
         if (!targetDirectory.Exists)
         {
             targetDirectory.Create();
@@ -49,53 +70,51 @@ internal class NuGetConfigMerger
 
         if (!TryFindNuGetConfigInDirectory(targetDirectory, out var nugetConfigFile))
         {
-            await CreateNewNuGetConfigAsync(targetDirectory, channel, confirmationCallback, cancellationToken);
+            await CreateNewNuGetConfigAsync(targetDirectory, mappings, configureGlobalPackagesFolder, confirmationCallback, cancellationToken);
         }
         else
         {
-            await UpdateExistingNuGetConfigAsync(nugetConfigFile, channel, confirmationCallback, cancellationToken);
+            await UpdateExistingNuGetConfigAsync(nugetConfigFile, mappings, configureGlobalPackagesFolder, confirmationCallback, cancellationToken);
         }
     }
 
-    private static async Task CreateNewNuGetConfigAsync(DirectoryInfo targetDirectory, PackageChannel channel, Func<FileInfo, XmlDocument?, XmlDocument, CancellationToken, Task<bool>>? confirmationCallback, CancellationToken cancellationToken)
+    private static async Task CreateNewNuGetConfigAsync(DirectoryInfo targetDirectory, PackageMapping[] mappings, bool configureGlobalPackagesFolder, Func<FileInfo, XmlDocument?, XmlDocument, CancellationToken, Task<bool>>? confirmationCallback, CancellationToken cancellationToken)
     {
-        var mappings = channel.Mappings;
-        if (mappings is null || mappings.Length == 0)
+        if (mappings.Length == 0)
         {
             return;
         }
 
         var targetPath = Path.Combine(targetDirectory.FullName, "nuget.config");
         var targetFile = new FileInfo(targetPath);
-        
+
         using var tmpConfig = await TemporaryNuGetConfig.CreateAsync(mappings);
-        
+
         if (confirmationCallback is not null)
         {
             // Load the proposed content as XmlDocument for the callback
             var proposedDocument = new XmlDocument();
             proposedDocument.Load(tmpConfig.ConfigFile.FullName);
-            
+
             var shouldProceed = await confirmationCallback(targetFile, null, proposedDocument, cancellationToken);
             if (!shouldProceed)
             {
                 return;
             }
         }
-        
-        if (channel.ConfigureGlobalPackagesFolder)
+
+        if (configureGlobalPackagesFolder)
         {
             // Need to modify the temporary config to add globalPackagesFolder before copying
             await AddGlobalPackagesFolderToConfigAsync(tmpConfig.ConfigFile);
         }
-        
+
         File.Copy(tmpConfig.ConfigFile.FullName, targetPath, overwrite: true);
     }
 
-    private static async Task UpdateExistingNuGetConfigAsync(FileInfo nugetConfigFile, PackageChannel channel, Func<FileInfo, XmlDocument?, XmlDocument, CancellationToken, Task<bool>>? confirmationCallback, CancellationToken cancellationToken)
+    private static async Task UpdateExistingNuGetConfigAsync(FileInfo nugetConfigFile, PackageMapping[] mappings, bool configureGlobalPackagesFolder, Func<FileInfo, XmlDocument?, XmlDocument, CancellationToken, Task<bool>>? confirmationCallback, CancellationToken cancellationToken)
     {
-        var mappings = channel.Mappings;
-        if (mappings is null || mappings.Length == 0)
+        if (mappings.Length == 0)
         {
             return;
         }
@@ -111,7 +130,7 @@ internal class NuGetConfigMerger
 
         var configContext = await LoadAndValidateConfigAsync(nugetConfigFile, mappings);
         AddMissingPackageSources(configContext);
-        
+
         if (configContext.PackageSourceMapping is not null)
         {
             UpdateExistingPackageSourceMapping(configContext);
@@ -128,19 +147,19 @@ internal class NuGetConfigMerger
             using var stringWriter = new StringWriter();
             configContext.Document.Save(stringWriter);
             proposedDocument.LoadXml(stringWriter.ToString());
-            
+
             var shouldProceed = await confirmationCallback(nugetConfigFile, originalDocument, proposedDocument, cancellationToken);
             if (!shouldProceed)
             {
                 return;
             }
         }
-        
-        if (channel.ConfigureGlobalPackagesFolder)
+
+        if (configureGlobalPackagesFolder)
         {
             AddGlobalPackagesFolderConfiguration(configContext);
         }
-        
+
         await SaveConfigAsync(nugetConfigFile, configContext.Document);
     }
 
@@ -228,24 +247,66 @@ internal class NuGetConfigMerger
     private static void UpdateExistingPackageSourceMapping(NuGetConfigContext context)
     {
         var packageSourceMapping = context.PackageSourceMapping!;
-        
+
         // Create a lookup of patterns to new sources from the mappings
         var patternToNewSource = context.Mappings.ToDictionary(m => m.PackageFilter, m => m.Source, StringComparer.OrdinalIgnoreCase);
-        
+
         // Track sources that still have packages after remapping
         var sourcesInUse = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        
+
         var patternsToAdd = RemapExistingPatterns(packageSourceMapping, patternToNewSource, context.UrlToExistingKey, sourcesInUse);
         AddRemappedPatterns(packageSourceMapping, patternsToAdd, context.UrlToExistingKey, sourcesInUse);
         AddNewPatterns(packageSourceMapping, context, sourcesInUse);
         FixUrlBasedPackageSourceKeys(packageSourceMapping, context.UrlToExistingKey, sourcesInUse);
         HandleWildcardMappingForExistingSources(packageSourceMapping, context, sourcesInUse);
         RemoveEmptyPackageSourceElements(packageSourceMapping, context.PackageSources, context.UrlToExistingKey, sourcesInUse);
+        RemoveOrphanedSafeToRemoveSources(context, sourcesInUse);
+    }
+
+    // Strip safe-to-remove sources (e.g. ~/.aspire/hives/*/packages) from <packageSources>
+    // when they have no corresponding <packageSourceMapping> entry after the merge and are not
+    // required by the new channel. Without this, CLI-managed dogfood feeds that were listed in
+    // <packageSources> but never mapped (or whose mapping was rewritten by an earlier merge)
+    // would linger forever and break `dotnet restore` with NU1301 once the hive directory is
+    // cleaned up on disk.
+    private static void RemoveOrphanedSafeToRemoveSources(NuGetConfigContext context, HashSet<string> sourcesInUse)
+    {
+        var requiredSources = new HashSet<string>(context.RequiredSources, StringComparer.OrdinalIgnoreCase);
+
+        var orphanedSources = context.PackageSources.Elements("add")
+            .Where(add =>
+            {
+                var key = (string?)add.Attribute("key");
+                var value = (string?)add.Attribute("value");
+
+                if (string.IsNullOrEmpty(key))
+                {
+                    return false;
+                }
+
+                if (sourcesInUse.Contains(key))
+                {
+                    return false;
+                }
+
+                if (requiredSources.Contains(key) || (!string.IsNullOrEmpty(value) && requiredSources.Contains(value)))
+                {
+                    return false;
+                }
+
+                return IsSourceSafeToRemove(key, value);
+            })
+            .ToArray();
+
+        foreach (var orphan in orphanedSources)
+        {
+            orphan.Remove();
+        }
     }
 
     private static List<(string pattern, string newSource)> RemapExistingPatterns(
-        XElement packageSourceMapping, 
-        Dictionary<string, string> patternToNewSource, 
+        XElement packageSourceMapping,
+        Dictionary<string, string> patternToNewSource,
         Dictionary<string, string> urlToExistingKey,
         HashSet<string> sourcesInUse)
     {
@@ -277,7 +338,7 @@ internal class NuGetConfigMerger
                 {
                     // Determine the key that will be used for the new source
                     var expectedKey = urlToExistingKey.TryGetValue(newSource, out var existingKey) ? existingKey : newSource;
-                    
+
                     if (!string.Equals(sourceKey, expectedKey, StringComparison.OrdinalIgnoreCase))
                     {
                         // This pattern needs to be moved to the new source
@@ -291,14 +352,14 @@ internal class NuGetConfigMerger
                     // Get the source URL to check if this source should keep obsolete patterns
                     var sourceElement = urlToExistingKey.FirstOrDefault(kvp => string.Equals(kvp.Value, sourceKey, StringComparison.OrdinalIgnoreCase));
                     var sourceValue = sourceElement.Key ?? sourceKey;
-                    
+
                     // Only remove patterns that are not in the new mappings if:
                     // 1. The source is safe to remove (like a PR hive) AND the pattern is Aspire-related, OR
                     // 2. The source is Microsoft-controlled AND the pattern is Aspire-related AND not a wildcard
                     // This preserves user-defined patterns like "Microsoft.Extensions.SpecialPackage*"
                     var isAspireRelatedPattern = IsAspireRelatedPattern(pattern);
-                    
-                    if ((IsSourceSafeToRemove(sourceKey, sourceValue) && isAspireRelatedPattern) || 
+
+                    if ((IsSourceSafeToRemove(sourceKey, sourceValue) && isAspireRelatedPattern) ||
                         (IsMicrosoftControlledSource(sourceKey, sourceValue) && isAspireRelatedPattern && pattern != "*"))
                     {
                         elementsToRemove.Add(packageElement);
@@ -330,18 +391,18 @@ internal class NuGetConfigMerger
     {
         // Second pass: Group patterns by source and add them all to the same packageSource element
         var patternsBySource = patternsToAdd.GroupBy(x => x.newSource, StringComparer.OrdinalIgnoreCase);
-        
+
         foreach (var sourceGroup in patternsBySource)
         {
             var newSource = sourceGroup.Key;
-            
+
             // Use existing key if available, otherwise use the source URL as key
             var keyToUse = urlToExistingKey.TryGetValue(newSource, out var existingKey) ? existingKey : newSource;
-            
+
             // Find or create the packageSource element for this source using the appropriate key
             var targetSourceElement = packageSourceMapping.Elements("packageSource")
                 .FirstOrDefault(ps => string.Equals((string?)ps.Attribute("key"), keyToUse, StringComparison.OrdinalIgnoreCase));
-            
+
             if (targetSourceElement is null)
             {
                 // Create new packageSource element for this source using the appropriate key
@@ -356,7 +417,7 @@ internal class NuGetConfigMerger
                 // Check if this pattern already exists in the target source
                 var existingPattern = targetSourceElement.Elements("package")
                     .FirstOrDefault(p => string.Equals((string?)p.Attribute("pattern"), pattern, StringComparison.OrdinalIgnoreCase));
-                
+
                 if (existingPattern is null)
                 {
                     // Add the package pattern to the target source
@@ -365,7 +426,7 @@ internal class NuGetConfigMerger
                     targetSourceElement.Add(packageElement);
                 }
             }
-            
+
             sourcesInUse.Add(keyToUse);
         }
     }
@@ -397,14 +458,14 @@ internal class NuGetConfigMerger
         foreach (var sourceGroup in newPatternsBySource)
         {
             var targetSource = sourceGroup.Key;
-            
+
             // Use existing key if available, otherwise use the source URL as key
             var keyToUse = context.UrlToExistingKey.TryGetValue(targetSource, out var existingKey) ? existingKey : targetSource;
-            
+
             // Find or create the packageSource element for this source
             var targetSourceElement = packageSourceMapping.Elements("packageSource")
                 .FirstOrDefault(ps => string.Equals((string?)ps.Attribute("key"), keyToUse, StringComparison.OrdinalIgnoreCase));
-            
+
             if (targetSourceElement is null)
             {
                 // Create new packageSource element for this source
@@ -419,7 +480,7 @@ internal class NuGetConfigMerger
                 // Check if this pattern already exists in the target source (just in case)
                 var existingPattern = targetSourceElement.Elements("package")
                     .FirstOrDefault(p => string.Equals((string?)p.Attribute("pattern"), mapping.PackageFilter, StringComparison.OrdinalIgnoreCase));
-                
+
                 if (existingPattern is null)
                 {
                     // Add the package pattern to the target source
@@ -428,7 +489,7 @@ internal class NuGetConfigMerger
                     targetSourceElement.Add(packageElement);
                 }
             }
-            
+
             sourcesInUse.Add(keyToUse);
         }
     }
@@ -440,9 +501,10 @@ internal class NuGetConfigMerger
     {
         // Fourth pass: Fix packageSource elements that use URLs as keys when proper keys exist
         var packageSourceElementsToFix = packageSourceMapping.Elements("packageSource")
-            .Where(ps => {
+            .Where(ps =>
+            {
                 var key = (string?)ps.Attribute("key");
-                return !string.IsNullOrEmpty(key) && urlToExistingKey.TryGetValue(key, out var properKey) && 
+                return !string.IsNullOrEmpty(key) && urlToExistingKey.TryGetValue(key, out var properKey) &&
                        !string.Equals(key, properKey, StringComparison.OrdinalIgnoreCase);
             })
             .ToArray();
@@ -455,7 +517,7 @@ internal class NuGetConfigMerger
                 // Find if there's already a packageSource with the proper key
                 var existingProperElement = packageSourceMapping.Elements("packageSource")
                     .FirstOrDefault(ps => string.Equals((string?)ps.Attribute("key"), properKey, StringComparison.OrdinalIgnoreCase));
-                
+
                 if (existingProperElement is not null)
                 {
                     // Move all packages from URL-based element to proper key element
@@ -466,14 +528,14 @@ internal class NuGetConfigMerger
                         var pattern = (string?)packageToMove.Attribute("pattern");
                         var existingPattern = existingProperElement.Elements("package")
                             .FirstOrDefault(p => string.Equals((string?)p.Attribute("pattern"), pattern, StringComparison.OrdinalIgnoreCase));
-                        
+
                         if (existingPattern is null)
                         {
                             packageToMove.Remove();
                             existingProperElement.Add(packageToMove);
                         }
                     }
-                    
+
                     // Remove the URL-based element if it's now empty
                     if (!elementToFix.Elements("package").Any())
                     {
@@ -515,10 +577,10 @@ internal class NuGetConfigMerger
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             var sourcesWithoutAnyPatterns = existingSourceKeys.Except(sourcesWithPatterns, StringComparer.OrdinalIgnoreCase).ToArray();
-            
+
             // Only add wildcard patterns to sources that originally had NO patterns at all
             // Sources that had patterns but lost them due to remapping should be removed entirely
-            
+
             // Check the original packageSourceMapping to see which sources had patterns originally
             var originalSourcesWithPatterns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var originalPsm = context.PackageSourceMapping;
@@ -531,7 +593,7 @@ internal class NuGetConfigMerger
                     {
                         // Add the original key
                         originalSourcesWithPatterns.Add(originalSourceKey);
-                        
+
                         // Also add the proper key if this was a URL-based key
                         if (context.UrlToExistingKey.TryGetValue(originalSourceKey, out var properKey))
                         {
@@ -540,7 +602,7 @@ internal class NuGetConfigMerger
                     }
                 }
             }
-            
+
             // Only give wildcard patterns to sources that:
             // 1. Have no patterns now
             // 2. Originally had no patterns either (were unmapped before) OR still have some patterns left
@@ -552,29 +614,29 @@ internal class NuGetConfigMerger
                 var sourceElement = context.ExistingAdds
                     .FirstOrDefault(add => string.Equals((string?)add.Attribute("key"), sourceKey, StringComparison.OrdinalIgnoreCase));
                 var sourceValue = (string?)sourceElement?.Attribute("value");
-                
+
                 // Check if this source is required by the current channel
                 var isRequiredByCurrentChannel = context.RequiredSources.Contains(sourceKey, StringComparer.OrdinalIgnoreCase) ||
                                                context.RequiredSources.Contains(sourceValue ?? "", StringComparer.OrdinalIgnoreCase);
-                
+
                 // For user-defined sources, give them wildcard patterns to remain functional
                 // Only skip this for sources that we would remove anyway (like PR hives) OR
                 // Microsoft-controlled sources that are not required by the current channel
-                if (!IsSourceSafeToRemove(sourceKey, sourceValue) && 
+                if (!IsSourceSafeToRemove(sourceKey, sourceValue) &&
                     (isRequiredByCurrentChannel || !IsMicrosoftControlledSource(sourceKey, sourceValue)))
                 {
                     var packageSourceElement = new XElement("packageSource");
                     packageSourceElement.SetAttributeValue("key", sourceKey);
-                    
+
                     var wildcardPackage = new XElement("package");
                     wildcardPackage.SetAttributeValue("pattern", "*");
                     packageSourceElement.Add(wildcardPackage);
-                    
+
                     packageSourceMapping.Add(packageSourceElement);
                     sourcesInUse.Add(sourceKey);
                 }
             }
-            
+
             // Also give wildcard patterns to sources that still have some patterns left but should remain fully functional
             // when there's a wildcard mapping that could interfere with their ability to serve packages
             // But only for user-defined sources, not Microsoft-controlled feeds
@@ -584,14 +646,25 @@ internal class NuGetConfigMerger
                 .Where(key => !string.IsNullOrEmpty(key))
                 .Cast<string>()
                 .ToArray();
-                
+
             foreach (var sourceKey in sourcesWithPatternsLeft)
             {
                 // Get the source URL to check if it's a user-defined source
                 var sourceElement = context.ExistingAdds
                     .FirstOrDefault(add => string.Equals((string?)add.Attribute("key"), sourceKey, StringComparison.OrdinalIgnoreCase));
                 var sourceValue = (string?)sourceElement?.Attribute("value");
-                
+                var isRequiredByCurrentChannel = context.RequiredSources.Contains(sourceKey, StringComparer.OrdinalIgnoreCase) ||
+                    context.RequiredSources.Contains(sourceValue ?? "", StringComparer.OrdinalIgnoreCase);
+                var requiredSourceHasWildcard = context.Mappings.Any(m =>
+                    m.PackageFilter == PackageMapping.AllPackages &&
+                    (string.Equals(m.Source, sourceKey, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(m.Source, sourceValue, StringComparison.OrdinalIgnoreCase)));
+
+                if (isRequiredByCurrentChannel && !requiredSourceHasWildcard)
+                {
+                    continue;
+                }
+
                 // For user-defined sources that still have patterns, also give them wildcard patterns
                 // to ensure they can serve other packages too. But skip Microsoft-controlled sources
                 // that have specific patterns as they are intended to serve specific packages only.
@@ -599,7 +672,7 @@ internal class NuGetConfigMerger
                 {
                     var packageSourceElement = packageSourceMapping.Elements("packageSource")
                         .FirstOrDefault(ps => string.Equals((string?)ps.Attribute("key"), sourceKey, StringComparison.OrdinalIgnoreCase));
-                    
+
                     if (packageSourceElement != null)
                     {
                         var wildcardPackage = new XElement("package");
@@ -615,24 +688,24 @@ internal class NuGetConfigMerger
     private static bool IsMicrosoftControlledSource(string sourceKey, string? sourceValue)
     {
         var urlToCheck = sourceValue ?? sourceKey;
-        
+
         if (string.IsNullOrEmpty(urlToCheck))
         {
             return false;
         }
-        
+
         // Check if this is a Microsoft/Azure DevOps feed
         if (urlToCheck.Contains("pkgs.dev.azure.com"))
         {
             return true;
         }
-        
+
         // Check if this is an official NuGet.org feed
         if (urlToCheck.Contains("api.nuget.org"))
         {
             return true;
         }
-        
+
         return false;
     }
 
@@ -642,7 +715,7 @@ internal class NuGetConfigMerger
         {
             return false;
         }
-        
+
         // Patterns that start with "Aspire" are Aspire-related
         // Wildcard patterns are not Aspire-specific
         // Other Microsoft.Extensions.* patterns (like "Microsoft.Extensions.SpecialPackage*") are NOT Aspire-related
@@ -651,20 +724,20 @@ internal class NuGetConfigMerger
 
     private static bool IsSourceSafeToRemove(string sourceKey, string? sourceValue)
     {
-        // Only remove sources that we know are tied to Aspire channels or PR hives
+        // Only remove sources that we know are tied to Aspire channels or CLI-managed hive feeds
         if (string.IsNullOrEmpty(sourceKey) && string.IsNullOrEmpty(sourceValue))
         {
             return false;
         }
 
         var urlToCheck = sourceValue ?? sourceKey;
-        
-        // Check if this is an Aspire PR hive
+
+        // Check if this is an Aspire hive feed
         if (!string.IsNullOrEmpty(urlToCheck) && urlToCheck.Contains(".aspire") && urlToCheck.Contains("hives"))
         {
             return true;
         }
-        
+
         // Only remove very specific Azure DevOps feeds that we know are temporary (like aspire PR feeds)
         // Don't remove official .NET feeds or other potentially permanent feeds
         if (!string.IsNullOrEmpty(urlToCheck) && urlToCheck.Contains("pkgs.dev.azure.com"))
@@ -674,11 +747,11 @@ internal class NuGetConfigMerger
             {
                 return true;
             }
-            
+
             // Be conservative - don't remove other Azure DevOps feeds as they might be official
             return false;
         }
-        
+
         // Don't remove other sources - they may be user-defined
         return false;
     }
@@ -705,10 +778,10 @@ internal class NuGetConfigMerger
             if (!string.IsNullOrEmpty(sourceKey) && !sourcesInUse.Contains(sourceKey))
             {
                 // Also check if any existing source key maps to this URL (for URL->key mapping scenario)
-                var isUsedByExistingKey = urlToExistingKey.Any(kvp => 
-                    string.Equals(kvp.Key, sourceKey, StringComparison.OrdinalIgnoreCase) && 
+                var isUsedByExistingKey = urlToExistingKey.Any(kvp =>
+                    string.Equals(kvp.Key, sourceKey, StringComparison.OrdinalIgnoreCase) &&
                     sourcesInUse.Contains(kvp.Value));
-                    
+
                 if (!isUsedByExistingKey)
                 {
                     var sourceToRemove = packageSources.Elements("add")
@@ -728,23 +801,23 @@ internal class NuGetConfigMerger
 
         // Group patterns by their target source and add them
         var patternsBySource = context.Mappings.GroupBy(m => m.Source, StringComparer.OrdinalIgnoreCase);
-        
+
         foreach (var sourceGroup in patternsBySource)
         {
             var sourceUrl = sourceGroup.Key;
             // Use existing key if available, otherwise use the source URL as key
             var keyToUse = context.UrlToExistingKey.TryGetValue(sourceUrl, out var existingKey) ? existingKey : sourceUrl;
-            
+
             var packageSource = new XElement("packageSource");
             packageSource.SetAttributeValue("key", keyToUse);
-            
+
             foreach (var mapping in sourceGroup)
             {
                 var packageElement = new XElement("package");
                 packageElement.SetAttributeValue("pattern", mapping.PackageFilter);
                 packageSource.Add(packageElement);
             }
-            
+
             packageSourceMapping.Add(packageSource);
         }
 
@@ -770,7 +843,7 @@ internal class NuGetConfigMerger
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var sourcesWithoutAnyPatterns = existingSourceKeys.Except(sourcesWithNewMappings, StringComparer.OrdinalIgnoreCase).ToArray();
-        
+
         // Add wildcard pattern to existing sources that don't have any patterns to preserve their original functionality
         // Only exclude PR hives that are not the current target
         foreach (var sourceKey in sourcesWithoutAnyPatterns)
@@ -779,17 +852,17 @@ internal class NuGetConfigMerger
             var sourceElement = context.ExistingAdds
                 .FirstOrDefault(add => string.Equals((string?)add.Attribute("key"), sourceKey, StringComparison.OrdinalIgnoreCase));
             var sourceValue = (string?)sourceElement?.Attribute("value");
-            
+
             // Only exclude PR hives and Aspire-specific feeds that are not the current target
             if (!IsSourceSafeToRemove(sourceKey, sourceValue))
             {
                 var packageSourceElement = new XElement("packageSource");
                 packageSourceElement.SetAttributeValue("key", sourceKey);
-                
+
                 var wildcardPackage = new XElement("package");
                 wildcardPackage.SetAttributeValue("pattern", "*");
                 packageSourceElement.Add(wildcardPackage);
-                
+
                 packageSourceMapping.Add(packageSourceElement);
             }
         }
@@ -821,7 +894,7 @@ internal class NuGetConfigMerger
             return false; // Implicit channels or empty mappings never require config changes.
         }
 
-	if (!TryFindNuGetConfigInDirectory(targetDirectory, out var nugetConfigFile))
+        if (!TryFindNuGetConfigInDirectory(targetDirectory, out var nugetConfigFile))
         {
             return true; // No config exists, so sources are "missing"
         }
@@ -901,7 +974,7 @@ internal class NuGetConfigMerger
                         {
                             // Use existing key if available, otherwise use the source URL as key
                             var expectedKey = urlToExistingKey.TryGetValue(requiredSourceUrl, out var existingKey) ? existingKey : requiredSourceUrl;
-                            
+
                             if (!string.Equals(sourceKey, expectedKey, StringComparison.OrdinalIgnoreCase))
                             {
                                 return true; // This pattern needs to be remapped
@@ -960,7 +1033,13 @@ internal class NuGetConfigMerger
         AddGlobalPackagesFolderConfiguration(configContext.Configuration);
     }
 
-    private static void AddGlobalPackagesFolderConfiguration(XElement configuration)
+    // Default workspace-relative cache used when no explicit path is supplied. Matches the
+    // long-standing 'aspire init / aspire new' convention of putting a per-workspace
+    // .nugetpackages folder next to the merged nuget.config so staging-vs-stable cache
+    // poisoning doesn't bleed into the user's global ~/.nuget/packages folder.
+    internal const string DefaultGlobalPackagesFolderValue = ".nugetpackages";
+
+    internal static void AddGlobalPackagesFolderConfiguration(XElement configuration, string? globalPackagesFolderValue = null)
     {
         // Check if config section already exists
         var config = configuration.Element("config");
@@ -976,10 +1055,13 @@ internal class NuGetConfigMerger
 
         if (existingGlobalPackagesFolder is null)
         {
-            // Add globalPackagesFolder configuration
+            // Add globalPackagesFolder configuration. Callers (e.g. PrebuiltAppHostServer's
+            // temporary nuget.config) supply an absolute path when the config file itself is
+            // ephemeral so the cached packages outlive the config — otherwise NuGet would
+            // resolve the relative ".nugetpackages" under the about-to-be-deleted temp dir.
             var globalPackagesFolderAdd = new XElement("add");
             globalPackagesFolderAdd.SetAttributeValue("key", "globalPackagesFolder");
-            globalPackagesFolderAdd.SetAttributeValue("value", ".nugetpackages");
+            globalPackagesFolderAdd.SetAttributeValue("value", globalPackagesFolderValue ?? DefaultGlobalPackagesFolderValue);
             config.Add(globalPackagesFolderAdd);
         }
     }

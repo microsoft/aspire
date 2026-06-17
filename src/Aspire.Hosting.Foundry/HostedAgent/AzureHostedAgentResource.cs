@@ -1,0 +1,551 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using System.Globalization;
+using System.IO.Hashing;
+using System.Text;
+using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure;
+using Aspire.Hosting.Azure.Provisioning;
+using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Publishing;
+using Aspire.Hosting.Utils;
+using Azure;
+using Azure.AI.Projects;
+using Azure.AI.Projects.Agents;
+using Azure.Core;
+using Azure.ResourceManager.Authorization.Models;
+using Microsoft.Extensions.Logging;
+using RoleManagementPrincipalType = Azure.ResourceManager.Authorization.Models.RoleManagementPrincipalType;
+
+namespace Aspire.Hosting.Foundry;
+
+/// <summary>
+/// A Microsoft Foundry hosted agent resource.
+/// </summary>
+public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
+{
+    // The "Azure AI User" built-in role (data-plane access to Foundry agents/inference). Granted to
+    // the agent's own instance identity below, and to consumers that reference the agent (see
+    // HostedAgentResourceBuilderExtensions.GrantHostedAgentConsumerRoles).
+    internal const string AzureAIUserRoleDefinitionId = "53ca6127-db72-4b80-b1b0-d745d6d5456d";
+
+    /// <summary>
+    /// Creates a new instance of the <see cref="AzureHostedAgentResource"/> class.
+    /// </summary>
+    public AzureHostedAgentResource([ResourceName] string name, IResource target, Action<HostedAgentConfiguration>? configure = null) : base(name)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        Target = target;
+        Configure = configure;
+        Annotations.Add(new ManifestPublishingCallbackAnnotation(PublishAsync));
+        // Set up steps for deploying this particular hosted agent
+        Annotations.Add(new PipelineStepAnnotation(async (ctx) =>
+        {
+            List<PipelineStep> steps = [];
+            var deploymentAnnotation = Target.GetDeploymentTargetAnnotation() ?? throw new InvalidOperationException($"Deployment target annotation is required on resource '{Target.Name}' to deploy as hosted agent.");
+            var project = deploymentAnnotation.ComputeEnvironment as AzureCognitiveServicesProjectResource
+                ?? throw new InvalidOperationException($"Compute environment for resource '{Target.Name}' must be an AzureCognitiveServicesProjectResource to deploy as hosted agent.");
+
+            // Create a step to deploy container as agent
+            var agentDeployStep = new PipelineStep
+            {
+                Name = $"deploy-{Name}",
+                Action = async (ctx) =>
+                {
+                    var version = await DeployAsync(ctx, project).ConfigureAwait(false);
+                    ctx.ReportingStep.Log(LogLevel.Information, new MarkdownString($"Successfully deployed **{Name}** as Hosted Agent (version {version})"));
+                    Version.Set(version.Version);
+                },
+                Tags = [WellKnownPipelineTags.DeployCompute],
+                RequiredBySteps = [WellKnownPipelineSteps.Deploy],
+                Resource = this,
+                DependsOnSteps = [WellKnownPipelineSteps.DeployPrereq, AzureEnvironmentResource.ProvisionInfrastructureStepName]
+            };
+            steps.Add(agentDeployStep);
+
+            return steps;
+        }));
+
+        // Wire up pipeline steps we introduced above
+        Annotations.Add(new PipelineConfigurationAnnotation(async (context) =>
+        {
+            // BuildCompute = build Docker images, so do that before pushing
+            context.GetSteps(Target, WellKnownPipelineTags.BuildCompute).RequiredBy(context.GetSteps(Target, WellKnownPipelineTags.PushContainerImage));
+
+            var agentDeployStep = context.GetSteps(this, WellKnownPipelineTags.DeployCompute);
+
+            // The app deployment should depend on push steps from the target resource
+            var pushSteps = context.GetSteps(Target, WellKnownPipelineTags.PushContainerImage);
+            agentDeployStep.DependsOn(pushSteps);
+        }));
+    }
+
+    /// <summary>
+    /// Configuration action to customize the hosted agent definition during deployment.
+    /// </summary>
+    public Action<HostedAgentConfiguration>? Configure { get; set; }
+
+    /// <summary>
+    /// Once deployed, the version that is assigned to this hosted agent.
+    /// </summary>
+    public StaticValueProvider<string> Version { get; } = new();
+
+    /// <summary>
+    /// The fully qualified image name for the hosted agent.
+    /// </summary>
+    public ContainerImageReference Image => new(Target);
+
+    /// <summary>
+    /// The target containerized workload that this hosted agent deploys.
+    /// </summary>
+    public IResource Target { get; }
+
+    /// <summary>
+    /// Convert all dynamic values into concrete values for deployment.
+    /// </summary>
+    private async Task<HostedAgentConfiguration> ToHostedAgentConfigurationAsync(PipelineStepContext context)
+    {
+        var imageName = await ((IValueProvider)Image).GetValueAsync(context.CancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(imageName))
+        {
+            throw new InvalidOperationException($"Container image for hosted agent '{Name}' could not be resolved.");
+        }
+
+        var def = new HostedAgentConfiguration(imageName)
+        {
+            // ProcessEnvironmentVariableValuesAsync does not resolve values properly in the deploy context
+            EnvironmentVariables = await GetResolvedEnvironmentVariablesAsync(context.ExecutionContext, this, Target, context.Logger, context.CancellationToken).ConfigureAwait(false),
+        };
+        if (Configure is not null)
+        {
+            Configure(def);
+        }
+        return def;
+    }
+
+    /// <summary>
+    /// Publishes the hosted agent during the manifest publishing phase.
+    /// </summary>
+    private async Task PublishAsync(ManifestPublishingContext ctx)
+    {
+        // Write agent manifest
+        ctx.Writer.WriteString("type", "azure.ai.agent.v0");
+        ctx.Writer.WriteStartObject("definition");
+        ctx.Writer.WriteString("kind", "hosted");
+        ctx.Writer.WriteString("target", Target.Name);
+        ctx.Writer.WriteEndObject(); // definition
+        ctx.TryAddDependentResources(Target);
+    }
+
+    /// <summary>
+    /// Deploys the specified agent to the given Microsoft Foundry project.
+    /// </summary>
+    private async Task<ProjectsAgentVersion> DeployAsync(PipelineStepContext context, AzureCognitiveServicesProjectResource project)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+
+        var azureEnvironment = context.Model.Resources.OfType<AzureEnvironmentResource>().FirstOrDefault() ??
+            throw new InvalidOperationException("AzureEnvironmentResource must be present in the application model.");
+
+        var provisioningContext = await azureEnvironment.ProvisioningContextTask.Task.ConfigureAwait(false);
+        var credential = provisioningContext.Credential;
+
+        var projectEndpoint = await project.Endpoint.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(projectEndpoint))
+        {
+            throw new InvalidOperationException($"Project '{project.Name}' does not have a valid connection string.");
+        }
+        var def = await ToHostedAgentConfigurationAsync(context).ConfigureAwait(false);
+        var projectClient = new AIProjectClient(new Uri(projectEndpoint), credential);
+        var result = await projectClient.AgentAdministrationClient.CreateAgentVersionAsync(
+            Name,
+            def.ToProjectsAgentVersionCreationOptions(Target.Name),
+            cancellationToken: context.CancellationToken
+        ).ConfigureAwait(false);
+
+        await UpdateAgentEndpointProtocolsAsync(projectClient.AgentAdministrationClient, def, context.CancellationToken).ConfigureAwait(false);
+
+        // Foundry should do this automatically in the future.
+        await AssignFoundryRoleToAgentIdentityAsync(context, project, result.Value, provisioningContext).ConfigureAwait(false);
+
+        return result.Value;
+    }
+
+    private async Task UpdateAgentEndpointProtocolsAsync(AgentAdministrationClient agentsClient, HostedAgentConfiguration configuration, CancellationToken cancellationToken)
+    {
+        var endpointProtocols = GetAgentEndpointProtocols(configuration.ContainerProtocolVersions);
+        if (endpointProtocols.Count == 0)
+        {
+            return;
+        }
+
+        var endpoint = new AgentEndpoint();
+        foreach (var protocol in endpointProtocols)
+        {
+            endpoint.Protocols.Add(protocol);
+        }
+
+        // Creating a hosted-agent version does not update the endpoint's advertised protocols;
+        // keep routing in sync so endpoint-scoped invocations can reach the selected version.
+        await agentsClient.PatchAgentObjectAsync(
+            Name,
+            new PatchAgentOptions
+            {
+                AgentEndpoint = endpoint
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    internal static IReadOnlyList<AgentEndpointProtocol> GetAgentEndpointProtocols(IEnumerable<ProtocolVersionRecord> protocolVersions)
+    {
+        var endpointProtocols = new List<AgentEndpointProtocol>();
+
+        foreach (var protocolVersion in protocolVersions)
+        {
+            var endpointProtocol = ToAgentEndpointProtocol(protocolVersion.Protocol);
+            if (!endpointProtocols.Contains(endpointProtocol))
+            {
+                endpointProtocols.Add(endpointProtocol);
+            }
+        }
+
+        return endpointProtocols;
+    }
+
+    private static AgentEndpointProtocol ToAgentEndpointProtocol(ProjectsAgentProtocol protocol)
+    {
+        return protocol.ToString() switch
+        {
+            "activity_protocol" => AgentEndpointProtocol.Activity,
+            "invocations" => AgentEndpointProtocol.Invocations,
+            "responses" => AgentEndpointProtocol.Responses,
+            var value => new AgentEndpointProtocol(value)
+        };
+    }
+
+    private async Task AssignFoundryRoleToAgentIdentityAsync(
+        PipelineStepContext context,
+        AzureCognitiveServicesProjectResource project,
+        ProjectsAgentVersion version,
+        ProvisioningContext provisioningContext)
+    {
+        var principalId = version.InstanceIdentity?.PrincipalId;
+        if (string.IsNullOrEmpty(principalId))
+        {
+            context.Logger.LogWarning("Hosted agent '{Name}' version '{Version}' did not return an instance identity. The agent may not be able to access Foundry project storage.", Name, version.Version);
+            return;
+        }
+
+        var foundryResourceId = await project.Parent.Id.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(foundryResourceId))
+        {
+            context.Logger.LogWarning("Could not resolve the Microsoft Foundry resource ID for hosted agent '{Name}'. The agent identity '{PrincipalId}' may need the Cognitive Services User role assigned manually.", Name, principalId);
+            return;
+        }
+
+        var subscriptionResourceId = provisioningContext.Subscription.Id.ToString();
+        var roleDefinitionId = new ResourceIdentifier(
+            $"{subscriptionResourceId}/providers/Microsoft.Authorization/roleDefinitions/{AzureAIUserRoleDefinitionId}");
+
+        var assignmentName = StableGuid(principalId, roleDefinitionId.ToString(), foundryResourceId);
+
+        var content = new RoleAssignmentCreateOrUpdateContent(roleDefinitionId, Guid.Parse(principalId))
+        {
+            PrincipalType = RoleManagementPrincipalType.ServicePrincipal
+        };
+
+        var resourceScope = new ResourceIdentifier(foundryResourceId);
+        var assignments = provisioningContext.ArmClient.GetRoleAssignments(resourceScope);
+
+        try
+        {
+            await assignments.CreateOrUpdateAsync(
+                WaitUntil.Completed,
+                assignmentName,
+                content,
+                context.CancellationToken).ConfigureAwait(false);
+
+            context.Logger.LogInformation("Assigned Cognitive Services User role to hosted agent '{Name}' identity '{PrincipalId}'.", Name, principalId);
+        }
+        catch (RequestFailedException ex)
+        {
+            context.Logger.LogWarning(
+                ex,
+                "Could not create Cognitive Services User role assignment for hosted agent '{Name}' identity '{PrincipalId}' on Foundry resource '{FoundryResourceId}'. Create the role assignment manually.",
+                Name,
+                principalId,
+                foundryResourceId);
+        }
+
+        static string StableGuid(params string[] values)
+        {
+            byte[] hash = XxHash128.Hash(
+                Encoding.UTF8.GetBytes(string.Join("|", values)));
+
+            return new Guid(hash).ToString();
+        }
+    }
+
+    internal static async Task<Dictionary<string, string>> GetResolvedEnvironmentVariablesAsync(
+        DistributedApplicationExecutionContext context,
+        AzureHostedAgentResource hostedAgent,
+        IResource resource,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        var collectedEnvVars = new Dictionary<string, object>();
+        if (resource.TryGetEnvironmentVariables(out var callbacks))
+        {
+            var envContext = new EnvironmentCallbackContext(context, resource, collectedEnvVars, cancellationToken)
+            {
+                Logger = logger
+            };
+
+            foreach (var callback in callbacks)
+            {
+                await callback.Callback(envContext).ConfigureAwait(false);
+            }
+        }
+        var resolvedEnvVars = new Dictionary<string, string>();
+        foreach (var (key, value) in collectedEnvVars)
+        {
+            if (HostedAgentConfiguration.IsReservedEnvironmentVariableName(key))
+            {
+                // Foundry injects platform-owned variables such as PORT itself. Some Aspire resource
+                // types use these variables to model local/container startup, but forwarding them in
+                // the hosted-agent definition causes Foundry to reject the version payload.
+                logger.LogDebug("Environment variable '{Key}' for resource '{Name}' is reserved by Foundry Hosted Agents and will be skipped.", key, resource.Name);
+                continue;
+            }
+
+            if (IsHostedAgentTargetPortValue(value, hostedAgent))
+            {
+                // Endpoint target-port variables model how a local process or container binds. Foundry
+                // hosted agents own the container port contract during deployment, and their endpoint
+                // resolver intentionally does not support EndpointProperty.TargetPort.
+                logger.LogDebug("Environment variable '{Key}' for resource '{Name}' references the hosted agent target port and will be skipped.", key, resource.Name);
+                continue;
+            }
+
+            switch (value)
+            {
+                case null:
+                    resolvedEnvVars[key] = string.Empty;
+                    break;
+                case string s:
+                    resolvedEnvVars[key] = s;
+                    break;
+                case IValueProvider provider:
+                    resolvedEnvVars[key] = await ResolveValueProviderAsync(provider, context, hostedAgent, resource, key, cancellationToken).ConfigureAwait(false) ?? string.Empty;
+                    break;
+                case IFormattable f:
+                    resolvedEnvVars[key] = f.ToString(null, CultureInfo.InvariantCulture);
+                    break;
+                default:
+                    logger.LogWarning("Environment variable '{Key}' for resource '{Name}' has unknown value of type '{type}' and will be skipped.", key, resource.Name, value.GetType().FullName);
+                    break;
+            }
+        }
+        return resolvedEnvVars;
+    }
+
+    private static bool IsHostedAgentTargetPortValue(object? value, AzureHostedAgentResource hostedAgent)
+    {
+        return value switch
+        {
+            EndpointReferenceExpression endpointReferenceExpression => IsHostedAgentTargetPortExpression(endpointReferenceExpression, hostedAgent),
+            ReferenceExpression referenceExpression when referenceExpression.IsConditional =>
+                IsHostedAgentTargetPortValue(referenceExpression.Condition, hostedAgent) ||
+                IsHostedAgentTargetPortValue(referenceExpression.WhenTrue, hostedAgent) ||
+                IsHostedAgentTargetPortValue(referenceExpression.WhenFalse, hostedAgent),
+            ReferenceExpression referenceExpression => referenceExpression.ValueProviders.Any(valueProvider => IsHostedAgentTargetPortValue(valueProvider, hostedAgent)),
+            _ => false
+        };
+    }
+
+    private static bool IsHostedAgentTargetPortExpression(EndpointReferenceExpression endpointReferenceExpression, AzureHostedAgentResource hostedAgent)
+    {
+        return endpointReferenceExpression.Property == EndpointProperty.TargetPort &&
+            ReferenceEquals(endpointReferenceExpression.Endpoint.Resource, hostedAgent.Target);
+    }
+
+    private static async ValueTask<string?> ResolveValueProviderAsync(
+        IValueProvider provider,
+        DistributedApplicationExecutionContext context,
+        AzureHostedAgentResource hostedAgent,
+        IResource resource,
+        string environmentVariableName,
+        CancellationToken cancellationToken)
+    {
+        if (context.IsPublishMode)
+        {
+            switch (provider)
+            {
+                case EndpointReference endpointReference:
+                    return await ResolvePublishedEndpointAsync(endpointReference.Property(EndpointProperty.Url), context, hostedAgent, resource, environmentVariableName, cancellationToken).ConfigureAwait(false);
+                case EndpointReferenceExpression endpointReferenceExpression:
+                    return await ResolvePublishedEndpointAsync(endpointReferenceExpression, context, hostedAgent, resource, environmentVariableName, cancellationToken).ConfigureAwait(false);
+                case ReferenceExpression referenceExpression:
+                    return await ResolveReferenceExpressionAsync(referenceExpression, context, hostedAgent, resource, environmentVariableName, cancellationToken).ConfigureAwait(false);
+                case ConnectionStringReference connectionStringReference:
+                    var connectionString = await ResolveReferenceExpressionAsync(connectionStringReference.Resource.ConnectionStringExpression, context, hostedAgent, resource, environmentVariableName, cancellationToken).ConfigureAwait(false);
+                    if (string.IsNullOrEmpty(connectionString) && !connectionStringReference.Optional)
+                    {
+                        throw new DistributedApplicationException($"The connection string for the resource '{connectionStringReference.Resource.Name}' is not available.");
+                    }
+
+                    return connectionString;
+                case IResourceWithConnectionString connectionStringResource and not ParameterResource:
+                    return await ResolveReferenceExpressionAsync(connectionStringResource.ConnectionStringExpression, context, hostedAgent, resource, environmentVariableName, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        return await provider.GetValueAsync(
+            new ValueProviderContext
+            {
+                ExecutionContext = context,
+                Caller = resource
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async ValueTask<string?> ResolveReferenceExpressionAsync(
+        ReferenceExpression expression,
+        DistributedApplicationExecutionContext context,
+        AzureHostedAgentResource hostedAgent,
+        IResource resource,
+        string environmentVariableName,
+        CancellationToken cancellationToken)
+    {
+        if (expression.IsConditional)
+        {
+            var conditionValue = await ResolveValueProviderAsync(expression.Condition!, context, hostedAgent, resource, environmentVariableName, cancellationToken).ConfigureAwait(false);
+            var branch = string.Equals(conditionValue, expression.MatchValue, StringComparison.OrdinalIgnoreCase) ? expression.WhenTrue! : expression.WhenFalse!;
+
+            return await ResolveReferenceExpressionAsync(branch, context, hostedAgent, resource, environmentVariableName, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (expression.Format.Length == 0)
+        {
+            return null;
+        }
+
+        var args = new object?[expression.ValueProviders.Count];
+        for (var i = 0; i < expression.ValueProviders.Count; i++)
+        {
+            args[i] = await ResolveValueProviderAsync(expression.ValueProviders[i], context, hostedAgent, resource, environmentVariableName, cancellationToken).ConfigureAwait(false);
+
+            if (expression.StringFormats[i] is string stringFormat && args[i] is string value)
+            {
+                args[i] = FormattingHelpers.FormatValue(value, stringFormat);
+            }
+        }
+
+        return string.Format(CultureInfo.InvariantCulture, expression.Format, args);
+    }
+
+    private static async ValueTask<string?> ResolvePublishedEndpointAsync(
+        EndpointReferenceExpression endpointReferenceExpression,
+        DistributedApplicationExecutionContext context,
+        AzureHostedAgentResource hostedAgent,
+        IResource resource,
+        string environmentVariableName,
+        CancellationToken cancellationToken)
+    {
+        var endpointReference = endpointReferenceExpression.Endpoint;
+        var endpoint = endpointReference.EndpointAnnotation;
+
+        if (endpointReference.Resource != hostedAgent.Target && !endpoint.IsExternal)
+        {
+            throw CreateEndpointResolutionException(hostedAgent, resource, environmentVariableName, endpointReference, $"Endpoint '{endpoint.Name}' is internal. Foundry hosted agents can only reference externally exposed endpoints during publish.");
+        }
+
+        if (!ComputeEnvironmentEndpointResolver.TryGetEffectiveComputeEnvironment(endpointReference.Resource, out var computeEnvironment))
+        {
+            var reason = $"Resource '{endpointReference.Resource.Name}' does not have a compute environment deployment target.";
+            throw CreateEndpointResolutionException(hostedAgent, resource, environmentVariableName, endpointReference, reason);
+        }
+
+#pragma warning disable ASPIRECOMPUTE002
+        var expression = computeEnvironment.GetEndpointPropertyExpression(endpointReferenceExpression);
+#pragma warning restore ASPIRECOMPUTE002
+
+        return await expression.GetValueAsync(
+            new ValueProviderContext
+            {
+                ExecutionContext = context,
+                Caller = resource
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private static InvalidOperationException CreateEndpointResolutionException(
+        AzureHostedAgentResource hostedAgent,
+        IResource resource,
+        string environmentVariableName,
+        EndpointReference endpointReference,
+        string reason)
+    {
+        return new InvalidOperationException(
+            $"Unable to resolve environment variable '{environmentVariableName}' for Foundry hosted agent '{hostedAgent.Name}' from target resource '{resource.Name}'. " +
+            $"Endpoint '{endpointReference.EndpointName}' on resource '{endpointReference.Resource.Name}' cannot be used. {reason}");
+    }
+
+}
+
+/// <summary>
+/// A static value provider that returns a fixed value once it's been set.
+/// </summary>
+
+public class StaticValueProvider<T> : IValueProvider, IManifestExpressionProvider
+{
+    private T? _value;
+    private bool _isSet;
+
+    /// <inheritdoc/>
+    public string ValueExpression => "{value}";
+
+    /// <summary>
+    /// Sets the value of the provider.
+    /// </summary>
+    public void Set(T value)
+    {
+        if (_isSet)
+        {
+            throw new InvalidOperationException($"Value has already been set.");
+        }
+        _value = value;
+        _isSet = true;
+    }
+
+    /// <summary>
+    /// Creates a new instance of the <see cref="StaticValueProvider{T}"/> class.
+    /// </summary>
+    public StaticValueProvider()
+    {
+        _isSet = false;
+    }
+
+    /// <summary>
+    /// Creates a new instance of the <see cref="StaticValueProvider{T}"/> class.
+    /// </summary>
+    public StaticValueProvider(T value)
+    {
+        _value = value;
+        _isSet = true;
+    }
+
+    /// <inheritdoc/>
+    public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken = default)
+    {
+        if (_isSet == false)
+        {
+            throw new InvalidOperationException("Value for provider has not been set.");
+        }
+        else
+        {
+            return ValueTask.FromResult(_value?.ToString());
+        }
+    }
+}

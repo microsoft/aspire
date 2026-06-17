@@ -15,6 +15,7 @@ public static class EmulatorResourceExtensions
     /// </summary>
     /// <param name="resource">The resource to check.</param>
     /// <returns>true if the specified resource is an emulator resource; otherwise, false.</returns>
+    [AspireExportIgnore(Reason = "Application model inspection helper — not part of the ATS surface.")]
     public static bool IsEmulator(this IResource resource)
     {
         ArgumentNullException.ThrowIfNull(resource);

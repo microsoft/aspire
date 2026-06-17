@@ -69,9 +69,9 @@ namespace Aspire.Cli.Resources {
             }
         }
 
-        public static string NoRunningAppHostsFound {
+        public static string AppHostIdentifierWithProcessId {
             get {
-                return ResourceManager.GetString("NoRunningAppHostsFound", resourceCulture);
+                return ResourceManager.GetString("AppHostIdentifierWithProcessId", resourceCulture);
             }
         }
 
@@ -87,22 +87,41 @@ namespace Aspire.Cli.Resources {
             }
         }
 
-        public static string SelectAppHostToStop {
+        public static string FoundRunningAppHost {
             get {
-                return ResourceManager.GetString("SelectAppHostToStop", resourceCulture);
+                return ResourceManager.GetString("FoundRunningAppHost", resourceCulture);
             }
         }
 
-        public static string ScanningForRunningAppHosts {
+        public static string SendingStopSignal {
             get {
-                return ResourceManager.GetString("ScanningForRunningAppHosts", resourceCulture);
+                return ResourceManager.GetString("SendingStopSignal", resourceCulture);
             }
         }
 
-        public static string NoInScopeAppHostsShowingAll {
+        public static string SelectAppHostAction {
             get {
-                return ResourceManager.GetString("NoInScopeAppHostsShowingAll", resourceCulture);
+                return ResourceManager.GetString("SelectAppHostAction", resourceCulture);
             }
         }
+
+        public static string AllOptionDescription {
+            get {
+                return ResourceManager.GetString("AllOptionDescription", resourceCulture);
+            }
+        }
+
+        public static string MultipleAppHostsNonInteractive {
+            get {
+                return ResourceManager.GetString("MultipleAppHostsNonInteractive", resourceCulture);
+            }
+        }
+
+        public static string AllAndProjectMutuallyExclusive {
+            get {
+                return ResourceManager.GetString("AllAndProjectMutuallyExclusive", resourceCulture);
+            }
+        }
+
     }
 }

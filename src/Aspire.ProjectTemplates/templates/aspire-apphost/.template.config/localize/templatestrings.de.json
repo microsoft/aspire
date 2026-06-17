@@ -1,4 +1,4 @@
-﻿{
+{
   "author": "Microsoft",
   "name": "Aspire-AppHost",
   "description": "Eine Projektvorlage zum Erstellen eines Aspire-AppHost-Projekts (Orchestrator).",
@@ -8,17 +8,16 @@
   "symbols/Framework/choices/net10.0/description": "Ziel.-NET10.0",
   "symbols/appHostHttpPort/description": "Portnummer, die für den HTTP-Endpunkt in launchSettings.json des AppHost-Projekts verwendet werden soll.",
   "symbols/appHostOtlpHttpPort/description": "Portnummer, die für den OTLP-HTTP-Endpunkt in launchSettings.json des AppHost-Projekts verwendet werden soll.",
-  "symbols/appHostMcpHttpPort/description": "Portnummer, die für den MCP-HTTP-Endpunkt in launchSettings.json des AppHost-Projekts verwendet werden soll.",
   "symbols/appHostResourceHttpPort/description": "Portnummer, die für den HTTP-Endpunkt des Ressourcendiensts in launchSettings.json des AppHost-Projekts verwendet werden soll.",
   "symbols/appHostHttpsPort/description": "Portnummer, die für den HTTPS-Endpunkt in launchSettings.json des AppHost-Projekts verwendet werden soll. Diese Option ist nur anwendbar, wenn der Parameter no-https nicht verwendet wird.",
   "symbols/appHostOtlpHttpsPort/description": "Portnummer, die für den OTLP-HTTPS-Endpunkt in launchSettings.json des AppHost-Projekts verwendet werden soll.",
-  "symbols/appHostMcpHttpsPort/description": "Portnummer, die für den MCP-HTTPS-Endpunkt in launchSettings.json des AppHost-Projekts verwendet werden soll.",
   "symbols/appHostResourceHttpsPort/description": "Portnummer, die für den HTTPS-Endpunkt des Ressourcendiensts in launchSettings.json des AppHost-Projekts verwendet werden soll.",
   "symbols/skipRestore/description": "Wenn angegeben, wird die automatische Wiederherstellung des Projekts beim Erstellen übersprungen.",
   "symbols/NoHttps/description": "Ob HTTPS deaktiviert werden soll.",
   "symbols/LocalhostTld/displayName": "Verwenden der .dev.localhost-TLD in der Anwendungs-URL",
   "symbols/LocalhostTld/description": "Gibt an, ob der Projektname mit der .dev.localhost-TLD in der Anwendungs-URL für die lokale Entwicklung kombiniert werden soll, z. B. https://myapp.dev.localhost:12345. Unterstützt unter .NET 10 und höher.",
   "postActions/set-startup-project/description": "Legt das Startprojekt in der Lösung fest",
+  "postActions/set-startup-project/manualInstructions/default/text": "",
   "postActions/restore/description": "„NuGet-Pakete“ wiederherstellen, die für dieses Projekt erforderlich sind.",
   "postActions/restore/manualInstructions/default/text": "\"dotnet restore\" ausführen"
 }

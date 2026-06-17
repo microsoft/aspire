@@ -150,8 +150,8 @@ Note: When using `AddDatabase` in the AppHost, the database name is included in 
 
 * https://learn.microsoft.com/ef/core/
 * https://www.mongodb.com/docs/entity-framework/current/
-* https://github.com/dotnet/aspire/tree/main/src/Components/README.md
+* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

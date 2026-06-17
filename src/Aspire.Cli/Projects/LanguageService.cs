@@ -11,7 +11,7 @@ namespace Aspire.Cli.Projects;
 /// </summary>
 internal sealed class LanguageService : ILanguageService
 {
-    private const string LanguageConfigKey = "language";
+    private const string LanguageConfigKey = "appHost.language";
 
     private readonly IConfigurationService _configurationService;
     private readonly IInteractionService _interactionService;
@@ -33,7 +33,11 @@ internal sealed class LanguageService : ILanguageService
     /// <inheritdoc />
     public async Task<IAppHostProject?> GetConfiguredProjectAsync(CancellationToken cancellationToken = default)
     {
-        var languageId = await _configurationService.GetConfigurationAsync(LanguageConfigKey, cancellationToken);
+        // Try new nested key first, then fall back to legacy flat key.
+        // TODO: Remove "language" fallback once legacy .aspire/settings.json is no longer supported.
+        // Tracked by https://github.com/microsoft/aspire/issues/15239
+        var languageId = await _configurationService.GetConfigurationAsync(LanguageConfigKey, cancellationToken)
+            ?? await _configurationService.GetConfigurationAsync("language", cancellationToken);
 
         if (string.IsNullOrWhiteSpace(languageId))
         {
@@ -81,20 +85,19 @@ internal sealed class LanguageService : ILanguageService
             return (_projectFactory.GetProject(lang), lang);
         }
 
-        _interactionService.DisplayEmptyLine();
-        _interactionService.DisplayMarkdown("""
+        _interactionService.DisplayMarkdown(
+            """
             # Select AppHost Language
 
             Choose the programming language for your Aspire AppHost.
             This selection will be saved for future use.
             """);
-        _interactionService.DisplayEmptyLine();
 
         var selected = await _interactionService.PromptForSelectionAsync(
             "Which language would you like to use?",
             languages,
             lang => lang.DisplayName,
-            cancellationToken);
+            cancellationToken: cancellationToken);
 
         return (_projectFactory.GetProject(selected), selected);
     }
@@ -102,7 +105,18 @@ internal sealed class LanguageService : ILanguageService
     /// <inheritdoc />
     public async Task<IAppHostProject> GetOrPromptForProjectAsync(
         string? explicitLanguageId = null,
-        bool saveSelection = true,
+        bool saveLanguageSelection = true,
+        CancellationToken cancellationToken = default)
+    {
+        var selection = await GetOrPromptForProjectSelectionAsync(explicitLanguageId, saveLanguageSelection, cancellationToken);
+
+        return selection.Project;
+    }
+
+    /// <inheritdoc />
+    public async Task<AppHostProjectSelection> GetOrPromptForProjectSelectionAsync(
+        string? explicitLanguageId = null,
+        bool saveLanguageSelection = true,
         CancellationToken cancellationToken = default)
     {
         // If explicitly specified, use that
@@ -114,26 +128,27 @@ internal sealed class LanguageService : ILanguageService
                 _interactionService.DisplayError($"Unknown language: '{explicitLanguageId}'");
                 throw new ArgumentException($"Unknown language: '{explicitLanguageId}'", nameof(explicitLanguageId));
             }
-            return _projectFactory.GetProject(language);
+
+            return new AppHostProjectSelection(_projectFactory.GetProject(language), ShouldPersistSelection: false);
         }
 
         // Check if configured
         var configuredProject = await GetConfiguredProjectAsync(cancellationToken);
         if (configuredProject is not null)
         {
-            return configuredProject;
+            return new AppHostProjectSelection(configuredProject, ShouldPersistSelection: false);
         }
 
         // Prompt for selection
         var (selectedProject, selectedLanguage) = await PromptForProjectWithLanguageAsync(cancellationToken);
 
         // Save the language ID
-        if (saveSelection)
+        if (saveLanguageSelection)
         {
             await SetLanguageAsync(selectedLanguage.LanguageId, isGlobal: false, cancellationToken);
-            _interactionService.DisplayMessage("check_mark", $"Language preference saved to local settings: {selectedProject.DisplayName}");
+            _interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Language preference saved to local configuration: {selectedProject.DisplayName}");
         }
 
-        return selectedProject;
+        return new AppHostProjectSelection(selectedProject, ShouldPersistSelection: !saveLanguageSelection);
     }
 }

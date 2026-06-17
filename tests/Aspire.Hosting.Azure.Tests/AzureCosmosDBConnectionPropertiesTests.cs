@@ -65,7 +65,7 @@ public class AzureCosmosDBConnectionPropertiesTests
             property =>
             {
                 Assert.Equal("Uri", property.Key);
-                Assert.Equal("https://{cosmos.bindings.emulator.host}:{cosmos.bindings.emulator.port}", property.Value.ValueExpression);
+                Assert.Equal("{cosmos.bindings.emulator.url}", property.Value.ValueExpression);
             },
             property =>
             {

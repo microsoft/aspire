@@ -40,12 +40,6 @@ public sealed class PostConfigureDashboardOptions : IPostConfigureOptions<Dashbo
             options.Otlp.HttpEndpointUrl = otlpHttpUrl;
         }
 
-        // Copy aliased config values to the strongly typed options.
-        if (_configuration[DashboardConfigNames.DashboardMcpUrlName.ConfigKey] is { Length: > 0 } mcpUrl)
-        {
-            options.Mcp.EndpointUrl = mcpUrl;
-        }
-
         if (_configuration[DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] is { Length: > 0 } frontendUrls)
         {
             options.Frontend.EndpointUrls = frontendUrls;
@@ -62,17 +56,13 @@ public sealed class PostConfigureDashboardOptions : IPostConfigureOptions<Dashbo
         {
             options.Frontend.AuthMode = FrontendAuthMode.Unsecured;
             options.Otlp.AuthMode = OtlpAuthMode.Unsecured;
-            options.Mcp.AuthMode = McpAuthMode.Unsecured;
             options.Api.AuthMode = ApiAuthMode.Unsecured;
         }
         else
         {
             options.Frontend.AuthMode ??= FrontendAuthMode.BrowserToken;
             options.Otlp.AuthMode ??= OtlpAuthMode.Unsecured;
-
-            // If an API key is configured, default to ApiKey auth mode instead of Unsecured.
-            options.Mcp.AuthMode ??= string.IsNullOrEmpty(options.Mcp.PrimaryApiKey) ? McpAuthMode.Unsecured : McpAuthMode.ApiKey;
-            options.Api.AuthMode ??= string.IsNullOrEmpty(options.Api.PrimaryApiKey) ? ApiAuthMode.Unsecured : ApiAuthMode.ApiKey;
+            options.Api.AuthMode ??= ApiAuthMode.ApiKey;
         }
 
         if (options.Frontend.AuthMode == FrontendAuthMode.BrowserToken && string.IsNullOrEmpty(options.Frontend.BrowserToken))
@@ -85,20 +75,40 @@ public sealed class PostConfigureDashboardOptions : IPostConfigureOptions<Dashbo
             options.Frontend.BrowserToken = token;
         }
 
-        options.AI.Disabled = _configuration.GetBool(DashboardConfigNames.DashboardAIDisabledName.ConfigKey);
-
-        // Normalize API keys: Api is canonical, falls back to Mcp if not set.
-        // Api -> Mcp fallback only (not bidirectional).
-        if (string.IsNullOrEmpty(options.Mcp.PrimaryApiKey) && !string.IsNullOrEmpty(options.Api.PrimaryApiKey))
+        if (options.Api.AuthMode == ApiAuthMode.ApiKey && string.IsNullOrEmpty(options.Api.PrimaryApiKey))
         {
-            _logger.LogDebug("Defaulting Mcp.PrimaryApiKey from Api.PrimaryApiKey.");
-            options.Mcp.PrimaryApiKey = options.Api.PrimaryApiKey;
+            var apiKey = TokenGenerator.GenerateToken();
+
+            // Set the generated API key in configuration. This is required because options could be created multiple times
+            // (at startup, after CI is created, after options change). Setting the key in configuration makes it consistent.
+            _configuration[DashboardConfigNames.DashboardApiPrimaryApiKeyName.ConfigKey] = apiKey;
+            options.Api.PrimaryApiKey = apiKey;
         }
 
-        if (string.IsNullOrEmpty(options.Mcp.SecondaryApiKey) && !string.IsNullOrEmpty(options.Api.SecondaryApiKey))
+        // ASPIRE_DASHBOARD_AI_DISABLED takes precendence over ASPIRE__DASHBOARD__AI__DISABLED.
+        if (_configuration.GetBool(DashboardConfigNames.DashboardAIDisabledName.ConfigKey) is { } aiDisabled)
         {
-            options.Mcp.SecondaryApiKey = options.Api.SecondaryApiKey;
+            options.AI.Disabled = aiDisabled;
         }
+        else
+        {
+            // If there is no explicit setting then default to disabled.
+            options.AI.Disabled = true;
+        }
+
+        // DashboardAspireApiDisabledName takes precedence over DashboardAspireApiEnabledName.
+        if (_configuration.GetBool(DashboardConfigNames.DashboardAspireApiDisabledName.ConfigKey) is { } apiDisabled)
+        {
+            options.Api.Disabled ??= apiDisabled;
+        }
+        else if (_configuration.GetBool(DashboardConfigNames.DashboardAspireApiEnabledName.ConfigKey) is { } apiEnabled)
+        {
+#pragma warning disable CS0618 // Type or member is obsolete
+            options.Api.Enabled ??= apiEnabled;
+#pragma warning restore CS0618
+        }
+
+        options.Api.Disabled ??= false;
 
         if (_configuration.GetBool(DashboardConfigNames.Legacy.DashboardOtlpSuppressUnsecuredTelemetryMessageName.ConfigKey) is { } suppressUnsecuredTelemetryMessage)
         {

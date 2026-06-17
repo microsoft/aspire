@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+
 using Aspire.TestUtilities;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
@@ -13,7 +15,7 @@ using Polly;
 
 namespace Aspire.Hosting.Oracle.Tests;
 
-[ActiveIssue("https://github.com/dotnet/aspire/issues/5362", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningOnCI))]
+[ActiveIssue("https://github.com/microsoft/aspire/issues/5362", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningOnCI))]
 public class OracleFunctionalTests(ITestOutputHelper testOutputHelper)
 {
     // Folders created for mounted folders need to be granted specific permissions
@@ -69,7 +71,7 @@ public class OracleFunctionalTests(ITestOutputHelper testOutputHelper)
 
     [Theory]
     [InlineData(true)]
-    [InlineData(false, Skip = "https://github.com/dotnet/aspire/issues/5191")]
+    [InlineData(false, Skip = "https://github.com/microsoft/aspire/issues/5191")]
     [RequiresFeature(TestFeature.Docker)]
     public async Task WithDataShouldPersistStateBetweenUsages(bool useVolume)
     {
@@ -344,7 +346,7 @@ public class OracleFunctionalTests(ITestOutputHelper testOutputHelper)
 
     [Theory]
     [InlineData(true)]
-    [InlineData(false, Skip = "https://github.com/dotnet/aspire/issues/5190")]
+    [InlineData(false, Skip = "https://github.com/microsoft/aspire/issues/5190")]
     [RequiresFeature(TestFeature.Docker)]
     public async Task VerifyWithInitFiles(bool init)
     {
@@ -476,4 +478,14 @@ public class OracleFunctionalTests(ITestOutputHelper testOutputHelper)
 
         await app.StopAsync();
     }
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public Task Oracle_WithPersistentLifetime_ReusesContainer()
+    {
+        return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
+            testOutputHelper,
+            builder => builder.AddOracle("resource").WithPersistentLifetime(),
+            "resource");
+    }
+
 }

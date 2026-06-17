@@ -5,6 +5,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "5")]
 public class WithCertificateAuthorityCollectionTests
 {
     [Fact]
@@ -20,7 +21,7 @@ public class WithCertificateAuthorityCollectionTests
                                {
                                    Assert.NotNull(context.Resource);
 
-                                   var sp = context.ExecutionContext.ServiceProvider;
+                                   var sp = context.ExecutionContext.Services;
                                    context.EnvironmentVariables["SP_AVAILABLE"] = sp is not null ? "true" : "false";
                                })
                                .WithCertificateAuthorityCollection(bundle1)

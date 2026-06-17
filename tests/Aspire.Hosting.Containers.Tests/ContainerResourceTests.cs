@@ -102,10 +102,7 @@ public class ContainerResourceTests
                 e.AllocatedEndpoint = new(e, "localhost", 1234, targetPortExpression: "1234");
 
                 // For container-container lookup we need to add an AllocatedEndpoint on the container network side
-                var ccae = new AllocatedEndpoint(e, "c1.dev.internal", 2234, EndpointBindingMode.SingleAddress, targetPortExpression: "2234", KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
-                var snapshot = new ValueSnapshot<AllocatedEndpoint>();
-                snapshot.SetValue(ccae);
-                e.AllAllocatedEndpoints.TryAdd(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, snapshot);
+                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "c1.dev.internal", 2234, EndpointBindingMode.SingleAddress, targetPortExpression: "2234", KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
             });
 
         var c2 = appBuilder.AddContainer("container", "none")
@@ -113,10 +110,7 @@ public class ContainerResourceTests
              {
                  e.UriScheme = "http";
                  // We only care about the container-side endpoint for this test
-                 var snapshot = new ValueSnapshot<AllocatedEndpoint>();
-                 var ae = new AllocatedEndpoint(e, "container.dev.internal", 5678, EndpointBindingMode.SingleAddress, targetPortExpression: "5678", KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
-                 snapshot.SetValue(ae);
-                 e.AllAllocatedEndpoints.TryAdd(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, snapshot);
+                 e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "container.dev.internal", 5678, EndpointBindingMode.SingleAddress, targetPortExpression: "5678", KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
              })
              .WithArgs(context =>
              {

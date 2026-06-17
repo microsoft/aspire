@@ -9,7 +9,6 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.DependencyInjection;
 using Aspire.Cli.Utils;
-using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Commands;
@@ -22,7 +21,7 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
         using var tempRepo = TemporaryWorkspace.Create(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("deploy --help");
@@ -52,15 +51,15 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
         // Act
-        var result = command.Parse("deploy --project invalid.csproj");
+        var result = command.Parse("deploy --apphost invalid.csproj");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
-        Assert.Equal(ExitCodeConstants.FailedToFindProject, exitCode); // Ensure the command fails
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode); // Ensure the command fails
     }
 
     [Fact]
@@ -86,15 +85,15 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
         // Act
-        var result = command.Parse("deploy --project valid.csproj");
+        var result = command.Parse("deploy --apphost valid.csproj");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
-        Assert.Equal(ExitCodeConstants.AppHostIncompatible, exitCode); // Ensure the command fails
+        Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode); // Ensure the command fails
     }
 
     [Fact]
@@ -111,7 +110,7 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
             {
                 var runner = new TestDotNetCliRunner
                 {
-                    BuildAsyncCallback = (projectFile, options, cancellationToken) =>
+                    BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) =>
                     {
                         return 1; // Simulate a build failure
                     }
@@ -120,15 +119,15 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
         // Act
-        var result = command.Parse("deploy --project valid.csproj");
+        var result = command.Parse("deploy --apphost valid.csproj");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
-        Assert.Equal(ExitCodeConstants.FailedToBuildArtifacts, exitCode); // Ensure the command fails
+        Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode); // Ensure the command fails
     }
 
     [Fact]
@@ -146,7 +145,7 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
                 var runner = new TestDotNetCliRunner
                 {
                     // Simulate a successful build
-                    BuildAsyncCallback = (projectFile, options, cancellationToken) => 0,
+                    BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
 
                     // Simulate a successful app host information retrieval
                     GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) =>
@@ -155,7 +154,7 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
                     },
 
                     // Simulate apphost running successfully and establishing a backchannel
-                    RunAsyncCallback = async (projectFile, watch, noBuild, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                    RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
                     {
                         Assert.True(options.NoLaunchProfile);
 
@@ -188,7 +187,7 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
         // Act
@@ -214,7 +213,7 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
                 var runner = new TestDotNetCliRunner
                 {
                     // Simulate a successful build
-                    BuildAsyncCallback = (projectFile, options, cancellationToken) => 0,
+                    BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
 
                     // Simulate a successful app host information retrieval
                     GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) =>
@@ -223,7 +222,7 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
                     },
 
                     // Simulate apphost running successfully and establishing a backchannel
-                    RunAsyncCallback = async (projectFile, watch, noBuild, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                    RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
                     {
                         Assert.True(options.NoLaunchProfile);
 
@@ -257,7 +256,7 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
         // Act
@@ -269,7 +268,6 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/dotnet/aspire/issues/11217")]
     public async Task DeployCommandIncludesDeployFlagInArguments()
     {
         using var tempRepo = TemporaryWorkspace.Create(outputHelper);
@@ -287,7 +285,7 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
                 var runner = new TestDotNetCliRunner
                 {
                     // Simulate a successful build
-                    BuildAsyncCallback = (projectFile, options, cancellationToken) => 0,
+                    BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
 
                     // Simulate a successful app host information retrieval
                     GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) =>
@@ -296,7 +294,7 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
                         },
 
                     // Simulate apphost running and verify --step deploy flag is passed
-                    RunAsyncCallback = async (projectFile, watch, noBuild, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                    RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
                         {
                             Assert.Contains("--operation", args);
                             Assert.Contains("publish", args);
@@ -329,7 +327,7 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
         // Act
@@ -355,7 +353,7 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
                 var runner = new TestDotNetCliRunner
                 {
                     // Simulate a successful build
-                    BuildAsyncCallback = (projectFile, options, cancellationToken) => 0,
+                    BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
 
                     // Simulate a successful app host information retrieval
                     GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) =>
@@ -364,7 +362,7 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
                     },
 
                     // Simulate apphost running but deployment fails
-                    RunAsyncCallback = async (projectFile, watch, noBuild, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                    RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
                     {
                         var deployModeCompleted = new TaskCompletionSource();
                         var backchannel = new TestAppHostBackchannel
@@ -389,7 +387,7 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
         // Act
@@ -397,7 +395,7 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
-        Assert.Equal(ExitCodeConstants.FailedToBuildArtifacts, exitCode); // Ensure the command returns a non-zero exit code
+        Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode); // Ensure the command returns a non-zero exit code
 
         static async IAsyncEnumerable<PublishingActivity> GetFailedDeploymentActivities([EnumeratorCancellation] CancellationToken cancellationToken)
         {

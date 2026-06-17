@@ -98,10 +98,10 @@ builder.AddQdrantClient("qdrant");
 ## Additional documentation
 
 * https://github.com/qdrant/qdrant-dotnet
-* https://github.com/dotnet/aspire/tree/main/src/Components/README.md
+* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire
 
 _Qdrant, and the Qdrant logo are trademarks or registered trademarks of Qdrant Solutions GmbH of Germany, and used with their permission._

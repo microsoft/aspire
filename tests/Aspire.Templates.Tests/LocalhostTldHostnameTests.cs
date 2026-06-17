@@ -23,7 +23,6 @@ public partial class LocalhostTldHostnameTests(ITestOutputHelper testOutput) : T
         { "aspire-apphost", "my.service.name", "my-service-name" },
         { "aspire-apphost-singlefile", "-my.service..name-", "my-service-name" },
         { "aspire-starter", "Test_App.1", "test-app-1" },
-        { "aspire-py-starter", "xn--Test_App_1", "xn-test-app-1" },
         { "aspire-ts-cs-starter", "My-App.Test", "my-app-test" }
     };
 
@@ -36,7 +35,7 @@ public partial class LocalhostTldHostnameTests(ITestOutputHelper testOutput) : T
 
         var targetFramework = templateName switch
         {
-            "aspire-apphost-singlefile" or "aspire-py-starter" => TestTargetFramework.None, // These templates do not support -f argument
+            "aspire-apphost-singlefile" => TestTargetFramework.None, // These templates do not support -f argument
             _ => TestTargetFramework.Next // LocalhostTld only available on net10.0
         };
 
@@ -57,7 +56,7 @@ public partial class LocalhostTldHostnameTests(ITestOutputHelper testOutput) : T
             "aspire-ts-cs-starter" or "aspire-starter" => Path.Combine(project.RootDir, $"{projectName}.AppHost", "Properties", "launchSettings.json"),
             "aspire" => Path.Combine(project.RootDir, $"{projectName}.AppHost", "Properties", "launchSettings.json"),
             "aspire-apphost" => Path.Combine(project.RootDir, "Properties", "launchSettings.json"),
-            "aspire-apphost-singlefile" or "aspire-py-starter" => Path.Combine(project.RootDir, "apphost.run.json"),
+            "aspire-apphost-singlefile" => Path.Combine(project.RootDir, "apphost.run.json"),
             _ => throw new ArgumentException($"Unknown template: {templateName}")
         };
 

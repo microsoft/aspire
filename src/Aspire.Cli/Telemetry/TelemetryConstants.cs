@@ -49,6 +49,11 @@ internal static class TelemetryConstants
         public const string ProcessExecutableName = "process.executable.name";
 
         /// <summary>
+        /// Tag for the resolved process executable path.
+        /// </summary>
+        public const string ProcessExecutablePath = "process.executable.path";
+
+        /// <summary>
         /// Tag for the process exit code.
         /// </summary>
         public const string ProcessExitCode = "process.exit.code";
@@ -69,6 +74,31 @@ internal static class TelemetryConstants
         public const string CliBuildId = "aspire.cli.build_id";
 
         /// <summary>
+        /// Tag for the CLI's effective identity version. This is the version the CLI is
+        /// behaving as — which honors <c>ASPIRE_CLI_VERSION</c> / the sidecar config — and may
+        /// differ from <see cref="CliVersion"/> (the physical binary's assembly version) when the
+        /// CLI is emulating another build for reproduction/diagnosis. See
+        /// docs/specs/cli-identity-sidecar.md.
+        /// </summary>
+        public const string IdentityVersion = "aspire.cli.identity.version";
+
+        /// <summary>
+        /// Tag for the CLI's effective identity commit (honors <c>ASPIRE_CLI_COMMIT</c> / sidecar).
+        /// May differ from the physical binary's commit when emulating another build.
+        /// </summary>
+        public const string IdentityCommit = "aspire.cli.identity.commit";
+
+        /// <summary>
+        /// Tag for the CLI's effective identity channel (honors <c>ASPIRE_CLI_CHANNEL</c> / sidecar).
+        /// </summary>
+        public const string IdentityChannel = "aspire.cli.identity.channel";
+
+        /// <summary>
+        /// Tag for the detected coding agent that invoked the CLI process.
+        /// </summary>
+        public const string CodingAgent = "process.coding_agent";
+
+        /// <summary>
         /// Tag for the deployment environment name ("ci" or "local").
         /// </summary>
         public const string DeploymentEnvironmentName = "deployment.environment.name";
@@ -84,14 +114,46 @@ internal static class TelemetryConstants
         public const string SdkMinimumRequiredVersion = "aspire.cli.sdk.minimum_required_version";
 
         /// <summary>
-        /// Tag indicating the result of the SDK installation attempt.
-        /// </summary>
-        public const string SdkInstallResult = "aspire.cli.sdk.install_result";
-
-        /// <summary>
         /// Tag indicating the result of the SDK check operation.
         /// </summary>
         public const string SdkCheckResult = "aspire.cli.sdk.check_result";
+
+        /// <summary>
+        /// Tag for the operating system name.
+        /// </summary>
+        public const string OsName = "os.name";
+
+        /// <summary>
+        /// Tag for the operating system type.
+        /// </summary>
+        public const string OsType = "os.type";
+
+        /// <summary>
+        /// Tag for the operating system version.
+        /// </summary>
+        public const string OsVersion = "os.version";
+
+        /// <summary>
+        /// Tag for the app host language identifier.
+        /// </summary>
+        public const string AppHostLanguage = "aspire.cli.apphost.language";
+
+        /// <summary>
+        /// Tag indicating whether the app host was launched in detached mode.
+        /// </summary>
+        public const string AppHostDetached = "aspire.cli.apphost.detached";
+
+        /// <summary>
+        /// Tag indicating whether the app host was launched in isolated mode.
+        /// </summary>
+        public const string AppHostIsolated = "aspire.cli.apphost.isolated";
+
+        /// <summary>
+        /// Tag for the error type when the operation fails.
+        /// Set to the exception type name or a descriptive error category.
+        /// Absence of this tag indicates success.
+        /// </summary>
+        public const string ErrorType = "error.type";
     }
 
     /// <summary>
@@ -108,6 +170,11 @@ internal static class TelemetryConstants
         /// Activity name for ensuring the SDK is installed.
         /// </summary>
         public const string EnsureSdkInstalled = "aspire/cli/ensure_sdk_installed";
+
+        /// <summary>
+        /// Activity name for running an app host.
+        /// </summary>
+        public const string RunAppHost = "aspire/cli/run_apphost";
     }
 
     /// <summary>

@@ -4,6 +4,7 @@
 using System.Globalization;
 
 namespace Aspire.Hosting.Tests;
+[Trait("Partition", "5")]
 public class ReferenceExpressionTests
 {
     [Theory]
@@ -120,5 +121,149 @@ public class ReferenceExpressionTests
         {
             return new("Hello World");
         }
+    }
+
+    private sealed class TestCondition(string value) : IValueProvider, IManifestExpressionProvider, IValueWithReferences
+    {
+        public string ValueExpression => "{test-condition.value}";
+
+        public IEnumerable<object> References => [this];
+
+        public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken = default) => new(value);
+    }
+
+    [Fact]
+    public void ConditionalExpression_ValueProviders_ReturnsUnionOfBothBranches()
+    {
+        var param1 = new Value();
+        var param2 = new Value();
+        var param3 = new Value();
+        var condition = new TestCondition("True");
+
+        var whenTrue = ReferenceExpression.Create($"prefix-{param1}-{param2}");
+        var whenFalse = ReferenceExpression.Create($"fallback-{param3}");
+
+        var conditional = ReferenceExpression.CreateConditional(condition, "True", whenTrue, whenFalse);
+
+        Assert.True(conditional.IsConditional);
+        Assert.Equal(3, conditional.ValueProviders.Count);
+        Assert.Same(param1, conditional.ValueProviders[0]);
+        Assert.Same(param2, conditional.ValueProviders[1]);
+        Assert.Same(param3, conditional.ValueProviders[2]);
+    }
+
+    [Fact]
+    public void ConditionalExpression_ValueProviders_EmptyWhenBranchesHaveNoProviders()
+    {
+        var condition = new TestCondition("True");
+
+        var whenTrue = ReferenceExpression.Create($"literal-a");
+        var whenFalse = ReferenceExpression.Create($"literal-b");
+
+        var conditional = ReferenceExpression.CreateConditional(condition, "True", whenTrue, whenFalse);
+
+        Assert.True(conditional.IsConditional);
+        Assert.Empty(conditional.ValueProviders);
+    }
+
+    [Fact]
+    public void ConditionalExpression_References_IncludesConditionAndBothBranches()
+    {
+        var param1 = new Value();
+        var param2 = new Value();
+        var condition = new TestCondition("True");
+
+        var whenTrue = ReferenceExpression.Create($"{param1}");
+        var whenFalse = ReferenceExpression.Create($"{param2}");
+
+        var conditional = ReferenceExpression.CreateConditional(condition, "True", whenTrue, whenFalse);
+
+        var references = ((IValueWithReferences)conditional).References.ToList();
+
+        // References should include the condition's references, then each branch's references
+        Assert.Contains(condition, references);
+        Assert.Contains(param1, references);
+        Assert.Contains(param2, references);
+    }
+
+    [Fact]
+    public void NestedConditionalExpression_ValueProviders_IncludesAllNestedProviders()
+    {
+        var outerCondition = new TestCondition("True");
+        var innerCondition = new TestCondition("Yes");
+        var param1 = new Value();
+        var param2 = new Value();
+        var param3 = new Value();
+
+        // Inner conditional: if innerCondition == "Yes" then param1 else param2
+        var innerConditional = ReferenceExpression.CreateConditional(
+            innerCondition, "Yes",
+            ReferenceExpression.Create($"{param1}"),
+            ReferenceExpression.Create($"{param2}"));
+
+        // Outer conditional: if outerCondition == "True" then innerConditional else param3
+        var outerConditional = ReferenceExpression.CreateConditional(
+            outerCondition, "True",
+            innerConditional,
+            ReferenceExpression.Create($"{param3}"));
+
+        // Outer ValueProviders should be the union of:
+        //   innerConditional.ValueProviders (param1, param2) + whenFalse.ValueProviders (param3)
+        Assert.Equal(3, outerConditional.ValueProviders.Count);
+        Assert.Same(param1, outerConditional.ValueProviders[0]);
+        Assert.Same(param2, outerConditional.ValueProviders[1]);
+        Assert.Same(param3, outerConditional.ValueProviders[2]);
+    }
+
+    [Fact]
+    public void NestedConditionalExpression_References_IncludesAllNestedReferences()
+    {
+        var outerCondition = new TestCondition("True");
+        var innerCondition = new TestCondition("Yes");
+        var param1 = new Value();
+        var param2 = new Value();
+        var param3 = new Value();
+
+        var innerConditional = ReferenceExpression.CreateConditional(
+            innerCondition, "Yes",
+            ReferenceExpression.Create($"{param1}"),
+            ReferenceExpression.Create($"{param2}"));
+
+        var outerConditional = ReferenceExpression.CreateConditional(
+            outerCondition, "True",
+            innerConditional,
+            ReferenceExpression.Create($"{param3}"));
+
+        var references = ((IValueWithReferences)outerConditional).References.ToList();
+
+        // Outer condition's references
+        Assert.Contains(outerCondition, references);
+        // Inner conditional's references (condition + both branches)
+        Assert.Contains(innerCondition, references);
+        Assert.Contains(param1, references);
+        Assert.Contains(param2, references);
+        // Outer false branch
+        Assert.Contains(param3, references);
+    }
+
+    [Fact]
+    public void DuplicateConditionalExpressions_HaveSameName()
+    {
+        var condition = new TestCondition("True");
+        var param1 = new Value();
+        var param2 = new Value();
+
+        var conditional1 = ReferenceExpression.CreateConditional(
+            condition, "True",
+            ReferenceExpression.Create($"{param1}"),
+            ReferenceExpression.Create($"{param2}"));
+
+        var conditional2 = ReferenceExpression.CreateConditional(
+            condition, "True",
+            ReferenceExpression.Create($"{param1}"),
+            ReferenceExpression.Create($"{param2}"));
+
+        // Two identical conditionals should produce the same hash-based name
+        Assert.Equal(conditional1.ValueExpression, conditional2.ValueExpression);
     }
 }

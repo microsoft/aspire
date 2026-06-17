@@ -21,6 +21,7 @@ internal static class ManifestPublishingExtensions
     /// </summary>
     /// <param name="pipeline">The pipeline to add the manifest publishing step to.</param>
     /// <returns>The pipeline for chaining.</returns>
+    [AspireExportIgnore(Reason = "Manifest publishing is an internal pipeline step and not part of the polyglot AppHost surface.")]
     public static IDistributedApplicationPipeline AddManifestPublishing(this IDistributedApplicationPipeline pipeline)
     {
         var step = new PipelineStep

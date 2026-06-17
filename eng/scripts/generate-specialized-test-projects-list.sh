@@ -20,8 +20,10 @@ OUTPUT_FILE="$2"
 
 mkdir -p "$(dirname "$OUTPUT_FILE")"
 
-# Find all test files with the attribute and extract unique top-level test directories
-PROJECTS=$(grep -rl "^ *\[${ATTRIBUTE_NAME}(\"[^\"]*\")\]" "$REPO_ROOT/tests" 2>/dev/null \
+# Find all test files with the attribute and extract unique top-level test directories.
+# Match both method/class-level attributes like [OuterloopTest("reason")] and
+# assembly-level attributes like [assembly: OuterloopTest("reason")].
+PROJECTS=$(grep -Erl "^[[:space:]]*\\[(assembly:[[:space:]]*)?${ATTRIBUTE_NAME}(Attribute)?(\\(\"[^\"]*\"\\))?\\]" "$REPO_ROOT/tests" 2>/dev/null \
     | while read -r file; do
         # Extract the top-level test directory (e.g., tests/Aspire.Hosting.Tests)
         rel_path="${file#$REPO_ROOT/}"

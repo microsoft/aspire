@@ -1,17 +1,18 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREINTERACTION001
-
 using System.Collections.Immutable;
 using System.Data;
 using System.Diagnostics;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dashboard;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -34,6 +35,7 @@ internal sealed class ApplicationOrchestrator
     private readonly DistributedApplicationExecutionContext _executionContext;
     private readonly ParameterProcessor _parameterProcessor;
     private readonly CancellationTokenSource _shutdownCancellation = new();
+    private IConfiguration? Configuration => _serviceProvider.GetService<IConfiguration>();
 
     public ApplicationOrchestrator(DistributedApplicationModel model,
                                    IDcpExecutor dcpExecutor,
@@ -68,6 +70,7 @@ internal sealed class ApplicationOrchestrator
         dcpExecutorEvents.Subscribe<OnResourceChangedContext>(OnResourceChanged);
         dcpExecutorEvents.Subscribe<OnEndpointsAllocatedContext>(OnEndpointsAllocated);
         dcpExecutorEvents.Subscribe<OnResourceStartingContext>(OnResourceStarting);
+        dcpExecutorEvents.Subscribe<OnConnectionStringAvailableContext>(OnConnectionStringAvailable);
         dcpExecutorEvents.Subscribe<OnResourceFailedToStartContext>(OnResourceFailedToStart);
 
         _eventing.Subscribe<ResourceEndpointsAllocatedEvent>(OnResourceEndpointsAllocated);
@@ -92,6 +95,7 @@ internal sealed class ApplicationOrchestrator
 
     private async Task WaitForInBeforeResourceStartedEvent(BeforeResourceStartedEvent @event, CancellationToken cancellationToken)
     {
+        using var activity = ProfilingTelemetry.StartResourceBeforeStartWait(Configuration, @event.Resource);
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         var waitForDependenciesTask = _notificationService.WaitForDependenciesAsync(@event.Resource, cts.Token);
@@ -117,6 +121,11 @@ internal sealed class ApplicationOrchestrator
                 await completedTask.ConfigureAwait(false);
             }
         }
+        catch (Exception ex)
+        {
+            activity.SetError(ex);
+            throw;
+        }
         finally
         {
             // Ensure both wait tasks are cancelled.
@@ -124,17 +133,11 @@ internal sealed class ApplicationOrchestrator
         }
     }
 
-    private async Task OnEndpointsAllocated(OnEndpointsAllocatedContext context)
+    private Task OnEndpointsAllocated(OnEndpointsAllocatedContext context)
     {
-#pragma warning disable CS0618 // Type or member is obsolete
-        var afterEndpointsAllocatedEvent = new AfterEndpointsAllocatedEvent(_serviceProvider, _model);
-#pragma warning restore CS0618 // Type or member is obsolete
-        await _eventing.PublishAsync(afterEndpointsAllocatedEvent, context.CancellationToken).ConfigureAwait(false);
-
-        foreach (var lifecycleHook in _lifecycleHooks)
-        {
-            await lifecycleHook.AfterEndpointsAllocatedAsync(_model, context.CancellationToken).ConfigureAwait(false);
-        }
+        // Endpoint allocation can now complete after resource creation, so there is no longer a single
+        // app-wide point where all endpoints are guaranteed to be allocated.
+        return Task.CompletedTask;
     }
 
     private async Task PublishResourceEndpointUrls(IResource resource, CancellationToken cancellationToken)
@@ -178,10 +181,19 @@ internal sealed class ApplicationOrchestrator
 
                 break;
             case KnownResourceTypes.Container:
+            {
+                var (displayName, isHighlighted, sortOrder) = ResourcePropertySnapshotMetadata.Get(KnownResourceTypes.Container, KnownProperties.Container.Image);
+                var imageName = context.Resource.TryGetContainerImageName(out var resolvedImageName) ? resolvedImageName : "";
+
                 await PublishUpdateAsync(_notificationService, context.Resource, context.DcpResourceName, s => s with
                 {
                     State = KnownResourceStates.Starting,
-                    Properties = s.Properties.SetResourceProperty(KnownProperties.Container.Image, context.Resource.TryGetContainerImageName(out var imageName) ? imageName : ""),
+                    Properties = s.Properties.SetResourceProperty(
+                        KnownProperties.Container.Image,
+                        imageName,
+                        displayName: displayName,
+                        isHighlighted: isHighlighted,
+                        sortOrder: sortOrder),
                     HealthReports = GetInitialHealthReports(context.Resource)
                 })
                 .ConfigureAwait(false);
@@ -189,11 +201,10 @@ internal sealed class ApplicationOrchestrator
                 Debug.Assert(context.DcpResourceName is not null, "Container that is starting should always include the DCP name.");
                 await SetChildResourceAsync(context.Resource, state: KnownResourceStates.Starting, startTimeStamp: null, stopTimeStamp: null).ConfigureAwait(false);
                 break;
+            }
             default:
                 break;
         }
-
-        await PublishConnectionStringAvailableEvent(context.Resource, context.CancellationToken).ConfigureAwait(false);
 
         var beforeResourceStartedEvent = new BeforeResourceStartedEvent(context.Resource, _serviceProvider);
         await _eventing.PublishAsync(beforeResourceStartedEvent, context.CancellationToken).ConfigureAwait(false);
@@ -211,6 +222,11 @@ internal sealed class ApplicationOrchestrator
         await PublishResourcesInitialStateAsync(context.CancellationToken).ConfigureAwait(false);
     }
 
+    private async Task OnConnectionStringAvailable(OnConnectionStringAvailableContext context)
+    {
+        await PublishConnectionStringAvailableEvent(context.Resource, context.CancellationToken).ConfigureAwait(false);
+    }
+
     private async Task ProcessResourceUrlCallbacks(IResource resource, CancellationToken cancellationToken)
     {
         var urls = new List<ResourceUrlAnnotation>();
@@ -224,7 +240,7 @@ internal sealed class ApplicationOrchestrator
                 foreach (var endpoint in endpoints)
                 {
                     // Create a URL for each endpoint
-                    Debug.Assert(endpoint.AllocatedEndpoint is not null, "Endpoint should be allocated at this point as we're calling this from ResourceEndpointsAllocatedEvent handler.");
+                    Debug.Assert(endpoint.AllocatedEndpoint is not null, "Endpoint should be allocated at this point as we're processing resource endpoint allocation.");
                     if (endpoint.AllocatedEndpoint is not { } allocatedEndpoint)
                     {
                         continue;
@@ -523,9 +539,13 @@ internal sealed class ApplicationOrchestrator
 
     private async Task OnResourceFailedToStart(OnResourceFailedToStartContext context)
     {
+        var stateSnapshot = context.ErrorMessage is not null
+            ? new ResourceStateSnapshot(KnownResourceStates.FailedToStart, KnownResourceStateStyles.Error)
+            : new ResourceStateSnapshot(KnownResourceStates.FailedToStart, null);
+
         if (context.DcpResourceName != null)
         {
-            await _notificationService.PublishUpdateAsync(context.Resource, context.DcpResourceName, s => s with { State = KnownResourceStates.FailedToStart }).ConfigureAwait(false);
+            await _notificationService.PublishUpdateAsync(context.Resource, context.DcpResourceName, s => s with { State = stateSnapshot }).ConfigureAwait(false);
 
             if (context.ResourceType == KnownResourceTypes.Container)
             {
@@ -534,7 +554,7 @@ internal sealed class ApplicationOrchestrator
         }
         else
         {
-            await _notificationService.PublishUpdateAsync(context.Resource, s => s with { State = KnownResourceStates.FailedToStart }).ConfigureAwait(false);
+            await _notificationService.PublishUpdateAsync(context.Resource, s => s with { State = stateSnapshot }).ConfigureAwait(false);
         }
     }
 

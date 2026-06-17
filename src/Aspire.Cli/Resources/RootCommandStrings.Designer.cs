@@ -79,6 +79,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Aspire CLI is emulating identity &apos;{0}&apos; version &apos;{1}&apos;. Behavior may differ from the installed build; identity was overridden via environment variables or the install sidecar..
+        /// </summary>
+        public static string IdentityOverrideNotice {
+            get {
+                return ResourceManager.GetString("IdentityOverrideNotice", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Welcome to the.
         /// </summary>
         public static string BannerWelcomeText {
@@ -129,20 +138,11 @@ namespace Aspire.Cli.Resources {
         ///
         ///The Aspire CLI collects usage data. It is collected by Microsoft and is used to help us improve your experience. You can opt out of telemetry by setting the ASPIRE_CLI_TELEMETRY_OPTOUT environment variable to &apos;1&apos; or &apos;true&apos; using your preferred shell.
         ///
-        ///Read more about Aspire CLI telemetry: https://aka.ms/aspire/cli-telemetry.
+        ///Read more about Aspire CLI telemetry: {0}.
         /// </summary>
         public static string FirstTimeUseTelemetryNotice {
             get {
                 return ResourceManager.GetString("FirstTimeUseTelemetryNotice", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Welcome to Aspire! Learn more about Aspire at https://aspire.dev.
-        /// </summary>
-        public static string FirstTimeUseWelcome {
-            get {
-                return ResourceManager.GetString("FirstTimeUseWelcome", resourceCulture);
             }
         }
 
@@ -152,6 +152,15 @@ namespace Aspire.Cli.Resources {
         public static string NoLogoArgumentDescription {
             get {
                 return ResourceManager.GetString("NoLogoArgumentDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Run the command in non-interactive mode, disabling all interactive prompts and spinners..
+        /// </summary>
+        public static string NonInteractiveArgumentDescription {
+            get {
+                return ResourceManager.GetString("NonInteractiveArgumentDescription", resourceCulture);
             }
         }
 

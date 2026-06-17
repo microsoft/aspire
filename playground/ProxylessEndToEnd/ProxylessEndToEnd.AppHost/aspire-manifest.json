@@ -1,10 +1,9 @@
 {
-  "$schema": "https://json.schemastore.org/aspire-8.0.json",
   "resources": {
     "redis": {
       "type": "container.v0",
-      "connectionString": "{redis.bindings.tcp.host}:{redis.bindings.tcp.port},password={redis-password.value}",
-      "image": "docker.io/library/redis:8.2",
+      "connectionString": "{redis.bindings.tcp.host}:{redis.bindings.tcp.port},password={redis-password.value}{cond-redis-bindings-tcp-tlsenabled-d148d83a.connectionString}",
+      "image": "docker.io/library/redis:8.6",
       "entrypoint": "/bin/sh",
       "args": [
         "-c",
@@ -15,7 +14,7 @@
       },
       "bindings": {
         "tcp": {
-          "scheme": "tcp",
+          "scheme": "redis",
           "protocol": "tcp",
           "transport": "tcp",
           "port": 9999,
@@ -34,7 +33,7 @@
         "REDIS_HOST": "{redis.bindings.tcp.host}",
         "REDIS_PORT": "{redis.bindings.tcp.port}",
         "REDIS_PASSWORD": "{redis-password.value}",
-        "REDIS_URI": "redis://:{redis-password-uri-encoded.value}@{redis.bindings.tcp.host}:{redis.bindings.tcp.port}"
+        "REDIS_URI": "{redis.bindings.tcp.scheme}://:{redis-password-uri-encoded.value}@{redis.bindings.tcp.host}:{redis.bindings.tcp.port}"
       },
       "bindings": {
         "http": {
@@ -61,7 +60,7 @@
         "REDIS_HOST": "{redis.bindings.tcp.host}",
         "REDIS_PORT": "{redis.bindings.tcp.port}",
         "REDIS_PASSWORD": "{redis-password.value}",
-        "REDIS_URI": "redis://:{redis-password-uri-encoded.value}@{redis.bindings.tcp.host}:{redis.bindings.tcp.port}"
+        "REDIS_URI": "{redis.bindings.tcp.scheme}://:{redis-password-uri-encoded.value}@{redis.bindings.tcp.host}:{redis.bindings.tcp.port}"
       },
       "bindings": {
         "http": {
@@ -92,6 +91,10 @@
       "type": "annotated.string",
       "value": "{redis-password.value}",
       "filter": "uri"
+    },
+    "cond-redis-bindings-tcp-tlsenabled-d148d83a": {
+      "type": "value.v0",
+      "connectionString": ""
     }
   }
 }

@@ -28,18 +28,18 @@
         <note>{0} is the key, {1} is the value</note>
       </trans-unit>
       <trans-unit id="DeleteCommand_Description">
-        <source>Delete a configuration value.</source>
-        <target state="translated">Löschen Sie einen Konfigurationswert.</target>
+        <source>Delete a configuration value</source>
+        <target state="needs-review-translation">Löschen Sie einen Konfigurationswert.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteCommand_GlobalArgumentDescription">
-        <source>Delete the configuration value from the global $HOME/.aspire/settings.json instead of the local settings file.</source>
-        <target state="translated">Löschen Sie den Konfigurationswert aus der globalen „$HOME/.aspire/settings.json“ anstelle der lokalen Einstellungsdatei.</target>
+        <source>Delete the configuration value from the global $HOME/.aspire/settings.json instead of the local settings file</source>
+        <target state="needs-review-translation">Löschen Sie den Konfigurationswert aus der globalen „$HOME/.aspire/settings.json“ anstelle der lokalen Einstellungsdatei.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteCommand_KeyArgumentDescription">
-        <source>The configuration key to delete.</source>
-        <target state="translated">Der zu löschende Konfigurationsschlüssel.</target>
+        <source>The configuration key to delete</source>
+        <target state="needs-review-translation">Der zu löschende Konfigurationsschlüssel.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteCommand_PromptForGlobal">
@@ -53,8 +53,8 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Manage configuration settings.</source>
-        <target state="translated">Verwalten Sie Konfigurationseinstellungen.</target>
+        <source>Manage CLI configuration including feature flags</source>
+        <target state="needs-review-translation">Verwalten Sie Konfigurationseinstellungen.</target>
         <note />
       </trans-unit>
       <trans-unit id="ExtensionActionPrompt">
@@ -63,13 +63,13 @@
         <note />
       </trans-unit>
       <trans-unit id="GetCommand_Description">
-        <source>Get a configuration value.</source>
-        <target state="translated">Rufen Sie einen Konfigurationswert ab.</target>
+        <source>Get a configuration value</source>
+        <target state="needs-review-translation">Rufen Sie einen Konfigurationswert ab.</target>
         <note />
       </trans-unit>
       <trans-unit id="GetCommand_KeyArgumentDescription">
-        <source>The configuration key to retrieve.</source>
-        <target state="translated">Der abzurufende Konfigurationsschlüssel.</target>
+        <source>The configuration key to retrieve</source>
+        <target state="needs-review-translation">Der abzurufende Konfigurationsschlüssel.</target>
         <note />
       </trans-unit>
       <trans-unit id="GetCommand_PromptForKey">
@@ -82,14 +82,24 @@
         <target state="translated">Globale Konfiguration</target>
         <note />
       </trans-unit>
+      <trans-unit id="HeaderKey">
+        <source>Key</source>
+        <target state="translated">Schlüssel</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderValue">
+        <source>Value</source>
+        <target state="translated">Wert</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InfoCommand_AvailableFeatures">
         <source>Available features</source>
         <target state="translated">Verfügbare Features</target>
         <note />
       </trans-unit>
       <trans-unit id="InfoCommand_Description">
-        <source>Display configuration file paths and available features.</source>
-        <target state="translated">Konfigurationsdateipfade und verfügbare Funktionen anzeigen.</target>
+        <source>Display configuration file paths and available features</source>
+        <target state="needs-review-translation">Konfigurationsdateipfade und verfügbare Funktionen anzeigen.</target>
         <note />
       </trans-unit>
       <trans-unit id="InfoCommand_GlobalSettingsPath">
@@ -98,8 +108,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InfoCommand_JsonOptionDescription">
-        <source>Output information in JSON format.</source>
-        <target state="translated">Informationen im JSON-Format ausgeben.</target>
+        <source>Output information in JSON format</source>
+        <target state="needs-review-translation">Informationen im JSON-Format ausgeben.</target>
         <note />
       </trans-unit>
       <trans-unit id="InfoCommand_LocalSettingsPath">
@@ -112,9 +122,19 @@
         <target state="translated">Eigenschaften der Einstellungsdatei</target>
         <note />
       </trans-unit>
+      <trans-unit id="ListCommand_AllFeaturesHint">
+        <source>Run 'aspire config list --all' to see all available feature flags.</source>
+        <target state="new">Run 'aspire config list --all' to see all available feature flags.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ListCommand_AllOptionDescription">
+        <source>Show all available features that can be configured</source>
+        <target state="new">Show all available features that can be configured</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ListCommand_Description">
-        <source>List all configuration values.</source>
-        <target state="translated">Listen Sie alle Konfigurationswerte auf.</target>
+        <source>List all configuration values</source>
+        <target state="needs-review-translation">Listen Sie alle Konfigurationswerte auf.</target>
         <note />
       </trans-unit>
       <trans-unit id="LocalConfigurationHeader">
@@ -138,18 +158,18 @@
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_Description">
-        <source>Set a configuration value.</source>
-        <target state="translated">Legen Sie einen Konfigurationswert fest.</target>
+        <source>Set a configuration value</source>
+        <target state="needs-review-translation">Legen Sie einen Konfigurationswert fest.</target>
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_GlobalArgumentDescription">
-        <source>Set the configuration value globally in $HOME/.aspire/settings.json instead of the local settings file.</source>
-        <target state="translated">Legen Sie den Konfigurationswert global unter „$HOME/.aspire/settings.json“ anstelle der lokalen Einstellungsdatei fest.</target>
+        <source>Set the configuration value globally in $HOME/.aspire/settings.json instead of the local settings file</source>
+        <target state="needs-review-translation">Legen Sie den Konfigurationswert global unter „$HOME/.aspire/settings.json“ anstelle der lokalen Einstellungsdatei fest.</target>
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_KeyArgumentDescription">
-        <source>The configuration key to set.</source>
-        <target state="translated">Der festzulegende Konfigurationsschlüssel.</target>
+        <source>The configuration key to set</source>
+        <target state="needs-review-translation">Der festzulegende Konfigurationsschlüssel.</target>
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_PromptForGlobal">
@@ -178,8 +198,13 @@
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_ValueArgumentDescription">
-        <source>The configuration value to set.</source>
-        <target state="translated">Der festzulegende Konfigurationswert.</target>
+        <source>The configuration value to set</source>
+        <target state="needs-review-translation">Der festzulegende Konfigurationswert.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SetFeatureHint">
+        <source>Use 'aspire config set features.&lt;name&gt; true|false' to enable or disable a feature.</source>
+        <target state="translated">Verwenden Sie „aspire config set features.&lt;name&gt; true|false“, um ein Feature zu aktivieren oder zu deaktivieren.</target>
         <note />
       </trans-unit>
     </body>

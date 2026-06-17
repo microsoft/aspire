@@ -16,7 +16,7 @@ namespace Aspire.Playground.Tests;
 public class ProjectSpecificTests(ITestOutputHelper _testOutput)
 {
     [Fact]
-    [QuarantinedTest("https://github.com/dotnet/aspire/issues/9171")]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/9171")]
     public async Task WithDockerfileTest()
     {
         var appHost = await DistributedApplicationTestFactory.CreateAsync(typeof(Projects.WithDockerfile_AppHost), _testOutput);
@@ -33,7 +33,7 @@ public class ProjectSpecificTests(ITestOutputHelper _testOutput)
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/dotnet/aspire/issues/6867")]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/6867")]
     public async Task KafkaTest()
     {
         var appHost = await DistributedApplicationTestFactory.CreateAsync(typeof(Projects.KafkaBasic_AppHost), _testOutput);
@@ -60,7 +60,7 @@ public class ProjectSpecificTests(ITestOutputHelper _testOutput)
     [Fact]
     [RequiresFeature(TestFeature.Docker)]
     [RequiresTools(["func"])]
-    [ActiveIssue("https://github.com/dotnet/aspire/issues/9243")]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/9243")]
     public async Task AzureFunctionsTest()
     {
         var appHost = await DistributedApplicationTestFactory.CreateAsync(typeof(Projects.AzureFunctionsEndToEnd_AppHost), _testOutput);
@@ -134,7 +134,7 @@ public class ProjectSpecificTests(ITestOutputHelper _testOutput)
             resourceName: "funcapp",
             timeoutSecs: 160);
 
-#if !SKIP_UNSTABLE_EMULATORS // https://github.com/dotnet/aspire/issues/7066
+#if !SKIP_UNSTABLE_EMULATORS // https://github.com/microsoft/aspire/issues/7066
         // Assert that ServiceBus triggers work correctly
         await apiServiceClient.GetAsync("/publish/asb");
         await WaitForAllTextAsync(app,

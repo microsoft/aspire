@@ -2,12 +2,19 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Diagnostics;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Utils;
 
+internal enum OutputLineStream
+{
+    StdOut,
+    StdErr
+}
+
 internal sealed class OutputCollector
 {
-    private readonly CircularBuffer<(string Stream, string Line)> _lines = new(10000); // 10k lines.
+    private readonly CircularBuffer<(OutputLineStream Stream, string Line)> _lines = new(10000); // 10k lines.
     private readonly object _lock = new object();
     private readonly FileLoggerProvider? _fileLogger;
     private readonly string _category;
@@ -15,7 +22,7 @@ internal sealed class OutputCollector
     /// <summary>
     /// Creates an OutputCollector that only buffers output in memory.
     /// </summary>
-    public OutputCollector() : this(null, "AppHost")
+    public OutputCollector() : this(null, CliLogFormat.Categories.AppHost)
     {
     }
 
@@ -23,8 +30,8 @@ internal sealed class OutputCollector
     /// Creates an OutputCollector that buffers output and optionally logs to disk.
     /// </summary>
     /// <param name="fileLogger">Optional file logger for writing output to disk.</param>
-    /// <param name="category">Category for log entries (e.g., "Build", "AppHost").</param>
-    public OutputCollector(FileLoggerProvider? fileLogger, string category = "AppHost")
+    /// <param name="category">Category for log entries.</param>
+    public OutputCollector(FileLoggerProvider? fileLogger, string category = CliLogFormat.Categories.AppHost)
     {
         _fileLogger = fileLogger;
         _category = category;
@@ -32,23 +39,15 @@ internal sealed class OutputCollector
 
     public void AppendOutput(string line)
     {
-        lock (_lock)
-        {
-            _lines.Add(("stdout", line));
-            _fileLogger?.WriteLog(FormatLogLine("stdout", line));
-        }
+        AppendLine(OutputLineStream.StdOut, line);
     }
 
     public void AppendError(string line)
     {
-        lock (_lock)
-        {
-            _lines.Add(("stderr", line));
-            _fileLogger?.WriteLog(FormatLogLine("stderr", line));
-        }
+        AppendLine(OutputLineStream.StdErr, line);
     }
 
-    public IEnumerable<(string Stream, string Line)> GetLines()
+    public IEnumerable<(OutputLineStream Stream, string Line)> GetLines()
     {
         lock (_lock)
         {
@@ -56,10 +55,12 @@ internal sealed class OutputCollector
         }
     }
 
-    private string FormatLogLine(string stream, string line)
+    private void AppendLine(OutputLineStream stream, string line)
     {
-        var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture);
-        var level = stream == "stderr" ? "FAIL" : "INFO";
-        return $"[{timestamp}] [{level}] [{_category}] {line}";
+        lock (_lock)
+        {
+            _lines.Add((stream, line));
+            _fileLogger?.WriteLog(DateTimeOffset.UtcNow, stream == OutputLineStream.StdErr ? LogLevel.Error : LogLevel.Information, _category, line);
+        }
     }
 }

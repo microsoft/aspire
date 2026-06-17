@@ -9,19 +9,37 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <summary>
 /// Represents an endpoint reference for a resource with endpoints.
 /// </summary>
-[AspireExport(ExposeProperties = true)]
+[AspireExport(ExposeProperties = true, ExposeMethods = true)]
 [DebuggerDisplay("Resource = {Resource.Name}, EndpointName = {EndpointName}, IsAllocated = {IsAllocated}")]
-public sealed class EndpointReference : IManifestExpressionProvider, IValueProvider, IValueWithReferences
+public sealed class EndpointReference : IExpressionValue, IManifestExpressionProvider, IValueProvider, IValueWithReferences
 {
     // A reference to the endpoint annotation if it exists.
     private EndpointAnnotation? _endpointAnnotation;
     private bool? _isAllocated;
-    private readonly NetworkIdentifier? _contextNetworkID;
+    private readonly NetworkIdentifier? _contextNetworkId;
 
     /// <summary>
     /// Gets the endpoint annotation associated with the endpoint reference.
     /// </summary>
-    public EndpointAnnotation EndpointAnnotation => GetEndpointAnnotation() ?? throw new InvalidOperationException(ErrorMessage ?? $"The endpoint `{EndpointName}` is not defined for the resource `{Resource.Name}`.");
+    public EndpointAnnotation EndpointAnnotation => GetEndpointAnnotation() ?? throw new InvalidOperationException(ErrorMessage ?? BuildMissingEndpointMessage());
+
+    private string BuildMissingEndpointMessage()
+    {
+        var availableNames = Resource.Annotations
+            .OfType<EndpointAnnotation>()
+            .Select(a => a.Name)
+            .Where(n => !string.IsNullOrEmpty(n))
+            .Distinct(StringComparers.EndpointAnnotationName)
+            .ToArray();
+
+        if (availableNames.Length == 0)
+        {
+            return $"The endpoint `{EndpointName}` is not defined for the resource `{Resource.Name}`. The resource has no endpoints defined.";
+        }
+
+        var formattedNames = string.Join(", ", availableNames.Select(static n => $"`{n}`"));
+        return $"The endpoint `{EndpointName}` is not defined for the resource `{Resource.Name}`. Available endpoints: {formattedNames}.";
+    }
 
     /// <summary>
     /// Gets the resource owner of the endpoint reference.
@@ -53,14 +71,39 @@ public sealed class EndpointReference : IManifestExpressionProvider, IValueProvi
     /// <summary>
     /// Gets a value indicating whether the endpoint uses HTTP scheme.
     /// </summary>
-    public bool IsHttp => StringComparers.EndpointAnnotationUriScheme.Equals(Scheme, "http");
+    public bool IsHttp => string.Equals(Scheme, "http", StringComparisons.EndpointAnnotationUriScheme);
 
     /// <summary>
-    ///
-    /// </summary> <summary>
     /// Gets a value indicating whether the endpoint uses HTTPS scheme.
     /// </summary>
-    public bool IsHttps => StringComparers.EndpointAnnotationUriScheme.Equals(Scheme, "https");
+    public bool IsHttps => string.Equals(Scheme, "https", StringComparisons.EndpointAnnotationUriScheme);
+
+    /// <summary>
+    /// Gets a value indicating whether TLS is enabled for this endpoint.
+    /// </summary>
+    /// <remarks>
+    /// Returns <see langword="false"/> if the endpoint annotation has not been added to the resource yet.
+    /// Once the annotation exists, this property delegates to <see cref="EndpointAnnotation.TlsEnabled"/>.
+    /// </remarks>
+    public bool TlsEnabled => Exists && EndpointAnnotation.TlsEnabled;
+
+    /// <summary>
+    /// Gets a value indicating whether the endpoint name is "http" or "https", ignoring case. This is a convention used to identify
+    /// endpoints that will be resolved based on the scheme of the endpoint in service discovery rather than by the specific endpoint name.
+    /// This is done to allow http endpoints that are dynamically updated to https to be mapped correctly despite the endpoint name no longer
+    /// matching the scheme.
+    /// </summary>
+    public bool IsHttpSchemeNamedEndpoint => string.Equals(EndpointName, "http", StringComparisons.EndpointAnnotationUriScheme) ||
+        string.Equals(EndpointName, "https", StringComparisons.EndpointAnnotationUriScheme);
+
+    /// <summary>
+    /// Gets a value indicating whether this endpoint is excluded from the default set when referencing the resource's endpoints.
+    /// </summary>
+    /// <remarks>
+    /// Returns <see langword="false"/> if the endpoint annotation has not been added to the resource yet.
+    /// Once the annotation exists, this property delegates to <see cref="EndpointAnnotation.ExcludeReferenceEndpoint"/>.
+    /// </remarks>
+    public bool ExcludeReferenceEndpoint => Exists && EndpointAnnotation.ExcludeReferenceEndpoint;
 
     string IManifestExpressionProvider.ValueExpression => GetExpression();
 
@@ -69,7 +112,7 @@ public sealed class EndpointReference : IManifestExpressionProvider, IValueProvi
     /// </summary>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The URL of the endpoint.</returns>
-    [AspireExport("getValueAsync", Description = "Gets the URL of the endpoint asynchronously")]
+    [AspireExport]
     public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken = default) => Property(EndpointProperty.Url).GetValueAsync(cancellationToken);
 
     /// <summary>
@@ -78,6 +121,7 @@ public sealed class EndpointReference : IManifestExpressionProvider, IValueProvi
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <param name="context">The context for value resolution.</param>
     /// <returns>The URL of the endpoint.</returns>
+    [AspireExportIgnore]
     public ValueTask<string?> GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken = default) => Property(EndpointProperty.Url).GetValueAsync(context, cancellationToken);
 
     /// <summary>
@@ -85,10 +129,10 @@ public sealed class EndpointReference : IManifestExpressionProvider, IValueProvi
     /// The reference will be resolved in the context of this network, which may be different
     /// from the network associated with the default network of the referenced Endpoint.
     /// </summary>
-    public NetworkIdentifier? ContextNetworkID => _contextNetworkID;
+    public NetworkIdentifier? ContextNetworkID => _contextNetworkId;
 
     /// <summary>
-    /// Gets the specified property expression of the endpoint. Defaults to the URL if no property is specified.
+    /// Gets the specified property expression of the endpoint.
     /// </summary>
     internal string GetExpression(EndpointProperty property = EndpointProperty.Url)
     {
@@ -100,6 +144,7 @@ public sealed class EndpointReference : IManifestExpressionProvider, IValueProvi
             EndpointProperty.Scheme => Binding("scheme"),
             EndpointProperty.TargetPort => Binding("targetPort"),
             EndpointProperty.HostAndPort => $"{Binding("host")}:{Binding("port")}",
+            EndpointProperty.TlsEnabled => Binding("tlsEnabled"),
             _ => throw new InvalidOperationException($"The property '{property}' is not supported for the endpoint '{EndpointName}'.")
         };
 
@@ -107,13 +152,39 @@ public sealed class EndpointReference : IManifestExpressionProvider, IValueProvi
     }
 
     /// <summary>
-    /// Gets the specified property expression of the endpoint. Defaults to the URL if no property is specified.
+    /// Gets the specified property expression of the endpoint.
     /// </summary>
     /// <param name="property">The <see cref="EndpointProperty"/> enum value to use in the reference.</param>
     /// <returns>An <see cref="EndpointReferenceExpression"/> representing the specified <see cref="EndpointProperty"/>.</returns>
+    [AspireExport]
     public EndpointReferenceExpression Property(EndpointProperty property)
     {
         return new(this, property);
+    }
+
+    /// <summary>
+    /// Creates a conditional <see cref="ReferenceExpression"/> that resolves to <paramref name="enabledValue"/> when
+    /// <see cref="EndpointAnnotation.TlsEnabled"/> is <see langword="true"/> on this endpoint, or to
+    /// <paramref name="disabledValue"/> otherwise.
+    /// </summary>
+    /// <ats-summary>Gets a conditional expression that resolves to the enabledValue when TLS is enabled on the endpoint, or to the disabledValue otherwise.</ats-summary>
+    /// <remarks>
+    /// The returned expression evaluates the TLS state lazily each time its value is resolved, making it
+    /// safe to embed in a <see cref="ReferenceExpression"/> that is built before TLS is configured
+    /// (e.g., before <c>BeforeStartEvent</c> fires). Because the condition and branches are declarative,
+    /// polyglot code generators can translate this into native conditional constructs in any target language.
+    /// </remarks>
+    /// <param name="enabledValue">The expression to evaluate when TLS is enabled (e.g., <c>",ssl=true"</c>).</param>
+    /// <param name="disabledValue">The expression to evaluate when TLS is not enabled.</param>
+    /// <returns>A conditional <see cref="ReferenceExpression"/> whose value tracks the TLS state of this endpoint.</returns>
+    [AspireExport]
+    public ReferenceExpression GetTlsValue(ReferenceExpression enabledValue, ReferenceExpression disabledValue)
+    {
+        return ReferenceExpression.CreateConditional(
+            Property(EndpointProperty.TlsEnabled),
+            bool.TrueString,
+            enabledValue,
+            disabledValue);
     }
 
     /// <summary>
@@ -141,8 +212,10 @@ public sealed class EndpointReference : IManifestExpressionProvider, IValueProvi
     /// </summary>
     public string Url => AllocatedEndpoint.UriString;
 
+#pragma warning disable CS0618 // Type or member is obsolete
     internal ValueSnapshot<AllocatedEndpoint> AllocatedEndpointSnapshot =>
         EndpointAnnotation.AllocatedEndpointSnapshot;
+#pragma warning restore CS0618 // Type or member is obsolete
 
     internal AllocatedEndpoint AllocatedEndpoint =>
         GetAllocatedEndpoint()
@@ -156,7 +229,8 @@ public sealed class EndpointReference : IManifestExpressionProvider, IValueProvi
         }
 
         _endpointAnnotation ??= Resource.Annotations.OfType<EndpointAnnotation>()
-            .SingleOrDefault(a => StringComparers.EndpointAnnotationName.Equals(a.Name, EndpointName));
+            .SingleOrDefault(a => string.Equals(a.Name, EndpointName, StringComparisons.EndpointAnnotationName));
+
         return _endpointAnnotation;
     }
 
@@ -168,20 +242,9 @@ public sealed class EndpointReference : IManifestExpressionProvider, IValueProvi
             return null;
         }
 
-        foreach (var nes in endpointAnnotation.AllAllocatedEndpoints)
-        {
-            if (StringComparers.NetworkID.Equals(nes.NetworkID, _contextNetworkID ?? KnownNetworkIdentifiers.LocalhostNetwork))
-            {
-                if (!nes.Snapshot.IsValueSet)
-                {
-                    continue;
-                }
-
-                return nes.Snapshot.GetValueAsync().GetAwaiter().GetResult();
-            }
-        }
-
-        return null;
+        return endpointAnnotation.AllAllocatedEndpoints.TryGetAllocatedEndpoint(_contextNetworkId ?? KnownNetworkIdentifiers.LocalhostNetwork, out var allocatedEndpoint)
+            ? allocatedEndpoint
+            : null;
     }
 
     /// <summary>
@@ -189,14 +252,14 @@ public sealed class EndpointReference : IManifestExpressionProvider, IValueProvi
     /// </summary>
     /// <param name="owner">The resource with endpoints that owns the referenced endpoint.</param>
     /// <param name="endpoint">The endpoint annotation.</param>
-    /// <param name="contextNetworkID">The ID of the network that serves as the context for the EndpointReference.</param>
+    /// <param name="contextNetworkId">The ID of the network that serves as the context for the EndpointReference.</param>
     /// <remarks>
     /// Most Aspire resources are accessed in the context of the "localhost" network (host processes calling other host processes,
     /// or host processes calling container via mapped ports). If a <see cref="NetworkIdentifier"/> is specified, the <see cref="EndpointReference"/>
     /// will always resolve in the context of that network. If the <see cref="NetworkIdentifier"/> is null, the reference will attempt to resolve itself
     /// based on the context of the requesting resource.
     /// </remarks>
-    public EndpointReference(IResourceWithEndpoints owner, EndpointAnnotation endpoint, NetworkIdentifier? contextNetworkID)
+    public EndpointReference(IResourceWithEndpoints owner, EndpointAnnotation endpoint, NetworkIdentifier? contextNetworkId)
     {
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(endpoint);
@@ -204,7 +267,7 @@ public sealed class EndpointReference : IManifestExpressionProvider, IValueProvi
         Resource = owner;
         EndpointName = endpoint.Name;
         _endpointAnnotation = endpoint;
-        _contextNetworkID = contextNetworkID;
+        _contextNetworkId = contextNetworkId;
     }
 
     /// <summary>
@@ -221,21 +284,21 @@ public sealed class EndpointReference : IManifestExpressionProvider, IValueProvi
     /// </summary>
     /// <param name="owner">The resource with endpoints that owns the referenced endpoint.</param>
     /// <param name="endpointName">The name of the endpoint.</param>
-    /// <param name="contextNetworkID">The ID of the network that serves as the context for the EndpointReference.</param>
+    /// <param name="contextNetworkId">The ID of the network that serves as the context for the EndpointReference.</param>
     /// <remarks>
     /// Most Aspire resources are accessed in the context of the "localhost" network (host proceses calling other host processes,
     /// or host processes calling container via mapped ports). This is why EndpointReference assumes this
     /// context unless specified otherwise. However, for container-to-container, or container-to-host communication,
     /// you must specify a container network context for the EndpointReference to be resolved correctly.
     /// </remarks>
-    public EndpointReference(IResourceWithEndpoints owner, string endpointName, NetworkIdentifier? contextNetworkID = null)
+    public EndpointReference(IResourceWithEndpoints owner, string endpointName, NetworkIdentifier? contextNetworkId = null)
     {
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(endpointName);
 
         Resource = owner;
         EndpointName = endpointName;
-        _contextNetworkID = contextNetworkID;
+        _contextNetworkId = contextNetworkId;
     }
 
     /// <summary>
@@ -255,7 +318,7 @@ public sealed class EndpointReference : IManifestExpressionProvider, IValueProvi
 /// <param name="property">The property of the endpoint.</param>
 [AspireExport(ExposeProperties = true)]
 [DebuggerDisplay("EndpointExpression = {ValueExpression}, Property = {Property}, Endpoint = {Endpoint.EndpointName}")]
-public class EndpointReferenceExpression(EndpointReference endpointReference, EndpointProperty property) : IManifestExpressionProvider, IValueProvider, IValueWithReferences
+public class EndpointReferenceExpression(EndpointReference endpointReference, EndpointProperty property) : IExpressionValue, IManifestExpressionProvider, IValueProvider, IValueWithReferences
 {
     /// <summary>
     /// Gets the <see cref="EndpointReference"/>.
@@ -300,6 +363,7 @@ public class EndpointReferenceExpression(EndpointReference endpointReference, En
         return Property switch
         {
             EndpointProperty.Scheme => new(Endpoint.Scheme),
+            EndpointProperty.TlsEnabled => Endpoint.TlsEnabled ? bool.TrueString : bool.FalseString,
             EndpointProperty.IPV4Host when networkContext == KnownNetworkIdentifiers.LocalhostNetwork => "127.0.0.1",
             EndpointProperty.TargetPort when Endpoint.TargetPort is int port => new(port.ToString(CultureInfo.InvariantCulture)),
             _ => await ResolveValueWithAllocatedAddress().ConfigureAwait(false)
@@ -307,21 +371,7 @@ public class EndpointReferenceExpression(EndpointReference endpointReference, En
 
         async ValueTask<string?> ResolveValueWithAllocatedAddress()
         {
-            // We are going to take the first snapshot that matches the context network ID. In general there might be multiple endpoints for a single service,
-            // and in future we might need some sort of policy to choose between them, but for now we just take the first one.
-            var endpointSnapshots = Endpoint.EndpointAnnotation.AllAllocatedEndpoints;
-            var nes = endpointSnapshots.Where(nes => nes.NetworkID == networkContext).FirstOrDefault();
-            if (nes is null)
-            {
-                nes = new NetworkEndpointSnapshot(new ValueSnapshot<AllocatedEndpoint>(), networkContext);
-                if (!endpointSnapshots.TryAdd(networkContext, nes.Snapshot))
-                {
-                    // Someone else added it first, use theirs.
-                    nes = endpointSnapshots.Where(nes => nes.NetworkID == networkContext).First();
-                }
-            }
-
-            var allocatedEndpoint = await nes.Snapshot.GetValueAsync(cancellationToken).ConfigureAwait(false);
+            var allocatedEndpoint = await Endpoint.EndpointAnnotation.AllAllocatedEndpoints.GetAllocatedEndpointAsync(networkContext, cancellationToken).ConfigureAwait(false);
 
             return Property switch
             {
@@ -381,5 +431,10 @@ public enum EndpointProperty
     /// <summary>
     /// The host and port of the endpoint in the format `{Host}:{Port}`.
     /// </summary>
-    HostAndPort
+    HostAndPort,
+
+    /// <summary>
+    /// Whether TLS is enabled on the endpoint. Returns <see cref="bool.TrueString"/> or <see cref="bool.FalseString"/>.
+    /// </summary>
+    TlsEnabled
 }

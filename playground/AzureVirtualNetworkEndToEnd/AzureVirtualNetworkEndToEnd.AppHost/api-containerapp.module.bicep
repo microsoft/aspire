@@ -11,6 +11,8 @@ param api_identity_outputs_id string
 
 param api_containerport string
 
+param sql_outputs_sqlserverfqdn string
+
 param storage_outputs_blobendpoint string
 
 param storage_outputs_queueendpoint string
@@ -62,6 +64,30 @@ resource api 'Microsoft.App/containerApps@2025-02-02-preview' = {
             {
               name: 'HTTP_PORTS'
               value: api_containerport
+            }
+            {
+              name: 'ConnectionStrings__sqldb'
+              value: 'Server=tcp:${sql_outputs_sqlserverfqdn},1433;Encrypt=True;Authentication="Active Directory Default";Database=sqldb'
+            }
+            {
+              name: 'SQLDB_HOST'
+              value: sql_outputs_sqlserverfqdn
+            }
+            {
+              name: 'SQLDB_PORT'
+              value: '1433'
+            }
+            {
+              name: 'SQLDB_URI'
+              value: 'mssql://${sql_outputs_sqlserverfqdn}:1433/sqldb'
+            }
+            {
+              name: 'SQLDB_JDBCCONNECTIONSTRING'
+              value: 'jdbc:sqlserver://${sql_outputs_sqlserverfqdn}:1433;database=sqldb;encrypt=true;trustServerCertificate=false'
+            }
+            {
+              name: 'SQLDB_DATABASENAME'
+              value: 'sqldb'
             }
             {
               name: 'ConnectionStrings__mycontainer'

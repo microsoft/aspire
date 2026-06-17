@@ -26,4 +26,6 @@ output connectionString string = '${redis.properties.hostName}:10000,ssl=true'
 
 output name string = redis.name
 
+output id string = redis.id
+
 output hostName string = redis.properties.hostName

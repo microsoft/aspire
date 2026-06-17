@@ -18,10 +18,11 @@ using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Cli;
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Dcp;
+using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Devcontainers;
 using Aspire.Hosting.Devcontainers.Codespaces;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Eventing;
-using Aspire.Hosting.Exec;
 using Aspire.Hosting.Health;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Orchestrator;
@@ -29,6 +30,9 @@ using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Pipelines.Internal;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.UserSecrets;
+using Aspire.Shared;
+using Aspire.Shared.UserSecrets;
+using Microsoft.Extensions.Configuration.UserSecrets;
 using Aspire.Hosting.VersionChecking;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,6 +41,9 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using OpenTelemetry.Exporter;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 namespace Aspire.Hosting;
 
@@ -174,6 +181,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
     public DistributedApplicationBuilder(DistributedApplicationOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostBuilderConstructing);
 
         _options = options;
 
@@ -183,12 +191,24 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         // so they're used to initialize some types created immediately, e.g. IHostEnvironment.
         innerBuilderOptions.Args = options.Args;
 
+        // Pre-seed the configuration with ASPIRE_-prefixed environment variables.
+        // HostApplicationBuilder will then add DOTNET_-prefixed env vars and command line args on top.
+        // This gives us the priority order: --environment > DOTNET_ENVIRONMENT > ASPIRE_ENVIRONMENT > default.
+        var configuration = new ConfigurationManager();
+        configuration.AddEnvironmentVariables(prefix: "ASPIRE_");
+        innerBuilderOptions.Configuration = configuration;
+
         LogBuilderConstructing(options, innerBuilderOptions);
         _innerBuilder = new HostApplicationBuilder(innerBuilderOptions);
 
+        var configuredUserSecretsId = _innerBuilder.Configuration[KnownConfigNames.AspireUserSecretsId];
+        var userSecretsId = ResolveUserSecretsId(AppHostAssembly, _innerBuilder.Configuration);
+        AddConfiguredUserSecrets(_innerBuilder.Configuration, AppHostAssembly, configuredUserSecretsId, _innerBuilder.Environment.IsDevelopment());
+
         _innerBuilder.Services.AddSingleton(TimeProvider.System);
 
-        _innerBuilder.Services.AddSingleton<ILoggerProvider, BackchannelLoggerProvider>();
+        _innerBuilder.Services.AddSingleton<BackchannelLoggerProvider>();
+        _innerBuilder.Services.AddSingleton<ILoggerProvider>(sp => sp.GetRequiredService<BackchannelLoggerProvider>());
         _innerBuilder.Logging.AddFilter("Microsoft.Hosting.Lifetime", LogLevel.Warning);
         _innerBuilder.Logging.AddFilter("Microsoft.AspNetCore.Server.Kestrel", LogLevel.Error);
         _innerBuilder.Logging.AddFilter("Aspire.Hosting.Dashboard", LogLevel.Error);
@@ -204,11 +224,24 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         }
 
         // This is so that we can see certificate errors in the resource server in the console logs.
-        // See: https://github.com/dotnet/aspire/issues/2914
+        // See: https://github.com/microsoft/aspire/issues/2914
         _innerBuilder.Logging.AddFilter("Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServer", LogLevel.Warning);
 
         // Add the logging configuration again to allow the user to override the defaults
         _innerBuilder.Logging.AddConfiguration(_innerBuilder.Configuration.GetSection("Logging"));
+
+        // The CLI sets ASPIRE_LOGLEVEL to control the default log level for Aspire processes
+        // without polluting child processes (unlike Logging__LogLevel__Default which cascades
+        // through DCP into project processes and overrides their appsettings.json configuration).
+        var aspireLogLevelValue = _innerBuilder.Configuration[KnownConfigNames.AspireLogLevel];
+        if (aspireLogLevelValue is not null && Enum.TryParse<LogLevel>(aspireLogLevelValue, ignoreCase: true, out var aspireLogLevel))
+        {
+            _innerBuilder.Logging.SetMinimumLevel(aspireLogLevel);
+            _innerBuilder.Services.Configure<LoggerFilterOptions>(options =>
+            {
+                options.Rules.Add(new LoggerFilterRule(providerName: null, categoryName: null, logLevel: aspireLogLevel, filter: null));
+            });
+        }
 
         AppHostDirectory = options.ProjectDirectory ?? _innerBuilder.Environment.ContentRootPath;
         var appHostName = options.ProjectName ?? _innerBuilder.Environment.ApplicationName;
@@ -221,10 +254,9 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         var appHostFilePath = options.AppHostFilePath;
 
         var assemblyMetadata = AppHostAssembly?.GetCustomAttributes<AssemblyMetadataAttribute>();
-        var aspireDir = GetMetadataValue(assemblyMetadata, "AppHostProjectBaseIntermediateOutputPath");
+        var aspireDir = ResolveAspireStorePath(assemblyMetadata, AppHostDirectory);
 
         ConfigurePipelineOptions(options);
-        var isExecMode = ConfigureExecOptions(options);
 
         // Compute the dashboard application name - use DashboardApplicationName if set for file-based apps,
         // otherwise fall back to the environment's ApplicationName
@@ -299,13 +331,6 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             LoadDeploymentState(appHostPathSha);
         }
 
-        // exec
-        if (isExecMode)
-        {
-            _innerBuilder.Services.AddSingleton<ExecResourceManager>();
-            Eventing.Subscribe<BeforeStartEvent>(ExecEventingHandlers.InitializeExecResources);
-        }
-
         // Core things
         // Create and register the directory service (first, so it can be used by other services)
         _directoryService = new FileSystemService(_innerBuilder.Configuration);
@@ -315,9 +340,13 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             return _directoryService;
         });
 
-        // Create and register the user secrets manager
+        // Create and register the user secrets manager (uses the userSecretsId resolved at top of constructor)
         var userSecretsFactory = new UserSecretsManagerFactory(_directoryService);
-        _userSecretsManager = userSecretsFactory.GetOrCreate(AppHostAssembly);
+
+        _userSecretsManager = !string.IsNullOrEmpty(userSecretsId)
+            ? userSecretsFactory.GetOrCreateFromId(userSecretsId)
+            : NoopUserSecretsManager.Instance;
+
         // Always register IUserSecretsManager so dependencies can resolve
         _innerBuilder.Services.AddSingleton(_userSecretsManager);
 
@@ -332,11 +361,10 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<ResourceNotificationService>();
         _innerBuilder.Services.AddSingleton<ResourceLoggerService>();
         _innerBuilder.Services.AddSingleton<ResourceCommandService>(s => new ResourceCommandService(s.GetRequiredService<ResourceNotificationService>(), s.GetRequiredService<ResourceLoggerService>(), s));
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+        _innerBuilder.Services.TryAddSingleton<IProcessRunner, DefaultProcessRunner>();
         _innerBuilder.Services.AddSingleton<InteractionService>();
         _innerBuilder.Services.AddSingleton<IInteractionService>(sp => sp.GetRequiredService<InteractionService>());
         _innerBuilder.Services.AddSingleton<ParameterProcessor>();
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         _innerBuilder.Services.AddSingleton<IDistributedApplicationEventing>(Eventing);
         _innerBuilder.Services.AddSingleton<LocaleOverrideContext>();
         _innerBuilder.Services.AddHealthChecks();
@@ -375,13 +403,15 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddHostedService<CliOrphanDetector>();
         _innerBuilder.Services.AddSingleton<BackchannelService>();
         _innerBuilder.Services.AddHostedService<BackchannelService>(sp => sp.GetRequiredService<BackchannelService>());
+        _innerBuilder.Services.AddSingleton<ProfilingTelemetry>();
+        _innerBuilder.Services.AddSingleton<AppHostStartupState>();
         _innerBuilder.Services.AddSingleton<AuxiliaryBackchannelService>();
         _innerBuilder.Services.AddHostedService<AuxiliaryBackchannelService>(sp => sp.GetRequiredService<AuxiliaryBackchannelService>());
         _innerBuilder.Services.AddSingleton<AppHostRpcTarget>();
 
         ConfigureHealthChecks();
 
-        if (ExecutionContext.IsRunMode && !isExecMode)
+        if (ExecutionContext.IsRunMode)
         {
             // Dashboard
             if (!options.DisableDashboard)
@@ -395,14 +425,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
                     // of persistent containers (as a new key would be a spec change).
                     _userSecretsManager.GetOrSetSecret(_innerBuilder.Configuration, "AppHost:OtlpApiKey", TokenGenerator.GenerateToken);
 
-                    // Set a random API key for the MCP Server if one isn't already present in configuration.
-                    // If a key is generated, it's stored in the user secrets store so that it will be auto-loaded
-                    // on subsequent runs and not recreated. This is important to ensure it doesn't change the state
-                    // of MCP clients.
-                    _userSecretsManager.GetOrSetSecret(_innerBuilder.Configuration, "AppHost:McpApiKey", TokenGenerator.GenerateToken);
-
                     // Set a random API key for the Dashboard Telemetry API if one isn't already present in configuration.
-                    // This is the canonical API key; it also falls back to McpApiKey for MCP if not set.
                     _userSecretsManager.GetOrSetSecret(_innerBuilder.Configuration, "AppHost:DashboardApiKey", TokenGenerator.GenerateToken);
 
                     // Determine the frontend browser token.
@@ -453,7 +476,6 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
                 _innerBuilder.Services.AddSingleton<IDashboardEndpointProvider, HostDashboardEndpointProvider>();
                 _innerBuilder.Services.AddEventingSubscriber<DashboardEventHandlers>();
                 _innerBuilder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IConfigureOptions<DashboardOptions>, ConfigureDefaultDashboardOptions>());
-                _innerBuilder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<DashboardOptions>, ValidateDashboardOptions>());
             }
 
             if (options.EnableResourceLogging)
@@ -469,14 +491,26 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             _innerBuilder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IConfigureOptions<DevcontainersOptions>, ConfigureDevcontainersOptions>());
             _innerBuilder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IConfigureOptions<SshRemoteOptions>, ConfigureSshRemoteOptions>());
             _innerBuilder.Services.AddSingleton<DevcontainerSettingsWriter>();
-            _innerBuilder.Services.TryAddEventingSubscriber<DevcontainerPortForwardingLifecycleHook>();
+            _innerBuilder.Services.TryAddEventingSubscriber<DevcontainerPortForwardingEventingSubscriber>();
 
             // Required command validation for resources
 #pragma warning disable ASPIRECOMMAND001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
             _innerBuilder.Services.TryAddSingleton<IRequiredCommandValidator, RequiredCommandValidator>();
 #pragma warning restore ASPIRECOMMAND001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-            _innerBuilder.Services.TryAddEventingSubscriber<RequiredCommandValidationLifecycleHook>();
+            _innerBuilder.Services.TryAddEventingSubscriber<RequiredCommandValidationEventingSubscriber>();
+
+            // Terminal host binary path resolution (WithTerminal)
+            _innerBuilder.Services.TryAddEventingSubscriber<TerminalHostEventingSubscriber>();
+
+            // Terminal host failure diagnostics (WithTerminal): unhides the failed host
+            // resource and writes an actionable diagnostic to its console log when a
+            // terminal host transitions to a terminal-failure state. Most common cause is
+            // a CLI/AppHost version mismatch (old bundled aspire-managed without the
+            // 'terminalhost' subcommand). See TerminalHostFailureDiagnosticService.
+            _innerBuilder.Services.AddHostedService<TerminalHostFailureDiagnosticService>();
         }
+
+        ConfigureProfilingTelemetry();
 
         if (ExecutionContext.IsRunMode)
         {
@@ -485,7 +519,12 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             _innerBuilder.Services.AddHostedService<OrchestratorHostService>();
 
             // DCP stuff
-            _innerBuilder.Services.AddSingleton<IDcpExecutor, DcpExecutor>();
+            _innerBuilder.Services.AddSingleton<DcpAppResourceStore>();
+            _innerBuilder.Services.AddSingleton<ProxylessEndpointPortAllocator>();
+            _innerBuilder.Services.AddSingleton<ExecutableCreator>();
+            _innerBuilder.Services.AddSingleton<ContainerCreator>();
+            _innerBuilder.Services.AddSingleton<DcpExecutor>();
+            _innerBuilder.Services.AddSingleton<IDcpExecutor>(sp => sp.GetRequiredService<DcpExecutor>());
             _innerBuilder.Services.AddSingleton<DcpExecutorEvents>();
             _innerBuilder.Services.AddSingleton<DcpHost>();
             _innerBuilder.Services.AddSingleton<IDcpDependencyCheckService, DcpDependencyCheck>();
@@ -496,21 +535,14 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             _innerBuilder.Services.AddSingleton<IKubernetesService, KubernetesService>();
 
             Eventing.Subscribe<BeforeStartEvent>(BuiltInDistributedApplicationEventSubscriptionHandlers.InitializeDcpAnnotations);
+            Eventing.Subscribe<BeforeStartEvent>(BuiltInDistributedApplicationEventSubscriptionHandlers.WarnPersistentContainersWithoutUserSecrets);
         }
 
         // Publishing support
         Eventing.Subscribe<BeforeStartEvent>(BuiltInDistributedApplicationEventSubscriptionHandlers.MutateHttp2TransportAsync);
-        _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, DockerContainerRuntime>("docker");
-        _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, PodmanContainerRuntime>("podman");
-        _innerBuilder.Services.AddSingleton(sp =>
-        {
-            var dcpOptions = sp.GetRequiredService<IOptions<DcpOptions>>();
-            return dcpOptions.Value.ContainerRuntime switch
-            {
-                string rt => sp.GetRequiredKeyedService<IContainerRuntime>(rt),
-                null => sp.GetRequiredKeyedService<IContainerRuntime>("docker")
-            };
-        });
+        _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, DockerContainerRuntime>(KnownContainerRuntimes.Docker);
+        _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, PodmanContainerRuntime>(KnownContainerRuntimes.Podman);
+        _innerBuilder.Services.AddSingleton<IContainerRuntimeResolver, ContainerRuntimeResolver>();
         _innerBuilder.Services.AddSingleton<IResourceContainerImageManager, ResourceContainerImageManager>();
         _innerBuilder.Services.AddSingleton<PipelineActivityReporter>();
         _innerBuilder.Services.AddSingleton<IPipelineActivityReporter, PipelineActivityReporter>(sp => sp.GetRequiredService<PipelineActivityReporter>());
@@ -564,6 +596,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         _innerBuilder.Services.AddSingleton(ExecutionContext);
         LogBuilderConstructed(this);
+        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostBuilderConstructed, _innerBuilder.Configuration);
     }
 
     private void ConfigureHealthChecks()
@@ -616,6 +649,82 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         }
     }
 
+    private void ConfigureProfilingTelemetry()
+    {
+        if (!ShouldConfigureProfilingTelemetry())
+        {
+            return;
+        }
+
+        var resourceBuilder = OpenTelemetry.Resources.ResourceBuilder.CreateDefault()
+            .AddService(
+                serviceName: "aspire-apphost",
+                serviceVersion: GetAppHostServiceVersion())
+            .AddAttributes(ProfilingTelemetry.CreateAppHostResourceAttributes(AppHostPath, ExecutionContext.Operation.ToString()));
+
+        _innerBuilder.Services.AddOpenTelemetry()
+            .WithTracing(builder =>
+            {
+                builder
+                    .AddSource(ProfilingTelemetry.ActivitySourceName)
+                    .SetResourceBuilder(resourceBuilder);
+
+                if (!string.IsNullOrEmpty(_innerBuilder.Configuration[KnownOtelConfigNames.ExporterOtlpEndpoint]))
+                {
+                    builder.AddOtlpExporter();
+                }
+                else
+                {
+                    var (url, protocol) = OtlpEndpointResolver.ResolveOtlpEndpoint(_innerBuilder.Configuration);
+
+                    builder.AddOtlpExporter(options =>
+                    {
+                        options.Endpoint = new Uri(url);
+                        options.Protocol = protocol switch
+                        {
+                            "http/protobuf" => OtlpExportProtocol.HttpProtobuf,
+                            _ => OtlpExportProtocol.Grpc
+                        };
+
+                        if (_innerBuilder.Configuration["AppHost:OtlpApiKey"] is { } otlpApiKey)
+                        {
+                            options.Headers = $"x-otlp-api-key={otlpApiKey}";
+                        }
+                    });
+                }
+            });
+    }
+
+    private bool ShouldConfigureProfilingTelemetry()
+    {
+        // Dashboard OTLP is normally configured for app telemetry. Profiling
+        // spans are high-cardinality diagnostics, so only export them when requested.
+        // This intentionally supports publish/deploy/inspect operations as well as
+        // run so profiling can follow the full CLI/AppHost/pipeline operation.
+        var profilingEnabled =
+            _innerBuilder.Configuration.GetBool(KnownConfigNames.ProfilingEnabled) ??
+            _innerBuilder.Configuration.GetBool(KnownConfigNames.Legacy.StartupProfilingEnabled);
+        if (profilingEnabled is not true)
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrEmpty(_innerBuilder.Configuration[KnownOtelConfigNames.ExporterOtlpEndpoint]))
+        {
+            return true;
+        }
+
+        var dashboardOtlpGrpcUrl = _innerBuilder.Configuration.GetString(KnownConfigNames.DashboardOtlpGrpcEndpointUrl, KnownConfigNames.Legacy.DashboardOtlpGrpcEndpointUrl);
+        var dashboardOtlpHttpUrl = _innerBuilder.Configuration.GetString(KnownConfigNames.DashboardOtlpHttpEndpointUrl, KnownConfigNames.Legacy.DashboardOtlpHttpEndpointUrl);
+
+        return !string.IsNullOrEmpty(dashboardOtlpGrpcUrl) || !string.IsNullOrEmpty(dashboardOtlpHttpUrl);
+    }
+
+    private static string? GetAppHostServiceVersion()
+    {
+        return typeof(DistributedApplication).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+    }
+
     private void MapTransportOptionsFromCustomKeys(TransportOptions options)
     {
         if (Configuration.GetBool(KnownConfigNames.AllowUnsecuredTransport) is { } allowUnsecuredTransport)
@@ -645,6 +754,8 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
             // TODO: Rename this to something related to deployment state
             { "--clear-cache", "Pipeline:ClearCache" },
+
+            { "--yes", "Pipeline:SkipConfirmation" },
 
             // DCP Publisher options, we should only process these in run mode
             { "--dcp-cli-path", "DcpPublisher:CliPath" },
@@ -677,70 +788,34 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         }
     }
 
-    private bool ConfigureExecOptions(DistributedApplicationOptions options)
-    {
-        var switchMappings = new Dictionary<string, string>()
-        {
-            { "--operation", "AppHost:Operation" },
-            { "--resource", "Exec:ResourceName" },
-            { "--start-resource", "Exec:ResourceName" },
-            { "--command", "Exec:Command" },
-            { "--workdir", "Exec:WorkingDirectory" }
-        };
-        _innerBuilder.Configuration.AddCommandLine(options.Args ?? [], switchMappings);
-
-        var execOptionsSection = _innerBuilder.Configuration.GetSection(ExecOptions.SectionName);
-        _innerBuilder.Services
-            .Configure<ExecOptions>(execOptionsSection)
-            .PostConfigure<ExecOptions>(execOptions =>
-        {
-            if (options.Args is null || !options.Args.Any())
-            {
-                return;
-            }
-
-            if (!string.IsNullOrEmpty(execOptions.Command))
-            {
-                execOptions.Enabled = true;
-            }
-
-            if (options.Args.Contains("--start-resource"))
-            {
-                execOptions.StartResource = true;
-            }
-        });
-
-        return options.Args?.Any(arg => arg == "--command") ?? false;
-    }
-
     /// <inheritdoc />
     public DistributedApplication Build()
     {
-        AspireEventSource.Instance.DistributedApplicationBuildStart();
-        try
+        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostBuildStarted, _innerBuilder.Configuration);
+        LogAppBuilding(this);
+
+        // ResourceCollection enforces unique names on Add/Insert/Set, but IResourceCollection
+        // could have a different implementation that doesn't. Validate as a safety net.
+        foreach (var duplicateResourceName in Resources.GroupBy(r => r.Name, StringComparers.ResourceName)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key))
         {
-            LogAppBuilding(this);
-
-            // AddResource(resource) validates that a name is unique but it's possible to add resources directly to the resource collection.
-            // Validate names for duplicates while building the application.
-            foreach (var duplicateResourceName in Resources.GroupBy(r => r.Name, StringComparers.ResourceName)
-                .Where(g => g.Count() > 1)
-                .Select(g => g.Key))
-            {
-                throw new DistributedApplicationException($"Multiple resources with the name '{duplicateResourceName}'. Resource names are case-insensitive.");
-            }
-
-            var application = new DistributedApplication(_innerBuilder.Build());
-
-            _executionContextOptions.ServiceProvider = application.Services.GetRequiredService<IServiceProvider>();
-
-            LogAppBuilt(application);
-            return application;
+            throw new DistributedApplicationException($"Multiple resources with the name '{duplicateResourceName}'. Resource names are case-insensitive.");
         }
-        finally
+
+        // Validate resource names. Resources added directly to the collection bypass AddResource validation.
+        foreach (var resource in Resources)
         {
-            AspireEventSource.Instance.DistributedApplicationBuildStop();
+            ValidateResourceName(resource);
         }
+
+        var application = new DistributedApplication(_innerBuilder.Build());
+
+        _executionContextOptions.Services = application.Services.GetRequiredService<IServiceProvider>();
+
+        LogAppBuilt(application);
+        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostBuildCompleted, _innerBuilder.Configuration);
+        return application;
     }
 
     /// <inheritdoc />
@@ -748,10 +823,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
     {
         ArgumentNullException.ThrowIfNull(resource);
 
-        if (Resources.FirstOrDefault(r => string.Equals(r.Name, resource.Name, StringComparisons.ResourceName)) is { } existingResource)
-        {
-            throw new DistributedApplicationException($"Cannot add resource of type '{resource.GetType()}' with name '{resource.Name}' because resource of type '{existingResource.GetType()}' with that name already exists. Resource names are case-insensitive.");
-        }
+        ValidateResourceName(resource);
 
         Resources.Add(resource);
         return CreateResourceBuilder(resource);
@@ -765,6 +837,78 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         var builder = new DistributedApplicationResourceBuilder<T>(this, resource);
         return builder;
     }
+
+    internal static string? ResolveUserSecretsId(Assembly? appHostAssembly, IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        // An explicitly configured value should win over any assembly-level UserSecretsId so guest AppHosts can
+        // direct secrets to their synthetic store instead of the generated server project's store.
+        var configuredUserSecretsId = configuration[KnownConfigNames.AspireUserSecretsId];
+        var assemblyUserSecretsId = appHostAssembly?.GetCustomAttribute<UserSecretsIdAttribute>()?.UserSecretsId;
+        return string.IsNullOrWhiteSpace(configuredUserSecretsId) ? assemblyUserSecretsId : configuredUserSecretsId;
+    }
+
+    internal static void AddConfiguredUserSecrets(IConfigurationManager configuration, Assembly? appHostAssembly, string? configuredUserSecretsId, bool isDevelopment)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        // Add explicitly configured user secrets early so they have the same precedence as the default AddUserSecrets
+        // called by HostApplicationBuilder for .NET projects, and can replace any assembly-level store when needed.
+        // Only add in Development environment, matching the behavior of the default AddUserSecrets.
+        if (!string.IsNullOrWhiteSpace(configuredUserSecretsId) && isDevelopment)
+        {
+            // Remove only the file-backed source for the assembly-derived user-secrets ID so the configured
+            // user-secrets store replaces that single source without affecting other configuration providers.
+            RemoveUserSecretsSource(configuration, appHostAssembly?.GetCustomAttribute<UserSecretsIdAttribute>()?.UserSecretsId);
+            configuration.AddUserSecrets(configuredUserSecretsId);
+        }
+    }
+
+    internal static void RemoveUserSecretsSource(IConfigurationManager configuration, string? userSecretsId)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        if (string.IsNullOrWhiteSpace(userSecretsId))
+        {
+            return;
+        }
+
+        var userSecretsFilePath = Path.GetFullPath(UserSecretsPathHelper.GetSecretsPathFromSecretsId(userSecretsId));
+
+        for (var i = configuration.Sources.Count - 1; i >= 0; i--)
+        {
+            if (configuration.Sources[i] is not FileConfigurationSource fileSource)
+            {
+                continue;
+            }
+
+            if (fileSource.Path is null)
+            {
+                continue;
+            }
+
+            var filePath = fileSource.FileProvider?.GetFileInfo(fileSource.Path).PhysicalPath;
+
+            if (filePath is not null && PathsEqual(filePath, userSecretsFilePath))
+            {
+                configuration.Sources.RemoveAt(i);
+            }
+        }
+    }
+
+    private static void ValidateResourceName(IResource resource)
+    {
+        if (!resource.TryGetLastAnnotation<NameValidationPolicyAnnotation>(out var policy))
+        {
+            policy = NameValidationPolicyAnnotation.Default;
+        }
+
+        ModelName.ValidateName(nameof(Aspire.Hosting.ApplicationModel.Resource), resource.Name, policy.MaxLength, policy.ValidateStartsWithLetter, policy.ValidateAllowedCharacters, policy.ValidateNoConsecutiveHyphens, policy.ValidateNoTrailingHyphen);
+    }
+
+    private static bool PathsEqual(string left, string right) =>
+        string.Equals(Path.GetFullPath(left), Path.GetFullPath(right), OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
     private static DiagnosticListener LogBuilderConstructing(DistributedApplicationOptions appBuilderOptions, HostApplicationBuilderSettings hostBuilderOptions)
     {
@@ -857,5 +1001,19 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
     /// <returns>The metadata value if found; otherwise, null.</returns>
     private static string? GetMetadataValue(IEnumerable<AssemblyMetadataAttribute>? assemblyMetadata, string key) =>
         assemblyMetadata?.FirstOrDefault(a => string.Equals(a.Key, key, StringComparison.OrdinalIgnoreCase))?.Value;
-}
 
+    private static string ResolveAspireStorePath(IEnumerable<AssemblyMetadataAttribute>? assemblyMetadata, string appHostDirectory)
+    {
+        var baseIntermediateOutputPath = GetMetadataValue(assemblyMetadata, "AppHostProjectBaseIntermediateOutputPath");
+        if (!string.IsNullOrEmpty(baseIntermediateOutputPath))
+        {
+            return baseIntermediateOutputPath;
+        }
+
+        // File-based and dynamically loaded AppHosts do not have the MSBuild intermediate output
+        // metadata that normal project AppHosts get. Use the AppHost directory as the root so
+        // IAspireStore resolves to the workspace-local .aspire folder instead of creating a
+        // .NET-style obj directory for non-.NET AppHosts.
+        return Path.GetFullPath(appHostDirectory);
+    }
+}

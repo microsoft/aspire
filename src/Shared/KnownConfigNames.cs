@@ -8,7 +8,6 @@ internal static class KnownConfigNames
     public const string AspNetCoreUrls = "ASPNETCORE_URLS";
     public const string AllowUnsecuredTransport = "ASPIRE_ALLOW_UNSECURED_TRANSPORT";
     public const string VersionCheckDisabled = "ASPIRE_VERSION_CHECK_DISABLED";
-    public const string DashboardMcpEndpointUrl = "ASPIRE_DASHBOARD_MCP_ENDPOINT_URL";
     public const string DashboardOtlpGrpcEndpointUrl = "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL";
     public const string DashboardOtlpHttpEndpointUrl = "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL";
     public const string DashboardFrontendBrowserToken = "ASPIRE_DASHBOARD_FRONTEND_BROWSERTOKEN";
@@ -18,6 +17,8 @@ internal static class KnownConfigNames
     public const string DashboardConfigFilePath = "ASPIRE_DASHBOARD_CONFIG_FILE_PATH";
     public const string DashboardFileConfigDirectory = "ASPIRE_DASHBOARD_FILE_CONFIG_DIRECTORY";
     public const string DashboardAIDisabled = "ASPIRE_DASHBOARD_AI_DISABLED";
+    public const string DashboardApiEnabled = "ASPIRE_DASHBOARD_API_ENABLED";
+    public const string DashboardApiDisabled = "ASPIRE_DASHBOARD_API_DISABLED";
     public const string DashboardForwardedHeadersEnabled = "ASPIRE_DASHBOARD_FORWARDEDHEADERS_ENABLED";
 
     public const string ShowDashboardResources = "ASPIRE_SHOW_DASHBOARD_RESOURCES";
@@ -25,32 +26,78 @@ internal static class KnownConfigNames
 
     public const string ContainerRuntime = "ASPIRE_CONTAINER_RUNTIME";
     public const string DependencyCheckTimeout = "ASPIRE_DEPENDENCY_CHECK_TIMEOUT";
+    public const string ProxylessEndpointPortRange = "ASPIRE_PROXYLESS_ENDPOINT_PORT_RANGE";
     public const string ServiceStartupWatchTimeout = "ASPIRE_SERVICE_STARTUP_WATCH_TIMEOUT";
     public const string WaitForDebugger = "ASPIRE_WAIT_FOR_DEBUGGER";
     public const string WaitForDebuggerTimeout = "ASPIRE_DEBUGGER_TIMEOUT";
     public const string UnixSocketPath = "ASPIRE_BACKCHANNEL_PATH";
+    public const string RemoteAppHostToken = "ASPIRE_REMOTE_APPHOST_TOKEN";
     public const string CliProcessId = "ASPIRE_CLI_PID";
     public const string CliProcessStarted = "ASPIRE_CLI_STARTED";
+    public const string CliLogFilePath = "ASPIRE_CLI_LOG_FILE";
+    public const string CliRunDetached = "ASPIRE_CLI_RUN_DETACHED";
+    public const string CliGenerateHttpsCertificate = "ASPIRE_CLI_GENERATE_HTTPS_CERTIFICATE";
+    public const string SuppressCliRunHook = "ASPIRE_SUPPRESS_CLI_RUN_HOOK";
+    public const string IntegrationLibsPath = "ASPIRE_INTEGRATION_LIBS_PATH";
+    public const string IntegrationProbeManifestPath = "ASPIRE_INTEGRATION_PROBE_MANIFEST_PATH";
     public const string ForceRichConsole = "ASPIRE_FORCE_RICH_CONSOLE";
+    public const string AppHostLogLevel = "ASPIRE_APPHOST_LOGLEVEL";
+    public const string AspireLogLevel = "ASPIRE_LOGLEVEL";
     public const string TestingDisableHttpClient = "ASPIRE_TESTING_DISABLE_HTTP_CLIENT";
     public const string InteractivityEnabled = "ASPIRE_INTERACTIVITY_ENABLED";
     public const string EnableContainerTunnel = "ASPIRE_ENABLE_CONTAINER_TUNNEL";
+    public const string AspireUserSecretsId = "ASPIRE_USER_SECRETS_ID";
 
     public const string LocaleOverride = "ASPIRE_LOCALE_OVERRIDE";
     public const string DotnetCliUiLanguage = "DOTNET_CLI_UI_LANGUAGE";
+    public const string DotnetCliTelemetryOptOut = "DOTNET_CLI_TELEMETRY_OPTOUT";
+    public const string DotnetCliWorkloadUpdateNotifyDisable = "DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE";
     public const string MsBuildTerminalLogger = "MSBUILDTERMINALLOGGER";
+
+    // Enables Aspire's local profiling telemetry. This is diagnostic telemetry used to correlate
+    // CLI, AppHost, DCP, and child-process spans, and is separate from customer telemetry.
+    public const string ProfilingEnabled = "ASPIRE_PROFILING_ENABLED";
+
+    // Stable identifier shared by every process participating in one profiling capture.
+    public const string ProfilingSessionId = "ASPIRE_PROFILING_SESSION_ID";
+
+    // W3C trace context propagated from the launching process to child processes so their spans
+    // attach to the same profiling trace.
+    public const string ProfilingTraceParent = "traceparent";
+
+    // Optional W3C tracestate companion value for traceparent.
+    public const string ProfilingTraceState = "tracestate";
+
+    // When set, the CLI adds MSBuild binary log arguments to supported dotnet commands and records
+    // the emitted binlog path on the profiling span.
+    public const string CliDotnetBinlogDirectory = "ASPIRE_CLI_DOTNET_BINLOG_DIR";
+    public const string CliBackchannelConnectTimeoutSeconds = "ASPIRE_CLI_BACKCHANNEL_CONNECT_TIMEOUT_SECONDS";
+
+    // DCP owns these profiling variables. Aspire maps its profiling state to these names when
+    // spawning DCP because DCP intentionally does not read ASPIRE_* configuration names.
+    public const string DcpOtelStartupProfilingEnabled = "DCP_OTEL_STARTUP_PROFILING_ENABLED";
+    public const string DcpOtelStartupTraceParent = "DCP_OTEL_STARTUP_TRACEPARENT";
+    public const string DcpOtelStartupTraceState = "DCP_OTEL_STARTUP_TRACESTATE";
+    public const string DcpOtelProfilingSessionId = "DCP_OTEL_PROFILING_SESSION_ID";
 
     public const string ExtensionEndpoint = "ASPIRE_EXTENSION_ENDPOINT";
     public const string ExtensionPromptEnabled = "ASPIRE_EXTENSION_PROMPT_ENABLED";
     public const string ExtensionToken = "ASPIRE_EXTENSION_TOKEN";
     public const string ExtensionCert = "ASPIRE_EXTENSION_CERT";
     public const string ExtensionDebugSessionId = "ASPIRE_EXTENSION_DEBUG_SESSION_ID";
+    public const string ExtensionDebugRunMode = "ASPIRE_EXTENSION_DEBUG_RUN_MODE";
+    public const string ExtensionCapabilities = "ASPIRE_EXTENSION_CAPABILITIES";
 
     public const string DeveloperCertificateDefaultTrust = "ASPIRE_DEVELOPER_CERTIFICATE_DEFAULT_TRUST";
     public const string DeveloperCertificateDefaultHttpsTermination = "ASPIRE_DEVELOPER_CERTIFICATE_DEFAULT_HTTPS_TERMINATION";
+    public const string DcpDeveloperCertificate = "ASPIRE_DCP_USE_DEVELOPER_CERTIFICATE";
 
     public const string DebugSessionInfo = "DEBUG_SESSION_INFO";
     public const string DebugSessionRunMode = "DEBUG_SESSION_RUN_MODE";
+    public const string DebugSessionPort = "DEBUG_SESSION_PORT";
+    public const string DebugSessionToken = "DEBUG_SESSION_TOKEN";
+    public const string DebugSessionServerCertificate = "DEBUG_SESSION_SERVER_CERTIFICATE";
+    public const string DcpInstanceIdPrefix = "DCP_INSTANCE_ID_PREFIX";
 
     public static class Legacy
     {
@@ -69,5 +116,16 @@ internal static class KnownConfigNames
         public const string ContainerRuntime = "DOTNET_ASPIRE_CONTAINER_RUNTIME";
         public const string DependencyCheckTimeout = "DOTNET_ASPIRE_DEPENDENCY_CHECK_TIMEOUT";
         public const string ServiceStartupWatchTimeout = "DOTNET_ASPIRE_SERVICE_STARTUP_WATCH_TIMEOUT";
+
+        // Legacy startup-profiling names are still read and written during the profiling
+        // transition so older Aspire tools and AppHosts can correlate startup spans.
+        public const string StartupProfilingEnabled = "ASPIRE_STARTUP_PROFILING_ENABLED";
+
+        // Legacy profiling session identifier, formerly named for startup-only profiling.
+        public const string StartupOperationId = "ASPIRE_STARTUP_OPERATION_ID";
+
+        // Startup-named W3C trace context propagated to DCP for resource lifecycle correlation.
+        public const string StartupTraceParent = "ASPIRE_STARTUP_TRACEPARENT";
+        public const string StartupTraceState = "ASPIRE_STARTUP_TRACESTATE";
     }
 }

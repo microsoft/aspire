@@ -3,23 +3,33 @@
   <file datatype="xml" source-language="en" target-language="cs" original="../PsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>List running Aspire apphosts.</source>
-        <target state="translated">Vypíše spuštěné hostitele aplikací Aspire.</target>
+        <source>List running AppHosts</source>
+        <target state="needs-review-translation">Vypíše spuštěné hostitele aplikací Aspire.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FollowOptionDescription">
+        <source>Keep running and emit updates as running AppHosts change. JSON output is emitted as newline-delimited full snapshots.</source>
+        <target state="new">Keep running and emit updates as running AppHosts change. JSON output is emitted as newline-delimited full snapshots.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FollowRequiresJson">
+        <source>The --follow option only supports JSON output. Use --format json.</source>
+        <target state="new">The --follow option only supports JSON output. Use --format json.</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderCliPid">
-        <source>CLI_PID</source>
-        <target state="translated">CLI_PID</target>
+        <source>CLI PID</source>
+        <target state="translated">CLI PID</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderDashboard">
-        <source>DASHBOARD</source>
-        <target state="translated">ŘÍDICÍ PANEL</target>
+        <source>Dashboard</source>
+        <target state="translated">Řídicí panel</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderPath">
-        <source>PATH</source>
-        <target state="translated">CESTA</target>
+        <source>Path</source>
+        <target state="translated">Cesta</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderPid">
@@ -27,19 +37,14 @@
         <target state="translated">PID</target>
         <note />
       </trans-unit>
+      <trans-unit id="HeaderSdk">
+        <source>SDK</source>
+        <target state="new">SDK</target>
+        <note />
+      </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output in JSON format.</source>
-        <target state="translated">Výstup ve formátu JSON</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="NoRunningAppHostsFound">
-        <source>No running AppHosts found.</source>
-        <target state="translated">Nebyl nalezen žádný spuštěný hostitel aplikací.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ScanningForRunningAppHosts">
-        <source>Scanning for running AppHosts...</source>
-        <target state="translated">Vyhledávání spuštěných hostitelů aplikací...</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">Výstup ve formátu JSON</target>
         <note />
       </trans-unit>
       <trans-unit id="UnknownPath">

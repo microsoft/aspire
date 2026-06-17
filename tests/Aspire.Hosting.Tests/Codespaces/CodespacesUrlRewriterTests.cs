@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Tests.Codespaces;
 
+[Trait("Partition", "4")]
 public class CodespacesUrlRewriterTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]

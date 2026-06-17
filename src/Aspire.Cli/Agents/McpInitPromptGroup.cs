@@ -9,19 +9,29 @@ namespace Aspire.Cli.Agents;
 internal sealed class McpInitPromptGroup
 {
     /// <summary>
-    /// Group for updating deprecated agent configurations (highest priority).
+    /// Group for updating deprecated agent configurations (applied silently).
     /// </summary>
     public static readonly McpInitPromptGroup ConfigUpdates = new("ConfigUpdates", priority: -1);
 
     /// <summary>
-    /// Group for agent environment configurations (VS Code, Copilot CLI, etc.).
+    /// Group for agent environment MCP server configurations (VS Code, Copilot CLI, etc.).
     /// </summary>
     public static readonly McpInitPromptGroup AgentEnvironments = new("AgentEnvironments", priority: 0);
 
     /// <summary>
-    /// Group for additional optional configurations (AGENTS.md, Playwright, etc.).
+    /// Group for skill file installations.
     /// </summary>
-    public static readonly McpInitPromptGroup AdditionalOptions = new("AdditionalOptions", priority: 1);
+    public static readonly McpInitPromptGroup SkillFiles = new("SkillFiles", priority: 1);
+
+    /// <summary>
+    /// Group for additional tool installations (Playwright CLI, etc.).
+    /// </summary>
+    public static readonly McpInitPromptGroup Tools = new("Tools", priority: 2);
+
+    /// <summary>
+    /// Group for additional optional configurations.
+    /// </summary>
+    public static readonly McpInitPromptGroup AdditionalOptions = new("AdditionalOptions", priority: 3);
 
     private McpInitPromptGroup(string name, int priority)
     {

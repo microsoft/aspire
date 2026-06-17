@@ -61,6 +61,63 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Give AI agents deep observability into your app so they can diagnose issues faster and verify fixes with confidence 🚀
+        ///
+        ///- 📦 Resource state, health checks, and relationships
+        ///- 🖥️ Console logs
+        ///- 📊 Distributed traces
+        ///- 🪵 Structured logs
+        ///
+        ///AI agents access dashboard telemetry through the Aspire CLI. If you haven’t installed it yet, [install the Aspire CLI]({1}).
+        ///
+        ///Initialize AI agent support in your project with:
+        ///
+        ///```bash
+        ///aspire agent init
+        ///```
+        ///
+        ///This command configures skill files for your AI agent. The ski [rest of string was truncated]&quot;;.
+        /// </summary>
+        public static string AIAgentsDialogAppHostDescription {
+            get {
+                return ResourceManager.GetString("AIAgentsDialogAppHostDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Give AI agents deep observability into your app so they can diagnose issues faster and verify fixes with confidence 🚀
+        ///
+        ///- 📊 Distributed traces
+        ///- 🔗 Trace spans
+        ///- 🪵 Structured logs
+        ///- 🗂️ Zip file export
+        ///
+        ///AI agents access dashboard telemetry using the Aspire CLI. [Install the Aspire CLI]({2}) if you haven&apos;t already.
+        ///
+        ///Use Aspire CLI commands to retrieve telemetry data directly in your terminal:
+        ///
+        ///```bash
+        ///aspire otel logs --dashboard-url {0}
+        ///```
+        ///
+        ///This is one example of how AI agents can access t [rest of string was truncated]&quot;;.
+        /// </summary>
+        public static string AIAgentsDialogStandaloneDescription {
+            get {
+                return ResourceManager.GetString("AIAgentsDialogStandaloneDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to AI agents.
+        /// </summary>
+        public static string AIAgentsDialogTitle {
+            get {
+                return ResourceManager.GetString("AIAgentsDialogTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Close.
         /// </summary>
         public static string DialogCloseButtonText {
@@ -232,6 +289,42 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Date and time.
+        /// </summary>
+        public static string FilterDialogDateValueLabel {
+            get {
+                return ResourceManager.GetString("FilterDialogDateValueLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to e.g. 2024-01-15T09:30:00.
+        /// </summary>
+        public static string FilterDialogDatePlaceholder {
+            get {
+                return ResourceManager.GetString("FilterDialogDatePlaceholder", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Pick date and time.
+        /// </summary>
+        public static string FilterDialogPickDateButtonTitle {
+            get {
+                return ResourceManager.GetString("FilterDialogPickDateButtonTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Invalid date format.
+        /// </summary>
+        public static string FilterDialogInvalidDate {
+            get {
+                return ResourceManager.GetString("FilterDialogInvalidDate", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Details.
         /// </summary>
         public static string GenAIDetailsTabText {
@@ -300,6 +393,15 @@ namespace Aspire.Dashboard.Resources {
         public static string GenAIInputTokensText {
             get {
                 return ResourceManager.GetString("GenAIInputTokensText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to LLM.
+        /// </summary>
+        public static string GenAILLMBadgeText {
+            get {
+                return ResourceManager.GetString("GenAILLMBadgeText", resourceCulture);
             }
         }
         
@@ -502,6 +604,24 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Tool call.
+        /// </summary>
+        public static string GenAIToolCallButtonText {
+            get {
+                return ResourceManager.GetString("GenAIToolCallButtonText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Tool definition.
+        /// </summary>
+        public static string GenAIToolDefinitionButtonText {
+            get {
+                return ResourceManager.GetString("GenAIToolDefinitionButtonText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to No parameters.
         /// </summary>
         public static string GenAIToolNoParameters {
@@ -556,6 +676,15 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Unexpected or truncated message content..
+        /// </summary>
+        public static string GenAIUnexpectedOrTruncatedContent {
+            get {
+                return ResourceManager.GetString("GenAIUnexpectedOrTruncatedContent", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Site-wide navigation.
         /// </summary>
         public static string HelpDialogCategoryNavigation {
@@ -592,7 +721,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Go to Microsoft Learn documentation.
+        ///   Looks up a localized string similar to Go to aspire.dev documentation.
         /// </summary>
         public static string HelpDialogGetHelpLinkText {
             get {
@@ -734,6 +863,15 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("InteractionButtonOk", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to All data.
+        /// </summary>
+        public static string ManageDataAllDataCheckboxLabel {
+            get {
+                return ResourceManager.GetString("ManageDataAllDataCheckboxLabel", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Console logs.
@@ -743,7 +881,16 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ManageDataConsoleLogs", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} for {1}.
+        /// </summary>
+        public static string ManageDataDataTypeForResourceCheckboxLabel {
+            get {
+                return ResourceManager.GetString("ManageDataDataTypeForResourceCheckboxLabel", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Manage logs and telemetry.
         /// </summary>
@@ -833,7 +980,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ManageDataResource", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Structured logs.
         /// </summary>
@@ -862,236 +1009,29 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Aspire MCP API key.
+        ///   Looks up a localized string similar to Dismiss all.
         /// </summary>
-        public static string McpServerDialogApiKeyLabel {
+        public static string NotificationCenterDismissAll {
             get {
-                return ResourceManager.GetString("McpServerDialogApiKeyLabel", resourceCulture);
+                return ResourceManager.GetString("NotificationCenterDismissAll", resourceCulture);
             }
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to The fastest way to get started is to &lt;a href=&quot;{0}&quot; target=&quot;_blank&quot;&gt;configure the Aspire MCP using the CLI&lt;/a&gt;.
+        ///   Looks up a localized string similar to No notifications.
         /// </summary>
-        public static string McpServerDialogCliInstructionsAbove {
+        public static string NotificationCenterEmpty {
             get {
-                return ResourceManager.GetString("McpServerDialogCliInstructionsAbove", resourceCulture);
+                return ResourceManager.GetString("NotificationCenterEmpty", resourceCulture);
             }
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to The &lt;code&gt;aspire mcp init&lt;/code&gt; command writes MCP JSON to your local workspace. Alternatively, configure your local AI development tools using instructions below..
+        ///   Looks up a localized string similar to Dismiss notification.
         /// </summary>
-        public static string McpServerDialogCliInstructionsBelow {
+        public static string NotificationEntryDismiss {
             get {
-                return ResourceManager.GetString("McpServerDialogCliInstructionsBelow", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Aspire MCP configuration.
-        /// </summary>
-        public static string McpServerDialogConfigurationHeading {
-            get {
-                return ResourceManager.GetString("McpServerDialogConfigurationHeading", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Copy.
-        /// </summary>
-        public static string McpServerDialogCopyButton {
-            get {
-                return ResourceManager.GetString("McpServerDialogCopyButton", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Visual Studio: Install Aspire MCP Server.
-        /// </summary>
-        public static string McpServerDialogInstallButtonAriaLabelVisualStudio {
-            get {
-                return ResourceManager.GetString("McpServerDialogInstallButtonAriaLabelVisualStudio", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to VS Code: Install Aspire MCP Server.
-        /// </summary>
-        public static string McpServerDialogInstallButtonAriaLabelVSCode {
-            get {
-                return ResourceManager.GetString("McpServerDialogInstallButtonAriaLabelVSCode", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to VS Code Insiders: Install Aspire MCP Server.
-        /// </summary>
-        public static string McpServerDialogInstallButtonAriaLabelVSCodeInsiders {
-            get {
-                return ResourceManager.GetString("McpServerDialogInstallButtonAriaLabelVSCodeInsiders", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Aspire MCP connects AI assistants to Aspire app data. AI can use Aspire MCP to get information about app resources, health checks, commands, console logs and real-time telemetry..
-        /// </summary>
-        public static string McpServerDialogIntroduction {
-            get {
-                return ResourceManager.GetString("McpServerDialogIntroduction", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Use Aspire MCP with AI.
-        /// </summary>
-        public static string McpServerDialogLearnMoreLink {
-            get {
-                return ResourceManager.GetString("McpServerDialogLearnMoreLink", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Manually updating &lt;code&gt;mcp.json&lt;/code&gt;.
-        /// </summary>
-        public static string McpServerDialogManuallyUpdatingAccordionHeading {
-            get {
-                return ResourceManager.GetString("McpServerDialogManuallyUpdatingAccordionHeading", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Aspire MCP can be used with any AI tooling that supports streamable HTTP MCP servers..
-        /// </summary>
-        public static string McpServerDialogOtherDescription {
-            get {
-                return ResourceManager.GetString("McpServerDialogOtherDescription", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Important details for configuring Aspire MCP are below. Please refer to your AI client&apos;s documentation for how to add an MCP server..
-        /// </summary>
-        public static string McpServerDialogOtherInstructions {
-            get {
-                return ResourceManager.GetString("McpServerDialogOtherInstructions", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to For other options, such as updating &lt;code&gt;mcp.json&lt;/code&gt;, see &lt;a href=&quot;{0}&quot; target=&quot;_blank&quot;&gt;Add an MCP server to Visual Studio&lt;/a&gt;..
-        /// </summary>
-        public static string McpServerDialogOtherOptionsVisualStudio {
-            get {
-                return ResourceManager.GetString("McpServerDialogOtherOptionsVisualStudio", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to For other options, such as updating &lt;code&gt;mcp.json&lt;/code&gt;, see &lt;a href=&quot;{0}&quot; target=&quot;_blank&quot;&gt;Add an MCP server to VS Code&lt;/a&gt;..
-        /// </summary>
-        public static string McpServerDialogOtherOptionsVSCode {
-            get {
-                return ResourceManager.GetString("McpServerDialogOtherOptionsVSCode", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Other.
-        /// </summary>
-        public static string McpServerDialogOtherTab {
-            get {
-                return ResourceManager.GetString("McpServerDialogOtherTab", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Quickly add Aspire MCP to Visual Studio using a browser install button:.
-        /// </summary>
-        public static string McpServerDialogQuicklyAddVisualStudio {
-            get {
-                return ResourceManager.GetString("McpServerDialogQuicklyAddVisualStudio", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Quickly add Aspire MCP to VS Code using a browser install button:.
-        /// </summary>
-        public static string McpServerDialogQuicklyAddVSCode {
-            get {
-                return ResourceManager.GetString("McpServerDialogQuicklyAddVSCode", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to You need to add the API key to Aspire MCP before you can use it. In GitHub Copilot Chat, select the Tools button, then the Aspire MCP server. Enter the API key below in the text box..
-        /// </summary>
-        public static string McpServerDialogVisualStudioApiKeyInstructions {
-            get {
-                return ResourceManager.GetString("McpServerDialogVisualStudioApiKeyInstructions", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Visual Studio.
-        /// </summary>
-        public static string McpServerDialogVisualStudioTab {
-            get {
-                return ResourceManager.GetString("McpServerDialogVisualStudioTab", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to The first time Aspire MCP starts, you&apos;ll be prompted by VS Code for the API key. Enter the API key below in the VS Code input text box..
-        /// </summary>
-        public static string McpServerDialogVSCodeApiKeyInstructions {
-            get {
-                return ResourceManager.GetString("McpServerDialogVSCodeApiKeyInstructions", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to VS Code.
-        /// </summary>
-        public static string McpServerDialogVSCodeTab {
-            get {
-                return ResourceManager.GetString("McpServerDialogVSCodeTab", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to To use VS Code with Aspire MCP, configure the MCP endpoint to use HTTP instead of HTTPS. Note that this will remove transport security from Aspire MCP communication and could allow data to be read by a third party..
-        /// </summary>
-        public static string McpServerDialogVSCodeWarningInstructions {
-            get {
-                return ResourceManager.GetString("McpServerDialogVSCodeWarningInstructions", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to As of October 2025, VS Code does not support using Aspire MCP over HTTPS..
-        /// </summary>
-        public static string McpServerDialogVSCodeWarningMessage {
-            get {
-                return ResourceManager.GetString("McpServerDialogVSCodeWarningMessage", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to More information.
-        /// </summary>
-        public static string McpServerDialogVSCodeWarningMoreInfo {
-            get {
-                return ResourceManager.GetString("McpServerDialogVSCodeWarningMoreInfo", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to VS Code limitation.
-        /// </summary>
-        public static string McpServerDialogVSCodeWarningTitle {
-            get {
-                return ResourceManager.GetString("McpServerDialogVSCodeWarningTitle", resourceCulture);
+                return ResourceManager.GetString("NotificationEntryDismiss", resourceCulture);
             }
         }
         
@@ -1222,6 +1162,42 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Time format.
+        /// </summary>
+        public static string SettingsDialogTimeFormat {
+            get {
+                return ResourceManager.GetString("SettingsDialogTimeFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to System.
+        /// </summary>
+        public static string SettingsDialogTimeFormatSystem {
+            get {
+                return ResourceManager.GetString("SettingsDialogTimeFormatSystem", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 12-hour.
+        /// </summary>
+        public static string SettingsDialogTimeFormatTwelveHour {
+            get {
+                return ResourceManager.GetString("SettingsDialogTimeFormatTwelveHour", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 24-hour.
+        /// </summary>
+        public static string SettingsDialogTimeFormatTwentyFourHour {
+            get {
+                return ResourceManager.GetString("SettingsDialogTimeFormatTwentyFourHour", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Version: {0}.
         /// </summary>
         public static string SettingsDialogVersion {
@@ -1258,11 +1234,20 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Format JSON.
+        ///   Looks up a localized string similar to JSON.
         /// </summary>
         public static string TextVisualizerDialogJsonFormat {
             get {
                 return ResourceManager.GetString("TextVisualizerDialogJsonFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Markdown.
+        /// </summary>
+        public static string TextVisualizerDialogMarkdownFormat {
+            get {
+                return ResourceManager.GetString("TextVisualizerDialogMarkdownFormat", resourceCulture);
             }
         }
         
@@ -1276,7 +1261,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Format XML.
+        ///   Looks up a localized string similar to XML.
         /// </summary>
         public static string TextVisualizerDialogXmlFormat {
             get {

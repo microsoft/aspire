@@ -48,6 +48,7 @@
 *.fsx text=auto
 *.hs text=auto
 *.json text=auto
+src/Components/**/ConfigurationSchema.json text eol=lf
 
 *.csproj text=auto
 *.vbproj text=auto
@@ -60,3 +61,5 @@
 # https://github.com/github/linguist/issues/1626#issuecomment-401442069
 # this only affects the repo's language statistics
 *.h linguist-language=C
+
+.github/workflows/*.lock.yml linguist-generated=true merge=ours

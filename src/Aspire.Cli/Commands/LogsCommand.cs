@@ -2,16 +2,18 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Backchannel;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -20,9 +22,12 @@ namespace Aspire.Cli.Commands;
 /// <summary>
 /// JSON output format for a log line.
 /// </summary>
+// `aspire logs --format json` and `aspire logs --format json --follow` use this shape;
+// keep docs/specs/cli-output-formats.md in sync when changing it.
 internal sealed class LogLineJson
 {
     public required string ResourceName { get; init; }
+    public string? Timestamp { get; init; }
     public required string Content { get; init; }
     public required bool IsError { get; init; }
 }
@@ -30,6 +35,7 @@ internal sealed class LogLineJson
 /// <summary>
 /// Wrapper for logs snapshot output.
 /// </summary>
+// `aspire logs --format json` uses this wrapper; keep docs/specs/cli-output-formats.md in sync when changing it.
 internal sealed class LogsOutput
 {
     public required LogLineJson[] Logs { get; init; }
@@ -70,20 +76,18 @@ internal sealed partial class LogsCommandJsonContext : JsonSerializerContext
 
 internal sealed class LogsCommand : BaseCommand
 {
-    private readonly IInteractionService _interactionService;
+    internal override HelpGroup HelpGroup => HelpGroup.Monitoring;
+
+    private readonly ICliHostEnvironment _hostEnvironment;
     private readonly AppHostConnectionResolver _connectionResolver;
     private readonly ILogger<LogsCommand> _logger;
-    private readonly ICliHostEnvironment _hostEnvironment;
 
     private static readonly Argument<string?> s_resourceArgument = new("resource")
     {
         Description = LogsCommandStrings.ResourceArgumentDescription,
         Arity = ArgumentArity.ZeroOrOne
     };
-    private static readonly Option<FileInfo?> s_projectOption = new("--project")
-    {
-        Description = LogsCommandStrings.ProjectOptionDescription
-    };
+    private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", SharedCommandStrings.AppHostOptionDescription);
     private static readonly Option<bool> s_followOption = new("--follow", "-f")
     {
         Description = LogsCommandStrings.FollowOptionDescription
@@ -96,114 +100,162 @@ internal sealed class LogsCommand : BaseCommand
     {
         Description = LogsCommandStrings.TailOptionDescription
     };
+    private static readonly Option<bool> s_timestampsOption = new("--timestamps", "-t")
+    {
+        Description = LogsCommandStrings.TimestampsOptionDescription
+    };
+    private static readonly Option<bool> s_includeHiddenOption = new("--include-hidden")
+    {
+        Description = LogsCommandStrings.IncludeHiddenOptionDescription
+    };
+    private static readonly Option<string?> s_searchOption = new("--search")
+    {
+        Description = LogsCommandStrings.SearchOptionDescription
+    };
 
-    // Colors to cycle through for different resources (similar to docker-compose)
-    private static readonly Color[] s_resourceColors =
-    [
-        Color.Cyan1,
-        Color.Green,
-        Color.Yellow,
-        Color.Blue,
-        Color.Magenta1,
-        Color.Orange1,
-        Color.DeepPink1,
-        Color.SpringGreen1,
-        Color.Aqua,
-        Color.Violet
-    ];
-    private readonly Dictionary<string, Color> _resourceColorMap = new(StringComparer.OrdinalIgnoreCase);
-    private int _nextColorIndex;
+    private readonly ResourceColorMap _resourceColorMap;
 
     public LogsCommand(
-        IInteractionService interactionService,
         IAuxiliaryBackchannelMonitor backchannelMonitor,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
+        IProjectLocator projectLocator,
         ICliHostEnvironment hostEnvironment,
-        AspireCliTelemetry telemetry,
-        ILogger<LogsCommand> logger)
-        : base("logs", LogsCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
+        ResourceColorMap resourceColorMap,
+        ILogger<LogsCommand> logger,
+        ProfilingTelemetry profilingTelemetry,
+        CommonCommandServices services)
+        : base("logs", LogsCommandStrings.Description, services)
     {
-        _interactionService = interactionService;
+        _resourceColorMap = resourceColorMap;
         _hostEnvironment = hostEnvironment;
         _logger = logger;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, executionContext, logger);
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, services.ExecutionContext, logger, profilingTelemetry);
 
         Arguments.Add(s_resourceArgument);
-        Options.Add(s_projectOption);
+        Options.Add(s_appHostOption);
         Options.Add(s_followOption);
         Options.Add(s_formatOption);
         Options.Add(s_tailOption);
+        Options.Add(s_timestampsOption);
+        Options.Add(s_includeHiddenOption);
+        Options.Add(s_searchOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
         var resourceName = parseResult.GetValue(s_resourceArgument);
-        var passedAppHostProjectFile = parseResult.GetValue(s_projectOption);
+        var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
         var follow = parseResult.GetValue(s_followOption);
         var format = parseResult.GetValue(s_formatOption);
         var tail = parseResult.GetValue(s_tailOption);
+        var timestamps = parseResult.GetValue(s_timestampsOption);
+        var includeHidden = parseResult.GetValue(s_includeHiddenOption);
+        var search = parseResult.GetValue(s_searchOption);
 
         // Validate --tail value
         if (tail.HasValue && tail.Value < 1)
         {
-            _interactionService.DisplayError(LogsCommandStrings.TailMustBePositive);
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, LogsCommandStrings.TailMustBePositive);
         }
-
-        // When outputting JSON, suppress status messages to keep output machine-readable
-        var scanningMessage = format == OutputFormat.Json ? string.Empty : LogsCommandStrings.ScanningForRunningAppHosts;
 
         var result = await _connectionResolver.ResolveConnectionAsync(
             passedAppHostProjectFile,
-            scanningMessage,
-            LogsCommandStrings.SelectAppHost,
-            LogsCommandStrings.NoInScopeAppHostsShowingAll,
-            LogsCommandStrings.AppHostNotRunning,
+            SharedCommandStrings.ScanningForRunningAppHosts,
+            string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.SelectAppHost, LogsCommandStrings.SelectAppHostAction),
+            SharedCommandStrings.AppHostNotRunning,
             cancellationToken);
 
         if (!result.Success)
         {
-            // No running AppHosts is not an error - similar to Unix 'ps' returning empty
-            return ExitCodeConstants.Success;
+            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsInformation(result, InteractionService));
+        }
+
+        var connection = result.Connection!;
+        var effectiveIncludeHidden = includeHidden || resourceName is not null;
+        using var resourceWatcher = new ResourceSnapshotWatcher(connection, effectiveIncludeHidden);
+        await resourceWatcher.WaitForInitialLoadAsync(cancellationToken).ConfigureAwait(false);
+
+        // Pre-resolve colors for all resource names so that assignment is
+        // deterministic regardless of which resources are displayed.
+        var allSnapshots = resourceWatcher.GetAllResources();
+        _resourceColorMap.ResolveAll(allSnapshots.Select(s => ResourceSnapshotMapper.GetResourceName(s, allSnapshots)));
+
+        // Validate resource name exists (match by Name or DisplayName since users may pass either)
+        if (resourceName is not null)
+        {
+            if (!ResourceSnapshotMapper.WhereMatchesResourceName(resourceWatcher.GetAllResources(), resourceName).Any())
+            {
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, string.Format(CultureInfo.CurrentCulture, LogsCommandStrings.ResourceNotFound, resourceName));
+            }
+        }
+        else
+        {
+            if (!resourceWatcher.GetResources().Any())
+            {
+                InteractionService.DisplayMessage(KnownEmojis.Information, LogsCommandStrings.NoResourcesFound);
+                return CommandResult.Success();
+            }
         }
 
         if (follow)
         {
-            return await ExecuteWatchAsync(result.Connection!, resourceName, format, tail, cancellationToken);
+            try
+            {
+                return CommandResult.FromExitCode(await ExecuteWatchAsync(connection, resourceWatcher, resourceName, format, tail, timestamps, search, cancellationToken));
+            }
+            catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken || cancellationToken.IsCancellationRequested)
+            {
+                return CommandResult.Success();
+            }
+            catch (Exception ex) when (AppHostFollowDisconnectHelpers.IsExpectedDisconnect(ex))
+            {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    return CommandResult.Success();
+                }
+
+                // Stopping or restarting the AppHost can tear down the JSON-RPC stream while
+                // logs --follow is active. Treat the lost stream as a normal end of stream
+                // rather than surfacing it as an unexpected CLI failure. Emit the status
+                // message on stderr so JSON output on stdout remains parseable.
+                AppHostFollowDisconnectHelpers.WriteStatusMessage(InteractionService, connection);
+
+                return CommandResult.Success();
+            }
         }
         else
         {
-            return await ExecuteGetAsync(result.Connection!, resourceName, format, tail, cancellationToken);
+            return CommandResult.FromExitCode(await ExecuteGetAsync(connection, resourceWatcher, resourceName, format, tail, timestamps, search, cancellationToken));
         }
     }
 
     private async Task<int> ExecuteGetAsync(
         IAppHostAuxiliaryBackchannel connection,
+        ResourceSnapshotWatcher resourceWatcher,
         string? resourceName,
         OutputFormat format,
         int? tail,
+        bool timestamps,
+        string? search,
         CancellationToken cancellationToken)
     {
-        // Collect all logs
-        List<ResourceLogLine> logLines;
-        if (!tail.HasValue)
-        {
-            logLines = await CollectLogsAsync(connection, resourceName, cancellationToken).ConfigureAwait(false);
-        }
-        else
-        {
-            // With tail specified, collect all logs first then take last N
-            logLines = await CollectLogsAsync(connection, resourceName, cancellationToken).ConfigureAwait(false);
+        // Collect all logs, parsing into LogEntry with resolved resource names sorted by timestamp
+        var entries = await InteractionService.ShowStatusAsync(
+            LogsCommandStrings.GettingLogs,
+            async () => await CollectLogsAsync(connection, resourceWatcher, resourceName, tail, search, cancellationToken).ConfigureAwait(false));
 
-            // Apply tail filter (tail.Value is guaranteed >= 1 by earlier validation)
-            if (logLines.Count > tail.Value)
-            {
-                logLines = logLines.Skip(logLines.Count - tail.Value).ToList();
-            }
+        // Keep the client-side search and tail passes even when a v2 AppHost already applied
+        // them. Older AppHosts fall back to the legacy log stream, and this also preserves the
+        // CLI's parsed-log search semantics for any edge cases the server-side pre-filter misses.
+        if (!string.IsNullOrEmpty(search))
+        {
+            entries = entries.Where(e => MatchesSearch(e, search)).ToList();
+        }
+
+        if (tail.HasValue && entries.Count > tail.Value)
+        {
+            entries = entries.Skip(entries.Count - tail.Value).ToList();
         }
 
         // Output the logs
@@ -212,145 +264,245 @@ internal sealed class LogsCommand : BaseCommand
             // Wrapped JSON for snapshot - single JSON object compatible with jq
             var logsOutput = new LogsOutput
             {
-                Logs = logLines.Select(l => new LogLineJson
+                Logs = entries.Select(entry => new LogLineJson
                 {
-                    ResourceName = l.ResourceName,
-                    Content = l.Content,
-                    IsError = l.IsError
+                    ResourceName = entry.ResourcePrefix ?? string.Empty,
+                    Timestamp = timestamps && entry.Timestamp.HasValue ? FormatTimestamp(entry.Timestamp.Value) : null,
+                    Content = entry.Content ?? entry.RawContent ?? string.Empty,
+                    IsError = entry.Type == LogEntryType.Error
                 }).ToArray()
             };
             var json = JsonSerializer.Serialize(logsOutput, LogsCommandJsonContext.Snapshot.LogsOutput);
-            _interactionService.DisplayRawText(json);
+            // Structured output always goes to stdout.
+            InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
         }
         else
         {
-            foreach (var logLine in logLines)
+            if (entries.Count == 0)
             {
-                OutputLogLine(logLine, format);
+                InteractionService.DisplayMessage(KnownEmojis.Information, LogsCommandStrings.NoLogsFound);
+            }
+            else
+            {
+                foreach (var entry in entries)
+                {
+                    OutputLogLine(entry, format, timestamps);
+                }
             }
         }
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private async Task<int> ExecuteWatchAsync(
         IAppHostAuxiliaryBackchannel connection,
+        ResourceSnapshotWatcher resourceWatcher,
         string? resourceName,
         OutputFormat format,
         int? tail,
+        bool timestamps,
+        string? search,
         CancellationToken cancellationToken)
     {
+        var logParser = new LogParser(ConsoleColor.Black);
+
         // If tail is specified, show last N lines first before streaming
         if (tail.HasValue)
         {
-            var historicalLogs = await CollectLogsAsync(connection, resourceName, cancellationToken).ConfigureAwait(false);
+            var entries = await InteractionService.ShowStatusAsync(
+                LogsCommandStrings.GettingLogs,
+                async () => await CollectLogsAsync(connection, resourceWatcher, resourceName, tail, search, cancellationToken).ConfigureAwait(false));
+
+            // Apply full-text search filter before tail so tail count reflects matching entries
+            if (!string.IsNullOrEmpty(search))
+            {
+                entries = entries.Where(e => MatchesSearch(e, search)).ToList();
+            }
 
             // Output last N lines
-            var tailedLogs = historicalLogs.Count > tail.Value
-                ? historicalLogs.Skip(historicalLogs.Count - tail.Value)
-                : historicalLogs;
+            var tailedEntries = entries.Count > tail.Value
+                ? entries.Skip(entries.Count - tail.Value)
+                : entries;
 
-            foreach (var logLine in tailedLogs)
+            foreach (var entry in tailedEntries)
             {
-                OutputLogLine(logLine, format);
+                OutputLogLine(entry, format, timestamps);
             }
         }
 
         // Now stream new logs
-        await foreach (var logLine in connection.GetResourceLogsAsync(resourceName, follow: true, cancellationToken).ConfigureAwait(false))
+        var followRequest = new GetConsoleLogsRequest
         {
-            OutputLogLine(logLine, format);
+            ResourceName = resourceName,
+            Follow = true,
+            Search = search,
+            IncludeHidden = resourceName is not null || resourceWatcher.IncludeHidden
+        };
+
+        await foreach (var logLine in GetConsoleLogLinesAsync(connection, followRequest, cancellationToken).ConfigureAwait(false))
+        {
+            // When streaming all resources, skip logs from hidden resources.
+            // We filter by exclusion so that new resources appearing after the
+            // initial snapshot are included by default.
+            if (resourceName is null && !resourceWatcher.IncludeHidden)
+            {
+                var resource = resourceWatcher.GetResource(logLine.ResourceName);
+                if (resource is not null && ResourceSnapshotMapper.IsHiddenResource(resource))
+                {
+                    continue;
+                }
+            }
+
+            var entry = ParseLogLine(logLine, logParser, resourceWatcher.GetAllResources());
+
+            // Apply full-text search filter on streamed log content
+            if (!string.IsNullOrEmpty(search) && !MatchesSearch(entry, search))
+            {
+                continue;
+            }
+
+            OutputLogLine(entry, format, timestamps);
         }
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     /// <summary>
-    /// Collects all logs for a resource (or all resources if resourceName is null) into a list.
+    /// Collects all logs for a resource (or all resources if resourceName is null), parsing each
+    /// into a <see cref="LogEntry"/> with the resolved resource name set on <see cref="LogEntry.ResourcePrefix"/>
+    /// and returning entries sorted by timestamp.
     /// </summary>
-    private async Task<List<ResourceLogLine>> CollectLogsAsync(
+    private static async Task<IList<LogEntry>> CollectLogsAsync(
         IAppHostAuxiliaryBackchannel connection,
+        ResourceSnapshotWatcher resourceWatcher,
         string? resourceName,
+        int? tail,
+        string? search,
         CancellationToken cancellationToken)
     {
-        var logLines = new List<ResourceLogLine>();
-        await foreach (var logLine in GetLogsAsync(connection, resourceName, cancellationToken).ConfigureAwait(false))
+        var logParser = new LogParser(ConsoleColor.Black);
+        var logEntries = new LogEntries(int.MaxValue) { BaseLineNumber = 1 };
+        // Snapshot the resource list once for the non-follow path since it doesn't change.
+        var allSnapshots = resourceWatcher.GetAllResources().ToList();
+        // For named resources, V2 AppHosts use Search/Tail to avoid sending non-matching
+        // logs over JSON-RPC. The client still applies the same filters after parsing for
+        // all-resource compatibility and to keep final output semantics centralized here.
+        var request = new GetConsoleLogsRequest
         {
-            logLines.Add(logLine);
+            ResourceName = resourceName,
+            Follow = false,
+            Search = search,
+            Tail = tail,
+            IncludeHidden = resourceName is not null || resourceWatcher.IncludeHidden
+        };
+
+        await foreach (var logLine in GetConsoleLogLinesAsync(connection, request, cancellationToken).ConfigureAwait(false))
+        {
+            // When streaming all resources, skip logs from hidden resources
+            if (resourceName is null && !resourceWatcher.IncludeHidden)
+            {
+                var resource = resourceWatcher.GetResource(logLine.ResourceName);
+                if (resource is not null && ResourceSnapshotMapper.IsHiddenResource(resource))
+                {
+                    continue;
+                }
+            }
+
+            logEntries.InsertSorted(ParseLogLine(logLine, logParser, allSnapshots));
         }
-        return logLines;
+        return logEntries.GetEntries();
+    }
+
+    private static async IAsyncEnumerable<ResourceLogLine> GetConsoleLogLinesAsync(
+        IAppHostAuxiliaryBackchannel connection,
+        GetConsoleLogsRequest request,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        // The batch RPC is capability-gated by the connection. Older AppHosts fall back through
+        // the line-streaming/legacy RPC paths, while newer AppHosts can reduce JSON-RPC overhead
+        // by sending many log lines per stream item.
+        await foreach (var batch in connection.GetConsoleLogBatchesAsync(request, cancellationToken).ConfigureAwait(false))
+        {
+            foreach (var logLine in batch.Lines)
+            {
+                yield return logLine;
+            }
+        }
     }
 
     /// <summary>
-    /// Gets logs for a resource (or all resources if resourceName is null) as an async enumerable.
+    /// Parses a <see cref="ResourceLogLine"/> into a <see cref="LogEntry"/> with the resolved resource name
+    /// set on <see cref="LogEntry.ResourcePrefix"/>.
     /// </summary>
-    private async IAsyncEnumerable<ResourceLogLine> GetLogsAsync(
-        IAppHostAuxiliaryBackchannel connection,
-        string? resourceName,
-        [EnumeratorCancellation] CancellationToken cancellationToken)
+    private static LogEntry ParseLogLine(ResourceLogLine logLine, LogParser logParser, IEnumerable<ResourceSnapshot> snapshots)
     {
-        if (resourceName is not null)
-        {
-            await foreach (var logLine in connection.GetResourceLogsAsync(resourceName, follow: false, cancellationToken).ConfigureAwait(false))
-            {
-                yield return logLine;
-            }
-            yield break;
-        }
-
-        // Get all resources and stream logs for each (like docker compose logs)
-        var snapshots = await connection.GetResourceSnapshotsAsync(cancellationToken).ConfigureAwait(false);
-        if (snapshots.Count == 0)
-        {
-            _interactionService.DisplayMessage("ℹ️", LogsCommandStrings.NoResourcesFound);
-            yield break;
-        }
-
-        foreach (var snapshot in snapshots.OrderBy(s => s.Name))
-        {
-            await foreach (var logLine in connection.GetResourceLogsAsync(snapshot.Name, follow: false, cancellationToken).ConfigureAwait(false))
-            {
-                yield return logLine;
-            }
-        }
+        var resolvedName = ResolveResourceName(logLine.ResourceName, snapshots);
+        return logParser.CreateLogEntry(logLine.Content, logLine.IsError, resolvedName);
     }
 
-    private void OutputLogLine(ResourceLogLine logLine, OutputFormat format)
+    private void OutputLogLine(LogEntry entry, OutputFormat format, bool timestamps)
     {
+        var displayName = entry.ResourcePrefix ?? string.Empty;
+        var content = entry.Content ?? entry.RawContent ?? string.Empty;
+        var displayContent = _hostEnvironment.SupportsAnsi ? content : AnsiParser.StripControlSequences(content);
+        var timestampPrefix = timestamps && entry.Timestamp.HasValue ? FormatTimestamp(entry.Timestamp.Value) + " " : string.Empty;
+
         if (format == OutputFormat.Json)
         {
             // NDJSON for streaming - compact, one object per line
             var logLineJson = new LogLineJson
             {
-                ResourceName = logLine.ResourceName,
-                Content = logLine.Content,
-                IsError = logLine.IsError
+                ResourceName = displayName,
+                Timestamp = timestamps && entry.Timestamp.HasValue ? FormatTimestamp(entry.Timestamp.Value) : null,
+                Content = content,
+                IsError = entry.Type == LogEntryType.Error
             };
             var output = JsonSerializer.Serialize(logLineJson, LogsCommandJsonContext.Ndjson.LogLineJson);
-            _interactionService.DisplayRawText(output);
-        }
-        else if (_hostEnvironment.SupportsAnsi)
-        {
-            // Colorized output: assign a consistent color to each resource
-            var color = GetResourceColor(logLine.ResourceName);
-            var escapedContent = logLine.Content.EscapeMarkup();
-            AnsiConsole.MarkupLine($"[{color}][[{logLine.ResourceName}]][/] {escapedContent}");
+            // Structured output always goes to stdout.
+            InteractionService.DisplayRawText(output, ConsoleOutput.Standard);
         }
         else
         {
-            // Plain text fallback when colors not supported
-            _interactionService.DisplayPlainText($"[{logLine.ResourceName}] {logLine.Content}");
+            // Colorized output: assign a consistent color to each resource
+            var color = _resourceColorMap.GetColor(displayName);
+            var escapedContent = displayContent.EscapeMarkup();
+            var dimTimestamp = timestampPrefix.Length > 0 ? $"[dim]{timestampPrefix.EscapeMarkup()}[/]" : string.Empty;
+            InteractionService.DisplayMarkupLine($"{dimTimestamp}[{color}][[{displayName.EscapeMarkup()}]][/] {escapedContent}");
         }
     }
 
-    private Color GetResourceColor(string resourceName)
+    private static string FormatTimestamp(DateTime timestamp)
     {
-        if (!_resourceColorMap.TryGetValue(resourceName, out var color))
+        return timestamp.ToString("yyyy-MM-ddTHH:mm:ss.fffK", CultureInfo.InvariantCulture);
+    }
+
+    private static bool MatchesSearch(LogEntry entry, string search)
+    {
+        var fragments = SearchTextParser.ParseFragments(search);
+        if (fragments.Length == 0)
         {
-            color = s_resourceColors[_nextColorIndex % s_resourceColors.Length];
-            _resourceColorMap[resourceName] = color;
-            _nextColorIndex++;
+            return true;
         }
-        return color;
+
+        var content = entry.RawContent ?? entry.Content ?? string.Empty;
+        var prefix = entry.ResourcePrefix ?? string.Empty;
+        var stripped = AnsiParser.StripControlSequences(content);
+
+        // Console logs have no structured attributes, so all search text is treated as
+        // free-text fragments matched against the log content and resource name.
+        return SearchTextParser.MatchesAllFragments(fragments, (content, prefix, stripped), static (state, fragment) =>
+            state.content.Contains(fragment, StringComparisons.FullTextSearch) ||
+            state.prefix.Contains(fragment, StringComparisons.FullTextSearch) ||
+            state.stripped.Contains(fragment, StringComparisons.FullTextSearch));
+    }
+
+    private static string ResolveResourceName(string resourceName, IEnumerable<ResourceSnapshot> snapshots)
+    {
+        var snapshot = snapshots.FirstOrDefault(s => string.Equals(s.Name, resourceName, StringComparisons.ResourceName));
+        if (snapshot is not null)
+        {
+            return ResourceSnapshotMapper.GetResourceName(snapshot, snapshots);
+        }
+        return resourceName;
     }
 }

@@ -170,6 +170,12 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("StartingDebugSessionInExtension", resourceCulture);
             }
         }
+
+        public static string StartingRunSessionInExtension {
+            get {
+                return ResourceManager.GetString("StartingRunSessionInExtension", resourceCulture);
+            }
+        }
         
         public static string AgentConfigurationPrompt {
             get {
@@ -204,12 +210,6 @@ namespace Aspire.Cli.Resources {
         public static string RunningInstanceStopped {
             get {
                 return ResourceManager.GetString("RunningInstanceStopped", resourceCulture);
-            }
-        }
-        
-        public static string CheckingForRunningInstances {
-            get {
-                return ResourceManager.GetString("CheckingForRunningInstances", resourceCulture);
             }
         }
         
@@ -255,9 +255,21 @@ namespace Aspire.Cli.Resources {
             }
         }
         
+        public static string AppHostFailedToBuild {
+            get {
+                return ResourceManager.GetString("AppHostFailedToBuild", resourceCulture);
+            }
+        }
+        
         public static string TimeoutWaitingForAppHost {
             get {
                 return ResourceManager.GetString("TimeoutWaitingForAppHost", resourceCulture);
+            }
+        }
+
+        public static string InvalidAppHostStartupTimeoutEnvironmentVariable {
+            get {
+                return ResourceManager.GetString("InvalidAppHostStartupTimeoutEnvironmentVariable", resourceCulture);
             }
         }
         
@@ -266,7 +278,19 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CheckLogsForDetails", resourceCulture);
             }
         }
-        
+
+        public static string RecentAppHostStartupOutput {
+            get {
+                return ResourceManager.GetString("RecentAppHostStartupOutput", resourceCulture);
+            }
+        }
+
+        public static string AppHostConnectionLostWaitingForExit {
+            get {
+                return ResourceManager.GetString("AppHostConnectionLostWaitingForExit", resourceCulture);
+            }
+        }
+
         public static string ProcessId {
             get {
                 return ResourceManager.GetString("ProcessId", resourceCulture);
@@ -294,6 +318,18 @@ namespace Aspire.Cli.Resources {
         public static string IsolatedModeRunningInstanceWarning {
             get {
                 return ResourceManager.GetString("IsolatedModeRunningInstanceWarning", resourceCulture);
+            }
+        }
+
+        public static string NoBuildArgumentDescription {
+            get {
+                return ResourceManager.GetString("NoBuildArgumentDescription", resourceCulture);
+            }
+        }
+
+        public static string NoBuildNotSupportedWithWatchMode {
+            get {
+                return ResourceManager.GetString("NoBuildNotSupportedWithWatchMode", resourceCulture);
             }
         }
     }

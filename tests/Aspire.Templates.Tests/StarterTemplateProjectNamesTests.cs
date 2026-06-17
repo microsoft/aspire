@@ -22,7 +22,7 @@ public abstract class StarterTemplateProjectNamesTests : TemplateTestsBase
     [MemberData(nameof(ProjectNames_TestData))]
     [RequiresFeature(TestFeature.SSLCertificate)]
     [RequiresFeature(TestFeature.Playwright)]
-    [OuterLoop("playwright test")]
+    [OuterloopTest("playwright test")]
     public async Task StarterTemplateWithTest_ProjectNames(string prefix)
     {
         string id = $"{prefix}-{_testType}";

@@ -1,170 +1,83 @@
 name: 'Enumerate test projects'
 description: 'Enumerate list of test projects'
 inputs:
-  includeIntegrations:
+  buildArgs:
     required: false
-    type: boolean
-    default: false
-  includeTemplates:
-    required: false
-    type: boolean
-    default: false
-  includeCliE2E:
-    required: false
-    type: boolean
-    default: false
-  includeDeployment:
-    required: false
-    type: boolean
-    default: false
+    type: string
+    default: ''
+    description: 'Additional MSBuild arguments passed to the test matrix generation step (e.g., /p:IncludeTemplateTests=true /p:OnlyDeploymentTests=true)'
 
+# Output format: JSON with structure {"include": [{...}, ...]}
+# Each entry contains:
+#   - type: 'regular' | 'collection' | 'class'
+#   - projectName: Full project name (e.g., 'Aspire.Hosting.Tests')
+#   - name: Display name for the test run
+#   - shortname: Short identifier
+#   - testProjectPath: Relative path to the test project
+#   - workitemprefix: Prefix for work item naming
+#   - runs-on: GitHub Actions runner (e.g., 'ubuntu-latest', 'windows-latest')
+#   - testSessionTimeout: Timeout for the test session (e.g., '20m')
+#   - testHangTimeout: Timeout for hung tests (e.g., '10m')
+#   - requiresNugets: Boolean indicating if NuGet packages are needed
+#   - requiresTestSdk: Boolean indicating if test SDK is needed
+#   - extraTestArgs: Additional test arguments (e.g., '--filter-trait "Partition=P1"')
+#   - collection: (collection type only) Collection/partition name
+#   - classname: (class type only) Fully qualified test class name
 outputs:
-  integrations_tests_matrix:
-    description: Integration tests matrix
-    value: ${{ steps.generate_integrations_matrix.outputs.integrations_tests_matrix }}
-  templates_tests_matrix:
-    description: Templates tests matrix
-    value: ${{ steps.generate_templates_matrix.outputs.templates_tests_matrix }}
-  cli_e2e_tests_matrix:
-    description: Cli E2E tests matrix
-    value: ${{ steps.generate_cli_e2e_matrix.outputs.cli_e2e_tests_matrix }}
-  deployment_tests_matrix:
-    description: Deployment E2E tests matrix
-    value: ${{ steps.generate_deployment_matrix.outputs.deployment_tests_matrix }}
+  all_tests:
+    description: Combined matrix of all test entries
+    value: ${{ steps.expand_matrix.outputs.all_tests }}
 runs:
   using: "composite"
   steps:
     - name: Checkout code
-      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
     - name: Set up .NET Core
-      uses: actions/setup-dotnet@3951f0dfe7a07e2313ec93c75700083e2005cbab # v4.3.0
+      uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
       with:
         global-json-file: ${{ github.workspace }}/global.json
 
-    - name: Get list of integration tests
-      if: ${{ inputs.includeIntegrations }}
-      shell: pwsh
-      run: >
-        dotnet build ${{ github.workspace }}/tests/Shared/GetTestProjects.proj
-        /bl:${{ github.workspace }}/artifacts/log/Debug/GetTestProjects.binlog
-        /p:TestsListOutputPath=${{ github.workspace }}/artifacts/TestsForGithubActions.list
-        /p:ContinuousIntegrationBuild=true
+    - name: Restore
+      shell: bash
+      run: ./restore.sh
 
-    - name: Generate list of template tests
-      if: ${{ inputs.includeTemplates }}
-      shell: pwsh
-      run: >
-          dotnet build ${{ github.workspace }}/tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj
-          "/t:Build;ExtractTestClassNames"
-          /bl:${{ github.workspace }}/artifacts/log/Debug/BuildTemplatesTests.binlog
-          -p:ExtractTestClassNamesForHelix=true
-          -p:PrepareForHelix=true
-          -p:ExtractTestClassNamesPrefix=Aspire.Templates.Tests
-          -p:InstallBrowsersForPlaywright=false
+    - name: Build ExtractTestPartitions tool
+      shell: bash
+      run: dotnet build tools/ExtractTestPartitions/ExtractTestPartitions.csproj -c Release --nologo -v quiet
 
-    - name: Generate list of CLI E2E tests
-      if: ${{ inputs.includeCliE2E }}
-      shell: pwsh
+    - name: Generate canonical test matrix
+      shell: bash
       run: >
-          dotnet build ${{ github.workspace }}/tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj
-          "/t:Build;ExtractTestClassNames"
-          /bl:${{ github.workspace }}/artifacts/log/Debug/BuildCliEndToEndTests.binlog
-          -p:ExtractTestClassNamesForHelix=true
-          -p:PrepareForHelix=true
-          -p:ExtractTestClassNamesPrefix=Aspire.Cli.EndToEnd.Tests
-          -p:InstallBrowsersForPlaywright=false
+        ./build.sh -test
+        /p:TestRunnerName=TestEnumerationRunsheetBuilder
+        /p:TestMatrixOutputPath=artifacts/canonical-test-matrix.json
+        /p:GenerateCIPartitions=true
+        /bl
+        ${{ inputs.buildArgs }}
 
-    - name: Generate list of Deployment E2E tests
-      if: ${{ inputs.includeDeployment }}
-      shell: pwsh
-      run: >
-          dotnet build ${{ github.workspace }}/tests/Aspire.Deployment.EndToEnd.Tests/Aspire.Deployment.EndToEnd.Tests.csproj
-          "/t:Build;ExtractTestClassNames"
-          /bl:${{ github.workspace }}/artifacts/log/Debug/BuildDeploymentEndToEndTests.binlog
-          -p:ExtractTestClassNamesForHelix=true
-          -p:PrepareForHelix=true
-          -p:ExtractTestClassNamesPrefix=Aspire.Deployment.EndToEnd.Tests
-
-    - name: Generate tests matrix
-      id: generate_integrations_matrix
-      if: ${{ inputs.includeIntegrations }}
+    - name: Expand matrix for GitHub Actions
+      id: expand_matrix
       shell: pwsh
       run: |
-        $filePath = "${{ github.workspace }}/artifacts/TestsForGithubActions.list"
-        $lines = Get-Content $filePath
-        $jsonObject = @{
-            "shortname" = $lines | Sort-Object
+        $canonicalMatrixPath = "${{ github.workspace }}/artifacts/canonical-test-matrix.json"
+        $expandScript = "${{ github.workspace }}/eng/scripts/expand-test-matrix-github.ps1"
+
+        if (Test-Path $canonicalMatrixPath) {
+          & $expandScript -CanonicalMatrixFile $canonicalMatrixPath -OutputToGitHubEnv
+        } else {
+          $emptyMatrix = '{"include":[]}'
+          "all_tests=$emptyMatrix" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          Write-Host "No canonical test matrix found, using empty matrix"
         }
-        $jsonString = ConvertTo-Json $jsonObject -Compress
-        "integrations_tests_matrix=$jsonString"
-        "integrations_tests_matrix=$jsonString" | Out-File -FilePath $env:GITHUB_OUTPUT
-
-    - name: Generate templates matrix
-      id: generate_templates_matrix
-      if: ${{ inputs.includeTemplates }}
-      shell: pwsh
-      run: |
-        $inputFilePath = "${{ github.workspace }}/artifacts/helix/templates-tests/Aspire.Templates.Tests.tests.list"
-        $lines = Get-Content $inputFilePath
-
-        $prefix = "Aspire.Templates.Tests."
-        $lines = Get-Content $inputFilePath | ForEach-Object {
-            $_ -replace "^$prefix", ""
-        }
-
-        $jsonObject = @{
-            "shortname" = $lines | Sort-Object
-        }
-        $jsonString = ConvertTo-Json $jsonObject -Compress
-        "templates_tests_matrix=$jsonString"
-        "templates_tests_matrix=$jsonString" | Out-File -FilePath $env:GITHUB_OUTPUT
-
-    - name: Generate cli e2e matrix
-      id: generate_cli_e2e_matrix
-      if: ${{ inputs.includeCliE2E }}
-      shell: pwsh
-      run: |
-        $inputFilePath = "${{ github.workspace }}/artifacts/helix/cli-e2e-tests/Aspire.Cli.EndToEnd.Tests.tests.list"
-        $lines = Get-Content $inputFilePath
-
-        $prefix = "Aspire.Cli.EndToEnd.Tests."
-        $lines = @(Get-Content $inputFilePath | ForEach-Object {
-            $_ -replace "^$prefix", ""
-        })
-
-        $jsonObject = @{
-            "shortname" = @($lines | Sort-Object)
-        }
-        $jsonString = ConvertTo-Json $jsonObject -Compress
-        "cli_e2e_tests_matrix=$jsonString"
-        "cli_e2e_tests_matrix=$jsonString" | Out-File -FilePath $env:GITHUB_OUTPUT
-
-    - name: Generate deployment matrix
-      id: generate_deployment_matrix
-      if: ${{ inputs.includeDeployment }}
-      shell: pwsh
-      run: |
-        $inputFilePath = "${{ github.workspace }}/artifacts/helix/deployment-e2e-tests/Aspire.Deployment.EndToEnd.Tests.tests.list"
-        $lines = Get-Content $inputFilePath
-
-        $prefix = "Aspire.Deployment.EndToEnd.Tests."
-        $lines = @(Get-Content $inputFilePath | ForEach-Object {
-            $_ -replace "^$prefix", ""
-        })
-
-        $jsonObject = @{
-            "shortname" = @($lines | Sort-Object)
-        }
-        $jsonString = ConvertTo-Json $jsonObject -Compress
-        "deployment_tests_matrix=$jsonString"
-        "deployment_tests_matrix=$jsonString" | Out-File -FilePath $env:GITHUB_OUTPUT
 
     - name: Upload logs
       if: always()
-      uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
       with:
         name: logs-enumerate-tests-${{ runner.os }}
         path: |
           artifacts/log/**/*.binlog
-          artifacts/**/*.list
+          artifacts/**/*tests-partitions.json
+          artifacts/**/*tests-metadata.json
+          artifacts/canonical-test-matrix.json

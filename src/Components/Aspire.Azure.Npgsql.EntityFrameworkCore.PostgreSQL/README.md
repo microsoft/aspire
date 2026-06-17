@@ -108,7 +108,7 @@ or
     builder.EnrichAzureNpgsqlDbContext<MyDbContext>(settings => settings.DisableHealthChecks = true);
 ```
 
-Use the `AzureNpgsqlEntityFrameworkCorePostgreSQLSettings.Credential` property to establish a connection. If no credential is configured, the [DefaultAzureCredential](https://learn.microsoft.com/dotnet/api/azure.identity.defaultazurecredential) is used.
+Use the `AzureNpgsqlEntityFrameworkCorePostgreSQLSettings.Credential` property to establish a connection. If no credential is configured, a [default TokenCredential is created based on the current environment](https://aka.ms/aspire/default-azure-credential).
 
 If the connection string contains a username and a password then the credential will be ignored.
 
@@ -151,10 +151,10 @@ builder.EnrichAzureNpgsqlDbContext<MyDbContext>();
 ## Additional documentation
 
 * https://learn.microsoft.com/ef/core/
-* https://github.com/dotnet/aspire/tree/main/src/Components/README.md
+* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire
 
 _*Postgres, PostgreSQL and the Slonik Logo are trademarks or registered trademarks of the PostgreSQL Community Association of Canada, and used with their permission._

@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsAspireHost>true</IsAspireHost>
+    <UserSecretsId>DC3A64A6-3991-41E2-956F-BFACC8091EC1</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure.Functions" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure.Storage" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AzureFunctionsWithDts.Functions\AzureFunctionsWithDts.Functions.csproj" />
+  </ItemGroup>
+
+</Project>

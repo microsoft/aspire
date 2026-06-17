@@ -3,6 +3,7 @@
 
 using Microsoft.AspNetCore.InternalTesting;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Tests.TestServices;
 
 namespace Aspire.Cli.Tests.Projects;
 
@@ -11,7 +12,7 @@ public class DefaultLanguageDiscoveryTests
     [Fact]
     public async Task GetAvailableLanguagesAsync_ReturnsCSharpLanguage()
     {
-        var discovery = new DefaultLanguageDiscovery();
+        var discovery = new DefaultLanguageDiscovery(new TestFeatures());
 
         var languages = await discovery.GetAvailableLanguagesAsync().DefaultTimeout();
 
@@ -27,7 +28,7 @@ public class DefaultLanguageDiscoveryTests
     [InlineData("apphost.cs")]
     public async Task GetAvailableLanguagesAsync_CSharpLanguageHasExpectedDetectionPatterns(string expectedPattern)
     {
-        var discovery = new DefaultLanguageDiscovery();
+        var discovery = new DefaultLanguageDiscovery(new TestFeatures());
 
         var languages = await discovery.GetAvailableLanguagesAsync().DefaultTimeout();
 
@@ -38,20 +39,24 @@ public class DefaultLanguageDiscoveryTests
     [Fact]
     public async Task GetAvailableLanguagesAsync_ReturnsTypeScriptLanguage()
     {
-        var discovery = new DefaultLanguageDiscovery();
+        var discovery = new DefaultLanguageDiscovery(new TestFeatures());
 
         var languages = await discovery.GetAvailableLanguagesAsync().DefaultTimeout();
 
         var typescript = languages.FirstOrDefault(l => l.LanguageId.Value == "typescript/nodejs");
         Assert.NotNull(typescript);
         Assert.Equal("TypeScript (Node.js)", typescript.DisplayName);
+        Assert.Contains("apphost.mts", typescript.DetectionPatterns);
         Assert.Contains("apphost.ts", typescript.DetectionPatterns);
+        Assert.Equal("apphost.mts", typescript.AppHostFileName);
     }
 
     [Fact]
     public async Task GetAvailableLanguagesAsync_ReturnsPythonLanguage()
     {
-        var discovery = new DefaultLanguageDiscovery();
+        var features = new TestFeatures();
+        features.SetFeature(KnownFeatures.ExperimentalPolyglotPython, true);
+        var discovery = new DefaultLanguageDiscovery(features);
 
         var languages = await discovery.GetAvailableLanguagesAsync().DefaultTimeout();
 
@@ -59,6 +64,35 @@ public class DefaultLanguageDiscoveryTests
         Assert.NotNull(python);
         Assert.Equal(KnownLanguageId.PythonDisplayName, python.DisplayName);
         Assert.Contains("apphost.py", python.DetectionPatterns);
+    }
+
+    [Fact]
+    public async Task GetAvailableLanguagesAsync_ExcludesExperimentalLanguagesByDefault()
+    {
+        var discovery = new DefaultLanguageDiscovery(new TestFeatures());
+
+        var languages = (await discovery.GetAvailableLanguagesAsync().DefaultTimeout()).ToList();
+
+        Assert.Null(languages.FirstOrDefault(l => l.LanguageId.Value == KnownLanguageId.Python));
+        Assert.Null(languages.FirstOrDefault(l => l.LanguageId.Value == KnownLanguageId.Go));
+        Assert.Null(languages.FirstOrDefault(l => l.LanguageId.Value == KnownLanguageId.Java));
+        Assert.Null(languages.FirstOrDefault(l => l.LanguageId.Value == KnownLanguageId.Rust));
+    }
+
+    [Theory]
+    [InlineData(KnownLanguageId.Python, "experimentalPolyglot:python")]
+    [InlineData(KnownLanguageId.Go, "experimentalPolyglot:go")]
+    [InlineData(KnownLanguageId.Java, "experimentalPolyglot:java")]
+    [InlineData(KnownLanguageId.Rust, "experimentalPolyglot:rust")]
+    public async Task GetAvailableLanguagesAsync_IncludesExperimentalLanguageWhenFlagEnabled(string languageId, string featureFlag)
+    {
+        var features = new TestFeatures();
+        features.SetFeature(featureFlag, true);
+        var discovery = new DefaultLanguageDiscovery(features);
+
+        var languages = (await discovery.GetAvailableLanguagesAsync().DefaultTimeout()).ToList();
+
+        Assert.NotNull(languages.FirstOrDefault(l => l.LanguageId.Value == languageId));
     }
 
     [Theory]
@@ -69,13 +103,13 @@ public class DefaultLanguageDiscoveryTests
     [InlineData("apphost.cs", KnownLanguageId.CSharp)]
     [InlineData("AppHost.cs", KnownLanguageId.CSharp)]
     [InlineData("APPHOST.CS", KnownLanguageId.CSharp)]
+    [InlineData("apphost.mts", "typescript/nodejs")]
+    [InlineData("AppHost.mts", "typescript/nodejs")]
     [InlineData("apphost.ts", "typescript/nodejs")]
     [InlineData("AppHost.ts", "typescript/nodejs")]
-    [InlineData("apphost.py", KnownLanguageId.Python)]
-    [InlineData("AppHost.py", KnownLanguageId.Python)]
     public void GetLanguageByFile_ReturnsCorrectLanguage(string fileName, string expectedLanguageId)
     {
-        var discovery = new DefaultLanguageDiscovery();
+        var discovery = new DefaultLanguageDiscovery(new TestFeatures());
         var file = new FileInfo(Path.Combine(Path.GetTempPath(), fileName));
 
         var language = discovery.GetLanguageByFile(file);
@@ -90,7 +124,7 @@ public class DefaultLanguageDiscoveryTests
     [InlineData("random.js")]
     public void GetLanguageByFile_ReturnsNullForUnknownFiles(string fileName)
     {
-        var discovery = new DefaultLanguageDiscovery();
+        var discovery = new DefaultLanguageDiscovery(new TestFeatures());
         var file = new FileInfo(Path.Combine(Path.GetTempPath(), fileName));
 
         var language = discovery.GetLanguageByFile(file);
@@ -98,13 +132,37 @@ public class DefaultLanguageDiscoveryTests
         Assert.Null(language);
     }
 
+    [Fact]
+    public void GetLanguageByFile_ReturnsNullForExperimentalLanguageWhenFlagDisabled()
+    {
+        var discovery = new DefaultLanguageDiscovery(new TestFeatures());
+        var file = new FileInfo(Path.Combine(Path.GetTempPath(), "apphost.go"));
+
+        var language = discovery.GetLanguageByFile(file);
+
+        Assert.Null(language);
+    }
+
+    [Fact]
+    public void GetLanguageByFile_ReturnsExperimentalLanguageWhenFlagEnabled()
+    {
+        var features = new TestFeatures();
+        features.SetFeature(KnownFeatures.ExperimentalPolyglotGo, true);
+        var discovery = new DefaultLanguageDiscovery(features);
+        var file = new FileInfo(Path.Combine(Path.GetTempPath(), "apphost.go"));
+
+        var language = discovery.GetLanguageByFile(file);
+
+        Assert.NotNull(language);
+        Assert.Equal(KnownLanguageId.Go, language.LanguageId.Value);
+    }
+
     [Theory]
     [InlineData(KnownLanguageId.CSharp)]
     [InlineData("typescript/nodejs")]
-    [InlineData(KnownLanguageId.Python)]
     public void GetLanguageById_ReturnsCorrectLanguage(string languageId)
     {
-        var discovery = new DefaultLanguageDiscovery();
+        var discovery = new DefaultLanguageDiscovery(new TestFeatures());
 
         var language = discovery.GetLanguageById(new LanguageId(languageId));
 
@@ -115,10 +173,33 @@ public class DefaultLanguageDiscoveryTests
     [Fact]
     public void GetLanguageById_ReturnsNullForUnknownLanguage()
     {
-        var discovery = new DefaultLanguageDiscovery();
+        var discovery = new DefaultLanguageDiscovery(new TestFeatures());
 
         var language = discovery.GetLanguageById(new LanguageId("unknown"));
 
         Assert.Null(language);
+    }
+
+    [Fact]
+    public void GetLanguageById_ReturnsNullForExperimentalLanguageWhenFlagDisabled()
+    {
+        var discovery = new DefaultLanguageDiscovery(new TestFeatures());
+
+        var language = discovery.GetLanguageById(new LanguageId(KnownLanguageId.Rust));
+
+        Assert.Null(language);
+    }
+
+    [Fact]
+    public void GetLanguageById_ReturnsExperimentalLanguageWhenFlagEnabled()
+    {
+        var features = new TestFeatures();
+        features.SetFeature(KnownFeatures.ExperimentalPolyglotRust, true);
+        var discovery = new DefaultLanguageDiscovery(features);
+
+        var language = discovery.GetLanguageById(new LanguageId(KnownLanguageId.Rust));
+
+        Assert.NotNull(language);
+        Assert.Equal(KnownLanguageId.Rust, language.LanguageId.Value);
     }
 }

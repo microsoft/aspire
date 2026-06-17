@@ -28,18 +28,18 @@
         <note>{0} is the key, {1} is the value</note>
       </trans-unit>
       <trans-unit id="DeleteCommand_Description">
-        <source>Delete a configuration value.</source>
-        <target state="translated">Bir yapılandırma değerini silin.</target>
+        <source>Delete a configuration value</source>
+        <target state="needs-review-translation">Bir yapılandırma değerini silin.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteCommand_GlobalArgumentDescription">
-        <source>Delete the configuration value from the global $HOME/.aspire/settings.json instead of the local settings file.</source>
-        <target state="translated">Yapılandırma değerini, yerel ayarlar dosyası yerine global $HOME/.aspire/settings.json dosyasından silin.</target>
+        <source>Delete the configuration value from the global $HOME/.aspire/settings.json instead of the local settings file</source>
+        <target state="needs-review-translation">Yapılandırma değerini, yerel ayarlar dosyası yerine global $HOME/.aspire/settings.json dosyasından silin.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteCommand_KeyArgumentDescription">
-        <source>The configuration key to delete.</source>
-        <target state="translated">Silinecek yapılandırma anahtarı.</target>
+        <source>The configuration key to delete</source>
+        <target state="needs-review-translation">Silinecek yapılandırma anahtarı.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteCommand_PromptForGlobal">
@@ -53,8 +53,8 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Manage configuration settings.</source>
-        <target state="translated">Yapılandırma ayarlarını yönetin.</target>
+        <source>Manage CLI configuration including feature flags</source>
+        <target state="needs-review-translation">Yapılandırma ayarlarını yönetin.</target>
         <note />
       </trans-unit>
       <trans-unit id="ExtensionActionPrompt">
@@ -63,13 +63,13 @@
         <note />
       </trans-unit>
       <trans-unit id="GetCommand_Description">
-        <source>Get a configuration value.</source>
-        <target state="translated">Bir yapılandırma değeri getir.</target>
+        <source>Get a configuration value</source>
+        <target state="needs-review-translation">Bir yapılandırma değeri getir.</target>
         <note />
       </trans-unit>
       <trans-unit id="GetCommand_KeyArgumentDescription">
-        <source>The configuration key to retrieve.</source>
-        <target state="translated">Getirilecek yapılandırma anahtarı.</target>
+        <source>The configuration key to retrieve</source>
+        <target state="needs-review-translation">Getirilecek yapılandırma anahtarı.</target>
         <note />
       </trans-unit>
       <trans-unit id="GetCommand_PromptForKey">
@@ -82,14 +82,24 @@
         <target state="translated">Genel yapılandırma</target>
         <note />
       </trans-unit>
+      <trans-unit id="HeaderKey">
+        <source>Key</source>
+        <target state="translated">Anahtar</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderValue">
+        <source>Value</source>
+        <target state="translated">Değer</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InfoCommand_AvailableFeatures">
         <source>Available features</source>
         <target state="translated">Kullanılabilir özellikler</target>
         <note />
       </trans-unit>
       <trans-unit id="InfoCommand_Description">
-        <source>Display configuration file paths and available features.</source>
-        <target state="translated">Yapılandırma dosyası yollarını ve mevcut özellikleri görüntüle.</target>
+        <source>Display configuration file paths and available features</source>
+        <target state="needs-review-translation">Yapılandırma dosyası yollarını ve mevcut özellikleri görüntüle.</target>
         <note />
       </trans-unit>
       <trans-unit id="InfoCommand_GlobalSettingsPath">
@@ -98,8 +108,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InfoCommand_JsonOptionDescription">
-        <source>Output information in JSON format.</source>
-        <target state="translated">Bilgileri JSON biçiminde çıkar.</target>
+        <source>Output information in JSON format</source>
+        <target state="needs-review-translation">Bilgileri JSON biçiminde çıkar.</target>
         <note />
       </trans-unit>
       <trans-unit id="InfoCommand_LocalSettingsPath">
@@ -112,9 +122,19 @@
         <target state="translated">Ayar dosyası özellikleri</target>
         <note />
       </trans-unit>
+      <trans-unit id="ListCommand_AllFeaturesHint">
+        <source>Run 'aspire config list --all' to see all available feature flags.</source>
+        <target state="new">Run 'aspire config list --all' to see all available feature flags.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ListCommand_AllOptionDescription">
+        <source>Show all available features that can be configured</source>
+        <target state="new">Show all available features that can be configured</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ListCommand_Description">
-        <source>List all configuration values.</source>
-        <target state="translated">Tüm yapılandırma değerlerini listeleyin.</target>
+        <source>List all configuration values</source>
+        <target state="needs-review-translation">Tüm yapılandırma değerlerini listeleyin.</target>
         <note />
       </trans-unit>
       <trans-unit id="LocalConfigurationHeader">
@@ -138,18 +158,18 @@
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_Description">
-        <source>Set a configuration value.</source>
-        <target state="translated">Bir yapılandırma değeri ayarla.</target>
+        <source>Set a configuration value</source>
+        <target state="needs-review-translation">Bir yapılandırma değeri ayarla.</target>
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_GlobalArgumentDescription">
-        <source>Set the configuration value globally in $HOME/.aspire/settings.json instead of the local settings file.</source>
-        <target state="translated">Yapılandırma değerini global olarak, yerel ayarlar dosyası yerine $HOME/.aspire/settings.json dosyasında ayarlayın.</target>
+        <source>Set the configuration value globally in $HOME/.aspire/settings.json instead of the local settings file</source>
+        <target state="needs-review-translation">Yapılandırma değerini global olarak, yerel ayarlar dosyası yerine $HOME/.aspire/settings.json dosyasında ayarlayın.</target>
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_KeyArgumentDescription">
-        <source>The configuration key to set.</source>
-        <target state="translated">Ayarlanacak yapılandırma anahtarı.</target>
+        <source>The configuration key to set</source>
+        <target state="needs-review-translation">Ayarlanacak yapılandırma anahtarı.</target>
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_PromptForGlobal">
@@ -178,8 +198,13 @@
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_ValueArgumentDescription">
-        <source>The configuration value to set.</source>
-        <target state="translated">Ayarlanacak yapılandırma değeri.</target>
+        <source>The configuration value to set</source>
+        <target state="needs-review-translation">Ayarlanacak yapılandırma değeri.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SetFeatureHint">
+        <source>Use 'aspire config set features.&lt;name&gt; true|false' to enable or disable a feature.</source>
+        <target state="translated">Bir özelliği etkinleştirmek veya devre dışı bırakmak için 'aspire config set features.&lt;name&gt; true|false' komutunu kullanın.</target>
         <note />
       </trans-unit>
     </body>

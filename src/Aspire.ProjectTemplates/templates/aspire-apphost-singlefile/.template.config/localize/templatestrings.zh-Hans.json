@@ -1,15 +1,13 @@
-﻿{
+{
   "author": "Microsoft",
   "name": "Aspire 单文件应用主机",
   "description": "适用于单文件方案的最小 Aspire AppHost (.NET 10+)。",
   "symbols/Framework/choices/net10.0/description": "目标 net10.0",
   "symbols/appHostHttpPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的 HTTP 终结点。",
   "symbols/appHostOtlpHttpPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的 OTLP HTTP 终结点。",
-  "symbols/appHostMcpHttpPort/description": "用于 AppHost 项目的 launchSettings.json 中 MCP HTTP 终结点的端口号。",
   "symbols/appHostResourceHttpPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的资源服务 HTTP 终结点。",
   "symbols/appHostHttpsPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的 HTTPS 终结点。仅当不使用参数 no-https 时，此选项才适用。",
   "symbols/appHostOtlpHttpsPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的 OTLP HTTPS 终结点。",
-  "symbols/appHostMcpHttpsPort/description": "用于 AppHost 项目的 launchSettings.json 中 MCP HTTPS 终结点的端口号。",
   "symbols/appHostResourceHttpsPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的资源服务 HTTPS 终结点。",
   "symbols/NoHttps/description": "是否禁用 HTTPS。",
   "symbols/LocalhostTld/displayName": "在应用程序 URL 中使用 .dev.localhost TLD",

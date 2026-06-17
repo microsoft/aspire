@@ -21,7 +21,8 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
     IResourceWithConnectionString,
     IResourceWithEndpoints,
     IResourceWithAzureFunctionsConfig,
-    IAzurePrivateEndpointTarget
+    IAzurePrivateEndpointTarget,
+    IAzureNspAssociationTarget
 {
     internal List<AzureCosmosDBDatabaseResource> Databases { get; } = [];
 
@@ -86,9 +87,14 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
     /// </summary>
     public bool IsEmulator => this.IsContainer();
 
-    internal bool IsPreviewEmulator =>
-        this.TryGetContainerImageName(out var imageName) &&
-        imageName == $"{CosmosDBEmulatorContainerImageTags.Registry}/{CosmosDBEmulatorContainerImageTags.Image}:{CosmosDBEmulatorContainerImageTags.TagVNextPreview}";
+    /// <summary>
+    /// Is this instance running the Linux-based (vNext) emulator?
+    /// </summary>
+    internal bool IsVNextEmulator
+    {
+        get => IsEmulator && field;
+        set => field = value;
+    }
 
     /// <summary>
     /// Gets the account endpoint URI expression for the Cosmos DB account.
@@ -98,9 +104,7 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
     /// </remarks>
     public ReferenceExpression UriExpression =>
         IsEmulator ?
-            IsPreviewEmulator ?
-                ReferenceExpression.Create($"{EmulatorEndpoint.Property(EndpointProperty.Url)}") :
-                ReferenceExpression.Create($"https://{EmulatorEndpoint.Property(EndpointProperty.IPV4Host)}:{EmulatorEndpoint.Property(EndpointProperty.Port)}") :
+            ReferenceExpression.Create($"{EmulatorEndpoint.Property(EndpointProperty.Url)}") :
             ReferenceExpression.Create($"{ConnectionStringOutput}");
 
     /// <summary>
@@ -121,7 +125,7 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
     /// </summary>
     public ReferenceExpression ConnectionStringExpression =>
         IsEmulator ?
-            AzureCosmosDBEmulatorConnectionString.Create(EmulatorEndpoint, IsPreviewEmulator) :
+            AzureCosmosDBEmulatorConnectionString.Create(EmulatorEndpoint, IsVNextEmulator) :
             UseAccessKeyAuthentication ?
                 ReferenceExpression.Create($"{ConnectionStringSecretOutput}") :
                 ReferenceExpression.Create($"{ConnectionStringOutput}");
@@ -260,9 +264,7 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
         }
     }
 
-    BicepOutputReference IAzurePrivateEndpointTarget.Id => Id;
-
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["Sql"];
 
-    string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() => "privatelink.documents.azure.com";
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() => ["privatelink.documents.azure.com"];
 }

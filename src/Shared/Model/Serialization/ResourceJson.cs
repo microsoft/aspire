@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
 namespace Aspire.Shared.Model.Serialization;
@@ -9,6 +10,8 @@ namespace Aspire.Shared.Model.Serialization;
 /// Represents a resource in JSON format.
 /// This is a shared representation used by both the Dashboard and CLI.
 /// </summary>
+// `aspire describe --format json` uses this shape and the nested resource shapes below;
+// keep docs/specs/cli-output-formats.md in sync when changing them.
 internal sealed class ResourceJson
 {
     /// <summary>
@@ -35,6 +38,11 @@ internal sealed class ResourceJson
     /// The state of the resource.
     /// </summary>
     public string? State { get; set; }
+
+    /// <summary>
+    /// The display names of resources this resource is waiting for.
+    /// </summary>
+    public string[]? WaitingFor { get; set; }
 
     /// <summary>
     /// The state style hint (e.g., "success", "error", "warning").
@@ -77,6 +85,11 @@ internal sealed class ResourceJson
     public string? DashboardUrl { get; set; }
 
     /// <summary>
+    /// The relationships of the resource.
+    /// </summary>
+    public ResourceRelationshipJson[]? Relationships { get; set; }
+
+    /// <summary>
     /// The URLs/endpoints associated with the resource.
     /// </summary>
     public ResourceUrlJson[]? Urls { get; set; }
@@ -87,29 +100,28 @@ internal sealed class ResourceJson
     public ResourceVolumeJson[]? Volumes { get; set; }
 
     /// <summary>
-    /// The environment variables associated with the resource.
+    /// The properties of the resource.
+    /// Dictionary key is the property name, value is the property value.
     /// </summary>
-    public ResourceEnvironmentVariableJson[]? Environment { get; set; }
+    public Dictionary<string, JsonNode?>? Properties { get; set; }
+
+    /// <summary>
+    /// The environment variables associated with the resource.
+    /// Dictionary key is the environment variable name, value is the environment variable value.
+    /// </summary>
+    public Dictionary<string, string?>? Environment { get; set; }
 
     /// <summary>
     /// The health reports associated with the resource.
+    /// Dictionary key is the health report name.
     /// </summary>
-    public ResourceHealthReportJson[]? HealthReports { get; set; }
-
-    /// <summary>
-    /// The properties of the resource.
-    /// </summary>
-    public ResourcePropertyJson[]? Properties { get; set; }
-
-    /// <summary>
-    /// The relationships of the resource.
-    /// </summary>
-    public ResourceRelationshipJson[]? Relationships { get; set; }
+    public Dictionary<string, ResourceHealthReportJson>? HealthReports { get; set; }
 
     /// <summary>
     /// The commands available for the resource.
+    /// Dictionary key is the command name.
     /// </summary>
-    public ResourceCommandJson[]? Commands { get; set; }
+    public Dictionary<string, ResourceCommandJson>? Commands { get; set; }
 }
 
 /// <summary>
@@ -118,7 +130,7 @@ internal sealed class ResourceJson
 internal sealed class ResourceUrlJson
 {
     /// <summary>
-    /// The name of the URL/endpoint.
+    /// The name of the endpoint.
     /// </summary>
     public string? Name { get; set; }
 
@@ -167,32 +179,10 @@ internal sealed class ResourceVolumeJson
 }
 
 /// <summary>
-/// Represents an environment variable in JSON format.
-/// </summary>
-internal sealed class ResourceEnvironmentVariableJson
-{
-    /// <summary>
-    /// The name of the environment variable.
-    /// </summary>
-    public string? Name { get; set; }
-
-    /// <summary>
-    /// The value of the environment variable.
-    /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
-    public string? Value { get; set; }
-}
-
-/// <summary>
 /// Represents a health report in JSON format.
 /// </summary>
 internal sealed class ResourceHealthReportJson
 {
-    /// <summary>
-    /// The name of the health report.
-    /// </summary>
-    public string? Name { get; set; }
-
     /// <summary>
     /// The health status.
     /// </summary>
@@ -207,29 +197,6 @@ internal sealed class ResourceHealthReportJson
     /// The exception message if any.
     /// </summary>
     public string? ExceptionMessage { get; set; }
-}
-
-/// <summary>
-/// Represents a property in JSON format.
-/// </summary>
-internal sealed class ResourcePropertyJson
-{
-    /// <summary>
-    /// The name of the property.
-    /// </summary>
-    public string? Name { get; set; }
-
-    /// <summary>
-    /// The value of the property.
-    /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
-    public string? Value { get; set; }
-
-    /// <summary>
-    /// Whether this property contains sensitive data.
-    /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public bool IsSensitive { get; set; }
 }
 
 /// <summary>
@@ -254,12 +221,144 @@ internal sealed class ResourceRelationshipJson
 internal sealed class ResourceCommandJson
 {
     /// <summary>
-    /// The name of the command.
+    /// The display name of the command.
     /// </summary>
-    public string? Name { get; set; }
+    public string? DisplayName { get; set; }
 
     /// <summary>
     /// The description of the command.
     /// </summary>
     public string? Description { get; set; }
+
+    /// <summary>
+    /// Where the command is visible. Omitted when the command uses the default UI and API visibility.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Visibility { get; set; }
+
+    /// <summary>
+    /// The state of the command (e.g., "Enabled", "Disabled", "Hidden").
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? State { get; set; }
+
+    /// <summary>
+    /// The sort order of the command for display purposes.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? SortOrder { get; set; }
+
+    /// <summary>
+    /// The ordered inputs that describe the invocation arguments accepted by the command.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ResourceCommandArgumentJson[]? ArgumentInputs { get; set; }
+}
+
+/// <summary>
+/// Constants for resource command state values in serialized resource JSON.
+/// </summary>
+internal static class KnownCommandState
+{
+    public const string Enabled = "Enabled";
+    public const string Disabled = "Disabled";
+    public const string Hidden = "Hidden";
+}
+
+/// <summary>
+/// Represents a command invocation argument input in JSON format.
+/// Keep this contract in sync with the VS Code extension's ResourceCommandArgumentInputJson
+/// in extension/src/views/AppHostDataRepository.ts.
+/// </summary>
+internal sealed class ResourceCommandArgumentJson
+{
+    /// <summary>
+    /// The argument name.
+    /// </summary>
+    public required string Name { get; set; }
+
+    /// <summary>
+    /// The display label.
+    /// </summary>
+    public string? Label { get; set; }
+
+    /// <summary>
+    /// The argument description.
+    /// </summary>
+    public string? Description { get; set; }
+
+    /// <summary>
+    /// Whether the description should be rendered as Markdown.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool EnableDescriptionMarkdown { get; set; }
+
+    /// <summary>
+    /// The input type.
+    /// </summary>
+    public required string InputType { get; set; }
+
+    /// <summary>
+    /// Whether the argument is required.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Required { get; set; }
+
+    /// <summary>
+    /// The placeholder text.
+    /// </summary>
+    public string? Placeholder { get; set; }
+
+    /// <summary>
+    /// The default value.
+    /// </summary>
+    public string? Value { get; set; }
+
+    /// <summary>
+    /// Choice options keyed by submitted value.
+    /// </summary>
+    public Dictionary<string, string?>? Options { get; set; }
+
+    /// <summary>
+    /// Whether custom choices are allowed.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool AllowCustomChoice { get; set; }
+
+    /// <summary>
+    /// Whether the argument input is disabled.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Disabled { get; set; }
+
+    /// <summary>
+    /// The maximum length for text inputs.
+    /// </summary>
+    public int? MaxLength { get; set; }
+
+    /// <summary>
+    /// Dynamic input loading metadata.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ResourceCommandArgumentDynamicLoadingJson? DynamicLoading { get; set; }
+}
+
+/// <summary>
+/// Represents dynamic loading metadata for a command invocation argument input in JSON format.
+/// Keep this contract in sync with the VS Code extension's ResourceCommandArgumentDynamicLoadingJson
+/// in extension/src/views/AppHostDataRepository.ts.
+/// </summary>
+internal sealed class ResourceCommandArgumentDynamicLoadingJson
+{
+    /// <summary>
+    /// Whether the input should always load when prompting starts.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool AlwaysLoadOnStart { get; set; }
+
+    /// <summary>
+    /// Input names that trigger reloading when their values change.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string[]? DependsOnInputs { get; set; }
 }

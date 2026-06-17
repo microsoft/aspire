@@ -54,7 +54,7 @@
       </trans-unit>
       <trans-unit id="ChatRequestErrorForbiddenVSCode">
         <source>Sign into VS Code with a GitHub account that has a Copilot subscription. Follow the steps in &lt;a href="{0}" target="_blank"&gt;Set up GitHub Copilot in VS Code&lt;/a&gt;.</source>
-        <target state="translated">Accedi a VS Code con un account GitHub che ha una sottoscrizione a Copilot. Segui i passaggi in &lt;a href="{0}" target="_blank"&gt;Configurare GitHub Copilot in VS Code&lt;/a&gt;.</target>
+        <target state="translated">Accedi a VS Code con un account GitHub che ha una sottoscrizione a Copilot. Segui i passaggi in &lt;a href="{0}" target="_blank"&gt;Configurazione di GitHub Copilot in VS Code&lt;/a&gt;.</target>
         <note>{0} is a link</note>
       </trans-unit>
       <trans-unit id="ChatRequestErrorForbiddenVisualStudio">

@@ -30,6 +30,8 @@ public static class AzureAppServiceComputeResourceExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
+    [AspireExport]
     public static IResourceBuilder<T> PublishAsAzureAppServiceWebsite<T>(this IResourceBuilder<T> builder,
         Action<AzureResourceInfrastructure, WebSite>? configure = null,
         Action<AzureResourceInfrastructure, WebSiteSlot>? configureSlot = null)
@@ -74,6 +76,7 @@ public static class AzureAppServiceComputeResourceExtensions
     /// <param name="builder">The compute resource builder.</param>
     /// <returns>The updated compute resource builder.</returns>
     /// <exception cref="InvalidOperationException">Thrown when the resource is not configured for Azure App Service publishing.</exception>
+    [AspireExport]
     public static IResourceBuilder<T> SkipEnvironmentVariableNameChecks<T>(this IResourceBuilder<T> builder)
         where T : IComputeResource
     {

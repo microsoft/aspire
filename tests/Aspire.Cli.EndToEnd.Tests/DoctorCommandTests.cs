@@ -3,7 +3,6 @@
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Tests.Utils;
-using Hex1b;
 using Hex1b.Automation;
 using Xunit;
 
@@ -15,150 +14,141 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class DoctorCommandTests(ITestOutputHelper output)
 {
+    public static TheoryData<string> AlternativeToolchains => new()
+    {
+        "bun",
+        "yarn",
+        "pnpm"
+    };
+
     [Fact]
     public async Task DoctorCommand_WithoutSslCertDir_ShowsPartiallyTrusted()
     {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
-        var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
-        var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
-        var isCI = CliE2ETestHelpers.IsRunningInCI;
-        var recordingPath = CliE2ETestHelpers.GetTestResultsRecordingPath(
-            nameof(DoctorCommand_WithoutSslCertDir_ShowsPartiallyTrusted));
-
-        var builder = Hex1bTerminal.CreateBuilder()
-            .WithHeadless()
-            .WithDimensions(160, 48)
-            .WithAsciinemaRecording(recordingPath)
-            .WithPtyProcess("/bin/bash", ["--norc"]);
-
-        using var terminal = builder.Build();
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
-        // Pattern to detect partial trust warning in aspire doctor output
-        var partiallyTrustedPattern = new CellPatternSearcher()
-            .Find("partially trusted");
-
-        // Pattern to detect doctor command completion (shows environment check results)
-        var doctorCompletePattern = new CellPatternSearcher()
-            .Find("dev-certs");
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
         var counter = new SequenceCounter();
-        var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
-        sequenceBuilder.PrepareEnvironment(workspace, counter);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        if (isCI)
-        {
-            sequenceBuilder.InstallAspireCliFromPullRequest(prNumber, counter);
-            sequenceBuilder.SourceAspireCliEnvironment(counter);
-            sequenceBuilder.VerifyAspireCliVersion(commitSha, counter);
-        }
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        // Generate and trust dev certs inside the container (Docker images don't have them by default)
+        await auto.TypeAsync("dotnet dev-certs https --trust 2>/dev/null || dotnet dev-certs https");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Unset SSL_CERT_DIR to trigger partial trust detection on Linux
-        sequenceBuilder
-            .ClearSslCertDir(counter)
-            .Type("aspire doctor")
-            .Enter()
-            .WaitUntil(s =>
-            {
-                // Wait for doctor to complete and show partial trust warning
-                var hasDevCerts = doctorCompletePattern.Search(s).Count > 0;
-                var hasPartiallyTrusted = partiallyTrustedPattern.Search(s).Count > 0;
-                return hasDevCerts && hasPartiallyTrusted;
-            }, TimeSpan.FromSeconds(60))
-            .WaitForSuccessPrompt(counter)
-            .Type("exit")
-            .Enter();
-
-        var sequence = sequenceBuilder.Build();
-
-        await sequence.ApplyAsync(terminal, TestContext.Current.CancellationToken);
-
-        await pendingRun;
+        await auto.TypeAsync("unset SSL_CERT_DIR");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.TypeAsync("aspire doctor");
+        await auto.EnterAsync();
+        await auto.WaitUntilAsync(
+            s => s.ContainsText("dev-certs") && s.ContainsText("partially trusted"),
+            timeout: TimeSpan.FromSeconds(60), description: "doctor to complete with partial trust warning");
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     [Fact]
-    public async Task DoctorCommand_WithSslCertDir_ShowsTrusted()
+    public async Task DoctorCommand_WithSslCertDir_ShowsTrustedAndDcpConnectionHealthy()
     {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
-        var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
-        var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
-        var isCI = CliE2ETestHelpers.IsRunningInCI;
-        var recordingPath = CliE2ETestHelpers.GetTestResultsRecordingPath(
-            nameof(DoctorCommand_WithSslCertDir_ShowsTrusted));
-
-        var builder = Hex1bTerminal.CreateBuilder()
-            .WithHeadless()
-            .WithDimensions(160, 48)
-            .WithAsciinemaRecording(recordingPath)
-            .WithPtyProcess("/bin/bash", ["--norc"]);
-
-        using var terminal = builder.Build();
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
-        // Pattern to detect fully trusted certificate
-        var trustedPattern = new CellPatternSearcher()
-            .Find("certificate is trusted");
-
-        // Pattern to detect partial trust (should NOT appear)
-        var partiallyTrustedPattern = new CellPatternSearcher()
-            .Find("partially trusted");
-
-        // Pattern to detect doctor command completion
-        var doctorCompletePattern = new CellPatternSearcher()
-            .Find("dev-certs");
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
         var counter = new SequenceCounter();
-        var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
-        sequenceBuilder.PrepareEnvironment(workspace, counter);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        if (isCI)
-        {
-            sequenceBuilder.InstallAspireCliFromPullRequest(prNumber, counter);
-            sequenceBuilder.SourceAspireCliEnvironment(counter);
-            sequenceBuilder.VerifyAspireCliVersion(commitSha, counter);
-        }
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        // Generate and trust dev certs inside the container (Docker images don't have them by default)
+        await auto.TypeAsync("dotnet dev-certs https --trust 2>/dev/null || dotnet dev-certs https");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Set SSL_CERT_DIR to include dev-certs trust path for full trust
-        sequenceBuilder
-            .ConfigureSslCertDir(counter)
-            .Type("aspire doctor")
-            .Enter()
-            .WaitUntil(s =>
+        await auto.TypeAsync("export SSL_CERT_DIR=\"/etc/ssl/certs:$HOME/.aspnet/dev-certs/trust\"");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.TypeAsync("aspire doctor");
+        await auto.EnterAsync();
+        await auto.WaitUntilAsync(s =>
+        {
+            // Fail if we see partial trust when SSL_CERT_DIR is configured
+            if (s.ContainsText("partially trusted"))
             {
-                // Wait for doctor to complete
-                var hasDevCerts = doctorCompletePattern.Search(s).Count > 0;
-                if (!hasDevCerts)
-                {
-                    return false;
-                }
+                throw new InvalidOperationException(
+                    "Unexpected 'partially trusted' message when SSL_CERT_DIR is configured!");
+            }
 
-                // Verify we see "trusted" but NOT "partially trusted"
-                var hasTrusted = trustedPattern.Search(s).Count > 0;
-                var hasPartiallyTrusted = partiallyTrustedPattern.Search(s).Count > 0;
+            return s.ContainsText("certificate is trusted") &&
+                   s.ContainsText("Developer Control Plane (DCP) connection health checks succeeded");
+        }, timeout: TimeSpan.FromSeconds(60), description: "doctor to complete with trusted certificate");
+        await auto.WaitForSuccessPromptAsync(counter);
+    }
 
-                // Fail if we see partial trust when SSL_CERT_DIR is configured
-                if (hasPartiallyTrusted)
-                {
-                    throw new InvalidOperationException(
-                        "Unexpected 'partially trusted' message when SSL_CERT_DIR is configured!");
-                }
+    [Theory]
+    [MemberData(nameof(AlternativeToolchains))]
+    [CaptureWorkspaceOnFailure]
+    public async Task DoctorCommand_TypeScriptAppHostReportsMissingConfiguredToolchain(string toolchain)
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var workspace = TemporaryWorkspace.Create(output);
 
-                return hasTrusted;
-            }, TimeSpan.FromSeconds(60))
-            .WaitForSuccessPrompt(counter)
-            .Type("exit")
-            .Enter();
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
-        var sequence = sequenceBuilder.Build();
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
-        await sequence.ApplyAsync(terminal, TestContext.Current.CancellationToken);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
-        await pendingRun;
+        output.WriteLine($"Testing aspire doctor missing-tool detection for: {toolchain}");
+
+        await auto.TypeAsync("aspire init --language typescript --non-interactive");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        TypeScriptAppHostToolchainTestHelpers.SetPackageManager(workspace.WorkspaceRoot.FullName, toolchain, cleanInstallState: true);
+        if (TypeScriptAppHostToolchainTestHelpers.UsesCorepack(toolchain))
+        {
+            await auto.RunCommandAsync(
+                $"COREPACK_ENABLE_DOWNLOAD_PROMPT=0 corepack prepare {TypeScriptAppHostToolchainTestHelpers.GetPackageManager(toolchain)} --activate",
+                counter,
+                TimeSpan.FromMinutes(2));
+        }
+
+        // Verify the configured toolchain can start and stop the generated AppHost
+        // before doctor is asked to report that the toolchain is missing from PATH.
+        await auto.AspireStartAsync(counter);
+        await auto.AspireStopAsync(counter);
+
+        await auto.TypeAsync("""mkdir -p ./doctor-path && ln -sf "$(command -v aspire)" ./doctor-path/aspire && ln -sf "$(command -v dotnet)" ./doctor-path/dotnet && if command -v docker >/dev/null 2>&1; then ln -sf "$(command -v docker)" ./doctor-path/docker; fi && export PATH="$PWD/doctor-path" """);
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync("aspire doctor");
+        await auto.EnterAsync();
+        await auto.WaitUntilAsync(
+            s => s.ContainsText($"TypeScript AppHost requires '{toolchain}'.") &&
+                 s.ContainsText($"Install {TypeScriptAppHostToolchainTestHelpers.GetDisplayName(toolchain)} tooling and rerun 'aspire doctor'.") &&
+                 s.ContainsText(TypeScriptAppHostToolchainTestHelpers.GetInstallationLink(toolchain)),
+            timeout: TimeSpan.FromSeconds(60),
+            description: $"doctor to report missing {toolchain} tooling");
+        await auto.WaitForAnyPromptAsync(counter);
     }
 }

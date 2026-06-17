@@ -64,7 +64,7 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
     // jobs (one per test class) when Playwright is not available.
     //
     // Currently this is not supported on Linux agents on helix, and azdo build machines
-    // https://github.com/dotnet/aspire/issues/4921
+    // https://github.com/microsoft/aspire/issues/4921
     private static bool IsPlaywrightSupported()
     {
         s_isPlaywrightSupported ??= GetIsPlaywrightSupported();
@@ -116,7 +116,7 @@ public class RequiresFeatureAttribute(TestFeature feature) : Attribute, ITraitAt
     //
     // scenarios:
     // - Windows: assume installed only for *local* runs as docker isn't supported on CI yet
-    //                - https://github.com/dotnet/aspire/issues/4291
+    //                - https://github.com/microsoft/aspire/issues/4291
     // - Linux - Local, or CI: always assume that docker is installed
     private static bool IsDockerSupported()
     {

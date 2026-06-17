@@ -18,7 +18,10 @@ namespace Aspire.Hosting.Azure;
 /// <remarks>
 /// Use <see cref="AzureProvisioningResourceExtensions.ConfigureInfrastructure{T}(ApplicationModel.IResourceBuilder{T}, Action{AzureResourceInfrastructure})"/> to configure specific <see cref="Azure.Provisioning"/> properties.
 /// </remarks>
+/// <ats-remarks />
+/// <ats-summary>Represents a Service Bus Queue. Initializes a new instance of the <ats-see cref="!:type:AzureServiceBusQueueResource" /> class.</ats-summary>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Queue = {QueueName}")]
+[AspireExport(ExposeProperties = true)]
 public class AzureServiceBusQueueResource(string name, string queueName, AzureServiceBusResource parent)
     : Resource(name), IResourceWithParent<AzureServiceBusResource>, IResourceWithConnectionString, IResourceWithAzureFunctionsConfig
 {

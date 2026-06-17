@@ -1,0 +1,7 @@
+﻿[
+  Step 'provision-sql' failed.,
+  Deployment failed: Error code = LocationNotAvailableForResourceType, Message = The provided location 'asia' is not available for resource type 'Microsoft.ManagedIdentity/userAssignedIdentities'.,
+  Deployment failed: Error code = LocationNotAvailableForResourceType, Message = The provided location 'asia' is not available for resource type 'Microsoft.ManagedIdentity/userAssignedIdentities'.,
+  Failed,
+  Failed to provision **sql**: Deployment failed: Error code = LocationNotAvailableForResourceType, Message = The provided location 'asia' is not available for resource type 'Microsoft.ManagedIdentity/userAssignedIdentities'.
+]

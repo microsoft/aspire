@@ -5,7 +5,7 @@ import { createProjectDebuggerExtension, projectDebuggerExtension } from '../deb
 import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, ProjectLaunchConfiguration } from '../dcp/types';
 import * as io from '../utils/io';
 import { ResourceDebuggerExtension } from '../debugger/debuggerExtensions';
-import { AspireDebugSession } from '../debugger/AspireDebugSession';
+import { AppHostParentOutputFilter, AspireDebugSession } from '../debugger/AspireDebugSession';
 
 class TestDotNetService {
     private _getDotNetTargetPathStub: sinon.SinonStub;
@@ -51,6 +51,171 @@ suite('Dotnet Debugger Extension Tests', () => {
         const fakeDotNetService = new TestDotNetService(outputPath, rejectBuild, hasDevKit);
         return { dotNetService: fakeDotNetService, extension: createProjectDebuggerExtension(() => fakeDotNetService), doesFileExistStub: sinon.stub(io, 'doesFileExist').resolves(doesOutputFileExist) };
     }
+
+    test('failed AppHost start writes error to debug console', async () => {
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/apphost.ts'
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub()
+        } as unknown as vscode.DebugSession;
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, {} as any, {} as any, () => { });
+        const outputEvents: any[] = [];
+        const outputSubscription = aspireDebugSession.onDidSendMessage(message => outputEvents.push(message));
+        const startError = new Error('AppHost build failed');
+
+        sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore');
+        sinon.stub(aspireDebugSession, 'startAndGetDebugSession').rejects(startError);
+        const showErrorMessageStub = sinon.stub(vscode.window, 'showErrorMessage').resolves(undefined);
+        sinon.stub(vscode.debug, 'stopDebugging').resolves();
+
+        await aspireDebugSession.startAppHost('/workspace/apphost.ts', ['node', 'apphost.ts'], [], true, { forceBuild: false });
+
+        assert.ok(showErrorMessageStub.calledWith(startError.message));
+        assert.ok(startError.stack);
+        assert.ok(outputEvents.some(message =>
+            message.type === 'event'
+            && message.event === 'output'
+            && message.body.category === 'stderr'
+            && message.body.output.includes(startError.stack)));
+
+        outputSubscription.dispose();
+    });
+
+    test('failed AppHost start does not duplicate already streamed build output', async () => {
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/apphost.ts'
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub()
+        } as unknown as vscode.DebugSession;
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, {} as any, {} as any, () => { });
+        const outputEvents: any[] = [];
+        const outputSubscription = aspireDebugSession.onDidSendMessage(message => outputEvents.push(message));
+        const startError = new Error('Build FAILED.');
+        (startError as Error & { debugConsoleOutputAlreadyWritten?: boolean }).debugConsoleOutputAlreadyWritten = true;
+
+        sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore');
+        sinon.stub(aspireDebugSession, 'startAndGetDebugSession').rejects(startError);
+        const showErrorMessageStub = sinon.stub(vscode.window, 'showErrorMessage').resolves(undefined);
+        sinon.stub(vscode.debug, 'stopDebugging').resolves();
+
+        await aspireDebugSession.startAppHost('/workspace/apphost.ts', ['node', 'apphost.ts'], [], true, { forceBuild: false });
+
+        assert.ok(showErrorMessageStub.calledWith(startError.message));
+        assert.strictEqual(outputEvents.some(message =>
+            message.type === 'event'
+            && message.event === 'output'
+            && message.body.output.includes(startError.message)), false);
+
+        outputSubscription.dispose();
+    });
+
+    test('filters AppHost debugger noise from Aspire parent debug console', () => {
+        const filter = new AppHostParentOutputFilter();
+
+        assert.strictEqual(filter.filter("'TestShop.AppHost' (CoreCLR: clrhost): Loaded '/dotnet/System.Private.CoreLib.dll'. Skipped loading symbols.\n", 'console'), undefined);
+        assert.strictEqual(filter.filter("TestShop.AppHost.dll (29067): Loaded '/usr/local/share/dotnet/shared/Microsoft.NETCore.App/8.0.14/System.Private.CoreLib.dll'. No se puede encontrar o abrir el archivo PDB.\n", 'console'), undefined);
+        assert.strictEqual(filter.filter("Loaded '/dotnet/System.Net.Http.dll'. Skipped loading symbols.\n", 'console'), undefined);
+        assert.strictEqual(filter.filter("Exception thrown: 'System.InvalidOperationException' in TestShop.AppHost.dll\n", 'console'), undefined);
+        assert.strictEqual(filter.filter('debug adapter details\n', 'debug'), undefined);
+        assert.strictEqual(filter.filter('-------------------------------------------------------------------------------\n', 'console'), undefined);
+        assert.strictEqual(filter.filter('You may only use the Microsoft Visual Studio .NET/C/C++ Debugger with Visual Studio Code.\n', 'console'), undefined);
+        assert.strictEqual(filter.filter('Usando la configuración de inicio de "/workspace/Properties/launchSettings.json" [perfil "https"]...\n', 'console'), undefined);
+        assert.strictEqual(filter.filter("dbug: Aspire.Hosting.Health.ResourceHealthCheckService[0]\n      Resource 'apigateway' is ready.\n", 'stdout'), undefined);
+        assert.strictEqual(filter.filter("Aspire.Hosting.Health.ResourceHealthCheckService: Debug: Resource 'apigateway' is ready.\n", 'stdout'), undefined);
+    });
+
+    test('keeps AppHost fatal output in Aspire parent debug console', () => {
+        const filter = new AppHostParentOutputFilter();
+        const criticalLog = "crit: TestShop.AppHost[0]\n      Host terminated unexpectedly.\n";
+        const unhandledException = 'Unhandled exception. System.InvalidOperationException: boom\n';
+        const unhandledBaseException = 'Unhandled exception. System.Exception: This code snippet is for illustrative purposes only.\n   at Program.<Main>$(String[] args) in /workspace/AppHost.cs:line 8\n';
+        const javascriptException = 'Uncaught TypeError: Cannot read properties of undefined\n    at file:///workspace/apphost.js:8:3\n';
+        const nodeModuleException = "Error [ERR_MODULE_NOT_FOUND]: Cannot find package '@microsoft/aspire'\n    at packageResolve (node:internal/modules/esm/resolve:857:9)\n";
+        const consoleError = 'Fatal error: unable to bind port\n';
+
+        assert.deepStrictEqual(filter.filter(criticalLog, 'stdout'), { output: criticalLog, category: 'stderr' });
+        assert.deepStrictEqual(filter.filter(unhandledException, 'console'), { output: unhandledException, category: 'stderr' });
+        assert.deepStrictEqual(filter.filter(unhandledBaseException, 'console'), { output: unhandledBaseException, category: 'stderr' });
+        assert.deepStrictEqual(filter.filter(javascriptException, 'console'), { output: javascriptException, category: 'stderr' });
+        assert.deepStrictEqual(filter.filter(nodeModuleException, 'console'), { output: nodeModuleException, category: 'stderr' });
+        assert.deepStrictEqual(filter.filter(consoleError, 'console'), { output: consoleError, category: 'stderr' });
+    });
+
+    test('keeps AppHost warning and information output that is not debugger console chatter', () => {
+        const filter = new AppHostParentOutputFilter();
+        const warningLog = "warn: TestShop.AppHost[0]\n      Port is already allocated.\n";
+        const normalOutput = 'Now listening on: https://localhost:5001\n';
+
+        assert.deepStrictEqual(filter.filter(warningLog, 'stdout'), { output: warningLog, category: 'stdout' });
+        assert.deepStrictEqual(filter.filter(normalOutput, 'stdout'), { output: normalOutput, category: 'stdout' });
+    });
+
+    test('does not promote benign AppHost stdout containing words like fail/error to stderr', () => {
+        const filter = new AppHostParentOutputFilter();
+        const benignFailMention = 'Failed payment retry queued for processing\n';
+        const benignErrorMention = 'Loaded handler from /src/error_handler/main.cs\n';
+        const benignFailureMention = 'Build complete with no failures detected\n';
+
+        assert.deepStrictEqual(filter.filter(benignFailMention, 'stdout'), { output: benignFailMention, category: 'stdout' });
+        assert.deepStrictEqual(filter.filter(benignErrorMention, 'stdout'), { output: benignErrorMention, category: 'stdout' });
+        assert.deepStrictEqual(filter.filter(benignFailureMention, 'stdout'), { output: benignFailureMention, category: 'stdout' });
+    });
+
+    test('does not classify arbitrary user stdout shaped like prefix:Level: as a structured log', () => {
+        const filter = new AppHostParentOutputFilter();
+        const userPrint = 'Status: Error: connection refused\n';
+        const userDebugPrint = 'Note: Debug: caller line 42\n';
+
+        assert.deepStrictEqual(filter.filter(userPrint, 'stdout'), { output: userPrint, category: 'stdout' });
+        assert.deepStrictEqual(filter.filter(userDebugPrint, 'stdout'), { output: userDebugPrint, category: 'stdout' });
+    });
+
+    test('continuation state is reset when DAP category changes between events', () => {
+        const filter = new AppHostParentOutputFilter();
+        // First event: a dropped trace log on stdout. Continuation state would say "drop indented lines".
+        assert.strictEqual(filter.filter('trce: Some.Category[0]\n', 'stdout'), undefined);
+        // A subsequent event on a different category (console) that happens to start with
+        // an indented line must NOT be silently dropped as a continuation of the trace log.
+        const indentedConsoleLine = '    Loaded module foo\n';
+        assert.strictEqual(filter.filter(indentedConsoleLine, 'console'), undefined); // dropped because console+non-severe, not because of continuation state
+        // And an indented stdout line afterwards is emitted normally instead of being dropped.
+        const indentedStdoutLine = '    plain user output line\n';
+        assert.deepStrictEqual(filter.filter(indentedStdoutLine, 'stdout'), { output: indentedStdoutLine, category: 'stdout' });
+    });
+
+    test('treats missing DAP category as console so debugger noise does not leak as stdout', () => {
+        const filter = new AppHostParentOutputFilter();
+        // Per the DAP spec a missing category should be treated as 'console'. The
+        // .NET debug adapter sometimes emits output events without a category, and
+        // this debugger chatter must be suppressed the same way as explicit
+        // 'console'-category lines instead of being mirrored as stdout.
+        const debuggerChatter = "'TestShop.AppHost' (CoreCLR: clrhost): Loaded '/dotnet/System.Private.CoreLib.dll'. Skipped loading symbols.\n";
+        assert.strictEqual(filter.filter(debuggerChatter, undefined), undefined);
+
+        // Severe runtime output without a category is still kept and promoted to stderr,
+        // matching the existing 'console'-category behavior.
+        const unhandledException = 'Unhandled exception. System.InvalidOperationException: boom\n';
+        assert.deepStrictEqual(filter.filter(unhandledException, undefined), { output: unhandledException, category: 'stderr' });
+    });
+
     test('project is built when C# dev kit is installed and executable not found', async () => {
         const outputPath = 'C:\\temp\\bin\\Debug\\net7.0\\TestProject.dll';
         const { extension, dotNetService } = createDebuggerExtension(outputPath, null, true, false);
@@ -101,6 +266,249 @@ suite('Dotnet Debugger Extension Tests', () => {
 
         assert.strictEqual(debugConfig.program, outputPath);
         assert.strictEqual(dotNetService.buildDotNetProjectStub.notCalled, true);
+    });
+
+    test('uses dotnet CLI when project runtimeconfig has no runnable framework', async () => {
+        const fs = require('fs');
+        const path = require('path');
+
+        const tempRoot = path.join(process.cwd(), '.test-temp', `dotnet-debugger-${process.pid}-${Date.now()}`);
+        const projectDir = path.join(tempRoot, 'Frontend With Spaces');
+        const outputDir = path.join(projectDir, 'bin', 'Debug', 'net10.0');
+        fs.mkdirSync(outputDir, { recursive: true });
+
+        try {
+            const projectPath = path.join(projectDir, 'Frontend.csproj');
+            const outputPath = path.join(outputDir, 'Frontend.dll');
+            fs.writeFileSync(projectPath, '<Project></Project>');
+            fs.writeFileSync(outputPath, '');
+            fs.writeFileSync(path.join(outputDir, 'Frontend.runtimeconfig.json'), JSON.stringify({
+                runtimeOptions: {
+                    tfm: 'net10.0'
+                }
+            }));
+
+            const { extension } = createDebuggerExtension(outputPath, null, true, true);
+            const launchConfig: ProjectLaunchConfiguration = {
+                type: 'project',
+                project_path: projectPath
+            };
+
+            const debugConfig: AspireResourceExtendedDebugConfiguration = {
+                runId: '1',
+                debugSessionId: '1',
+                type: 'coreclr',
+                name: 'Test Debug Config',
+                request: 'launch'
+            };
+
+            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+
+            await extension.createDebugSessionConfigurationCallback!(launchConfig, ['--message', 'hello world'], [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
+
+            assert.strictEqual(debugConfig.type, 'coreclr');
+            assert.strictEqual(debugConfig.program, 'dotnet');
+            assert.deepStrictEqual(debugConfig.args, ['run', '--project', projectPath, '--no-launch-profile', '--', '--message', 'hello world']);
+            assert.strictEqual(debugConfig.noDebug, true);
+        } finally {
+            fs.rmSync(tempRoot, { recursive: true, force: true });
+        }
+    });
+
+    test('preserves launch profile argument string for dotnet CLI fallback when run session arguments are absent', async () => {
+        const fs = require('fs');
+        const path = require('path');
+
+        const tempRoot = path.join(process.cwd(), '.test-temp', `dotnet-debugger-${process.pid}-${Date.now()}`);
+        const projectDir = path.join(tempRoot, 'Frontend With Profile');
+        const propertiesDir = path.join(projectDir, 'Properties');
+        const outputDir = path.join(projectDir, 'bin', 'Debug', 'net10.0');
+        fs.mkdirSync(propertiesDir, { recursive: true });
+        fs.mkdirSync(outputDir, { recursive: true });
+
+        try {
+            const projectPath = path.join(projectDir, 'Frontend.csproj');
+            const outputPath = path.join(outputDir, 'Frontend.dll');
+            fs.writeFileSync(projectPath, '<Project></Project>');
+            fs.writeFileSync(outputPath, '');
+            fs.writeFileSync(path.join(outputDir, 'Frontend.runtimeconfig.json'), JSON.stringify({
+                runtimeOptions: {
+                    tfm: 'net10.0'
+                }
+            }));
+            fs.writeFileSync(path.join(propertiesDir, 'launchSettings.json'), JSON.stringify({
+                profiles: {
+                    Development: {
+                        commandLineArgs: '--arg "value with spaces" --message "say \\"hi\\"" --path "C:\\Temp\\file.txt"'
+                    }
+                }
+            }));
+
+            const { extension } = createDebuggerExtension(outputPath, null, true, true);
+            const launchConfig: ProjectLaunchConfiguration = {
+                type: 'project',
+                project_path: projectPath,
+                launch_profile: 'Development'
+            };
+
+            const debugConfig: AspireResourceExtendedDebugConfiguration = {
+                runId: '1',
+                debugSessionId: '1',
+                type: 'coreclr',
+                name: 'Test Debug Config',
+                request: 'launch'
+            };
+
+            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+
+            await extension.createDebugSessionConfigurationCallback!(launchConfig, undefined, [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
+
+            assert.strictEqual(debugConfig.args, `run --project "${projectPath}" --no-launch-profile -- --arg "value with spaces" --message "say \\"hi\\"" --path "C:\\Temp\\file.txt"`);
+        } finally {
+            fs.rmSync(tempRoot, { recursive: true, force: true });
+        }
+    });
+
+    test('ignores launch profile executable settings when using dotnet CLI fallback', async () => {
+        const fs = require('fs');
+        const path = require('path');
+
+        const tempRoot = path.join(process.cwd(), '.test-temp', `dotnet-debugger-${process.pid}-${Date.now()}`);
+        const projectDir = path.join(tempRoot, 'Frontend With Executable Settings');
+        const propertiesDir = path.join(projectDir, 'Properties');
+        const outputDir = path.join(projectDir, 'bin', 'Debug', 'net10.0');
+        fs.mkdirSync(propertiesDir, { recursive: true });
+        fs.mkdirSync(outputDir, { recursive: true });
+
+        try {
+            const projectPath = path.join(projectDir, 'Frontend.csproj');
+            const outputPath = path.join(outputDir, 'Frontend.dll');
+            fs.writeFileSync(projectPath, '<Project></Project>');
+            fs.writeFileSync(outputPath, '');
+            fs.writeFileSync(path.join(outputDir, 'Frontend.runtimeconfig.json'), JSON.stringify({
+                runtimeOptions: {
+                    tfm: 'net10.0'
+                }
+            }));
+            fs.writeFileSync(path.join(propertiesDir, 'launchSettings.json'), JSON.stringify({
+                profiles: {
+                    Development: {
+                        workingDirectory: 'custom',
+                        executablePath: 'customExecutable'
+                    }
+                }
+            }));
+
+            const { extension } = createDebuggerExtension(outputPath, null, true, true);
+            const launchConfig: ProjectLaunchConfiguration = {
+                type: 'project',
+                project_path: projectPath,
+                launch_profile: 'Development'
+            };
+
+            const debugConfig: AspireResourceExtendedDebugConfiguration = {
+                runId: '1',
+                debugSessionId: '1',
+                type: 'coreclr',
+                name: 'Test Debug Config',
+                request: 'launch'
+            };
+
+            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+
+            await extension.createDebugSessionConfigurationCallback!(launchConfig, undefined, [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
+
+            assert.strictEqual(debugConfig.cwd, projectDir);
+            assert.strictEqual(debugConfig.executablePath, undefined);
+        } finally {
+            fs.rmSync(tempRoot, { recursive: true, force: true });
+        }
+    });
+
+    test('fails project launch when runtimeconfig cannot be parsed', async () => {
+        const fs = require('fs');
+        const path = require('path');
+
+        const tempRoot = path.join(process.cwd(), '.test-temp', `dotnet-debugger-${process.pid}-${Date.now()}`);
+        const projectDir = path.join(tempRoot, 'Frontend With Invalid RuntimeConfig');
+        const outputDir = path.join(projectDir, 'bin', 'Debug', 'net10.0');
+        fs.mkdirSync(outputDir, { recursive: true });
+
+        try {
+            const projectPath = path.join(projectDir, 'Frontend.csproj');
+            const outputPath = path.join(outputDir, 'Frontend.dll');
+            fs.writeFileSync(projectPath, '<Project></Project>');
+            fs.writeFileSync(outputPath, '');
+            fs.writeFileSync(path.join(outputDir, 'Frontend.runtimeconfig.json'), '{');
+
+            const { extension } = createDebuggerExtension(outputPath, null, true, true);
+            const launchConfig: ProjectLaunchConfiguration = {
+                type: 'project',
+                project_path: projectPath
+            };
+
+            const debugConfig: AspireResourceExtendedDebugConfiguration = {
+                runId: '1',
+                debugSessionId: '1',
+                type: 'coreclr',
+                name: 'Test Debug Config',
+                request: 'launch'
+            };
+
+            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+
+            await assert.rejects(
+                extension.createDebugSessionConfigurationCallback!(launchConfig, undefined, [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig),
+                /Failed to inspect runtimeconfig/);
+        } finally {
+            fs.rmSync(tempRoot, { recursive: true, force: true });
+        }
+    });
+
+    test('notifies user when dotnet CLI fallback disables debugger attach', async () => {
+        const fs = require('fs');
+        const path = require('path');
+
+        const tempRoot = path.join(process.cwd(), '.test-temp', `dotnet-debugger-${process.pid}-${Date.now()}`);
+        const projectDir = path.join(tempRoot, 'Frontend With Notification');
+        const outputDir = path.join(projectDir, 'bin', 'Debug', 'net10.0');
+        fs.mkdirSync(outputDir, { recursive: true });
+
+        try {
+            const projectPath = path.join(projectDir, 'Frontend.csproj');
+            const outputPath = path.join(outputDir, 'Frontend.dll');
+            fs.writeFileSync(projectPath, '<Project></Project>');
+            fs.writeFileSync(outputPath, '');
+            fs.writeFileSync(path.join(outputDir, 'Frontend.runtimeconfig.json'), JSON.stringify({
+                runtimeOptions: {
+                    tfm: 'net10.0'
+                }
+            }));
+
+            const showInformationMessageStub = sinon.stub(vscode.window, 'showInformationMessage').resolves(undefined);
+            const { extension } = createDebuggerExtension(outputPath, null, true, true);
+            const launchConfig: ProjectLaunchConfiguration = {
+                type: 'project',
+                project_path: projectPath
+            };
+
+            const debugConfig: AspireResourceExtendedDebugConfiguration = {
+                runId: '1',
+                debugSessionId: '1',
+                type: 'coreclr',
+                name: 'Test Debug Config',
+                request: 'launch'
+            };
+
+            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+
+            await extension.createDebugSessionConfigurationCallback!(launchConfig, undefined, [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
+
+            assert.strictEqual(showInformationMessageStub.calledOnce, true);
+            assert.match(showInformationMessageStub.firstCall.args[0], /breakpoints/i);
+        } finally {
+            fs.rmSync(tempRoot, { recursive: true, force: true });
+        }
     });
 
     test('applies launch profile settings to debug configuration', async () => {
@@ -183,6 +591,145 @@ suite('Dotnet Debugger Extension Tests', () => {
         assert.strictEqual(debugConfig.serverReadyAction.uriFormat, 'https://localhost:5001');
 
         // cleanup
+        fs.rmSync(tempDir, { recursive: true, force: true });
+    });
+
+    test('uses executable path for Executable command launch profiles instead of project output', async () => {
+        // Bug #15647: Executable command profiles use the executablePath and
+        // commandLineArgs to define how to run the class library project. The extension
+        // should use executablePath as the program instead of the project's output DLL.
+        const fs = require('fs');
+        const os = require('os');
+        const path = require('path');
+
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-test-'));
+        const projectDir = path.join(tempDir, 'MyClassLibFunction');
+        const propertiesDir = path.join(projectDir, 'Properties');
+        fs.mkdirSync(propertiesDir, { recursive: true });
+
+        const projectPath = path.join(projectDir, 'MyClassLibFunction.csproj');
+        fs.writeFileSync(projectPath, '<Project></Project>');
+
+        const launchSettings = {
+            profiles: {
+                'Aspire_my-function': {
+                    commandName: 'Executable',
+                    executablePath: 'dotnet',
+                    commandLineArgs: 'exec --depsfile ./MyClassLibFunction.deps.json --runtimeconfig ./MyClassLibFunction.runtimeconfig.json RuntimeSupport.dll MyClassLibFunction::MyClassLibFunction.Function::FunctionHandler',
+                    workingDirectory: 'bin/Debug/net10.0/',
+                    environmentVariables: {
+                        FUNCTION_ENV: 'test'
+                    }
+                }
+            }
+        };
+
+        fs.writeFileSync(path.join(propertiesDir, 'launchSettings.json'), JSON.stringify(launchSettings, null, 2));
+
+        // The output path would be a class library DLL - this should NOT be used as program
+        const outputPath = path.join(projectDir, 'bin', 'Debug', 'net10.0', 'MyClassLibFunction.dll');
+        const { extension, dotNetService } = createDebuggerExtension(outputPath, null, true, true);
+
+        const launchConfig: ProjectLaunchConfiguration = {
+            type: 'project',
+            project_path: projectPath,
+            launch_profile: 'Aspire_my-function'
+        };
+
+        const debugConfig: AspireResourceExtendedDebugConfiguration = {
+            runId: '1',
+            debugSessionId: '1',
+            type: 'coreclr',
+            name: 'Test Debug Config',
+            request: 'launch'
+        };
+
+        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+
+        await extension.createDebugSessionConfigurationCallback!(launchConfig, undefined, [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
+
+        // program should be the executable path from the profile, NOT the project output DLL
+        assert.strictEqual(debugConfig.program, 'dotnet');
+
+        // args should come from the profile's commandLineArgs
+        assert.strictEqual(debugConfig.args, 'exec --depsfile ./MyClassLibFunction.deps.json --runtimeconfig ./MyClassLibFunction.runtimeconfig.json RuntimeSupport.dll MyClassLibFunction::MyClassLibFunction.Function::FunctionHandler');
+
+        // cwd should resolve to the profile's working directory
+        assert.strictEqual(debugConfig.cwd, path.resolve(projectDir, 'bin/Debug/net10.0/'));
+
+        // env should include the profile's environment variables
+        assert.strictEqual(debugConfig.env.FUNCTION_ENV, 'test');
+
+        // project should still be built (to compile the class library dependencies)
+        assert.strictEqual(dotNetService.buildDotNetProjectStub.calledOnce, true);
+
+        // cleanup
+        fs.rmSync(tempDir, { recursive: true, force: true });
+    });
+
+    test('expands environment variables in Executable profile executablePath and commandLineArgs', async () => {
+        // Executable launch profiles may contain $(VAR) references (e.g. $(HOME)) that
+        // VS expands natively but the coreclr debugger does not. The extension must expand
+        // these before passing them to the debug configuration.
+        const fs = require('fs');
+        const os = require('os');
+        const path = require('path');
+
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-test-'));
+        const projectDir = path.join(tempDir, 'MyToolProject');
+        const propertiesDir = path.join(projectDir, 'Properties');
+        fs.mkdirSync(propertiesDir, { recursive: true });
+
+        const projectPath = path.join(projectDir, 'MyToolProject.csproj');
+        fs.writeFileSync(projectPath, '<Project></Project>');
+
+        // Set up a test env var so expansion is deterministic
+        const envVarName = 'ASPIRE_TEST_TOOL_ROOT';
+        const envVarValue = '/opt/tools';
+        process.env[envVarName] = envVarValue;
+
+        const launchSettings = {
+            profiles: {
+                'Aspire_my-tool': {
+                    commandName: 'Executable',
+                    executablePath: '$(' + envVarName + ')/bin/dotnet',
+                    commandLineArgs: 'exec --depsfile ./MyToolProject.deps.json $(' + envVarName + ')/lib/RuntimeSupport.dll MyToolProject::MyToolProject.Function::Handler',
+                    workingDirectory: 'bin/Debug/net10.0/'
+                }
+            }
+        };
+
+        fs.writeFileSync(path.join(propertiesDir, 'launchSettings.json'), JSON.stringify(launchSettings, null, 2));
+
+        const outputPath = path.join(projectDir, 'bin', 'Debug', 'net10.0', 'MyToolProject.dll');
+        const { extension, dotNetService } = createDebuggerExtension(outputPath, null, true, true);
+
+        const launchConfig: ProjectLaunchConfiguration = {
+            type: 'project',
+            project_path: projectPath,
+            launch_profile: 'Aspire_my-tool'
+        };
+
+        const debugConfig: AspireResourceExtendedDebugConfiguration = {
+            runId: '1',
+            debugSessionId: '1',
+            type: 'coreclr',
+            name: 'Test Debug Config',
+            request: 'launch'
+        };
+
+        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+
+        await extension.createDebugSessionConfigurationCallback!(launchConfig, undefined, [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
+
+        // executablePath should have $(VAR) expanded
+        assert.strictEqual(debugConfig.program, `${envVarValue}/bin/dotnet`);
+
+        // commandLineArgs should also have $(VAR) expanded
+        assert.strictEqual(debugConfig.args, `exec --depsfile ./MyToolProject.deps.json ${envVarValue}/lib/RuntimeSupport.dll MyToolProject::MyToolProject.Function::Handler`);
+
+        // cleanup
+        delete process.env[envVarName];
         fs.rmSync(tempDir, { recursive: true, force: true });
     });
 });

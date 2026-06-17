@@ -1,0 +1,507 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure.AppContainers;
+using Aspire.Hosting.Foundry;
+using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+
+namespace Aspire.Hosting.Azure.Tests;
+
+public class FoundryExtensionsTests
+{
+    [Fact]
+    public void AddFoundry_ShouldAddResourceToBuilder()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resourceBuilder = builder.AddFoundry("myAIFoundry");
+        Assert.NotNull(resourceBuilder);
+        var resource = Assert.Single(builder.Resources.OfType<FoundryResource>());
+        Assert.Equal("myAIFoundry", resource.Name);
+    }
+
+    [Fact]
+    public void AddDeployment_ShouldAddDeploymentToResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resourceBuilder = builder.AddFoundry("myAIFoundry");
+        var deploymentBuilder = resourceBuilder.AddDeployment("deployment1", "gpt-4", "1.0", "OpenAI");
+        Assert.NotNull(deploymentBuilder);
+        var resource = Assert.Single(builder.Resources.OfType<FoundryResource>());
+        var deployment = Assert.Single(resource.Deployments);
+        Assert.Equal("deployment1", deployment.Name);
+        Assert.Equal("deployment1", deployment.DeploymentName);
+        Assert.Equal("gpt-4", deployment.ModelName);
+        Assert.Equal("1.0", deployment.ModelVersion);
+        Assert.Equal("OpenAI", deployment.Format);
+    }
+
+    [Fact]
+    public void WithProperties_ShouldApplyConfiguration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resourceBuilder = builder.AddFoundry("myAIFoundry");
+        var deploymentBuilder = resourceBuilder.AddDeployment("deployment1", "gpt-4", "1.0", "OpenAI");
+        bool configured = false;
+        deploymentBuilder.WithProperties(d =>
+        {
+            configured = true;
+            d.ModelName = "changed";
+        });
+        Assert.True(configured);
+        var resource = Assert.Single(builder.Resources.OfType<FoundryResource>());
+        var deployment = Assert.Single(resource.Deployments);
+        Assert.Equal("changed", deployment.ModelName);
+    }
+
+    [Fact]
+    public void AddFoundry_ConnectionString_IsCorrect()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resourceBuilder = builder.AddFoundry("myAIFoundry");
+        var resource = Assert.Single(builder.Resources.OfType<FoundryResource>());
+        // The connection string should reference the aiFoundryApiEndpoint output
+        var expected = $"Endpoint={resource.Endpoint.ValueExpression};EndpointAIInference={resource.AIFoundryApiEndpoint.ValueExpression}models";
+        var connectionString = resource.ConnectionStringExpression.ValueExpression;
+        Assert.Equal(expected, connectionString);
+    }
+
+    [Fact]
+    public async Task RunAsFoundryLocal_SetsIsEmulator()
+    {
+        var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resourceBuilder = builder.AddFoundry("myAIFoundry");
+        var resource = Assert.Single(builder.Resources.OfType<FoundryResource>());
+        Assert.False(resource.IsEmulator);
+        Assert.Null(resource.ApiKey);
+
+        var localBuilder = resourceBuilder.RunAsFoundryLocal();
+
+        var localResource = Assert.Single(builder.Resources.OfType<FoundryResource>());
+        Assert.True(localResource.IsEmulator);
+
+        using var app = builder.Build();
+
+        await app.StartAsync(cts.Token);
+
+        var rns = app.Services.GetRequiredService<ResourceNotificationService>();
+
+        // Wait until it's not in Starting state anymore (started or failed whether the Foundry Local service is setup or not)
+        await rns.WaitForResourceAsync(resource.Name, [KnownResourceStates.FailedToStart, KnownResourceStates.Running], cts.Token);
+
+        Assert.Equal(FoundryLocalService.ApiKey, localResource.ApiKey);
+    }
+
+    [Fact]
+    public void FoundryLocalService_TryParseModelId_ParsesModelInfoOutput()
+    {
+        var output = """
+            Alias                          Device     Task           File Size    License      Model ID
+            phi-3.5-mini                   GPU        chat           2.16 GB      MIT          Phi-3.5-mini-instruct-generic-gpu:1
+            """;
+
+        Assert.True(FoundryLocalService.TryParseModelId(output, out var modelId));
+        Assert.Equal("Phi-3.5-mini-instruct-generic-gpu:1", modelId);
+    }
+
+    [Fact]
+    public void FoundryLocalService_TryParseModelId_IgnoresDiagnosticOutputBeforeTable()
+    {
+        var output = """
+            [15:12:56 ERR] Exception fetching models from Azure Foundry catalog
+            Model management service is running on http://127.0.0.1:54597/openai/status
+            Alias                          Device     Task           File Size    License      Model ID
+            phi-3.5-mini                   GPU        chat           2.16 GB      MIT          Phi-3.5-mini-instruct-generic-gpu:1
+            """;
+
+        Assert.True(FoundryLocalService.TryParseModelId(output, out var modelId));
+        Assert.Equal("Phi-3.5-mini-instruct-generic-gpu:1", modelId);
+    }
+
+    [Fact]
+    public void RunAsFoundryLocal_DeploymentIsMarkedLocal()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resourceBuilder = builder.AddFoundry("myAIFoundry");
+        resourceBuilder.AddDeployment("deployment1", "gpt-4", "1.0", "OpenAI");
+        var localBuilder = resourceBuilder.RunAsFoundryLocal();
+        var localResource = Assert.Single(builder.Resources.OfType<FoundryResource>());
+        Assert.True(localResource.IsEmulator);
+
+        foreach (var deployment in localResource.Deployments)
+        {
+            Assert.True(deployment.Parent.IsEmulator);
+        }
+    }
+
+    [Fact]
+    public void RunAsFoundryLocal_DeploymentConnectionString_HasModelProperty()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var foundry = builder.AddFoundry("myAIFoundry");
+        var deployment = foundry.AddDeployment("deployment1", "gpt-4", "1.0", "OpenAI");
+
+        foundry.RunAsFoundryLocal();
+
+        var resource = Assert.Single(builder.Resources.OfType<FoundryResource>());
+
+        Assert.Single(resource.Deployments);
+
+        // NB: The ModelId property is updated with the downloaded model id when the resource is starting.
+        // We are only testing that the ModelName fallback is referenced in the connection string.
+
+        Assert.Equal("{myAIFoundry.connectionString};Model=gpt-4", deployment.Resource.ConnectionStringExpression.ValueExpression);
+    }
+
+    [Fact]
+    public void RunAsFoundryLocal_DeploymentConnectionString_UsesModelId()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var foundry = builder.AddFoundry("myAIFoundry");
+        var deployment = foundry.AddDeployment("deployment1", "gpt-4", "1.0", "OpenAI");
+        foundry.RunAsFoundryLocal();
+
+        deployment.Resource.ModelId = "custom-model-id";
+
+        Assert.Equal("{myAIFoundry.connectionString};Model=custom-model-id", deployment.Resource.ConnectionStringExpression.ValueExpression);
+    }
+
+    [Fact]
+    public void AIFoundry_DeploymentConnectionString_HasDeploymentProperty()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var foundry = builder.AddFoundry("myAIFoundry");
+        var deployment = foundry.AddDeployment("deployment1", "gpt-4", "1.0", "OpenAI");
+
+        var resource = Assert.Single(builder.Resources.OfType<FoundryResource>());
+
+        Assert.Single(resource.Deployments);
+        Assert.Equal("{myAIFoundry.connectionString};Deployment=deployment1", deployment.Resource.ConnectionStringExpression.ValueExpression);
+    }
+
+    [Fact]
+    public async Task AddFoundry_GeneratesValidBicep()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var foundry = builder.AddFoundry("foundry");
+        var deployment1 = foundry.AddDeployment("deployment1", "gpt-4", "1.0", "OpenAI");
+        var deployment2 = foundry.AddDeployment("deployment2", "Phi-4", "1.0", "Microsoft");
+        var deployment3 = foundry.AddDeployment("my-model", "Phi-4", "1.0", "Microsoft");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(model, foundry.Resource);
+
+        var roles = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), r => r.Name == "foundry-roles");
+        var rolesManifest = await AzureManifestUtils.GetManifestWithBicep(roles, skipPreparer: true);
+
+        await Verify(manifest.BicepText, extension: "bicep")
+            .AppendContentAsFile(rolesManifest.BicepText, "bicep");
+    }
+
+    [Fact]
+    public void AddProject_SetsParentFoundryForProvisioningOrdering()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var foundry = builder.AddFoundry("myAIFoundry");
+        var project = foundry
+            .AddProject("my-project");
+
+        Assert.Same(foundry.Resource, project.Resource.Parent);
+    }
+
+    [Fact]
+    public void AddProject_DoesNotAddDefaultContainerRegistryInRunMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var project = builder.AddFoundry("myAIFoundry")
+            .AddProject("my-project");
+
+        Assert.DoesNotContain(builder.Resources, r => r.Name == "my-project-acr");
+        Assert.Empty(builder.Resources.OfType<AzureContainerRegistryResource>());
+        Assert.Null(project.Resource.ContainerRegistry);
+    }
+
+    [Fact]
+    public async Task AddProject_WithPublishAsExistingFoundry_GeneratesBicepThatReferencesExistingParent()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var project = builder.AddFoundry("foundry")
+            .PublishAsExisting("existing-foundry", "existing-rg")
+            .AddProject("project");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var (_, bicepText) = await AzureManifestUtils.GetManifestWithBicep(model, project.Resource);
+
+        Assert.Contains("resource foundry 'Microsoft.CognitiveServices/accounts@", bicepText);
+        Assert.Contains("existing = {", bicepText);
+        Assert.Contains("name: 'existing-foundry'", bicepText);
+        Assert.Contains("scope: resourceGroup('existing-rg')", bicepText);
+        Assert.DoesNotContain("kind: 'AIServices'", bicepText);
+    }
+
+    [Fact]
+    public async Task AddProject_GeneratesEndpointFromParentFoundryApiEndpoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var project = builder.AddFoundry("foundry")
+            .AddProject("project");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var (_, bicepText) = await AzureManifestUtils.GetManifestWithBicep(model, project.Resource);
+
+        await Verify(bicepText, extension: "bicep");
+    }
+
+    [Fact]
+    public async Task AddFoundry_WithPublishAsExisting_UsesStableDefaultCapabilityHostName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var foundry = builder.AddFoundry("logical-foundry")
+            .PublishAsExisting("existing-foundry", "existing-rg");
+
+        foundry.AddDeployment("chat", "gpt-4", "1.0", "OpenAI");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var (_, bicepText) = await AzureManifestUtils.GetManifestWithBicep(model, foundry.Resource);
+
+        Assert.Contains("name: 'foundry-caphost'", bicepText);
+        Assert.DoesNotContain("logical-foundry-caphost", bicepText);
+    }
+
+    [Fact]
+    public void AddAsExistingResource_ShouldBeIdempotent_ForFoundryResource()
+    {
+        // Arrange
+        var aiFoundryResource = new FoundryResource("test-foundry", _ => { });
+        var infrastructure = new AzureResourceInfrastructure(aiFoundryResource, "test-foundry");
+
+        // Act - Call AddAsExistingResource twice
+        var firstResult = aiFoundryResource.AddAsExistingResource(infrastructure);
+        var secondResult = aiFoundryResource.AddAsExistingResource(infrastructure);
+
+        // Assert - Both calls should return the same resource instance, not duplicates
+        Assert.Same(firstResult, secondResult);
+    }
+
+    [Fact]
+    public async Task WithComputeEnvironment_ResolvesExternalContainerAppReference()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var env = builder.AddAzureContainerAppEnvironment("env");
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var weatherAgent = builder.AddProject<Project>("weatheragent", launchProfileName: null)
+            .WithEndpoint(targetPort: 9000, scheme: "http", name: "http", isExternal: true)
+            .WithComputeEnvironment(env);
+
+        var advisorAgent = builder.AddProject<Project>("advisoragent", launchProfileName: null)
+            .WithReference(weatherAgent)
+            .WaitFor(weatherAgent)
+            .AsHostedAgent(project);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var hostedAgent = Assert.Single(model.Resources.OfType<AzureHostedAgentResource>());
+        var environment = Assert.Single(model.Resources.OfType<AzureContainerAppEnvironmentResource>());
+        environment.Outputs["AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN"] = "example.azurecontainerapps.io";
+        environment.ProvisioningTaskCompletionSource?.TrySetResult();
+        SetFoundryProjectOutputs(project.Resource);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var environmentVariables = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+            builder.ExecutionContext,
+            hostedAgent,
+            advisorAgent.Resource,
+            NullLogger<FoundryExtensionsTests>.Instance,
+            cts.Token);
+
+        Assert.Equal("https://weatheragent.example.azurecontainerapps.io", environmentVariables["services__weatheragent__http__0"]);
+    }
+
+    [Fact]
+    public async Task WithComputeEnvironment_DoesNotSetReservedFoundryProjectEndpointEnvironmentVariable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var advisorAgent = builder.AddProject<Project>("advisor-agent", launchProfileName: null)
+            .AsHostedAgent(project);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var hostedAgent = Assert.Single(model.Resources.OfType<AzureHostedAgentResource>());
+        SetFoundryProjectOutputs(project.Resource);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var environmentVariables = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+            builder.ExecutionContext,
+            hostedAgent,
+            advisorAgent.Resource,
+            NullLogger<FoundryExtensionsTests>.Instance,
+            cts.Token);
+
+        Assert.DoesNotContain("FOUNDRY_PROJECT_ENDPOINT", environmentVariables.Keys);
+    }
+
+    [Fact]
+    public async Task WithComputeEnvironment_ResolvesReferenceExpressionEnvironmentVariable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var env = builder.AddAzureContainerAppEnvironment("env");
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var weatherAgent = builder.AddProject<Project>("weather-agent", launchProfileName: null)
+            .WithEndpoint(targetPort: 9000, scheme: "http", name: "http", isExternal: true)
+            .WithComputeEnvironment(env);
+
+        var advisorAgent = builder.AddProject<Project>("advisor-agent", launchProfileName: null)
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables["WEATHER_HEALTH_URL"] = ReferenceExpression.Create($"{weatherAgent.GetEndpoint("http")}/health");
+            })
+            .AsHostedAgent(project);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var hostedAgent = Assert.Single(model.Resources.OfType<AzureHostedAgentResource>());
+        var environment = Assert.Single(model.Resources.OfType<AzureContainerAppEnvironmentResource>());
+        environment.Outputs["AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN"] = "example.azurecontainerapps.io";
+        environment.ProvisioningTaskCompletionSource?.TrySetResult();
+        SetFoundryProjectOutputs(project.Resource);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var environmentVariables = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+            builder.ExecutionContext,
+            hostedAgent,
+            advisorAgent.Resource,
+            NullLogger<FoundryExtensionsTests>.Instance,
+            cts.Token);
+
+        Assert.Equal("https://weather-agent.example.azurecontainerapps.io/health", environmentVariables["WEATHER_HEALTH_URL"]);
+    }
+
+    [Fact]
+    public async Task WithComputeEnvironment_ResolvesEndpointReferenceExpressionEnvironmentVariable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var env = builder.AddAzureContainerAppEnvironment("env");
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var weatherAgent = builder.AddProject<Project>("weather-agent", launchProfileName: null)
+            .WithEndpoint(targetPort: 9000, scheme: "http", name: "http", isExternal: true)
+            .WithComputeEnvironment(env);
+
+        var advisorAgent = builder.AddProject<Project>("advisor-agent", launchProfileName: null)
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables["WEATHER_HOST_AND_PORT"] = weatherAgent.GetEndpoint("http").Property(EndpointProperty.HostAndPort);
+            })
+            .AsHostedAgent(project);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var hostedAgent = Assert.Single(model.Resources.OfType<AzureHostedAgentResource>());
+        var environment = Assert.Single(model.Resources.OfType<AzureContainerAppEnvironmentResource>());
+        environment.Outputs["AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN"] = "example.azurecontainerapps.io";
+        environment.ProvisioningTaskCompletionSource?.TrySetResult();
+        SetFoundryProjectOutputs(project.Resource);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var environmentVariables = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+            builder.ExecutionContext,
+            hostedAgent,
+            advisorAgent.Resource,
+            NullLogger<FoundryExtensionsTests>.Instance,
+            cts.Token);
+
+        Assert.Equal("weather-agent.example.azurecontainerapps.io:443", environmentVariables["WEATHER_HOST_AND_PORT"]);
+    }
+
+    [Fact]
+    public async Task WithComputeEnvironment_ThrowsForInternalContainerAppReference()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var env = builder.AddAzureContainerAppEnvironment("env");
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var weatherAgent = builder.AddProject<Project>("weather-agent", launchProfileName: null)
+            .WithHttpEndpoint(targetPort: 9000)
+            .WithComputeEnvironment(env);
+
+        var advisorAgent = builder.AddProject<Project>("advisor-agent", launchProfileName: null)
+            .WithReference(weatherAgent)
+            .WaitFor(weatherAgent);
+
+        advisorAgent.AsHostedAgent(project);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var hostedAgent = Assert.Single(model.Resources.OfType<AzureHostedAgentResource>());
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+                builder.ExecutionContext,
+                hostedAgent,
+                advisorAgent.Resource,
+                NullLogger<FoundryExtensionsTests>.Instance,
+                default));
+
+        Assert.Contains("Foundry hosted agent 'advisor-agent-ha'", ex.Message);
+        Assert.Contains("Endpoint 'http' on resource 'weather-agent' cannot be used", ex.Message);
+        Assert.Contains("internal", ex.Message);
+    }
+
+    private static void SetFoundryProjectOutputs(AzureCognitiveServicesProjectResource project)
+    {
+        // These tests call the deployment-time environment resolver directly. In a real publish,
+        // provisioning populates the Foundry project Bicep outputs before references are resolved.
+        // Seed the outputs here so BicepOutputReference.GetValueAsync does not wait for provisioning.
+        project.Outputs["endpoint"] = "https://account.services.ai.azure.com/api/projects/my-project";
+        project.Outputs["APPLICATION_INSIGHTS_CONNECTION_STRING"] = "";
+        project.ProvisioningTaskCompletionSource?.TrySetResult();
+    }
+
+    private sealed class Project : IProjectMetadata
+    {
+        public string ProjectPath => "project";
+    }
+
+}

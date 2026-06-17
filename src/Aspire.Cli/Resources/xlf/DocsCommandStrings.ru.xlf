@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="ru" original="../DocsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Browse and search Aspire documentation from aspire.dev.</source>
-        <target state="translated">Просмотр документации Aspire и поиск в ней на aspire.dev.</target>
+        <source>Browse and search Aspire documentation and API reference from aspire.dev</source>
+        <target state="needs-review-translation">Просмотр документации Aspire и поиск в ней на aspire.dev.</target>
         <note />
       </trans-unit>
       <trans-unit id="DocumentNotFound">
@@ -13,8 +13,8 @@
         <note />
       </trans-unit>
       <trans-unit id="FormatOptionDescription">
-        <source>Output format (Table or Json).</source>
-        <target state="translated">Формат вывода (таблица или JSON).</target>
+        <source>Output format (Table or Json)</source>
+        <target state="needs-review-translation">Формат вывода (таблица или JSON).</target>
         <note />
       </trans-unit>
       <trans-unit id="FoundDocumentationPages">
@@ -28,18 +28,43 @@
         <note />
       </trans-unit>
       <trans-unit id="GetDescription">
-        <source>Get the full content of a documentation page by its slug.</source>
-        <target state="translated">Получить полное содержимое страницы документации по её динамическому идентификатору.</target>
+        <source>Get the full content of a documentation page by its slug</source>
+        <target state="needs-review-translation">Получить полное содержимое страницы документации по её динамическому идентификатору.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderScore">
+        <source>Score</source>
+        <target state="translated">Оценка</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderSection">
+        <source>Section</source>
+        <target state="translated">Раздел</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderSlug">
+        <source>Slug</source>
+        <target state="translated">Динамический идентификатор</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderSummary">
+        <source>Summary</source>
+        <target state="translated">Сводка</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderTitle">
+        <source>Title</source>
+        <target state="translated">Название</target>
         <note />
       </trans-unit>
       <trans-unit id="LimitOptionDescription">
-        <source>Maximum number of search results to return (default: 5, max: 10).</source>
-        <target state="translated">Максимальное количество результатов поиска, которые следует вернуть (по умолчанию: 5, максимум: 10).</target>
+        <source>Maximum number of search results to return (default: 5, max: 10)</source>
+        <target state="needs-review-translation">Максимальное количество результатов поиска, которые следует вернуть (по умолчанию: 5, максимум: 10).</target>
         <note />
       </trans-unit>
       <trans-unit id="ListDescription">
-        <source>List all available Aspire documentation pages.</source>
-        <target state="translated">Выдать список всех доступных страниц документации по Aspire.</target>
+        <source>List all available Aspire documentation pages</source>
+        <target state="needs-review-translation">Выдать список всех доступных страниц документации по Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="LoadingDocumentation">
@@ -58,23 +83,23 @@
         <note />
       </trans-unit>
       <trans-unit id="QueryArgumentDescription">
-        <source>The search query.</source>
-        <target state="translated">Поисковый запрос.</target>
+        <source>The search query</source>
+        <target state="needs-review-translation">Поисковый запрос.</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchDescription">
-        <source>Search Aspire documentation by keywords.</source>
-        <target state="translated">Поиск в документации Aspire по ключевым словам.</target>
+        <source>Search Aspire documentation by keywords</source>
+        <target state="needs-review-translation">Поиск в документации Aspire по ключевым словам.</target>
         <note />
       </trans-unit>
       <trans-unit id="SectionOptionDescription">
-        <source>Return only the specified section of the page.</source>
-        <target state="translated">Возвращать только указанный раздел страницы.</target>
+        <source>Return only the specified section of the page</source>
+        <target state="needs-review-translation">Возвращать только указанный раздел страницы.</target>
         <note />
       </trans-unit>
       <trans-unit id="SlugArgumentDescription">
-        <source>The slug of the documentation page (e.g., 'redis-integration').</source>
-        <target state="translated">Идентификатор страницы документации (например, "redis-integration").</target>
+        <source>The slug of the documentation page (e.g., 'redis-integration')</source>
+        <target state="needs-review-translation">Идентификатор страницы документации (например, "redis-integration").</target>
         <note />
       </trans-unit>
     </body>

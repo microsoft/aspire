@@ -6,8 +6,12 @@
     <PackageTags>$(ComponentAzurePackageTags) redis azure cache caching cloud</PackageTags>
     <Description>An Azure Cache for Redis® client that integrates with Aspire, including Azure AD authentication, health checks, logging and telemetry.</Description>
     <PackageIconFullPath>$(SharedDir)AzureCacheRedis_256x.png</PackageIconFullPath>
-    <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
+    <DisablePackageBaselineValidation>true</DisablePackageBaselineValidation>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\Shared\AzureCredentialHelper.cs" Link="AzureCredentialHelper.cs" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Azure.StackExchangeRedis" />

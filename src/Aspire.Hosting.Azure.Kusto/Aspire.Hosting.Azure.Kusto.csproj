@@ -22,6 +22,7 @@
   <ItemGroup>
     <Compile Include="$(SharedDir)StringComparers.cs" LinkBase="Utils" />
     <Compile Include="$(SharedDir)AzureRoleAssignmentUtils.cs" LinkBase="Utils" />
+    <Compile Include="$(SharedDir)AzureCredentialHelper.cs" LinkBase="Utils" />
   </ItemGroup>
 
   <ItemGroup>

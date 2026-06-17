@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="ApplicatorDescription">
         <source>Configure GitHub Copilot CLI to use the Aspire MCP server</source>
-        <target state="translated">Configurare l'interfaccia a riga di comando di GitHub Copilot per usare il server MCP di Aspire</target>
+        <target state="translated">Configura l'interfaccia CLI di GitHub Copilot per usare il server MCP di Aspire</target>
         <note />
       </trans-unit>
     </body>

@@ -4,11 +4,9 @@
 using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
-using Aspire.Cli.Configuration;
+using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.Mcp.Docs;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
@@ -29,14 +27,10 @@ internal sealed class DocsListCommand : BaseCommand
     };
 
     public DocsListCommand(
-        IInteractionService interactionService,
         IDocsIndexService docsIndexService,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        AspireCliTelemetry telemetry,
-        ILogger<DocsListCommand> logger)
-        : base("list", DocsCommandStrings.ListDescription, features, updateNotifier, executionContext, interactionService, telemetry)
+        ILogger<DocsListCommand> logger,
+        CommonCommandServices services)
+        : base("list", DocsCommandStrings.ListDescription, services)
     {
         _docsIndexService = docsIndexService;
         _logger = logger;
@@ -44,9 +38,7 @@ internal sealed class DocsListCommand : BaseCommand
         Options.Add(s_formatOption);
     }
 
-    protected override bool UpdateNotificationsEnabled => false;
-
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
@@ -61,23 +53,23 @@ internal sealed class DocsListCommand : BaseCommand
 
         if (docs.Count is 0)
         {
-            InteractionService.DisplayError(DocsCommandStrings.NoDocumentationAvailable);
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, DocsCommandStrings.NoDocumentationAvailable);
         }
 
         if (format is OutputFormat.Json)
         {
             var json = JsonSerializer.Serialize(docs.ToArray(), JsonSourceGenerationContext.RelaxedEscaping.DocsListItemArray);
-            InteractionService.DisplayRawText(json);
+            // Structured output always goes to stdout.
+            InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
         }
         else
         {
             InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, DocsCommandStrings.FoundDocumentationPages, docs.Count));
 
             var table = new Table();
-            table.AddColumn("Title");
-            table.AddColumn("Slug");
-            table.AddColumn("Summary");
+            table.AddBoldColumn(DocsCommandStrings.HeaderTitle);
+            table.AddBoldColumn(DocsCommandStrings.HeaderSlug);
+            table.AddBoldColumn(DocsCommandStrings.HeaderSummary);
 
             foreach (var doc in docs)
             {
@@ -87,9 +79,9 @@ internal sealed class DocsListCommand : BaseCommand
                     Markup.Escape(doc.Summary ?? "-"));
             }
 
-            AnsiConsole.Write(table);
+            InteractionService.DisplayRenderable(table);
         }
 
-        return ExitCodeConstants.Success;
+        return CommandResult.Success();
     }
 }

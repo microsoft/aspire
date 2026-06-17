@@ -2,13 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
-using System.CommandLine.Help;
 using System.Diagnostics;
 using System.Globalization;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -18,20 +16,20 @@ namespace Aspire.Cli.Commands;
 
 internal sealed class ConfigCommand : BaseCommand
 {
-    private readonly IConfiguration _configuration;
-    private readonly IInteractionService _interactionService;
+    internal override HelpGroup HelpGroup => HelpGroup.ToolsAndConfiguration;
 
-    public ConfigCommand(IConfiguration configuration, IConfigurationService configurationService, IInteractionService interactionService, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, AspireCliTelemetry telemetry)
-        : base("config", ConfigCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
+    private readonly IConfiguration _configuration;
+
+    public ConfigCommand(IConfiguration configuration, IConfigurationService configurationService, CommonCommandServices services)
+        : base("config", ConfigCommandStrings.Description, services)
     {
         _configuration = configuration;
-        _interactionService = interactionService;
 
-        var getCommand = new GetCommand(configurationService, InteractionService, features, updateNotifier, executionContext, telemetry);
-        var setCommand = new SetCommand(configurationService, InteractionService, features, updateNotifier, executionContext, telemetry);
-        var listCommand = new ListCommand(configurationService, InteractionService, features, updateNotifier, executionContext, telemetry);
-        var deleteCommand = new DeleteCommand(configurationService, InteractionService, features, updateNotifier, executionContext, telemetry);
-        var infoCommand = new InfoCommand(configurationService, InteractionService, features, updateNotifier, executionContext, telemetry);
+        var getCommand = new GetCommand(configurationService, services);
+        var setCommand = new SetCommand(configurationService, services);
+        var listCommand = new ListCommand(configurationService, services);
+        var deleteCommand = new DeleteCommand(configurationService, services);
+        var infoCommand = new InfoCommand(configurationService, services);
 
         Subcommands.Add(getCommand);
         Subcommands.Add(setCommand);
@@ -40,18 +38,15 @@ internal sealed class ConfigCommand : BaseCommand
         Subcommands.Add(infoCommand);
     }
 
-    protected override bool UpdateNotificationsEnabled => false;
-
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         if (_configuration[KnownConfigNames.ExtensionPromptEnabled] is not "true")
         {
-            new HelpAction().Invoke(parseResult);
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.DisplayHelp();
         }
 
         // Prompt for the action that the user wants to perform
-        var subcommand = await _interactionService.PromptForSelectionAsync(
+        var subcommand = await InteractionService.PromptForSelectionAsync(
             ConfigCommandStrings.ExtensionActionPrompt,
             Subcommands.Cast<BaseConfigSubCommand>(),
             cmd =>
@@ -59,9 +54,9 @@ internal sealed class ConfigCommand : BaseCommand
                 Debug.Assert(cmd.Description is not null);
                 return cmd.Description.TrimEnd('.');
             },
-            cancellationToken);
+            cancellationToken: cancellationToken);
 
-        return await subcommand.InteractiveExecuteAsync(cancellationToken);
+        return CommandResult.FromExitCode(await subcommand.InteractiveExecuteAsync(cancellationToken));
     }
 
     private sealed class GetCommand : BaseConfigSubCommand
@@ -71,24 +66,21 @@ internal sealed class ConfigCommand : BaseCommand
             Description = ConfigCommandStrings.GetCommand_KeyArgumentDescription
         };
 
-        public GetCommand(IConfigurationService configurationService, IInteractionService interactionService, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, AspireCliTelemetry telemetry)
-            : base("get", ConfigCommandStrings.GetCommand_Description, features, updateNotifier, configurationService, executionContext, interactionService, telemetry)
+        public GetCommand(IConfigurationService configurationService, CommonCommandServices services)
+            : base("get", ConfigCommandStrings.GetCommand_Description, configurationService, services)
         {
             Arguments.Add(s_keyArgument);
         }
 
-        protected override bool UpdateNotificationsEnabled => false;
-
-        protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+        protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
         {
             var key = parseResult.GetValue(s_keyArgument);
             if (key is null)
             {
-                InteractionService.DisplayError(ErrorStrings.ConfigurationKeyRequired);
-                return Task.FromResult(ExitCodeConstants.InvalidCommand);
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, ErrorStrings.ConfigurationKeyRequired);
             }
 
-            return ExecuteAsync(key, cancellationToken);
+            return CommandResult.FromExitCode(await ExecuteAsync(key, cancellationToken));
         }
 
         public override async Task<int> InteractiveExecuteAsync(CancellationToken cancellationToken)
@@ -104,12 +96,12 @@ internal sealed class ConfigCommand : BaseCommand
             if (value is not null)
             {
                 InteractionService.DisplayPlainText(value);
-                return ExitCodeConstants.Success;
+                return CliExitCodes.Success;
             }
             else
             {
                 InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ErrorStrings.ConfigurationKeyNotFound, key));
-                return ExitCodeConstants.ConfigNotFound;
+                return CliExitCodes.ConfigNotFound;
             }
         }
     }
@@ -129,17 +121,15 @@ internal sealed class ConfigCommand : BaseCommand
             Description = ConfigCommandStrings.SetCommand_GlobalArgumentDescription
         };
 
-        public SetCommand(IConfigurationService configurationService, IInteractionService interactionService, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, AspireCliTelemetry telemetry)
-            : base("set", ConfigCommandStrings.SetCommand_Description, features, updateNotifier, configurationService, executionContext, interactionService, telemetry)
+        public SetCommand(IConfigurationService configurationService, CommonCommandServices services)
+            : base("set", ConfigCommandStrings.SetCommand_Description, configurationService, services)
         {
             Arguments.Add(s_keyArgument);
             Arguments.Add(s_valueArgument);
             Options.Add(s_globalOption);
         }
 
-        protected override bool UpdateNotificationsEnabled => false;
-
-        protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+        protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
         {
             var key = parseResult.GetValue(s_keyArgument);
             var value = parseResult.GetValue(s_valueArgument);
@@ -147,17 +137,15 @@ internal sealed class ConfigCommand : BaseCommand
 
             if (key is null)
             {
-                InteractionService.DisplayError(ErrorStrings.ConfigurationKeyRequired);
-                return Task.FromResult(ExitCodeConstants.InvalidCommand);
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, ErrorStrings.ConfigurationKeyRequired);
             }
 
             if (value is null)
             {
-                InteractionService.DisplayError(ErrorStrings.ConfigurationValueRequired);
-                return Task.FromResult(ExitCodeConstants.InvalidCommand);
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, ErrorStrings.ConfigurationValueRequired);
             }
 
-            return ExecuteAsync(key, value, isGlobal, cancellationToken);
+            return CommandResult.FromExitCode(await ExecuteAsync(key, value, isGlobal, cancellationToken));
         }
 
         public override async Task<int> InteractiveExecuteAsync(CancellationToken cancellationToken)
@@ -175,6 +163,18 @@ internal sealed class ConfigCommand : BaseCommand
 
         private async Task<int> ExecuteAsync(string key, string value, bool isGlobal, CancellationToken cancellationToken)
         {
+            if (AppHostPathConfigurationPolicy.IsLegacyAppHostPathKey(key))
+            {
+                InteractionService.DisplayError(ErrorStrings.LegacyAppHostPathCannotBeSetWithConfigCommand);
+                return CliExitCodes.InvalidCommand;
+            }
+
+            if (isGlobal && !AppHostPathConfigurationPolicy.IsGloballySettableKey(key))
+            {
+                InteractionService.DisplayError(ErrorStrings.GlobalAppHostPathCannotBeSetWithConfigCommand);
+                return CliExitCodes.InvalidCommand;
+            }
+
             try
             {
                 await ConfigurationService.SetConfigurationAsync(key, value, isGlobal, cancellationToken);
@@ -184,29 +184,43 @@ internal sealed class ConfigCommand : BaseCommand
                     : string.Format(CultureInfo.CurrentCulture, ConfigCommandStrings.ConfigurationKeySetLocally, key,
                         value));
 
-                return ExitCodeConstants.Success;
+                return CliExitCodes.Success;
             }
             catch (Exception ex)
             {
                 var errorMessage = string.Format(CultureInfo.CurrentCulture, ErrorStrings.ErrorSettingConfiguration, ex.Message);
                 Telemetry.RecordError(errorMessage, ex);
                 InteractionService.DisplayError(errorMessage);
-                return ExitCodeConstants.InvalidCommand;
+                return CliExitCodes.InvalidCommand;
             }
         }
     }
 
-    private sealed class ListCommand(IConfigurationService configurationService, IInteractionService interactionService, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, AspireCliTelemetry telemetry)
-        : BaseConfigSubCommand("list", ConfigCommandStrings.ListCommand_Description, features, updateNotifier, configurationService, executionContext, interactionService, telemetry)
+    private sealed class ListCommand : BaseConfigSubCommand
     {
-        protected override bool UpdateNotificationsEnabled => false;
-
-        protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+        private static readonly Option<bool> s_allOption = new("--all")
         {
-            return InteractiveExecuteAsync(cancellationToken);
+            Description = ConfigCommandStrings.ListCommand_AllOptionDescription
+        };
+
+        public ListCommand(IConfigurationService configurationService, CommonCommandServices services)
+            : base("list", ConfigCommandStrings.ListCommand_Description, configurationService, services)
+        {
+            Options.Add(s_allOption);
         }
 
-        public override async Task<int> InteractiveExecuteAsync(CancellationToken cancellationToken)
+        protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+        {
+            var showAll = parseResult.GetValue(s_allOption);
+            return CommandResult.FromExitCode(await ExecuteAsync(showAll, cancellationToken));
+        }
+
+        public override Task<int> InteractiveExecuteAsync(CancellationToken cancellationToken)
+        {
+            return ExecuteAsync(showAll: false, cancellationToken);
+        }
+
+        private async Task<int> ExecuteAsync(bool showAll, CancellationToken cancellationToken)
         {
             if (InteractionService is ExtensionInteractionService extensionInteractionService)
             {
@@ -214,69 +228,122 @@ internal sealed class ConfigCommand : BaseCommand
                 if (Path.Exists(settingsFilePath))
                 {
                     extensionInteractionService.OpenEditor(settingsFilePath);
-                    return ExitCodeConstants.Success;
+                    return CliExitCodes.Success;
                 }
             }
 
             var localConfig = await ConfigurationService.GetLocalConfigurationAsync(cancellationToken);
             var globalConfig = await ConfigurationService.GetGlobalConfigurationAsync(cancellationToken);
 
+            var featurePrefix = $"{KnownFeatures.FeaturePrefix}.";
+
             // Check if we have any configuration at all
             if (localConfig.Count == 0 && globalConfig.Count == 0)
             {
-                InteractionService.DisplayMessage("information", ConfigCommandStrings.NoConfigurationValuesFound);
-                return ExitCodeConstants.Success;
-            }
+                InteractionService.DisplayMessage(KnownEmojis.Information, ConfigCommandStrings.NoConfigurationValuesFound);
 
-            var featurePrefix = $"{KnownFeatures.FeaturePrefix}.";
-
-            // Display Local Configuration (including features)
-            if (localConfig.Count > 0)
-            {
-                InteractionService.DisplayMarkdown($"**{ConfigCommandStrings.LocalConfigurationHeader}:**");
-                foreach (var kvp in localConfig.OrderBy(k => k.Key))
+                if (!showAll)
                 {
-                    InteractionService.DisplayMarkupLine($"  [cyan]{kvp.Key.EscapeMarkup()}[/] = [yellow]{kvp.Value.EscapeMarkup()}[/]");
+                    // Show hint about --all flag when there's no config and user didn't pass --all
+                    InteractionService.DisplayMarkupLine($"  [dim]{ConfigCommandStrings.ListCommand_AllFeaturesHint.EscapeMarkup()}[/]");
+                    return CliExitCodes.Success;
                 }
-            }
-            else if (globalConfig.Count > 0)
-            {
-                // Only show "no local config" message if we have global config
-                InteractionService.DisplayMarkdown($"**{ConfigCommandStrings.LocalConfigurationHeader}:**");
-                InteractionService.DisplayPlainText($"  {ConfigCommandStrings.NoLocalConfigurationFound}");
-            }
 
-            // Display Global Configuration (including features)
-            if (globalConfig.Count > 0)
-            {
-                InteractionService.DisplayEmptyLine();
-                InteractionService.DisplayMarkdown($"**{ConfigCommandStrings.GlobalConfigurationHeader}:**");
-                foreach (var kvp in globalConfig.OrderBy(k => k.Key))
-                {
-                    InteractionService.DisplayMarkupLine($"  [cyan]{kvp.Key.EscapeMarkup()}[/] = [yellow]{kvp.Value.EscapeMarkup()}[/]");
-                }
+                // showAll=true: fall through to show available features below
             }
-            else if (localConfig.Count > 0)
+            else
             {
-                // Only show "no global config" message if we have local config
+                // Compute max column widths across both tables for consistent alignment
+                var keyWidth = MaxWidth(ConfigCommandStrings.HeaderKey, localConfig.Keys, globalConfig.Keys);
+                var valueWidth = MaxWidth(ConfigCommandStrings.HeaderValue, localConfig.Values, globalConfig.Values);
+
+                // Display Local Configuration
+                RenderConfigTable(
+                    ConfigCommandStrings.LocalConfigurationHeader,
+                    localConfig,
+                    ConfigCommandStrings.NoLocalConfigurationFound,
+                    keyWidth,
+                    valueWidth);
+
                 InteractionService.DisplayEmptyLine();
-                InteractionService.DisplayMarkdown($"**{ConfigCommandStrings.GlobalConfigurationHeader}:**");
-                InteractionService.DisplayPlainText($"  {ConfigCommandStrings.NoGlobalConfigurationFound}");
+
+                // Display Global Configuration
+                RenderConfigTable(
+                    ConfigCommandStrings.GlobalConfigurationHeader,
+                    globalConfig,
+                    ConfigCommandStrings.NoGlobalConfigurationFound,
+                    keyWidth,
+                    valueWidth);
             }
 
             // Display Available Features
-            var allConfiguredFeatures = localConfig.Concat(globalConfig).Where(kvp => kvp.Key.StartsWith(featurePrefix, StringComparison.Ordinal)).Select(kvp => kvp.Key.Substring(featurePrefix.Length)).ToHashSet(StringComparer.Ordinal);
-            var availableFeatures = KnownFeatures.GetAllFeatureNames().ToList();
-            var unconfiguredFeatures = availableFeatures.Where(f => !allConfiguredFeatures.Contains(f)).ToList();
+            var allConfiguredFeatures = localConfig.Concat(globalConfig)
+                .Where(kvp => kvp.Key.StartsWith(featurePrefix, StringComparison.Ordinal))
+                .Select(kvp => kvp.Key.Substring(featurePrefix.Length))
+                .ToHashSet(StringComparer.Ordinal);
+
+            var unconfiguredFeatures = KnownFeatures.GetAllFeatureMetadata()
+                .Where(f => !allConfiguredFeatures.Contains(f.Name))
+                .ToList();
 
             if (unconfiguredFeatures.Count > 0)
             {
                 InteractionService.DisplayEmptyLine();
                 InteractionService.DisplayMarkdown($"**{ConfigCommandStrings.AvailableFeaturesHeader}:**");
-                InteractionService.DisplayPlainText($"  {string.Join(", ", unconfiguredFeatures)}");
+
+                if (showAll)
+                {
+                    foreach (var feature in unconfiguredFeatures)
+                    {
+                        var defaultText = feature.DefaultValue ? "true" : "false";
+                        InteractionService.DisplayMarkupLine($"  [cyan]{feature.Name.EscapeMarkup()}[/] [dim](default: {defaultText})[/]");
+                        InteractionService.DisplayMarkupLine($"    [dim]{feature.Description.EscapeMarkup()}[/]");
+                    }
+                    InteractionService.DisplayEmptyLine();
+                    InteractionService.DisplayMarkupLine($"  [dim]{ConfigCommandStrings.SetFeatureHint.EscapeMarkup()}[/]");
+                }
+                else
+                {
+                    InteractionService.DisplayMarkupLine($"  [dim]{ConfigCommandStrings.ListCommand_AllFeaturesHint.EscapeMarkup()}[/]");
+                }
             }
 
-            return ExitCodeConstants.Success;
+            return CliExitCodes.Success;
+
+            static int MaxWidth(string header, IEnumerable<string> localValues, IEnumerable<string> globalValues)
+            {
+                const int minColumnWidth = 30;
+
+                return localValues.Concat(globalValues)
+                    .Select(s => s.Length)
+                    .Append(header.Length)
+                    .Append(minColumnWidth)
+                    .Max();
+            }
+        }
+
+        private void RenderConfigTable(string title, Dictionary<string, string> config, string emptyMessage, int keyWidth, int valueWidth)
+        {
+            var table = new Table();
+            table.Title = new TableTitle($"[bold]{title.EscapeMarkup()}[/]");
+            table.AddBoldColumn(ConfigCommandStrings.HeaderKey, width: keyWidth);
+            table.AddBoldColumn(ConfigCommandStrings.HeaderValue, width: valueWidth);
+
+            if (config.Count > 0)
+            {
+                foreach (var kvp in config.OrderBy(k => k.Key))
+                {
+                    table.AddRow(
+                        $"[cyan]{kvp.Key.EscapeMarkup()}[/]",
+                        $"[yellow]{kvp.Value.EscapeMarkup()}[/]");
+                }
+            }
+            else
+            {
+                table.AddRow($"[dim]{emptyMessage.EscapeMarkup()}[/]", "");
+            }
+
+            InteractionService.DisplayRenderable(table);
         }
     }
 
@@ -291,27 +358,24 @@ internal sealed class ConfigCommand : BaseCommand
             Description = ConfigCommandStrings.DeleteCommand_GlobalArgumentDescription
         };
 
-        public DeleteCommand(IConfigurationService configurationService, IInteractionService interactionService, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, AspireCliTelemetry telemetry)
-            : base("delete", ConfigCommandStrings.DeleteCommand_Description, features, updateNotifier, configurationService, executionContext, interactionService, telemetry)
+        public DeleteCommand(IConfigurationService configurationService, CommonCommandServices services)
+            : base("delete", ConfigCommandStrings.DeleteCommand_Description, configurationService, services)
         {
             Arguments.Add(s_keyArgument);
             Options.Add(s_globalOption);
         }
 
-        protected override bool UpdateNotificationsEnabled => false;
-
-        protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+        protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
         {
             var key = parseResult.GetValue(s_keyArgument);
             var isGlobal = parseResult.GetValue(s_globalOption);
 
             if (key is null)
             {
-                InteractionService.DisplayError(ErrorStrings.ConfigurationKeyRequired);
-                return Task.FromResult(ExitCodeConstants.InvalidCommand);
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, ErrorStrings.ConfigurationKeyRequired);
             }
 
-            return ExecuteAsync(key, isGlobal, cancellationToken);
+            return CommandResult.FromExitCode(await ExecuteAsync(key, isGlobal, cancellationToken));
         }
 
         public override async Task<int> InteractiveExecuteAsync(CancellationToken cancellationToken)
@@ -322,7 +386,7 @@ internal sealed class ConfigCommand : BaseCommand
             if (value is null)
             {
                 InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ErrorStrings.ConfigurationKeyNotFound, key));
-                return ExitCodeConstants.ConfigNotFound;
+                return CliExitCodes.ConfigNotFound;
             }
 
             var isGlobal = await InteractionService.PromptForSelectionAsync(
@@ -351,12 +415,12 @@ internal sealed class ConfigCommand : BaseCommand
                         InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, ConfigCommandStrings.ConfigurationKeyDeletedLocally, key));
                     }
 
-                    return ExitCodeConstants.Success;
+                    return CliExitCodes.Success;
                 }
                 else
                 {
                     InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ErrorStrings.ConfigurationKeyNotFound, key));
-                    return ExitCodeConstants.InvalidCommand;
+                    return CliExitCodes.InvalidCommand;
                 }
             }
             catch (Exception ex)
@@ -364,19 +428,19 @@ internal sealed class ConfigCommand : BaseCommand
                 var errorMessage = string.Format(CultureInfo.CurrentCulture, ErrorStrings.ErrorDeletingConfiguration, ex.Message);
                 Telemetry.RecordError(errorMessage, ex);
                 InteractionService.DisplayError(errorMessage);
-                return ExitCodeConstants.InvalidCommand;
+                return CliExitCodes.InvalidCommand;
             }
         }
     }
 
     private sealed class InfoCommand : BaseConfigSubCommand
     {
-        public InfoCommand(IConfigurationService configurationService, IInteractionService interactionService, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, AspireCliTelemetry telemetry)
-            : base("info", ConfigCommandStrings.InfoCommand_Description, features, updateNotifier, configurationService, executionContext, interactionService, telemetry)
+        public InfoCommand(IConfigurationService configurationService, CommonCommandServices services)
+            : base("info", ConfigCommandStrings.InfoCommand_Description, configurationService, services)
         {
             // Hide from help - this command is intended for tooling (VS Code extension) use only
             this.Hidden = true;
-            
+
             var jsonOption = new Option<bool>("--json")
             {
                 Description = ConfigCommandStrings.InfoCommand_JsonOptionDescription
@@ -384,12 +448,10 @@ internal sealed class ConfigCommand : BaseCommand
             Options.Add(jsonOption);
         }
 
-        protected override bool UpdateNotificationsEnabled => false;
-
-        protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+        protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
         {
             var useJson = parseResult.GetValue<bool>("--json");
-            return ExecuteAsync(useJson);
+            return CommandResult.FromExitCode(await ExecuteAsync(useJson));
         }
 
         public override Task<int> InteractiveExecuteAsync(CancellationToken cancellationToken)
@@ -409,12 +471,14 @@ internal sealed class ConfigCommand : BaseCommand
 
             if (useJson)
             {
-                var info = new ConfigInfo(localPath, globalPath, availableFeatures, localSchema, globalSchema);
+                var configFileSchema = SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: false);
+                var info = new ConfigInfo(localPath, globalPath, availableFeatures, localSchema, globalSchema, configFileSchema, KnownCapabilities.GetAdvertisedCapabilities());
                 var json = System.Text.Json.JsonSerializer.Serialize(info, JsonSourceGenerationContext.Default.ConfigInfo);
                 // Use DisplayRawText to avoid Spectre.Console word wrapping which breaks JSON strings
                 if (InteractionService is ConsoleInteractionService consoleService)
                 {
-                    consoleService.DisplayRawText(json);
+                    // Structured output always goes to stdout.
+                    consoleService.DisplayRawText(json, ConsoleOutput.Standard);
                 }
                 else
                 {
@@ -439,11 +503,11 @@ internal sealed class ConfigCommand : BaseCommand
                 foreach (var property in localSchema.Properties)
                 {
                     var requiredText = property.Required ? "[red]*[/]" : "";
-                    InteractionService.DisplayMarkupLine($"  {requiredText}[cyan]{property.Name.EscapeMarkup()}[/] ([yellow]{property.Type}[/]) - {property.Description.EscapeMarkup()}");
+                    InteractionService.DisplayMarkupLine($"  {requiredText}[cyan]{property.Name.EscapeMarkup()}[/] ([yellow]{property.Type.EscapeMarkup()}[/]) - {property.Description.EscapeMarkup()}");
                 }
             }
 
-            return Task.FromResult(ExitCodeConstants.Success);
+            return Task.FromResult(CliExitCodes.Success);
         }
     }
 }

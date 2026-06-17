@@ -1,3 +1,4 @@
+# DisableDockerDetector "Playground sample - not a production image"
 FROM python:3.13-slim-bookworm
 
 # ------------------------------

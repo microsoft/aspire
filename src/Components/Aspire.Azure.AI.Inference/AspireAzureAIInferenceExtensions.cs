@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire;
 using Aspire.Azure.AI.Inference;
 using Aspire.Azure.Common;
 using Azure;
@@ -8,7 +9,6 @@ using Azure.AI.Inference;
 using Azure.Core;
 using Azure.Core.Extensions;
 using Azure.Core.Pipeline;
-using Azure.Identity;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Azure;
 using Microsoft.Extensions.Configuration;
@@ -159,7 +159,7 @@ public static class AspireAzureAIInferenceExtensions
                     }
                     else
                     {
-                        var credential = settings.TokenCredential ?? new DefaultAzureCredential();
+                        var credential = settings.TokenCredential ?? AzureCredentialHelper.CreateDefaultAzureCredential();
 
                         // Defines the scopes used for authorization when connecting to Azure AI Inference services.
                         // Use the default one (ml.azure.com) and add the public one required for Azure Foundry AI.
@@ -412,7 +412,7 @@ public static class AspireAzureAIInferenceExtensions
                     }
                     else
                     {
-                        var credential = settings.TokenCredential ?? new DefaultAzureCredential();
+                        var credential = settings.TokenCredential ?? AzureCredentialHelper.CreateDefaultAzureCredential();
 
                         // Defines the scopes used for authorization when connecting to Azure AI Inference services.
                         // Use the default one (ml.azure.com) and add the public one required for Azure Foundry AI.

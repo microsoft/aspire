@@ -175,7 +175,14 @@ public sealed class AzurePublishingContext(
             if (resource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAnnotation))
             {
                 await VisitAsync(existingAnnotation.ResourceGroup, MapParameterAsync, cancellationToken).ConfigureAwait(false);
+                await VisitAsync(existingAnnotation.Subscription, MapParameterAsync, cancellationToken).ConfigureAwait(false);
                 await VisitAsync(existingAnnotation.Name, MapParameterAsync, cancellationToken).ConfigureAwait(false);
+            }
+
+            if (resource.Scope is { } scope)
+            {
+                await VisitAsync(scope.ResourceGroup, MapParameterAsync, cancellationToken).ConfigureAwait(false);
+                await VisitAsync(scope.Subscription, MapParameterAsync, cancellationToken).ConfigureAwait(false);
             }
 
             // Map parameters for the resource itself
@@ -200,12 +207,38 @@ public sealed class AzurePublishingContext(
             return FormattableStringFactory.Create(expr.Format, args);
         }
 
+        object EvalConditionalExpr(ReferenceExpression expr)
+        {
+            var conditionVal = Eval(expr.Condition!);
+
+            // If the condition resolves to a static string, evaluate at publish time
+            if (conditionVal is string staticCondition)
+            {
+                var branch = string.Equals(staticCondition, expr.MatchValue, StringComparison.OrdinalIgnoreCase)
+                    ? expr.WhenTrue!
+                    : expr.WhenFalse!;
+                return Eval(branch);
+            }
+
+            // Condition is a Bicep parameter/output — emit a ternary expression
+            var whenTrueVal = ResolveValue(Eval(expr.WhenTrue!));
+            var whenFalseVal = ResolveValue(Eval(expr.WhenFalse!));
+
+            var conditional = new ConditionalExpression(
+                new BinaryExpression(ResolveValue(conditionVal).Compile(), BinaryBicepOperator.Equal, new StringLiteralExpression(expr.MatchValue!)),
+                whenTrueVal.Compile(),
+                whenFalseVal.Compile());
+
+            return new BicepValue<string>(conditional);
+        }
+
         object Eval(object? value) => value switch
         {
             BicepOutputReference b => GetOutputs(moduleMap[b.Resource], b.Name),
             ParameterResource p => ParameterLookup[p],
             ConnectionStringReference r => Eval(r.Resource.ConnectionStringExpression),
             IResourceWithConnectionString cs => Eval(cs.ConnectionStringExpression),
+            ReferenceExpression { IsConditional: true } re => EvalConditionalExpr(re),
             ReferenceExpression re => EvalExpr(re),
             string s => s,
             _ => ""
@@ -221,6 +254,39 @@ public sealed class AzurePublishingContext(
                 FormattableString fs => BicepFunction.Interpolate(fs),
                 _ => throw new NotSupportedException("Unsupported value type " + val.GetType())
             };
+        }
+
+        BicepValue<string> GetScopeExpression(AzureBicepResource resource)
+        {
+            if (resource.Scope is null)
+            {
+                return new IdentifierExpression(rg.BicepIdentifier);
+            }
+
+            if (resource.Scope.IsTenantScope)
+            {
+                return new FunctionCallExpression(new IdentifierExpression("tenant"));
+            }
+
+            if (resource.Scope.ResourceGroup is not null && resource.Scope.Subscription is not null)
+            {
+                return new FunctionCallExpression(
+                    new IdentifierExpression("resourceGroup"),
+                    ResolveValue(Eval(resource.Scope.Subscription)).Compile(),
+                    ResolveValue(Eval(resource.Scope.ResourceGroup)).Compile());
+            }
+
+            if (resource.Scope.ResourceGroup is not null)
+            {
+                return new FunctionCallExpression(new IdentifierExpression("resourceGroup"), ResolveValue(Eval(resource.Scope.ResourceGroup)).Compile());
+            }
+
+            if (resource.Scope.Subscription is not null)
+            {
+                return new FunctionCallExpression(new IdentifierExpression("subscription"), ResolveValue(Eval(resource.Scope.Subscription)).Compile());
+            }
+
+            throw new InvalidOperationException("The Azure Bicep resource scope must specify a resource group, subscription, or tenant scope.");
         }
 
         var computeEnvironments = new List<IAzureComputeEnvironmentResource>();
@@ -243,15 +309,8 @@ public sealed class AzurePublishingContext(
             )
             .ConfigureAwait(false);
 
-            BicepValue<string> scope = resource.Scope?.ResourceGroup switch
-            {
-                string rgName => new FunctionCallExpression(new IdentifierExpression("resourceGroup"), new StringLiteralExpression(rgName)),
-                ParameterResource p => new FunctionCallExpression(new IdentifierExpression("resourceGroup"), ParameterLookup[p].Value.Compile()),
-                _ => new IdentifierExpression(rg.BicepIdentifier)
-            };
-
             var module = moduleMap[resource];
-            module.Scope = scope;
+            module.Scope = GetScopeExpression(resource);
             module.Parameters.Add("location", locationParam);
 
             foreach (var parameter in resource.Parameters)
@@ -321,12 +380,10 @@ public sealed class AzurePublishingContext(
                         Resource = resource,
                         CancellationToken = cancellationToken
                     };
-                    await dockerfileBuildAnnotation.MaterializeDockerfileAsync(context, cancellationToken).ConfigureAwait(false);
 
                     // Copy to a resource-specific path in the output folder for publishing
                     var resourceDockerfilePath = Path.Combine(outputPath, $"{resource.Name}.Dockerfile");
-                    Directory.CreateDirectory(outputPath);
-                    File.Copy(dockerfileBuildAnnotation.DockerfilePath, resourceDockerfilePath, overwrite: true);
+                    await dockerfileBuildAnnotation.EmitDockerfileArtifactsAsync(context, resourceDockerfilePath).ConfigureAwait(false);
                 }
 
                 var task = await step.CreateTaskAsync(

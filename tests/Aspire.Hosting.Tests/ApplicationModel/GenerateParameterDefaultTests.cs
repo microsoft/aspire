@@ -5,6 +5,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Tests.ApplicationModel;
 
+[Trait("Partition", "4")]
 public class GenerateParameterDefaultTests
 {
     [Fact]

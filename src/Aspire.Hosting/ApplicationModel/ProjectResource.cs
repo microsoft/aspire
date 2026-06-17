@@ -47,7 +47,7 @@ public class ProjectResource : Resource, IResourceWithEnvironment, IResourceWith
                 Action = BuildProjectImage,
                 Tags = [WellKnownPipelineTags.BuildCompute],
                 RequiredBySteps = [WellKnownPipelineSteps.Build],
-                DependsOnSteps = [WellKnownPipelineSteps.BuildPrereq],
+                DependsOnSteps = [WellKnownPipelineSteps.BuildPrereq, WellKnownPipelineSteps.CheckContainerRuntime],
                 Resource = this
             };
             steps.Add(buildStep);
@@ -144,7 +144,7 @@ public class ProjectResource : Resource, IResourceWithEnvironment, IResourceWith
         var tempTag = $"temp-{Guid.NewGuid():N}";
         var tempImageName = $"{originalImageName}:{tempTag}";
 
-        var containerRuntime = ctx.Services.GetRequiredService<IContainerRuntime>();
+        var containerRuntime = await ctx.Services.GetRequiredService<IContainerRuntimeResolver>().ResolveAsync(ctx.CancellationToken).ConfigureAwait(false);
 
         logger.LogDebug("Tagging image {OriginalImageName} as {TempImageName}", originalImageName, tempImageName);
         await containerRuntime.TagImageAsync(originalImageName, tempImageName, ctx.CancellationToken).ConfigureAwait(false);
@@ -163,10 +163,13 @@ public class ProjectResource : Resource, IResourceWithEnvironment, IResourceWith
         // Add COPY --from: statements for each source
         stage.AddContainerFiles(this, containerWorkingDir, logger);
 
-        // Get the directory service to create temp Dockerfile
         var projectDir = Path.GetDirectoryName(projectMetadata.ProjectPath)!;
+
+        // Create a unique temporary Dockerfile path for this resource using the directory service.
+        // Passing a file name causes CreateTempFile to create the file in a new, empty subdirectory,
+        // which avoids Docker/buildx scanning the entire temporary directory.
         var directoryService = ctx.Services.GetRequiredService<IFileSystemService>();
-        var tempDockerfilePath = directoryService.TempDirectory.CreateTempFile().Path;
+        var tempDockerfilePath = directoryService.TempDirectory.CreateTempFile("Dockerfile").Path;
 
         var builtSuccessfully = false;
         try
@@ -183,7 +186,8 @@ public class ProjectResource : Resource, IResourceWithEnvironment, IResourceWith
             var context = await this.ProcessContainerBuildOptionsCallbackAsync(
                 ctx.Services,
                 logger,
-                cancellationToken: ctx.CancellationToken).ConfigureAwait(false);
+                ctx.ExecutionContext,
+                ctx.CancellationToken).ConfigureAwait(false);
 
             var buildOptions = new ContainerImageBuildOptions
             {

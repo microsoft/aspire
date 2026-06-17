@@ -1,0 +1,349 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using System.CommandLine;
+using System.Globalization;
+using System.Text.Json;
+using Aspire.Cli.Backchannel;
+using Aspire.Cli.Interaction;
+using Aspire.Cli.Projects;
+using Aspire.Cli.Resources;
+using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Utils;
+using Aspire.Otlp.Serialization;
+using Aspire.Shared.Export;
+using Microsoft.Extensions.Logging;
+
+namespace Aspire.Cli.Commands;
+
+/// <summary>
+/// Command to export telemetry and resource data to a zip file.
+/// </summary>
+internal sealed class ExportCommand : BaseCommand
+{
+    internal override HelpGroup HelpGroup => HelpGroup.Monitoring;
+
+    private readonly AppHostConnectionResolver _connectionResolver;
+    private readonly ILogger<ExportCommand> _logger;
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly TimeProvider _timeProvider;
+
+    private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", SharedCommandStrings.AppHostOptionDescription);
+
+    private static readonly Option<string?> s_outputOption = new("--output", "-o")
+    {
+        Description = ExportCommandStrings.OutputOptionDescription
+    };
+
+    private static readonly Option<string?> s_dashboardUrlOption = TelemetryCommandHelpers.CreateDashboardUrlOption();
+    private static readonly Option<string?> s_apiKeyOption = TelemetryCommandHelpers.CreateApiKeyOption();
+
+    private static readonly Option<bool> s_includeHiddenOption = new("--include-hidden")
+    {
+        Description = ExportCommandStrings.IncludeHiddenOptionDescription
+    };
+
+    private static readonly Argument<string?> s_resourceArgument = new("resource")
+    {
+        Description = ExportCommandStrings.ResourceOptionDescription,
+        Arity = ArgumentArity.ZeroOrOne
+    };
+
+    public ExportCommand(
+        IAuxiliaryBackchannelMonitor backchannelMonitor,
+        IProjectLocator projectLocator,
+        IHttpClientFactory httpClientFactory,
+        TimeProvider timeProvider,
+        ILogger<ExportCommand> logger,
+        CommonCommandServices services)
+        : base("export", ExportCommandStrings.Description, services)
+    {
+        _httpClientFactory = httpClientFactory;
+        _timeProvider = timeProvider;
+        _logger = logger;
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, services.ExecutionContext, logger);
+
+        Arguments.Add(s_resourceArgument);
+        Options.Add(s_appHostOption);
+        Options.Add(s_outputOption);
+        Options.Add(s_dashboardUrlOption);
+        Options.Add(s_apiKeyOption);
+        Options.Add(s_includeHiddenOption);
+    }
+
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    {
+        using var activity = Telemetry.StartDiagnosticActivity(Name);
+
+        var resourceName = parseResult.GetValue(s_resourceArgument);
+        var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
+        var outputPath = parseResult.GetValue(s_outputOption);
+        var dashboardUrl = parseResult.GetValue(s_dashboardUrlOption);
+        var apiKey = parseResult.GetValue(s_apiKeyOption);
+        var includeHidden = parseResult.GetValue(s_includeHiddenOption);
+
+        // Validate mutual exclusivity of --apphost and --dashboard-url
+        if (passedAppHostProjectFile is not null && dashboardUrl is not null)
+        {
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, TelemetryCommandStrings.DashboardUrlAndAppHostExclusive);
+        }
+
+        // Default file name if not specified
+        if (string.IsNullOrEmpty(outputPath))
+        {
+            var timestamp = _timeProvider.GetLocalNow().ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+            outputPath = $"aspire-export-{timestamp}.zip";
+        }
+
+        // Ensure directory exists
+        var directory = Path.GetDirectoryName(Path.GetFullPath(outputPath));
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        var dashboardApi = await TelemetryCommandHelpers.GetDashboardApiAsync(
+            _connectionResolver, InteractionService, _httpClientFactory, _logger, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: false, cancellationToken);
+
+        if (!dashboardApi.Success)
+        {
+            return CommandResult.FromExitCode(dashboardApi.ExitCode);
+        }
+
+        if (dashboardApi.BaseUrl is null)
+        {
+            InteractionService.DisplayMessage(KnownEmojis.Warning, ExportCommandStrings.DashboardNotAvailable);
+        }
+
+        try
+        {
+            return CommandResult.FromExitCode(await ExportDataAsync(resourceName, includeHidden, dashboardApi.Connection, dashboardApi.BaseUrl, dashboardApi.ApiToken, outputPath, cancellationToken));
+        }
+        catch (HttpRequestException ex) when (dashboardUrl is not null)
+        {
+            _logger.LogError(ex, "Failed to export telemetry data from dashboard");
+            var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, dashboardApi.BaseUrl!, true, _httpClientFactory, _logger, cancellationToken);
+            TelemetryCommandHelpers.DisplayTelemetryError(InteractionService, errorInfo);
+            return CommandResult.Failure(CliExitCodes.DashboardFailure);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to export telemetry data");
+            return CommandResult.Failure(CliExitCodes.DashboardFailure, string.Format(CultureInfo.CurrentCulture, ExportCommandStrings.FailedToExport, ex.Message));
+        }
+    }
+
+    private async Task<int> ExportDataAsync(
+        string? resourceName,
+        bool includeHidden,
+        IAppHostAuxiliaryBackchannel? connection,
+        string? baseUrl,
+        string? apiToken,
+        string outputPath,
+        CancellationToken cancellationToken)
+    {
+        var isDashboardAvailable = baseUrl is not null && apiToken is not null;
+
+        using var client = isDashboardAvailable ? TelemetryCommandHelpers.CreateApiClient(_httpClientFactory, apiToken!) : null;
+
+        // Always fetch all snapshots so we know which resources are hidden.
+
+        // Get telemetry resources and resource snapshots
+        var (telemetryResources, allSnapshots) = await InteractionService.ShowStatusAsync(ExportCommandStrings.GatheringResources, async () =>
+        {
+            var resources = isDashboardAvailable
+                ? await TelemetryCommandHelpers.GetAllResourcesAsync(client!, baseUrl!, cancellationToken).ConfigureAwait(false)
+                : [];
+            IReadOnlyList<ResourceSnapshot> snaps = connection is not null
+                ? await connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false)
+                : [];
+            return (resources, snaps);
+        });
+
+        // Filter hidden resources, deriving the visible list and the hidden set for log filtering.
+        var (_, snapshots, hiddenResourceNames) = ResourceSnapshotMapper.FilterHiddenResources(allSnapshots, includeHidden, resourceName);
+
+        // Validate resource name exists (match by Name or DisplayName since users may pass either)
+        if (resourceName is not null && snapshots.Count > 0)
+        {
+            if (!ResourceSnapshotMapper.WhereMatchesResourceName(snapshots, resourceName).Any())
+            {
+                InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ExportCommandStrings.ResourceNotFound, resourceName));
+                return CliExitCodes.InvalidCommand;
+            }
+        }
+        else if (resourceName is null && connection is not null && snapshots.Count == 0)
+        {
+            InteractionService.DisplayMessage(KnownEmojis.Information, ExportCommandStrings.NoResourcesFound);
+            return CliExitCodes.Success;
+        }
+
+        // Resolve which telemetry resources match the filter
+        List<string>? resolvedTelemetryResources = null;
+        var hasTelemetryData = true;
+        if (resourceName is not null)
+        {
+            hasTelemetryData = TelemetryCommandHelpers.TryResolveResourceNames(resourceName, telemetryResources, out resolvedTelemetryResources);
+        }
+
+        var allOtlpResources = TelemetryCommandHelpers.ToOtlpResources(telemetryResources);
+
+        var exportArchive = new ExportArchive();
+
+        // Export resource details (filtered when a resource name is specified)
+        if (snapshots.Count > 0)
+        {
+            AddResources(exportArchive, snapshots, resourceName);
+        }
+
+        // Export console logs from backchannel
+        if (connection is not null)
+        {
+            await InteractionService.ShowStatusAsync(ExportCommandStrings.GatheringConsoleLogs, async () =>
+            {
+                await AddConsoleLogsAsync(exportArchive, connection, resourceName, snapshots, hiddenResourceNames, cancellationToken).ConfigureAwait(false);
+                return true;
+            });
+        }
+
+        if (isDashboardAvailable && hasTelemetryData)
+        {
+            // Export structured logs from Dashboard API
+            await InteractionService.ShowStatusAsync(ExportCommandStrings.GatheringStructuredLogs, async () =>
+            {
+                await AddStructuredLogsAsync(exportArchive, client!, baseUrl!, resolvedTelemetryResources, allOtlpResources, cancellationToken).ConfigureAwait(false);
+                return true;
+            });
+
+            // Export traces from Dashboard API
+            await InteractionService.ShowStatusAsync(ExportCommandStrings.GatheringTraces, async () =>
+            {
+                await AddTracesAsync(exportArchive, client!, baseUrl!, resolvedTelemetryResources, allOtlpResources, cancellationToken).ConfigureAwait(false);
+                return true;
+            });
+        }
+
+        var fullPath = Path.GetFullPath(outputPath);
+        exportArchive.WriteToFile(fullPath);
+
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, string.Format(CultureInfo.CurrentCulture, ExportCommandStrings.ExportComplete, fullPath));
+        return CliExitCodes.Success;
+    }
+
+    private static void AddResources(ExportArchive exportArchive, IReadOnlyList<ResourceSnapshot> snapshots, string? resourceName)
+    {
+        var resourceJsonList = ResourceSnapshotMapper.MapToResourceJsonList(snapshots);
+        var matchingNames = resourceName is not null
+            ? new HashSet<string>(ResourceSnapshotMapper.WhereMatchesResourceName(snapshots, resourceName).Select(s => s.Name), StringComparers.ResourceName)
+            : null;
+
+        foreach (var (snapshot, resourceJson) in snapshots.Zip(resourceJsonList))
+        {
+            if (matchingNames is not null && !matchingNames.Contains(snapshot.Name))
+            {
+                continue;
+            }
+
+            var displayName = ResourceSnapshotMapper.GetResourceName(snapshot, snapshots);
+            exportArchive.Resources[displayName] = resourceJson;
+        }
+    }
+
+    private static async Task AddConsoleLogsAsync(
+        ExportArchive exportArchive,
+        IAppHostAuxiliaryBackchannel connection,
+        string? resourceName,
+        IReadOnlyList<ResourceSnapshot> snapshots,
+        HashSet<string> hiddenResourceNames,
+        CancellationToken cancellationToken)
+    {
+        var logLinesByResource = new Dictionary<string, List<string>>();
+
+        await foreach (var logLine in connection.GetResourceLogsAsync(resourceName, follow: false, cancellationToken).ConfigureAwait(false))
+        {
+            // When exporting all resources, skip logs from hidden resources
+            if (resourceName is null && hiddenResourceNames.Contains(logLine.ResourceName))
+            {
+                continue;
+            }
+            if (!logLinesByResource.TryGetValue(logLine.ResourceName, out var lines))
+            {
+                lines = [];
+                logLinesByResource[logLine.ResourceName] = lines;
+            }
+
+            lines.Add(logLine.Content);
+        }
+
+        foreach (var (name, lines) in logLinesByResource)
+        {
+            var snapshot = snapshots.FirstOrDefault(s => string.Equals(s.Name, name, StringComparisons.ResourceName));
+            var displayName = snapshot is not null
+                ? ResourceSnapshotMapper.GetResourceName(snapshot, snapshots)
+                : name;
+            exportArchive.ConsoleLogs[displayName] = lines;
+        }
+    }
+
+    private static async Task AddStructuredLogsAsync(
+        ExportArchive exportArchive,
+        HttpClient client,
+        string baseUrl,
+        List<string>? resolvedResources,
+        IReadOnlyList<IOtlpResource> allOtlpResources,
+        CancellationToken cancellationToken)
+    {
+        var url = DashboardUrls.TelemetryLogsApiUrl(baseUrl, resolvedResources, limit: TelemetryCommandHelpers.MaxTelemetryLimit);
+        var response = await client.GetAsync(url, cancellationToken).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+
+        var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        var apiResponse = JsonSerializer.Deserialize(json, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+
+        if (apiResponse?.Data?.ResourceLogs is { Length: > 0 })
+        {
+            // Group by resolved resource name so each resource gets its own file
+            var groups = apiResponse.Data.ResourceLogs
+                .GroupBy(rl => TelemetryCommandHelpers.ResolveResourceName(rl.Resource, allOtlpResources));
+
+            foreach (var group in groups)
+            {
+                exportArchive.StructuredLogs[group.Key] = new OtlpTelemetryDataJson
+                {
+                    ResourceLogs = group.ToArray()
+                };
+            }
+        }
+    }
+
+    private static async Task AddTracesAsync(
+        ExportArchive exportArchive,
+        HttpClient client,
+        string baseUrl,
+        List<string>? resolvedResources,
+        IReadOnlyList<IOtlpResource> allOtlpResources,
+        CancellationToken cancellationToken)
+    {
+        var url = DashboardUrls.TelemetryTracesApiUrl(baseUrl, resolvedResources, limit: TelemetryCommandHelpers.MaxTelemetryLimit);
+        var response = await client.GetAsync(url, cancellationToken).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+
+        var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        var apiResponse = JsonSerializer.Deserialize(json, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+
+        if (apiResponse?.Data?.ResourceSpans is { Length: > 0 })
+        {
+            // Group by resolved resource name so each resource gets its own file
+            var groups = apiResponse.Data.ResourceSpans
+                .GroupBy(rs => TelemetryCommandHelpers.ResolveResourceName(rs.Resource, allOtlpResources));
+
+            foreach (var group in groups)
+            {
+                exportArchive.Traces[group.Key] = new OtlpTelemetryDataJson
+                {
+                    ResourceSpans = group.ToArray()
+                };
+            }
+        }
+    }
+}

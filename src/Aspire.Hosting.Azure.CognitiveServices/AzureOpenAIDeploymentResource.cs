@@ -9,6 +9,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <summary>
 /// Represents an Azure OpenAI Deployment resource.
 /// </summary>
+[AspireExport(ExposeProperties = true)]
 public class AzureOpenAIDeploymentResource : Resource, IResourceWithParent<AzureOpenAIResource>, IResourceWithConnectionString
 {
     /// <value>"Standard"</value>

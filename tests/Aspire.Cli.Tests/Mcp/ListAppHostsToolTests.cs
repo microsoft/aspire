@@ -166,16 +166,14 @@ public class ListAppHostsToolTests(ITestOutputHelper outputHelper)
 
     private static CliExecutionContext CreateCliExecutionContext(DirectoryInfo workingDirectory)
     {
-        var hivesDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "hives"));
-        var cacheDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "cache"));
-        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-sdks")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        return TestExecutionContextHelper.CreateExecutionContext(workingDirectory);
     }
 
     private static AppHostAuxiliaryBackchannel CreateAppHostConnection(string hash, string socketPath, AppHostInformation appHostInfo, bool isInScope)
     {
         // Create a mock JsonRpc that won't be used
         var rpc = new JsonRpc(Stream.Null);
-        return new AppHostAuxiliaryBackchannel(hash, socketPath, rpc, mcpInfo: null, appHostInfo, isInScope);
+        return new AppHostAuxiliaryBackchannel(hash, socketPath, rpc, appHostInfo, isInScope);
     }
 }
 

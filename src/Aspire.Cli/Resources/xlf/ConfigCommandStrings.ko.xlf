@@ -28,18 +28,18 @@
         <note>{0} is the key, {1} is the value</note>
       </trans-unit>
       <trans-unit id="DeleteCommand_Description">
-        <source>Delete a configuration value.</source>
-        <target state="translated">구성 값을 삭제합니다.</target>
+        <source>Delete a configuration value</source>
+        <target state="needs-review-translation">구성 값을 삭제합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteCommand_GlobalArgumentDescription">
-        <source>Delete the configuration value from the global $HOME/.aspire/settings.json instead of the local settings file.</source>
-        <target state="translated">로컬 설정 파일 대신 전역 $HOME/.log/settings.json의 구성 값을 삭제합니다.</target>
+        <source>Delete the configuration value from the global $HOME/.aspire/settings.json instead of the local settings file</source>
+        <target state="needs-review-translation">로컬 설정 파일 대신 전역 $HOME/.log/settings.json의 구성 값을 삭제합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteCommand_KeyArgumentDescription">
-        <source>The configuration key to delete.</source>
-        <target state="translated">삭제할 구성 키입니다.</target>
+        <source>The configuration key to delete</source>
+        <target state="needs-review-translation">삭제할 구성 키입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeleteCommand_PromptForGlobal">
@@ -53,8 +53,8 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Manage configuration settings.</source>
-        <target state="translated">구성 설정을 관리합니다.</target>
+        <source>Manage CLI configuration including feature flags</source>
+        <target state="needs-review-translation">구성 설정을 관리합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ExtensionActionPrompt">
@@ -63,13 +63,13 @@
         <note />
       </trans-unit>
       <trans-unit id="GetCommand_Description">
-        <source>Get a configuration value.</source>
-        <target state="translated">구성 값을 가져옵니다.</target>
+        <source>Get a configuration value</source>
+        <target state="needs-review-translation">구성 값을 가져옵니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="GetCommand_KeyArgumentDescription">
-        <source>The configuration key to retrieve.</source>
-        <target state="translated">검색할 구성 키입니다.</target>
+        <source>The configuration key to retrieve</source>
+        <target state="needs-review-translation">검색할 구성 키입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="GetCommand_PromptForKey">
@@ -82,14 +82,24 @@
         <target state="translated">전역 구성</target>
         <note />
       </trans-unit>
+      <trans-unit id="HeaderKey">
+        <source>Key</source>
+        <target state="translated">키</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderValue">
+        <source>Value</source>
+        <target state="translated">값</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InfoCommand_AvailableFeatures">
         <source>Available features</source>
         <target state="translated">사용 가능한 기능</target>
         <note />
       </trans-unit>
       <trans-unit id="InfoCommand_Description">
-        <source>Display configuration file paths and available features.</source>
-        <target state="translated">구성 파일 경로 및 사용 가능한 기능을 표시합니다.</target>
+        <source>Display configuration file paths and available features</source>
+        <target state="needs-review-translation">구성 파일 경로 및 사용 가능한 기능을 표시합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="InfoCommand_GlobalSettingsPath">
@@ -98,8 +108,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InfoCommand_JsonOptionDescription">
-        <source>Output information in JSON format.</source>
-        <target state="translated">JSON 형식으로 정보를 출력합니다.</target>
+        <source>Output information in JSON format</source>
+        <target state="needs-review-translation">JSON 형식으로 정보를 출력합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="InfoCommand_LocalSettingsPath">
@@ -112,9 +122,19 @@
         <target state="translated">설정 파일 속성</target>
         <note />
       </trans-unit>
+      <trans-unit id="ListCommand_AllFeaturesHint">
+        <source>Run 'aspire config list --all' to see all available feature flags.</source>
+        <target state="new">Run 'aspire config list --all' to see all available feature flags.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ListCommand_AllOptionDescription">
+        <source>Show all available features that can be configured</source>
+        <target state="new">Show all available features that can be configured</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ListCommand_Description">
-        <source>List all configuration values.</source>
-        <target state="translated">모든 구성 값을 나열합니다.</target>
+        <source>List all configuration values</source>
+        <target state="needs-review-translation">모든 구성 값을 나열합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="LocalConfigurationHeader">
@@ -138,18 +158,18 @@
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_Description">
-        <source>Set a configuration value.</source>
-        <target state="translated">구성 값을 설정합니다.</target>
+        <source>Set a configuration value</source>
+        <target state="needs-review-translation">구성 값을 설정합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_GlobalArgumentDescription">
-        <source>Set the configuration value globally in $HOME/.aspire/settings.json instead of the local settings file.</source>
-        <target state="translated">로컬 설정 파일 대신 $HOME/.aspire/settings.json에서 전역적으로 구성 값을 설정합니다.</target>
+        <source>Set the configuration value globally in $HOME/.aspire/settings.json instead of the local settings file</source>
+        <target state="needs-review-translation">로컬 설정 파일 대신 $HOME/.aspire/settings.json에서 전역적으로 구성 값을 설정합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_KeyArgumentDescription">
-        <source>The configuration key to set.</source>
-        <target state="translated">설정할 구성 키입니다.</target>
+        <source>The configuration key to set</source>
+        <target state="needs-review-translation">설정할 구성 키입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_PromptForGlobal">
@@ -178,8 +198,13 @@
         <note />
       </trans-unit>
       <trans-unit id="SetCommand_ValueArgumentDescription">
-        <source>The configuration value to set.</source>
-        <target state="translated">설정할 구성 값입니다.</target>
+        <source>The configuration value to set</source>
+        <target state="needs-review-translation">설정할 구성 값입니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SetFeatureHint">
+        <source>Use 'aspire config set features.&lt;name&gt; true|false' to enable or disable a feature.</source>
+        <target state="translated">기능을 활성화하거나 비활성화하려면 'aspire config set features.&lt;name&gt; true|false' 명령을 사용합니다.</target>
         <note />
       </trans-unit>
     </body>

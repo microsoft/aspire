@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Testing;
 using Aspire.Hosting.Utils;
@@ -27,7 +29,7 @@ public class AddAzureKustoTests
     }
 
     [Theory]
-    [InlineData(null, "latest")]
+    [InlineData(null, "2026.03.16.1116-2611-994a3c9-master")]
     [InlineData("custom-tag", "custom-tag")]
     public void RunAsEmulator_ShouldConfigureContainerImageWithCorrectTag(string? customTag, string expectedTag)
     {
@@ -295,7 +297,7 @@ public class AddAzureKustoTests
     }
 
     [Fact]
-    public void RunAsEmulator_WithCustomLifetime_ShouldConfigureLifetimeAnnotation()
+    public void RunAsEmulator_WithCustomLifetime_ShouldConfigurePersistenceAnnotation()
     {
         // Arrange
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -303,13 +305,12 @@ public class AddAzureKustoTests
         // Act
         var resourceBuilder = builder.AddAzureKustoCluster("test-kusto").RunAsEmulator(containerBuilder =>
         {
-            containerBuilder.WithLifetime(ContainerLifetime.Persistent);
+            containerBuilder.WithPersistentLifetime();
         });
 
         // Assert
-        var lifetimeAnnotation = resourceBuilder.Resource.Annotations.OfType<ContainerLifetimeAnnotation>().SingleOrDefault();
-        Assert.NotNull(lifetimeAnnotation);
-        Assert.Equal(ContainerLifetime.Persistent, lifetimeAnnotation.Lifetime);
+        var persistenceAnnotation = Assert.Single(resourceBuilder.Resource.Annotations.OfType<PersistenceAnnotation>());
+        Assert.Equal(PersistenceMode.Persistent, persistenceAnnotation.Mode);
     }
 
     [Fact]

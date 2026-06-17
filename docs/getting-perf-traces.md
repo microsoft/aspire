@@ -1,35 +1,36 @@
 # Wall-clock time investigations
 
-Aspire has some built-in EventPipe providers that you can collect from during performance investigations.
+Aspire startup profiling is collected with the CLI self-profile capture flow. The hidden `--capture-profile` option starts a private dashboard collector, enables profiling-only OpenTelemetry spans for the CLI and AppHost, exports a dashboard trace archive, and exits with the wrapped command's exit code.
 
-## Collection with dotnet trace
+## Collection with Aspire CLI
 
-You can use [dotnet trace](https://learn.microsoft.com/dotnet/core/diagnostics/dotnet-trace) to a trace from a running Aspire application (identified via process ID). Follow the documentation, but make sure to include the Aspire event provider, as in the example below:
+Capture startup for an AppHost and exit automatically after startup:
 
 ```sh
-dotnet trace collect --providers *Microsoft-Aspire-Hosting --process-id 1234 --buffersize 8192
+aspire run \
+  --project path/to/AppHost.csproj \
+  --capture-profile \
+  --capture-profile-output artifacts/tmp/startup-profile/profile.zip \
+  --non-interactive
 ```
 
-Then analyze using `dotnet trace report` or convert to a format such as Speedscope.
+From a repository checkout, use the built CLI directly:
 
-`dotnet trace` allows granular control over data collected from your program. For more information see the documentation for `--providers` and `--clrevents` parameter for the [dotnet trace collect command](https://learn.microsoft.com/dotnet/core/diagnostics/dotnet-trace#dotnet-trace-collect). For additional information [well-known event providers in .NET](https://learn.microsoft.com/dotnet/core/diagnostics/well-known-event-providers) and [reference for .NET runtime events](https://learn.microsoft.com/dotnet/fundamentals/diagnostics/runtime-events).
+```sh
+./dotnet.sh exec artifacts/bin/Aspire.Cli/Debug/net10.0/aspire.dll run \
+  --project tests/TestingAppHost1/TestingAppHost1.AppHost/TestingAppHost1.AppHost.csproj \
+  --capture-profile \
+  --capture-profile-output artifacts/tmp/startup-profile/profile.zip \
+  --non-interactive
+```
 
-## Collection with PerfView (Windows only)
+The export zip contains `traces/profile.json`, which can be inspected with tools such as `jq`:
 
-On Windows, you can collect the trace using PerfView instead (https://github.com/microsoft/perfview/releases). Use Collect menu, then Collect again, to open the collection dialog and make the following changes from defaults:
+```sh
+tmpdir="$(mktemp -d)"
+unzip -q artifacts/tmp/startup-profile/profile.zip -d "$tmpdir"
+jq -r '.resourceSpans[]?.scopeSpans[]?.scope.name' "$tmpdir/traces/profile.json" | sort | uniq -c
+jq -r '.resourceSpans[]?.scopeSpans[]?.spans[]?.name' "$tmpdir/traces/profile.json" | sort | uniq -c
+```
 
-1. If you do not intend to share the trace with anyone, uncheck the "Zip" and "Merge" option.
-1. Increase Circular MB to `8192`.
-1. Check the `Thread Time` checkbox.
-1. Expand Advanced Options panel and make sure you have Kernel Base, Cpu Samples, File I/O, .NET, and Task (TPL) options checked.
-1. In "Additional Providers" add `*Microsoft-Aspire-Hosting` (note the asterisk before the Aspire provider name!).
-
-Once you are ready, hit "Start Collection" button and run your scenario.
-
-When done with the scenario, hit "Stop Collection". Wait for PerfView to finish merging and analyzing data (the "working" status bar stops flashing).
-
-### Verify that the trace contains Aspire data
-
-This is an optional step, but if you are wondering if your trace has been captured properly, you can check the following:
-
-1. Open the trace (usually named PerfViewData.etl, if you haven't changed the name) and double click Events view. Verify you have a bunch of events from the Microsoft-Aspire-Hosting provider.
+Expected captures include `Aspire.Cli.Profiling` spans for CLI work and `Aspire.Hosting.Profiling` spans for AppHost orchestration, resource startup, backchannel startup, dashboard readiness, and outbound DCP/Kubernetes calls.

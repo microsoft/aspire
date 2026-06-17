@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "MySqlDb.AppHost/MySqlDb.AppHost.csproj"
+  }
+}

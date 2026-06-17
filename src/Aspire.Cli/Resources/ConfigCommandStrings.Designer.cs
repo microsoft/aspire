@@ -195,6 +195,24 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Show all available features that can be configured..
+        /// </summary>
+        public static string ListCommand_AllOptionDescription {
+            get {
+                return ResourceManager.GetString("ListCommand_AllOptionDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Run 'aspire config list --all' to see all available feature flags..
+        /// </summary>
+        public static string ListCommand_AllFeaturesHint {
+            get {
+                return ResourceManager.GetString("ListCommand_AllFeaturesHint", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to No configuration values found..
         /// </summary>
         public static string NoConfigurationValuesFound {
@@ -380,6 +398,27 @@ namespace Aspire.Cli.Resources {
         public static string InfoCommand_SettingsProperties {
             get {
                 return ResourceManager.GetString("InfoCommand_SettingsProperties", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Use &apos;aspire config set features.&lt;name&gt; true|false&apos; to enable or disable a feature..
+        /// </summary>
+        public static string SetFeatureHint {
+            get {
+                return ResourceManager.GetString("SetFeatureHint", resourceCulture);
+            }
+        }
+
+        public static string HeaderKey {
+            get {
+                return ResourceManager.GetString("HeaderKey", resourceCulture);
+            }
+        }
+
+        public static string HeaderValue {
+            get {
+                return ResourceManager.GetString("HeaderValue", resourceCulture);
             }
         }
     }

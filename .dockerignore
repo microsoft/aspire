@@ -1,0 +1,19 @@
+# Ignore build artifacts (will be rebuilt inside Docker)
+artifacts/
+.dotnet/
+
+# IDE and editor files
+.vs/
+.vscode/
+*.user
+*.suo
+
+# Git data (not needed for build)
+.git/
+
+# Node modules
+**/node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db

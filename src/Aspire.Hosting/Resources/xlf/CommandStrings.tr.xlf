@@ -12,6 +12,46 @@
         <target state="translated">Parametreyi sil</target>
         <note />
       </trans-unit>
+      <trans-unit id="RebuildDescription">
+        <source>Stop the resource, rebuild the project from source, and restart. Use this to apply source code changes.</source>
+        <target state="new">Stop the resource, rebuild the project from source, and restart. Use this to apply source code changes.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RebuildName">
+        <source>Rebuild</source>
+        <target state="new">Rebuild</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceDeletedParameter">
+        <source>Successfully deleted parameter '{0}'.</source>
+        <target state="new">Successfully deleted parameter '{0}'.</target>
+        <note>{0} is the resource name.</note>
+      </trans-unit>
+      <trans-unit id="ResourceRebuilt">
+        <source>Successfully rebuilt '{0}'.</source>
+        <target state="new">Successfully rebuilt '{0}'.</target>
+        <note>{0} is the resource name.</note>
+      </trans-unit>
+      <trans-unit id="ResourceRestarted">
+        <source>Successfully restarted '{0}'.</source>
+        <target state="new">Successfully restarted '{0}'.</target>
+        <note>{0} is the resource name.</note>
+      </trans-unit>
+      <trans-unit id="ResourceSetParameter">
+        <source>Successfully set parameter '{0}'.</source>
+        <target state="new">Successfully set parameter '{0}'.</target>
+        <note>{0} is the resource name.</note>
+      </trans-unit>
+      <trans-unit id="ResourceStarted">
+        <source>Successfully started '{0}'.</source>
+        <target state="new">Successfully started '{0}'.</target>
+        <note>{0} is the resource name.</note>
+      </trans-unit>
+      <trans-unit id="ResourceStopped">
+        <source>Successfully stopped '{0}'.</source>
+        <target state="new">Successfully stopped '{0}'.</target>
+        <note>{0} is the resource name.</note>
+      </trans-unit>
       <trans-unit id="RestartDescription">
         <source>Restart resource</source>
         <target state="translated">Kaynağı yeniden başlat</target>
@@ -55,6 +95,11 @@
       <trans-unit id="StopName">
         <source>Stop</source>
         <target state="translated">Durdur</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RebuilderResourceNotFound">
+        <source>Rebuilder resource for '{0}' not found.</source>
+        <target state="new">Rebuilder resource for '{0}' not found.</target>
         <note />
       </trans-unit>
     </body>

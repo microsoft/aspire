@@ -37,6 +37,11 @@
         <target state="translated">遺漏命令</target>
         <note />
       </trans-unit>
+      <trans-unit id="PersistentContainerWithoutUserSecrets">
+        <source>Resource '{0}' has a persistent lifetime but the AppHost project does not have user secrets configured. Generated parameter values (such as passwords) may change on each restart, causing persistent containers to be recreated. Run 'aspire secret set' to initialize user secrets.</source>
+        <target state="translated">資源 '{0}' 具有持久生命週期，但 AppHost 專案尚未設定使用者祕密。產生的參數值 (例如密碼) 可能會在每次重啟時變更，導致持久容器被重新建立。請執行 'aspire secret set' 以初始化使用者祕密。</target>
+        <note />
+      </trans-unit>
       <trans-unit id="RequiredCommandNotFound">
         <source>Required command '{0}' was not found on PATH or at the specified location.</source>
         <target state="translated">在 PATH 或指定的位置找不到必要的命令 '{0}'。</target>
@@ -60,6 +65,81 @@
       <trans-unit id="ResourceMayFailToStart">
         <source>Resource '{0}' may fail to start: {1}</source>
         <target state="translated">資源 '{0}' 可能無法啟動: {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePropertyContainerArgumentsDisplayName">
+        <source>Container arguments</source>
+        <target state="new">Container arguments</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePropertyContainerCommandDisplayName">
+        <source>Container command</source>
+        <target state="new">Container command</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePropertyContainerIdDisplayName">
+        <source>Container ID</source>
+        <target state="new">Container ID</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePropertyContainerImageDisplayName">
+        <source>Container image</source>
+        <target state="new">Container image</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePropertyContainerLifetimeDisplayName">
+        <source>Container lifetime</source>
+        <target state="new">Container lifetime</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePropertyContainerPortsDisplayName">
+        <source>Container ports</source>
+        <target state="new">Container ports</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePropertyExecutableArgumentsDisplayName">
+        <source>Executable arguments</source>
+        <target state="new">Executable arguments</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePropertyExecutablePathDisplayName">
+        <source>Executable path</source>
+        <target state="new">Executable path</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePropertyExecutableProcessIdDisplayName">
+        <source>Process ID</source>
+        <target state="new">Process ID</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePropertyExecutableWorkingDirectoryDisplayName">
+        <source>Working directory</source>
+        <target state="new">Working directory</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePropertyParameterValueDisplayName">
+        <source>Value</source>
+        <target state="new">Value</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePropertyProjectLaunchProfileDisplayName">
+        <source>Launch profile</source>
+        <target state="new">Launch profile</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePropertyProjectPathDisplayName">
+        <source>Project path</source>
+        <target state="new">Project path</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePropertyToolPackageDisplayName">
+        <source>Tool package</source>
+        <target state="new">Tool package</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePropertyToolVersionDisplayName">
+        <source>Tool version</source>
+        <target state="new">Tool version</target>
         <note />
       </trans-unit>
     </body>

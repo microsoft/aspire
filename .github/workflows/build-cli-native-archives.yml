@@ -6,66 +6,174 @@ on:
       versionOverrideArg:
         required: false
         type: string
+      configuration:
+        required: false
+        type: string
+        default: Debug
+      targets:
+        description: >
+          JSON array of target objects to build. Each object must have 'os', 'runner', and 'rids' keys.
+          Defaults to all platforms (linux-x64, linux-arm64, win-x64, win-arm64, osx-arm64).
+        required: false
+        type: string
+        default: >-
+          [
+            {"os": "ubuntu-latest", "runner": "8-core-ubuntu-latest", "rids": "linux-x64"},
+            {"os": "ubuntu-latest", "runner": "ubuntu-24.04-arm", "rids": "linux-arm64"},
+            {"os": "windows-latest", "runner": "windows-latest", "rids": "win-x64"},
+            {"os": "windows-latest", "runner": "windows-11-arm", "rids": "win-arm64"},
+            {"os": "macos-latest", "runner": "macos-latest", "rids": "osx-arm64"}
+          ]
 
 jobs:
 
   build_cli_archives:
-    name: Build CLI (${{ matrix.targets.os }})
-    runs-on: ${{ matrix.targets.os }}
+    name: Build CLI (${{ matrix.targets.rids }})
+    runs-on: ${{ matrix.targets.runner }}
     strategy:
       matrix:
-        targets:
-          - os: ubuntu-latest
-            rids: linux-x64
-          - os: windows-latest
-            rids: win-x64
-          - os: macos-latest
-            rids: osx-arm64
+        targets: ${{ fromJson(inputs.targets) }}
+    # Compute the Aspire CLI channel from the triggering GH Actions event,
+    # mirroring the algorithm in eng/pipelines/templates/build_sign_native.yml
+    # (computeCliChannel step):
+    #   pull_request          -> pr-<PR_NUMBER>
+    #   refs/heads/release/*  -> staging
+    #   refs/heads/internal/release/* -> staging
+    #   refs/heads/main      -> local
+    #   anything else (schedule, workflow_dispatch on other refs) -> daily
+    # The AzDO 'stable' branch (DotNetFinalVersionKind == 'release') is
+    # intentionally omitted: stable archives are produced only by the AzDO
+    # release pipeline, never by GH Actions.
+    # For PR builds we bake the resolved hive label directly (pr-<N>) so the
+    # CLI's IdentityChannelReader can return the channel verbatim, with no
+    # separate parse of the version suffix at runtime.
+    env:
+      ASPIRE_CLI_CHANNEL: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || (startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/internal/release/')) && 'staging' || github.ref == 'refs/heads/main' && 'local' || 'daily' }}
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Build CLI packages (Windows)
-        if: ${{ matrix.targets.os == 'windows-latest' }}
-        shell: pwsh
+      # Node.js is required because PackDotnetTool now depends on PackNpmPackage,
+      # which shells out to `npm pack` to produce the @microsoft/aspire-cli npm
+      # tarballs alongside the existing dotnet tool packages. GitHub-hosted
+      # runners ship Node by default, but installing it explicitly pins the
+      # version and avoids relying on the runner image.
+      - name: Install node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: 22.x
+
+      # Build RID-specific NuGet packages (DCP + Dashboard) locally instead of
+      # downloading them from the build_packages job. This allows the CLI archive
+      # build to run in parallel with build_packages.
+      #
+      # No shell: specified — GH Actions defaults to bash on Linux/macOS, pwsh on
+      # Windows. The /p: and /bl: prefixes are safe in both, and build.sh accepts
+      # single-dash flags because it normalizes -- to - before matching.
+      - name: Build RID-specific packages
         run: >
-          .\build.cmd
+          ${{ runner.os == 'Windows' && './build.cmd' || './build.sh' }}
+          -ci
+          -restore
+          -build
+          -pack
+          -configuration ${{ inputs.configuration }}
+          /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BuildBundleDeps.binlog
+          /p:ContinuousIntegrationBuild=true
+          /p:BuildBundleDepsOnly=true
+          /p:AspireCliChannel=${{ env.ASPIRE_CLI_CHANNEL }}
+          ${{ inputs.versionOverrideArg }}
+
+      - name: Build bundle payload archive
+        run: >
+          ${{ runner.os == 'Windows' && './dotnet.cmd' || './dotnet.sh' }}
+          msbuild
+          eng/Bundle.proj
+          /restore
+          /p:Configuration=${{ inputs.configuration }}
+          /p:TargetRid=${{ matrix.targets.rids }}
+          /p:BundleVersion=ci-bundlepayload
+          /p:SkipNativeBuild=true
+          /p:ContinuousIntegrationBuild=true
+          /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BundlePayload.binlog
+          ${{ inputs.versionOverrideArg }}
+
+      - name: Build CLI packages
+        run: >
+          ${{ runner.os == 'Windows' && './build.cmd' || './build.sh' }}
           -ci
           -build
+          -pack
           -restore
-          /bl:${{ github.workspace }}/artifacts/log/Debug/BuildCli.binlog
+          -configuration ${{ inputs.configuration }}
+          /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BuildCli.binlog
           /p:ContinuousIntegrationBuild=true
           /p:SkipManagedBuild=true
           /p:TargetRids=${{ matrix.targets.rids }}
+          /p:BundlePayloadPath=${{ github.workspace }}/artifacts/bundle/aspire-ci-bundlepayload-${{ matrix.targets.rids }}.tar.gz
+          /p:AspireCliChannel=${{ env.ASPIRE_CLI_CHANNEL }}
           ${{ inputs.versionOverrideArg }}
 
-      - name: Build CLI packages (Unix)
-        if: ${{ matrix.targets.os != 'windows-latest' }}
-        shell: bash
-        run: >
-          ./build.sh
-          --ci
-          --build
-          --restore
-          /bl:${{ github.workspace }}/artifacts/log/Debug/BuildCli.binlog
-          /p:ContinuousIntegrationBuild=true
-          /p:SkipManagedBuild=true
-          /p:TargetRids=${{ matrix.targets.rids }}
-          ${{ inputs.versionOverrideArg }}
+      - name: Verify CLI tool nupkg
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
 
-      - name: Upload logs
-        if: always()
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1  # v4.6.1
+          $rid = '${{ matrix.targets.rids }}'
+          $archiveExtension = if ($rid.StartsWith('win-')) { 'zip' } else { 'tar.gz' }
+          $archive = @(Get-ChildItem -Path 'artifacts/packages/${{ inputs.configuration }}' -Filter "aspire-cli-$rid-*.$archiveExtension" -Recurse -File -ErrorAction SilentlyContinue)
+          if ($archive.Count -ne 1) {
+            throw "Expected exactly one CLI archive for $rid, but found $($archive.Count): $($archive.FullName -join ', ')"
+          }
+
+          eng/scripts/verify-cli-tool-nupkg.ps1 `
+            -PackagesDir artifacts/packages/${{ inputs.configuration }} `
+            -Rid $rid `
+            -ArchivePath $archive[0].FullName
+
+      - name: Verify CLI npm package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $rid = '${{ matrix.targets.rids }}'
+          $archiveExtension = if ($rid.StartsWith('win-')) { 'zip' } else { 'tar.gz' }
+          $archive = @(Get-ChildItem -Path 'artifacts/packages/${{ inputs.configuration }}' -Filter "aspire-cli-$rid-*.$archiveExtension" -Recurse -File -ErrorAction SilentlyContinue)
+          if ($archive.Count -ne 1) {
+            throw "Expected exactly one CLI archive for $rid, but found $($archive.Count): $($archive.FullName -join ', ')"
+          }
+
+          eng/scripts/verify-cli-npm-package.ps1 `
+            -PackagesDir artifacts/packages/${{ inputs.configuration }} `
+            -Rid $rid `
+            -ArchivePath $archive[0].FullName
+
+      # Upload DCP, Dashboard, and CLI tool packages so test/polyglot jobs can download them
+      - name: Upload RID-specific packages
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: cli-native-logs-${{ matrix.targets.rids }}
-          path: artifacts/log/**
+          name: built-nugets-for-${{ matrix.targets.rids }}
+          path: |
+            artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Hosting.Orchestration.${{ matrix.targets.rids }}.*.nupkg
+            artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Dashboard.Sdk.${{ matrix.targets.rids }}.*.nupkg
+            artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Cli.*.nupkg
+            artifacts/packages/${{ inputs.configuration }}/Shipping/microsoft-aspire-cli*.tgz
+          if-no-files-found: error
+          retention-days: 15
 
       - name: Upload CLI archives
         if: success()
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1  # v4.6.1
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: cli-native-archives-${{ matrix.targets.rids }}
           path: artifacts/packages/**/aspire-cli*
           retention-days: 15
           if-no-files-found: error
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: cli-native-logs-${{ matrix.targets.rids }}
+          path: artifacts/log/**

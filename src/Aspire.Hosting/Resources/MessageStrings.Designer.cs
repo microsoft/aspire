@@ -10,8 +10,8 @@
 
 namespace Aspire.Hosting.Resources {
     using System;
-    
-    
+
+
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -23,15 +23,15 @@ namespace Aspire.Hosting.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class MessageStrings {
-        
+
         private static global::System.Resources.ResourceManager resourceMan;
-        
+
         private static global::System.Globalization.CultureInfo resourceCulture;
-        
+
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal MessageStrings() {
         }
-        
+
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Hosting.Resources {
                 return resourceMan;
             }
         }
-        
+
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,7 +59,7 @@ namespace Aspire.Hosting.Resources {
                 resourceCulture = value;
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Anonymous volumes cannot be read-only..
         /// </summary>
@@ -68,7 +68,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("ContainerMountAnonymousVolumesReadOnlyExceptionMessage", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Bind mounts must specify an absolute path..
         /// </summary>
@@ -77,7 +77,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("ContainerMountBindMountsRequireRootedPaths", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Bind mounts must specify a source path..
         /// </summary>
@@ -86,7 +86,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("ContainerMountBindMountsRequireSourceExceptionMessage", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Application orchestrator dependency check returned an error: {0}.
         /// </summary>
@@ -95,7 +95,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("DcpDependencyCheckFailedMessage", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Newer version of the Aspire.Hosting.AppHost package is required to run the application. Ensure you are referencing at least version &apos;{0}&apos;..
         /// </summary>
@@ -104,7 +104,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("DcpVersionCheckTooLowMessage", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Installation instructions.
         /// </summary>
@@ -113,7 +113,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("InstallationInstructions", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Missing command.
         /// </summary>
@@ -122,7 +122,142 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("MissingCommandNotificationTitle", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to Container arguments.
+        /// </summary>
+        internal static string ResourcePropertyContainerArgumentsDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyContainerArgumentsDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Container command.
+        /// </summary>
+        internal static string ResourcePropertyContainerCommandDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyContainerCommandDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Container ID.
+        /// </summary>
+        internal static string ResourcePropertyContainerIdDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyContainerIdDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Container image.
+        /// </summary>
+        internal static string ResourcePropertyContainerImageDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyContainerImageDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Container lifetime.
+        /// </summary>
+        internal static string ResourcePropertyContainerLifetimeDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyContainerLifetimeDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Container ports.
+        /// </summary>
+        internal static string ResourcePropertyContainerPortsDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyContainerPortsDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Executable arguments.
+        /// </summary>
+        internal static string ResourcePropertyExecutableArgumentsDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyExecutableArgumentsDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Executable path.
+        /// </summary>
+        internal static string ResourcePropertyExecutablePathDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyExecutablePathDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Process ID.
+        /// </summary>
+        internal static string ResourcePropertyExecutableProcessIdDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyExecutableProcessIdDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Working directory.
+        /// </summary>
+        internal static string ResourcePropertyExecutableWorkingDirectoryDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyExecutableWorkingDirectoryDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Value.
+        /// </summary>
+        internal static string ResourcePropertyParameterValueDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyParameterValueDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Launch profile.
+        /// </summary>
+        internal static string ResourcePropertyProjectLaunchProfileDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyProjectLaunchProfileDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Project path.
+        /// </summary>
+        internal static string ResourcePropertyProjectPathDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyProjectPathDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Tool package.
+        /// </summary>
+        internal static string ResourcePropertyToolPackageDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyToolPackageDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Tool version.
+        /// </summary>
+        internal static string ResourcePropertyToolVersionDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyToolVersionDisplayName", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Required command &apos;{0}&apos; was not found on PATH or at the specified location..
         /// </summary>
@@ -131,7 +266,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("RequiredCommandNotFound", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Required command &apos;{0}&apos; was not found on PATH or at the specified location. For installation instructions, see: {1}.
         /// </summary>
@@ -140,7 +275,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("RequiredCommandNotFoundWithLink", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Command &apos;{0}&apos; validation failed: {1}.
         /// </summary>
@@ -149,7 +284,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("RequiredCommandValidationFailed", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Command &apos;{0}&apos; validation failed: {1}. For installation instructions, see: {2}.
         /// </summary>
@@ -158,7 +293,16 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("RequiredCommandValidationFailedWithLink", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to Resource &apos;{0}&apos; has a persistent lifetime but the AppHost project does not have user secrets configured. Generated parameter values (such as passwords) may change on each restart, causing persistent containers to be recreated. Run &apos;aspire secret set&apos; to initialize user secrets..
+        /// </summary>
+        internal static string PersistentContainerWithoutUserSecrets {
+            get {
+                return ResourceManager.GetString("PersistentContainerWithoutUserSecrets", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Resource &apos;{0}&apos; may fail to start: {1}.
         /// </summary>
@@ -167,5 +311,6 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("ResourceMayFailToStart", resourceCulture);
             }
         }
+
     }
 }

@@ -3,12 +3,8 @@
   "$id": "https://json.schemastore.org/aspire-settings.json",
   "type": "object",
   "title": "Aspire Local Settings",
-  "description": "Configuration file for .NET Aspire application host (.aspire/settings.json)",
+  "description": "Aspire CLI local configuration file (.aspire/settings.json)",
   "properties": {
-    "appHostPath": {
-      "description": "The path to the AppHost entry point file (e.g., \"Program.cs\", \"app.ts\"). Relative to the directory containing .aspire/settings.json.",
-      "type": "string"
-    },
     "channel": {
       "description": "The Aspire channel to use for package resolution (e.g., \"stable\", \"preview\", \"staging\"). Used by aspire add to determine which NuGet feed to use.",
       "type": "string"
@@ -17,6 +13,22 @@
       "description": "Feature flags for enabling/disabling experimental or optional features. Key is feature name, value is enabled (true) or disabled (false).",
       "type": "object",
       "properties": {
+        "aspireSkillsRemoteFetchEnabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "(Preview) Allow the Aspire CLI to download the aspire-skills bundle from GitHub. When disabled (the 13.4 default), the CLI only uses the cached bundle and the embedded snapshot baked into the CLI; toggle on to opt in to the remote fetch path.",
+          "default": false
+        },
         "defaultWatchEnabled": {
           "anyOf": [
             {
@@ -33,7 +45,7 @@
           "description": "Enable or disable watch mode by default when running Aspire applications for automatic restarts on file changes",
           "default": false
         },
-        "dotnetSdkInstallationEnabled": {
+        "experimentalPolyglot:go": {
           "anyOf": [
             {
               "type": "boolean"
@@ -46,26 +58,10 @@
               ]
             }
           ],
-          "description": "Enable or disable automatic .NET SDK installation when a required SDK version is missing",
-          "default": true
-        },
-        "execCommandEnabled": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "string",
-              "enum": [
-                "true",
-                "false"
-              ]
-            }
-          ],
-          "description": "Enable or disable the 'aspire exec' command for executing commands inside running resources",
+          "description": "Enable or disable experimental Go language support for polyglot Aspire applications",
           "default": false
         },
-        "minimumSdkCheckEnabled": {
+        "experimentalPolyglot:java": {
           "anyOf": [
             {
               "type": "boolean"
@@ -78,58 +74,10 @@
               ]
             }
           ],
-          "description": "Enable or disable minimum .NET SDK version checking before running Aspire applications",
-          "default": true
-        },
-        "orphanDetectionWithTimestampEnabled": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "string",
-              "enum": [
-                "true",
-                "false"
-              ]
-            }
-          ],
-          "description": "Enable or disable timestamp-based orphan process detection to clean up stale Aspire processes",
-          "default": true
-        },
-        "packageSearchDiskCachingEnabled": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "string",
-              "enum": [
-                "true",
-                "false"
-              ]
-            }
-          ],
-          "description": "Enable or disable disk caching for package search results to improve performance",
-          "default": true
-        },
-        "polyglotSupportEnabled": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "string",
-              "enum": [
-                "true",
-                "false"
-              ]
-            }
-          ],
-          "description": "Enable or disable support for non-.NET (polyglot) languages and runtimes in Aspire applications",
+          "description": "Enable or disable experimental Java language support for polyglot Aspire applications",
           "default": false
         },
-        "runningInstanceDetectionEnabled": {
+        "experimentalPolyglot:python": {
           "anyOf": [
             {
               "type": "boolean"
@@ -142,7 +90,39 @@
               ]
             }
           ],
-          "description": "Enable or disable detection of already running Aspire instances to prevent conflicts",
+          "description": "Enable or disable experimental Python language support for polyglot Aspire applications",
+          "default": false
+        },
+        "experimentalPolyglot:rust": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Enable or disable experimental Rust language support for polyglot Aspire applications",
+          "default": false
+        },
+        "nugetSignatureVerificationEnabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Enable or disable defaulting the DOTNET_NUGET_SIGNATURE_VERIFICATION environment variable for spawned processes",
           "default": true
         },
         "showAllTemplates": {
@@ -217,16 +197,19 @@
       "type": "string"
     },
     "packages": {
-      "description": "Package name to version mapping",
+      "description": "Package references as an object literal (like npm's package.json). Key is package name, value is version.",
       "type": "object",
       "additionalProperties": {
-        "type": "string",
-        "description": "Package version"
+        "type": "string"
       }
     },
     "sdkVersion": {
       "description": "The Aspire SDK version used for this polyglot AppHost project. Determines the version of Aspire.Hosting packages to use.",
       "type": "string"
+    },
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference"
     }
   },
   "additionalProperties": false

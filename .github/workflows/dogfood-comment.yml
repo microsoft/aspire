@@ -19,19 +19,19 @@ on:
 jobs:
   add-dogfood-comment:
     # Only run on the dotnet org to avoid running on forks
-    if: ${{ github.repository_owner == 'dotnet' }}
+    if: ${{ github.repository_owner == 'microsoft' }}
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
     steps:
       - name: Add dogfooding comment
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             // Get PR number from either the PR event or manual input
             const prNumber = context.payload.number || context.payload.inputs.pr_number;
-            const bashScript = 'https://raw.githubusercontent.com/dotnet/aspire/main/eng/scripts/get-aspire-cli-pr.sh';
-            const psScript = 'https://raw.githubusercontent.com/dotnet/aspire/main/eng/scripts/get-aspire-cli-pr.ps1';
+            const bashScript = 'https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh';
+            const psScript = 'https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.ps1';
             
             // Unique marker to identify dogfooding comments
             const dogfoodMarker = '<!-- dogfood-pr -->';

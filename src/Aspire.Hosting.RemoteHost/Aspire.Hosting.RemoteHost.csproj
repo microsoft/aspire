@@ -1,27 +1,37 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
-    <IsPackable>true</IsPackable>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Description>Remote host server for polyglot Aspire AppHosts.</Description>
-    <PackageTags>aspire hosting polyglot</PackageTags>
-    <!-- New package, no baseline to compare against yet -->
-    <EnablePackageValidation>false</EnablePackageValidation>
+    <IsPackable>false</IsPackable>
+    <SkipAspireIntegrationAnalyzersReference>true</SkipAspireIntegrationAnalyzersReference>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <PackageReference Include="StreamJsonRpc" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Aspire.Hosting\Aspire.Hosting.csproj" />
+    <ProjectReference Include="..\Aspire.TypeSystem\Aspire.TypeSystem.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="Aspire.Hosting.RemoteHost.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
+    <Compile Include="$(SharedDir)KnownOtelConfigNames.cs" Link="Utils\KnownOtelConfigNames.cs" />
+    <Compile Include="$(SharedDir)IntegrationPackageProbeManifest.cs" Link="IntegrationPackageProbeManifest.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Copy appsettings.json to output -->
+    <None Include="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

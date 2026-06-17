@@ -8,6 +8,7 @@ using static Aspire.Hosting.VolumeNameGenerator;
 
 namespace Aspire.Hosting.Tests.Utils;
 
+[Trait("Partition", "4")]
 public class VolumeNameGeneratorTests
 {
     [Fact]

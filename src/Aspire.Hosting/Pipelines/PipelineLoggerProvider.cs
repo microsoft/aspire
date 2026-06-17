@@ -94,7 +94,7 @@ internal sealed class PipelineLoggerProvider(IOptions<PipelineLoggingOptions> op
                 message = $"{message} {exception}";
             }
 
-            step.Log(logLevel, message, enableMarkdown: false);
+            step.Log(logLevel, message);
         }
     }
 }

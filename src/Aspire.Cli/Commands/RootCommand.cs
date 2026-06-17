@@ -4,30 +4,35 @@
 using System.CommandLine;
 using System.CommandLine.Help;
 using Microsoft.Extensions.Logging;
+using Spectre.Console;
 
 #if DEBUG
 using System.Globalization;
 using System.Diagnostics;
 #endif
 
+using Aspire.Cli.Bundles;
 using Aspire.Cli.Commands.Sdk;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Utils;
 using BaseRootCommand = System.CommandLine.RootCommand;
 
 namespace Aspire.Cli.Commands;
 
 internal sealed class RootCommand : BaseRootCommand
 {
+    internal const int DefaultCaptureProfileDelaySeconds = 5;
+
     public static readonly Option<bool> DebugOption = new(CommonOptionNames.Debug, CommonOptionNames.DebugShort)
     {
         Description = RootCommandStrings.DebugArgumentDescription,
         Recursive = true,
-        Hidden = true // Hidden for backward compatibility, use --debug-level instead
+        Hidden = true // Hidden for backward compatibility, use --log-level instead
     };
 
-    public static readonly Option<LogLevel?> DebugLevelOption = new("--debug-level", "-v")
+    public static readonly Option<LogLevel?> DebugLevelOption = new("--log-level", "-l")
     {
         Description = RootCommandStrings.DebugLevelArgumentDescription,
         Recursive = true
@@ -35,7 +40,7 @@ internal sealed class RootCommand : BaseRootCommand
 
     public static readonly Option<bool> NonInteractiveOption = new(CommonOptionNames.NonInteractive)
     {
-        Description = "Run the command in non-interactive mode, disabling all interactive prompts and spinners",
+        Description = RootCommandStrings.NonInteractiveArgumentDescription,
         Recursive = true
     };
 
@@ -66,6 +71,33 @@ internal sealed class RootCommand : BaseRootCommand
         DefaultValueFactory = _ => false
     };
 
+    public static readonly Option<bool> StartDebugSessionOption = new(CommonOptionNames.StartDebugSession)
+    {
+        Description = RunCommandStrings.StartDebugSessionArgumentDescription,
+        Recursive = true,
+        DefaultValueFactory = _ => false
+    };
+
+    public static readonly Option<bool> CaptureProfileOption = new("--capture-profile")
+    {
+        Recursive = true,
+        Hidden = true,
+        DefaultValueFactory = _ => false
+    };
+
+    public static readonly Option<FileInfo?> CaptureProfileOutputOption = new("--capture-profile-output")
+    {
+        Recursive = true,
+        Hidden = true
+    };
+
+    public static readonly Option<int> CaptureProfileDelayOption = new("--capture-profile-delay")
+    {
+        Recursive = true,
+        Hidden = true,
+        DefaultValueFactory = _ => DefaultCaptureProfileDelaySeconds
+    };
+
     /// <summary>
     /// Global options that should be passed through to child CLI processes when spawning.
     /// Add new global options here to ensure they are forwarded during detached mode execution.
@@ -76,7 +108,7 @@ internal sealed class RootCommand : BaseRootCommand
         (DebugLevelOption, pr =>
         {
             var level = pr.GetValue(DebugLevelOption);
-            return level.HasValue ? ["--debug-level", level.Value.ToString()] : null;
+            return level.HasValue ? ["--log-level", level.Value.ToString()] : null;
         }),
         (WaitForDebuggerOption, pr => pr.GetValue(WaitForDebuggerOption) ? ["--wait-for-debugger"] : null),
     ];
@@ -102,6 +134,7 @@ internal sealed class RootCommand : BaseRootCommand
     }
 
     private readonly IInteractionService _interactionService;
+    private readonly IAnsiConsole _ansiConsole;
 
     public RootCommand(
         NewCommand newCommand,
@@ -109,31 +142,47 @@ internal sealed class RootCommand : BaseRootCommand
         RunCommand runCommand,
         StopCommand stopCommand,
         StartCommand startCommand,
-        RestartCommand restartCommand,
+        WaitCommand waitCommand,
+        LsCommand lsCommand,
         ResourceCommand commandCommand,
         PsCommand psCommand,
-        ResourcesCommand resourcesCommand,
+        DescribeCommand describeCommand,
         LogsCommand logsCommand,
+        IntegrationCommand integrationCommand,
+        TerminalCommand terminalCommand,
         AddCommand addCommand,
         PublishCommand publishCommand,
         DeployCommand deployCommand,
+        DestroyCommand destroyCommand,
         DoCommand doCommand,
         ConfigCommand configCommand,
         CacheCommand cacheCommand,
+        CertificatesCommand certificatesCommand,
         DoctorCommand doctorCommand,
-        ExecCommand execCommand,
         UpdateCommand updateCommand,
         McpCommand mcpCommand,
         AgentCommand agentCommand,
         TelemetryCommand telemetryCommand,
+        ExportCommand exportCommand,
+        DashboardCommand dashboardCommand,
         DocsCommand docsCommand,
+        SecretCommand secretCommand,
         SdkCommand sdkCommand,
+        RestoreCommand restoreCommand,
+        SetupCommand setupCommand,
+#if DEBUG
+        RenderCommand renderCommand,
+#endif
         ExtensionInternalCommand extensionInternalCommand,
-        IFeatures featureFlags,
-        IInteractionService interactionService)
+        IBundleService bundleService,
+        IInteractionService interactionService,
+        IFeatures features,
+        IAnsiConsole ansiConsole,
+        CliExecutionContext executionContext)
         : base(RootCommandStrings.Description)
     {
         _interactionService = interactionService;
+        _ansiConsole = ansiConsole;
 
 #if DEBUG
         CliWaitForDebuggerOption.Validators.Add((result) =>
@@ -144,7 +193,7 @@ internal sealed class RootCommand : BaseRootCommand
             if (waitForDebugger)
             {
                 _interactionService.ShowStatus(
-                    $":bug:  {string.Format(CultureInfo.CurrentCulture, RootCommandStrings.WaitingForDebugger, Environment.ProcessId)}",
+                    string.Format(CultureInfo.CurrentCulture, RootCommandStrings.WaitingForDebugger, Environment.ProcessId),
                     () =>
                     {
                         while (!Debugger.IsAttached)
@@ -153,7 +202,7 @@ internal sealed class RootCommand : BaseRootCommand
                         }
 
                         Debugger.Break();
-                    });
+                    }, emoji: KnownEmojis.Bug);
             }
         });
 #endif
@@ -165,55 +214,96 @@ internal sealed class RootCommand : BaseRootCommand
         Options.Add(BannerOption);
         Options.Add(WaitForDebuggerOption);
         Options.Add(CliWaitForDebuggerOption);
+        if (ExtensionHelper.IsExtensionHost(interactionService, out _, out _))
+        {
+            Options.Add(StartDebugSessionOption);
+        }
+        Options.Add(CaptureProfileOption);
+        Options.Add(CaptureProfileOutputOption);
+        Options.Add(CaptureProfileDelayOption);
 
         // Handle standalone 'aspire' or 'aspire --banner' (no subcommand)
-        this.SetAction((context, cancellationToken) =>
+        this.SetAction((Func<ParseResult, CancellationToken, Task<int>>)((context, cancellationToken) =>
         {
             var bannerRequested = context.GetValue(BannerOption);
             if (bannerRequested)
             {
                 // If --banner was passed, we've already shown it in Main, just exit successfully
-                return Task.FromResult(ExitCodeConstants.Success);
+                return Task.FromResult((int)CliExitCodes.Success);
             }
 
-            // No subcommand provided - show help but return InvalidCommand to signal usage error
-            // This is consistent with other parent commands (DocsCommand, SdkCommand, etc.)
-            new HelpAction().Invoke(context);
-            return Task.FromResult(ExitCodeConstants.InvalidCommand);
-        });
+            // No subcommand provided - show grouped help but return InvalidCommand to signal usage error
+            var writer = _ansiConsole.Profile.Out.Writer;
+            var consoleWidth = _ansiConsole.Profile.Width;
+            GroupedHelpWriter.WriteHelp(this, writer, consoleWidth);
+            return Task.FromResult((int)CliExitCodes.InvalidCommand);
+        }));
 
         Subcommands.Add(newCommand);
         Subcommands.Add(initCommand);
         Subcommands.Add(runCommand);
         Subcommands.Add(stopCommand);
         Subcommands.Add(startCommand);
-        Subcommands.Add(restartCommand);
+        Subcommands.Add(waitCommand);
+        Subcommands.Add(lsCommand);
         Subcommands.Add(commandCommand);
         Subcommands.Add(psCommand);
-        Subcommands.Add(resourcesCommand);
+        Subcommands.Add(describeCommand);
         Subcommands.Add(logsCommand);
+        Subcommands.Add(integrationCommand);
+        // 'aspire terminal' is hidden behind a feature flag while WithTerminal() is experimental.
+        // Toggle with `aspire config set features.terminalCommandsEnabled true`.
+        if (features.IsFeatureEnabled(KnownFeatures.TerminalCommandsEnabled, defaultValue: false))
+        {
+            Subcommands.Add(terminalCommand);
+        }
         Subcommands.Add(addCommand);
         Subcommands.Add(publishCommand);
         Subcommands.Add(configCommand);
         Subcommands.Add(cacheCommand);
+        Subcommands.Add(certificatesCommand);
         Subcommands.Add(doctorCommand);
         Subcommands.Add(deployCommand);
+        Subcommands.Add(destroyCommand);
         Subcommands.Add(doCommand);
         Subcommands.Add(updateCommand);
         Subcommands.Add(extensionInternalCommand);
         Subcommands.Add(mcpCommand);
         Subcommands.Add(agentCommand);
         Subcommands.Add(telemetryCommand);
+        Subcommands.Add(exportCommand);
         Subcommands.Add(docsCommand);
+        Subcommands.Add(dashboardCommand);
+        Subcommands.Add(secretCommand);
 
-        if (featureFlags.IsFeatureEnabled(KnownFeatures.ExecCommandEnabled, false))
+#if DEBUG
+        Subcommands.Add(renderCommand);
+#endif
+
+        if (bundleService.IsBundle)
         {
-            Subcommands.Add(execCommand);
+            Subcommands.Add(setupCommand);
         }
 
-        if (featureFlags.IsFeatureEnabled(KnownFeatures.PolyglotSupportEnabled, false))
+        Subcommands.Add(sdkCommand);
+        Subcommands.Add(restoreCommand);
+
+        // Replace the default --help action with grouped help output.
+        // Add -v as a short alias for --version.
+        foreach (var option in Options)
         {
-            Subcommands.Add(sdkCommand);
+            if (option is HelpOption helpOption)
+            {
+                helpOption.Action = new GroupedHelpAction(this, _ansiConsole);
+            }
+            else if (option is VersionOption versionOption)
+            {
+                versionOption.Aliases.Add("-v");
+                // Report the resolved identity version so --version honors ASPIRE_CLI_VERSION /
+                // the install sidecar. Without an override this resolves to the assembly's
+                // informational version, matching the built-in action's output.
+                versionOption.Action = new IdentityVersionAction(executionContext);
+            }
         }
 
     }

@@ -1,11 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire;
 using Aspire.Azure.Common;
 using Aspire.Azure.Security.KeyVault;
 using Azure.Core.Extensions;
 using Azure.Extensions.AspNetCore.Configuration.Secrets;
-using Azure.Identity;
 using Azure.Security.KeyVault.Certificates;
 using Azure.Security.KeyVault.Keys;
 using Azure.Security.KeyVault.Secrets;
@@ -204,6 +204,6 @@ public static class AspireKeyVaultExtensions
             throw new InvalidOperationException($"VaultUri is missing. It should be provided in 'ConnectionStrings:{connectionName}' or under the 'VaultUri' key in the '{DefaultConfigSectionName}' configuration section.");
         }
 
-        return new SecretClient(settings.VaultUri, settings.Credential ?? new DefaultAzureCredential(), clientOptions);
+        return new SecretClient(settings.VaultUri, settings.Credential ?? AzureCredentialHelper.CreateDefaultAzureCredential(), clientOptions);
     }
 }

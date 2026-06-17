@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 
 static class TestResourceExtensions
 {
+    [AspireExportIgnore(Reason = "Stress playground helper; not part of the supported ATS surface.")]
     public static IResourceBuilder<TestResource> AddTestResource(this IDistributedApplicationBuilder builder, string name)
     {
         builder.Services.TryAddEventingSubscriber<TestResourceLifecycle>();
@@ -28,6 +29,7 @@ static class TestResourceExtensions
         return rb;
     }
 
+    [AspireExportIgnore(Reason = "Stress playground helper; not part of the supported ATS surface.")]
     public static IResourceBuilder<TestNestedResource> AddNestedResource(this IDistributedApplicationBuilder builder, string name, IResource parent)
     {
         var rb = builder.AddResource(new TestNestedResource(name, parent))
@@ -39,6 +41,84 @@ static class TestResourceExtensions
                               new("P1", "P2"),
                               new(CustomResourceKnownProperties.Source, "Custom"),
                               new(KnownProperties.Resource.ParentName, parent.Name)
+                          ]
+                      })
+                      .ExcludeFromManifest();
+
+        return rb;
+    }
+
+    [AspireExportIgnore(Reason = "Stress playground helper; not part of the supported ATS surface.")]
+    public static IResourceBuilder<CommandGroupResource> AddCommandGroup(this IDistributedApplicationBuilder builder, string name, IResource parent)
+    {
+        var rb = builder.AddResource(new CommandGroupResource(name, parent))
+                      .WithInitialState(new()
+                      {
+                          ResourceType = "Command Group",
+                          State = "Running",
+                          Properties = [
+                              new(KnownProperties.Resource.ParentName, parent.Name)
+                          ]
+                      })
+                      .ExcludeFromManifest();
+
+        return rb;
+    }
+
+    [AspireExportIgnore(Reason = "Stress playground helper; not part of the supported ATS surface.")]
+    public static IResourceBuilder<NoStatusResource> AddNoStatusResource(this IDistributedApplicationBuilder builder, string name)
+    {
+        var rb = builder.AddResource(new NoStatusResource(name))
+                      .WithInitialState(new()
+                      {
+                          ResourceType = "No Status Resource",
+                          Properties = [
+                              new(CustomResourceKnownProperties.Source, "Custom")
+                          ]
+                      })
+                      .ExcludeFromManifest();
+
+        return rb;
+    }
+
+    [AspireExportIgnore(Reason = "Stress playground helper; not part of the supported ATS surface.")]
+    public static IResourceBuilder<PropertyStressResource> AddPropertyStressResource(this IDistributedApplicationBuilder builder, string name)
+    {
+        var rb = builder.AddResource(new PropertyStressResource(name))
+                      .WithInitialState(new()
+                      {
+                          ResourceType = "Executable",
+                          State = "Running",
+                          Properties = [
+                              new(KnownProperties.Executable.Path, "/stress/known/path")
+                              {
+                                  DisplayName = "Known non-sensitive path"
+                              },
+                              new(KnownProperties.Executable.Args, "--api-key stress-secret-value")
+                              {
+                                  DisplayName = "Known sensitive arguments",
+                                  IsSensitive = true
+                              },
+                              new("stress.property.highlighted", "Visible highlighted value")
+                              {
+                                  DisplayName = "Unknown highlighted property",
+                                  IsHighlighted = true
+                              },
+                              new("stress.property.highlightedSecret", "Visible highlighted sensitive value")
+                              {
+                                  DisplayName = "Unknown highlighted sensitive property",
+                                  IsSensitive = true,
+                                  IsHighlighted = true
+                              },
+                              new("stress.property.hidden", "Hidden until Show all is selected")
+                              {
+                                  DisplayName = "Unknown non-highlighted property"
+                              },
+                              new("stress.property.hiddenSecret", "Hidden sensitive value until Show all is selected")
+                              {
+                                  DisplayName = "Unknown non-highlighted sensitive property",
+                                  IsSensitive = true
+                              }
                           ]
                       })
                       .ExcludeFromManifest();
@@ -114,4 +194,17 @@ sealed class TestResource(string name) : Resource(name)
 sealed class TestNestedResource(string name, IResource parent) : Resource(name), IResourceWithParent
 {
     public IResource Parent { get; } = parent;
+}
+
+sealed class CommandGroupResource(string name, IResource parent) : Resource(name), IResourceWithParent
+{
+    public IResource Parent { get; } = parent;
+}
+
+sealed class NoStatusResource(string name) : Resource(name)
+{
+}
+
+sealed class PropertyStressResource(string name) : Resource(name)
+{
 }

@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "WaitForSandbox.AppHost/WaitForSandbox.AppHost.csproj"
+  }
+}

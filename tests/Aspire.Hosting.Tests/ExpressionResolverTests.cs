@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "5")]
 public class ExpressionResolverTests
 {
     [Theory]
@@ -96,10 +97,7 @@ public class ExpressionResolverTests
                 if (sourceIsContainer)
                 {
                     // Note: on the container network side the port and target port are always the same for AllocatedEndpoint.
-                    var ae = new AllocatedEndpoint(e, containerHost, 22345, EndpointBindingMode.SingleAddress, targetPortExpression: "22345", KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
-                    var snapshot = new ValueSnapshot<AllocatedEndpoint>();
-                    snapshot.SetValue(ae);
-                    e.AllAllocatedEndpoints.TryAdd(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, snapshot);
+                    e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, containerHost, 22345, EndpointBindingMode.SingleAddress, targetPortExpression: "22345", KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
                 }
             })
             .WithEndpoint("endpoint2", e =>
@@ -108,10 +106,7 @@ public class ExpressionResolverTests
                 e.AllocatedEndpoint = new(e, "localhost", 12346, targetPortExpression: "10001");
                 if (sourceIsContainer)
                 {
-                    var ae = new AllocatedEndpoint(e, containerHost, 22346, EndpointBindingMode.SingleAddress, targetPortExpression: "22346", KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
-                    var snapshot = new ValueSnapshot<AllocatedEndpoint>();
-                    snapshot.SetValue(ae);
-                    e.AllAllocatedEndpoints.TryAdd(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, snapshot);
+                    e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, containerHost, 22346, EndpointBindingMode.SingleAddress, targetPortExpression: "22346", KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
                 }
             })
              .WithEndpoint("endpoint3", e =>
@@ -120,10 +115,7 @@ public class ExpressionResolverTests
                  e.AllocatedEndpoint = new(e, "host with space", 12347);
                  if (sourceIsContainer)
                  {
-                     var ae = new AllocatedEndpoint(e, containerHost, 22347, EndpointBindingMode.SingleAddress, targetPortExpression: "22346", KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
-                     var snapshot = new ValueSnapshot<AllocatedEndpoint>();
-                     snapshot.SetValue(ae);
-                     e.AllAllocatedEndpoints.TryAdd(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, snapshot);
+                     e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, containerHost, 22347, EndpointBindingMode.SingleAddress, targetPortExpression: "22347", KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
                  }
              });
 
@@ -155,11 +147,11 @@ public class ExpressionResolverTests
 
     [Theory]
     [InlineData(false, true, "http://localhost:18889", "http://localhost:18889")]
-    [InlineData(true, true, "http://localhost:18889", "http://aspire.dev.internal:18889")]
+    [InlineData(true, true, "http://localhost:18889", "http://host.docker.internal:18889")]
     [InlineData(false, true, "http://127.0.0.1:18889", "http://127.0.0.1:18889")]
-    [InlineData(true, true, "http://127.0.0.1:18889", "http://aspire.dev.internal:18889")]
+    [InlineData(true, true, "http://127.0.0.1:18889", "http://host.docker.internal:18889")]
     [InlineData(false, true, "http://[::1]:18889", "http://[::1]:18889")]
-    [InlineData(true, true, "http://[::1]:18889", "http://aspire.dev.internal:18889")]
+    [InlineData(true, true, "http://[::1]:18889", "http://host.docker.internal:18889")]
     [InlineData(false, false, "http://localhost:18889", "http://localhost:18889")]
     [InlineData(true, false, "http://localhost:18889", "http://host.docker.internal:18889")]
     [InlineData(false, false, "http://127.0.0.1:18889", "http://127.0.0.1:18889")]
@@ -191,9 +183,46 @@ public class ExpressionResolverTests
         Assert.Equal(expectedValue, config["envname"]);
     }
 
+    [Fact]
+    public async Task ContainerHostUrlIgnoresMatchingNonHostEndpoint()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var nonHostEndpoint = new EndpointAnnotation(
+            System.Net.Sockets.ProtocolType.Tcp,
+            KnownNetworkIdentifiers.DefaultAspireContainerNetwork,
+            uriScheme: "http",
+            name: "internal",
+            port: 18889,
+            targetPort: 18889);
+
+        nonHostEndpoint.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(
+            KnownNetworkIdentifiers.DefaultAspireContainerNetwork,
+            new AllocatedEndpoint(
+                nonHostEndpoint,
+                KnownHostNames.DefaultContainerTunnelHostName,
+                47092,
+                EndpointBindingMode.SingleAddress,
+                targetPortExpression: "47092",
+                KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+
+        builder.AddResource(new TestHostResource("nonHost"))
+            .WithAnnotation(nonHostEndpoint);
+
+        var test = builder.AddContainer("testSource", "someimage")
+            .WithEnvironment("envname", new HostUrl("http://localhost:18889/path"));
+
+        var testServiceProvider = new TestServiceProvider();
+        testServiceProvider.AddService(Options.Create(new DcpOptions() { EnableAspireContainerTunnel = true }));
+        testServiceProvider.AddService(new DistributedApplicationModel(builder.Resources));
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(test.Resource, DistributedApplicationOperation.Run, testServiceProvider).DefaultTimeout();
+        Assert.Equal("http://host.docker.internal:18889/path", config["envname"]);
+    }
+
     [Theory]
     [InlineData(false, true, "http://localhost:18889")]
-    [InlineData(true, true, "http://aspire.dev.internal:18889")]
+    [InlineData(true, true, "http://host.docker.internal:18889")]
     [InlineData(false, false, "http://localhost:18889")]
     [InlineData(true, false, "http://host.docker.internal:18889")]
     public async Task HostUrlPropertyGetsResolvedInOtlpExporterEndpoint(bool container, bool withTunnel, string expectedValue)

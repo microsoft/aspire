@@ -1,8 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
+using Yarp.ReverseProxy.Configuration;
+using Yarp.ReverseProxy.Forwarder;
 
 namespace Aspire.Hosting.Yarp.Tests;
 
@@ -46,10 +49,25 @@ public class YarpClusterTests(ITestOutputHelper testOutputHelper)
         var httpsEndpoint = resource.GetEndpoint("https");
 
         var httpCluster = new YarpCluster(httpEndpoint);
-        Assert.Equal("http://_http.ServiceC", httpCluster.Targets[0]);
+        Assert.Equal("http://ServiceC", httpCluster.Targets[0]);
 
         var httpsCluster = new YarpCluster(httpsEndpoint);
-        Assert.Equal("https://_https.ServiceC", httpsCluster.Targets[0]);
+        Assert.Equal("https://ServiceC", httpsCluster.Targets[0]);
+    }
+
+    [Fact]
+    public void Create_YarpCluster_From_Named_Endpoint_Uses_DnsSd_Format()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var resource = builder.AddResource(new TestResource("ServiceC"))
+                              .WithEndpoint(name: "prometheus", scheme: "http")
+                              .WithEndpoint(name: "management", scheme: "https");
+
+        var prometheusCluster = new YarpCluster(resource.GetEndpoint("prometheus"));
+        Assert.Equal("http://_prometheus.ServiceC", prometheusCluster.Targets[0]);
+
+        var managementCluster = new YarpCluster(resource.GetEndpoint("management"));
+        Assert.Equal("https://_management.ServiceC", managementCluster.Targets[0]);
     }
 
     [Fact]
@@ -70,6 +88,18 @@ public class YarpClusterTests(ITestOutputHelper testOutputHelper)
 
         var httpsCluster = new YarpCluster(httpsService.Resource);
         Assert.Equal($"https://ServiceD", httpsCluster.Targets[0]);
+    }
+
+    [Fact]
+    public void Create_YarpCluster_From_Resource_With_Named_Endpoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var service = builder.AddResource(new TestResource("ServiceC"))
+                             .WithEndpoint(name: "api", scheme: "http");
+
+        var cluster = new YarpCluster(service.Resource);
+
+        Assert.Equal("http://_api.ServiceC", Assert.Single(cluster.Targets));
     }
 
     [Fact]
@@ -214,6 +244,78 @@ public class YarpClusterTests(ITestOutputHelper testOutputHelper)
             var ex = Assert.Throws<ArgumentException>(() => config.AddCluster("test-cluster2", (object)123));
             Assert.Contains("IValueProvider, string, or Uri", ex.Message);
         });
+    }
+
+    [Fact]
+    public void AddRoute_WithStringTarget_CreatesClusterAndRoute()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var yarp = builder.AddYarp("gateway");
+
+        yarp.WithConfiguration(config =>
+        {
+            var route = config.AddRoute("/string/{**catchall}", (object)"https://example.net");
+
+            var cluster = Assert.Single(yarp.Resource.Clusters);
+            var storedRoute = Assert.Single(yarp.Resource.Routes);
+
+            Assert.Same(route, storedRoute);
+            Assert.Equal("https://example.net", Assert.Single(cluster.Targets));
+            Assert.Equal(cluster.ClusterConfig.ClusterId, route.RouteConfig.ClusterId);
+            Assert.Equal($"cluster_{YarpConfigurationBuilderHelpers.CreateSyntheticClusterName("/string/{**catchall}", "https://example.net")}", cluster.ClusterConfig.ClusterId);
+            Assert.Equal("/string/{**catchall}", route.RouteConfig.Match?.Path);
+        });
+    }
+
+    [Fact]
+    public void AddCatchAllRoute_WithStringTarget_CreatesClusterAndRoute()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var yarp = builder.AddYarp("gateway");
+
+        yarp.WithConfiguration(config =>
+        {
+            var route = config.AddCatchAllRoute((object)"https://example.org");
+
+            var cluster = Assert.Single(yarp.Resource.Clusters);
+            var storedRoute = Assert.Single(yarp.Resource.Routes);
+
+            Assert.Same(route, storedRoute);
+            Assert.Equal("https://example.org", Assert.Single(cluster.Targets));
+            Assert.Equal(cluster.ClusterConfig.ClusterId, route.RouteConfig.ClusterId);
+            Assert.Equal($"cluster_{YarpConfigurationBuilderHelpers.CreateSyntheticClusterName("/{**catchall}", "https://example.org")}", cluster.ClusterConfig.ClusterId);
+            Assert.Equal("/{**catchall}", route.RouteConfig.Match?.Path);
+        });
+    }
+
+    [Fact]
+    public void ClusterConfigDtos_StayInSyncWithYarpConfigurationTypes()
+    {
+        AssertDtoShapeMatchesYarpConfig<YarpForwarderRequestConfig, ForwarderRequestConfig>();
+        AssertDtoShapeMatchesYarpConfig<YarpHttpClientConfig, HttpClientConfig>();
+        AssertDtoShapeMatchesYarpConfig<YarpWebProxyConfig, WebProxyConfig>();
+        AssertDtoShapeMatchesYarpConfig<YarpSessionAffinityConfig, SessionAffinityConfig>();
+        AssertDtoShapeMatchesYarpConfig<YarpSessionAffinityCookieConfig, SessionAffinityCookieConfig>();
+        AssertDtoShapeMatchesYarpConfig<YarpHealthCheckConfig, HealthCheckConfig>();
+        AssertDtoShapeMatchesYarpConfig<YarpActiveHealthCheckConfig, ActiveHealthCheckConfig>();
+        AssertDtoShapeMatchesYarpConfig<YarpPassiveHealthCheckConfig, PassiveHealthCheckConfig>();
+    }
+
+    private static void AssertDtoShapeMatchesYarpConfig<TDto, TYarp>()
+    {
+        var dtoProperties = typeof(TDto)
+            .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+            .Select(property => property.Name)
+            .OrderBy(name => name)
+            .ToArray();
+
+        var yarpProperties = typeof(TYarp)
+            .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+            .Select(property => property.Name)
+            .OrderBy(name => name)
+            .ToArray();
+
+        Assert.Equal(yarpProperties, dtoProperties);
     }
 
     private sealed class TestResource(string name) : IResourceWithServiceDiscovery

@@ -98,6 +98,31 @@ internal sealed class OtlpKeyValueJson
 }
 
 /// <summary>
+/// Represents the combined telemetry data in OTLP JSON format.
+/// This type can contain logs, traces, and/or metrics data.
+/// </summary>
+internal sealed class OtlpTelemetryDataJson
+{
+    /// <summary>
+    /// An array of ResourceSpans.
+    /// </summary>
+    [JsonPropertyName("resourceSpans")]
+    public OtlpResourceSpansJson[]? ResourceSpans { get; set; }
+
+    /// <summary>
+    /// An array of ResourceLogs.
+    /// </summary>
+    [JsonPropertyName("resourceLogs")]
+    public OtlpResourceLogsJson[]? ResourceLogs { get; set; }
+
+    /// <summary>
+    /// An array of ResourceMetrics.
+    /// </summary>
+    [JsonPropertyName("resourceMetrics")]
+    public OtlpResourceMetricsJson[]? ResourceMetrics { get; set; }
+}
+
+/// <summary>
 /// Represents instrumentation scope information.
 /// </summary>
 internal sealed class OtlpInstrumentationScopeJson

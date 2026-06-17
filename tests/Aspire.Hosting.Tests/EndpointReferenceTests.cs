@@ -2,9 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net.Sockets;
+using System.Runtime.CompilerServices;
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "5")]
 public class EndpointReferenceTests
 {
     [Fact]
@@ -285,6 +287,21 @@ public class EndpointReferenceTests
         Assert.Null(targetPort);
     }
 
+    [Fact]
+    public void AllocatedEndpoint_ThrowsWhenNetworkIdDoesNotMatch()
+    {
+        var annotation = new EndpointAnnotation(ProtocolType.Tcp, KnownNetworkIdentifiers.LocalhostNetwork, uriScheme: "http", name: "http");
+
+        // Create an AllocatedEndpoint with a different network ID.
+        var mismatchedEndpoint = new AllocatedEndpoint(
+            annotation, "localhost", 8080,
+            EndpointBindingMode.SingleAddress,
+            targetPortExpression: null,
+            networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => annotation.AllocatedEndpoint = mismatchedEndpoint);
+    }
+
     [Theory]
     [InlineData(EndpointProperty.Url, ResourceKind.Host, ResourceKind.Host, "blah://localhost:1234")]
     [InlineData(EndpointProperty.Url, ResourceKind.Host, ResourceKind.Container, "blah://localhost:1234")]
@@ -330,9 +347,7 @@ public class EndpointReferenceTests
             : ("host.docker.internal", port);
 
         var containerEndpoint = new AllocatedEndpoint(annotation, containerHost, containerPort, EndpointBindingMode.SingleAddress, targetPortExpression: targetPort.ToString(), KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
-        var snapshot = new ValueSnapshot<AllocatedEndpoint>();
-        snapshot.SetValue(containerEndpoint);
-        annotation.AllAllocatedEndpoints.TryAdd(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, snapshot);
+        annotation.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, containerEndpoint);
 
         var expression = destination.GetEndpoint(annotation.Name).Property(property);
 
@@ -363,6 +378,92 @@ public class EndpointReferenceTests
         }
     }
 
+    [Fact]
+    public async Task WaitingForAllocatedEndpointWorks()
+    {
+        var resource = new TestResource("test");
+        var annotation = new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "http", name: "http");
+        resource.Annotations.Add(annotation);
+        var endpointRef = new EndpointReference(resource, annotation);
+
+        var waitStarted = new SemaphoreSlim(0, 1);
+
+#pragma warning disable CA2012 // Use ValueTasks correctly
+        var consumer = new WithWaitStartedNotification<string?>(waitStarted, endpointRef.GetValueAsync(CancellationToken.None).GetAwaiter());
+#pragma warning restore CA2012 // Use ValueTasks correctly
+
+        await Task.WhenAll
+        (
+            Task.Run(async() =>
+            {
+                await waitStarted.WaitAsync();
+                var allocatedEndpoint = new AllocatedEndpoint(annotation, "localhost", 5000);
+                annotation.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.LocalhostNetwork, allocatedEndpoint);
+            }),
+            Task.Run(async () =>
+            {
+                var url = await consumer;
+                Assert.Equal("http://localhost:5000", url);
+            })
+        ).WaitAsync(TimeSpan.FromSeconds(10));
+    }
+
+    [Fact]
+    public void EndpointAnnotation_ThrowsWhenEndpointNameNotDefined_ListsAvailableEndpoints()
+    {
+        var resource = new TestResource("api-boston");
+        var httpEndpoint = new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "https", name: "http");
+        resource.Annotations.Add(httpEndpoint);
+
+        var endpointRef = new EndpointReference(resource, "https");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => endpointRef.EndpointAnnotation);
+        Assert.Contains("`https`", ex.Message);
+        Assert.Contains("`api-boston`", ex.Message);
+        Assert.Contains("Available endpoints", ex.Message);
+        Assert.Contains("`http`", ex.Message);
+    }
+
+    [Fact]
+    public void EndpointAnnotation_ThrowsWhenEndpointNameNotDefined_ListsMultipleAvailableEndpoints()
+    {
+        var resource = new TestResource("api");
+        resource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "http", name: "http"));
+        resource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "tcp", name: "grpc"));
+
+        var endpointRef = new EndpointReference(resource, "https");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => endpointRef.EndpointAnnotation);
+        Assert.Contains("`https`", ex.Message);
+        Assert.Contains("`http`", ex.Message);
+        Assert.Contains("`grpc`", ex.Message);
+    }
+
+    [Fact]
+    public void EndpointAnnotation_ThrowsWhenResourceHasNoEndpoints_MessageIsClear()
+    {
+        var resource = new TestResource("api");
+
+        var endpointRef = new EndpointReference(resource, "https");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => endpointRef.EndpointAnnotation);
+        Assert.Contains("`https`", ex.Message);
+        Assert.Contains("`api`", ex.Message);
+        Assert.Contains("no endpoints defined", ex.Message);
+    }
+
+    [Fact]
+    public void EndpointAnnotation_ThrowsWithCustomErrorMessageWhenSet()
+    {
+        var resource = new TestResource("api");
+        resource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "http", name: "http"));
+
+        var endpointRef = new EndpointReference(resource, "https") { ErrorMessage = "custom message" };
+
+        var ex = Assert.Throws<InvalidOperationException>(() => endpointRef.EndpointAnnotation);
+        Assert.Equal("custom message", ex.Message);
+    }
+
     public enum ResourceKind
     {
         Host,
@@ -371,5 +472,38 @@ public class EndpointReferenceTests
 
     private sealed class TestResource(string name) : Resource(name), IResourceWithEndpoints
     {
+    }
+
+    private struct WithWaitStartedNotification<T>
+    {
+        private readonly WaitStartedNotificationAwaiter<T> _awaiter;
+
+        public WithWaitStartedNotification(SemaphoreSlim waitStarted, ValueTaskAwaiter<T> inner)
+        {
+            _awaiter = new WaitStartedNotificationAwaiter<T>(waitStarted, inner);
+        }
+        public WaitStartedNotificationAwaiter<T> GetAwaiter() => _awaiter;
+    }
+
+    private struct WaitStartedNotificationAwaiter<T>: INotifyCompletion
+    {
+        private readonly ValueTaskAwaiter<T> _inner;
+        private readonly SemaphoreSlim _waitStarted;
+
+        public WaitStartedNotificationAwaiter(SemaphoreSlim waitStarted, ValueTaskAwaiter<T> inner)
+        {
+            _waitStarted = waitStarted;
+            _inner = inner;
+        }
+
+        public bool IsCompleted => false; // Force continuation
+
+        public void OnCompleted(Action continuation)
+        {
+            _waitStarted.Release();
+            _inner.OnCompleted(continuation);
+        }
+
+        public T GetResult() => _inner.GetResult();
     }
 }

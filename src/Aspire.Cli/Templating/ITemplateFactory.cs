@@ -5,6 +5,16 @@ namespace Aspire.Cli.Templating;
 
 internal interface ITemplateFactory
 {
+    /// <summary>
+    /// Gets template definitions synchronously for command registration.
+    /// This must not perform any I/O or async work.
+    /// </summary>
     IEnumerable<ITemplate> GetTemplates();
-    IEnumerable<ITemplate> GetInitTemplates();
+
+    /// <summary>
+    /// Gets templates that are available for use, performing any necessary
+    /// runtime availability checks (e.g. SDK availability).
+    /// </summary>
+    Task<IEnumerable<ITemplate>> GetTemplatesAsync(CancellationToken cancellationToken = default);
+    Task<IEnumerable<ITemplate>> GetInitTemplatesAsync(CancellationToken cancellationToken = default);
 }

@@ -2,15 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
-using System.Runtime.InteropServices;
-using System.Text.RegularExpressions;
-using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Hosting;
+using Microsoft.AspNetCore.Certificates.Generation;
 
 namespace Aspire.Cli.Certificates;
 
@@ -24,130 +22,157 @@ internal sealed class EnsureCertificatesTrustedResult
     /// to ensure certificates are properly trusted.
     /// </summary>
     public required IDictionary<string, string> EnvironmentVariables { get; init; }
+
+    /// <summary>
+    /// Gets whether the trust operation completed successfully.
+    /// </summary>
+    public required bool Success { get; init; }
+
+    /// <summary>
+    /// Gets whether the operation was cancelled by the user.
+    /// </summary>
+    public bool WasCancelled { get; init; }
+
+    /// <summary>
+    /// Gets the underlying result code from the certificate manager.
+    /// </summary>
+    public EnsureCertificateResult? ResultCode { get; init; }
 }
 
 internal interface ICertificateService
 {
-    Task<EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(IDotNetCliRunner runner, CancellationToken cancellationToken);
+    Task<EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(CancellationToken cancellationToken);
 }
 
-internal sealed partial class CertificateService(IInteractionService interactionService, AspireCliTelemetry telemetry) : ICertificateService
+internal sealed class CertificateService(
+    ICertificateToolRunner certificateToolRunner,
+    IInteractionService interactionService,
+    AspireCliTelemetry telemetry,
+    ICliHostEnvironment hostEnvironment,
+    CliExecutionContext executionContext,
+    Func<bool>? isLinux = null) : ICertificateService
 {
     private const string SslCertDirEnvVar = "SSL_CERT_DIR";
-    private const string DevCertsOpenSslCertDirEnvVar = "DOTNET_DEV_CERTS_OPENSSL_CERTIFICATE_DIRECTORY";
-    private static readonly string s_defaultDevCertsTrustPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-        ".aspnet",
-        "dev-certs",
-        "trust");
+    private readonly Func<bool> _isLinux = isLinux ?? OperatingSystem.IsLinux;
 
-    /// <summary>
-    /// Gets the dev-certs trust path, respecting the DOTNET_DEV_CERTS_OPENSSL_CERTIFICATE_DIRECTORY override.
-    /// </summary>
-    private static string GetDevCertsTrustPath()
-    {
-        var overridePath = Environment.GetEnvironmentVariable(DevCertsOpenSslCertDirEnvVar);
-        return !string.IsNullOrEmpty(overridePath) ? overridePath : s_defaultDevCertsTrustPath;
-    }
-
-    public async Task<EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(IDotNetCliRunner runner, CancellationToken cancellationToken)
+    public async Task<EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(CancellationToken cancellationToken)
     {
         using var activity = telemetry.StartDiagnosticActivity(kind: ActivityKind.Client);
 
         var environmentVariables = new Dictionary<string, string>();
-        var ensureCertificateCollector = new OutputCollector();
+        var isLinux = _isLinux();
 
-        // Use the machine-readable check (available in .NET 10 SDK which is the minimum required)
-        var trustResult = await CheckMachineReadableAsync(runner, ensureCertificateCollector, cancellationToken);
-        await HandleMachineReadableTrustAsync(runner, trustResult, ensureCertificateCollector, environmentVariables, cancellationToken);
+        // In non-interactive environments on macOS and Windows we can't successfully
+        // prompt for trust (macOS Keychain password, Windows trust dialog).
+        // Skip the trust attempt but still check the current state so we can warn when
+        // the environment does not already have a trusted certificate. Linux trust is
+        // non-interactive so it's safe to run the full flow there.
+        var canPerformTrust = hostEnvironment.SupportsInteractiveInput || isLinux;
 
-        return new EnsureCertificatesTrustedResult
+        if (!canPerformTrust)
         {
-            EnvironmentVariables = environmentVariables
-        };
-    }
+            var preCheck = certificateToolRunner.CheckHttpCertificate();
 
-    private async Task<CertificateTrustResult> CheckMachineReadableAsync(
-        IDotNetCliRunner runner,
-        OutputCollector collector,
-        CancellationToken cancellationToken)
-    {
-        var options = new DotNetCliRunnerInvocationOptions
-        {
-            StandardOutputCallback = collector.AppendOutput,
-            StandardErrorCallback = collector.AppendError,
-        };
-
-        var (_, result) = await interactionService.ShowStatusAsync(
-            $":locked_with_key: {InteractionServiceStrings.CheckingCertificates}",
-            async () => await runner.CheckHttpCertificateMachineReadableAsync(options, cancellationToken));
-
-        // Return the result or a default "no certificates" result
-        return result ?? new CertificateTrustResult
-        {
-            HasCertificates = false,
-            TrustLevel = null,
-            Certificates = []
-        };
-    }
-
-    private async Task HandleMachineReadableTrustAsync(
-        IDotNetCliRunner runner,
-        CertificateTrustResult trustResult,
-        OutputCollector collector,
-        Dictionary<string, string> environmentVariables,
-        CancellationToken cancellationToken)
-    {
-        // If fully trusted, nothing more to do
-        if (trustResult.IsFullyTrusted)
-        {
-            return;
-        }
-
-        // If not trusted at all, run the trust operation
-        if (trustResult.IsNotTrusted)
-        {
-            var options = new DotNetCliRunnerInvocationOptions
+            if (!preCheck.HasCertificates && ShouldGenerateHttpsCertificate())
             {
-                StandardOutputCallback = collector.AppendOutput,
-                StandardErrorCallback = collector.AppendError,
-            };
+                // No certificate exists yet. Generate one without trusting it so that
+                // Kestrel's UseHttps() can load the cert from the personal store.
+                // Trust requires user interaction (Windows dialog / macOS Keychain) which
+                // is not possible here, but generation is non-interactive and safe.
+                //
+                // The .NET SDK's first-run experience normally handles this: the first
+                // invocation of any `dotnet` command calls EnsureAspNetCoreHttpsDevelopmentCertificate
+                // (trust: false) and writes a sentinel to ~/.dotnet/ so it only runs once per
+                // SDK version. For C# AppHosts this happens implicitly via `dotnet run`, but
+                // non-.NET AppHost languages (TypeScript, Python, etc.) launch a prebuilt
+                // native binary and never invoke `dotnet`, so the first-run cert generation
+                // never triggers. This call ensures consistent behavior across all languages.
+                var generateResult = certificateToolRunner.EnsureHttpCertificateExists();
 
-            var trustExitCode = await interactionService.ShowStatusAsync(
-                $":locked_with_key: {InteractionServiceStrings.TrustingCertificates}",
-                () => runner.TrustHttpCertificateAsync(options, cancellationToken));
-
-            if (trustExitCode != 0)
-            {
-                interactionService.DisplayLines(collector.GetLines());
-                interactionService.DisplayMessage("warning", string.Format(CultureInfo.CurrentCulture, ErrorStrings.CertificatesMayNotBeFullyTrusted, trustExitCode));
+                if (generateResult is EnsureCertificateResult.Succeeded or EnsureCertificateResult.ValidCertificatePresent)
+                {
+                    // Refresh the check so subsequent trust-level logic reflects the newly created cert.
+                    preCheck = certificateToolRunner.CheckHttpCertificate();
+                }
+                else
+                {
+                    interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.CertificateGenerationFailed, generateResult));
+                }
             }
 
-            // Re-check trust status after trust operation
-            var recheckOptions = new DotNetCliRunnerInvocationOptions
+            if (preCheck.IsPartiallyTrusted)
             {
-                StandardOutputCallback = collector.AppendOutput,
-                StandardErrorCallback = collector.AppendError,
-            };
-
-            var (_, recheckResult) = await runner.CheckHttpCertificateMachineReadableAsync(recheckOptions, cancellationToken);
-            if (recheckResult is not null)
-            {
-                trustResult = recheckResult;
+                interactionService.DisplayMessage(KnownEmojis.Warning, ErrorStrings.CertificatesPartiallyTrustedNonInteractive);
             }
+            else if (!preCheck.IsFullyTrusted)
+            {
+                interactionService.DisplayMessage(KnownEmojis.Warning, ErrorStrings.CertificatesNotTrustedNonInteractive);
+            }
+
+            if (preCheck.IsPartiallyTrusted && isLinux)
+            {
+                ConfigureSslCertDir(environmentVariables);
+            }
+
+            return new EnsureCertificatesTrustedResult
+            {
+                EnvironmentVariables = environmentVariables,
+                Success = true
+            };
         }
 
-        // If partially trusted (either initially or after trust), configure SSL_CERT_DIR on Linux
-        if (trustResult.IsPartiallyTrusted && RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        // Always run trust so the Aspire cache stays populated even when the certificate
+        // is already trusted. Each platform's TrustCertificateCore short-circuits without
+        // prompting when the certificate is already in the trust store.
+        var trustResultCode = await interactionService.ShowStatusAsync(
+            InteractionServiceStrings.TrustingCertificates,
+            () => Task.FromResult(certificateToolRunner.TrustHttpCertificate()),
+            emoji: KnownEmojis.LockedWithKey);
+
+        if (trustResultCode == EnsureCertificateResult.UserCancelledTrustStep)
+        {
+            interactionService.DisplayMessage(KnownEmojis.Warning, CertificatesCommandStrings.TrustCancelled);
+        }
+        else if (!CertificateHelpers.IsSuccessfulTrustResult(trustResultCode))
+        {
+            interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.CertificatesMayNotBeFullyTrusted, trustResultCode));
+        }
+
+        var postTrustCheck = certificateToolRunner.CheckHttpCertificate();
+        if (postTrustCheck.IsPartiallyTrusted && isLinux)
         {
             ConfigureSslCertDir(environmentVariables);
         }
+
+        var partialTrustAccepted = !hostEnvironment.SupportsInteractiveInput
+            && isLinux
+            && trustResultCode == EnsureCertificateResult.PartiallyFailedToTrustTheCertificate
+            && postTrustCheck.IsPartiallyTrusted;
+
+        return new EnsureCertificatesTrustedResult
+        {
+            EnvironmentVariables = environmentVariables,
+            Success = CertificateHelpers.IsSuccessfulTrustResult(trustResultCode) || partialTrustAccepted,
+            WasCancelled = trustResultCode == EnsureCertificateResult.UserCancelledTrustStep,
+            ResultCode = trustResultCode
+        };
+    }
+
+    /// <summary>
+    /// Checks whether automatic HTTPS certificate generation is enabled.
+    /// Set ASPIRE_CLI_GENERATE_HTTPS_CERTIFICATE=false to suppress generation,
+    /// mirroring the .NET SDK's DOTNET_GENERATE_ASPNET_CERTIFICATE opt-out.
+    /// </summary>
+    private bool ShouldGenerateHttpsCertificate()
+    {
+        var value = executionContext.GetEnvironmentVariable(KnownConfigNames.CliGenerateHttpsCertificate);
+        return !string.Equals(value, "false", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void ConfigureSslCertDir(Dictionary<string, string> environmentVariables)
     {
         // Get the dev-certs trust path (respects DOTNET_DEV_CERTS_OPENSSL_CERTIFICATE_DIRECTORY override)
-        var devCertsTrustPath = GetDevCertsTrustPath();
+        var devCertsTrustPath = CertificateHelpers.GetDevCertsTrustPath();
 
         // Get the current SSL_CERT_DIR value (if any)
         var currentSslCertDir = Environment.GetEnvironmentVariable(SslCertDirEnvVar);
@@ -168,97 +193,14 @@ internal sealed partial class CertificateService(IInteractionService interaction
         else
         {
             // Set the dev-certs trust path combined with the system certificate directory.
-            // Query OpenSSL to get its configured certificate directory.
-            var systemCertDirs = new List<string>();
-
-            if (TryGetOpenSslCertsDirectory(out var openSslCertsDir))
-            {
-                systemCertDirs.Add(openSslCertsDir);
-            }
-            else
-            {
-                // Fallback to common locations if OpenSSL is not available or fails
-                if (Directory.Exists("/etc/ssl/certs"))
-                {
-                    systemCertDirs.Add("/etc/ssl/certs");
-                }
-
-                if (Directory.Exists("/etc/pki/tls/certs"))
-                {
-                    systemCertDirs.Add("/etc/pki/tls/certs");
-                }
-            }
-
+            var systemCertDirs = CertificateHelpers.GetSystemCertificateDirectories();
             systemCertDirs.Add(devCertsTrustPath);
 
             environmentVariables[SslCertDirEnvVar] = string.Join(Path.PathSeparator, systemCertDirs);
         }
     }
-
-    /// <summary>
-    /// Attempts to get the OpenSSL certificates directory by running 'openssl version -d'.
-    /// This is the same approach used by ASP.NET Core's certificate manager.
-    /// </summary>
-    /// <param name="certsDir">The path to the OpenSSL certificates directory if found.</param>
-    /// <returns>True if the OpenSSL certs directory was found, false otherwise.</returns>
-    private static bool TryGetOpenSslCertsDirectory([NotNullWhen(true)] out string? certsDir)
-    {
-        certsDir = null;
-
-        try
-        {
-            var processInfo = new ProcessStartInfo("openssl", "version -d")
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            using var process = Process.Start(processInfo);
-            if (process is null)
-            {
-                return false;
-            }
-
-            var stdout = process.StandardOutput.ReadToEnd();
-            process.WaitForExit(TimeSpan.FromSeconds(5));
-
-            if (process.ExitCode != 0)
-            {
-                return false;
-            }
-
-            // Parse output like: OPENSSLDIR: "/usr/lib/ssl"
-            var match = OpenSslVersionRegex().Match(stdout);
-            if (!match.Success)
-            {
-                return false;
-            }
-
-            var openSslDir = match.Groups[1].Value;
-            certsDir = Path.Combine(openSslDir, "certs");
-
-            // Verify the directory exists
-            if (!Directory.Exists(certsDir))
-            {
-                certsDir = null;
-                return false;
-            }
-
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    [GeneratedRegex("OPENSSLDIR:\\s*\"([^\"]+)\"")]
-    private static partial Regex OpenSslVersionRegex();
 }
 
-public sealed class CertificateServiceException(string message) : Exception(message)
+internal sealed class CertificateServiceException(string message) : Exception(message)
 {
-
 }

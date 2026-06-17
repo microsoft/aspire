@@ -5,221 +5,239 @@ using System.CommandLine;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
-using Aspire.Cli.Telemetry;
-using Aspire.Cli.Utils;
+using Aspire.Shared.Json;
 using Microsoft.Extensions.Logging;
+using Semver;
 using Spectre.Console;
+using StreamJsonRpc;
 
 namespace Aspire.Cli.Commands.Sdk;
 
 /// <summary>
-/// Command for dumping ATS capabilities from Aspire integration libraries.
+/// Command for dumping ATS capabilities and exported values from Aspire integration libraries.
 /// Supports multiple output formats for different use cases.
 /// 
 /// Usage:
-///   aspire sdk dump [integration.csproj]           # Pretty output (default)
-///   aspire sdk dump --json                         # Machine-readable JSON
-///   aspire sdk dump --ci -o capabilities.txt      # Stable text for git diffing
+///   aspire sdk dump                                                               # Core Aspire.Hosting only
+///   aspire sdk dump Aspire.Hosting.Redis@13.2.0                                   # Single package
+///   aspire sdk dump Aspire.Hosting.Redis@13.2.0 Aspire.Hosting.PostgreSQL@13.2.0  # Multiple packages
+///   aspire sdk dump ./MyIntegration.csproj Aspire.Hosting.Redis@13.2.0            # Mix of project and packages
+///   aspire sdk dump --format json                                                 # Machine-readable JSON
+///   aspire sdk dump --format ci -o capabilities.txt                               # Stable text for git diffing
 /// </summary>
 internal sealed class SdkDumpCommand : BaseCommand
 {
     private readonly IAppHostServerProjectFactory _appHostServerProjectFactory;
     private readonly ILogger<SdkDumpCommand> _logger;
 
-    private static readonly Argument<FileInfo?> s_integrationArgument = new("integration")
+    private static readonly Argument<string[]> s_integrationArgument = new("integrations")
     {
-        Description = "Path to the integration project (.csproj). If not specified, dumps core Aspire.Hosting capabilities.",
-        Arity = ArgumentArity.ZeroOrOne
+        Description = "Integrations to scan. Each can be a .csproj path or a NuGet package in PackageName@Version format. If not specified, dumps core Aspire.Hosting capabilities.",
+        Arity = ArgumentArity.ZeroOrMore
     };
     private static readonly Option<FileInfo?> s_outputOption = new("--output", "-o")
     {
         Description = "Output file. If not specified, outputs to stdout."
     };
-    private static readonly Option<bool> s_jsonOption = new("--json")
+    private static readonly Option<DirectoryInfo?> s_outputDirectoryOption = new("--output-directory")
     {
-        Description = "Output as JSON for machine consumption."
+        Description = "Output directory for one CI ATS file per integration. Requires --format ci and at least one integration."
     };
-    private static readonly Option<bool> s_ciOption = new("--ci")
+    private static readonly Option<OutputFormat> s_formatOption = new("--format")
     {
-        Description = "Output stable text format for CI/CD diffing."
+        Description = "Output format: Pretty (default), Json (machine-readable), or Ci (stable text for diffing)."
     };
 
     public SdkDumpCommand(
         IAppHostServerProjectFactory appHostServerProjectFactory,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        IInteractionService interactionService,
         ILogger<SdkDumpCommand> logger,
-        AspireCliTelemetry telemetry)
-        : base("dump", "Dump ATS capabilities from Aspire integration libraries.", features, updateNotifier, executionContext, interactionService, telemetry)
+        CommonCommandServices services)
+        : base("dump", "Dump ATS capabilities from Aspire integration libraries.", services)
     {
         _appHostServerProjectFactory = appHostServerProjectFactory;
         _logger = logger;
 
         Arguments.Add(s_integrationArgument);
         Options.Add(s_outputOption);
-        Options.Add(s_jsonOption);
-        Options.Add(s_ciOption);
+        Options.Add(s_outputDirectoryOption);
+        Options.Add(s_formatOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
-        var integrationProject = parseResult.GetValue(s_integrationArgument);
+        var integrationArgs = parseResult.GetValue(s_integrationArgument) ?? [];
         var outputFile = parseResult.GetValue(s_outputOption);
-        var jsonFormat = parseResult.GetValue(s_jsonOption);
-        var ciFormat = parseResult.GetValue(s_ciOption);
+        var outputDirectory = parseResult.GetValue(s_outputDirectoryOption);
+        var format = parseResult.GetValue(s_formatOption);
 
-        // Validate the integration project if specified
-        if (integrationProject is not null)
+        if (outputFile is not null && outputDirectory is not null)
         {
-            if (!integrationProject.Exists)
-            {
-                InteractionService.DisplayError($"Integration project not found: {integrationProject.FullName}");
-                return ExitCodeConstants.FailedToFindProject;
-            }
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, "The --output and --output-directory options cannot be used together.");
+        }
 
-            if (!integrationProject.Extension.Equals(".csproj", StringComparison.OrdinalIgnoreCase))
+        if (outputDirectory is not null && format != OutputFormat.Ci)
+        {
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, "The --output-directory option requires --format ci.");
+        }
+
+        if (outputDirectory is not null && integrationArgs.Length == 0)
+        {
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, "The --output-directory option requires at least one integration.");
+        }
+
+        // Parse each integration argument: either a .csproj path or PackageName@Version
+        var integrations = new List<IntegrationReference>();
+
+        foreach (var arg in integrationArgs)
+        {
+            if (arg.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
             {
-                InteractionService.DisplayError($"Expected a .csproj file, got: {integrationProject.Extension}");
-                return ExitCodeConstants.InvalidCommand;
+                var projectFile = new FileInfo(arg);
+                if (!projectFile.Exists)
+                {
+                    return CommandResult.Failure(CliExitCodes.FailedToFindProject, $"Integration project not found: {projectFile.FullName}");
+                }
+
+                integrations.Add(IntegrationReference.FromProject(
+                    IntegrationAssemblyNameResolver.Resolve(projectFile),
+                    projectFile.FullName));
+            }
+            else if (arg.Contains('@'))
+            {
+                var atIndex = arg.LastIndexOf('@');
+                var packageName = arg[..atIndex];
+                var packageVersion = arg[(atIndex + 1)..];
+
+                if (string.IsNullOrWhiteSpace(packageName) || string.IsNullOrWhiteSpace(packageVersion) || packageName.Contains('@'))
+                {
+                    return CommandResult.Failure(CliExitCodes.InvalidCommand, $"Invalid package format '{arg}'. Expected PackageName@Version (e.g. Aspire.Hosting.Redis@9.2.0).");
+                }
+
+                if (!SemVersion.TryParse(packageVersion, SemVersionStyles.Any, out _))
+                {
+                    return CommandResult.Failure(CliExitCodes.InvalidCommand, $"Invalid version '{packageVersion}' in '{arg}'. Expected a valid NuGet version (e.g. 9.2.0).");
+                }
+
+                _logger.LogDebug("Parsed package reference {PackageName} version {Version}", packageName, packageVersion);
+                integrations.Add(IntegrationReference.FromPackage(packageName, packageVersion));
+            }
+            else
+            {
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, $"Invalid integration argument '{arg}'. Expected a .csproj path or PackageName@Version format.");
             }
         }
 
-        if (jsonFormat && ciFormat)
+        var duplicateIntegration = integrations
+            .GroupBy(integration => integration.Name, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(group => group.Count() > 1);
+        if (duplicateIntegration is not null)
         {
-            InteractionService.DisplayError("Cannot specify both --json and --ci. Choose one format.");
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, $"Multiple integrations resolve to assembly name '{duplicateIntegration.Key}'.");
         }
 
-        var format = jsonFormat ? OutputFormat.Json : ciFormat ? OutputFormat.Ci : OutputFormat.Pretty;
+        if (outputDirectory is not null)
+        {
+            return CommandResult.FromExitCode(await DumpCapabilitiesToDirectoryAsync(integrations, outputDirectory, format, cancellationToken));
+        }
 
         // For file output, skip the interactive spinner
         if (outputFile is not null)
         {
-            return await DumpCapabilitiesAsync(integrationProject, outputFile, format, cancellationToken);
+            return CommandResult.FromExitCode(await DumpCapabilitiesAsync(integrations, outputFile, format, cancellationToken));
         }
 
-        return await InteractionService.ShowStatusAsync(
-            ":magnifying_glass_tilted_right: Scanning capabilities...",
-            async () => await DumpCapabilitiesAsync(integrationProject, outputFile, format, cancellationToken));
+        return CommandResult.FromExitCode(await InteractionService.ShowStatusAsync(
+            "Scanning capabilities...",
+            async () => await DumpCapabilitiesAsync(integrations, outputFile, format, cancellationToken),
+            emoji: KnownEmojis.MagnifyingGlassTiltedLeft));
     }
 
     private async Task<int> DumpCapabilitiesAsync(
-        FileInfo? integrationProject,
+        List<IntegrationReference> integrations,
         FileInfo? outputFile,
         OutputFormat format,
         CancellationToken cancellationToken)
     {
-        // Use a temporary directory for the AppHost server
-        var tempDir = Path.Combine(Path.GetTempPath(), "aspire-sdk-dump", Guid.NewGuid().ToString("N")[..8]);
-        Directory.CreateDirectory(tempDir);
+        var tempDirectory = Directory.CreateTempSubdirectory("aspire-sdk-dump-");
+        var tempDir = tempDirectory.FullName;
 
         try
         {
-            var appHostServerProject = _appHostServerProjectFactory.Create(tempDir);
-            var socketPath = appHostServerProject.GetSocketPath();
+            var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(tempDir, cancellationToken);
 
-            // Build packages list - empty since we only need core capabilities + optional integration
-            var packages = new List<(string Name, string Version)>();
+            _logger.LogDebug("Building AppHost server for capability scanning with {Count} integrations", integrations.Count);
 
-            _logger.LogDebug("Building AppHost server for capability scanning");
+            var prepareResult = await appHostServerProject.PrepareAsync(
+                ExecutionContext.IdentityVersion,
+                integrations,
+                cancellationToken: cancellationToken);
 
-            // Create project files with the integration project reference if specified
-            var additionalProjectRefs = integrationProject is not null
-                ? new[] { integrationProject.FullName }
-                : null;
-
-            await appHostServerProject.CreateProjectFilesAsync(
-                AppHostServerProject.DefaultSdkVersion,
-                packages,
-                cancellationToken,
-                additionalProjectReferences: additionalProjectRefs);
-
-            var (buildSuccess, buildOutput) = await appHostServerProject.BuildAsync(cancellationToken);
-
-            if (!buildSuccess)
+            if (!prepareResult.Success)
             {
                 InteractionService.DisplayError("Failed to build capability scanner.");
-                foreach (var (_, line) in buildOutput.GetLines())
+                if (prepareResult.Output is not null)
                 {
-                    InteractionService.DisplayMessage("wrench", line.EscapeMarkup());
-                }
-                return ExitCodeConstants.FailedToBuildArtifacts;
-            }
-
-            // Start the server
-            var currentPid = Environment.ProcessId;
-            var (serverProcess, _) = appHostServerProject.Run(socketPath, currentPid, new Dictionary<string, string>());
-
-            try
-            {
-                // Connect and get capabilities
-                await using var rpcClient = await AppHostRpcClient.ConnectAsync(socketPath, cancellationToken);
-
-                _logger.LogDebug("Fetching capabilities via RPC");
-                var capabilities = await rpcClient.GetCapabilitiesAsync(cancellationToken);
-
-                // Output Info-level diagnostics to stderr via logger (shown with -d flag)
-                var infoDiagnostics = capabilities.Diagnostics.Where(d => d.Severity == "Info").ToList();
-                foreach (var diag in infoDiagnostics)
-                {
-                    var location = string.IsNullOrEmpty(diag.Location) ? "" : $" [{diag.Location}]";
-                    _logger.LogDebug("{Message}{Location}", diag.Message, location);
-                }
-
-                // Remove Info diagnostics from output (they go to stderr only)
-                capabilities.Diagnostics.RemoveAll(d => d.Severity == "Info");
-
-                // Format the output
-                var output = format switch
-                {
-                    OutputFormat.Json => FormatJson(capabilities),
-                    OutputFormat.Ci => FormatCi(capabilities),
-                    _ => FormatPretty(capabilities)
-                };
-
-                // Write output
-                if (outputFile is not null)
-                {
-                    var outputDir = outputFile.Directory;
-                    if (outputDir is not null && !outputDir.Exists)
+                    foreach (var (_, line) in prepareResult.Output.GetLines())
                     {
-                        outputDir.Create();
+                        InteractionService.DisplayMessage(KnownEmojis.Wrench, line);
                     }
-                    await File.WriteAllTextAsync(outputFile.FullName, output, cancellationToken);
-                    InteractionService.DisplaySuccess($"Capabilities written to {outputFile.FullName}");
                 }
-                else
-                {
-                    // Output to stdout
-                    Console.WriteLine(output);
-                }
+                return CliExitCodes.FailedToBuildArtifacts;
+            }
 
-                // Return error code if there are errors in diagnostics
-                var hasErrors = capabilities.Diagnostics.Exists(d => d.Severity == "Error");
-                return hasErrors ? ExitCodeConstants.InvalidCommand : ExitCodeConstants.Success;
-            }
-            finally
+            await using var serverSession = AppHostServerSession.Start(
+                appHostServerProject,
+                environmentVariables: null,
+                debug: false,
+                _logger);
+
+            // Connect and get capabilities
+            var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
+
+            var exportAssemblyNames = integrations.Count > 0
+                ? integrations.Select(i => i.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
+                : null;
+
+            _logger.LogDebug("Fetching capabilities via RPC");
+            var capabilities = exportAssemblyNames is not null
+                ? await rpcClient.GetCapabilitiesForAssembliesAsync(exportAssemblyNames, cancellationToken)
+                : await rpcClient.GetCapabilitiesAsync(cancellationToken);
+
+            PrepareCapabilitiesForOutput(capabilities, integrations);
+
+            // Format the output
+            var output = format switch
             {
-                // Stop the server - just try to kill, catch if already exited
-                try
+                OutputFormat.Json => FormatJson(capabilities),
+                OutputFormat.Ci => FormatCi(capabilities),
+                _ => FormatPretty(capabilities)
+            };
+
+            // Write output
+            if (outputFile is not null)
+            {
+                var outputDir = outputFile.Directory;
+                if (outputDir is not null && !outputDir.Exists)
                 {
-                    serverProcess.Kill(entireProcessTree: true);
+                    outputDir.Create();
                 }
-                catch (InvalidOperationException)
-                {
-                    // Process already exited - this is fine
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogDebug(ex, "Error killing AppHost server process");
-                }
+                await File.WriteAllTextAsync(outputFile.FullName, output, cancellationToken);
+                InteractionService.DisplaySuccess($"Capabilities written to {outputFile.FullName}");
             }
+            else
+            {
+                // Output to stdout
+                InteractionService.DisplayRawText(output, consoleOverride: ConsoleOutput.Standard);
+            }
+
+            // Return error code if there are errors in diagnostics
+            var hasErrors = capabilities.Diagnostics.Exists(d => d.Severity == "Error");
+            return hasErrors ? CliExitCodes.InvalidCommand : CliExitCodes.Success;
         }
         finally
         {
@@ -238,6 +256,144 @@ internal sealed class SdkDumpCommand : BaseCommand
         }
     }
 
+    private async Task<int> DumpCapabilitiesToDirectoryAsync(
+        List<IntegrationReference> integrations,
+        DirectoryInfo outputDirectory,
+        OutputFormat format,
+        CancellationToken cancellationToken)
+    {
+        var tempDirectory = Directory.CreateTempSubdirectory("aspire-sdk-dump-");
+        var tempDir = tempDirectory.FullName;
+
+        try
+        {
+            var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(tempDir, cancellationToken);
+
+            _logger.LogDebug("Building AppHost server for batched capability scanning with {Count} integrations", integrations.Count);
+
+            var prepareResult = await appHostServerProject.PrepareAsync(
+                ExecutionContext.IdentityVersion,
+                integrations,
+                cancellationToken: cancellationToken);
+
+            if (!prepareResult.Success)
+            {
+                InteractionService.DisplayError("Failed to build capability scanner.");
+                if (prepareResult.Output is not null)
+                {
+                    foreach (var (_, line) in prepareResult.Output.GetLines())
+                    {
+                        InteractionService.DisplayMessage(KnownEmojis.Wrench, line);
+                    }
+                }
+                return CliExitCodes.FailedToBuildArtifacts;
+            }
+
+            await using var serverSession = AppHostServerSession.Start(
+                appHostServerProject,
+                environmentVariables: null,
+                debug: false,
+                _logger);
+
+            var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
+            outputDirectory.Create();
+
+            var dumpTasks = integrations
+                .Select(integration => DumpIntegrationCapabilitiesAsync(rpcClient, integration, outputDirectory, format, cancellationToken))
+                .ToArray();
+
+            var dumpResults = await Task.WhenAll(dumpTasks);
+            var failures = dumpResults.Where(result => !result.Success).ToArray();
+            if (failures.Length > 0)
+            {
+                InteractionService.DisplayError("Failed to dump capabilities for one or more integrations.");
+                foreach (var failure in failures)
+                {
+                    InteractionService.DisplayMessage(KnownEmojis.CrossMark, $"{failure.IntegrationName}: {failure.ErrorMessage}");
+                }
+
+                return CliExitCodes.FailedToBuildArtifacts;
+            }
+
+            return dumpResults.Any(result => result.HasErrors)
+                ? CliExitCodes.InvalidCommand
+                : CliExitCodes.Success;
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(tempDir))
+                {
+                    Directory.Delete(tempDir, recursive: true);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to clean up temp directory {TempDir}", tempDir);
+            }
+        }
+    }
+
+    private async Task<IntegrationDumpResult> DumpIntegrationCapabilitiesAsync(
+        IAppHostRpcClient rpcClient,
+        IntegrationReference integration,
+        DirectoryInfo outputDirectory,
+        OutputFormat format,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var capabilities = await rpcClient.GetCapabilitiesForAssembliesAsync(new[] { integration.Name }, cancellationToken);
+            PrepareCapabilitiesForOutput(capabilities, [integration]);
+
+            var output = format switch
+            {
+                OutputFormat.Json => FormatJson(capabilities),
+                OutputFormat.Ci => FormatCi(capabilities),
+                _ => FormatPretty(capabilities)
+            };
+
+            var outputPath = Path.Combine(outputDirectory.FullName, $"{integration.Name}.ats.txt");
+            await File.WriteAllTextAsync(outputPath, output, cancellationToken);
+            InteractionService.DisplaySuccess($"Capabilities written to {outputPath}");
+
+            return new IntegrationDumpResult(integration.Name, Success: true, HasErrors: capabilities.Diagnostics.Exists(d => d.Severity == "Error"));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException or RemoteInvocationException or AppHostCodeGenerationException)
+        {
+            _logger.LogWarning(ex, "Failed to dump capabilities for integration {IntegrationName}", integration.Name);
+            return new IntegrationDumpResult(integration.Name, Success: false, HasErrors: false, ex.Message);
+        }
+    }
+
+    private void PrepareCapabilitiesForOutput(CapabilitiesInfo capabilities, IEnumerable<IntegrationReference> integrations)
+    {
+        var infoDiagnostics = capabilities.Diagnostics.Where(d => d.Severity == "Info").ToList();
+        foreach (var diag in infoDiagnostics)
+        {
+            var location = string.IsNullOrEmpty(diag.Location) ? "" : $" [{diag.Location}]";
+            _logger.LogDebug("{Message}{Location}", diag.Message, location);
+        }
+
+        capabilities.Diagnostics.RemoveAll(d => d.Severity == "Info");
+
+        var packageVersions = integrations
+            .Where(i => i.IsPackageReference)
+            .Select(i => new PackageInfo { Name = i.Name, Version = i.Version! })
+            .ToList();
+        if (packageVersions.Count > 0)
+        {
+            capabilities.Packages = packageVersions;
+        }
+    }
+
+    private sealed record IntegrationDumpResult(
+        string IntegrationName,
+        bool Success,
+        bool HasErrors,
+        string? ErrorMessage = null);
+
     #region Output Formatters
 
     private static string FormatJson(CapabilitiesInfo capabilities)
@@ -251,7 +407,7 @@ internal sealed class SdkDumpCommand : BaseCommand
 
         // Header (no timestamp for stable diffs)
         sb.AppendLine("# Aspire Type System Capabilities");
-        sb.AppendLine("# Generated by: aspire sdk dump --ci");
+        sb.AppendLine("# Generated by: aspire sdk dump --format ci");
         sb.AppendLine();
 
         // Diagnostics
@@ -294,11 +450,19 @@ internal sealed class SdkDumpCommand : BaseCommand
             sb.AppendLine("# DTO Types");
             foreach (var t in capabilities.DtoTypes.OrderBy(t => t.TypeId))
             {
-                sb.AppendLine(t.TypeId);
+                if (!string.IsNullOrEmpty(t.Description))
+                {
+                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "{0} # {1}", t.TypeId, t.Description));
+                }
+                else
+                {
+                    sb.AppendLine(t.TypeId);
+                }
                 foreach (var p in t.Properties.OrderBy(p => p.Name))
                 {
                     var optional = p.IsOptional ? "?" : "";
-                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  {0}{1}: {2}", p.Name, optional, p.Type?.TypeId ?? "unknown"));
+                    var desc = !string.IsNullOrEmpty(p.Description) ? string.Format(CultureInfo.InvariantCulture, " # {0}", p.Description) : "";
+                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  {0}{1}: {2}{3}", p.Name, optional, p.Type?.TypeId ?? "unknown", desc));
                 }
             }
             sb.AppendLine();
@@ -311,6 +475,26 @@ internal sealed class SdkDumpCommand : BaseCommand
             foreach (var t in capabilities.EnumTypes.OrderBy(t => t.TypeId))
             {
                 sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "{0} = {1}", t.TypeId, string.Join(" | ", t.Values)));
+            }
+            sb.AppendLine();
+        }
+
+        if (capabilities.ExportedValues.Count > 0)
+        {
+            sb.AppendLine("# Exported Values");
+            foreach (var value in capabilities.ExportedValues
+                .OrderBy(value => string.Join(".", value.PathSegments), StringComparer.Ordinal))
+            {
+                var descriptionSuffix = string.IsNullOrEmpty(value.Description)
+                    ? ""
+                    : string.Format(CultureInfo.InvariantCulture, " # {0}", value.Description);
+                sb.AppendLine(string.Format(
+                    CultureInfo.InvariantCulture,
+                    "{0}: {1} = {2}{3}",
+                    string.Join(".", value.PathSegments),
+                    value.Type.TypeId,
+                    value.Value?.ToRelaxedJsonString() ?? "null",
+                    descriptionSuffix));
             }
             sb.AppendLine();
         }
@@ -348,6 +532,7 @@ internal sealed class SdkDumpCommand : BaseCommand
         sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   Handle Types:  {0}", capabilities.HandleTypes.Count));
         sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   DTO Types:     {0}", capabilities.DtoTypes.Count));
         sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   Enum Types:    {0}", capabilities.EnumTypes.Count));
+        sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   Exported Values:  {0}", capabilities.ExportedValues.Count));
         sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   Capabilities:  {0}", capabilities.Capabilities.Count));
         if (errorCount > 0 || warningCount > 0)
         {
@@ -408,6 +593,10 @@ internal sealed class SdkDumpCommand : BaseCommand
             foreach (var t in capabilities.DtoTypes.OrderBy(t => t.Name))
             {
                 sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   {0}", t.Name));
+                if (!string.IsNullOrEmpty(t.Description))
+                {
+                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "      {0}", t.Description));
+                }
                 foreach (var p in t.Properties.OrderBy(p => p.Name))
                 {
                     var optional = p.IsOptional ? "?" : "";
@@ -415,6 +604,10 @@ internal sealed class SdkDumpCommand : BaseCommand
                     // Simplify type display
                     var simpleType = SimplifyTypeName(typeId);
                     sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "      - {0}{1}: {2}", p.Name, optional, simpleType));
+                    if (!string.IsNullOrEmpty(p.Description))
+                    {
+                        sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "         {0}", p.Description));
+                    }
                 }
             }
             sb.AppendLine();
@@ -429,6 +622,30 @@ internal sealed class SdkDumpCommand : BaseCommand
             {
                 sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   {0}", t.Name));
                 sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "      {0}", string.Join(" | ", t.Values)));
+            }
+            sb.AppendLine();
+        }
+
+        if (capabilities.ExportedValues.Count > 0)
+        {
+            sb.AppendLine("Exported Values (copied into guest SDKs)");
+            sb.AppendLine("--------------------------------------------------------------------------------");
+            foreach (var value in capabilities.ExportedValues
+                .OrderBy(value => string.Join(".", value.PathSegments), StringComparer.Ordinal))
+            {
+                sb.AppendLine(string.Format(
+                    CultureInfo.InvariantCulture,
+                    "   {0}: {1}",
+                    string.Join(".", value.PathSegments),
+                    SimplifyTypeName(value.Type.TypeId)));
+                sb.AppendLine(string.Format(
+                    CultureInfo.InvariantCulture,
+                    "      {0}",
+                    value.Value?.ToRelaxedJsonString() ?? "null"));
+                if (!string.IsNullOrEmpty(value.Description))
+                {
+                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "      {0}", value.Description));
+                }
             }
             sb.AppendLine();
         }
@@ -493,13 +710,24 @@ internal sealed class SdkDumpCommand : BaseCommand
 
 #region Response DTOs (matching server response)
 
+// `aspire sdk dump --format json` uses these shapes; keep
+// docs/specs/cli-output-formats.md in sync when changing them.
+
 internal sealed class CapabilitiesInfo
 {
+    public List<PackageInfo> Packages { get; set; } = [];
     public List<CapabilityInfo> Capabilities { get; set; } = [];
     public List<HandleTypeInfo> HandleTypes { get; set; } = [];
     public List<DtoTypeInfo> DtoTypes { get; set; } = [];
     public List<EnumTypeInfo> EnumTypes { get; set; } = [];
+    public List<ExportedValueInfo> ExportedValues { get; set; } = [];
     public List<DiagnosticInfo> Diagnostics { get; set; } = [];
+}
+
+internal sealed class PackageInfo
+{
+    public string Name { get; set; } = "";
+    public string Version { get; set; } = "";
 }
 
 internal sealed class CapabilityInfo
@@ -509,6 +737,7 @@ internal sealed class CapabilityInfo
     public string? OwningTypeName { get; set; }
     public string QualifiedMethodName { get; set; } = "";
     public string? Description { get; set; }
+    public DocumentationInfo? Documentation { get; set; }
     public string CapabilityKind { get; set; } = "";
     public string? TargetTypeId { get; set; }
     public string? TargetParameterName { get; set; }
@@ -529,12 +758,14 @@ internal sealed class ParameterInfo
     public List<CallbackParameterInfo>? CallbackParameters { get; set; }
     public TypeRefInfo? CallbackReturnType { get; set; }
     public string? DefaultValue { get; set; }
+    public DocumentationInfo? Documentation { get; set; }
 }
 
 internal sealed class CallbackParameterInfo
 {
     public string Name { get; set; } = "";
     public TypeRefInfo? Type { get; set; }
+    public DocumentationInfo? Documentation { get; set; }
 }
 
 internal sealed class TypeRefInfo
@@ -555,6 +786,7 @@ internal sealed class HandleTypeInfo
     public bool IsInterface { get; set; }
     public bool ExposeProperties { get; set; }
     public bool ExposeMethods { get; set; }
+    public DocumentationInfo? Documentation { get; set; }
     public List<TypeRefInfo> ImplementedInterfaces { get; set; } = [];
     public List<TypeRefInfo> BaseTypeHierarchy { get; set; } = [];
 }
@@ -563,6 +795,8 @@ internal sealed class DtoTypeInfo
 {
     public string TypeId { get; set; } = "";
     public string Name { get; set; } = "";
+    public string? Description { get; set; }
+    public DocumentationInfo? Documentation { get; set; }
     public List<DtoPropertyInfo> Properties { get; set; } = [];
 }
 
@@ -571,6 +805,8 @@ internal sealed class DtoPropertyInfo
     public string Name { get; set; } = "";
     public TypeRefInfo? Type { get; set; }
     public bool IsOptional { get; set; }
+    public string? Description { get; set; }
+    public DocumentationInfo? Documentation { get; set; }
 }
 
 internal sealed class EnumTypeInfo
@@ -578,6 +814,37 @@ internal sealed class EnumTypeInfo
     public string TypeId { get; set; } = "";
     public string Name { get; set; } = "";
     public List<string> Values { get; set; } = [];
+    public List<EnumValueInfo> ValueInfos { get; set; } = [];
+    public DocumentationInfo? Documentation { get; set; }
+}
+
+internal sealed class EnumValueInfo
+{
+    public string Name { get; set; } = "";
+    public DocumentationInfo? Documentation { get; set; }
+}
+
+internal sealed class ExportedValueInfo
+{
+    public List<string> PathSegments { get; set; } = [];
+    public TypeRefInfo Type { get; set; } = null!;
+    public JsonNode? Value { get; set; }
+    public string? Description { get; set; }
+    public DocumentationInfo? Documentation { get; set; }
+}
+
+internal sealed class DocumentationInfo
+{
+    public string? Summary { get; set; }
+    public string? Remarks { get; set; }
+    public string? Returns { get; set; }
+    public List<ParameterDocumentationInfo> Parameters { get; set; } = [];
+}
+
+internal sealed class ParameterDocumentationInfo
+{
+    public string Name { get; set; } = "";
+    public string Description { get; set; } = "";
 }
 
 internal sealed class DiagnosticInfo
@@ -593,6 +860,7 @@ internal sealed class DiagnosticInfo
 
 [JsonSourceGenerationOptions(WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(CapabilitiesInfo))]
+[JsonSerializable(typeof(PackageInfo))]
 [JsonSerializable(typeof(CapabilityInfo))]
 [JsonSerializable(typeof(ParameterInfo))]
 [JsonSerializable(typeof(CallbackParameterInfo))]
@@ -601,6 +869,10 @@ internal sealed class DiagnosticInfo
 [JsonSerializable(typeof(DtoTypeInfo))]
 [JsonSerializable(typeof(DtoPropertyInfo))]
 [JsonSerializable(typeof(EnumTypeInfo))]
+[JsonSerializable(typeof(EnumValueInfo))]
+[JsonSerializable(typeof(ExportedValueInfo))]
+[JsonSerializable(typeof(DocumentationInfo))]
+[JsonSerializable(typeof(ParameterDocumentationInfo))]
 [JsonSerializable(typeof(DiagnosticInfo))]
 internal partial class CapabilitiesJsonContext : JsonSerializerContext
 {

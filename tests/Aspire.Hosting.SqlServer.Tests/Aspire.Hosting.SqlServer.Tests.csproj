@@ -2,6 +2,8 @@
 
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <!-- SqlServer container tests need longer hang timeout than the default 10m -->
+    <TestHangTimeout>20m</TestHangTimeout>
   </PropertyGroup>
 
   <ItemGroup>

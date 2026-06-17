@@ -12,7 +12,9 @@ namespace Aspire.Cli.Projects;
 internal record AppHostValidationResult(
     bool IsValid,
     bool IsPossiblyUnbuildable = false,
-    string? Message = null);
+    bool IsUnsupported = false,
+    string? Message = null,
+    string? AspireHostingVersion = null);
 
 /// <summary>
 /// Context for updating packages in an AppHost project.
@@ -28,6 +30,18 @@ internal sealed class UpdatePackagesContext
     /// Gets or sets the package channel to update to.
     /// </summary>
     public required Packaging.PackageChannel Channel { get; init; }
+
+    /// <summary>
+    /// Gets the prompt binding for confirmation prompts.
+    /// Enables non-interactive confirmation via CLI options (e.g. <c>--yes</c>).
+    /// </summary>
+    public required Interaction.PromptBinding<bool> ConfirmBinding { get; init; }
+
+    /// <summary>
+    /// Gets the prompt binding for the NuGet config directory prompt.
+    /// Enables non-interactive selection via CLI options (e.g. <c>--nuget-config-dir</c>).
+    /// </summary>
+    public required Interaction.PromptBinding<string?> NuGetConfigDirBinding { get; init; }
 }
 
 /// <summary>
@@ -120,6 +134,16 @@ internal sealed class PublishContext
     /// Gets whether debug logging is enabled.
     /// </summary>
     public bool Debug { get; init; }
+
+    /// <summary>
+    /// Gets whether to start a debug session in the extension for the AppHost.
+    /// </summary>
+    public bool StartDebugSession { get; init; }
+
+    /// <summary>
+    /// Gets whether to skip building before running.
+    /// </summary>
+    public bool NoBuild { get; init; }
 }
 
 /// <summary>
@@ -128,6 +152,11 @@ internal sealed class PublishContext
 /// </summary>
 internal interface IAppHostProject
 {
+    /// <summary>
+    /// Gets or sets whether this project type is unsupported in the current environment.
+    /// </summary>
+    bool IsUnsupported { get; set; }
+
     /// <summary>
     /// Gets the unique identifier for this language (e.g., "csharp", "typescript").
     /// Used for configuration storage and CLI arguments.
@@ -162,6 +191,13 @@ internal interface IAppHostProject
     string? AppHostFileName { get; }
 
     /// <summary>
+    /// Determines whether this AppHost should use project references instead of package references.
+    /// </summary>
+    /// <param name="appHostFile">The AppHost file being operated on.</param>
+    /// <returns><see langword="true"/> when project-reference mode should be used; otherwise <see langword="false"/>.</returns>
+    bool IsUsingProjectReferences(FileInfo appHostFile);
+
+    /// <summary>
     /// Runs the AppHost project.
     /// </summary>
     /// <param name="context">The context containing all information needed to run the AppHost.</param>
@@ -187,6 +223,14 @@ internal interface IAppHostProject
     Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Gets the Aspire SDK version used by the specified AppHost.
+    /// </summary>
+    /// <param name="appHostFile">The AppHost file.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The resolved version using this project type's AppHost model, or <see langword="null"/> when the version is unknown.</returns>
+    Task<string?> GetAspireHostingVersionAsync(FileInfo appHostFile, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Adds a package to the AppHost project.
     /// </summary>
     /// <param name="context">The context containing package information.</param>
@@ -203,17 +247,25 @@ internal interface IAppHostProject
     Task<UpdatePackagesResult> UpdatePackagesAsync(UpdatePackagesContext context, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Checks for and handles any running instance of this AppHost.
+    /// Finds any running instance of this AppHost and stops it.
     /// </summary>
     /// <param name="appHostFile">The AppHost file to check for running instances.</param>
     /// <param name="homeDirectory">The user's home directory for computing socket paths.</param>
     /// <param name="cancellationToken">A cancellation token.</param>
     /// <returns>The result indicating what happened with the running instance check.</returns>
-    Task<RunningInstanceResult> CheckAndHandleRunningInstanceAsync(FileInfo appHostFile, DirectoryInfo homeDirectory, CancellationToken cancellationToken);
+    Task<RunningInstanceResult> FindAndStopRunningInstanceAsync(FileInfo appHostFile, DirectoryInfo homeDirectory, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Gets the UserSecretsId for the specified AppHost file.
+    /// </summary>
+    /// <param name="appHostFile">The AppHost file.</param>
+    /// <param name="autoInit">If true, initializes user secrets if not configured.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    Task<string?> GetUserSecretsIdAsync(FileInfo appHostFile, bool autoInit, CancellationToken cancellationToken);
 }
 
 /// <summary>
-/// Result of checking for and handling a running instance.
+/// Result of finding and stopping a running instance.
 /// </summary>
 internal enum RunningInstanceResult
 {

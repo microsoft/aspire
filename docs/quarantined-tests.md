@@ -47,7 +47,7 @@ dotnet exec YourTestAssembly.dll --filter-trait "quarantined=true"
 
 ```csharp
 [Fact]
-[QuarantinedTest("https://github.com/dotnet/aspire/issues/7920")]
+[QuarantinedTest("https://github.com/microsoft/aspire/issues/7920")]
 public async Task FlakyTest()
 {
     // Test implementation

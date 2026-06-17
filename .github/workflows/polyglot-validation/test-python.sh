@@ -21,11 +21,11 @@ cd "$WORK_DIR"
 
 # Initialize Python AppHost
 echo "Creating Python apphost project..."
-aspire init -l python --non-interactive
+aspire init --language python --non-interactive -d
 
 # Add Redis integration
 echo "Adding Redis integration..."
-aspire add Aspire.Hosting.Redis --non-interactive 2>&1 || {
+aspire add Aspire.Hosting.Redis --non-interactive -d 2>&1 || {
     echo "aspire add failed, manually updating settings.json..."
     PKG_VERSION=$(aspire --version | grep -oP '\d+\.\d+\.\d+-.*' | head -1)
     if [ -f ".aspire/settings.json" ]; then
@@ -39,8 +39,8 @@ aspire add Aspire.Hosting.Redis --non-interactive 2>&1 || {
 
 # Insert Redis line into apphost.py
 echo "Configuring apphost.py with Redis..."
-if grep -q "builder.build().run()" apphost.py; then
-    sed -i '/builder.build().run()/i\# Add Redis cache resource\nredis = builder.add_redis("cache").with_image_registry("netaspireci.azurecr.io")' apphost.py
+if grep -q "builder.run()" apphost.py; then
+    sed -i '/builder.run()/i\    # Add Redis cache resource\n    redis = builder.add_redis("cache").with_image_registry("netaspireci.azurecr.io")' apphost.py
     echo "✅ Redis configuration added to apphost.py"
 fi
 

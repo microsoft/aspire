@@ -3,6 +3,7 @@
 
 namespace Aspire.Hosting.Tests;
 
+[Trait("Partition", "5")]
 public class ModelNameTests
 {
     [Fact]
@@ -107,5 +108,15 @@ public class ModelNameTests
     public void ValidateName_ValidNames_Success(string name)
     {
         ModelName.ValidateName(nameof(Resource), name);
+    }
+
+    [Fact]
+    public void ProjectRebuilderResource_LongName_DoesNotThrow()
+    {
+        var longName = new string('a', 64) + "-rebuilder";
+        var parent = new ProjectResource("parent");
+        var rebuilder = new ProjectRebuilderResource(longName, parent, "/some/project.csproj");
+
+        Assert.Equal(longName, rebuilder.Name);
     }
 }

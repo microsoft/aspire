@@ -11,7 +11,7 @@ ms.date: 05/18/2025
 - .NET 8.0 Long Term Support (LTS)
 - .NET 9.0 Standard Term Support (STS)
 
-If you have feedback, questions, or want to contribute to Aspire, collaborate with us on [:::image type="icon" source="../media/github-mark.svg" border="false"::: GitHub](https://github.com/dotnet/aspire) or join us on [:::image type="icon" source="../media/discord-icon.svg" border="false"::: Discord](https://aka.ms/dotnet-discord) to chat with team members.
+If you have feedback, questions, or want to contribute to Aspire, collaborate with us on [:::image type="icon" source="../media/github-mark.svg" border="false"::: GitHub](https://github.com/microsoft/aspire) or join us on [:::image type="icon" source="../media/discord-icon.svg" border="false"::: Discord](https://aka.ms/dotnet-discord) to chat with team members.
 
 It's important to note that Aspire releases out-of-band from .NET releases. While major versions of Aspire align with major .NET versions, minor versions are released more frequently. For more information on .NET and Aspire version support, see:
 
@@ -98,7 +98,7 @@ builder.Eventing.Subscribe<InitializeResourceEvent>(myCustom, async (e, ct) =>
 });
 ```
 
-This replaces awkward patterns like `Task.Run` inside constructors or `Configure()` methods. You can see a more complex version in the [TalkingClock sample](https://github.com/dotnet/aspire-samples/tree/3dee8cd7c7880fe421ea61ba167301eb1369000a/samples/CustomResources/CustomResources.AppHost) in the official Aspire samples repo.
+This replaces awkward patterns like `Task.Run` inside constructors or `Configure()` methods. You can see a more complex version in the [TalkingClock sample](https://github.com/microsoft/aspire-samples/tree/3dee8cd7c7880fe421ea61ba167301eb1369000a/samples/CustomResources/CustomResources.AppHost) in the official Aspire samples repo.
 
 #### `ResourceEndpointsAllocatedEvent`
 
@@ -811,7 +811,7 @@ This ensures every app that references the database gets **full access** without
 
 If your deployment relied on Aspire setting the managed identity as the SQL Server **admin**, you'll need to review your access model. Apps now receive **explicit role-based access (`db_owner`)** instead of broad admin rights.
 
-📖 Related: [dotnet/aspire#8381](https://github.com/dotnet/aspire/issues/8381) and [dotnet/aspire#8389](https://github.com/dotnet/aspire/issues/8389)
+📖 Related: [microsoft/aspire#8381](https://github.com/microsoft/aspire/issues/8381) and [microsoft/aspire#8389](https://github.com/microsoft/aspire/issues/8389)
 
 ### 💸 Default Azure SQL SKU now uses the Free Offer (Breaking change)
 
@@ -840,7 +840,7 @@ sql.AddDatabase("appdb")
    .WithDefaultAzureSku(); // Uses the previous (General Purpose) default
 ```
 
-If you want to specify what SKU to use, you the `ConfigureInfrastructure` method as explained here: [Setting a specific SKU](https://github.com/dotnet/aspire/tree/main/src/Aspire.Hosting.Azure.Sql#setting-a-specific-sku).
+If you want to specify what SKU to use, you the `ConfigureInfrastructure` method as explained here: [Setting a specific SKU](https://github.com/microsoft/aspire/tree/main/src/Aspire.Hosting.Azure.Sql#setting-a-specific-sku).
 
 #### ⚠️ Breaking change
 

@@ -6,6 +6,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <summary>
 /// A resource that represents a RabbitMQ resource.
 /// </summary>
+[AspireExport(ExposeProperties = true)]
 public class RabbitMQServerResource : ContainerResource, IResourceWithConnectionString, IResourceWithEnvironment
 {
     internal const string PrimaryEndpointName = "tcp";

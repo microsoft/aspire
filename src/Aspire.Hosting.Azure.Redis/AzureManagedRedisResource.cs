@@ -18,6 +18,7 @@ namespace Aspire.Hosting.Azure;
 /// </summary>
 /// <param name="name">The name of the resource.</param>
 /// <param name="configureInfrastructure">Callback to configure the Azure resources.</param>
+[AspireExport(ExposeProperties = true)]
 public class AzureManagedRedisResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
     : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString, IAzurePrivateEndpointTarget
 {
@@ -72,6 +73,8 @@ public class AzureManagedRedisResource(string name, Action<AzureResourceInfrastr
     internal RedisResource? InnerResource { get; private set; }
 
     /// <inheritdoc />
+    /// <remarks>This property is not available in polyglot app hosts.</remarks>
+    [AspireExportIgnore]
     public override ResourceAnnotationCollection Annotations => InnerResource?.Annotations ?? base.Annotations;
 
     /// <summary>
@@ -248,9 +251,7 @@ public class AzureManagedRedisResource(string name, Action<AzureResourceInfrastr
         }
     }
 
-    BicepOutputReference IAzurePrivateEndpointTarget.Id => Id;
-
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["redisEnterprise"];
 
-    string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() => "privatelink.redis.azure.net";
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() => ["privatelink.redis.azure.net"];
 }

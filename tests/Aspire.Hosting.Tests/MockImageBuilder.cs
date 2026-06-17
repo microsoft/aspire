@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREPIPELINES003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
+using System.Collections.Concurrent;
 using Aspire.Hosting.Publishing;
 
 namespace Aspire.Hosting.Tests;
@@ -15,9 +16,9 @@ public sealed class MockImageBuilder : IResourceContainerImageManager
     public bool BuildImageCalled { get; private set; }
     public bool BuildImagesCalled { get; private set; }
     public bool PushImageCalled { get; private set; }
-    public List<IResource> BuildImageResources { get; } = [];
-    public List<ContainerImageBuildOptions?> BuildImageOptions { get; } = [];
-    public List<IResource> PushImageCalls { get; } = [];
+    public ConcurrentBag<IResource> BuildImageResources { get; } = [];
+    public ConcurrentBag<ContainerImageBuildOptions?> BuildImageOptions { get; } = [];
+    public ConcurrentBag<IResource> PushImageCalls { get; } = [];
 
     public Task BuildImageAsync(IResource resource, CancellationToken cancellationToken = default)
     {
@@ -29,7 +30,10 @@ public sealed class MockImageBuilder : IResourceContainerImageManager
     public Task BuildImagesAsync(IEnumerable<IResource> resources, CancellationToken cancellationToken = default)
     {
         BuildImagesCalled = true;
-        BuildImageResources.AddRange(resources);
+        foreach (var resource in resources)
+        {
+            BuildImageResources.Add(resource);
+        }
         return Task.CompletedTask;
     }
 

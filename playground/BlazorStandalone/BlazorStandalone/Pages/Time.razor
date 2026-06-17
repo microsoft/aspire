@@ -1,0 +1,67 @@
+@page "/time"
+@inject IHttpClientFactory HttpClientFactory
+
+<PageTitle>Time</PageTitle>
+
+<h1>Current Time</h1>
+
+<p>This component demonstrates fetching data from the TimeAPI service via Aspire service discovery.</p>
+
+@if (errorMessage != null)
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+else if (timeResponse == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <div class="card" style="max-width: 400px;">
+        <div class="card-body">
+            <h5 class="card-title">Server Time</h5>
+            <p class="card-text"><strong>Date:</strong> @timeResponse.Date</p>
+            <p class="card-text"><strong>Local Time:</strong> @timeResponse.LocalTime</p>
+            <p class="card-text"><strong>UTC:</strong> @timeResponse.UtcNow.ToString("HH:mm:ss")</p>
+            <p class="card-text"><strong>Time Zone:</strong> @timeResponse.TimeZone</p>
+        </div>
+    </div>
+    <button class="btn btn-primary mt-3" @onclick="RefreshTime">Refresh</button>
+}
+
+@code {
+    private TimeResponse? timeResponse;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTime();
+    }
+
+    private async Task LoadTime()
+    {
+        try
+        {
+            errorMessage = null;
+            var client = HttpClientFactory.CreateClient("timeapi");
+            timeResponse = await client.GetFromJsonAsync<TimeResponse>("currenttime");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to fetch time data: {ex.Message}";
+        }
+    }
+
+    private async Task RefreshTime()
+    {
+        await LoadTime();
+    }
+
+    public class TimeResponse
+    {
+        public DateTimeOffset UtcNow { get; set; }
+        public string? TimeZone { get; set; }
+        public string? LocalTime { get; set; }
+        public string? Date { get; set; }
+    }
+}

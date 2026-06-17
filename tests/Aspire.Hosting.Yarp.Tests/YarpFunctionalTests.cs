@@ -1,17 +1,23 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Testing;
 using Aspire.Hosting.Utils;
 using Aspire.Hosting.Yarp.Transforms;
 using Aspire.TestUtilities;
 
 namespace Aspire.Hosting.Yarp.Tests;
+
 public class YarpFunctionalTests(ITestOutputHelper testOutputHelper)
 {
+    // The floating aspnetapp tag can move to a platform-specific manifest; pin
+    // this functional test to a multi-platform tag because it runs on Linux CI.
+    private const string BackendImage = "mcr.microsoft.com/dotnet/samples:aspnetapp-8.0";
+
     [Fact]
     [RequiresFeature(TestFeature.Docker)]
-    [QuarantinedTest("https://github.com/dotnet/aspire/issues/9344")]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/17020")]
     public async Task VerifyYarpResourceExtensionsConfig()
     {
         await VerifyYarpResource((yarp, endpoint) =>
@@ -31,7 +37,7 @@ public class YarpFunctionalTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var backend = builder
-            .AddContainer("backend", "mcr.microsoft.com/dotnet/samples:aspnetapp")
+            .AddContainer("backend", BackendImage)
             .WithHttpEndpoint(targetPort: 8080)
             .WithExternalHttpEndpoints();
 
@@ -48,8 +54,7 @@ public class YarpFunctionalTests(ITestOutputHelper testOutputHelper)
         await app.ResourceNotifications.WaitForResourceHealthyAsync(backend.Resource.Name, cts.Token);
         await app.ResourceNotifications.WaitForResourceHealthyAsync(yarp.Resource.Name, cts.Token);
 
-        var endpoint = yarp.Resource.GetEndpoint("http");
-        var httpClient = new HttpClient() { BaseAddress = new Uri(endpoint.Url) };
+        using var httpClient = app.CreateHttpClient(yarp.Resource.Name);
 
         using var response200 = await httpClient.GetAsync("/aspnetapp");
         Assert.Equal(System.Net.HttpStatusCode.OK, response200.StatusCode);

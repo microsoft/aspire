@@ -34,6 +34,11 @@ internal sealed class TemplateInputs
     public string? Channel { get; init; }
 
     /// <summary>
+    /// Gets the selected AppHost language identifier.
+    /// </summary>
+    public string? Language { get; init; }
+
+    /// <summary>
     /// Gets a value indicating whether this is an in-place initialization (e.g., aspire init)
     /// where the template should use the current working directory without prompting for name/output.
     /// </summary>

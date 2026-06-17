@@ -85,7 +85,7 @@ builder.AddDotnetTool("incompatibleSdk", "dotnet-ef")
 
 // Some issues only show up when installing for first time, rather than using existing downloaded versions
 // Use a specific NUGET_PACKAGES path for these playground tools, so we can easily reset them
-builder.Eventing.Subscribe<BeforeStartEvent>(async (evt, _) =>
+builder.OnBeforeStart(async (evt, _) =>
 {
     var nugetPackagesPath = Path.Join(evt.Services.GetRequiredService<IAspireStore>().BasePath, "nuget");
 

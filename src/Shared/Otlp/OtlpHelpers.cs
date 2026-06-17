@@ -86,20 +86,6 @@ public static partial class OtlpHelpers
         return TimeSpan.Zero;
     }
 
-    /// <summary>
-    /// Formats a Unix nanosecond timestamp to a time string (HH:mm:ss.fff).
-    /// </summary>
-    /// <returns>Formatted time string or empty string if null.</returns>
-    public static string FormatNanoTimestamp(ulong? nanos)
-    {
-        if (nanos.HasValue)
-        {
-            return UnixNanoSecondsToDateTime(nanos.Value)
-                .ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture);
-        }
-        return "";
-    }
-
     public static string GetResourceName(IOtlpResource resource, IReadOnlyList<IOtlpResource> allResources)
     {
         var count = 0;
@@ -113,15 +99,17 @@ public static partial class OtlpHelpers
                     var instanceId = resource.InstanceId;
 
                     // Convert long GUID into a shorter, more human friendly format.
+                    // The last characters are used because version 7 GUIDs created close
+                    // in time share the same leading characters, e.g. Guid.CreateVersion7().
                     // Before: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
-                    // After:  aaaaaaaa
+                    // After:  eeeeeeee
                     if (instanceId != null && Guid.TryParse(instanceId, out var guid))
                     {
                         Span<char> chars = stackalloc char[32];
-                        var result = guid.TryFormat(chars, charsWritten: out _, format: "N");
+                        var result = guid.TryFormat(chars, out var charsWritten, format: "N");
                         Debug.Assert(result, "Guid.TryFormat not successful.");
 
-                        instanceId = chars.Slice(0, 8).ToString();
+                        instanceId = chars.Slice(charsWritten - 8, 8).ToString();
                     }
 
                     if (instanceId == null)

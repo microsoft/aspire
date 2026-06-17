@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="AIAssistantLaunchButtonText">
         <source>Chat with GitHub Copilot</source>
-        <target state="translated">Conversation avec GitHub Copilot</target>
+        <target state="translated">Discuter avec GitHub Copilot</target>
         <note />
       </trans-unit>
       <trans-unit id="ChatIDEConnectionDisclaimerText">
@@ -109,7 +109,7 @@
       </trans-unit>
       <trans-unit id="DialogTitle">
         <source>GitHub Copilot chat</source>
-        <target state="translated">Copilot Chat GitHub</target>
+        <target state="translated">Conversation GitHub Copilot</target>
         <note />
       </trans-unit>
       <trans-unit id="DislikeMessageButtonText">
@@ -164,7 +164,7 @@
       </trans-unit>
       <trans-unit id="SidebarTitle">
         <source>GitHub Copilot chat</source>
-        <target state="translated">Copilot Chat GitHub</target>
+        <target state="translated">Conversation GitHub Copilot</target>
         <note />
       </trans-unit>
       <trans-unit id="ToolNotificationConsoleLogs">

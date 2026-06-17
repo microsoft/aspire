@@ -378,29 +378,16 @@ public class AddDotnetToolTests
         Assert.Equal(expectedManifest, manifest.ToString());
     }
 
-    [Theory]
-    [InlineData("11.1.0", true)]
-    [InlineData("10.0.0", true)]
-    [InlineData("9.0.999", false)]
-    public void ValidateDotnetSdkVersion_ValidatesVersionCorrectly(string versionString, bool isAllowed)
-    {
-        var version = Version.Parse(versionString);
-
-        if (isAllowed)
-        {
-            DotnetToolResourceExtensions.ValidateDotnetSdkVersion(version, "");
-        }
-        else
-        {
-            Assert.Throws<DistributedApplicationException>(() =>
-                DotnetToolResourceExtensions.ValidateDotnetSdkVersion(version, ""));
-        }
-    }
-
     [Fact]
-    public void ValidateDotnetSdkVersion_WithNullVersion_DoesNotThrow()
+    public void AddDotnetTool_IncludesRequiredCommandAnnotation()
     {
-        // Should not throw - null is treated as "unable to determine version"
-        DotnetToolResourceExtensions.ValidateDotnetSdkVersion(null, "");
+        var builder = DistributedApplication.CreateBuilder();
+        var tool = builder.AddDotnetTool("mytool", "dotnet-ef");
+
+#pragma warning disable ASPIRECOMMAND001
+        var annotation = Assert.Single(tool.Resource.Annotations.OfType<RequiredCommandAnnotation>());
+#pragma warning restore ASPIRECOMMAND001
+        Assert.Equal("dotnet", annotation.Command);
+        Assert.NotNull(annotation.ValidationCallback);
     }
 }

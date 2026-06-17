@@ -76,4 +76,10 @@ internal class YarpConfigurationBuilder(IResourceBuilder<YarpResource> parent) :
         _parent.Resource.Clusters.Add(destination);
         return destination;
     }
+
+    internal YarpRoute AddRoute(string path, object destination)
+    {
+        var cluster = AddCluster(YarpConfigurationBuilderHelpers.CreateSyntheticClusterName(path, destination.ToString()!), [destination]);
+        return AddRoute(path, cluster);
+    }
 }

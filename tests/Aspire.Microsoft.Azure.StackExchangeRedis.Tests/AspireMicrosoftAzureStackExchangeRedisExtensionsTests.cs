@@ -74,5 +74,6 @@ public class AspireMicrosoftAzureStackExchangeRedisExtensionsTests
         var defaults = configurationOptions.Defaults;
         Assert.IsNotType<IAzureCacheTokenEvents>(defaults, exactMatch: false);
         Assert.IsNotType<AzureOptionsProvider>(defaults, exactMatch: false);
+        Assert.IsNotType<AzureManagedRedisOptionsProvider>(defaults, exactMatch: false);
     }
 }

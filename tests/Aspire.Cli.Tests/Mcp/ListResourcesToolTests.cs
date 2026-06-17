@@ -22,7 +22,7 @@ public class ListResourcesToolTests
             () => tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).AsTask()).DefaultTimeout();
 
         Assert.Contains("No Aspire AppHost", exception.Message);
-        Assert.Contains("--detach", exception.Message);
+        Assert.Contains("aspire start", exception.Message);
     }
 
     [Fact]

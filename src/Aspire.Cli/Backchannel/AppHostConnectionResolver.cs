@@ -2,9 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Projects;
+using Aspire.Cli.Resources;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
+using Spectre.Console;
 
 namespace Aspire.Cli.Backchannel;
 
@@ -16,9 +21,15 @@ internal sealed class AppHostConnectionResult
     public IAppHostAuxiliaryBackchannel? Connection { get; init; }
 
     [MemberNotNullWhen(true, nameof(Connection))]
+    [MemberNotNullWhen(false, nameof(ErrorMessage))]
     public bool Success => Connection is not null;
 
     public string? ErrorMessage { get; init; }
+
+    public int? ExitCode { get; init; }
+
+    [MemberNotNullWhen(true, nameof(ExitCode))]
+    public bool IsProjectResolutionError => ExitCode is CliExitCodes.FailedToFindProject or CliExitCodes.SdkNotInstalled;
 }
 
 /// <summary>
@@ -30,16 +41,44 @@ internal sealed class AppHostConnectionResult
 internal sealed class AppHostConnectionResolver(
     IAuxiliaryBackchannelMonitor backchannelMonitor,
     IInteractionService interactionService,
+    IProjectLocator projectLocator,
     CliExecutionContext executionContext,
-    ILogger logger)
+    ILogger logger,
+    ProfilingTelemetry? profilingTelemetry = null)
 {
+    /// <summary>
+    /// Resolves all running AppHost connections using socket-first discovery.
+    /// Used when stopping all running AppHosts (e.g., via --all flag).
+    /// </summary>
+    /// <param name="scanningMessage">Message to display while scanning for AppHosts.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>All resolved connections, or an empty array if none found.</returns>
+    public async Task<AppHostConnectionResult[]> ResolveAllConnectionsAsync(
+        string scanningMessage,
+        CancellationToken cancellationToken)
+    {
+        var connections = await interactionService.ShowStatusAsync(
+            scanningMessage,
+            async () =>
+            {
+                await backchannelMonitor.ScanAsync(cancellationToken).ConfigureAwait(false);
+                return backchannelMonitor.Connections.ToList();
+            });
+
+        if (connections.Count == 0)
+        {
+            return [];
+        }
+
+        return connections.Select(c => new AppHostConnectionResult { Connection = c }).ToArray();
+    }
+
     /// <summary>
     /// Resolves an AppHost connection using socket-first discovery.
     /// </summary>
     /// <param name="projectFile">Optional project file. If specified, uses fast path to find matching socket.</param>
     /// <param name="scanningMessage">Message to display while scanning for AppHosts.</param>
     /// <param name="selectPrompt">Prompt to display when multiple AppHosts are found.</param>
-    /// <param name="noInScopeMessage">Message to display when no in-scope AppHosts are found but others exist.</param>
     /// <param name="notFoundMessage">Message to display when no AppHosts are found.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The resolved connection, or null with an error message.</returns>
@@ -47,17 +86,60 @@ internal sealed class AppHostConnectionResolver(
         FileInfo? projectFile,
         string scanningMessage,
         string selectPrompt,
-        string noInScopeMessage,
         string notFoundMessage,
         CancellationToken cancellationToken)
     {
-        // Fast path: If --project was specified, check directly for its socket
+        // Fast path: If --apphost was specified, check directly for its socket
         if (projectFile is not null)
         {
+            var explicitDirectory = Directory.Exists(projectFile.FullName);
+
+            if (explicitDirectory)
+            {
+                try
+                {
+                    var searchResult = await projectLocator.UseOrFindAppHostProjectFileAsync(
+                        projectFile,
+                        MultipleAppHostProjectsFoundBehavior.Throw,
+                        createSettingsFile: false,
+                        cancellationToken).ConfigureAwait(false);
+
+                    projectFile = searchResult.SelectedProjectFile;
+                }
+                catch (ProjectLocatorException ex)
+                {
+                    var (exitCode, errorMessage) = ProjectLocatorErrorHelper.GetExitCodeAndMessage(ex, projectOptionSpecifiedAsDirectory: true);
+                    return new AppHostConnectionResult
+                    {
+                        ErrorMessage = errorMessage,
+                        ExitCode = exitCode,
+                    };
+                }
+
+                if (projectFile is null)
+                {
+                    return new AppHostConnectionResult
+                    {
+                        ErrorMessage = InteractionServiceStrings.ProjectOptionSpecifiedDirectoryContainsNoAppHosts,
+                        ExitCode = CliExitCodes.FailedToFindProject,
+                    };
+                }
+            }
+            else if (!projectFile.Exists)
+            {
+                return new AppHostConnectionResult
+                {
+                    ErrorMessage = InteractionServiceStrings.ProjectOptionDoesntExist,
+                    ExitCode = CliExitCodes.FailedToFindProject,
+                };
+            }
+
             var targetPath = projectFile.FullName;
-            var matchingSockets = AppHostHelper.FindMatchingSockets(
+            var matchingSockets = AppHostHelper.FindMatchingNonOrphanedSockets(
                 targetPath,
-                executionContext.HomeDirectory.FullName);
+                executionContext.HomeDirectory.FullName,
+                Environment.ProcessId,
+                logger);
 
             // Try each matching socket until we get a connection
             foreach (var socketPath in matchingSockets)
@@ -65,10 +147,12 @@ internal sealed class AppHostConnectionResolver(
                 try
                 {
                     var connection = await AppHostAuxiliaryBackchannel.ConnectAsync(
-                        socketPath, logger, cancellationToken).ConfigureAwait(false);
+                        socketPath, logger, cancellationToken, profilingTelemetry).ConfigureAwait(false);
                     if (connection is not null)
                     {
-                        return new AppHostConnectionResult { Connection = connection };
+                        var result = new AppHostConnectionResult { Connection = connection };
+                        StoreAppHostCliLogFilePath(result);
+                        return result;
                     }
                 }
                 catch (Exception ex)
@@ -77,7 +161,12 @@ internal sealed class AppHostConnectionResolver(
                 }
             }
 
-            return new AppHostConnectionResult { ErrorMessage = notFoundMessage };
+            var displayPath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, targetPath);
+
+            return new AppHostConnectionResult
+            {
+                ErrorMessage = string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.AppHostNotRunningAtPath, displayPath)
+            };
         }
 
         // Socket-first approach: Scan for running AppHosts via their sockets
@@ -110,48 +199,21 @@ internal sealed class AppHostConnectionResolver(
         }
         else if (inScopeConnections.Count > 1)
         {
-            // Multiple in-scope AppHosts running, prompt for selection
-            // Order by most recently started first
-            var choices = inScopeConnections
-                .OrderByDescending(c => c.AppHostInfo?.StartedAt ?? DateTimeOffset.MinValue)
-                .Select(c =>
-                {
-                    var appHostPath = c.AppHostInfo?.AppHostPath ?? "Unknown";
-                    var relativePath = Path.GetRelativePath(workingDirectory, appHostPath);
-                    return (Display: relativePath, Connection: c);
-                })
-                .ToList();
-
-            var selectedDisplay = await interactionService.PromptForSelectionAsync(
+            selectedConnection = await PromptForAppHostSelectionAsync(
+                inScopeConnections,
+                SharedCommandStrings.MultipleInScopeAppHosts,
                 selectPrompt,
-                choices.Select(c => c.Display).ToArray(),
-                c => c,
+                path => Path.GetRelativePath(workingDirectory, path),
                 cancellationToken);
-
-            selectedConnection = choices.FirstOrDefault(c => c.Display == selectedDisplay).Connection;
         }
         else if (outOfScopeConnections.Count > 0)
         {
-            // No in-scope AppHosts, but there are out-of-scope ones - let user pick
-            interactionService.DisplayMessage("information", noInScopeMessage);
-
-            // Order by most recently started first
-            var choices = outOfScopeConnections
-                .OrderByDescending(c => c.AppHostInfo?.StartedAt ?? DateTimeOffset.MinValue)
-                .Select(c =>
-                {
-                    var path = c.AppHostInfo?.AppHostPath ?? "Unknown";
-                    return (Display: path, Connection: c);
-                })
-                .ToList();
-
-            var selectedDisplay = await interactionService.PromptForSelectionAsync(
+            selectedConnection = await PromptForAppHostSelectionAsync(
+                outOfScopeConnections,
+                SharedCommandStrings.NoInScopeAppHostsShowingAll,
                 selectPrompt,
-                choices.Select(c => c.Display).ToArray(),
-                c => c,
+                path => path,
                 cancellationToken);
-
-            selectedConnection = choices.FirstOrDefault(c => c.Display == selectedDisplay).Connection;
         }
 
         if (selectedConnection is null)
@@ -159,6 +221,57 @@ internal sealed class AppHostConnectionResolver(
             return new AppHostConnectionResult { ErrorMessage = notFoundMessage };
         }
 
-        return new AppHostConnectionResult { Connection = selectedConnection };
+        var selectedResult = new AppHostConnectionResult { Connection = selectedConnection };
+        StoreAppHostCliLogFilePath(selectedResult);
+        return selectedResult;
+    }
+
+    /// <summary>
+    /// Stores the app host's CLI log file path on the execution context so that
+    /// <see cref="Commands.BaseCommand"/> can display it alongside the current CLI's log path on failure.
+    /// </summary>
+    internal void StoreAppHostCliLogFilePath(AppHostConnectionResult result)
+    {
+        if (result.Success && result.Connection.AppHostInfo?.CliLogFilePath is { } cliLogFilePath)
+        {
+            executionContext.AppHostCliLogFilePath = cliLogFilePath;
+        }
+    }
+
+    /// <summary>
+    /// Displays an informational message, prompts the user to select from available AppHost connections,
+    /// and displays the selected AppHost with a success indicator.
+    /// </summary>
+    private async Task<IAppHostAuxiliaryBackchannel?> PromptForAppHostSelectionAsync(
+        List<IAppHostAuxiliaryBackchannel> candidateConnections,
+        string contextMessage,
+        string selectPrompt,
+        Func<string, string> formatPath,
+        CancellationToken cancellationToken)
+    {
+        interactionService.DisplayMessage(KnownEmojis.Information, contextMessage);
+
+        // Order by most recently started first
+        var choices = candidateConnections
+            .OrderByDescending(c => c.AppHostInfo?.StartedAt ?? DateTimeOffset.MinValue)
+            .Select(c =>
+            {
+                var appHostPath = c.AppHostInfo?.AppHostPath ?? "Unknown";
+                return (Display: formatPath(appHostPath), Connection: c);
+            })
+            .ToList();
+
+        var selectedDisplay = await interactionService.PromptForSelectionAsync(
+            selectPrompt,
+            choices.Select(c => c.Display).ToArray(),
+            c => c.EscapeMarkup(),
+            echoSelected: false,
+            cancellationToken: cancellationToken);
+
+        var selectedConnection = choices.FirstOrDefault(c => c.Display == selectedDisplay).Connection;
+
+        interactionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.UsingAppHost, selectedDisplay));
+
+        return selectedConnection;
     }
 }

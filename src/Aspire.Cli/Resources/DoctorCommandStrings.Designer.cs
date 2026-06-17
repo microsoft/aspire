@@ -85,6 +85,24 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("EnvironmentCheckHeader", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire.
+        /// </summary>
+        public static string AspireCategoryHeader {
+            get {
+                return ResourceManager.GetString("AspireCategoryHeader", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to AppHost.
+        /// </summary>
+        public static string AppHostCategoryHeader {
+            get {
+                return ResourceManager.GetString("AppHostCategoryHeader", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to .NET SDK.
@@ -123,7 +141,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to For detailed prerequisites: https://aka.ms/aspire-prerequisites.
+        ///   Looks up a localized string similar to For detailed prerequisites: {0}.
         /// </summary>
         public static string DetailedPrerequisitesLink {
             get {
@@ -137,6 +155,618 @@ namespace Aspire.Cli.Resources {
         public static string CheckingPrerequisites {
             get {
                 return ResourceManager.GetString("CheckingPrerequisites", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Operating system: {0}.
+        /// </summary>
+        public static string OperatingSystemMessageFormat {
+            get {
+                return ResourceManager.GetString("OperatingSystemMessageFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to unknown.
+        /// </summary>
+        public static string VersionUnknown {
+            get {
+                return ResourceManager.GetString("VersionUnknown", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire CLI version {0}.
+        /// </summary>
+        public static string CliVersionMessageFormat {
+            get {
+                return ResourceManager.GetString("CliVersionMessageFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire CLI version {0} is out of date. Latest version is {1}.
+        /// </summary>
+        public static string CliVersionOutOfDateMessageFormat {
+            get {
+                return ResourceManager.GetString("CliVersionOutOfDateMessageFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Run &apos;{0}&apos; to update Aspire CLI..
+        /// </summary>
+        public static string CliVersionOutOfDateFixFormat {
+            get {
+                return ResourceManager.GetString("CliVersionOutOfDateFixFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Could not check for Aspire CLI updates.
+        /// </summary>
+        public static string CliVersionUpdateCheckFailedMessage {
+            get {
+                return ResourceManager.GetString("CliVersionUpdateCheckFailedMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to  (channel: {0}).
+        /// </summary>
+        public static string ChannelSuffixFormat {
+            get {
+                return ResourceManager.GetString("ChannelSuffixFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to AppHost version {0} ({1}).
+        /// </summary>
+        public static string AppHostVersionMessageFormat {
+            get {
+                return ResourceManager.GetString("AppHostVersionMessageFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Could not determine AppHost version ({0}).
+        /// </summary>
+        public static string AppHostVersionUnknownMessageFormat {
+            get {
+                return ResourceManager.GetString("AppHostVersionUnknownMessageFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Could not determine AppHost version.
+        /// </summary>
+        public static string AppHostVersionCheckFailedMessage {
+            get {
+                return ResourceManager.GetString("AppHostVersionCheckFailedMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No HTTPS development certificate found.
+        /// </summary>
+        public static string DevCertsNoCertificateMessage {
+            get {
+                return ResourceManager.GetString("DevCertsNoCertificateMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire uses HTTPS for secure communication between the dashboard and your services during local development..
+        /// </summary>
+        public static string DevCertsNoCertificateDetails {
+            get {
+                return ResourceManager.GetString("DevCertsNoCertificateDetails", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Run &apos;{0}&apos; to trust the HTTPS development certificate..
+        /// </summary>
+        public static string DevCertsTrustFixFormat {
+            get {
+                return ResourceManager.GetString("DevCertsTrustFixFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Run &apos;{0}&apos; to remove all certificates, then run &apos;{1}&apos; to create and trust a new one..
+        /// </summary>
+        public static string DevCertsCleanAndTrustFixFormat {
+            get {
+                return ResourceManager.GetString("DevCertsCleanAndTrustFixFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Multiple HTTPS development certificates found ({0} certificates), but none are trusted.
+        /// </summary>
+        public static string DevCertsMultipleNoneTrustedMessageFormat {
+            get {
+                return ResourceManager.GetString("DevCertsMultipleNoneTrustedMessageFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Found certificates: {0}. Having multiple certificates can cause confusion..
+        /// </summary>
+        public static string DevCertsMultipleNoneTrustedDetailsFormat {
+            get {
+                return ResourceManager.GetString("DevCertsMultipleNoneTrustedDetailsFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Multiple HTTPS development certificates found ({0} certificates).
+        /// </summary>
+        public static string DevCertsMultipleSomeUntrustedMessageFormat {
+            get {
+                return ResourceManager.GetString("DevCertsMultipleSomeUntrustedMessageFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Found certificates: {0}. Having multiple certificates can cause confusion when selecting which one to use..
+        /// </summary>
+        public static string DevCertsMultipleSomeUntrustedDetailsFormat {
+            get {
+                return ResourceManager.GetString("DevCertsMultipleSomeUntrustedDetailsFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to HTTPS development certificate is trusted.
+        /// </summary>
+        public static string DevCertsTrustedMessage {
+            get {
+                return ResourceManager.GetString("DevCertsTrustedMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to HTTPS development certificate is not trusted.
+        /// </summary>
+        public static string DevCertsNotTrustedMessage {
+            get {
+                return ResourceManager.GetString("DevCertsNotTrustedMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Certificate {0} exists in the personal store but was not found in the trusted root store..
+        /// </summary>
+        public static string DevCertsNotTrustedDetailsFormat {
+            get {
+                return ResourceManager.GetString("DevCertsNotTrustedDetailsFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to HTTPS development certificate is only partially trusted.
+        /// </summary>
+        public static string DevCertsPartiallyTrustedMessage {
+            get {
+                return ResourceManager.GetString("DevCertsPartiallyTrustedMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The certificate is in the trusted store, but SSL_CERT_DIR is not configured to include '{0}'. Some applications may not trust the certificate. 'aspire run' will configure this automatically..
+        /// </summary>
+        public static string DevCertsPartiallyTrustedDetailsFormat {
+            get {
+                return ResourceManager.GetString("DevCertsPartiallyTrustedDetailsFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Set SSL_CERT_DIR in your shell profile: {0}.
+        /// </summary>
+        public static string DevCertsPartiallyTrustedFixFormat {
+            get {
+                return ResourceManager.GetString("DevCertsPartiallyTrustedFixFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to HTTPS development certificate has an older version ({0}).
+        /// </summary>
+        public static string DevCertsOldVersionMessageFormat {
+            get {
+                return ResourceManager.GetString("DevCertsOldVersionMessageFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Older certificate versions (&lt; v{0}) may not support all certificate trust scenarios..
+        /// </summary>
+        public static string DevCertsOldVersionDetailsFormat {
+            get {
+                return ResourceManager.GetString("DevCertsOldVersionDetailsFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Developer Control Plane (DCP) bundle not found; skipping connection health checks.
+        /// </summary>
+        public static string DcpBundleNotFoundMessage {
+            get {
+                return ResourceManager.GetString("DcpBundleNotFoundMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The running Aspire CLI is not associated with a bundle layout that contains the Developer Control Plane (DCP)..
+        /// </summary>
+        public static string DcpBundleNotFoundDetails {
+            get {
+                return ResourceManager.GetString("DcpBundleNotFoundDetails", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Developer Control Plane (DCP) executable not found.
+        /// </summary>
+        public static string DcpExecutableNotFoundMessage {
+            get {
+                return ResourceManager.GetString("DcpExecutableNotFoundMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Expected Developer Control Plane (DCP) executable at '{0}'..
+        /// </summary>
+        public static string DcpExecutableNotFoundDetailsFormat {
+            get {
+                return ResourceManager.GetString("DcpExecutableNotFoundDetailsFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Failed to check Developer Control Plane (DCP) connection health.
+        /// </summary>
+        public static string DcpConnectionCheckFailedMessage {
+            get {
+                return ResourceManager.GetString("DcpConnectionCheckFailedMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Developer Control Plane (DCP) API server returned HTTP {0} ({1})..
+        /// </summary>
+        public static string DcpApiServerReturnedHttpStatusMessageFormat {
+            get {
+                return ResourceManager.GetString("DcpApiServerReturnedHttpStatusMessageFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate succeeded.
+        /// </summary>
+        public static string DcpEphemeralCertificateConnectionSucceededMessage {
+            get {
+                return ResourceManager.GetString("DcpEphemeralCertificateConnectionSucceededMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Developer Control Plane (DCP) connection using the developer certificate succeeded.
+        /// </summary>
+        public static string DcpDeveloperCertificateConnectionSucceededMessage {
+            get {
+                return ResourceManager.GetString("DcpDeveloperCertificateConnectionSucceededMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Developer Control Plane (DCP) connection health checks succeeded.
+        /// </summary>
+        public static string DcpConnectionSucceededMessage {
+            get {
+                return ResourceManager.GetString("DcpConnectionSucceededMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Timed out after {0} seconds while checking Developer Control Plane (DCP) connection health..
+        /// </summary>
+        public static string DcpConnectionTimedOutMessageFormat {
+            get {
+                return ResourceManager.GetString("DcpConnectionTimedOutMessageFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No trusted developer certificate was available for the Developer Control Plane (DCP) developer certificate connection check.
+        /// </summary>
+        public static string DcpDeveloperCertificateUnavailableMessage {
+            get {
+                return ResourceManager.GetString("DcpDeveloperCertificateUnavailableMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Run `aspire certs trust` to create and trust a developer certificate..
+        /// </summary>
+        public static string DcpDeveloperCertificateTrustFix {
+            get {
+                return ResourceManager.GetString("DcpDeveloperCertificateTrustFix", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Run `aspire certs trust` to repair developer certificate trust..
+        /// </summary>
+        public static string DcpDeveloperCertificateRepairTrustFix {
+            get {
+                return ResourceManager.GetString("DcpDeveloperCertificateRepairTrustFix", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to TLS authentication failed: {0}.
+        /// </summary>
+        public static string DcpTlsAuthenticationFailedDetailsFormat {
+            get {
+                return ResourceManager.GetString("DcpTlsAuthenticationFailedDetailsFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate failed.
+        /// </summary>
+        public static string DcpEphemeralCertificateConnectionFailedMessage {
+            get {
+                return ResourceManager.GetString("DcpEphemeralCertificateConnectionFailedMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Developer Control Plane (DCP) connection using the developer certificate failed.
+        /// </summary>
+        public static string DcpDeveloperCertificateConnectionFailedMessage {
+            get {
+                return ResourceManager.GetString("DcpDeveloperCertificateConnectionFailedMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Failed to start Developer Control Plane (DCP)..
+        /// </summary>
+        public static string DcpStartFailedMessage {
+            get {
+                return ResourceManager.GetString("DcpStartFailedMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Developer Control Plane (DCP) exited before writing kubeconfig. Exit code: {0}.{1}{2}.
+        /// </summary>
+        public static string DcpExitedBeforeKubeconfigDetailsFormat {
+            get {
+                return ResourceManager.GetString("DcpExitedBeforeKubeconfigDetailsFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Developer Control Plane (DCP) did not write any output..
+        /// </summary>
+        public static string DcpNoOutputDetails {
+            get {
+                return ResourceManager.GetString("DcpNoOutputDetails", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Developer Control Plane (DCP) kubeconfig did not contain a valid server URI..
+        /// </summary>
+        public static string DcpKubeconfigMissingServerDetails {
+            get {
+                return ResourceManager.GetString("DcpKubeconfigMissingServerDetails", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The developer certificate could not be cached because it was not valid..
+        /// </summary>
+        public static string DcpDeveloperCertificateInvalidForCacheDetails {
+            get {
+                return ResourceManager.GetString("DcpDeveloperCertificateInvalidForCacheDetails", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The developer certificate could not be cached because the user profile directory could not be determined..
+        /// </summary>
+        public static string DcpDeveloperCertificateUserProfileMissingDetails {
+            get {
+                return ResourceManager.GetString("DcpDeveloperCertificateUserProfileMissingDetails", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No fully trusted exportable developer certificate with a private key was found..
+        /// </summary>
+        public static string DcpDeveloperCertificateNoTrustedExportableDetails {
+            get {
+                return ResourceManager.GetString("DcpDeveloperCertificateNoTrustedExportableDetails", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The developer certificate did not have a thumbprint..
+        /// </summary>
+        public static string DcpDeveloperCertificateMissingThumbprintDetails {
+            get {
+                return ResourceManager.GetString("DcpDeveloperCertificateMissingThumbprintDetails", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to [trusted].
+        /// </summary>
+        public static string DevCertsTrustLabelFull {
+            get {
+                return ResourceManager.GetString("DevCertsTrustLabelFull", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to [partial].
+        /// </summary>
+        public static string DevCertsTrustLabelPartial {
+            get {
+                return ResourceManager.GetString("DevCertsTrustLabelPartial", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire CLI Installations.
+        /// </summary>
+        public static string HeaderInstallations {
+            get {
+                return ResourceManager.GetString("HeaderInstallations", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Path.
+        /// </summary>
+        public static string ColumnPath {
+            get {
+                return ResourceManager.GetString("ColumnPath", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Version.
+        /// </summary>
+        public static string ColumnVersion {
+            get {
+                return ResourceManager.GetString("ColumnVersion", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Channel.
+        /// </summary>
+        public static string ColumnChannel {
+            get {
+                return ResourceManager.GetString("ColumnChannel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Route.
+        /// </summary>
+        public static string ColumnRoute {
+            get {
+                return ResourceManager.GetString("ColumnRoute", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to PATH status.
+        /// </summary>
+        public static string ColumnPathStatus {
+            get {
+                return ResourceManager.GetString("ColumnPathStatus", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to (current).
+        /// </summary>
+        public static string ValueCurrentMarker {
+            get {
+                return ResourceManager.GetString("ValueCurrentMarker", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to (unknown).
+        /// </summary>
+        public static string ValueUnknown {
+            get {
+                return ResourceManager.GetString("ValueUnknown", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to (not probed).
+        /// </summary>
+        public static string ValueNotProbed {
+            get {
+                return ResourceManager.GetString("ValueNotProbed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to (probe failed).
+        /// </summary>
+        public static string ValueProbeFailed {
+            get {
+                return ResourceManager.GetString("ValueProbeFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to active.
+        /// </summary>
+        public static string ValuePathActive {
+            get {
+                return ResourceManager.GetString("ValuePathActive", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to shadowed.
+        /// </summary>
+        public static string ValuePathShadowed {
+            get {
+                return ResourceManager.GetString("ValuePathShadowed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to not on PATH.
+        /// </summary>
+        public static string ValuePathNotOnPath {
+            get {
+                return ResourceManager.GetString("ValuePathNotOnPath", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Install discovery failed. See the Aspire CLI logs for details..
+        /// </summary>
+        public static string InstallationDiscoveryFailedReason {
+            get {
+                return ResourceManager.GetString("InstallationDiscoveryFailedReason", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Legacy .aspire/settings.json detected at {0}.
+        /// </summary>
+        public static string LegacySettingsDetectedMessageFormat {
+            get {
+                return ResourceManager.GetString("LegacySettingsDetectedMessageFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Run 'aspire init' (or any aspire run/add/update/pipeline command) to migrate to aspire.config.json....
+        /// </summary>
+        public static string LegacySettingsDetectedFix {
+            get {
+                return ResourceManager.GetString("LegacySettingsDetectedFix", resourceCulture);
             }
         }
     }

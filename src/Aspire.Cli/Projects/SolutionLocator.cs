@@ -4,6 +4,7 @@
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
+using Spectre.Console;
 
 namespace Aspire.Cli.Projects;
 
@@ -19,7 +20,7 @@ internal sealed class SolutionLocator(ILogger<SolutionLocator> logger, IInteract
         logger.LogDebug("Searching for solution files starting from {StartDirectory}", startDirectory.FullName);
 
         var solutionFiles = await GetSolutionFilesInDirectoryAndSubfoldersAsync(startDirectory, cancellationToken);
-        
+
         if (!solutionFiles.Any())
         {
             logger.LogDebug("No solution files found in {Directory} or subdirectories", startDirectory.FullName);
@@ -27,7 +28,7 @@ internal sealed class SolutionLocator(ILogger<SolutionLocator> logger, IInteract
         }
 
         logger.LogDebug("Found {Count} solution file(s) in {Directory}", solutionFiles.Count, startDirectory.FullName);
-        
+
         if (solutionFiles.Count == 1)
         {
             // Single solution found, use it
@@ -39,9 +40,9 @@ internal sealed class SolutionLocator(ILogger<SolutionLocator> logger, IInteract
             var selectedSolution = await interactionService.PromptForSelectionAsync(
                 InitCommandStrings.MultipleSolutionsFound,
                 solutionFiles,
-                solutionFile => $"{solutionFile.Name} ({Path.GetRelativePath(startDirectory.FullName, solutionFile.FullName)})",
-                cancellationToken);
-            
+                solutionFile => $"{solutionFile.Name.EscapeMarkup()} ({Path.GetRelativePath(startDirectory.FullName, solutionFile.FullName).EscapeMarkup()})",
+                cancellationToken: cancellationToken);
+
             return selectedSolution;
         }
     }
@@ -49,7 +50,7 @@ internal sealed class SolutionLocator(ILogger<SolutionLocator> logger, IInteract
     private static async Task<List<FileInfo>> GetSolutionFilesInDirectoryAndSubfoldersAsync(DirectoryInfo directory, CancellationToken cancellationToken)
     {
         // Search for .sln and .slnx files in parallel
-        var slnTask = Task.Run(() => 
+        var slnTask = Task.Run(() =>
         {
             try
             {
@@ -62,7 +63,7 @@ internal sealed class SolutionLocator(ILogger<SolutionLocator> logger, IInteract
             }
         }, cancellationToken);
 
-        var slnxTask = Task.Run(() => 
+        var slnxTask = Task.Run(() =>
         {
             try
             {

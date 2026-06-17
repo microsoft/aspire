@@ -14,7 +14,6 @@ using Aspire.Hosting.Azure.Utils;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Azure;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -272,15 +271,29 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
         if (Scope is not null)
         {
             context.Writer.WriteStartObject("scope");
-            var resourceGroup = Scope.ResourceGroup switch
+            WriteScopeValue(context, "resourceGroup", Scope.ResourceGroup);
+            WriteScopeValue(context, "subscription", Scope.Subscription);
+            if (Scope.IsTenantScope)
             {
-                IManifestExpressionProvider output => output.ValueExpression,
-                object obj => obj.ToString(),
-                null => ""
-            };
-            context.Writer.WriteString("resourceGroup", resourceGroup);
+                context.Writer.WriteString("tenant", "current");
+            }
             context.Writer.WriteEndObject();
         }
+    }
+
+    private static void WriteScopeValue(ManifestPublishingContext context, string propertyName, object? scopeValue)
+    {
+        if (scopeValue is null)
+        {
+            return;
+        }
+
+        var value = scopeValue switch
+        {
+            IManifestExpressionProvider output => output.ValueExpression,
+            object obj => obj.ToString(),
+        };
+        context.Writer.WriteString(propertyName, value);
     }
 
     /// <summary>
@@ -306,7 +319,6 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
         }
 
         var bicepProvisioner = context.Services.GetRequiredService<IBicepProvisioner>();
-        var configuration = context.Services.GetRequiredService<IConfiguration>();
 
         // Find the AzureEnvironmentResource from the application model
         var azureEnvironment = context.Model.Resources.OfType<AzureEnvironmentResource>().FirstOrDefault();
@@ -318,7 +330,7 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
         var provisioningContext = await azureEnvironment.ProvisioningContextTask.Task.ConfigureAwait(false);
 
         var resourceTask = await context.ReportingStep
-            .CreateTaskAsync($"Deploying **{resource.Name}**", context.CancellationToken)
+            .CreateTaskAsync(new MarkdownString($"Deploying **{resource.Name}**"), context.CancellationToken)
             .ConfigureAwait(false);
 
         await using (resourceTask.ConfigureAwait(false))
@@ -326,11 +338,11 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
             try
             {
                 if (await bicepProvisioner.ConfigureResourceAsync(
-                    configuration, resource, context.CancellationToken).ConfigureAwait(false))
+                    resource, context.CancellationToken).ConfigureAwait(false))
                 {
                     resource.ProvisioningTaskCompletionSource?.TrySetResult();
                     await resourceTask.CompleteAsync(
-                        $"Using existing deployment for **{resource.Name}**",
+                        new MarkdownString($"Using existing deployment for **{resource.Name}**"),
                         CompletionState.Completed,
                         context.CancellationToken).ConfigureAwait(false);
                 }
@@ -341,7 +353,7 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
                         .ConfigureAwait(false);
                     resource.ProvisioningTaskCompletionSource?.TrySetResult();
                     await resourceTask.CompleteAsync(
-                        $"Successfully provisioned **{resource.Name}**",
+                        new MarkdownString($"Successfully provisioned **{resource.Name}**"),
                         CompletionState.Completed,
                         context.CancellationToken).ConfigureAwait(false);
                 }
@@ -356,10 +368,10 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
                 };
                 resource.ProvisioningTaskCompletionSource?.TrySetException(ex);
                 await resourceTask.CompleteAsync(
-                    $"Failed to provision **{resource.Name}**: {errorMessage}",
+                    new MarkdownString($"Failed to provision **{resource.Name}**: {errorMessage}"),
                     CompletionState.CompletedWithError,
                     context.CancellationToken).ConfigureAwait(false);
-                throw;
+                throw new ProvisioningFailedException(errorMessage, ex);
             }
         }
     }
@@ -373,84 +385,8 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
     /// </summary>
     /// <param name="requestEx">The Azure RequestFailedException containing the error response</param>
     /// <returns>The most specific error message found, or the original exception message if parsing fails</returns>
-    private static string ExtractDetailedErrorMessage(RequestFailedException requestEx)
-    {
-        try
-        {
-            var response = requestEx.GetRawResponse();
-            if (response?.Content is not null)
-            {
-                var responseContent = response.Content.ToString();
-                if (!string.IsNullOrEmpty(responseContent))
-                {
-                    if (JsonNode.Parse(responseContent) is JsonObject responseObj)
-                    {
-                        if (responseObj["error"] is JsonObject errorObj)
-                        {
-                            var code = errorObj["code"]?.ToString();
-                            var message = errorObj["message"]?.ToString();
-
-                            if (!string.IsNullOrEmpty(code) && !string.IsNullOrEmpty(message))
-                            {
-                                if (errorObj["details"] is JsonArray detailsArray && detailsArray.Count > 0)
-                                {
-                                    var deepestErrorMessage = ExtractDeepestErrorMessage(detailsArray);
-                                    if (!string.IsNullOrEmpty(deepestErrorMessage))
-                                    {
-                                        return deepestErrorMessage;
-                                    }
-                                }
-
-                                return $"{code}: {message}";
-                            }
-                        }
-
-                        if (responseObj["properties"]?["error"] is JsonObject deploymentErrorObj)
-                        {
-                            var code = deploymentErrorObj["code"]?.ToString();
-                            var message = deploymentErrorObj["message"]?.ToString();
-
-                            if (!string.IsNullOrEmpty(code) && !string.IsNullOrEmpty(message))
-                            {
-                                return $"{code}: {message}";
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        catch (JsonException) { }
-
-        return requestEx.Message;
-    }
-
-    private static string ExtractDeepestErrorMessage(JsonArray detailsArray)
-    {
-        foreach (var detail in detailsArray)
-        {
-            if (detail is JsonObject detailObj)
-            {
-                var detailCode = detailObj["code"]?.ToString();
-                var detailMessage = detailObj["message"]?.ToString();
-
-                if (detailObj["details"] is JsonArray nestedDetailsArray && nestedDetailsArray.Count > 0)
-                {
-                    var deeperMessage = ExtractDeepestErrorMessage(nestedDetailsArray);
-                    if (!string.IsNullOrEmpty(deeperMessage))
-                    {
-                        return deeperMessage;
-                    }
-                }
-
-                if (!string.IsNullOrEmpty(detailCode) && !string.IsNullOrEmpty(detailMessage))
-                {
-                    return $"{detailCode}: {detailMessage}";
-                }
-            }
-        }
-
-        return string.Empty;
-    }
+    internal static string ExtractDetailedErrorMessage(RequestFailedException requestEx)
+        => AzureProvisioningFailureDetails.FromRequestFailedException(requestEx).ToDetailedMessage();
 
     /// <summary>
     /// Known parameters that will be filled in automatically by the host environment.
@@ -573,7 +509,7 @@ public readonly struct BicepTemplateFile(string path, bool deleteFileOnDispose) 
 /// <param name="name">The name of the KeyVault secret.</param>
 /// <param name="resource">The <see cref="AzureBicepResource"/>.</param>
 [Obsolete("BicepSecretOutputReference is no longer supported. Use IAzureKeyVaultResource instead.")]
-public sealed class BicepSecretOutputReference(string name, AzureBicepResource resource) : IManifestExpressionProvider, IValueProvider, IValueWithReferences
+public sealed class BicepSecretOutputReference(string name, AzureBicepResource resource) : IExpressionValue, IManifestExpressionProvider, IValueProvider, IValueWithReferences
 {
     /// <summary>
     /// Name of the KeyVault secret.
@@ -627,7 +563,8 @@ public sealed class BicepSecretOutputReference(string name, AzureBicepResource r
 /// </summary>
 /// <param name="name">The name of the output</param>
 /// <param name="resource">The <see cref="AzureBicepResource"/>.</param>
-public sealed class BicepOutputReference(string name, AzureBicepResource resource) : IManifestExpressionProvider, IValueProvider, IValueWithReferences, IEquatable<BicepOutputReference>
+[AspireExport(ExposeProperties = true)]
+public sealed class BicepOutputReference(string name, AzureBicepResource resource) : IExpressionValue, IManifestExpressionProvider, IValueProvider, IValueWithReferences, IEquatable<BicepOutputReference>
 {
     /// <summary>
     /// Name of the output.

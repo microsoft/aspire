@@ -16,6 +16,7 @@
     <TestCaptureOutput Condition="'$(TestCaptureOutput)' == '' and '$(ContinuousIntegrationBuild)' == 'true'">true</TestCaptureOutput>
     <!-- don't capture on local runs -->
     <TestCaptureOutput Condition="'$(TestCaptureOutput)' == ''">false</TestCaptureOutput>
+
   </PropertyGroup>
 
   <ItemGroup>
@@ -26,8 +27,7 @@
           Condition="'$(PrepareForHelix)' == 'true'" />
   </ItemGroup>
 
-  <Target Name="ZipTestArchive" AfterTargets="Build"
-          Condition=" '$(IsTestProject)' == 'true' and '$(PrepareForHelix)' == 'true' and '$(RunOnAzdoHelix)' == 'true' and '$(IsTestUtilityProject)' != 'true' and '$(IsCrossTargetingBuild)' != 'true'">
+  <Target Name="ZipTestArchive" AfterTargets="Build" Condition="'$(_ShouldArchiveTests)' == 'true'">
     <Error Condition="'$(TestArchiveTestsDir)' == ''" Text="TestArchiveTestsDir property to archive the test folder must be set." />
     <PropertyGroup>
       <TestsArchiveSourceDir Condition="'$(TestsArchiveSourceDir)' == ''">$(OutDir)</TestsArchiveSourceDir>
@@ -41,46 +41,71 @@
                   Overwrite="true" />
   </Target>
 
-  <!-- Used for running one helix job per test class -->
-  <Target Name="ExtractTestClassNames"
-          Condition=" '$(IsTestProject)' == 'true' and '$(ExtractTestClassNamesForHelix)' == 'true' and '$(PrepareForHelix)' == 'true' and '$(IsTestUtilityProject)' != 'true'"
-          BeforeTargets="ZipTestArchive">
+  <!-- Enhanced test splitting with auto-detection -->
+  <Target Name="GenerateTestPartitionsForCI"
+          BeforeTargets="ZipTestArchive"
+          Condition=" '$(IsTestProject)' == 'true' and '$(SplitTestsOnCI)' == 'true' and ('$(GenerateCIPartitions)' == 'true' or ('$(PrepareForHelix)' == 'true' and '$(RunOnAzdoHelix)' == 'true' and '$(IsGitHubActionsRunner)' != 'true')) and '$(IsTestUtilityProject)' != 'true'">
 
-    <Error Condition="'$(ExtractTestClassNamesPrefix)' == ''"
-           Text="%24(ExtractTestClassNamesPrefix) should be set, for example - Aspire.Templates.Tests" />
+    <Error Condition="'$(TestClassNamePrefixForCI)' == ''"
+           Text="%24(TestClassNamePrefixForCI) must be set when SplitTestsOnCI=true. Example: -p:TestClassNamePrefixForCI=Aspire.Hosting.Tests" />
 
-    <!-- if there are no runnable tests left then this would exit with code 8 for zero tests -->
-    <Exec Command="&quot;$(RunCommand)&quot; --filter-not-trait category=failing --list-tests --ignore-exit-code 8" ConsoleToMSBuild="true">
-      <Output TaskParameter="ConsoleOutput" ItemName="_ListOfTestsLines" />
-    </Exec>
+    <Message Text="[$(MSBuildProjectName)] Starting test partitions extraction with auto-detection..." Importance="High" />
 
     <PropertyGroup>
-      <_Regex>^\s*($(ExtractTestClassNamesPrefix)[^\($]+)</_Regex>
+      <!-- Path to discovery helper script -->
+      <_DiscoveryScriptPath>$(RepoRoot)eng\scripts\split-test-projects-for-ci.ps1</_DiscoveryScriptPath>
+
+      <!-- Output files -->
+      <_TestPartitionsJsonAbsolutePath>$([MSBuild]::NormalizePath('$(RepoRoot)', '$(TestArchiveTestsDir)$(MSBuildProjectName).tests-partitions.json'))</_TestPartitionsJsonAbsolutePath>
+
     </PropertyGroup>
-    <ItemGroup>
-      <_TestLines0 Include="$([System.Text.RegularExpressions.Regex]::Match('%(_ListOfTestsLines.Identity)', '$(_Regex)'))" />
-      <TestClassName Include="$([System.IO.Path]::GetFileNameWithoutExtension('%(_TestLines0.Identity)'))" />
-    </ItemGroup>
 
-    <ItemGroup>
-      <UniqueTestClassNamesFiltered Include="@(TestClassName->Distinct())" Exclude="@(TestClassNamesToSkipTests)" />
-    </ItemGroup>
+    <!-- Ensure output directory exists -->
+    <MakeDir Directories="$(TestArchiveTestsDir)" />
 
-    <Warning Text="No $(ExtractTestClassNamesPrefix) test classes found!" Condition="'@(TestClassName)' == ''" />
+    <!-- Call PowerShell discovery helper (optimized to only run list-tests when needed) -->
+    <Message Text="[$(MSBuildProjectName)] Running discovery helper..." Importance="High" />
 
-    <WriteLinesToFile File="$(TestArchiveTestsDir)$(MSBuildProjectName).tests.list"
-                      Lines="@(UniqueTestClassNamesFiltered)"
-                      Overwrite="true" />
-  </Target>
+    <PropertyGroup>
+      <_PwshCommand>pwsh</_PwshCommand>
+      <_TestAssemblyPath>$(TargetDir)$(TargetFileName)</_TestAssemblyPath>
+      <_DiscoveryCommand>$(_PwshCommand) -NoProfile -ExecutionPolicy Bypass -File &quot;$(_DiscoveryScriptPath)&quot;</_DiscoveryCommand>
+      <_DiscoveryCommand>$(_DiscoveryCommand) -TestAssemblyPath &quot;$(_TestAssemblyPath)&quot;</_DiscoveryCommand>
+      <_DiscoveryCommand>$(_DiscoveryCommand) -RunCommand &quot;$(RunCommand)&quot;</_DiscoveryCommand>
+      <_DiscoveryCommand>$(_DiscoveryCommand) -TestClassNamePrefixForCI &quot;$(TestClassNamePrefixForCI)&quot;</_DiscoveryCommand>
+      <_DiscoveryCommand>$(_DiscoveryCommand) -TestPartitionsJsonFile &quot;$(_TestPartitionsJsonAbsolutePath)&quot;</_DiscoveryCommand>
+      <_DiscoveryCommand>$(_DiscoveryCommand) -RepoRoot &quot;$(RepoRoot.TrimEnd('\'))&quot;</_DiscoveryCommand>
+    </PropertyGroup>
 
-  <Target Name="GetRunTestsOnGithubActions" Returns="@(TestProject)">
-    <ItemGroup>
-      <TestProject Condition="'$(BuildOs)' == 'windows'" Include="$(MSBuildProjectFullPath)" RunTestsOnGithubActions="$(RunOnGithubActionsWindows)" />
-      <TestProject Condition="'$(BuildOs)' == 'linux'" Include="$(MSBuildProjectFullPath)" RunTestsOnGithubActions="$(RunOnGithubActionsLinux)" />
-      <TestProject Condition="'$(BuildOs)' == 'darwin'" Include="$(MSBuildProjectFullPath)" RunTestsOnGithubActions="$(RunOnGithubActionsMacOS)" />
-    </ItemGroup>
+    <Exec Command="$(_DiscoveryCommand)"
+          IgnoreExitCode="false"
+          WorkingDirectory="$(RepoRoot)" />
+
+    <!-- Verify output file was created -->
+    <Error Condition="!Exists('$(_TestPartitionsJsonAbsolutePath)')"
+           Text="Discovery helper failed to generate test partitions file: $(_TestPartitionsJsonAbsolutePath)" />
+
+    <Message Text="[$(MSBuildProjectName)] ✅ Test metadata extraction complete!" Importance="High" />
+    <Message Text="[$(MSBuildProjectName)] Files: $(_TestPartitionsJsonAbsolutePath)" Importance="High" />
+    <Exec Condition="'$(TestPartitionVerboseLogging)' == 'true'" Command="cat $(_TestPartitionsJsonAbsolutePath)" />
   </Target>
 
   <Import Project="$(TestsSharedDir)Aspire.Templates.Testing.targets" Condition="'$(IsTemplateTestProject)' == 'true'" />
   <Import Project="$(RepositoryEngineeringDir)Testing.targets" />
+
+  <!-- Must be after Testing.targets import where IsAzdoHelixRunner, IsGitHubActionsRunner, and RunOnAzdoHelix are computed -->
+  <PropertyGroup>
+    <ArchiveTests Condition="'$(ArchiveTests)' == '' and '$(PrepareForHelix)' == 'true' and '$(RunOnAzdoHelix)' == 'true'">true</ArchiveTests>
+
+    <_ShouldArchiveForHelixRun Condition="'$(IsAzdoHelixRunner)' == 'true' and
+        (($([MSBuild]::IsOSPlatform('Windows')) and'$(RunOnAzdoHelixWindows)' == 'true')
+        or ($([MSBuild]::IsOSPlatform('Linux')) and '$(RunOnAzdoHelixLinux)' == 'true'))">true</_ShouldArchiveForHelixRun>
+
+    <_ShouldArchiveForGithubActionsRun Condition="'$(IsGitHubActionsRunner)' == 'true' and '$(RequiresNugets)' == 'true'">true</_ShouldArchiveForGithubActionsRun>
+
+    <_ShouldArchiveTests
+      Condition=" '$(IsTestProject)' == 'true' and '$(ArchiveTests)' == 'true' and
+                  ('$(_ShouldArchiveForHelixRun)' == 'true' or '$(_ShouldArchiveForGithubActionsRun)' == 'true') and
+                  '$(IsTestUtilityProject)' != 'true' and '$(IsCrossTargetingBuild)' != 'true'">true</_ShouldArchiveTests>
+  </PropertyGroup>
 </Project>
