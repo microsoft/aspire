@@ -717,14 +717,16 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
             "test",
             _loggerFactory.CreateLogger<ProcessGuestLauncher>());
 
+        using var tempDirectory = new TestTempDirectory();
+
         string command;
         string[] args;
         if (OperatingSystem.IsWindows())
         {
-            // `set /p` reads a line from stdin. With redirected+closed stdin it sees EOF and
-            // exits immediately. With an inherited or open-empty stdin it would block.
+            // `set /p` reads from process stdin. Do not add a local `<nul` redirection here:
+            // that would make the command observe EOF even if ProcessGuestLauncher regressed.
             command = "cmd.exe";
-            args = ["/c", "set /p line=<nul & echo eof"];
+            args = ["/c", "set /p line= & if defined line (echo got-input) else (echo eof)"];
         }
         else
         {
@@ -739,7 +741,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         var (exitCode, output) = await launcher.LaunchAsync(
             command,
             args,
-            new DirectoryInfo(Path.GetTempPath()),
+            new DirectoryInfo(tempDirectory.Path),
             new Dictionary<string, string>(),
             cts.Token);
 
@@ -750,6 +752,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, exitCode);
         var lines = output?.GetLines().Select(l => l.Line).ToArray() ?? [];
         Assert.Contains(lines, l => l.Contains("eof", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(lines, l => l.Contains("got-input", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
