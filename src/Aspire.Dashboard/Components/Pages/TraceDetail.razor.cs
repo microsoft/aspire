@@ -26,6 +26,7 @@ namespace Aspire.Dashboard.Components.Pages;
 
 public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisposable
 {
+    private const string ScrollContainerId = "traceDetailScrollContainer";
     private const string NameColumn = nameof(NameColumn);
     private const string ResourceColumn = nameof(ResourceColumn);
     private const string TicksColumn = nameof(TicksColumn);
@@ -226,7 +227,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
             var spanVm = PageViewModel.SpanWaterfallViewModels.SingleOrDefault(vm => vm.Span.SpanId == SpanId);
             if (spanVm != null)
             {
-                await OnShowPropertiesAsync(spanVm, buttonId: null);
+                await OnShowPropertiesAsync(spanVm, focusElementId: null);
             }
 
             // Navigate to remove ?spanId=xxx in the URL. A small delay is required here, otherwise the page rendering breaks.
@@ -254,13 +255,18 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         });
     }
 
-    protected override void OnAfterRender(bool firstRender)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         // Check to see whether max item count should be set on every render.
         // This is required because the data grid's virtualize component can be recreated on data change.
         if (_dataGrid != null && FluentDataGridHelper<SpanWaterfallViewModel>.TrySetMaxItemCount(_dataGrid, 10_000))
         {
             StateHasChanged();
+        }
+
+        if (firstRender)
+        {
+            await JS.InvokeVoidAsync("focusElement", ScrollContainerId);
         }
     }
 
@@ -408,9 +414,9 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         await _layout.CloseMobileToolbarAsync();
     }
 
-    private async Task OnShowPropertiesAsync(SpanWaterfallViewModel viewModel, string? buttonId)
+    private async Task OnShowPropertiesAsync(SpanWaterfallViewModel viewModel, string? focusElementId)
     {
-        _elementIdBeforeDetailsViewOpened = buttonId;
+        _elementIdBeforeDetailsViewOpened = focusElementId;
 
         if (PageViewModel.SelectedData?.SpanViewModel?.Span.SpanId == viewModel.Span.SpanId)
         {

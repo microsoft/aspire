@@ -669,6 +669,14 @@ fluent-switch.table-switch::part(label) {
     overflow: auto;
 }
 
+.log-overflow:focus,
+.datagrid-overflow-area:focus,
+.logs-grid-container:focus,
+.resources-grid-container:focus,
+.tracedetails-grid-container:focus {
+    outline: none;
+}
+
 .log-overflow {
     --console-theme-black: #0C0C0C;
     --console-theme-blue: #0037DA;

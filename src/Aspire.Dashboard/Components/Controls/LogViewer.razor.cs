@@ -111,6 +111,7 @@ public sealed partial class LogViewer
             Logger.LogDebug("Initializing log viewer.");
 
             await JS.InvokeVoidAsync("initializeContinuousScroll");
+            await JS.InvokeVoidAsync("focusElement", "logScrollContainer");
             DimensionManager.OnViewportInformationChanged += OnBrowserResize;
         }
     }

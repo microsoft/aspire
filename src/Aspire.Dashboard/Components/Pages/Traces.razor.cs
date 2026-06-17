@@ -282,6 +282,7 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
         if (firstRender)
         {
             await JS.InvokeVoidAsync("initializeContinuousScroll");
+            await JS.InvokeVoidAsync("focusElement", "tracesScrollContainer");
             DimensionManager.OnViewportInformationChanged += OnBrowserResize;
         }
     }

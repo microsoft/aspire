@@ -26,6 +26,7 @@ namespace Aspire.Dashboard.Components.Pages;
 
 public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionAndUrlState<StructuredLogs.StructuredLogsPageViewModel, StructuredLogs.StructuredLogsPageState>
 {
+    private const string ScrollContainerId = "structuredLogsScrollContainer";
     private const string ResourceColumn = nameof(ResourceColumn);
     private const string LogLevelColumn = nameof(LogLevelColumn);
     private const string TimestampColumn = nameof(TimestampColumn);
@@ -262,7 +263,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             var logEntryId = TelemetryRepository.GetLog(LogEntryId.Value);
             if (logEntryId != null)
             {
-                await OnShowPropertiesAsync(logEntryId, buttonId: null);
+                await OnShowPropertiesAsync(logEntryId, focusElementId: null);
             }
 
             // Navigate to remove ?logEntryId=xxx in the URL. A small delay is required here, otherwise the page rendering breaks.
@@ -312,9 +313,9 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         }
     }
 
-    private async Task OnShowPropertiesAsync(OtlpLogEntry entry, string? buttonId)
+    private async Task OnShowPropertiesAsync(OtlpLogEntry entry, string? focusElementId)
     {
-        _elementIdBeforeDetailsViewOpened = buttonId;
+        _elementIdBeforeDetailsViewOpened = focusElementId;
 
         if (PageViewModel.SelectedLogEntry?.LogEntry.InternalId == entry.InternalId)
         {
@@ -452,6 +453,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         if (firstRender)
         {
             await JS.InvokeVoidAsync("initializeContinuousScroll");
+            await JS.InvokeVoidAsync("focusElement", ScrollContainerId);
             DimensionManager.OnViewportInformationChanged += OnBrowserResize;
         }
     }

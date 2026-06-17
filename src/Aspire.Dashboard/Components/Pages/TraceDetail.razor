@@ -156,6 +156,7 @@
                             </div>
                         }
 
+                        <div id="@ScrollContainerId" class="tracedetails-grid-container continuous-scroll-overflow" tabindex="0" role="region" aria-label="@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailTraceStartHeader)]">
                         <GridColumnManager @ref="_manager" Columns="@_gridColumns">
                             <FluentDataGrid @ref="_dataGrid"
                                             Virtualize="true"
@@ -170,7 +171,7 @@
                                             OverscanCount="100"
                                             ShowHover="true"
                                             ItemKey="@(r => r.Span.SpanId)"
-                                            OnRowClick="@(r => r.ExecuteOnDefault(d => OnShowPropertiesAsync(d, buttonId: null)))">
+                                            OnRowClick="@(r => r.ExecuteOnDefault(d => OnShowPropertiesAsync(d, focusElementId: ScrollContainerId)))">
                                 <ChildContent>
                                     <AspireTemplateColumn ColumnId="@NameColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailNameHeader)]" Tooltip="true" TooltipText="@(c => c.GetTooltip(_resources))" Class="expand-col">
                                         @{
@@ -364,7 +365,7 @@
 
                                         <div @onclick:stopPropagation="true" style="margin-left: 7px;">
                                             <SpanActions SpanViewModel="@context"
-                                                         OnViewDetails="@((buttonId) => OnShowPropertiesAsync(context, buttonId))"
+                                                         OnViewDetails="@((focusElementId) => OnShowPropertiesAsync(context, focusElementId))"
                                                          OnLaunchGenAI="@OnGenAIClickedAsync" />
                                         </div>
                                     </AspireTemplateColumn>
@@ -374,6 +375,7 @@
                                 </EmptyContent>
                             </FluentDataGrid>
                         </GridColumnManager>
+                        </div>
                     </Summary>
                     <Details>
                         @if (context?.SpanViewModel is { } spanVm)
