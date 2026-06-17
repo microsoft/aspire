@@ -14,6 +14,7 @@ namespace Aspire.Cli.Utils.EnvironmentChecker;
 internal sealed class OperatingSystemCheck : IEnvironmentCheck
 {
     internal const string CheckName = "operating-system";
+    private const string UnknownOperatingSystemMetadataValue = "unknown";
 
     private readonly Func<OperatingSystemDetails> _getOperatingSystemDetails;
 
@@ -36,17 +37,16 @@ internal sealed class OperatingSystemCheck : IEnvironmentCheck
         cancellationToken.ThrowIfCancellationRequested();
 
         var details = _getOperatingSystemDetails();
+        var messageDisplayName = details.MessageDisplayName ?? details.Name;
         var result = new EnvironmentCheckResult
         {
             Category = EnvironmentCheckCategories.Environment,
             Name = CheckName,
-            Status = details.Type.Equals("Unknown", StringComparison.OrdinalIgnoreCase)
-                ? EnvironmentCheckStatus.Warning
-                : EnvironmentCheckStatus.Pass,
+            Status = details.Status,
             Message = string.Format(
                 CultureInfo.CurrentCulture,
                 DoctorCommandStrings.OperatingSystemMessageFormat,
-                string.IsNullOrWhiteSpace(details.Version) ? details.Name : $"{details.Name} {details.Version}"),
+                string.IsNullOrWhiteSpace(details.Version) ? messageDisplayName : $"{messageDisplayName} {details.Version}"),
             Metadata = BuildMetadata(details)
         };
 
@@ -73,14 +73,20 @@ internal sealed class OperatingSystemCheck : IEnvironmentCheck
             return CreateLinuxDetails(version, description);
         }
 
-        return new OperatingSystemDetails("Unknown", RuntimeInformation.OSDescription, version.ToString(), description);
+        return new OperatingSystemDetails(
+            UnknownOperatingSystemMetadataValue,
+            UnknownOperatingSystemMetadataValue,
+            version.ToString(),
+            description,
+            EnvironmentCheckStatus.Warning,
+            DoctorCommandStrings.VersionUnknown);
     }
 
     internal static OperatingSystemDetails CreateWindowsDetails(Version version, string description)
-        => new("Windows", "Windows", version.ToString(), description);
+        => new("Windows", "Windows", version.ToString(), description, EnvironmentCheckStatus.Pass);
 
     internal static OperatingSystemDetails CreateMacOSDetails(Version version, string description)
-        => new("macOS", "macOS", version.ToString(), description);
+        => new("macOS", "macOS", version.ToString(), description, EnvironmentCheckStatus.Pass);
 
     internal static OperatingSystemDetails CreateLinuxDetails(Version fallbackVersion, string description)
     {
@@ -95,7 +101,7 @@ internal sealed class OperatingSystemCheck : IEnvironmentCheck
         var displayName = string.IsNullOrWhiteSpace(distroName) ? "Linux" : $"Linux {distroName}";
         var linuxDescription = string.IsNullOrWhiteSpace(prettyName) ? description : prettyName;
 
-        return new OperatingSystemDetails("Linux", displayName, string.IsNullOrWhiteSpace(version) ? fallbackVersion.ToString() : version, linuxDescription);
+        return new OperatingSystemDetails("Linux", displayName, string.IsNullOrWhiteSpace(version) ? fallbackVersion.ToString() : version, linuxDescription, EnvironmentCheckStatus.Pass);
     }
 
     internal static Dictionary<string, string> ParseLinuxOsRelease(string? contents)
@@ -222,4 +228,10 @@ internal sealed class OperatingSystemCheck : IEnvironmentCheck
     }
 }
 
-internal sealed record OperatingSystemDetails(string Type, string Name, string Version, string Description);
+internal sealed record OperatingSystemDetails(
+    string Type,
+    string Name,
+    string Version,
+    string Description,
+    EnvironmentCheckStatus Status,
+    string? MessageDisplayName = null);

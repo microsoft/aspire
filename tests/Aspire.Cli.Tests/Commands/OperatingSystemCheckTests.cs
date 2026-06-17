@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Utils.EnvironmentChecker;
+using Aspire.Cli.Resources;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -14,7 +15,8 @@ public class OperatingSystemCheckTests
             Type: "Linux",
             Name: "Linux Ubuntu",
             Version: "24.04",
-            Description: "Ubuntu 24.04.2 LTS"));
+            Description: "Ubuntu 24.04.2 LTS",
+            Status: EnvironmentCheckStatus.Pass));
 
         var result = Assert.Single(await check.CheckAsync(TestContext.Current.CancellationToken));
 
@@ -33,18 +35,20 @@ public class OperatingSystemCheckTests
     public async Task CheckAsync_ReturnsWarningForUnknownOperatingSystem()
     {
         var check = new OperatingSystemCheck(() => new OperatingSystemDetails(
-            Type: "Unknown",
-            Name: "Unknown OS",
+            Type: "unknown",
+            Name: "unknown",
             Version: "1.2.3",
-            Description: "Unknown OS description"));
+            Description: "Unknown OS description",
+            Status: EnvironmentCheckStatus.Warning,
+            MessageDisplayName: DoctorCommandStrings.VersionUnknown));
 
         var result = Assert.Single(await check.CheckAsync(TestContext.Current.CancellationToken));
 
         Assert.Equal(EnvironmentCheckStatus.Warning, result.Status);
-        Assert.Equal("Operating system: Unknown OS 1.2.3", result.Message);
+        Assert.Equal("Operating system: unknown 1.2.3", result.Message);
         Assert.NotNull(result.Metadata);
-        Assert.Equal("Unknown", result.Metadata["osType"]!.GetValue<string>());
-        Assert.Equal("Unknown OS", result.Metadata["displayName"]!.GetValue<string>());
+        Assert.Equal("unknown", result.Metadata["osType"]!.GetValue<string>());
+        Assert.Equal("unknown", result.Metadata["displayName"]!.GetValue<string>());
         Assert.Equal("1.2.3", result.Metadata["version"]!.GetValue<string>());
         Assert.Equal("Unknown OS description", result.Metadata["description"]!.GetValue<string>());
     }
