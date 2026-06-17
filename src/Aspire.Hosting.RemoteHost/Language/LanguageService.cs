@@ -168,7 +168,6 @@ internal sealed class LanguageService
                    "This usually indicates a binary mismatch between the bundled apphost server and the integration assemblies on disk; " +
                    "check the apphost server log for 'LoaderExceptions' Warnings.";
         }
-
         return $"No language support found for: {language}. Available languages: {string.Join(", ", available)}.";
     }
 }

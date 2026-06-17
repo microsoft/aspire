@@ -1,0 +1,22 @@
+{
+  "appHost": {
+    "path": "apphost.ts",
+    "language": "typescript/nodejs"
+  },
+  "sdk": {
+    "version": "13.3.0-dev"
+  },
+  "channel": "pr-15723",
+  "profiles": {
+    "https": {
+      "applicationUrl": "https://localhost:50095;http://localhost:29514",
+      "environmentVariables": {
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:44294",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:13511"
+      }
+    }
+  },
+  "packages": {
+    "Aspire.Hosting.Redis": ""
+  }
+}

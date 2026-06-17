@@ -33,4 +33,11 @@ public interface ILanguageSupport
     /// </summary>
     /// <returns>The runtime spec containing commands for execution.</returns>
     RuntimeSpec GetRuntimeSpec();
+
+    /// <summary>
+    /// Gets the spec for spawning integration hosts in this language, or
+    /// <c>null</c> if this language cannot host cross-language integrations.
+    /// Default is <c>null</c> — languages opt in by overriding.
+    /// </summary>
+    IntegrationHostSpec? GetIntegrationHostSpec() => null;
 }

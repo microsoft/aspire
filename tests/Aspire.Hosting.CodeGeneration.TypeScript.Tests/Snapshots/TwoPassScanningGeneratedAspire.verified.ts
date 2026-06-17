@@ -1638,6 +1638,11 @@ export interface WithBindMountOptions {
     isReadOnly?: boolean;
 }
 
+export interface WithCertificateTrustEnvironmentOptions {
+    /** The optional environment variable that receives the certificate directories path. */
+    certificateDirectoriesEnvironmentVariable?: string;
+}
+
 export interface WithCommandOptions {
     /** Optional configuration for the command. */
     commandOptions?: CommandOptions;
@@ -1707,6 +1712,13 @@ export interface WithEndpointOptions {
     isExternal?: boolean;
     /** Network protocol: TCP or UDP are supported today, others possibly in future. */
     protocol?: ProtocolType;
+}
+
+export interface WithExecutableDebugSupportOptions {
+    /** The optional runtime executable to use in the launch configuration. */
+    runtimeExecutable?: string;
+    /** The optional launch method to use in the launch configuration. */
+    launchMethod?: string;
 }
 
 export interface WithHiddenOnCompletionOptions {
@@ -2427,6 +2439,8 @@ class CommandLineArgsCallbackContextPromiseImpl implements CommandLineArgsCallba
 /** Provides an ATS-first editor for command-line arguments within polyglot callbacks. */
 export interface CommandLineArgsEditor {
     toJSON(): MarshalledHandle;
+    /** Clears all command-line arguments. */
+    clear(): CommandLineArgsEditorPromise;
     /**
      * Adds a command-line argument.
      * @param value The argument to add.
@@ -2435,6 +2449,8 @@ export interface CommandLineArgsEditor {
 }
 
 export interface CommandLineArgsEditorPromise extends PromiseLike<CommandLineArgsEditor> {
+    /** Clears all command-line arguments. */
+    clear(): CommandLineArgsEditorPromise;
     /**
      * Adds a command-line argument.
      * @param value The argument to add.
@@ -2452,6 +2468,21 @@ class CommandLineArgsEditorImpl implements CommandLineArgsEditor {
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    /** @internal */
+    async _clearInternal(): Promise<CommandLineArgsEditor> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        await this._client.invokeCapability<void>(
+            'Aspire.Hosting.ApplicationModel/clear',
+            rpcArgs
+        );
+        return this;
+    }
+
+    /** Clears all command-line arguments. */
+    clear(): CommandLineArgsEditorPromise {
+        return new CommandLineArgsEditorPromiseImpl(this._clearInternal(), this._client);
+    }
 
     /** @internal */
     async _addInternal(value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<CommandLineArgsEditor> {
@@ -2487,6 +2518,10 @@ class CommandLineArgsEditorPromiseImpl implements CommandLineArgsEditorPromise {
         onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
     ): PromiseLike<TResult1 | TResult2> {
         return this._promise.then(onfulfilled, onrejected);
+    }
+
+    clear(): CommandLineArgsEditorPromise {
+        return new CommandLineArgsEditorPromiseImpl(this._promise.then(obj => obj.clear()), this._client);
     }
 
     add(value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): CommandLineArgsEditorPromise {
@@ -14283,6 +14318,25 @@ export interface ContainerRegistryResource {
      */
     withParentProcessLifetime(parentProcessId: number): ContainerRegistryResourcePromise;
     /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
      * Registers a callback to customize the URLs displayed for the resource.
      * @param callback The callback that will customize URLs for the resource.
      * @returns The resource builder.
@@ -14599,6 +14653,25 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * @returns The resource builder.
      */
     withParentProcessLifetime(parentProcessId: number): ContainerRegistryResourcePromise;
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
     /**
      * Registers a callback to customize the URLs displayed for the resource.
      * @param callback The callback that will customize URLs for the resource.
@@ -15041,6 +15114,50 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      */
     withParentProcessLifetime(parentProcessId: number): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
+    }
+
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId, json };
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting/withSerializedAnnotation',
+                rpcArgs
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client);
+    }
+
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    async getSerializedAnnotation(annotationId: string): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting/getSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    async hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<boolean>(
+            'Aspire.Hosting/hasSerializedAnnotation',
+            rpcArgs
+        );
     }
 
     /** @internal */
@@ -16159,6 +16276,18 @@ class ContainerRegistryResourcePromiseImpl implements ContainerRegistryResourceP
         return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.withParentProcessLifetime(parentProcessId)), this._client);
     }
 
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.withSerializedAnnotation(annotationId, json)), this._client);
+    }
+
+    getSerializedAnnotation(annotationId: string): Promise<string> {
+        return this._promise.then(obj => obj.getSerializedAnnotation(annotationId));
+    }
+
+    hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        return this._promise.then(obj => obj.hasSerializedAnnotation(annotationId));
+    }
+
     withUrls(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.withUrls(callback)), this._client);
     }
@@ -16674,6 +16803,31 @@ export interface ContainerResource {
      */
     withArgs(args: string[]): ContainerResourcePromise;
     /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): ContainerResourcePromise;
+    /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
      * @returns The resource builder.
@@ -16883,6 +17037,13 @@ export interface ContainerResource {
      * @returns The resource builder.
      */
     withCertificateTrustScope(scope: CertificateTrustScope): ContainerResourcePromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): ContainerResourcePromise;
     /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
@@ -17483,6 +17644,31 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      */
     withArgs(args: string[]): ContainerResourcePromise;
     /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): ContainerResourcePromise;
+    /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
      * @returns The resource builder.
@@ -17692,6 +17878,13 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @returns The resource builder.
      */
     withCertificateTrustScope(scope: CertificateTrustScope): ContainerResourcePromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): ContainerResourcePromise;
     /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
@@ -18807,6 +19000,69 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
         return new ContainerResourcePromiseImpl(this._withArgsInternal(args), this._client);
     }
 
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId, json };
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting/withSerializedAnnotation',
+                rpcArgs
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client);
+    }
+
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    async getSerializedAnnotation(annotationId: string): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting/getSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    async hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<boolean>(
+            'Aspire.Hosting/hasSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /** @internal */
+    private async _withArgsReplaceInternal(args: string[]): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, args };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withArgsReplace',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withArgsReplaceInternal(args), this._client);
+    }
+
     /** @internal */
     private async _withArgsCallbackInternal(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): Promise<ContainerResource> {
         const callbackId = registerCallback(async (objData: unknown) => {
@@ -19627,6 +19883,28 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      */
     withCertificateTrustScope(scope: CertificateTrustScope): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withCertificateTrustScopeInternal(scope), this._client);
+    }
+
+    /** @internal */
+    private async _withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable: string, certificateDirectoriesEnvironmentVariable?: string): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, certificateBundleEnvironmentVariable };
+        if (certificateDirectoriesEnvironmentVariable !== undefined) rpcArgs.certificateDirectoriesEnvironmentVariable = certificateDirectoriesEnvironmentVariable;
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withCertificateTrustEnvironment',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): ContainerResourcePromise {
+        const certificateDirectoriesEnvironmentVariable = options?.certificateDirectoriesEnvironmentVariable;
+        return new ContainerResourcePromiseImpl(this._withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable, certificateDirectoriesEnvironmentVariable), this._client);
     }
 
     /** @internal */
@@ -20869,6 +21147,22 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withArgs(args)), this._client);
     }
 
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.withSerializedAnnotation(annotationId, json)), this._client);
+    }
+
+    getSerializedAnnotation(annotationId: string): Promise<string> {
+        return this._promise.then(obj => obj.getSerializedAnnotation(annotationId));
+    }
+
+    hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        return this._promise.then(obj => obj.hasSerializedAnnotation(annotationId));
+    }
+
+    withArgsReplace(args: string[]): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withArgsReplace(args)), this._client);
+    }
+
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withArgsCallback(callback)), this._client);
     }
@@ -20983,6 +21277,10 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
 
     withCertificateTrustScope(scope: CertificateTrustScope): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withCertificateTrustScope(scope)), this._client);
+    }
+
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withCertificateTrustEnvironment(certificateBundleEnvironmentVariable, options)), this._client);
     }
 
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ContainerResourcePromise {
@@ -21328,6 +21626,31 @@ export interface CSharpAppResource {
      */
     withArgs(args: string[]): CSharpAppResourcePromise;
     /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): CSharpAppResourcePromise;
+    /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
      * @returns The resource builder.
@@ -21543,6 +21866,13 @@ export interface CSharpAppResource {
      * @returns The resource builder.
      */
     withCertificateTrustScope(scope: CertificateTrustScope): CSharpAppResourcePromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): CSharpAppResourcePromise;
     /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
@@ -21952,6 +22282,31 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      */
     withArgs(args: string[]): CSharpAppResourcePromise;
     /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): CSharpAppResourcePromise;
+    /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
      * @returns The resource builder.
@@ -22167,6 +22522,13 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @returns The resource builder.
      */
     withCertificateTrustScope(scope: CertificateTrustScope): CSharpAppResourcePromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): CSharpAppResourcePromise;
     /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
@@ -22823,6 +23185,69 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      */
     withArgs(args: string[]): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withArgsInternal(args), this._client);
+    }
+
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId, json };
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting/withSerializedAnnotation',
+                rpcArgs
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client);
+    }
+
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    async getSerializedAnnotation(annotationId: string): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting/getSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    async hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<boolean>(
+            'Aspire.Hosting/hasSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /** @internal */
+    private async _withArgsReplaceInternal(args: string[]): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, args };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withArgsReplace',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withArgsReplaceInternal(args), this._client);
     }
 
     /** @internal */
@@ -23665,6 +24090,28 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      */
     withCertificateTrustScope(scope: CertificateTrustScope): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withCertificateTrustScopeInternal(scope), this._client);
+    }
+
+    /** @internal */
+    private async _withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable: string, certificateDirectoriesEnvironmentVariable?: string): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, certificateBundleEnvironmentVariable };
+        if (certificateDirectoriesEnvironmentVariable !== undefined) rpcArgs.certificateDirectoriesEnvironmentVariable = certificateDirectoriesEnvironmentVariable;
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withCertificateTrustEnvironment',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): CSharpAppResourcePromise {
+        const certificateDirectoriesEnvironmentVariable = options?.certificateDirectoriesEnvironmentVariable;
+        return new CSharpAppResourcePromiseImpl(this._withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable, certificateDirectoriesEnvironmentVariable), this._client);
     }
 
     /** @internal */
@@ -24823,6 +25270,22 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withArgs(args)), this._client);
     }
 
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.withSerializedAnnotation(annotationId, json)), this._client);
+    }
+
+    getSerializedAnnotation(annotationId: string): Promise<string> {
+        return this._promise.then(obj => obj.getSerializedAnnotation(annotationId));
+    }
+
+    hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        return this._promise.then(obj => obj.hasSerializedAnnotation(annotationId));
+    }
+
+    withArgsReplace(args: string[]): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withArgsReplace(args)), this._client);
+    }
+
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withArgsCallback(callback)), this._client);
     }
@@ -24941,6 +25404,10 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
 
     withCertificateTrustScope(scope: CertificateTrustScope): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withCertificateTrustScope(scope)), this._client);
+    }
+
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withCertificateTrustEnvironment(certificateBundleEnvironmentVariable, options)), this._client);
     }
 
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): CSharpAppResourcePromise {
@@ -25320,6 +25787,31 @@ export interface DotnetToolResource {
      */
     withArgs(args: string[]): DotnetToolResourcePromise;
     /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): DotnetToolResourcePromise;
+    /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
      * @returns The resource builder.
@@ -25530,6 +26022,13 @@ export interface DotnetToolResource {
      */
     withCertificateTrustScope(scope: CertificateTrustScope): DotnetToolResourcePromise;
     /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): DotnetToolResourcePromise;
+    /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
      * Use the developer certificate for HTTPS/TLS endpoints on a container resource:
@@ -25620,6 +26119,14 @@ export interface DotnetToolResource {
      * @returns The resource builder.
      */
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): DotnetToolResourcePromise;
+    /**
+     * Adds VS Code-compatible debug metadata for an executable resource.
+     * @param launchConfigurationType The launch configuration type understood by the extension.
+     * @param scriptPath The script path, relative to the executable working directory when not rooted.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withExecutableDebugSupport(launchConfigurationType: string, scriptPath: string, options?: WithExecutableDebugSupportOptions): DotnetToolResourcePromise;
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
@@ -25966,6 +26473,31 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      */
     withArgs(args: string[]): DotnetToolResourcePromise;
     /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): DotnetToolResourcePromise;
+    /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
      * @returns The resource builder.
@@ -26176,6 +26708,13 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      */
     withCertificateTrustScope(scope: CertificateTrustScope): DotnetToolResourcePromise;
     /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): DotnetToolResourcePromise;
+    /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
      * Use the developer certificate for HTTPS/TLS endpoints on a container resource:
@@ -26266,6 +26805,14 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @returns The resource builder.
      */
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): DotnetToolResourcePromise;
+    /**
+     * Adds VS Code-compatible debug metadata for an executable resource.
+     * @param launchConfigurationType The launch configuration type understood by the extension.
+     * @param scriptPath The script path, relative to the executable working directory when not rooted.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withExecutableDebugSupport(launchConfigurationType: string, scriptPath: string, options?: WithExecutableDebugSupportOptions): DotnetToolResourcePromise;
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
@@ -26935,6 +27482,69 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      */
     withArgs(args: string[]): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withArgsInternal(args), this._client);
+    }
+
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId, json };
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting/withSerializedAnnotation',
+                rpcArgs
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client);
+    }
+
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    async getSerializedAnnotation(annotationId: string): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting/getSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    async hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<boolean>(
+            'Aspire.Hosting/hasSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /** @internal */
+    private async _withArgsReplaceInternal(args: string[]): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, args };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withArgsReplace',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withArgsReplaceInternal(args), this._client);
     }
 
     /** @internal */
@@ -27760,6 +28370,28 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
+    private async _withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable: string, certificateDirectoriesEnvironmentVariable?: string): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, certificateBundleEnvironmentVariable };
+        if (certificateDirectoriesEnvironmentVariable !== undefined) rpcArgs.certificateDirectoriesEnvironmentVariable = certificateDirectoriesEnvironmentVariable;
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withCertificateTrustEnvironment',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): DotnetToolResourcePromise {
+        const certificateDirectoriesEnvironmentVariable = options?.certificateDirectoriesEnvironmentVariable;
+        return new DotnetToolResourcePromiseImpl(this._withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable, certificateDirectoriesEnvironmentVariable), this._client);
+    }
+
+    /** @internal */
     private async _withHttpsDeveloperCertificateInternal(password?: Awaitable<ParameterResource>): Promise<DotnetToolResource> {
         password = isPromiseLike(password) ? await password : password;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
@@ -27984,6 +28616,31 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      */
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withComputeEnvironmentInternal(computeEnvironmentResource), this._client);
+    }
+
+    /** @internal */
+    private async _withExecutableDebugSupportInternal(launchConfigurationType: string, scriptPath: string, runtimeExecutable?: string, launchMethod?: string): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchConfigurationType, scriptPath };
+        if (runtimeExecutable !== undefined) rpcArgs.runtimeExecutable = runtimeExecutable;
+        if (launchMethod !== undefined) rpcArgs.launchMethod = launchMethod;
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withExecutableDebugSupport',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds VS Code-compatible debug metadata for an executable resource.
+     * @param launchConfigurationType The launch configuration type understood by the extension.
+     * @param scriptPath The script path, relative to the executable working directory when not rooted.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withExecutableDebugSupport(launchConfigurationType: string, scriptPath: string, options?: WithExecutableDebugSupportOptions): DotnetToolResourcePromise {
+        const runtimeExecutable = options?.runtimeExecutable;
+        const launchMethod = options?.launchMethod;
+        return new DotnetToolResourcePromiseImpl(this._withExecutableDebugSupportInternal(launchConfigurationType, scriptPath, runtimeExecutable, launchMethod), this._client);
     }
 
     /** @internal */
@@ -28920,6 +29577,22 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withArgs(args)), this._client);
     }
 
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.withSerializedAnnotation(annotationId, json)), this._client);
+    }
+
+    getSerializedAnnotation(annotationId: string): Promise<string> {
+        return this._promise.then(obj => obj.getSerializedAnnotation(annotationId));
+    }
+
+    hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        return this._promise.then(obj => obj.hasSerializedAnnotation(annotationId));
+    }
+
+    withArgsReplace(args: string[]): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withArgsReplace(args)), this._client);
+    }
+
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withArgsCallback(callback)), this._client);
     }
@@ -29036,6 +29709,10 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withCertificateTrustScope(scope)), this._client);
     }
 
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withCertificateTrustEnvironment(certificateBundleEnvironmentVariable, options)), this._client);
+    }
+
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withHttpsDeveloperCertificate(options)), this._client);
     }
@@ -29070,6 +29747,10 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
 
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withComputeEnvironment(computeEnvironmentResource)), this._client);
+    }
+
+    withExecutableDebugSupport(launchConfigurationType: string, scriptPath: string, options?: WithExecutableDebugSupportOptions): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withExecutableDebugSupport(launchConfigurationType, scriptPath, options)), this._client);
     }
 
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): DotnetToolResourcePromise {
@@ -29383,6 +30064,31 @@ export interface ExecutableResource {
      */
     withArgs(args: string[]): ExecutableResourcePromise;
     /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): ExecutableResourcePromise;
+    /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
      * @returns The resource builder.
@@ -29593,6 +30299,13 @@ export interface ExecutableResource {
      */
     withCertificateTrustScope(scope: CertificateTrustScope): ExecutableResourcePromise;
     /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): ExecutableResourcePromise;
+    /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
      * Use the developer certificate for HTTPS/TLS endpoints on a container resource:
@@ -29683,6 +30396,14 @@ export interface ExecutableResource {
      * @returns The resource builder.
      */
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): ExecutableResourcePromise;
+    /**
+     * Adds VS Code-compatible debug metadata for an executable resource.
+     * @param launchConfigurationType The launch configuration type understood by the extension.
+     * @param scriptPath The script path, relative to the executable working directory when not rooted.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withExecutableDebugSupport(launchConfigurationType: string, scriptPath: string, options?: WithExecutableDebugSupportOptions): ExecutableResourcePromise;
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
@@ -29996,6 +30717,31 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      */
     withArgs(args: string[]): ExecutableResourcePromise;
     /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): ExecutableResourcePromise;
+    /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
      * @returns The resource builder.
@@ -30206,6 +30952,13 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      */
     withCertificateTrustScope(scope: CertificateTrustScope): ExecutableResourcePromise;
     /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): ExecutableResourcePromise;
+    /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
      * Use the developer certificate for HTTPS/TLS endpoints on a container resource:
@@ -30296,6 +31049,14 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @returns The resource builder.
      */
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): ExecutableResourcePromise;
+    /**
+     * Adds VS Code-compatible debug metadata for an executable resource.
+     * @param launchConfigurationType The launch configuration type understood by the extension.
+     * @param scriptPath The script path, relative to the executable working directory when not rooted.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withExecutableDebugSupport(launchConfigurationType: string, scriptPath: string, options?: WithExecutableDebugSupportOptions): ExecutableResourcePromise;
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
@@ -30861,6 +31622,69 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      */
     withArgs(args: string[]): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withArgsInternal(args), this._client);
+    }
+
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId, json };
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting/withSerializedAnnotation',
+                rpcArgs
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client);
+    }
+
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    async getSerializedAnnotation(annotationId: string): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting/getSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    async hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<boolean>(
+            'Aspire.Hosting/hasSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /** @internal */
+    private async _withArgsReplaceInternal(args: string[]): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, args };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withArgsReplace',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withArgsReplaceInternal(args), this._client);
     }
 
     /** @internal */
@@ -31686,6 +32510,28 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
+    private async _withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable: string, certificateDirectoriesEnvironmentVariable?: string): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, certificateBundleEnvironmentVariable };
+        if (certificateDirectoriesEnvironmentVariable !== undefined) rpcArgs.certificateDirectoriesEnvironmentVariable = certificateDirectoriesEnvironmentVariable;
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withCertificateTrustEnvironment',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): ExecutableResourcePromise {
+        const certificateDirectoriesEnvironmentVariable = options?.certificateDirectoriesEnvironmentVariable;
+        return new ExecutableResourcePromiseImpl(this._withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable, certificateDirectoriesEnvironmentVariable), this._client);
+    }
+
+    /** @internal */
     private async _withHttpsDeveloperCertificateInternal(password?: Awaitable<ParameterResource>): Promise<ExecutableResource> {
         password = isPromiseLike(password) ? await password : password;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
@@ -31910,6 +32756,31 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      */
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withComputeEnvironmentInternal(computeEnvironmentResource), this._client);
+    }
+
+    /** @internal */
+    private async _withExecutableDebugSupportInternal(launchConfigurationType: string, scriptPath: string, runtimeExecutable?: string, launchMethod?: string): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchConfigurationType, scriptPath };
+        if (runtimeExecutable !== undefined) rpcArgs.runtimeExecutable = runtimeExecutable;
+        if (launchMethod !== undefined) rpcArgs.launchMethod = launchMethod;
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withExecutableDebugSupport',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds VS Code-compatible debug metadata for an executable resource.
+     * @param launchConfigurationType The launch configuration type understood by the extension.
+     * @param scriptPath The script path, relative to the executable working directory when not rooted.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withExecutableDebugSupport(launchConfigurationType: string, scriptPath: string, options?: WithExecutableDebugSupportOptions): ExecutableResourcePromise {
+        const runtimeExecutable = options?.runtimeExecutable;
+        const launchMethod = options?.launchMethod;
+        return new ExecutableResourcePromiseImpl(this._withExecutableDebugSupportInternal(launchConfigurationType, scriptPath, runtimeExecutable, launchMethod), this._client);
     }
 
     /** @internal */
@@ -32822,6 +33693,22 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withArgs(args)), this._client);
     }
 
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.withSerializedAnnotation(annotationId, json)), this._client);
+    }
+
+    getSerializedAnnotation(annotationId: string): Promise<string> {
+        return this._promise.then(obj => obj.getSerializedAnnotation(annotationId));
+    }
+
+    hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        return this._promise.then(obj => obj.hasSerializedAnnotation(annotationId));
+    }
+
+    withArgsReplace(args: string[]): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withArgsReplace(args)), this._client);
+    }
+
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withArgsCallback(callback)), this._client);
     }
@@ -32938,6 +33825,10 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withCertificateTrustScope(scope)), this._client);
     }
 
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withCertificateTrustEnvironment(certificateBundleEnvironmentVariable, options)), this._client);
+    }
+
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withHttpsDeveloperCertificate(options)), this._client);
     }
@@ -32972,6 +33863,10 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
 
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withComputeEnvironment(computeEnvironmentResource)), this._client);
+    }
+
+    withExecutableDebugSupport(launchConfigurationType: string, scriptPath: string, options?: WithExecutableDebugSupportOptions): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withExecutableDebugSupport(launchConfigurationType, scriptPath, options)), this._client);
     }
 
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ExecutableResourcePromise {
@@ -33232,6 +34127,25 @@ export interface ExternalServiceResource {
      * @returns The resource builder.
      */
     withParentProcessLifetime(parentProcessId: number): ExternalServiceResourcePromise;
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
     /**
      * Registers a callback to customize the URLs displayed for the resource.
      * @param callback The callback that will customize URLs for the resource.
@@ -33554,6 +34468,25 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * @returns The resource builder.
      */
     withParentProcessLifetime(parentProcessId: number): ExternalServiceResourcePromise;
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
     /**
      * Registers a callback to customize the URLs displayed for the resource.
      * @param callback The callback that will customize URLs for the resource.
@@ -34020,6 +34953,50 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      */
     withParentProcessLifetime(parentProcessId: number): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
+    }
+
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId, json };
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting/withSerializedAnnotation',
+                rpcArgs
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client);
+    }
+
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    async getSerializedAnnotation(annotationId: string): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting/getSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    async hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<boolean>(
+            'Aspire.Hosting/hasSerializedAnnotation',
+            rpcArgs
+        );
     }
 
     /** @internal */
@@ -35142,6 +36119,18 @@ class ExternalServiceResourcePromiseImpl implements ExternalServiceResourcePromi
         return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.withParentProcessLifetime(parentProcessId)), this._client);
     }
 
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.withSerializedAnnotation(annotationId, json)), this._client);
+    }
+
+    getSerializedAnnotation(annotationId: string): Promise<string> {
+        return this._promise.then(obj => obj.getSerializedAnnotation(annotationId));
+    }
+
+    hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        return this._promise.then(obj => obj.hasSerializedAnnotation(annotationId));
+    }
+
     withUrls(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.withUrls(callback)), this._client);
     }
@@ -35437,6 +36426,25 @@ export interface ParameterResource {
      * @returns The resource builder.
      */
     withParentProcessLifetime(parentProcessId: number): ParameterResourcePromise;
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
     /**
      * Registers a callback to customize the URLs displayed for the resource.
      * @param callback The callback that will customize URLs for the resource.
@@ -35767,6 +36775,25 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * @returns The resource builder.
      */
     withParentProcessLifetime(parentProcessId: number): ParameterResourcePromise;
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
     /**
      * Registers a callback to customize the URLs displayed for the resource.
      * @param callback The callback that will customize URLs for the resource.
@@ -36251,6 +37278,50 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      */
     withParentProcessLifetime(parentProcessId: number): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
+    }
+
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId, json };
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting/withSerializedAnnotation',
+                rpcArgs
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client);
+    }
+
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    async getSerializedAnnotation(annotationId: string): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting/getSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    async hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<boolean>(
+            'Aspire.Hosting/hasSerializedAnnotation',
+            rpcArgs
+        );
     }
 
     /** @internal */
@@ -37377,6 +38448,18 @@ class ParameterResourcePromiseImpl implements ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withParentProcessLifetime(parentProcessId)), this._client);
     }
 
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.withSerializedAnnotation(annotationId, json)), this._client);
+    }
+
+    getSerializedAnnotation(annotationId: string): Promise<string> {
+        return this._promise.then(obj => obj.getSerializedAnnotation(annotationId));
+    }
+
+    hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        return this._promise.then(obj => obj.hasSerializedAnnotation(annotationId));
+    }
+
     withUrls(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withUrls(callback)), this._client);
     }
@@ -37709,6 +38792,31 @@ export interface ProjectResource {
      */
     withArgs(args: string[]): ProjectResourcePromise;
     /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): ProjectResourcePromise;
+    /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
      * @returns The resource builder.
@@ -37924,6 +39032,13 @@ export interface ProjectResource {
      * @returns The resource builder.
      */
     withCertificateTrustScope(scope: CertificateTrustScope): ProjectResourcePromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): ProjectResourcePromise;
     /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
@@ -38333,6 +39448,31 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      */
     withArgs(args: string[]): ProjectResourcePromise;
     /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): ProjectResourcePromise;
+    /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
      * @returns The resource builder.
@@ -38548,6 +39688,13 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @returns The resource builder.
      */
     withCertificateTrustScope(scope: CertificateTrustScope): ProjectResourcePromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): ProjectResourcePromise;
     /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
@@ -39205,6 +40352,69 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      */
     withArgs(args: string[]): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withArgsInternal(args), this._client);
+    }
+
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId, json };
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting/withSerializedAnnotation',
+                rpcArgs
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client);
+    }
+
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    async getSerializedAnnotation(annotationId: string): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting/getSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    async hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<boolean>(
+            'Aspire.Hosting/hasSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /** @internal */
+    private async _withArgsReplaceInternal(args: string[]): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, args };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withArgsReplace',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withArgsReplaceInternal(args), this._client);
     }
 
     /** @internal */
@@ -40047,6 +41257,28 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      */
     withCertificateTrustScope(scope: CertificateTrustScope): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withCertificateTrustScopeInternal(scope), this._client);
+    }
+
+    /** @internal */
+    private async _withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable: string, certificateDirectoriesEnvironmentVariable?: string): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, certificateBundleEnvironmentVariable };
+        if (certificateDirectoriesEnvironmentVariable !== undefined) rpcArgs.certificateDirectoriesEnvironmentVariable = certificateDirectoriesEnvironmentVariable;
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withCertificateTrustEnvironment',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): ProjectResourcePromise {
+        const certificateDirectoriesEnvironmentVariable = options?.certificateDirectoriesEnvironmentVariable;
+        return new ProjectResourcePromiseImpl(this._withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable, certificateDirectoriesEnvironmentVariable), this._client);
     }
 
     /** @internal */
@@ -41205,6 +42437,22 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withArgs(args)), this._client);
     }
 
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.withSerializedAnnotation(annotationId, json)), this._client);
+    }
+
+    getSerializedAnnotation(annotationId: string): Promise<string> {
+        return this._promise.then(obj => obj.getSerializedAnnotation(annotationId));
+    }
+
+    hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        return this._promise.then(obj => obj.hasSerializedAnnotation(annotationId));
+    }
+
+    withArgsReplace(args: string[]): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withArgsReplace(args)), this._client);
+    }
+
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withArgsCallback(callback)), this._client);
     }
@@ -41323,6 +42571,10 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
 
     withCertificateTrustScope(scope: CertificateTrustScope): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withCertificateTrustScope(scope)), this._client);
+    }
+
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withCertificateTrustEnvironment(certificateBundleEnvironmentVariable, options)), this._client);
     }
 
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ProjectResourcePromise {
@@ -41851,6 +43103,31 @@ export interface TestDatabaseResource {
      */
     withArgs(args: string[]): TestDatabaseResourcePromise;
     /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): TestDatabaseResourcePromise;
+    /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
      * @returns The resource builder.
@@ -42060,6 +43337,13 @@ export interface TestDatabaseResource {
      * @returns The resource builder.
      */
     withCertificateTrustScope(scope: CertificateTrustScope): TestDatabaseResourcePromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): TestDatabaseResourcePromise;
     /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
@@ -42660,6 +43944,31 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      */
     withArgs(args: string[]): TestDatabaseResourcePromise;
     /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): TestDatabaseResourcePromise;
+    /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
      * @returns The resource builder.
@@ -42869,6 +44178,13 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @returns The resource builder.
      */
     withCertificateTrustScope(scope: CertificateTrustScope): TestDatabaseResourcePromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): TestDatabaseResourcePromise;
     /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
@@ -43983,6 +45299,69 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourcePromiseImpl(this._withArgsInternal(args), this._client);
     }
 
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId, json };
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting/withSerializedAnnotation',
+                rpcArgs
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client);
+    }
+
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    async getSerializedAnnotation(annotationId: string): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting/getSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    async hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<boolean>(
+            'Aspire.Hosting/hasSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /** @internal */
+    private async _withArgsReplaceInternal(args: string[]): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, args };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withArgsReplace',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withArgsReplaceInternal(args), this._client);
+    }
+
     /** @internal */
     private async _withArgsCallbackInternal(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): Promise<TestDatabaseResource> {
         const callbackId = registerCallback(async (objData: unknown) => {
@@ -44803,6 +46182,28 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      */
     withCertificateTrustScope(scope: CertificateTrustScope): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withCertificateTrustScopeInternal(scope), this._client);
+    }
+
+    /** @internal */
+    private async _withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable: string, certificateDirectoriesEnvironmentVariable?: string): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, certificateBundleEnvironmentVariable };
+        if (certificateDirectoriesEnvironmentVariable !== undefined) rpcArgs.certificateDirectoriesEnvironmentVariable = certificateDirectoriesEnvironmentVariable;
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withCertificateTrustEnvironment',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): TestDatabaseResourcePromise {
+        const certificateDirectoriesEnvironmentVariable = options?.certificateDirectoriesEnvironmentVariable;
+        return new TestDatabaseResourcePromiseImpl(this._withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable, certificateDirectoriesEnvironmentVariable), this._client);
     }
 
     /** @internal */
@@ -46045,6 +47446,22 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withArgs(args)), this._client);
     }
 
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.withSerializedAnnotation(annotationId, json)), this._client);
+    }
+
+    getSerializedAnnotation(annotationId: string): Promise<string> {
+        return this._promise.then(obj => obj.getSerializedAnnotation(annotationId));
+    }
+
+    hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        return this._promise.then(obj => obj.hasSerializedAnnotation(annotationId));
+    }
+
+    withArgsReplace(args: string[]): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withArgsReplace(args)), this._client);
+    }
+
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withArgsCallback(callback)), this._client);
     }
@@ -46159,6 +47576,10 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
 
     withCertificateTrustScope(scope: CertificateTrustScope): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withCertificateTrustScope(scope)), this._client);
+    }
+
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withCertificateTrustEnvironment(certificateBundleEnvironmentVariable, options)), this._client);
     }
 
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): TestDatabaseResourcePromise {
@@ -46694,6 +48115,31 @@ export interface TestRedisResource {
      */
     withArgs(args: string[]): TestRedisResourcePromise;
     /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): TestRedisResourcePromise;
+    /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
      * @returns The resource builder.
@@ -46912,6 +48358,13 @@ export interface TestRedisResource {
      * @returns The resource builder.
      */
     withCertificateTrustScope(scope: CertificateTrustScope): TestRedisResourcePromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): TestRedisResourcePromise;
     /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
@@ -47567,6 +49020,31 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      */
     withArgs(args: string[]): TestRedisResourcePromise;
     /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): TestRedisResourcePromise;
+    /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
      * @returns The resource builder.
@@ -47785,6 +49263,13 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @returns The resource builder.
      */
     withCertificateTrustScope(scope: CertificateTrustScope): TestRedisResourcePromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): TestRedisResourcePromise;
     /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
@@ -48967,6 +50452,69 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourcePromiseImpl(this._withArgsInternal(args), this._client);
     }
 
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId, json };
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting/withSerializedAnnotation',
+                rpcArgs
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client);
+    }
+
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    async getSerializedAnnotation(annotationId: string): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting/getSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    async hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<boolean>(
+            'Aspire.Hosting/hasSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /** @internal */
+    private async _withArgsReplaceInternal(args: string[]): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, args };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withArgsReplace',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withArgsReplaceInternal(args), this._client);
+    }
+
     /** @internal */
     private async _withArgsCallbackInternal(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): Promise<TestRedisResource> {
         const callbackId = registerCallback(async (objData: unknown) => {
@@ -49803,6 +51351,28 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      */
     withCertificateTrustScope(scope: CertificateTrustScope): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withCertificateTrustScopeInternal(scope), this._client);
+    }
+
+    /** @internal */
+    private async _withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable: string, certificateDirectoriesEnvironmentVariable?: string): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, certificateBundleEnvironmentVariable };
+        if (certificateDirectoriesEnvironmentVariable !== undefined) rpcArgs.certificateDirectoriesEnvironmentVariable = certificateDirectoriesEnvironmentVariable;
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withCertificateTrustEnvironment',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): TestRedisResourcePromise {
+        const certificateDirectoriesEnvironmentVariable = options?.certificateDirectoriesEnvironmentVariable;
+        return new TestRedisResourcePromiseImpl(this._withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable, certificateDirectoriesEnvironmentVariable), this._client);
     }
 
     /** @internal */
@@ -51260,6 +52830,22 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withArgs(args)), this._client);
     }
 
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.withSerializedAnnotation(annotationId, json)), this._client);
+    }
+
+    getSerializedAnnotation(annotationId: string): Promise<string> {
+        return this._promise.then(obj => obj.getSerializedAnnotation(annotationId));
+    }
+
+    hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        return this._promise.then(obj => obj.hasSerializedAnnotation(annotationId));
+    }
+
+    withArgsReplace(args: string[]): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withArgsReplace(args)), this._client);
+    }
+
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withArgsCallback(callback)), this._client);
     }
@@ -51378,6 +52964,10 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
 
     withCertificateTrustScope(scope: CertificateTrustScope): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withCertificateTrustScope(scope)), this._client);
+    }
+
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withCertificateTrustEnvironment(certificateBundleEnvironmentVariable, options)), this._client);
     }
 
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): TestRedisResourcePromise {
@@ -51958,6 +53548,31 @@ export interface TestVaultResource {
      */
     withArgs(args: string[]): TestVaultResourcePromise;
     /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): TestVaultResourcePromise;
+    /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
      * @returns The resource builder.
@@ -52167,6 +53782,13 @@ export interface TestVaultResource {
      * @returns The resource builder.
      */
     withCertificateTrustScope(scope: CertificateTrustScope): TestVaultResourcePromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): TestVaultResourcePromise;
     /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
@@ -52769,6 +54391,31 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      */
     withArgs(args: string[]): TestVaultResourcePromise;
     /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): TestVaultResourcePromise;
+    /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
      * @returns The resource builder.
@@ -52978,6 +54625,13 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @returns The resource builder.
      */
     withCertificateTrustScope(scope: CertificateTrustScope): TestVaultResourcePromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): TestVaultResourcePromise;
     /**
      * Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
      *
@@ -54094,6 +55748,69 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourcePromiseImpl(this._withArgsInternal(args), this._client);
     }
 
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId, json };
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting/withSerializedAnnotation',
+                rpcArgs
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client);
+    }
+
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    async getSerializedAnnotation(annotationId: string): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting/getSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    async hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<boolean>(
+            'Aspire.Hosting/hasSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /** @internal */
+    private async _withArgsReplaceInternal(args: string[]): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, args };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withArgsReplace',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withArgsReplaceInternal(args), this._client);
+    }
+
     /** @internal */
     private async _withArgsCallbackInternal(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): Promise<TestVaultResource> {
         const callbackId = registerCallback(async (objData: unknown) => {
@@ -54914,6 +56631,28 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      */
     withCertificateTrustScope(scope: CertificateTrustScope): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withCertificateTrustScopeInternal(scope), this._client);
+    }
+
+    /** @internal */
+    private async _withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable: string, certificateDirectoriesEnvironmentVariable?: string): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, certificateBundleEnvironmentVariable };
+        if (certificateDirectoriesEnvironmentVariable !== undefined) rpcArgs.certificateDirectoriesEnvironmentVariable = certificateDirectoriesEnvironmentVariable;
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withCertificateTrustEnvironment',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): TestVaultResourcePromise {
+        const certificateDirectoriesEnvironmentVariable = options?.certificateDirectoriesEnvironmentVariable;
+        return new TestVaultResourcePromiseImpl(this._withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable, certificateDirectoriesEnvironmentVariable), this._client);
     }
 
     /** @internal */
@@ -56171,6 +57910,22 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withArgs(args)), this._client);
     }
 
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.withSerializedAnnotation(annotationId, json)), this._client);
+    }
+
+    getSerializedAnnotation(annotationId: string): Promise<string> {
+        return this._promise.then(obj => obj.getSerializedAnnotation(annotationId));
+    }
+
+    hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        return this._promise.then(obj => obj.hasSerializedAnnotation(annotationId));
+    }
+
+    withArgsReplace(args: string[]): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withArgsReplace(args)), this._client);
+    }
+
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withArgsCallback(callback)), this._client);
     }
@@ -56285,6 +58040,10 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
 
     withCertificateTrustScope(scope: CertificateTrustScope): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withCertificateTrustScope(scope)), this._client);
+    }
+
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withCertificateTrustEnvironment(certificateBundleEnvironmentVariable, options)), this._client);
     }
 
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): TestVaultResourcePromise {
@@ -56905,6 +58664,25 @@ export interface Resource {
      */
     withParentProcessLifetime(parentProcessId: number): ResourcePromise;
     /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
+    /**
      * Registers a callback to customize the URLs displayed for the resource.
      * @param callback The callback that will customize URLs for the resource.
      * @returns The resource builder.
@@ -57221,6 +58999,25 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * @returns The resource builder.
      */
     withParentProcessLifetime(parentProcessId: number): ResourcePromise;
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise;
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    getSerializedAnnotation(annotationId: string): Promise<string>;
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    hasSerializedAnnotation(annotationId: string): Promise<boolean>;
     /**
      * Registers a callback to customize the URLs displayed for the resource.
      * @param callback The callback that will customize URLs for the resource.
@@ -57664,6 +59461,50 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      */
     withParentProcessLifetime(parentProcessId: number): ResourcePromise {
         return new ResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
+    }
+
+    /**
+     * Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+     * @param annotationId The stable annotation identifier.
+     * @param json The serialized JSON payload.
+     * @returns The resource.
+     */
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId, json };
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting/withSerializedAnnotation',
+                rpcArgs
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client);
+    }
+
+    /**
+     * Gets a serialized ATS annotation payload from a resource.
+     * @param annotationId The stable annotation identifier.
+     * @returns The serialized JSON payload.
+     */
+    async getSerializedAnnotation(annotationId: string): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting/getSerializedAnnotation',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Determines whether a resource has a serialized ATS annotation with the specified ID.
+     * @param annotationId The stable annotation identifier.
+     * @returns `true` if the annotation exists; otherwise, `false`.
+     */
+    async hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, annotationId };
+        return await this._client.invokeCapability<boolean>(
+            'Aspire.Hosting/hasSerializedAnnotation',
+            rpcArgs
+        );
     }
 
     /** @internal */
@@ -58782,6 +60623,18 @@ class ResourcePromiseImpl implements ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withParentProcessLifetime(parentProcessId)), this._client);
     }
 
+    withSerializedAnnotation(annotationId: string, json: string): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.withSerializedAnnotation(annotationId, json)), this._client);
+    }
+
+    getSerializedAnnotation(annotationId: string): Promise<string> {
+        return this._promise.then(obj => obj.getSerializedAnnotation(annotationId));
+    }
+
+    hasSerializedAnnotation(annotationId: string): Promise<boolean> {
+        return this._promise.then(obj => obj.hasSerializedAnnotation(annotationId));
+    }
+
     withUrls(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withUrls(callback)), this._client);
     }
@@ -58994,11 +60847,24 @@ export interface ResourceWithArgs {
      */
     withArgs(args: string[]): ResourceWithArgsPromise;
     /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): ResourceWithArgsPromise;
+    /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
      * @returns The resource builder.
      */
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): ResourceWithArgsPromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): ResourceWithArgsPromise;
 }
 
 export interface ResourceWithArgsPromise extends PromiseLike<ResourceWithArgs> {
@@ -59009,11 +60875,24 @@ export interface ResourceWithArgsPromise extends PromiseLike<ResourceWithArgs> {
      */
     withArgs(args: string[]): ResourceWithArgsPromise;
     /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): ResourceWithArgsPromise;
+    /**
      * Adds a callback to be executed with a list of command-line arguments when a resource is started.
      * @param callback A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
      * @returns The resource builder.
      */
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): ResourceWithArgsPromise;
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): ResourceWithArgsPromise;
 }
 
 // ============================================================================
@@ -59046,6 +60925,25 @@ class ResourceWithArgsImpl extends ResourceBuilderBase<IResourceWithArgsHandle> 
     }
 
     /** @internal */
+    private async _withArgsReplaceInternal(args: string[]): Promise<ResourceWithArgs> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, args };
+        const result = await this._client.invokeCapability<IResourceWithArgsHandle>(
+            'Aspire.Hosting/withArgsReplace',
+            rpcArgs
+        );
+        return new ResourceWithArgsImpl(result, this._client);
+    }
+
+    /**
+     * Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+     * @param args The arguments to be passed to the resource when it is started.
+     * @returns The resource builder.
+     */
+    withArgsReplace(args: string[]): ResourceWithArgsPromise {
+        return new ResourceWithArgsPromiseImpl(this._withArgsReplaceInternal(args), this._client);
+    }
+
+    /** @internal */
     private async _withArgsCallbackInternal(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): Promise<ResourceWithArgs> {
         const callbackId = registerCallback(async (objData: unknown) => {
             const objHandle = wrapIfHandle(objData) as CommandLineArgsCallbackContextHandle;
@@ -59067,6 +60965,28 @@ class ResourceWithArgsImpl extends ResourceBuilderBase<IResourceWithArgsHandle> 
      */
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): ResourceWithArgsPromise {
         return new ResourceWithArgsPromiseImpl(this._withArgsCallbackInternal(callback), this._client);
+    }
+
+    /** @internal */
+    private async _withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable: string, certificateDirectoriesEnvironmentVariable?: string): Promise<ResourceWithArgs> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, certificateBundleEnvironmentVariable };
+        if (certificateDirectoriesEnvironmentVariable !== undefined) rpcArgs.certificateDirectoriesEnvironmentVariable = certificateDirectoriesEnvironmentVariable;
+        const result = await this._client.invokeCapability<IResourceWithArgsHandle>(
+            'Aspire.Hosting/withCertificateTrustEnvironment',
+            rpcArgs
+        );
+        return new ResourceWithArgsImpl(result, this._client);
+    }
+
+    /**
+     * Configures environment variables that point to Aspire-managed certificate trust paths.
+     * @param certificateBundleEnvironmentVariable The environment variable that receives the certificate bundle path.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): ResourceWithArgsPromise {
+        const certificateDirectoriesEnvironmentVariable = options?.certificateDirectoriesEnvironmentVariable;
+        return new ResourceWithArgsPromiseImpl(this._withCertificateTrustEnvironmentInternal(certificateBundleEnvironmentVariable, certificateDirectoriesEnvironmentVariable), this._client);
     }
 
 }
@@ -59092,8 +61012,16 @@ class ResourceWithArgsPromiseImpl implements ResourceWithArgsPromise {
         return new ResourceWithArgsPromiseImpl(this._promise.then(obj => obj.withArgs(args)), this._client);
     }
 
+    withArgsReplace(args: string[]): ResourceWithArgsPromise {
+        return new ResourceWithArgsPromiseImpl(this._promise.then(obj => obj.withArgsReplace(args)), this._client);
+    }
+
     withArgsCallback(callback: (obj: CommandLineArgsCallbackContext) => Promise<void>): ResourceWithArgsPromise {
         return new ResourceWithArgsPromiseImpl(this._promise.then(obj => obj.withArgsCallback(callback)), this._client);
+    }
+
+    withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, options?: WithCertificateTrustEnvironmentOptions): ResourceWithArgsPromise {
+        return new ResourceWithArgsPromiseImpl(this._promise.then(obj => obj.withCertificateTrustEnvironment(certificateBundleEnvironmentVariable, options)), this._client);
     }
 
 }
