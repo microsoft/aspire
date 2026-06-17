@@ -470,17 +470,17 @@ public sealed class DashboardClientTests
             if (FailOnExecuteResourceCommand)
             {
                 return new AsyncUnaryCall<ResourceCommandResponse>(
-                Task.FromException<ResourceCommandResponse>(new RpcException(new Status(StatusCode.Unavailable, "Service unavailable"))),
-                Task.FromResult(new Metadata()),
-                () => new Status(StatusCode.Unavailable, "Service unavailable"),
-                () => new Metadata(),
-                () => { });
+                    Task.FromException<ResourceCommandResponse>(new RpcException(new Status(StatusCode.Unavailable, "Service unavailable"))),
+                    Task.FromResult(new Metadata()),
+                    () => new Status(StatusCode.Unavailable, "Service unavailable"),
+                    () => new Metadata(),
+                    () => { });
             }
 
             return new AsyncUnaryCall<ResourceCommandResponse>(
                 Task.FromResult(new ResourceCommandResponse
                 {
-                Kind = Aspire.DashboardService.Proto.V1.ResourceCommandResponseKind.Succeeded
+                    Kind = Aspire.DashboardService.Proto.V1.ResourceCommandResponseKind.Succeeded
                 }),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,

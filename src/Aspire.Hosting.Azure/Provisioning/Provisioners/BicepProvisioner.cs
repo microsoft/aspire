@@ -232,35 +232,9 @@ internal sealed class BicepProvisioner(
             }
         }
 
-        if (string.Equals(deployment.ProvisioningState, DeploymentStateProvisioningStateSucceeded, StringComparisons.AzureProvisioningState))
+        if (await HandleTerminalReconciledDeploymentStateAsync(resource, stateSection, deploymentResourceId, deployment, currentLocation, cancellationToken).ConfigureAwait(false))
         {
-            // Successful adoption replays the deployment outputs into the resource
-            // state exactly as normal provisioning would.
-            return await ConfigureSucceededReconciledDeploymentAsync(
-                resource,
-                stateSection,
-                deploymentResourceId,
-                deployment.Outputs,
-                currentLocation,
-                cancellationToken).ConfigureAwait(false);
-        }
-
-        if (string.Equals(deployment.ProvisioningState, DeploymentStateProvisioningStateCanceled, StringComparisons.AzureProvisioningState))
-        {
-            // Preserve ARM's terminal cancellation so the dashboard explains why this
-            // resource stopped instead of silently retrying.
-            await PersistReconciledProvisioningStateAsync(stateSection, DeploymentStateProvisioningStateCanceled, cancellationToken).ConfigureAwait(false);
-            await PublishReconciledTerminalStateAsync(resource, "Azure deployment canceled").ConfigureAwait(false);
-            throw new InvalidOperationException($"Azure deployment for {resource.Name} was canceled.");
-        }
-
-        if (string.Equals(deployment.ProvisioningState, DeploymentStateProvisioningStateFailed, StringComparisons.AzureProvisioningState))
-        {
-            // Preserve ARM's terminal failure for the same reason as cancellation:
-            // this is the outcome of the adopted deployment.
-            await PersistReconciledProvisioningStateAsync(stateSection, DeploymentStateProvisioningStateFailed, cancellationToken).ConfigureAwait(false);
-            await PublishReconciledTerminalStateAsync(resource, "Azure deployment failed").ConfigureAwait(false);
-            throw new InvalidOperationException($"Azure deployment for {resource.Name} failed.");
+            return true;
         }
 
         logger.LogDebug("Cached Azure deployment {DeploymentId} for {ResourceName} has provisioning state {ProvisioningState}. Reprovisioning.", deploymentId, resource.Name, deployment.ProvisioningState);
@@ -381,6 +355,48 @@ internal sealed class BicepProvisioner(
         await deploymentStateManager.SaveSectionAsync(stateSection, cancellationToken).ConfigureAwait(false);
 
         return await ConfigureResourceAsync(resource, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<bool> HandleTerminalReconciledDeploymentStateAsync(
+        AzureBicepResource resource,
+        DeploymentStateSection stateSection,
+        ResourceIdentifier deploymentId,
+        AzureDeploymentState deployment,
+        string currentLocation,
+        CancellationToken cancellationToken)
+    {
+        if (string.Equals(deployment.ProvisioningState, DeploymentStateProvisioningStateSucceeded, StringComparisons.AzureProvisioningState))
+        {
+            // Successful adoption replays the deployment outputs into the resource
+            // state exactly as normal provisioning would.
+            return await ConfigureSucceededReconciledDeploymentAsync(
+                resource,
+                stateSection,
+                deploymentId,
+                deployment.Outputs,
+                currentLocation,
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        if (string.Equals(deployment.ProvisioningState, DeploymentStateProvisioningStateCanceled, StringComparisons.AzureProvisioningState))
+        {
+            // Preserve ARM's terminal cancellation so the dashboard explains why this
+            // resource stopped instead of silently retrying.
+            await PersistReconciledProvisioningStateAsync(stateSection, DeploymentStateProvisioningStateCanceled, cancellationToken).ConfigureAwait(false);
+            await PublishReconciledTerminalStateAsync(resource, "Azure deployment canceled").ConfigureAwait(false);
+            throw new InvalidOperationException($"Azure deployment for {resource.Name} was canceled.");
+        }
+
+        if (string.Equals(deployment.ProvisioningState, DeploymentStateProvisioningStateFailed, StringComparisons.AzureProvisioningState))
+        {
+            // Preserve ARM's terminal failure for the same reason as cancellation:
+            // this is the outcome of the adopted deployment.
+            await PersistReconciledProvisioningStateAsync(stateSection, DeploymentStateProvisioningStateFailed, cancellationToken).ConfigureAwait(false);
+            await PublishReconciledTerminalStateAsync(resource, "Azure deployment failed").ConfigureAwait(false);
+            throw new InvalidOperationException($"Azure deployment for {resource.Name} failed.");
+        }
+
+        return false;
     }
 
     private async Task PersistReconciledProvisioningStateAsync(DeploymentStateSection stateSection, string provisioningState, CancellationToken cancellationToken)
@@ -659,7 +675,6 @@ internal sealed class BicepProvisioner(
             {
                 await PublishDeploymentOperationSummaryAsync(resource, context, deploymentId, effectiveLocation, deploymentOperationTracker, force: true, statePersistenceCancellationToken).ConfigureAwait(false);
             }
-
         }
         catch (RequestFailedException ex)
         {
@@ -851,29 +866,9 @@ internal sealed class BicepProvisioner(
             }
         }
 
-        if (string.Equals(deployment.ProvisioningState, DeploymentStateProvisioningStateSucceeded, StringComparisons.AzureProvisioningState))
+        if (await HandleTerminalReconciledDeploymentStateAsync(resource, stateSection, deploymentId, deployment, currentLocation, cancellationToken).ConfigureAwait(false))
         {
-            return await ConfigureSucceededReconciledDeploymentAsync(
-                resource,
-                stateSection,
-                deploymentId,
-                deployment.Outputs,
-                currentLocation,
-                cancellationToken).ConfigureAwait(false);
-        }
-
-        if (string.Equals(deployment.ProvisioningState, DeploymentStateProvisioningStateCanceled, StringComparisons.AzureProvisioningState))
-        {
-            await PersistReconciledProvisioningStateAsync(stateSection, DeploymentStateProvisioningStateCanceled, cancellationToken).ConfigureAwait(false);
-            await PublishReconciledTerminalStateAsync(resource, "Azure deployment canceled").ConfigureAwait(false);
-            throw new InvalidOperationException($"Azure deployment for {resource.Name} was canceled.");
-        }
-
-        if (string.Equals(deployment.ProvisioningState, DeploymentStateProvisioningStateFailed, StringComparisons.AzureProvisioningState))
-        {
-            await PersistReconciledProvisioningStateAsync(stateSection, DeploymentStateProvisioningStateFailed, cancellationToken).ConfigureAwait(false);
-            await PublishReconciledTerminalStateAsync(resource, "Azure deployment failed").ConfigureAwait(false);
-            throw new InvalidOperationException($"Azure deployment for {resource.Name} failed.");
+            return true;
         }
 
         logger.LogDebug("Unable to adopt active Azure deployment {DeploymentId} for {ResourceName} because provisioning state is {ProvisioningState}.", deploymentId, resource.Name, deployment.ProvisioningState);
