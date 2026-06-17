@@ -16,8 +16,8 @@ public sealed class OllamaIntegrationTests(ITestOutputHelper output)
 {
     private const string ProjectName = "AspireOllamaTest";
 
-    // Uses an older version of Ollama integration to test using old integration with new Aspire AppHost.
-    private const string OllamaPackageVersion = "13.4.0";
+    // Uses the same pre-release version as the Dapr test to ensure compatibility with the dev Aspire AppHost.
+    private const string OllamaPackageVersion = "13.4.0-beta.651";
 
     [CaptureWorkspaceOnFailure]
     [Fact]
