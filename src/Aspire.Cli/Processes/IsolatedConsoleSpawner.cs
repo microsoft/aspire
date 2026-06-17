@@ -54,15 +54,24 @@ internal static class IsolatedConsoleSpawner
             isolatedStartInfo.ArgumentList.Add(arg);
         }
 
-        // Mirror the ProcessStartInfo.Environment overlays. Touching IsolatedProcessStartInfo's
-        // Environment property snapshots the current process env (same semantics as ProcessStartInfo),
-        // and we then overlay every key set on the source. We can't just copy over startInfo.Environment
-        // wholesale because that would re-overlay the inherited block onto itself; only iterate the
-        // entries the caller actually mutated. ProcessStartInfo doesn't expose a "touched" set, so we
-        // overlay everything — extra writes of identical values are harmless.
-        foreach (var key in startInfo.Environment.Keys)
+        // Replace (not overlay) the env block so callers that did startInfo.Environment.Remove(key)
+        // see that removal honored — e.g. PrebuiltAppHostServer.CreateStartInfo explicitly removes
+        // KnownConfigNames.IntegrationLibsPath / IntegrationProbeManifestPath when they aren't
+        // configured, to suppress any value the parent CLI happens to have set in its own env.
+        // ProcessStartInfo.Environment is eagerly snapshotted from the parent, so iterating its
+        // Keys gives us the authoritative "what the child should see" view; a missing key here
+        // really does mean "do not pass this to the child" — including for vars the parent inherits.
+        // Overlay-without-clear (a prior approach) silently re-inherited any removed key on the
+        // isolated path, which the Unix partial also avoids via Environment.Clear() + add.
+        isolatedStartInfo.Environment.Clear();
+        foreach (var (key, value) in startInfo.Environment)
         {
-            isolatedStartInfo.Environment[key] = startInfo.Environment[key];
+            // Match ProcessStartInfo.Environment semantics: a null value means "do not set this
+            // variable in the child" — we get there by simply not adding it.
+            if (value is not null)
+            {
+                isolatedStartInfo.Environment[key] = value;
+            }
         }
 
         return IsolatedProcess.Start(

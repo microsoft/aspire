@@ -48,10 +48,14 @@ internal static class ProcessGracefulShutdownLadder
         // way it interrupts the WaitForExitAsync below.
         try
         {
-            DateTimeOffset? startTime = TryGetStartTime(process);
+            // startTime is intentionally null: includeStartTimeForDcp is always false at this
+            // call site (the Unix branch ignores StartTime entirely; the Windows DCP branch
+            // only consults it when includeStartTimeForDcp is true). Querying Process.StartTime
+            // here would just risk an InvalidOperationException on a process whose handle has
+            // been closed or is in a state that disallows the read.
             await signaler.RequestProcessTreeGracefulShutdownAsync(
                 process.Id,
-                startTime,
+                startTime: null,
                 includeStartTimeForDcp: false,
                 gracefulToken).ConfigureAwait(false);
         }
@@ -114,22 +118,6 @@ internal static class ProcessGracefulShutdownLadder
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Error draining killed {ProcessDescription} (pid {Pid}).", processDescription, SafePid(process));
-        }
-    }
-
-    private static DateTimeOffset? TryGetStartTime(Process process)
-    {
-        // Process.StartTime can throw InvalidOperationException on a process whose handle was
-        // closed or that has exited in some states. Treat as unavailable rather than aborting
-        // the graceful path — the Unix branch ignores StartTime entirely, and the Windows DCP
-        // branch only uses it when includeStartTimeForDcp is true (which it never is here).
-        try
-        {
-            return process.StartTime;
-        }
-        catch (Exception)
-        {
-            return null;
         }
     }
 
