@@ -29,9 +29,6 @@ namespace Aspire.Cli.Projects;
 /// </summary>
 internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGenerator
 {
-    private const string TypeScriptAppHostFileName = "apphost.ts";
-    private const string TypeScriptMtsAppHostFileName = "apphost.mts";
-
     private readonly IInteractionService _interactionService;
     private readonly IAppHostCliBackchannel _backchannel;
     private readonly IAppHostServerProjectFactory _appHostServerProjectFactory;
@@ -1564,6 +1561,13 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         {
             files = ConvertGeneratedFilesForLegacyTypeScriptAppHost(files);
             outputPath = Path.Combine(appPath, LanguageInfo.LegacyGeneratedFolderName);
+
+            // Nudge the user toward the modern `apphost.mts` layout. The legacy layout keeps
+            // working, so this is a single, non-blocking warning that points at `aspire migrate`.
+            _interactionService.DisplayMessage(
+                KnownEmojis.Warning,
+                $"[yellow]{Markup.Escape(ErrorStrings.LegacyTypeScriptAppHostWarning)}[/]",
+                allowMarkup: true);
         }
 
         // Write generated files to the output directory
@@ -1621,9 +1625,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         }
 
         return appHostFile is not null
-            ? appHostFile.Name.Equals(TypeScriptAppHostFileName, StringComparison.OrdinalIgnoreCase)
-            : File.Exists(Path.Combine(appPath, TypeScriptAppHostFileName)) &&
-                !File.Exists(Path.Combine(appPath, TypeScriptMtsAppHostFileName));
+            ? LegacyTypeScriptAppHost.IsLegacyAppHostFile(appHostFile)
+            : LegacyTypeScriptAppHost.IsLegacyLayout(appPath);
     }
 
     /// <summary>

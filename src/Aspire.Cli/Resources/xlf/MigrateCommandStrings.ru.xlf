@@ -1,0 +1,52 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="ru" original="../MigrateCommandStrings.resx">
+    <body>
+      <trans-unit id="ConfirmPromptFormat">
+        <source>Migrate '{0}' to '{1}'? This rewrites SDK imports and updates aspire.config.json and tsconfig.apphost.json.</source>
+        <target state="new">Migrate '{0}' to '{1}'? This rewrites SDK imports and updates aspire.config.json and tsconfig.apphost.json.</target>
+        <note>{0} is the legacy apphost.ts file name, {1} is the modern apphost.mts file name.</note>
+      </trans-unit>
+      <trans-unit id="Description">
+        <source>Migrate a legacy TypeScript AppHost (apphost.ts) to the recommended apphost.mts format.</source>
+        <target state="new">Migrate a legacy TypeScript AppHost (apphost.ts) to the recommended apphost.mts format.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MigratingStatus">
+        <source>Migrating to apphost.mts</source>
+        <target state="new">Migrating to apphost.mts</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MigrationCancelled">
+        <source>Migration cancelled. No changes were made.</source>
+        <target state="new">Migration cancelled. No changes were made.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MigrationSucceededFormat">
+        <source>Migrated '{0}' to '{1}'.</source>
+        <target state="new">Migrated '{0}' to '{1}'.</target>
+        <note>{0} is the legacy apphost.ts file name, {1} is the modern apphost.mts file name.</note>
+      </trans-unit>
+      <trans-unit id="NothingToMigrate">
+        <source>No legacy 'apphost.ts' AppHost was found in the current project. Nothing to migrate.</source>
+        <target state="new">No legacy 'apphost.ts' AppHost was found in the current project. Nothing to migrate.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RegenerateFailedWarning">
+        <source>Migration completed, but regenerating the SDK code failed. Run 'aspire restore' to regenerate it.</source>
+        <target state="new">Migration completed, but regenerating the SDK code failed. Run 'aspire restore' to regenerate it.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RegeneratingStatus">
+        <source>Regenerating SDK code</source>
+        <target state="new">Regenerating SDK code</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="YesOptionDescription">
+        <source>Perform the migration without prompting for confirmation.</source>
+        <target state="new">Perform the migration without prompting for confirmation.</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

@@ -553,5 +553,23 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("LegacySettingsDetectedFix", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Legacy 'apphost.ts' layout detected at {0}.
+        /// </summary>
+        public static string LegacyTypeScriptAppHostMessageFormat {
+            get {
+                return ResourceManager.GetString("LegacyTypeScriptAppHostMessageFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Run 'aspire migrate' to upgrade to the recommended 'apphost.mts' format....
+        /// </summary>
+        public static string LegacyTypeScriptAppHostFix {
+            get {
+                return ResourceManager.GetString("LegacyTypeScriptAppHostFix", resourceCulture);
+            }
+        }
     }
 }

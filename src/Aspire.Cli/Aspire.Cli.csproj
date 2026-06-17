@@ -224,6 +224,11 @@
       <AutoGen>True</AutoGen>
       <DependentUpon>ErrorStrings.resx</DependentUpon>
     </Compile>
+    <Compile Update="Resources\MigrateCommandStrings.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>MigrateCommandStrings.resx</DependentUpon>
+    </Compile>
     <Compile Update="Resources\AddCommandStrings.Designer.cs">
       <DesignTime>True</DesignTime>
       <AutoGen>True</AutoGen>
@@ -329,6 +334,13 @@
       <SubType>Designer</SubType>
       <Generator>PublicResXFileCodeGenerator</Generator>
       <LastGenOutput>ErrorStrings.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Resources\MigrateCommandStrings.resx">
+      <XlfSourceFormat>Resx</XlfSourceFormat>
+      <XlfOutputItem>EmbeddedResource</XlfOutputItem>
+      <SubType>Designer</SubType>
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>MigrateCommandStrings.Designer.cs</LastGenOutput>
     </EmbeddedResource>
     <EmbeddedResource Update="Resources\AddCommandStrings.resx">
       <XlfSourceFormat>Resx</XlfSourceFormat>

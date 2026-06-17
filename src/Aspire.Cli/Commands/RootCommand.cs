@@ -169,6 +169,7 @@ internal sealed class RootCommand : BaseRootCommand
         SecretCommand secretCommand,
         SdkCommand sdkCommand,
         RestoreCommand restoreCommand,
+        MigrateCommand migrateCommand,
         SetupCommand setupCommand,
 #if DEBUG
         RenderCommand renderCommand,
@@ -287,6 +288,7 @@ internal sealed class RootCommand : BaseRootCommand
 
         Subcommands.Add(sdkCommand);
         Subcommands.Add(restoreCommand);
+        Subcommands.Add(migrateCommand);
 
         // Replace the default --help action with grouped help output.
         // Add -v as a short alias for --version.

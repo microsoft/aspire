@@ -264,6 +264,7 @@ internal static class CliTestHelper
         services.AddTransient<ExtensionInternalCommand>();
         services.AddTransient<WaitCommand>();
         services.AddTransient<RestoreCommand>();
+        services.AddTransient<MigrateCommand>();
         services.AddTransient<SdkCommand>();
         services.AddTransient<SdkGenerateCommand>();
         services.AddTransient<SdkDumpCommand>();

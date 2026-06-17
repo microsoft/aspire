@@ -1036,6 +1036,11 @@ public class GuestAppHostProjectTests : IDisposable
             },
             m =>
             {
+                Assert.Equal("warning", m.Emoji.Name);
+                Assert.Equal(ErrorStrings.LegacyTypeScriptAppHostWarning, Markup.Remove(m.Message));
+            },
+            m =>
+            {
                 Assert.Equal("package", m.Emoji.Name);
                 Assert.Equal(UpdateCommandStrings.RegeneratedSdkCode, m.Message);
             });
@@ -1126,6 +1131,11 @@ public class GuestAppHostProjectTests : IDisposable
             {
                 Assert.Equal("warning", m.Emoji.Name);
                 Assert.Contains(expectedWarning, m.Message);
+            },
+            m =>
+            {
+                Assert.Equal("warning", m.Emoji.Name);
+                Assert.Equal(ErrorStrings.LegacyTypeScriptAppHostWarning, Markup.Remove(m.Message));
             },
             m =>
             {

@@ -558,6 +558,7 @@ public class Program
         builder.Services.AddSingleton<IEnvironmentCheck, ContainerRuntimeCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DeprecatedAgentConfigCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, LegacySettingsFileCheck>();
+        builder.Services.AddSingleton<IEnvironmentCheck, LegacyTypeScriptAppHostCheck>();
         builder.Services.AddSingleton<IEnvironmentChecker, EnvironmentChecker>();
 
         // MCP server transport factory - creates transport only when needed to avoid
@@ -631,6 +632,7 @@ public class Program
         builder.Services.AddTransient<SdkGenerateCommand>();
         builder.Services.AddTransient<SdkDumpCommand>();
         builder.Services.AddTransient<RestoreCommand>();
+        builder.Services.AddTransient<MigrateCommand>();
         builder.Services.AddTransient<SetupCommand>();
 #if DEBUG
         builder.Services.AddTransient<RenderCommand>();
