@@ -33,7 +33,8 @@ function Get-ValidationAppHosts {
     # Discover TypeScript AppHosts by their entry point file. The CLI recognizes both the
     # modern 'apphost.mts' and the legacy 'apphost.ts' (see TypeScriptLanguageSupport
     # detection patterns). The directory containing the entry point is the working directory
-    # for npm install, 'aspire restore', and the generated '.aspire/modules' SDK output.
+    # for npm install, 'aspire restore', and the generated SDK output (under '.aspire/modules'
+    # for 'apphost.mts', or the legacy '.modules' folder for 'apphost.ts').
     $appHosts = foreach ($root in $playgroundRoots) {
         if (-not (Test-Path $root)) {
             continue
@@ -70,6 +71,17 @@ function Get-RequiredGeneratedFiles([string]$entryPoint) {
     return @("aspire.$extension", "base.$extension", "transport.$extension")
 }
 
+function Get-GeneratedModulesDir([string]$appDir, [string]$entryPoint) {
+    # The CLI writes the generated SDK to a directory that depends on the entry point: modern
+    # 'apphost.mts' apps use '.aspire/modules' (ILanguageDiscovery.GeneratedFolderName), while
+    # legacy 'apphost.ts' apps still import from './.modules/' so the CLI writes there instead
+    # (ILanguageDiscovery.LegacyGeneratedFolderName; see the code-gen output path in
+    # GuestAppHostProject). Mirror that here so cleanup and verification target the directory
+    # the CLI actually writes to.
+    $relativeDir = if ($entryPoint -like '*.mts') { '.aspire/modules' } else { '.modules' }
+    return Join-Path $appDir $relativeDir
+}
+
 function Install-NodeDependencies([string]$appDir) {
     Push-Location $appDir
     try {
@@ -86,8 +98,7 @@ function Install-NodeDependencies([string]$appDir) {
     }
 }
 
-function Assert-GeneratedSdkFiles([string]$appDir, [string[]]$requiredGeneratedFiles) {
-    $generatedDir = Join-Path $appDir '.aspire/modules'
+function Assert-GeneratedSdkFiles([string]$generatedDir, [string[]]$requiredGeneratedFiles) {
     foreach ($file in $requiredGeneratedFiles) {
         $path = Join-Path $generatedDir $file
         if (-not (Test-Path $path)) {
@@ -131,7 +142,7 @@ foreach ($appHost in $appHosts) {
         Write-Host '  -> Installing npm dependencies...'
         Install-NodeDependencies -appDir $appHost.Directory
 
-        $generatedDir = Join-Path $appHost.Directory '.aspire/modules'
+        $generatedDir = Get-GeneratedModulesDir -appDir $appHost.Directory -entryPoint $appHost.EntryPoint
         if (Test-Path $generatedDir) {
             Write-Host '  -> Clearing existing generated SDK...'
             Remove-Item -Path $generatedDir -Recurse -Force
@@ -141,7 +152,7 @@ foreach ($appHost in $appHosts) {
         & dotnet run --no-build --project $cliProject -- restore
 
         Write-Host '  -> Verifying generated SDK...'
-        Assert-GeneratedSdkFiles -appDir $appHost.Directory -requiredGeneratedFiles (Get-RequiredGeneratedFiles $appHost.EntryPoint)
+        Assert-GeneratedSdkFiles -generatedDir $generatedDir -requiredGeneratedFiles (Get-RequiredGeneratedFiles $appHost.EntryPoint)
 
         Write-Host "  OK $appName refreshed"
         $updated.Add($appName)
