@@ -326,7 +326,8 @@ window.getBrowserInfo = function () {
 window.focusElement = function (selector) {
     const element = document.getElementById(selector);
     if (element) {
-        element.focus();
+        /* Focus the element without showing the focus ring. */
+        element.focus({ focusVisible: false });
     }
 };
 
