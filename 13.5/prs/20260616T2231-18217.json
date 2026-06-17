@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "VS Code extension E2E test hardening; improves test reliability but no user-facing product changes",
+  "mergedAt": "2026-06-16T22:31:18Z",
+  "number": 18217,
+  "runDate": "2026-06-17T00:33:15Z",
+  "status": "excluded",
+  "title": "Harden VS Code extension E2E tests"
+}

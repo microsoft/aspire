@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "CLI identity now resolved at runtime via env vars and .aspire-install.json sidecar, enabling testing of staging/stable behavior pre-release",
+  "mergedAt": "2026-06-17T00:30:47Z",
+  "number": 18087,
+  "runDate": "2026-06-17T00:33:15Z",
+  "status": "included",
+  "title": "CLI identity sidecar"
+}

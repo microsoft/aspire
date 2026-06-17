@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "When dismissing a version update notification for a pre-release (e.g. 13.5.0-preview1), Aspire now stores a wildcard pattern (13.5.0-*) that suppresses notifications for all subsequent pre-releases of the same version. The notification reappears when the stable release (13.5.0) becomes available.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔔",
+  "firstMergedAt": "2026-06-16T20:16:19Z",
+  "lastMergedAt": "2026-06-16T20:16:19Z",
+  "name": "Smarter ignore for pre-release version update notifications",
+  "owner": "JamesNK",
+  "prs": [
+    18233
+  ]
+}

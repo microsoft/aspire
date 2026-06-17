@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Improvement to version update notification: ignoring a pre-release now suppresses all pre-releases of the same version",
+  "mergedAt": "2026-06-16T20:16:19Z",
+  "number": 18233,
+  "runDate": "2026-06-17T00:33:15Z",
+  "status": "included",
+  "title": "Support wildcard ignore patterns for pre-release version checks"
+}

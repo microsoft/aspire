@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Release pipeline change requiring single npm ESRP owner; not user-facing",
+  "mergedAt": "2026-06-16T20:35:35Z",
+  "number": 18218,
+  "runDate": "2026-06-17T00:33:15Z",
+  "status": "excluded",
+  "title": "Require exactly one npm ESRP owner in release pipeline"
+}
