@@ -341,6 +341,30 @@ public class MSBuildTests
     }
 
     [Fact]
+    public async Task CliBundleDefaultResolvesNewestVersionedBundlePath()
+    {
+        var repoRoot = MSBuildUtils.GetRepoRoot();
+        using var tempDirectory = new TestTempDirectory();
+
+        var layoutRoot = Path.Combine(tempDirectory.Path, "layout");
+        _ = CreateFakeCliBundleAtVersionedLayoutRoot(layoutRoot, "9.9.0-aaaaaaaaaaaaaaaa");
+        var newestBundle = CreateFakeCliBundleAtVersionedLayoutRoot(layoutRoot, "9.10.0-bbbbbbbbbbbbbbbb");
+        var appHostDirectory = CreateSdkBundleAppHostProject(tempDirectory.Path, repoRoot,
+            $"""
+              <AspireCliBundlePath>{layoutRoot}</AspireCliBundlePath>
+            """);
+
+        CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
+
+        BuildProject(appHostDirectory);
+
+        var resolvedPaths = await File.ReadAllLinesAsync(Path.Combine(appHostDirectory, "obj", "resolved-aspire-paths.txt"));
+        Assert.Equal(newestBundle.DcpDir, resolvedPaths[0]);
+        Assert.Equal(newestBundle.ManagedDir, resolvedPaths[1]);
+        Assert.Equal(newestBundle.ManagedPath, resolvedPaths[2]);
+    }
+
+    [Fact]
     public void CliBundleOptOutEmitsWarning()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
@@ -578,7 +602,16 @@ public class MSBuildTests
 
     private static (string LayoutRoot, string DcpDir, string ManagedDir, string ManagedPath) CreateFakeCliBundleAtLayoutRoot(string layoutRoot)
     {
-        var bundleRoot = Path.Combine(layoutRoot, "bundle");
+        return CreateFakeCliBundleRoot(layoutRoot, Path.Combine(layoutRoot, "bundle"));
+    }
+
+    private static (string LayoutRoot, string DcpDir, string ManagedDir, string ManagedPath) CreateFakeCliBundleAtVersionedLayoutRoot(string layoutRoot, string versionId)
+    {
+        return CreateFakeCliBundleRoot(layoutRoot, Path.Combine(layoutRoot, "versions", versionId));
+    }
+
+    private static (string LayoutRoot, string DcpDir, string ManagedDir, string ManagedPath) CreateFakeCliBundleRoot(string layoutRoot, string bundleRoot)
+    {
         var dcpDir = EnsureTrailingSeparator(Path.Combine(bundleRoot, "dcp"));
         var managedDir = EnsureTrailingSeparator(Path.Combine(bundleRoot, "managed"));
         Directory.CreateDirectory(dcpDir);

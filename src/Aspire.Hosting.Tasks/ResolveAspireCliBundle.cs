@@ -16,6 +16,7 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
     private const string InstallSidecarFileName = ".aspire-install.json";
     private const string AspireHomeEnvironmentVariable = "ASPIRE_HOME";
     private const int MaxInstallSidecarBytes = 64 * 1024;
+    private static readonly Version s_unversionedDirectoryVersion = new(0, 0);
 
     /// <summary>
     /// Optional path to an Aspire CLI bundle or layout directory.
@@ -332,7 +333,9 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
         var versionsRoot = Path.Combine(layoutPath, VersionsDirectoryName);
         if (Directory.Exists(versionsRoot))
         {
-            foreach (var versionDirectory in EnumerateDirectories(versionsRoot))
+            foreach (var versionDirectory in EnumerateDirectories(versionsRoot)
+                         .OrderByDescending(GetVersionDirectoryVersion)
+                         .ThenByDescending(Path.GetFileName, StringComparer.OrdinalIgnoreCase))
             {
                 if (TryResolveBundleRoot(versionDirectory, out resolution))
                 {
@@ -343,6 +346,44 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
 
         resolution = default!;
         return false;
+    }
+
+    private static Version GetVersionDirectoryVersion(string path)
+    {
+        var directoryName = Path.GetFileName(path);
+        return Version.TryParse(StripVersionIdHash(directoryName), out var version)
+            ? version
+            : s_unversionedDirectoryVersion;
+    }
+
+    private static string StripVersionIdHash(string directoryName)
+    {
+        // BundleService version directories are named "<sanitized-version>-<16-hex-xxhash>",
+        // for example "9.10.0-bbbbbbbbbbbbbbbb". Strip the hash so System.Version
+        // compares the semantic version instead of the full directory name.
+        var separatorIndex = directoryName.LastIndexOf('-');
+        if (separatorIndex < 0 ||
+            directoryName.Length - separatorIndex - 1 != 16 ||
+            !ContainsOnlyHexDigits(directoryName, separatorIndex + 1))
+        {
+            return directoryName;
+        }
+
+        return directoryName.Substring(0, separatorIndex);
+    }
+
+    private static bool ContainsOnlyHexDigits(string value, int startIndex)
+    {
+        for (var i = startIndex; i < value.Length; i++)
+        {
+            var ch = value[i];
+            if (ch is not ((>= '0' and <= '9') or (>= 'A' and <= 'F') or (>= 'a' and <= 'f')))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static IEnumerable<string> EnumerateDirectories(string path)
