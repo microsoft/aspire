@@ -86,8 +86,8 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Perform updates?", timeout: TimeSpan.FromSeconds(60));
         await auto.EnterAsync(); // confirm "Perform updates?" (default: Yes)
-        // Stable channel does not prompt for NuGet.config creation because
-        // RequiresProjectNuGetConfig is false and there is no existing config.
+        // Stable channel does not prompt for NuGet.config creation because it maps
+        // Aspire* to nuget.org and there is no existing config.
         await auto.WaitUntilTextAsync("Update successful!", timeout: TimeSpan.FromSeconds(60));
         await auto.WaitForSuccessPromptAsync(counter);
 
@@ -190,8 +190,8 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
             """);
 
         // First update: migrate to the new SDK format on the latest stable version.
-        // Stable channel does not prompt for NuGet.config creation because
-        // RequiresProjectNuGetConfig is false and there is no existing config.
+        // Stable channel does not prompt for NuGet.config creation because it maps
+        // Aspire* to nuget.org and there is no existing config.
         await auto.TypeAsync($"aspire update --project \"{containerAppHostCsprojPath}\" --channel stable");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Perform updates?", timeout: TimeSpan.FromSeconds(60));
@@ -231,8 +231,8 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
         // skip the SDK update step. The updater must still detect and remove the
         // orphan PackageVersion - that cleanup is itself an update step, so the
         // run prompts for confirmation just like the first update did.
-        // Stable channel does not prompt for NuGet.config because
-        // RequiresProjectNuGetConfig is false and there is no existing config.
+        // Stable channel does not prompt for NuGet.config because it maps Aspire*
+        // to nuget.org and there is no existing config.
         await auto.TypeAsync($"aspire update --project \"{containerAppHostCsprojPath}\" --channel stable");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Perform updates?", timeout: TimeSpan.FromSeconds(60));

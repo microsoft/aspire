@@ -568,9 +568,15 @@ internal static class Hex1bAutomatorTestHelpers
             default:
                 throw new ArgumentOutOfRangeException(nameof(template), template, $"Unsupported template: {template}");
         }
+        // Step 3: Enter the project name. The CLI resolves the selected template's version against
+        // the active channel's feed somewhere in this window, and slow feeds (staging/daily darc
+        // feeds) can take well over 10s — far longer than nuget.org. Use templateTimeout here (and
+        // for the output-path prompt below) so emulated staging/daily runs don't time out waiting
+        // for the prompt; otherwise the wait throws while `aspire new` is still open and the
+        // teardown `exit` gets consumed by the live prompt, hanging the whole run.
         await auto.WaitUntilAsync(
             s => new CellPatternSearcher().Find("Enter the project name").Search(s).Count > 0,
-            timeout: TimeSpan.FromSeconds(10),
+            timeout: templateTimeout,
             description: "project name prompt");
         await auto.TypeAsync(projectName);
         await auto.EnterAsync();
@@ -578,7 +584,7 @@ internal static class Hex1bAutomatorTestHelpers
         // Step 4: Accept default output path
         await auto.WaitUntilAsync(
             s => new CellPatternSearcher().Find("Enter the output path").Search(s).Count > 0,
-            timeout: TimeSpan.FromSeconds(10),
+            timeout: templateTimeout,
             description: "output path prompt");
         await auto.EnterAsync();
 

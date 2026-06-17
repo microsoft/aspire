@@ -20,13 +20,19 @@ internal static class TestExecutionContextHelper
         this TemporaryWorkspace workspace,
         string identityChannel = "local",
         IReadOnlyDictionary<string, string?>? environmentVariables = null,
-        string? logFilePath = null)
+        string? logFilePath = null,
+        string? identityVersion = null,
+        string? identityCommit = null,
+        bool identityOverridden = false)
     {
         return CreateExecutionContext(
             workspace.WorkspaceRoot,
             identityChannel: identityChannel,
             environmentVariables: environmentVariables,
-            logFilePath: logFilePath);
+            logFilePath: logFilePath,
+            identityVersion: identityVersion,
+            identityCommit: identityCommit,
+            identityOverridden: identityOverridden);
     }
 
     /// <summary>
@@ -42,7 +48,11 @@ internal static class TestExecutionContextHelper
         IReadOnlyDictionary<string, string?>? environmentVariables = null,
         DirectoryInfo? packagesDirectory = null,
         bool debugMode = false,
-        string? logFilePath = null)
+        string? logFilePath = null,
+        string? identityVersion = null,
+        string? identityCommit = null,
+        bool identityOverridden = false,
+        DirectoryInfo? identityPackagesDirectory = null)
     {
         var root = rootDirectory.FullName;
         hivesDirectory ??= new DirectoryInfo(Path.Combine(root, ".aspire", "hives"));
@@ -59,10 +69,15 @@ internal static class TestExecutionContextHelper
             sdksDirectory,
             logsDirectory,
             logFilePath,
+            identityChannel: identityChannel,
+            identityVersion: identityVersion,
+            identityCommit: identityCommit,
+            nugetServiceIndexOverride: null,
+            identityOverridden: identityOverridden,
+            identityPackagesDirectory: identityPackagesDirectory,
             debugMode: debugMode,
             environmentVariables: environmentVariables,
             homeDirectory: homeDirectory,
-            packagesDirectory: packagesDirectory,
-            identityChannel: identityChannel);
+            packagesDirectory: packagesDirectory);
     }
 }

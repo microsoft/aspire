@@ -9,10 +9,10 @@ Validates the npm ESRP owner and approver aliases used by the release pipeline.
 The Aspire release pipeline (eng/pipelines/release-publish-nuget.yml) submits the
 @microsoft/aspire-cli npm packages through MicroBuild's ESRP publish template. ESRP
 requires a set of owner aliases and a single approver alias. This script normalizes
-those values, enforces the release rules (owners must include at least one required
-owner alias, approvers must be a single alias, and the two sets must not overlap), and
-emits the normalized ("effective") sets so the pipeline can forward them to the publish
-template.
+those values, enforces the release rules (owners must be a single alias that is one of
+the required owner aliases, approvers must be a single alias, and the two must not be
+the same alias), and emits the normalized ("effective") sets so the pipeline can forward
+them to the publish template.
 
 The release job runs with `checkout: none`, so the pipeline cannot dot-source this file
 at runtime. The helper functions are mirrored inline in the pipeline YAML and the
@@ -25,7 +25,7 @@ Dot-source the script to import only the helper functions without running valida
     . ./validate-npm-release-aliases.ps1
 
 .PARAMETER Owners
-Comma-separated owner aliases or @microsoft.com email addresses. Defaults to the
+A single owner alias or @microsoft.com email address. Defaults to the
 NPM_PUBLISH_OWNERS environment variable.
 
 .PARAMETER Approvers
@@ -33,7 +33,7 @@ A single approver alias or @microsoft.com email address. Defaults to the
 NPM_PUBLISH_APPROVERS environment variable.
 
 .PARAMETER RequiredOwners
-Comma-separated list of owner aliases, at least one of which must appear in Owners.
+Comma-separated list of owner aliases; the single owner must be one of these.
 Defaults to the NPM_PUBLISH_REQUIRED_OWNERS environment variable.
 #>
 [CmdletBinding()]
@@ -120,6 +120,9 @@ function Invoke-NpmReleaseAliasValidation(
     exit 1
   }
 
+  # ESRP accepts multiple owners, but the release process requires exactly one so that
+  # ownership of the @microsoft/aspire-cli package maps to a single accountable alias.
+  Assert-SingleNpmReleaseAlias $normalizedOwners 'NpmPublishOwners'
   Assert-ContainsAnyRequiredNpmOwnerAlias $normalizedOwners $requiredNpmOwners 'NpmPublishOwners'
   Assert-SingleNpmReleaseAlias $normalizedApprovers 'NpmPublishApprovers'
 

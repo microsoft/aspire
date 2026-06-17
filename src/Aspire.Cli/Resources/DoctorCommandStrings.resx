@@ -92,6 +92,10 @@
   <data name="CheckingPrerequisites" xml:space="preserve">
     <value>Checking Aspire environment...</value>
   </data>
+  <data name="OperatingSystemMessageFormat" xml:space="preserve">
+    <value>Operating system: {0}</value>
+    <comment>{0} is the operating system display name and version, for example "Windows 10.0.22631", "macOS 26.0", or "Linux Ubuntu 24.04".</comment>
+  </data>
   <data name="VersionUnknown" xml:space="preserve">
     <value>unknown</value>
   </data>
