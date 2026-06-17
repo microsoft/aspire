@@ -141,10 +141,10 @@ public sealed class ReleasePublishNugetPipelineTests
         Assert.DoesNotContain("NPM_PUBLISH_REQUIRED_APPROVERS", commonVariables);
         Assert.Contains("- name: NPM_PUBLISH_REQUIRED_OWNERS", pipeline);
         Assert.Equal("joperezr,ankj", FindYamlVariableValue(pipeline, "NPM_PUBLISH_REQUIRED_OWNERS"));
-        Assert.Contains("displayName: '[Advanced] npm ESRP owners (comma-separated Microsoft aliases or emails; must include joperezr or ankj)'", pipeline);
-        Assert.Contains("displayName: '[Advanced] npm ESRP approver (single Microsoft alias or email; must differ from the owners)'", pipeline);
+        Assert.Contains("displayName: '[Advanced] npm ESRP owner (single Microsoft alias or email; must be joperezr or ankj)'", pipeline);
+        Assert.Contains("displayName: '[Advanced] npm ESRP approver (single Microsoft alias or email; must differ from the owner)'", pipeline);
 
-        AssertContainsRequiredAliases(
+        AssertOwnerDefaultIsSingleRequiredAlias(
             FindYamlVariableValue(pipeline, "NPM_PUBLISH_REQUIRED_OWNERS"),
             FindYamlParameterDefault(pipeline, "NpmPublishOwners"),
             "NpmPublishOwners");
@@ -164,6 +164,7 @@ public sealed class ReleasePublishNugetPipelineTests
     {
         var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
 
+        Assert.Contains("Assert-SingleNpmReleaseAlias $normalizedOwners 'NpmPublishOwners'", pipeline);
         Assert.Contains("Assert-ContainsAnyRequiredNpmOwnerAlias $normalizedOwners $requiredNpmOwners 'NpmPublishOwners'", pipeline);
         Assert.DoesNotContain("Assert-ContainsRequiredNpmAliases $normalizedOwners $requiredNpmOwners 'NpmPublishOwners'", pipeline);
         Assert.Contains("Assert-SingleNpmReleaseAlias $normalizedApprovers 'NpmPublishApprovers'", pipeline);
@@ -222,13 +223,13 @@ public sealed class ReleasePublishNugetPipelineTests
         var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
 
         // Defaults let an unattended queue submission pass validation without operator input:
-        // owners include a required owner alias, the approver is a single distinct alias, and the
-        // per-run override parameters are marked advanced.
+        // the owner is a single required owner alias, the approver is a single distinct alias, and
+        // the per-run override parameters are marked advanced.
         Assert.Contains("- name: NpmPublishOwners", pipeline);
-        Assert.Contains("default: 'joperezr,ankj'", pipeline);
+        Assert.Contains("default: 'joperezr'", pipeline);
         Assert.Contains("- name: NpmPublishApprovers", pipeline);
         Assert.Contains("default: 'adamratzman'", pipeline);
-        Assert.Contains("[Advanced] npm ESRP owners", pipeline);
+        Assert.Contains("[Advanced] npm ESRP owner", pipeline);
         Assert.Contains("[Advanced] npm ESRP approver", pipeline);
         Assert.Contains("[Advanced] Minutes to wait between npm RID and pointer package submissions", pipeline);
     }
@@ -562,17 +563,19 @@ public sealed class ReleasePublishNugetPipelineTests
         return index;
     }
 
-    private static void AssertContainsRequiredAliases(string requiredAliasesValue, string actualAliasesValue, string parameterName)
+    private static void AssertOwnerDefaultIsSingleRequiredAlias(string requiredAliasesValue, string actualAliasesValue, string parameterName)
     {
+        // The single-owner rule means the default must normalize to exactly one alias, and that
+        // alias must be one of the required ESRP owner aliases so unattended runs pass validation.
         var actualAliases = ParseNpmReleaseAliasSet(actualAliasesValue);
-        var missingAliases = ParseNpmReleaseAliasSet(requiredAliasesValue)
-            .Where(requiredAlias => !actualAliases.Contains(requiredAlias))
-            .OrderBy(alias => alias)
-            .ToArray();
-
         Assert.True(
-            missingAliases.Length == 0,
-            $"{parameterName} default must include required ESRP alias(es): {string.Join(", ", missingAliases)}.");
+            actualAliases.Count == 1,
+            $"{parameterName} default must be a single alias, but was '{actualAliasesValue}'.");
+
+        var requiredAliases = ParseNpmReleaseAliasSet(requiredAliasesValue);
+        Assert.True(
+            actualAliases.All(requiredAliases.Contains),
+            $"{parameterName} default '{actualAliasesValue}' must be one of the required ESRP owner aliases: {requiredAliasesValue}.");
     }
 
     private static HashSet<string> ParseNpmReleaseAliasSet(string value)

@@ -17,7 +17,6 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Templating;
-using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Hosting.Utils;
 using Aspire.Shared;
@@ -104,6 +103,7 @@ internal sealed class InitCommand : BaseCommand
         Options.Add(_channelOption);
         Options.Add(_languageOption);
         Options.Add(NewCommand.s_suppressAgentInitOption);
+        Options.Add(AgentInitCommand.s_skillLocationsOption);
         Options.Add(AgentInitCommand.s_skillsOption);
     }
 
@@ -164,6 +164,7 @@ internal sealed class InitCommand : BaseCommand
         // This prompt lets users choose which skills to install — including aspireify.
         var workspaceRoot = solutionFile?.Directory ?? workingDirectory;
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, NewCommand.s_suppressAgentInitOption, defaultValue: true);
+        var skillLocationsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillLocationsOption);
         var skillsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption);
         // aspire init creates an AppHost in an existing repo, so pre-select every bundle skill
         // (which includes aspireify as the natural follow-up wiring skill).
@@ -172,8 +173,10 @@ internal sealed class InitCommand : BaseCommand
             CliExitCodes.Success,
             workspaceRoot,
             agentInitBinding,
-            cancellationToken,
-            skillsBinding: skillsBinding);
+            skillLocationsBinding,
+            skillsBinding,
+            null,
+            cancellationToken);
 
         // Step 5: Print follow-up commands only when the user selected the one-time init skill.
         if (agentInitResult.ExitCode == CliExitCodes.Success &&
@@ -277,7 +280,11 @@ internal sealed class InitCommand : BaseCommand
         // Drop bare single-file apphost. Pin the SDK version so later operations
         // (project updating, version parsing in ProjectUpdater/FallbackProjectParser)
         // can locate and update the directive — they expect the @<version> form.
-        var aspireVersion = VersionHelper.GetDefaultTemplateVersion();
+        // Use IdentitySdkVersion (build-metadata stripped) rather than IdentityVersion:
+        // the directive references the published Aspire.AppHost.Sdk NuGet package, whose
+        // version never carries a +<sha> suffix. This also matches the empty-apphost
+        // template path (CliTemplateFactory.EmptyTemplate) so both emit the same form.
+        var aspireVersion = _executionContext.IdentitySdkVersion;
         var appHostContent = $$"""
             #:sdk Aspire.AppHost.Sdk@{{aspireVersion}}
 

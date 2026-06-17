@@ -328,7 +328,9 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddScoped<TelemetryImportService>();
         builder.Services.AddSingleton<IInstrumentUnitResolver, DefaultInstrumentUnitResolver>();
 
-        builder.Services.AddScoped<IAIContextProvider, AIContextProvider>();
+        builder.Services.AddScoped<AIContextProvider>();
+        builder.Services.AddScoped<IAIContextProvider>(serviceProvider => serviceProvider.GetRequiredService<AIContextProvider>());
+        builder.Services.AddScoped<IAssistantDisplayContext>(serviceProvider => serviceProvider.GetRequiredService<AIContextProvider>());
         builder.Services.AddScoped<IceBreakersBuilder>();
         builder.Services.AddSingleton<ChatClientFactory>();
 

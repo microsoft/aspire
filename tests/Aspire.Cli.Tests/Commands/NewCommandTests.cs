@@ -2064,6 +2064,59 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NewCommandNonInteractive_WithSkillLocationsNone_DoesNotInstallAgentSkills()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliHostEnvironmentFactory = (sp) =>
+            {
+                var configuration = sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
+                return new CliHostEnvironment(configuration, nonInteractive: true);
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output --skill-locations none");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var outputDir = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
+        var agentsDir = Path.Combine(outputDir, ".agents", "skills");
+        Assert.False(Directory.Exists(agentsDir), $"Expected no agents/skills directory but found {agentsDir}");
+    }
+
+    [Fact]
+    public async Task NewCommandNonInteractive_WithSkillLocationsAndSkills_InstallsOnlySpecifiedSkills()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliHostEnvironmentFactory = (sp) =>
+            {
+                var configuration = sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
+                return new CliHostEnvironment(configuration, nonInteractive: true);
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse($"new aspire-empty --name TestApp --output ./output --skill-locations standard --skills {CommonAgentApplicators.AspireSkillName}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var outputDir = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
+        var aspireSkillPath = Path.Combine(outputDir, ".agents", "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md");
+        Assert.True(File.Exists(aspireSkillPath), $"Expected aspire skill file at {aspireSkillPath}");
+
+        var aspireifySkillPath = Path.Combine(outputDir, ".agents", "skills", CommonAgentApplicators.AspireifySkillName);
+        Assert.False(Directory.Exists(aspireifySkillPath), $"Expected no aspireify skill directory but found {aspireifySkillPath}");
+    }
+
+    [Fact]
     public async Task NewCommandNonInteractiveWithoutTemplate_DisplaysErrorWithAvailableTemplates()
     {
         TestInteractionService? testInteractionService = null;

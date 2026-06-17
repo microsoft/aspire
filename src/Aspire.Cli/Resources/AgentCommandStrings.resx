@@ -198,6 +198,9 @@
   <data name="PlaywrightCliInstaller_FailedToResolvePackage" xml:space="preserve">
     <value>Failed to resolve {0} from the npm registry.</value>
   </data>
+  <data name="PlaywrightCliInstaller_InvalidVersionOverride" xml:space="preserve">
+    <value>The value of configuration setting '{0}' ('{1}') is not a valid SemVer 2.0 version.</value>
+  </data>
   <data name="PlaywrightCliInstaller_ProvenanceVerificationFailed" xml:space="preserve">
     <value>Provenance verification failed for {0}: {1}</value>
   </data>

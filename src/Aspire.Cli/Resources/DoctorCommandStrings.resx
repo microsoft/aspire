@@ -92,6 +92,10 @@
   <data name="CheckingPrerequisites" xml:space="preserve">
     <value>Checking Aspire environment...</value>
   </data>
+  <data name="OperatingSystemMessageFormat" xml:space="preserve">
+    <value>Operating system: {0}</value>
+    <comment>{0} is the operating system display name and version, for example "Windows 10.0.22631", "macOS 26.0", or "Linux Ubuntu 24.04".</comment>
+  </data>
   <data name="VersionUnknown" xml:space="preserve">
     <value>unknown</value>
   </data>
@@ -229,5 +233,13 @@
   </data>
   <data name="InstallationDiscoveryFailedReason" xml:space="preserve">
     <value>Install discovery failed. See the Aspire CLI logs for details.</value>
+  </data>
+  <data name="LegacySettingsDetectedMessageFormat" xml:space="preserve">
+    <value>Legacy .aspire/settings.json detected at {0}</value>
+    <comment>{0} is the full path to the legacy settings file.</comment>
+  </data>
+  <data name="LegacySettingsDetectedFix" xml:space="preserve">
+    <value>Run 'aspire init' (or any aspire run/add/update/pipeline command) to migrate to aspire.config.json.
+The legacy file continues to work — this is a non-blocking warning.</value>
   </data>
 </root>
