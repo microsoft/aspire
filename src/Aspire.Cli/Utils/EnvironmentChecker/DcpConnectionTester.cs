@@ -321,7 +321,7 @@ internal sealed class DcpConnectionTester(
                 };
 
                 using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
-                if (!response.IsSuccessStatusCode && response.StatusCode != HttpStatusCode.NoContent)
+                if (!response.IsSuccessStatusCode)
                 {
                     _logger.LogDebug("DCP doctor stop request returned HTTP {StatusCode}.", response.StatusCode);
                 }
