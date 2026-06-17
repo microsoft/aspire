@@ -182,13 +182,13 @@
                                                 // We want to have consistent margin for both client and server spans.
                                                 string spanNameContainerStyle;
                                                 if (!isServerOrConsumer)
-                                                    {
-                                                        // Client span has 19px extra content:
-                                                        // - 5px extra margin-left
-                                                        // - 5px border
-                                                        // - 9px padding-left
-                                                        spanNameContainerStyle = $"margin-left: 5px; border-left-color: {ColorGenerator.Instance.GetColorVariableByKey(GetResourceName(context.Span.Source))}; border-left-width: 5px; border-left-style: solid; padding-left: 9px;";
-                                                    }
+                                                {
+                                                    // Client span has 19px extra content:
+                                                    // - 5px extra margin-left
+                                                    // - 5px border
+                                                    // - 9px padding-left
+                                                    spanNameContainerStyle = $"margin-left: 5px; border-left-color: {ColorGenerator.Instance.GetColorVariableByKey(GetResourceName(context.Span.Source))}; border-left-width: 5px; border-left-style: solid; padding-left: 9px;";
+                                                }
                                                 else
                                                 {
                                                     // Span with icon has 19px extra content:
