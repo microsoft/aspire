@@ -447,24 +447,6 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate succeeded.
-        /// </summary>
-        public static string DcpEphemeralCertificateConnectionSucceededMessage {
-            get {
-                return ResourceManager.GetString("DcpEphemeralCertificateConnectionSucceededMessage", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Developer Control Plane (DCP) connection using the developer certificate succeeded.
-        /// </summary>
-        public static string DcpDeveloperCertificateConnectionSucceededMessage {
-            get {
-                return ResourceManager.GetString("DcpDeveloperCertificateConnectionSucceededMessage", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Developer Control Plane (DCP) connection succeeded.
         /// </summary>
         public static string DcpConnectionSucceededMessage {
