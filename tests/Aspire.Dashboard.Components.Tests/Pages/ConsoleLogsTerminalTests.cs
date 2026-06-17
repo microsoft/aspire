@@ -186,6 +186,8 @@ public partial class ConsoleLogsTests
             new Value { StringValue = value },
             isValueSensitive: false,
             knownProperty: null,
-            priority: 0);
+            sortOrder: 0,
+            displayName: null,
+            isHighlighted: false);
     }
 }

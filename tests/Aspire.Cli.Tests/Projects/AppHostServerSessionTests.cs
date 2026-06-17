@@ -147,6 +147,10 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             CancellationToken.None);
         _ = session.StartAsync();
 
+        // Wait for the process to exit so the stopwatch measures only the early-exit detection
+        // latency, not the variable execution time of "dotnet --version" on loaded CI machines.
+        await project.StartedProcess!.WaitForExitAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+
         var stopwatch = Stopwatch.StartNew();
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             () => session.GetRpcClientAsync(TestContext.Current.CancellationToken)).DefaultTimeout();
@@ -614,6 +618,8 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
 
         public Dictionary<string, string>? ReceivedEnvironmentVariables { get; private set; }
 
+        public Process? StartedProcess { get; private set; }
+
         public string GetInstanceIdentifier() => AppDirectoryPath;
 
         public Task<AppHostServerPrepareResult> PrepareAsync(
@@ -644,6 +650,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             };
             var process = Process.Start(startInfo)!;
 
+            StartedProcess = process;
             return new AppHostServerRunResult(
                 SocketPath: "test.sock",
                 Process: process,

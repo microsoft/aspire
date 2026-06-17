@@ -51,6 +51,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     private readonly IProcessTreeGracefulShutdownSignaler _gracefulShutdownSignaler;
     private readonly GracefulShutdownService _shutdownService;
     private readonly WindowsConsoleProcessJob? _consoleProcessJob;
+    private readonly AppHostServerCodegenSessionFactory _codegenSessionFactory;
 
     // Language is always resolved via constructor
     private readonly LanguageInfo _resolvedLanguage;
@@ -74,7 +75,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         IProcessTreeGracefulShutdownSignaler gracefulShutdownSignaler,
         GracefulShutdownService shutdownService,
         TimeProvider? timeProvider = null,
-        WindowsConsoleProcessJob? consoleProcessJob = null)
+        WindowsConsoleProcessJob? consoleProcessJob = null,
+        AppHostServerCodegenSessionFactory? codegenSessionFactory = null)
     {
         _resolvedLanguage = language;
         _interactionService = interactionService;
@@ -95,7 +97,26 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         _gracefulShutdownSignaler = gracefulShutdownSignaler;
         _shutdownService = shutdownService;
         _consoleProcessJob = consoleProcessJob;
+
+        // Default to constructing a real session for code generation. This uses the simple
+        // construction (no graceful-shutdown parameters) because the codegen session is transient:
+        // it is started, queried over RPC, and disposed within BuildAndGenerateSdkAsync. Tests
+        // override this to supply a fake session that returns canned RPC results.
+        _codegenSessionFactory = codegenSessionFactory ?? CreateCodegenSession;
     }
+
+    private static IAppHostServerSession CreateCodegenSession(
+        IAppHostServerProject project,
+        ILogger logger,
+        CancellationToken stopRequested,
+        ProfilingTelemetry? profilingTelemetry) =>
+        new AppHostServerSession(
+            project,
+            environmentVariables: null,
+            debug: false,
+            logger,
+            stopRequested,
+            profilingTelemetry);
 
     // ═══════════════════════════════════════════════════════════════
     // IDENTITY (Always resolved via constructor)
@@ -125,8 +146,9 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             return configuredVersion;
         }
 
-        _logger.LogDebug("Using default SDK version: {Version}", DotNetBasedAppHostServerProject.DefaultSdkVersion);
-        return DotNetBasedAppHostServerProject.DefaultSdkVersion;
+        var defaultSdkVersion = _executionContext.IdentitySdkVersion;
+        _logger.LogDebug("Using default SDK version: {Version}", defaultSdkVersion);
+        return defaultSdkVersion;
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -158,6 +180,21 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     /// <inheritdoc />
     public bool IsUsingProjectReferences(FileInfo appHostFile)
     {
+        // When the CLI is emulating a different build via ASPIRE_CLI_* identity overrides (or the
+        // install sidecar), it must behave like the installed CLI it is impersonating — and an
+        // installed CLI never resolves Aspire packages through in-repo project references. Without
+        // this guard a source (DEBUG) build run from inside the Aspire repo trips
+        // AspireRepositoryDetector via its Environment.ProcessPath fallback (it walks up from the
+        // CLI binary, not the apphost, and finds the repo's Aspire.slnx), so project-reference mode
+        // is reported for an apphost that lives in an arbitrary directory. That short-circuits
+        // channel resolution (see IntegrationPackageSearchService.GetConfiguredChannel) and an
+        // emulated staging/daily apphost would silently resolve stable nuget.org packages instead of
+        // its pinned channel's feed. See docs/specs/cli-identity-sidecar.md.
+        if (_executionContext.IdentityOverridden)
+        {
+            return false;
+        }
+
         return AspireRepositoryDetector.DetectRepositoryRoot(appHostFile.Directory?.FullName) is not null;
     }
 
@@ -277,10 +314,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         }
 
         // Step 2: Start the AppHost server temporarily for code generation
-        await using var serverSession = new AppHostServerSession(
+        await using var serverSession = _codegenSessionFactory(
             appHostServerProject,
-            environmentVariables: null,
-            debug: false,
             _logger,
             cancellationToken,
             _profilingTelemetry);
@@ -300,6 +335,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             appHostFile: null,
             rpcClient,
             integrations,
+            targetSdkVersion: config.SdkVersion,
             cancellationToken);
 
         // Step 5: Install dependencies using GuestRuntime (best effort - don't block code generation)
@@ -495,7 +531,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                             appHostFile,
                             rpcClient,
                             integrations,
-                            cancellationToken);
+                            cancellationToken: cancellationToken);
                     }
 
                     await EnsureRuntimeCreatedAsync(directory, rpcClient, cancellationToken);
@@ -1081,7 +1117,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                             appHostFile,
                             rpcClient,
                             integrations,
-                            cancellationToken);
+                            cancellationToken: cancellationToken);
                     }
 
                     await EnsureRuntimeCreatedAsync(directory, rpcClient, cancellationToken);
@@ -1543,7 +1579,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         FileInfo? appHostFile,
         IAppHostRpcClient rpcClient,
         IEnumerable<IntegrationReference> integrations,
-        CancellationToken cancellationToken)
+        string? targetSdkVersion = null,
+        CancellationToken cancellationToken = default)
     {
         var integrationsList = integrations.ToList();
 
@@ -1551,7 +1588,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         // The code generator is registered by its Language property, not the runtime ID
         var codeGenerator = _resolvedLanguage.CodeGenerator;
 
-        WarnIfCliSdkVersionSkew(appPath);
+        WarnIfCliSdkVersionSkew(appPath, targetSdkVersion);
 
         _logger.LogDebug("Generating {CodeGenerator} code via RPC for {Count} packages", codeGenerator, integrationsList.Count);
 
@@ -1644,10 +1681,19 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     /// purely informational and let code-generation try first so that benign skew (e.g. a
     /// daily-build CLI against a stable SDK) doesn't block valid scenarios.
     /// </summary>
-    private void WarnIfCliSdkVersionSkew(string appPath)
+    private void WarnIfCliSdkVersionSkew(string appPath, string? targetSdkVersion = null)
     {
         try
         {
+            var cliVersion = _executionContext.IdentitySdkVersion;
+
+            // When the caller is actively updating TO a version that matches the CLI,
+            // the on-disk config is stale and about to be overwritten — skip the warning.
+            if (targetSdkVersion is not null && !IsKnownIncompatibleSkew(cliVersion, targetSdkVersion))
+            {
+                return;
+            }
+
             var configDir = ConfigurationHelper.GetConfigRootDirectory(new DirectoryInfo(appPath));
             var config = AspireConfigFile.Load(configDir.FullName);
             var configuredSdkVersion = config?.SdkVersion;
@@ -1656,7 +1702,6 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 return;
             }
 
-            var cliVersion = VersionHelper.GetDefaultSdkVersion();
             if (!IsKnownIncompatibleSkew(cliVersion, configuredSdkVersion))
             {
                 return;

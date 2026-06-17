@@ -734,8 +734,30 @@ public static class PostgresBuilderExtensions
         {
             var quotedDatabaseIdentifier = new NpgsqlCommandBuilder().QuoteIdentifier(npgsqlDatabase.DatabaseName);
             using var command = npgsqlConnection.CreateCommand();
-            command.CommandText = scriptAnnotation?.Script ?? $"CREATE DATABASE {quotedDatabaseIdentifier}";
-            await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            var commandText = scriptAnnotation?.Script ?? $"CREATE DATABASE {quotedDatabaseIdentifier}";
+            command.CommandText = commandText;
+
+            if (scriptAnnotation?.Script is not null)
+            {
+                logger.LogInformation("Executing custom creation script for database '{DatabaseName}'", npgsqlDatabase.DatabaseName);
+            }
+
+            var rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+            if (scriptAnnotation?.Script is not null)
+            {
+                // ADO.NET returns -1 for DDL statements (CREATE DATABASE, etc.) because they don't affect data rows.
+                // Only include the rows-affected count when it carries meaningful information.
+                if (rowsAffected >= 0)
+                {
+                    logger.LogInformation("Completed custom creation script for database '{DatabaseName}' ({RowsAffected} rows affected)", npgsqlDatabase.DatabaseName, rowsAffected);
+                }
+                else
+                {
+                    logger.LogInformation("Completed custom creation script for database '{DatabaseName}'", npgsqlDatabase.DatabaseName);
+                }
+            }
+
             logger.LogDebug("Database '{DatabaseName}' created successfully", npgsqlDatabase.DatabaseName);
         }
         catch (PostgresException p) when (p.SqlState == "42P04")

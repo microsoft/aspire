@@ -199,7 +199,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             }
 
             var containerAppResource = new RenderedModelResource<Container>(container, ctr);
-            DcpModelUtilities.AddServicesProducedInfo(containerAppResource, _appResources.Get(), _logger);
+            DcpModelUtilities.AddServicesProducedInfo(containerAppResource, _appResources.Get());
             _appResources.Add(containerAppResource);
             result.Add(containerAppResource);
         }
@@ -316,11 +316,6 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         spec.RunArgs = runArgs;
 
         var (configuration, pemCertificates, createFiles) = await BuildContainerConfiguration(cr, logger, cToken).ConfigureAwait(false);
-        // Configuration callbacks are the last pre-creation point where on-demand allocation can run.
-        cr.ModelResource.Annotations
-            .OfType<OnDemandEndpointAllocationAnnotation>()
-            .SingleOrDefault()
-            ?.StopAllocating();
 
         if (configuration.Exception is not null)
         {

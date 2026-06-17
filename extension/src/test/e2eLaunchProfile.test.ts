@@ -192,11 +192,21 @@ suite('E2E launch profile', () => {
         assert.ok(aspireCliEnvironmentStart >= 0);
         assert.ok(aspireCliEnvironmentEnd > aspireCliEnvironmentStart);
         assert.ok(aspireCliEnvironment.includes("ASPIRE_CLI_TELEMETRY_OPTOUT: 'true'"));
+        assert.ok(aspireCliEnvironment.includes("DOTNET_CLI_UI_LANGUAGE: 'en'"));
         assert.ok(aspireCliEnvironment.includes("DOTNET_CLI_TELEMETRY_OPTOUT: '1'"));
         assert.ok(envConstruction.includes('const extestEnv = getAspireCliEnvironment({'));
         assert.ok(envConstruction.includes("ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE: 'true'"));
         assert.ok(runTests.includes('runWithProcessTreeTimeout(process.execPath'));
         assert.ok(runTests.includes('extestEnv'));
+    });
+
+    test('suppresses evaluation diagnostics for intentional E2E AppHost interaction APIs', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+
+        assert.ok(runner.includes('#pragma warning disable ASPIREINTERACTION001'));
+        assert.ok(runner.includes('new InteractionInput'));
+        assert.ok(runner.includes('InputType.SecretText'));
     });
 
     test('launches VS Code E2E tests with telemetry disabled before extension activation', () => {
@@ -225,9 +235,25 @@ suite('E2E launch profile', () => {
         assert.ok(zeroToRunning.includes('this.timeout(2100000);'));
         assert.ok(zeroToRunning.includes('waitForDebugSessionStartup(appHostPath, 300000)'));
         assert.ok(zeroToRunning.includes('waitForDebugDashboardUrl(appHostPath, 180000)'));
-        assert.ok(zeroToRunning.includes('waitForEditorTitle(dashboardHost, 180000'));
+        assert.ok(zeroToRunning.includes("waitForHttpText(dashboardUrl, 'Aspire', 180000"));
         assert.ok(zeroToRunning.includes("process.platform === 'linux'"));
         assert.ok(zeroToRunning.includes("waitForWorkbenchTextAfterIntegratedBrowserNavigation(['Resources', dashboardHost], 180000)"));
+        assert.ok(!zeroToRunning.includes("waitForEditorTitle(dashboardHost"));
+        assert.ok(!zeroToRunning.includes("waitForEditorTitle(new URL(dashboardUrl).host"));
+    });
+
+    test('uses integrated-browser webview text instead of editor title waits', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const extension = fs.readFileSync(path.join(extensionRoot, 'src', 'extension.ts'), 'utf8');
+        const appHostTreeProvider = fs.readFileSync(path.join(extensionRoot, 'src', 'views', 'AspireAppHostTreeProvider.ts'), 'utf8');
+        const treeActions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'treeActions.e2e.test.ts'), 'utf8');
+
+        assert.ok(extension.includes('return { url: endpointUrl };'));
+        assert.ok(appHostTreeProvider.includes("await vscode.commands.executeCommand('simpleBrowser.show', element.url);"));
+        assert.ok(treeActions.includes("assert.strictEqual((openedEndpoint.result as { url?: string }).url, endpointUrl);"));
+        assert.ok(treeActions.includes('waitForWorkbenchTextAfterIntegratedBrowserNavigation(new URL(endpointUrl).host)'));
+        assert.ok(treeActions.includes("waitForHttpText(endpointUrl, 'ok')"));
+        assert.ok(!treeActions.includes('waitForEditorTitle(new URL(endpointUrl).host'));
     });
 
     test('hides AppHost outside the workspace for empty-discovery coverage', () => {
@@ -257,5 +283,77 @@ suite('E2E launch profile', () => {
         assert.ok(!assertions.includes('.slice(afterInvocationCount)'));
         assert.ok(!assertions.includes('.slice(afterCommandCount)'));
         assert.ok(!assertions.includes('.slice(afterLaunchCount)'));
+    });
+
+    test('writes E2E control and mutable fixture files with Windows-safe retries', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const extension = fs.readFileSync(path.join(extensionRoot, 'src', 'extension.ts'), 'utf8');
+        const assertions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'assertions.ts'), 'utf8');
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const debugDashboard = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'debugDashboard.e2e.test.ts'), 'utf8');
+        const extensionRenameRetryStart = extension.indexOf('function isRetryableRenameError');
+        const extensionRenameRetryEnd = extension.indexOf('function sleepSynchronously');
+        const renameRetryStart = assertions.indexOf('function isRetryableRenameError');
+        const renameRetryEnd = assertions.indexOf('function isDebugSessionForAppHost');
+        assert.ok(extensionRenameRetryStart >= 0);
+        assert.ok(extensionRenameRetryEnd > extensionRenameRetryStart);
+        assert.ok(renameRetryStart >= 0);
+        assert.ok(renameRetryEnd > renameRetryStart);
+        const extensionRenameRetry = extension.slice(extensionRenameRetryStart, extensionRenameRetryEnd);
+        const renameRetry = assertions.slice(renameRetryStart, renameRetryEnd);
+
+        assert.ok(assertions.includes('writeJsonFileAtomic(controlFilePath'));
+        assert.ok(assertions.includes('renameFileWithRetry(temporaryPath, filePath)'));
+        assert.ok(extensionRenameRetry.includes("error.code === 'EBUSY'"));
+        assert.ok(renameRetry.includes("error.code === 'EBUSY'"));
+        assert.ok(fixtures.includes('writeFileWithRetry(settingsPath'));
+        assert.ok(fixtures.includes('removePath(getWorkspaceAppHostConfigPath(), { force: true });'));
+        assert.ok(fixtures.includes("removePath(path.join(getWorkspaceRoot(), '.aspire'), { recursive: true, force: true });"));
+        assert.ok(fixtures.includes("const maxAttempts = process.platform === 'win32' ? 40 : 1;"));
+        assert.ok(fixtures.includes('fs.rmSync(targetPath, options);'));
+        assert.ok(debugDashboard.includes('writeFileWithRetry(appHostSourcePath, brokenSource);'));
+        assert.ok(debugDashboard.includes('writeFileWithRetry(appHostSourcePath, originalSource)'));
+        assert.ok(debugDashboard.includes("__AspireE2EFlushRegressionMissingSymbol__' does not exist"));
+        assert.ok(!debugDashboard.includes('waitForLogFileText'));
+        assert.ok(fixtures.includes("code === 'EBUSY'"));
+        assert.ok(fixtures.includes("code === 'EPERM'"));
+        assert.ok(fixtures.includes("code === 'EACCES'"));
+    });
+
+    test('uses lightweight secondary AppHost candidates for discovery-only E2E coverage', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const commandPalette = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'commandPalette.e2e.test.ts'), 'utf8');
+        const discoveryConfiguration = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'discoveryConfiguration.e2e.test.ts'), 'utf8');
+
+        assert.ok(commandPalette.includes('this.timeout(420000);'));
+        assert.ok(fixtures.includes("kind: 'project' | 'single-file' = 'project'"));
+        assert.ok(fixtures.includes("path.join(projectDirectory, 'apphost.cs')"));
+        assert.ok(fixtures.includes('#:sdk Aspire.AppHost.Sdk@${getAppHostSdkVersion()}'));
+        assert.ok(commandPalette.includes("createAdditionalAppHostCandidate('AspireE2E.SecondAppHost', 'single-file')"));
+        assert.ok(discoveryConfiguration.includes("createAdditionalAppHostCandidate('AspireE2E.SecondAppHost', 'single-file')"));
+        assert.ok(discoveryConfiguration.includes('restored primary AppHost without stale secondary candidate'));
+    });
+
+    test('waits for running AppHost processes to exit before deleting E2E fixture directories', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const stopAppHostStart = fixtures.indexOf('export async function stopAppHostIfRunning');
+        const stopAppHostEnd = fixtures.indexOf('async function waitForRunningAppHostProcessExitFromState');
+        assert.ok(stopAppHostStart >= 0);
+        assert.ok(stopAppHostEnd > stopAppHostStart);
+        const stopAppHost = fixtures.slice(stopAppHostStart, stopAppHostEnd);
+
+        assert.ok(stopAppHost.includes('await waitForRunningAppHostProcessExitFromState(appHostPath, 5000).catch(() => undefined);'));
+        assert.ok(stopAppHost.includes('const runningAppHost = await getRunningAppHostAccordingToCli(appHostPath);'));
+        assert.ok(stopAppHost.includes('await waitForProcessExit(runningAppHost.appHostPid, 30000);'));
+        assert.ok(stopAppHost.includes('if (!await getRunningAppHostAccordingToCli(appHostPath))'));
+        assert.ok(fixtures.includes("['ps', '--format', 'json']"));
+        assert.ok(fixtures.includes('Number.isInteger(candidate.appHostPid)'));
+        assert.ok(!fixtures.includes('terminateProcessTree(runningAppHost.appHostPid'));
+        assert.ok(fixtures.includes('async function waitForProcessExit(pid: number, timeoutMs: number): Promise<void>'));
+        assert.ok(fixtures.includes('process.kill(pid, 0);'));
+        assert.ok(fixtures.includes("error.code === 'EPERM'"));
+        assert.ok(fixtures.includes("const maxAttempts = process.platform === 'win32' ? 40 : 1;"));
     });
 });

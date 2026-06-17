@@ -138,6 +138,11 @@ internal interface IArmClient
     Task<IEnumerable<ISubscriptionResource>> GetAvailableSubscriptionsAsync(string? tenantId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Gets a subscription by identifier.
+    /// </summary>
+    Task<ISubscriptionResource> GetSubscriptionAsync(string subscriptionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Gets all available locations for the specified subscription.
     /// </summary>
     Task<IEnumerable<(string Name, string DisplayName)>> GetAvailableLocationsAsync(string subscriptionId, CancellationToken cancellationToken = default);
@@ -146,6 +151,11 @@ internal interface IArmClient
     /// Gets detailed information about available resource groups including their locations.
     /// </summary>
     Task<IEnumerable<(string Name, string Location)>> GetAvailableResourceGroupsWithLocationAsync(string subscriptionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets Azure locations that support the specified resource type.
+    /// </summary>
+    Task<IEnumerable<string>> GetSupportedLocationsAsync(string subscriptionId, string resourceType, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets role assignments collection for the specified scope.
@@ -171,6 +181,14 @@ internal interface IArmClient
     /// Gets Azure resource IDs targeted by the specified deployment.
     /// </summary>
     IAsyncEnumerable<string> GetDeploymentTargetResourceIdsAsync(string deploymentId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets Azure deployment operations for the specified deployment.
+    /// </summary>
+    IAsyncEnumerable<AzureDeploymentOperationDetails> GetDeploymentOperationsAsync(
+        string deploymentId,
+        bool recursive = true,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -306,6 +324,11 @@ internal interface ITenantResource
     /// Gets the default domain.
     /// </summary>
     string? DefaultDomain { get; }
+
+    /// <summary>
+    /// Gets ARM deployments collection.
+    /// </summary>
+    IArmDeploymentCollection GetArmDeployments();
 }
 
 /// <summary>

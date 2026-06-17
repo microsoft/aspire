@@ -23,7 +23,7 @@ namespace Aspire.Cli.Projects;
 /// internal linked CTS, so there is exactly one kill site (the registered callback). Callers
 /// should not reach into <see cref="ServerProcess"/> to drive lifecycle.
 /// </remarks>
-internal sealed class AppHostServerSession : IAsyncDisposable
+internal sealed class AppHostServerSession : IAppHostServerSession
 {
     private const string ProcessDescription = "AppHost server";
 

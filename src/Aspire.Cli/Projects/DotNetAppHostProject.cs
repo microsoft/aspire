@@ -46,6 +46,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     private readonly GracefulShutdownService _shutdownService;
     private readonly IProcessTreeGracefulShutdownSignaler _gracefulShutdownSignaler;
     private readonly WindowsConsoleProcessJob? _consoleProcessJob;
+    private readonly CliExecutionContext _executionContext;
 
     private static readonly string[] s_detectionPatterns = ["*.csproj", "*.fsproj", "*.vbproj", "apphost.cs"];
     private const string DirectLaunchDisabledConfigKey = "dotnetAppHostDirectLaunchDisabled";
@@ -77,6 +78,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         IConfigurationService configurationService,
         GracefulShutdownService shutdownService,
         IProcessTreeGracefulShutdownSignaler gracefulShutdownSignaler,
+        CliExecutionContext executionContext,
         WindowsConsoleProcessJob? consoleProcessJob = null,
         TimeProvider? timeProvider = null)
     {
@@ -99,6 +101,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // WindowsConsoleProcessJob is DI-registered Windows-only; null on non-Windows hosts.
         // ProcessExecutionFactory enforces the Windows-requires-job invariant at spawn time.
         _consoleProcessJob = consoleProcessJob;
+        _executionContext = executionContext;
         _timeProvider = timeProvider ?? TimeProvider.System;
         _runningInstanceManager = new RunningInstanceManager(_logger, _interactionService, _timeProvider);
     }
@@ -546,7 +549,13 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     {
         if (isSingleFileAppHost)
         {
-            return (true, VersionHelper.GetDefaultTemplateVersion());
+            // A single-file apphost pins its Aspire.Hosting version via the
+            // `#:sdk Aspire.AppHost.Sdk@<version>` directive, which uses IdentitySdkVersion (the
+            // identity version with build metadata stripped, matching the published NuGet package
+            // version). Report that same value here so the compatibility check reflects what the
+            // apphost actually pins, honoring ASPIRE_CLI_VERSION / sidecar overrides rather than
+            // the physical assembly version.
+            return (true, _executionContext.IdentitySdkVersion);
         }
 
         using var compatibilityActivity = _profilingTelemetry.StartAppHostCheckCompatibility();

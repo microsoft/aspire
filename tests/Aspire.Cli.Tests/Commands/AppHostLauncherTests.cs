@@ -722,6 +722,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 sdkDirectory,
                 logsDirectory,
                 Path.Combine(logsDirectory.FullName, "parent.log"),
+                identityChannel: "local",
                 homeDirectory: homeDirectory);
             var interactionService = new TestInteractionService();
             var monitor = new TestAuxiliaryBackchannelMonitor();

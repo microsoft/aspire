@@ -41,17 +41,20 @@ internal sealed class ScaffoldingService : IScaffoldingService
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly IInteractionService _interactionService;
     private readonly ILogger<ScaffoldingService> _logger;
+    private readonly CliExecutionContext _executionContext;
 
     public ScaffoldingService(
         IAppHostServerProjectFactory appHostServerProjectFactory,
         ILanguageDiscovery languageDiscovery,
         IInteractionService interactionService,
-        ILogger<ScaffoldingService> logger)
+        ILogger<ScaffoldingService> logger,
+        CliExecutionContext executionContext)
     {
         _appHostServerProjectFactory = appHostServerProjectFactory;
         _languageDiscovery = languageDiscovery;
         _interactionService = interactionService;
         _logger = logger;
+        _executionContext = executionContext;
     }
 
     /// <inheritdoc />
@@ -73,7 +76,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
 
         // Step 1: Resolve SDK and package strategy
         var sdkVersion = string.IsNullOrWhiteSpace(context.SdkVersion)
-            ? VersionHelper.GetDefaultSdkVersion()
+            ? _executionContext.IdentitySdkVersion
             : context.SdkVersion;
         var config = AspireConfigFile.LoadOrCreate(directory.FullName, sdkVersion);
         if (!string.IsNullOrWhiteSpace(context.SdkVersion))

@@ -212,6 +212,23 @@
         <target state="needs-review-translation">将结果输出为 JSON g格式以便工具集成</target>
         <note />
       </trans-unit>
+      <trans-unit id="LegacySettingsDetectedFix">
+        <source>Run 'aspire init' (or any aspire run/add/update/pipeline command) to migrate to aspire.config.json.
+The legacy file continues to work — this is a non-blocking warning.</source>
+        <target state="new">Run 'aspire init' (or any aspire run/add/update/pipeline command) to migrate to aspire.config.json.
+The legacy file continues to work — this is a non-blocking warning.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LegacySettingsDetectedMessageFormat">
+        <source>Legacy .aspire/settings.json detected at {0}</source>
+        <target state="new">Legacy .aspire/settings.json detected at {0}</target>
+        <note>{0} is the full path to the legacy settings file.</note>
+      </trans-unit>
+      <trans-unit id="OperatingSystemMessageFormat">
+        <source>Operating system: {0}</source>
+        <target state="new">Operating system: {0}</target>
+        <note>{0} is the operating system display name and version, for example "Windows 10.0.22631", "macOS 26.0", or "Linux Ubuntu 24.04".</note>
+      </trans-unit>
       <trans-unit id="SdkCategoryHeader">
         <source>.NET SDK</source>
         <target state="translated">.NET SDK</target>

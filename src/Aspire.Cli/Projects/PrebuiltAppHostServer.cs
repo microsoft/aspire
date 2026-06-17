@@ -636,11 +636,13 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
             // Mirror the temp NuGet.config's catch-all decision: it adds `* -> NuGet.org`
             // only when the matched channel did not supply its own AllPackages mapping. The
             // --source argument list must agree so non-Aspire transitives have the same
-            // catch-all source in both views.
+            // catch-all source in both views. Honor the runtime nuget service-index
+            // override here too — see docs/specs/cli-identity-sidecar.md.
+            var nugetOrg = _executionContext.NuGetServiceIndexOverride ?? PackageSources.NuGetOrg;
             if (hasOverride && !matchedChannelHasAllPackagesMapping &&
-                !sources.Contains(PackageSources.NuGetOrg, StringComparer.OrdinalIgnoreCase))
+                !sources.Contains(nugetOrg, StringComparer.OrdinalIgnoreCase))
             {
-                sources.Add(PackageSources.NuGetOrg);
+                sources.Add(nugetOrg);
             }
         }
         catch (Exception ex)
@@ -689,7 +691,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
             }
 
             return await TemporaryNuGetConfig.CreateAsync(
-                PackageSourceOverrideMappings.Create(packageSourceOverride, matchedChannel),
+                PackageSourceOverrideMappings.Create(packageSourceOverride, matchedChannel, _executionContext.NuGetServiceIndexOverride),
                 configureGlobalPackagesFolder,
                 configureGlobalPackagesFolder ? ResolveStableGlobalPackagesFolder(packageSourceOverride) : null);
         }

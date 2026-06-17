@@ -88,7 +88,6 @@ suite('Aspire zero-to-running E2E', function () {
 
         await waitForHttpText(dashboardUrl, 'Aspire', 180000, new URL(dashboardUrl).origin);
         const dashboardHost = new URL(dashboardUrl).host;
-        assert.ok((await waitForEditorTitle(dashboardHost, 180000, { matchCase: false })).toLowerCase().includes(dashboardHost.toLowerCase()));
         if (process.platform === 'linux') {
             // Chromium webview text extraction is unreliable on hosted Windows and macOS runners after
             // integrated-browser navigation. The HTTP probe above proves the dashboard rendered

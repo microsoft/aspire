@@ -132,7 +132,9 @@ public class DefaultTerminalConnectionResolverTests
             new Value { StringValue = value },
             isValueSensitive: false,
             knownProperty: null,
-            priority: 0);
+            sortOrder: 0,
+            displayName: null,
+            isHighlighted: false);
     }
 
     private sealed class DisabledDashboardClient : IDashboardClient
@@ -140,6 +142,11 @@ public class DefaultTerminalConnectionResolverTests
         public bool IsEnabled => false;
         public Task WhenConnected => Task.CompletedTask;
         public string ApplicationName => "Disabled";
+        public DashboardConnectionState ConnectionState => DashboardConnectionState.Connected;
+#pragma warning disable CS0067 // Event is never used - required by interface
+        public event Action<DashboardConnectionState>? ConnectionStateChanged;
+#pragma warning restore CS0067
+        public Task ReconnectAsync() => Task.CompletedTask;
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
         public Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, ExecuteResourceCommandOptions options, CancellationToken cancellationToken) => throw new NotImplementedException();
         public IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> SubscribeConsoleLogs(string resourceName, CancellationToken cancellationToken) => throw new NotImplementedException();

@@ -149,6 +149,49 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         Assert.Equal("pr-17159", context.IdentityChannel);
     }
 
+    [Fact]
+    public void BuildCliExecutionContext_NuGetServiceIndexOverrideFromEnv_MarksIdentityOverridden()
+    {
+        // Setting only ASPIRE_CLI_NUGET_SERVICE_INDEX must still flag the run as an emulation so the
+        // startup override notice fires and tooling does not mistake a diagnostic run for a real build.
+        // Regression guard: this source was previously omitted from the identityOverridden computation.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var resolver = new IdentityResolver(
+            new InstallSidecarReader(),
+            typeof(Program).Assembly,
+            binaryDir: null,
+            envReader: name => name == IdentityResolver.NuGetServiceIndexEnvVar ? "http://localhost:5000/v3/index.json" : null);
+
+        var context = Program.BuildCliExecutionContext(
+            debugMode: false,
+            logsDirectory: Path.Combine(workspace.WorkspaceRoot.FullName, "logs"),
+            logFilePath: Path.Combine(workspace.WorkspaceRoot.FullName, "logs", "aspire.log"),
+            identityResolver: resolver);
+
+        Assert.True(context.IdentityOverridden);
+        Assert.Equal("http://localhost:5000/v3/index.json", context.NuGetServiceIndexOverride);
+    }
+
+    [Fact]
+    public void BuildCliExecutionContext_NoOverrides_DoesNotMarkIdentityOverridden()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var resolver = new IdentityResolver(
+            new InstallSidecarReader(),
+            typeof(Program).Assembly,
+            binaryDir: null,
+            envReader: _ => null);
+
+        var context = Program.BuildCliExecutionContext(
+            debugMode: false,
+            logsDirectory: Path.Combine(workspace.WorkspaceRoot.FullName, "logs"),
+            logFilePath: Path.Combine(workspace.WorkspaceRoot.FullName, "logs", "aspire.log"),
+            identityResolver: resolver);
+
+        Assert.False(context.IdentityOverridden);
+        Assert.Null(context.NuGetServiceIndexOverride);
+    }
+
     private static string WriteBinaryWithSidecar(string binaryDir, string source)
     {
         Directory.CreateDirectory(binaryDir);

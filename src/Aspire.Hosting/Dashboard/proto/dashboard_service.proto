@@ -220,6 +220,11 @@ message ResourceProperty {
     // Whether the value is sensitive and should be masked in the UI by default.
     // Defaults to false. When true, the user must explicitly unmask the value to view it.
     optional bool is_sensitive = 4;
+    // A flag that indicates whether the property is highlighted in the UI.
+    // Highlighted properties are shown by default even when they are not known to the dashboard.
+    bool is_highlighted = 5;
+    // Optional sort order used when displaying the property in the UI.
+    optional int32 sort_order = 6;
 }
 
 // Models the full state of an resource (container, executable, project, etc) at a particular point in time.
