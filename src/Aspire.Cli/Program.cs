@@ -556,6 +556,8 @@ public class Program
         builder.Services.AddSingleton<IEnvironmentCheck, DeprecatedWorkloadCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DevCertsCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, ContainerRuntimeCheck>();
+        builder.Services.AddSingleton<IDcpConnectionTester, DcpConnectionTester>();
+        builder.Services.AddSingleton<IEnvironmentCheck, DcpConnectionHealthCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DeprecatedAgentConfigCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, LegacySettingsFileCheck>();
         builder.Services.AddSingleton<IEnvironmentChecker, EnvironmentChecker>();
