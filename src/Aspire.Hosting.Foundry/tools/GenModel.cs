@@ -1106,9 +1106,18 @@ public class ModelClient : IDisposable
 
     private static void AddPopulatedJsonField(List<string> partialFailureFields, string fieldName, object? value)
     {
-        if (value is JsonElement element && IsPopulatedJsonElement(element))
+        // System.Text.Json materializes any non-null JSON value for an `object?` property into a boxed
+        // JsonElement, so an empty "regionalErrors": [] / {} arrives here as a non-null JsonElement.
+        // Only flag the field as a partial-failure marker when the element actually has content; an
+        // empty collection means "no errors" and must NOT be flagged. Otherwise a clean 200 would be
+        // misread as partial and, now that partial responses are retried, would burn the entire retry
+        // budget before aborting.
+        if (value is JsonElement element)
         {
-            partialFailureFields.Add(fieldName);
+            if (IsPopulatedJsonElement(element))
+            {
+                partialFailureFields.Add(fieldName);
+            }
         }
         else if (value is not null)
         {
