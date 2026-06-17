@@ -2620,7 +2620,7 @@ internal sealed class AzureProvisioningController(
 
             try
             {
-                await armClient.DeleteResourceAsync(resourceId, cancellationToken, resourceLocation, fallbackResourceLocation).ConfigureAwait(false);
+                await armClient.DeleteResourceAsync(resourceId, resourceLocation, fallbackResourceLocation, cancellationToken).ConfigureAwait(false);
             }
             catch (RequestFailedException ex) when (ex.Status == 404)
             {
@@ -3022,7 +3022,7 @@ internal sealed class AzureProvisioningController(
 
         try
         {
-            await armClient.DeleteResourceAsync(resourceId, cancellationToken, currentLocation).ConfigureAwait(false);
+            await armClient.DeleteResourceAsync(resourceId, currentLocation, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
         catch (RequestFailedException ex) when (ex.Status == 404)
         {

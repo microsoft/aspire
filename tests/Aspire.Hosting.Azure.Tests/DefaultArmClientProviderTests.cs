@@ -135,7 +135,7 @@ public class DefaultArmClientProviderTests
         });
         var armClient = provider.GetArmClient(new CapturingTokenCredential(), SubscriptionId);
 
-        await armClient.DeleteResourceAsync(KeyVaultResourceId, CancellationToken.None);
+        await armClient.DeleteResourceAsync(KeyVaultResourceId, cancellationToken: CancellationToken.None);
 
         Assert.Contains(transport.Requests, static request => request.Method == RequestMethod.Get.ToString() && request.Uri.AbsolutePath == KeyVaultResourceId);
         Assert.Contains(transport.Requests, static request => request.Method == RequestMethod.Delete.ToString() && request.Uri.AbsolutePath == KeyVaultResourceId);
@@ -158,7 +158,7 @@ public class DefaultArmClientProviderTests
         });
         var armClient = provider.GetArmClient(new CapturingTokenCredential(), SubscriptionId);
 
-        await armClient.DeleteResourceAsync(KeyVaultResourceId, CancellationToken.None, resourceLocation: "ukwest", fallbackResourceLocation: "westus2");
+        await armClient.DeleteResourceAsync(KeyVaultResourceId, resourceLocation: "ukwest", fallbackResourceLocation: "westus2", cancellationToken: CancellationToken.None);
 
         Assert.Contains(transport.Requests, static request => request.Method == RequestMethod.Get.ToString() && request.Uri.AbsolutePath == KeyVaultResourceId);
         Assert.DoesNotContain(transport.Requests, static request => request.Method == RequestMethod.Delete.ToString() && request.Uri.AbsolutePath == KeyVaultResourceId);

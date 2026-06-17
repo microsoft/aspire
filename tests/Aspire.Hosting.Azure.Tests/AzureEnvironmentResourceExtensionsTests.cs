@@ -5248,7 +5248,7 @@ public class AzureEnvironmentResourceExtensionsTests
         public Task<bool> ResourceExistsAsync(string resourceId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
-        public Task DeleteResourceAsync(string resourceId, CancellationToken cancellationToken = default, string? resourceLocation = null, string? fallbackResourceLocation = null)
+        public Task DeleteResourceAsync(string resourceId, string? resourceLocation = null, string? fallbackResourceLocation = null, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
         public Task CancelDeploymentAsync(string deploymentId, CancellationToken cancellationToken = default)
@@ -5658,7 +5658,7 @@ public class AzureEnvironmentResourceExtensionsTests
         public Task<bool> ResourceExistsAsync(string resourceId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
-        public Task DeleteResourceAsync(string resourceId, CancellationToken cancellationToken = default, string? resourceLocation = null, string? fallbackResourceLocation = null)
+        public Task DeleteResourceAsync(string resourceId, string? resourceLocation = null, string? fallbackResourceLocation = null, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
         public Task CancelDeploymentAsync(string deploymentId, CancellationToken cancellationToken = default)
@@ -5740,7 +5740,7 @@ public class AzureEnvironmentResourceExtensionsTests
         public Task<bool> ResourceExistsAsync(string resourceId, CancellationToken cancellationToken = default)
             => Task.FromResult(true);
 
-        public async Task DeleteResourceAsync(string resourceId, CancellationToken cancellationToken = default, string? resourceLocation = null, string? fallbackResourceLocation = null)
+        public async Task DeleteResourceAsync(string resourceId, string? resourceLocation = null, string? fallbackResourceLocation = null, CancellationToken cancellationToken = default)
         {
             lock (_lock)
             {
@@ -5814,7 +5814,7 @@ public class AzureEnvironmentResourceExtensionsTests
         public Task<bool> ResourceExistsAsync(string resourceId, CancellationToken cancellationToken = default)
             => Task.FromException<bool>(new global::Azure.Identity.CredentialUnavailableException("Credential unavailable."));
 
-        public Task DeleteResourceAsync(string resourceId, CancellationToken cancellationToken = default, string? resourceLocation = null, string? fallbackResourceLocation = null)
+        public Task DeleteResourceAsync(string resourceId, string? resourceLocation = null, string? fallbackResourceLocation = null, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
         public Task CancelDeploymentAsync(string deploymentId, CancellationToken cancellationToken = default)
@@ -5879,8 +5879,8 @@ public class AzureEnvironmentResourceExtensionsTests
         public Task<bool> ResourceExistsAsync(string resourceId, CancellationToken cancellationToken = default)
             => Task.FromException<bool>(exception);
 
-        public Task DeleteResourceAsync(string resourceId, CancellationToken cancellationToken = default, string? resourceLocation = null, string? fallbackResourceLocation = null)
-            => _inner.DeleteResourceAsync(resourceId, cancellationToken, resourceLocation, fallbackResourceLocation);
+        public Task DeleteResourceAsync(string resourceId, string? resourceLocation = null, string? fallbackResourceLocation = null, CancellationToken cancellationToken = default)
+            => _inner.DeleteResourceAsync(resourceId, resourceLocation, fallbackResourceLocation, cancellationToken);
 
         public Task CancelDeploymentAsync(string deploymentId, CancellationToken cancellationToken = default)
             => _inner.CancelDeploymentAsync(deploymentId, cancellationToken);
@@ -5938,10 +5938,10 @@ public class AzureEnvironmentResourceExtensionsTests
         public Task<bool> ResourceExistsAsync(string resourceId, CancellationToken cancellationToken = default)
             => Task.FromResult(string.Equals(resourceId, existingResourceId, StringComparison.OrdinalIgnoreCase));
 
-        public Task DeleteResourceAsync(string resourceId, CancellationToken cancellationToken = default, string? resourceLocation = null, string? fallbackResourceLocation = null)
+        public Task DeleteResourceAsync(string resourceId, string? resourceLocation = null, string? fallbackResourceLocation = null, CancellationToken cancellationToken = default)
             => string.Equals(resourceId, existingResourceId, StringComparison.OrdinalIgnoreCase)
                 ? Task.FromException(deleteException)
-                : _inner.DeleteResourceAsync(resourceId, cancellationToken, resourceLocation, fallbackResourceLocation);
+                : _inner.DeleteResourceAsync(resourceId, resourceLocation, fallbackResourceLocation, cancellationToken);
 
         public Task CancelDeploymentAsync(string deploymentId, CancellationToken cancellationToken = default)
             => _inner.CancelDeploymentAsync(deploymentId, cancellationToken);

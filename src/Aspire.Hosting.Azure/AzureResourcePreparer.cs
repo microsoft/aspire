@@ -4,8 +4,8 @@
 #pragma warning disable ASPIREAZURE003
 #pragma warning disable ASPIREPIPELINES002
 
-using Aspire.Hosting.ApplicationModel;
 using Aspire.Dashboard.Model;
+using Aspire.Hosting.ApplicationModel;
 using Azure.Provisioning;
 using Azure.Provisioning.Authorization;
 using Microsoft.Extensions.DependencyInjection;

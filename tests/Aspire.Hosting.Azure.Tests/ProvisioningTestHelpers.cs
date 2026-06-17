@@ -372,7 +372,7 @@ internal sealed class TestArmClient : IArmClient
         return Task.FromResult(exists);
     }
 
-    public Task DeleteResourceAsync(string resourceId, CancellationToken cancellationToken = default, string? resourceLocation = null, string? fallbackResourceLocation = null)
+    public Task DeleteResourceAsync(string resourceId, string? resourceLocation = null, string? fallbackResourceLocation = null, CancellationToken cancellationToken = default)
     {
         _existingResourceIds?.Remove(resourceId);
         _deletedResourceIds?.Add(resourceId);

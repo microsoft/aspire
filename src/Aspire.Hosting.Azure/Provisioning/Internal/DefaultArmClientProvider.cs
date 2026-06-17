@@ -213,7 +213,7 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
             }
         }
 
-        public async Task DeleteResourceAsync(string resourceId, CancellationToken cancellationToken = default, string? resourceLocation = null, string? fallbackResourceLocation = null)
+        public async Task DeleteResourceAsync(string resourceId, string? resourceLocation = null, string? fallbackResourceLocation = null, CancellationToken cancellationToken = default)
         {
             var resourceIdentifier = new ResourceIdentifier(resourceId);
             var resource = armClient.GetGenericResource(resourceIdentifier);
