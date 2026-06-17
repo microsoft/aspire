@@ -407,11 +407,6 @@ class ResourceItem extends vscode.TreeItem {
         this.description = buildResourceDescription(resource);
         this.tooltip = buildResourceTooltip(resource);
         this.contextValue = getResourceContextValue(resource);
-        
-        // Debug: Log terminal detection
-        if (resource.properties?.['terminal.enabled']) {
-            console.log(`[DEBUG] Resource "${resource.name}" has terminal.enabled = ${resource.properties['terminal.enabled']}, contextValue = ${this.contextValue}`);
-        }
     }
 }
 
