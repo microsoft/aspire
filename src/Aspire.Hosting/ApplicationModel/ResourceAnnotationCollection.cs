@@ -55,10 +55,6 @@ public sealed class ResourceAnnotationCollection : Collection<IResourceAnnotatio
             }
         }
 
-        public ImmutableArray<IResourceAnnotation> GetSnapshot() => _items;
-
-        public IResourceAnnotation[] ToArray() => [.. _items];
-
         public void Add(IResourceAnnotation item)
         {
             lock (_writeLock)
