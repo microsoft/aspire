@@ -88,12 +88,15 @@ public static class RemoteHostServer
         services.AddSingleton<CodeGeneratorResolver>();
         services.AddSingleton<LanguageSupportResolver>();
         services.AddSingleton<ExternalCapabilityRegistry>();
+        // Handles must be shared across guest and integration-host connections so external
+        // capabilities can resolve handles created by the originating guest. The tradeoff is
+        // that handle cleanup happens when the server shuts down instead of per connection.
+        services.AddSingleton<HandleRegistry>();
 
         // Scoped services
         services.AddScoped<CodeGenerationService>();
         services.AddScoped<LanguageService>();
         services.AddScoped<JsonRpcAuthenticationState>();
-        services.AddSingleton<HandleRegistry>();
         services.AddScoped<CancellationTokenRegistry>();
         services.AddScoped<JsonRpcCallbackInvoker>();
         services.AddScoped<ICallbackInvoker>(sp => sp.GetRequiredService<JsonRpcCallbackInvoker>());

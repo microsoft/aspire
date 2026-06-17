@@ -911,25 +911,17 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             var integrationName = integration.Name;
             var stdoutTask = Task.Run(async () =>
             {
-                while (!installProcess.HasExited)
+                string? line;
+                while ((line = await installProcess.StandardOutput.ReadLineAsync(cancellationToken)) is not null)
                 {
-                    var line = await installProcess.StandardOutput.ReadLineAsync(cancellationToken);
-                    if (line is null)
-                    {
-                        break;
-                    }
                     _logger.LogInformation("[npm install: {Name}] {Line}", integrationName, line);
                 }
             }, cancellationToken);
             var stderrTask = Task.Run(async () =>
             {
-                while (!installProcess.HasExited)
+                string? line;
+                while ((line = await installProcess.StandardError.ReadLineAsync(cancellationToken)) is not null)
                 {
-                    var line = await installProcess.StandardError.ReadLineAsync(cancellationToken);
-                    if (line is null)
-                    {
-                        break;
-                    }
                     _logger.LogWarning("[npm install: {Name}] {Line}", integrationName, line);
                 }
             }, cancellationToken);

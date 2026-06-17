@@ -32,7 +32,7 @@ internal static class AppHostServerAppSettingsWriter
         IEnumerable<string> atsAssemblies,
         IEnumerable<IntegrationReference> npmIntegrations)
     {
-        var assembliesJson = string.Join(",\n      ", atsAssemblies.Select(a => $"\"{a}\""));
+        var assembliesJson = string.Join(",\n      ", atsAssemblies.Select(JsonString));
 
         var integrationHostEntries = npmIntegrations
             .Where(i => i.Source == IntegrationSource.Npm)

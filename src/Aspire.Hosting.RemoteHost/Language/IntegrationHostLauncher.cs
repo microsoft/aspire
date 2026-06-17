@@ -306,13 +306,9 @@ internal sealed class IntegrationHostLauncher : IHostedService
             {
                 try
                 {
-                    while (!hostProcess.HasExited)
+                    string? line;
+                    while ((line = await hostProcess.StandardOutput.ReadLineAsync().ConfigureAwait(false)) is not null)
                     {
-                        var line = await hostProcess.StandardOutput.ReadLineAsync().ConfigureAwait(false);
-                        if (line is null)
-                        {
-                            break;
-                        }
                         _logger.LogInformation("IntegrationHost[{Name}]: {Line}", packageName, line);
                     }
                 }
@@ -325,13 +321,9 @@ internal sealed class IntegrationHostLauncher : IHostedService
             {
                 try
                 {
-                    while (!hostProcess.HasExited)
+                    string? line;
+                    while ((line = await hostProcess.StandardError.ReadLineAsync().ConfigureAwait(false)) is not null)
                     {
-                        var line = await hostProcess.StandardError.ReadLineAsync().ConfigureAwait(false);
-                        if (line is null)
-                        {
-                            break;
-                        }
                         _logger.LogWarning("IntegrationHost[{Name}]: {Line}", packageName, line);
                     }
                 }

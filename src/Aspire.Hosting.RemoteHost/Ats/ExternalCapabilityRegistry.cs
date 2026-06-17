@@ -24,7 +24,7 @@ internal sealed class ExternalCapabilityRegistry
     };
 
     private readonly ConcurrentDictionary<string, ExternalCapabilityRegistration> _capabilities = new();
-    private readonly List<JsonRpc> _integrationHosts = new();
+    private readonly ConcurrentBag<JsonRpc> _integrationHosts = new();
     private readonly ConcurrentDictionary<string, JsonRpcCallbackInvoker> _callbackOwners = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _hostRegisteredSignal = new(initialCount: 0);
     private readonly ILogger<ExternalCapabilityRegistry> _logger;

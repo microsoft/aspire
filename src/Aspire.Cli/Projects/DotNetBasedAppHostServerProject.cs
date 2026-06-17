@@ -546,7 +546,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         {
             if (e.Data is not null)
             {
-                _logger.LogInformation("AppHostServer: {Line}", e.Data);
+                _logger.LogDebug("AppHostServer: {Line}", e.Data);
                 outputCollector.AppendOutput(e.Data);
             }
         };
@@ -554,7 +554,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         {
             if (e.Data is not null)
             {
-                _logger.LogWarning("AppHostServer: {Line}", e.Data);
+                _logger.LogDebug("AppHostServer: {Line}", e.Data);
                 outputCollector.AppendError(e.Data);
             }
         };

@@ -201,8 +201,8 @@ internal sealed class JsonRpcServer : BackgroundService
         var disconnectReason = "unknown";
         using var activity = _profilingTelemetry.StartJsonRpcConnection();
 
-        // Create a DI scope for this client connection
-        // All scoped services (HandleRegistry, RemoteAppHostService, etc.) are per-client
+        // Create a DI scope for this client connection. Scoped services resolved below are
+        // per-client; singleton services such as HandleRegistry are shared across connections.
         _logger.LogDebug("Creating DI scope for client {ClientId}", clientId);
         var scope = _scopeFactory.CreateAsyncScope();
         await using var _ = scope.ConfigureAwait(false);
@@ -228,8 +228,11 @@ internal sealed class JsonRpcServer : BackgroundService
             // handler awaits a call on another connection's JsonRpc instance.
             jsonRpc.SynchronizationContext = null;
 
-            // Enable wire-level tracing for debugging
-            jsonRpc.TraceSource.Switch.Level = System.Diagnostics.SourceLevels.Verbose;
+            // Keep wire tracing quiet unless trace logging is explicitly enabled. StreamJsonRpc
+            // invokes trace listeners for every frame at Verbose, before ILogger can filter it.
+            jsonRpc.TraceSource.Switch.Level = _logger.IsEnabled(LogLevel.Trace)
+                ? System.Diagnostics.SourceLevels.Verbose
+                : System.Diagnostics.SourceLevels.Warning;
             jsonRpc.TraceSource.Listeners.Add(new JsonRpcTraceListener(_logger, clientId));
 
             // Add the shared CodeGenerationService as an additional target for generateCode method
