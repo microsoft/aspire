@@ -12,7 +12,8 @@ namespace Aspire.Cli.Projects;
 
 internal sealed class CSharpCliManagedAppHostModuleGenerator(
     IPackagingService packagingService,
-    ILogger<CSharpCliManagedAppHostModuleGenerator> logger)
+    ILogger<CSharpCliManagedAppHostModuleGenerator> logger,
+    string? nugetServiceIndexOverride = null)
 {
     internal const string ModulesDirectoryName = "modules";
     internal const string ModuleProjectFileName = "Aspire.csproj";
@@ -55,7 +56,7 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
         var integrationReferences = config
             .GetIntegrationReferences(VersionHelper.GetDefaultSdkVersion(), configDirectory.FullName)
             .ToList();
-        var restoreSources = await new IntegrationRestoreSourceResolver(packagingService, logger)
+        var restoreSources = await new IntegrationRestoreSourceResolver(packagingService, logger, nugetServiceIndexOverride)
             .ResolveAsync(config.Channel, packageSourceOverride, cancellationToken)
             .ConfigureAwait(false);
         if (restoreSources.PackageSourceMappings is not null)

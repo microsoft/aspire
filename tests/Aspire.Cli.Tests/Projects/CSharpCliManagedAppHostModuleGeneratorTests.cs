@@ -268,6 +268,40 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
     }
 
     [Fact]
+    public async Task TryGenerateAsyncUsesNuGetServiceIndexOverrideForSourceOverrideFallback()
+    {
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        var appHostFile = CreateCliManagedAppHost(workspace.WorkspaceRoot);
+        var config = new AspireConfigFile
+        {
+            SdkVersion = "13.2.0"
+        };
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => throw new InvalidOperationException("Channels should not be resolved.")
+        };
+        var generator = new CSharpCliManagedAppHostModuleGenerator(
+            packagingService,
+            NullLogger<CSharpCliManagedAppHostModuleGenerator>.Instance,
+            nugetServiceIndexOverride: "http://localhost:5400/v3/index.json");
+
+        var moduleProjectFile = await generator.TryGenerateAsync(appHostFile, config, workspace.WorkspaceRoot, packageSourceOverride: "/tmp/aspire-pr-hive/packages", CancellationToken.None);
+
+        Assert.NotNull(moduleProjectFile);
+
+        var moduleProject = XDocument.Load(moduleProjectFile.FullName);
+        var restoreConfigFile = moduleProject.Root!
+            .Element("PropertyGroup")!
+            .Element("RestoreConfigFile")!
+            .Value;
+
+        var nugetConfig = XDocument.Load(restoreConfigFile);
+        Assert.Equal(["/tmp/aspire-pr-hive/packages", "http://localhost:5400/v3/index.json"], GetPackageSources(nugetConfig));
+        Assert.Equal(["Aspire*"], GetPackagePatternsForSource(nugetConfig, "/tmp/aspire-pr-hive/packages"));
+        Assert.Equal(["*"], GetPackagePatternsForSource(nugetConfig, "http://localhost:5400/v3/index.json"));
+    }
+
+    [Fact]
     public async Task TryGenerateAsyncThrowsWhenStagingChannelIsUnavailable()
     {
         using var workspace = TemporaryWorkspace.Create(_outputHelper);

@@ -68,7 +68,7 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
         _features = features;
         _runner = runner;
         _logger = logger;
-        _cliManagedModuleGenerator = new CSharpCliManagedAppHostModuleGenerator(packagingService, cliManagedModuleGeneratorLogger);
+        _cliManagedModuleGenerator = new CSharpCliManagedAppHostModuleGenerator(packagingService, cliManagedModuleGeneratorLogger, executionContext.NuGetServiceIndexOverride);
     }
 
     public override bool CanHandle(FileInfo appHostFile)

@@ -366,7 +366,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var realDirectory = workspace.WorkspaceRoot.CreateSubdirectory("real-apphost");
         var linkDirectoryPath = Path.Combine(workspace.WorkspaceRoot.FullName, "linked-apphost");
-        TryCreateSymlink(linkDirectoryPath, realDirectory.FullName);
+        TestSymlinkHelper.TryCreateSymlink(linkDirectoryPath, realDirectory.FullName);
 
         var realCacheDirectory = IntegrationClosureBuilder.GetAppHostIntegrationCacheDirectory(realDirectory);
         var linkCacheDirectory = IntegrationClosureBuilder.GetAppHostIntegrationCacheDirectory(new DirectoryInfo(linkDirectoryPath));
@@ -2691,24 +2691,6 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             typeof(PrebuiltAppHostServer)
                 .GetField("_workingDirectory", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
                 .GetValue(server));
-    }
-
-    private static void TryCreateSymlink(string linkPath, string targetPath)
-    {
-        try
-        {
-            Directory.CreateSymbolicLink(linkPath, targetPath);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            // Creating symlinks requires additional privileges in some environments. Skip
-            // cleanly rather than failing this cache-key regression for an environment reason.
-            Assert.Skip($"Cannot create symbolic links in this environment: {ex.Message}");
-        }
-        catch (IOException ex)
-        {
-            Assert.Skip($"Symbolic link creation failed in this environment: {ex.Message}");
-        }
     }
 
     private static string GetArgumentValue(IReadOnlyList<string> arguments, string optionName)
