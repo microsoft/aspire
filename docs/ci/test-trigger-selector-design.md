@@ -330,8 +330,11 @@ Flipping `enforce` to `'true'` makes the same selector return the
 selective matrix and selective `run_<job>` outputs. The downstream gates do not
 need to change.
 
-The kill switch is wired in the same step: a `[full ci]` token in the PR body
-passes `--force-all`. Non-PR events (no base SHA at all,
+The kill switch is wired in the same step: the `run-full-ci` PR label passes
+`--force-all`. The label is read from the workflow event payload
+(`contains(github.event.pull_request.labels.*.name, 'run-full-ci')`), a snapshot —
+so adding the label takes effect on the next push (or reopen), not on a plain
+re-run of an existing run. Non-PR events (no base SHA at all,
 e.g. a push to `main`) also force the full set. A PR *with* a base SHA that
 cannot be fetched in the shallow checkout **fails the step** instead of forcing
 run-all: `base.sha` is always reachable on origin, so a fetch failure is a real
@@ -374,7 +377,7 @@ selected — the changed file (convention / path rule), the affected production
 project, the Layer 1 graph closure (with its full decision path), or the
 selected test that pulled it in via `derived_targets`. These render in both the
 step summary (verbose, with the full graph chain and the rule's reason text) and
-the sticky PR comment (terse).
+the PR comment (terse).
 
 **Selection record (`select-tests-selection.json`).** The selector writes a
 machine-readable record — mode, the reproduce inputs, the changed / excluded /
@@ -420,17 +423,23 @@ runs the full matrix and all jobs. The summary shows:
 - any `ALL` or kill-switch escalation and why;
 - unattributed changed files that may need curated rules.
 
-The sticky PR comment carries the same selection in a terser form: each test
+The PR comment carries the same selection in a terser form: each test
 project and job is listed with **every** cause that selected it (e.g. a job
 pulled in only because a test runs reads `via test <Name>`), priority-ordered
 and de-duplicated. The full per-item cause list additionally includes the rule
-`reason` text in the step summary. In audit mode the comment is advisory — the
+`reason` text in the step summary. The comment is posted **one per pushed
+commit** and links the head commit it was computed for: a re-run of the same
+commit updates that commit's comment in place (no duplicate — re-runs are
+common), a new commit posts a fresh comment at the bottom, and comments from
+superseded commits are collapsed (minimized, never deleted) so the latest
+selection surfaces at the bottom while the per-push history is preserved. In
+audit mode the comment is advisory — the
 full matrix and all jobs still run — so it is labelled "(audit mode)" and states
 that the lists are what selective CI **would** run under enforcement.
 
 Any audit run where a would-be-skipped test would have failed is a map bug,
 fixed before enforcing. Once audit data shows the skip set is consistently safe,
-flip to enforcing and keep the `[full ci]` kill switch.
+flip to enforcing and keep the `run-full-ci` kill switch.
 
 ## Verifier test
 

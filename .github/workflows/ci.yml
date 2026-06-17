@@ -71,7 +71,7 @@ jobs:
     name: Tests
     needs: [prepare_for_ci]
     # pull-requests: write is used only by tests.yml's isolated comment_selection job (which runs no
-    # PR code) to post the sticky "selected tests" comment; every job that runs PR code stays at
+    # PR code) to post the "selected tests" comment; every job that runs PR code stays at
     # contents:read. Reusable-workflow tokens are capped by the caller, so this is where the elevated
     # scope must be granted.
     permissions:

@@ -7,8 +7,8 @@ namespace Aspire.SelectTests;
 /// Options that override normal selection.
 /// </summary>
 /// <param name="ForceAll">
-/// The kill switch: a <c>[full ci]</c> token in the PR body forces the whole matrix to run
-/// regardless of which files changed.
+/// The kill switch: the <c>run-full-ci</c> PR label (or a non-PR build with no diff base) forces the
+/// whole matrix to run regardless of which files changed.
 /// </param>
 public sealed record SelectorOptions(bool ForceAll = false);
 
@@ -161,11 +161,11 @@ public sealed class TestSelector
         var selectsAll = false;
         string? reason = null;
 
-        // Kill switch: a [full ci] token forces the whole matrix regardless of which files changed.
+        // Kill switch: the run-full-ci label forces the whole matrix regardless of which files changed.
         if (options.ForceAll)
         {
             selectsAll = true;
-            reason = "kill switch: a [full ci] token forces the full matrix";
+            reason = "kill switch: the run-full-ci label forces the full matrix";
         }
 
         foreach (var file in changedFiles)

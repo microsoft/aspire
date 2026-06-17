@@ -32,15 +32,15 @@ inputs:
   commentFile:
     required: false
     default: ''
-    description: 'Where the selector writes the human-readable selection summary (also goes to the job step summary) so the caller can post it as a sticky PR comment. Empty defaults to $GITHUB_WORKSPACE/artifacts/select-tests-comment.md.'
+    description: 'Where the selector writes the human-readable selection summary (also goes to the job step summary) so the caller can post it as a PR comment. Empty defaults to $GITHUB_WORKSPACE/artifacts/select-tests-comment.md.'
   selectionJsonFile:
     required: false
     default: ''
     description: 'Where the selector writes the machine-readable selection record (mode, inputs, and every selected test/job with its per-item causes incl. the Layer 1 decision path). Uploaded as an artifact for post-hoc debugging. Empty defaults to $GITHUB_WORKSPACE/artifacts/select-tests-selection.json.'
-  prBody:
+  forceAll:
     required: false
-    default: ''
-    description: 'The PR body. Scanned for the [full ci] kill switch. Passed via env, never interpolated into the script, to avoid shell injection from a malicious PR description.'
+    default: 'false'
+    description: 'Kill switch: when ''true'' the selector returns the full matrix and all jobs regardless of the diff. The caller computes this -- on PRs from the run-full-ci label. Non-PR events (no base SHA) force the full set regardless.'
   prBaseSha:
     required: false
     default: ''
@@ -90,10 +90,8 @@ runs:
     - name: Select relevant tests
       id: select
       shell: bash
-      # Untrusted PR fields (body) are passed via env, never interpolated into the script body, to
-      # avoid shell injection from a malicious PR description.
       env:
-        PR_BODY: ${{ inputs.prBody }}
+        FORCE_ALL: ${{ inputs.forceAll }}
         PR_BASE_SHA: ${{ inputs.prBaseSha }}
         HEAD_SHA: ${{ inputs.headSha }}
         BEFORE_BUILD_PROPS: ${{ inputs.beforeBuildProps }}
@@ -121,8 +119,9 @@ runs:
         [ -n "$TRIGGER_MAP" ] && args+=(--map "$TRIGGER_MAP")
         [ "$ENFORCE_SELECTION" = "true" ] && args+=(--enforce)
 
-        # Kill switch: a [full ci] token in the PR body forces everything.
-        if printf '%s' "$PR_BODY" | grep -qiF '[full ci]'; then
+        # Kill switch: the caller sets forceAll (on PRs, from the run-full-ci label) to force the whole
+        # matrix regardless of which files changed.
+        if [ "$FORCE_ALL" = "true" ]; then
           args+=(--force-all)
         elif [ -n "$PR_BASE_SHA" ]; then
           # Pull requests diff base..head. This job's checkout is shallow, so fetch the base commit.

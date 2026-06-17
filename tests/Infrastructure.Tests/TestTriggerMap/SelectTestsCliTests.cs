@@ -61,7 +61,7 @@ public sealed class SelectTestsCliTests
     // --from/--changed-files input. Run() previously resolved changed files *before* the force-all
     // short-circuit and threw "Provide either --changed-files or --from"; the CI step then swallowed
     // that non-zero exit, silently masking a broken selector. This drives the exact path the workflow
-    // takes on the [full ci] kill switch (force-all, no diff base). Because the selection is ALL, no
+    // takes on the run-full-ci label kill switch (force-all, no diff base). Because the selection is ALL, no
     // restriction props are written even under --enforce, so enumerate-tests runs the full matrix.
     [Fact]
     public void ForceAllWithoutDiffInputsWritesNoRestrictionProps()
@@ -135,7 +135,7 @@ public sealed class SelectTestsCliTests
         });
     }
 
-    // The sticky PR comment (SELECT_TESTS_COMMENT_FILE) is the terse, scannable view: a "## Tests
+    // The PR comment (SELECT_TESTS_COMMENT_FILE) is the terse, scannable view: a "## Tests
     // selector" heading, the selected test projects, and the selected jobs -- and none of the
     // step-summary audit detail (options, changed files, would-have-skipped). Pin that so the comment
     // stays reader-friendly, and that enforcing mode omits the "(audit mode)" qualifier.

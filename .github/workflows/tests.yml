@@ -19,7 +19,7 @@ jobs:
     name: Setup for tests
     runs-on: ubuntu-latest
     # This job checks out and runs PR-authored code (SelectTests, the test build), so it is kept at
-    # contents:read with no pull-requests:write. The sticky selection comment is posted from the
+    # contents:read with no pull-requests:write. The selection comment is posted from the
     # separate comment_selection job below, which runs no PR code and holds the write scope instead.
     permissions:
       contents: read
@@ -67,7 +67,10 @@ jobs:
           checkout: 'false'
           enforce: 'false'
           commentFile: ${{ env.SELECT_TESTS_COMMENT_FILE }}
-          prBody: ${{ github.event.pull_request.body }}
+          # Kill switch: the 'run-full-ci' PR label forces the full matrix + all jobs. Read from the event
+          # payload snapshot, so adding the label takes effect on the next push (or reopen), not on a
+          # plain re-run of an existing run. Empty on non-PR events -> the action force-alls anyway.
+          forceAll: ${{ contains(github.event.pull_request.labels.*.name, 'run-full-ci') }}
           prBaseSha: ${{ github.event.pull_request.base.sha }}
           headSha: ${{ github.sha }}
 
@@ -133,11 +136,17 @@ jobs:
           $splitScript = "${{ github.workspace }}/eng/scripts/split-test-matrix-by-deps.ps1"
           & $splitScript -AllTestsMatrix $matrix -OutputToGitHubEnv
 
-  # Posts the sticky "selected tests" PR comment. Deliberately isolated from setup_for_tests: that
+  # Posts the "selected tests" PR comment. Deliberately isolated from setup_for_tests: that
   # job checks out and runs PR-authored code, so it must not hold pull-requests:write. This job runs
   # NO PR code -- it only downloads the selection-summary artifact and posts it -- so granting it the
   # write scope is least-privilege. Informational only; a token/permission hiccup (e.g. a fork PR
   # with a read-only token) must never fail CI, hence continue-on-error.
+  #
+  # One comment per pushed commit: a re-run of the same commit updates that commit's comment in place
+  # (no duplicate -- re-runs are common), a new commit posts a fresh comment at the bottom, and
+  # comments from superseded commits are collapsed (minimized, never deleted) so the timeline stays
+  # clean while the per-push history is preserved. Every comment links the head commit it was computed
+  # for, which is also the idempotency key.
   comment_selection:
     name: Comment selected tests on PR
     runs-on: ubuntu-latest
@@ -166,17 +175,66 @@ jobs:
               return;
             }
             const marker = '<!-- select-tests-comment -->';
-            const body = `${marker}\n${fs.readFileSync(file, 'utf8')}`;
             const { owner, repo } = context.repo;
             const issue_number = context.issue.number;
+            // Link the head commit the selection was computed for. On pull_request the workflow runs
+            // against an ephemeral merge ref, so prefer the PR head SHA (what the author pushed and
+            // recognizes) and fall back to context.sha otherwise. The full SHA is also the idempotency
+            // key: a comment whose body links this SHA is "the comment for this commit".
+            const sha = context.payload.pull_request?.head?.sha ?? context.sha;
+            const shortSha = sha.slice(0, 7);
+            const shaUrl = `${context.serverUrl}/${owner}/${repo}/commit/${sha}`;
+            const footer = `\n\n---\n_Selection computed for commit [\`${shortSha}\`](${shaUrl})._`;
+            const body = `${marker}\n${fs.readFileSync(file, 'utf8')}${footer}`;
+
+            // One comment per pushed commit. Re-runs of the same commit find that commit's existing
+            // comment (its body links this SHA) and update it in place -- no duplicate. A new commit
+            // matches nothing and posts a fresh comment at the bottom.
             const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
-            const existing = comments.find(c => c.body && c.body.includes(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
-              core.info(`Updated selection comment ${existing.id}.`);
+            const mine = comments.filter(c => c.body && c.body.includes(marker));
+            const current = mine.filter(c => c.body.includes(sha)).at(-1);
+            let keepId;
+            if (current) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: current.id, body });
+              keepId = current.id;
+              core.info(`Updated selection comment ${current.id} for ${shortSha}.`);
             } else {
-              await github.rest.issues.createComment({ owner, repo, issue_number, body });
-              core.info('Created selection comment.');
+              const created = await github.rest.issues.createComment({ owner, repo, issue_number, body });
+              keepId = created.data.id;
+              core.info(`Created selection comment ${created.data.id} for ${shortSha}.`);
+            }
+
+            // Collapse every other prior selection comment (superseded commits, or the legacy single
+            // sticky comment from before this per-commit logic) instead of deleting them, so the
+            // timeline stays clean but the per-push history is preserved.
+            //
+            // Only the run for the PR's CURRENT head may collapse the others. A manual re-run of an
+            // older run carries that older commit in its event payload; if it is no longer the PR head,
+            // refresh its own comment (above) but do NOT minimize -- otherwise it would collapse the
+            // newer commit's live comment. Default to "not live" if the head can't be resolved, so a
+            // transient API error never collapses the wrong comment.
+            let isLiveHead = false;
+            try {
+              const pull = await github.rest.pulls.get({ owner, repo, pull_number: issue_number });
+              isLiveHead = pull.data.head.sha === sha;
+            } catch (error) {
+              core.info(`Could not resolve PR head (${error.message}); skipping minimization.`);
+            }
+            if (isLiveHead) {
+              // minimizeComment is GraphQL-only and takes the node_id from the REST listing. Best
+              // effort: a failure (e.g. already minimized) must not fail this informational job.
+              for (const c of mine) {
+                if (c.id === keepId) {
+                  continue;
+                }
+                try {
+                  await github.graphql(
+                    `mutation($id: ID!) { minimizeComment(input: { subjectId: $id, classifier: OUTDATED }) { minimizedComment { isMinimized } } }`,
+                    { id: c.node_id });
+                } catch (error) {
+                  core.info(`Could not minimize comment ${c.id}: ${error.message}`);
+                }
+              }
             }
 
   build_packages:
