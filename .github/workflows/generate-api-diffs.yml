@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: release/13.3
+          ref: main
 
       - name: Restore and build
         run: |
@@ -40,7 +40,7 @@ jobs:
         with:
           token: ${{ steps.app-token.outputs.token }}
           branch: update-api-diffs
-          base: release/13.3
+          base: main
           labels: |
             NO-MERGE
           title: "[Automated] Update API Surface Area"

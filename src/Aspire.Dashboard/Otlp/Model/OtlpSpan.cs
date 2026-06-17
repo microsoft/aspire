@@ -241,6 +241,7 @@ public class OtlpSpan
             KnownSourceFields.NameField => span.Scope.Name,
             KnownTraceFields.NameField => span.Name,
             KnownTraceFields.DurationField => span.Duration.TotalMilliseconds.ToString("R", CultureInfo.InvariantCulture),
+            KnownTraceFields.TimestampField => (span.StartTime.ToUniversalTime().Ticks / TimeSpan.TicksPerMillisecond).ToString(CultureInfo.InvariantCulture),
             _ => span.Attributes.GetValue(field)
         };
     }

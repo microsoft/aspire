@@ -84,11 +84,15 @@
 
 @media (max-width: 768px) {
     ::deep.layout {
+        /* MobileNavMenu uses this same value to keep its scrollport within the
+           visible viewport instead of extending underneath the header at high zoom. */
+        --mobile-header-height: 52px;
+        --mobile-nav-menu-offset: 2px;
         height: 100vh;
         width: 100vw;
         display: grid;
         grid-template-columns: auto 1fr;
-        grid-template-rows: auto auto auto 1fr;
+        grid-template-rows: var(--mobile-header-height) auto auto 1fr;
         grid-template-areas:
             "icon head"
             "nav-menu nav-menu"

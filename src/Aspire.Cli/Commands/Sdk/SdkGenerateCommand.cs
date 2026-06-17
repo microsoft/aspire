@@ -5,8 +5,6 @@ using System.CommandLine;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
-using Aspire.Cli.Telemetry;
-using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Commands.Sdk;
@@ -42,13 +40,9 @@ internal sealed class SdkGenerateCommand : BaseCommand
     public SdkGenerateCommand(
         ILanguageDiscovery languageDiscovery,
         IAppHostServerProjectFactory appHostServerProjectFactory,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        IInteractionService interactionService,
         ILogger<SdkGenerateCommand> logger,
-        AspireCliTelemetry telemetry)
-        : base("generate", "Generate typed SDKs from an Aspire integration library for use in other languages.", features, updateNotifier, executionContext, interactionService, telemetry)
+        CommonCommandServices services)
+        : base("generate", "Generate typed SDKs from an Aspire integration library for use in other languages.", services)
     {
         _languageDiscovery = languageDiscovery;
         _appHostServerProjectFactory = appHostServerProjectFactory;
@@ -129,7 +123,7 @@ internal sealed class SdkGenerateCommand : BaseCommand
             var integrations = new List<IntegrationReference>();
             if (codeGenPackage is not null)
             {
-                integrations.Add(IntegrationReference.FromPackage(codeGenPackage, VersionHelper.GetDefaultTemplateVersion()));
+                integrations.Add(IntegrationReference.FromPackage(codeGenPackage, ExecutionContext.IdentityVersion));
             }
 
             // Add the integration project as a project reference
@@ -140,7 +134,7 @@ internal sealed class SdkGenerateCommand : BaseCommand
             _logger.LogDebug("Building AppHost server for SDK generation");
 
             var prepareResult = await appHostServerProject.PrepareAsync(
-                VersionHelper.GetDefaultTemplateVersion(),
+                ExecutionContext.IdentityVersion,
                 integrations,
                 cancellationToken: cancellationToken);
 

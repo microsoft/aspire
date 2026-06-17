@@ -1,14 +1,16 @@
-# Release Pipeline: Publish NuGet Packages and Promote to GA Channel
+# Release Pipeline: Publish Aspire Release Artifacts
 #
 # This pipeline automates the release process for microsoft/aspire:
 # 1. Downloads signed packages from a specified build
 # 2. Publishes packages to NuGet.org and npm
 # 3. Promotes the build to the Aspire GA channel via darc
-# 4. Submits WinGet manifests
-# 5. Dispatches the release-github-tasks GitHub Actions workflow as the
+# 4. Submits WinGet manifests and, when SkipHomebrewValidation=false,
+#    validates the Homebrew cask
+# 5. Optionally publishes the signed VS Code extension to the Marketplace
+# 6. Dispatches the release-github-tasks GitHub Actions workflow as the
 #    aspire-repo-bot GitHub App (tag, GitHub Release, merge-back PR,
 #    baseline PR) and waits for it to complete
-# 6. Uploads aspire-cli-* archives from the source build's BlobArtifacts
+# 7. Uploads aspire-cli-* archives from the source build's BlobArtifacts
 #    onto the GitHub Release as the aspire-repo-bot
 #
 # For full documentation, see: docs/release-process.md
@@ -62,21 +64,6 @@ parameters:
     type: boolean
     default: false
 
-  - name: NpmPublishOwners
-    displayName: '[Advanced] npm ESRP owner (single Microsoft alias or email; must be joperezr or ankj)'
-    type: string
-    default: 'joperezr'
-
-  - name: NpmPublishApprovers
-    displayName: '[Advanced] npm ESRP approver (single Microsoft alias or email; must differ from the owner)'
-    type: string
-    default: 'adamratzman'
-
-  - name: NpmRegistryPropagationDelayMinutes
-    displayName: '[Advanced] Minutes to wait between npm RID and pointer package submissions'
-    type: number
-    default: 10
-
   - name: SkipChannelPromotion
     displayName: '[Advanced] Skip Channel Promotion (re-run after success)'
     type: boolean
@@ -98,9 +85,32 @@ parameters:
     default: false
 
   - name: SkipHomebrewValidation
-    displayName: '[Advanced] Skip Homebrew cask validation against live GitHub release (re-run after success)'
+    displayName: '[Advanced] Skip Homebrew cask validation against live GitHub release (default; set false to opt in)'
     type: boolean
-    default: false
+    default: true
+
+  # Azure DevOps manual string parameters cannot be left blank. Keep these
+  # defaults valid for unattended queue submissions: the owners must include a
+  # required ESRP owner alias, and the approver must be a single distinct alias.
+  - name: NpmPublishOwners
+    displayName: '[Advanced] npm ESRP owner (single Microsoft alias or email; must be joperezr or ankj)'
+    type: string
+    default: 'joperezr'
+
+  - name: NpmPublishApprovers
+    displayName: '[Advanced] npm ESRP approver (single Microsoft alias or email; must differ from the owner)'
+    type: string
+    default: 'adamratzman'
+
+  - name: NpmRegistryPropagationDelayMinutes
+    displayName: '[Advanced] Minutes to wait between npm RID and pointer package submissions'
+    type: number
+    default: 10
+
+  - name: SkipVSCodeExtensionPublish
+    displayName: '[Advanced] Skip VS Code Extension Publishing'
+    type: boolean
+    default: true
 
   # Ref used when invoking `workflow_dispatch` against release-github-tasks.yml.
   # GitHub loads the workflow file *from this ref*, so it controls which version
@@ -118,7 +128,7 @@ variables:
   - template: /eng/common/templates-official/variables/pool-providers.yml@self
   - name: NPM_PUBLISH_REQUIRED_OWNERS
     value: joperezr,ankj
-  # Variable group containing secrets (VscePublishToken for future use)
+  # Variable group containing VscePublishToken for VS Code Marketplace publishing and aspire-repo-bot credentials
   # Note: NuGet publishing uses service connection 'NuGet.org - dotnet/aspire' instead of API key
   - group: Aspire-Release-Secrets
   # Variable group containing aspire-winget-bot-pat for WinGet publishing
@@ -228,6 +238,11 @@ extends:
                     displayName: 'Publish WinGet Manifests'
                     targetPath: '$(Pipeline.Workspace)/installers/winget-manifests-stable'
                     artifactName: 'winget-manifests-stable'
+                - ${{ if eq(parameters.SkipVSCodeExtensionPublish, false) }}:
+                  - output: pipelineArtifact
+                    displayName: 'Publish VS Code Extension with SBOM'
+                    targetPath: '$(Pipeline.Workspace)/vscode/aspire-vscode-extension'
+                    artifactName: 'aspire-vscode-extension'
             steps:
               - checkout: none
 
@@ -243,6 +258,7 @@ extends:
                     "${{ parameters.SkipChannelPromotion }}" -eq "true"
                   )
                   Write-Host "Installer-only mode: $installerOnlyMode"
+                  Write-Host "Skip VS Code Extension Publishing: ${{ parameters.SkipVSCodeExtensionPublish }}"
                   Write-Host "==============================="
                 displayName: 'Log Stage Info'
 
@@ -401,6 +417,11 @@ extends:
                 - download: aspire-build
                   displayName: 'Download WinGet Manifests from Source Build'
                   artifact: winget-manifests-stable
+
+              - ${{ if eq(parameters.SkipVSCodeExtensionPublish, false) }}:
+                - download: aspire-build
+                  displayName: 'Download VS Code Extension from Source Build'
+                  artifact: aspire-vscode-extension
 
               # Move artifacts to expected location for output
               - ${{ if not(and(eq(parameters.SkipNuGetPublish, true), eq(parameters.SkipChannelPromotion, true))) }}:
@@ -659,11 +680,64 @@ extends:
                   Write-Host "✓ Installer artifacts prepared"
                 displayName: 'Prepare Installer Artifacts'
 
+              - ${{ if eq(parameters.SkipVSCodeExtensionPublish, false) }}:
+                - pwsh: |
+                    $ErrorActionPreference = 'Stop'
+
+                    $sourcePath = "$(Pipeline.Workspace)/aspire-build/aspire-vscode-extension"
+                    $targetPath = "$(Pipeline.Workspace)/vscode/aspire-vscode-extension"
+
+                    if (!(Test-Path $sourcePath)) {
+                      Write-Error "VS Code extension artifact was not downloaded from source build. Expected: $sourcePath"
+                      exit 1
+                    }
+
+                    $vsixFiles = @(Get-ChildItem -Path $sourcePath -Filter "*.vsix" -Recurse -File)
+                    if ($vsixFiles.Count -ne 1) {
+                      Write-Error "Expected exactly one .vsix in '$sourcePath', found $($vsixFiles.Count)."
+                      exit 1
+                    }
+
+                    $vsix = $vsixFiles[0]
+                    $baseName = [System.IO.Path]::GetFileNameWithoutExtension($vsix.Name)
+                    $manifestPath = Join-Path $vsix.DirectoryName "$baseName.manifest"
+                    $signaturePath = Join-Path $vsix.DirectoryName "$baseName.signature.p7s"
+
+                    if (!(Test-Path $manifestPath)) {
+                      Write-Error "Missing VS Code extension manifest next to '$($vsix.FullName)': $manifestPath"
+                      exit 1
+                    }
+
+                    if (!(Test-Path $signaturePath)) {
+                      Write-Error "Missing VS Code extension signature next to '$($vsix.FullName)': $signaturePath"
+                      exit 1
+                    }
+
+                    if (!(Test-Path $targetPath)) {
+                      New-Item -ItemType Directory -Path $targetPath -Force | Out-Null
+                    }
+
+                    $files = Get-ChildItem -Path $sourcePath -Recurse -File
+                    Write-Host "Copying $($files.Count) VS Code extension artifact file(s) from $sourcePath to $targetPath"
+                    foreach ($file in $files) {
+                      $relativePath = $file.FullName.Substring($sourcePath.Length + 1)
+                      $destPath = Join-Path $targetPath $relativePath
+                      $destDir = Split-Path $destPath -Parent
+                      if (!(Test-Path $destDir)) {
+                        New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+                      }
+                      Copy-Item $file.FullName -Destination $destPath -Force
+                      Write-Host "  Copied: $relativePath"
+                    }
+
+                    Write-Host "✓ VS Code extension artifact prepared for release publishing"
+                  displayName: 'Prepare VS Code Extension Artifact'
+
       # ===== STAGE 2: RELEASE =====
-      # This releaseJob consumes the artifacts with SBOM and publishes release
-      # outputs (NuGet.org, npm, and channel promotion).
+      # This stage consumes artifacts with SBOM and publishes release outputs
+      # (NuGet.org, npm, and channel promotion).
       - stage: Release
-        displayName: 'Release to NuGet and Promote'
+        displayName: 'Release Artifacts'
         dependsOn: PrepareArtifacts
         jobs:
           - job: ReleaseJob
@@ -2041,10 +2115,183 @@ extends:
                   } else {
                     Write-Host " (validates cask against live GH release after asset upload)"
                   }
+                  Write-Host "║ VS Code Ext:    ${{ parameters.SkipVSCodeExtensionPublish }}" -NoNewline
+                  if ("${{ parameters.SkipVSCodeExtensionPublish }}" -eq "true") {
+                    Write-Host " (SKIPPED)"
+                  } else {
+                    if ("${{ parameters.DryRun }}" -eq "true") {
+                      Write-Host " (validated in dry-run)"
+                    } else {
+                      Write-Host " (publish runs after this job)"
+                    }
+                  }
                   Write-Host "╚═══════════════════════════════════════════════════════════════╝"
                   Write-Host ""
                 displayName: 'Print Summary'
                 condition: always()
+
+          # ===== VS CODE EXTENSION PUBLISHING =====
+          - job: VSCodeExtensionJob
+            displayName: 'Publish VS Code Extension to Marketplace'
+            dependsOn: ReleaseJob
+            condition: |
+              and(
+                in(dependencies.ReleaseJob.result, 'Succeeded', 'SucceededWithIssues'),
+                eq('${{ parameters.SkipVSCodeExtensionPublish }}', 'false')
+              )
+            timeoutInMinutes: 30
+            pool:
+              name: NetCore1ESPool-Internal
+              image: windows.vs2026preview.scout.amd64
+              os: windows
+            templateContext:
+              type: releaseJob
+              isProduction: true
+              # No ESRP publish runs in this job; vsce publishes directly to the VS Code Marketplace
+              # using a PAT. Skip the auto-injected MicroBuildAuthorizePublishPlugin@0 so it
+              # does not 401 against the devdiv MicroBuildToolset feed.
+              mb:
+                publish:
+                  enabled: false
+              inputs:
+                - input: pipelineArtifact
+                  artifactName: aspire-vscode-extension
+                  targetPath: '$(Pipeline.Workspace)/vscode/aspire-vscode-extension'
+            steps:
+              - task: UseNode@1
+                displayName: 'Install Node.js'
+                inputs:
+                  version: '20.x'
+
+              - pwsh: |
+                  $ErrorActionPreference = 'Stop'
+
+                  npm install -g @vscode/vsce@3.7.1 --registry https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
+                  vsce --version
+                displayName: 'Install vsce'
+
+              - pwsh: |
+                  $ErrorActionPreference = 'Stop'
+
+                  $publisher = 'microsoft-aspire'
+                  $artifactPath = "$(Pipeline.Workspace)/vscode/aspire-vscode-extension"
+                  $dryRun = [System.Convert]::ToBoolean("${{ parameters.DryRun }}")
+                  $preRelease = [System.Convert]::ToBoolean("${{ parameters.IsPrerelease }}")
+
+                  if ([string]::IsNullOrWhiteSpace($env:VSCE_PAT)) {
+                    Write-Error "VscePublishToken is empty. Update or rotate the VscePublishToken secret in the Aspire-Release-Secrets variable group before publishing the VS Code extension."
+                    exit 1
+                  }
+
+                  $vsixFiles = @(Get-ChildItem -Path $artifactPath -Filter "*.vsix" -Recurse -File)
+                  if ($vsixFiles.Count -ne 1) {
+                    Write-Error "Expected exactly one VSIX under '$artifactPath', found $($vsixFiles.Count)."
+                    exit 1
+                  }
+
+                  $vsix = $vsixFiles[0]
+                  $baseName = [System.IO.Path]::GetFileNameWithoutExtension($vsix.Name)
+                  $manifestPath = Join-Path $vsix.DirectoryName "$baseName.manifest"
+                  $signaturePath = Join-Path $vsix.DirectoryName "$baseName.signature.p7s"
+
+                  if (!(Test-Path $manifestPath)) {
+                    Write-Error "Manifest file not found: $manifestPath"
+                    exit 1
+                  }
+                  if (!(Test-Path $signaturePath)) {
+                    Write-Error "Signature file not found: $signaturePath"
+                    exit 1
+                  }
+
+                  $bytes = [System.IO.File]::ReadAllBytes($signaturePath)
+                  if ($bytes.Length -eq 0 -or $bytes[0] -ne 0x30) {
+                    $firstByte = if ($bytes.Length -gt 0) { "0x{0:X2}" -f $bytes[0] } else { "empty" }
+                    Write-Error "$baseName.signature.p7s does not appear to be signed. First byte: $firstByte (expected 0x30 for PKCS#7)."
+                    exit 1
+                  }
+
+                  Add-Type -AssemblyName System.IO.Compression.ZipFile
+                  $archive = [System.IO.Compression.ZipFile]::OpenRead($vsix.FullName)
+                  try {
+                    $vsixManifestEntry = $archive.GetEntry("extension.vsixmanifest")
+                    if ($null -eq $vsixManifestEntry) {
+                      Write-Error "VSIX package '$($vsix.FullName)' does not contain extension.vsixmanifest."
+                      exit 1
+                    }
+
+                    $reader = [System.IO.StreamReader]::new($vsixManifestEntry.Open())
+                    try {
+                      [xml]$vsixManifest = $reader.ReadToEnd()
+                    } finally {
+                      $reader.Dispose()
+                    }
+                  } finally {
+                    $archive.Dispose()
+                  }
+
+                  $manifestPreRelease = $false
+                  $preReleaseNode = $vsixManifest.SelectSingleNode("//*[local-name()='Property' and @Id='Microsoft.VisualStudio.Code.PreRelease']")
+                  if ($null -ne $preReleaseNode) {
+                    $preReleaseValue = $preReleaseNode.GetAttribute("Value").Trim().ToLowerInvariant()
+                    if ($preReleaseValue -eq "true") {
+                      $manifestPreRelease = $true
+                    } elseif ($preReleaseValue -eq "false") {
+                      $manifestPreRelease = $false
+                    } else {
+                      Write-Error "VSIX extension.vsixmanifest has invalid Microsoft.VisualStudio.Code.PreRelease value '$($preReleaseNode.GetAttribute("Value"))'. Expected 'true' or 'false'."
+                      exit 1
+                    }
+                  }
+
+                  if ($manifestPreRelease -ne $preRelease) {
+                    Write-Error "VSIX pre-release manifest flag is '$manifestPreRelease', but release pipeline IsPrerelease is '$preRelease'. Queue the source build with 'Package VS Code Extension as Pre-Release=$preRelease' or rerun this pipeline with IsPrerelease=$manifestPreRelease."
+                    exit 1
+                  }
+
+                  Write-Host "VSIX pre-release manifest flag matches IsPrerelease: $preRelease"
+
+                  Write-Host "Verifying VS Code extension signature for $($vsix.Name)..."
+                  vsce verify-signature --packagePath $vsix.FullName --manifestPath $manifestPath --signaturePath $signaturePath
+                  if ($LASTEXITCODE -ne 0) {
+                    Write-Error "Signature verification failed for $($vsix.Name)."
+                    exit 1
+                  }
+
+                  Write-Host "Verifying VS Code Marketplace PAT for publisher '$publisher'..."
+                  vsce verify-pat $publisher
+                  if ($LASTEXITCODE -ne 0) {
+                    Write-Error "PAT verification failed for publisher '$publisher'. Ensure Aspire-Release-Secrets/VscePublishToken has Marketplace: Manage scope and rotate it if it expired."
+                    exit 1
+                  }
+
+                  $publishArgs = @("publish", "--packagePath", $vsix.FullName, "--manifestPath", $manifestPath, "--signaturePath", $signaturePath)
+                  if ($preRelease) {
+                    $publishArgs += "--pre-release"
+                  }
+
+                  if ($dryRun) {
+                    Write-Host "=== DRY RUN MODE ==="
+                    Write-Host "[DRY RUN] Would run: vsce $($publishArgs -join ' ')"
+                    Write-Host "=== DRY RUN - VS Code extension was not published ==="
+                    exit 0
+                  }
+
+                  if ($preRelease) {
+                    Write-Host "Publishing $($vsix.Name) to VS Code Marketplace as PRE-RELEASE..."
+                  } else {
+                    Write-Host "Publishing $($vsix.Name) to VS Code Marketplace..."
+                  }
+
+                  vsce @publishArgs
+                  if ($LASTEXITCODE -ne 0) {
+                    Write-Error "Failed to publish $($vsix.Name)."
+                    exit 1
+                  }
+
+                  Write-Host "✓ $($vsix.Name) published successfully"
+                displayName: 'Validate and publish VS Code extension'
+                env:
+                  VSCE_PAT: $(VscePublishToken)
 
           # ===== WINGET PUBLISHING =====
           - job: WinGetJob
@@ -2111,14 +2358,15 @@ extends:
       # DryRun behavior: this stage still runs when DryRun=true. DryRun is
       # propagated to the GH workflow as dry_run=true (keeps it from
       # creating tags/releases/PRs) and to the asset script (downloads and
-      # verifies SHA512s but skips the gh release upload). HomebrewValidateJob
-      # also runs under DryRun — it does not publish anything, it only audits
-      # and `brew install`/`brew uninstall` against a public URL. If the
-      # release for the version being validated does not yet exist (DryRun,
-      # or a re-run after assets were already uploaded), the job is expected
-      # to surface that as a real failure rather than be silently skipped.
-      # This lets a release manager validate the full AzDO → GitHub path
-      # end-to-end without performing a real release.
+      # verifies SHA512s but skips the gh release upload). When
+      # SkipHomebrewValidation=false, HomebrewValidateJob also runs under DryRun
+      # — it does not publish anything, it only audits and `brew install`/
+      # `brew uninstall` against a public URL. If the release for the version
+      # being validated does not yet exist (DryRun, or a re-run after assets
+      # were already uploaded), the job is expected to surface that as a real
+      # failure rather than be silently skipped. This lets a release manager
+      # validate the full AzDO → GitHub path end-to-end without performing a
+      # real release.
       - stage: GitHubTasks
         displayName: 'Dispatch GitHub Release Tasks'
         # PrepareArtifacts is listed explicitly (in addition to Release) so the

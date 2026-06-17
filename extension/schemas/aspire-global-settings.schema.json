@@ -13,6 +13,22 @@
       "description": "Feature flags for enabling/disabling experimental or optional features. Key is feature name, value is enabled (true) or disabled (false).",
       "type": "object",
       "properties": {
+        "aspireSkillsRemoteFetchEnabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "(Preview) Allow the Aspire CLI to download the aspire-skills bundle from GitHub. When disabled (the 13.4 default), the CLI only uses the cached bundle and the embedded snapshot baked into the CLI; toggle on to opt in to the remote fetch path.",
+          "default": false
+        },
         "defaultWatchEnabled": {
           "anyOf": [
             {
@@ -27,22 +43,6 @@
             }
           ],
           "description": "Enable or disable watch mode by default when running Aspire applications for automatic restarts on file changes",
-          "default": false
-        },
-        "execCommandEnabled": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "string",
-              "enum": [
-                "true",
-                "false"
-              ]
-            }
-          ],
-          "description": "Enable or disable the 'aspire exec' command for executing commands inside running resources",
           "default": false
         },
         "experimentalPolyglot:go": {
@@ -108,6 +108,22 @@
           ],
           "description": "Enable or disable experimental Rust language support for polyglot Aspire applications",
           "default": false
+        },
+        "nugetSignatureVerificationEnabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Enable or disable defaulting the DOTNET_NUGET_SIGNATURE_VERIFICATION environment variable for spawned processes",
+          "default": true
         },
         "showAllTemplates": {
           "anyOf": [
@@ -184,8 +200,7 @@
       "description": "Package references as an object literal (like npm's package.json). Key is package name, value is version.",
       "type": "object",
       "additionalProperties": {
-        "type": "string",
-        "description": "Package version"
+        "type": "string"
       }
     },
     "sdkVersion": {

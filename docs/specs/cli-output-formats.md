@@ -427,6 +427,18 @@ The JSON form includes secret values. Do not redirect it to logs or files unless
 {
   "checks": [
     {
+      "category": "environment",
+      "name": "operating-system",
+      "status": "pass",
+      "message": "Operating system: Linux Ubuntu 24.04",
+      "metadata": {
+        "osType": "Linux",
+        "displayName": "Linux Ubuntu",
+        "version": "24.04",
+        "description": "Ubuntu 24.04.2 LTS"
+      }
+    },
+    {
       "category": "sdk",
       "name": "dotnet-sdk",
       "status": "pass",
@@ -442,7 +454,7 @@ The JSON form includes secret values. Do not redirect it to logs or files unless
     }
   ],
   "summary": {
-    "passed": 1,
+    "passed": 2,
     "warnings": 1,
     "failed": 0
   }

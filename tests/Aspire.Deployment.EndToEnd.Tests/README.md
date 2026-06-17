@@ -189,7 +189,7 @@ The following TypeScript publish paths remain type-checked by the polyglot appho
 
 ## Writing New Tests
 
-See the [Deployment E2E Testing Skill](../../.github/skills/deployment-e2e-testing/SKILL.md) for detailed patterns and guidance.
+See the [Deployment E2E Testing Skill](../../.agents/skills/deployment-e2e-testing/SKILL.md) for detailed patterns and guidance.
 
 Basic test structure:
 

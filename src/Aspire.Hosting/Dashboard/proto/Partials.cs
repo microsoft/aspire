@@ -81,7 +81,25 @@ partial class Resource
 
         foreach (var property in snapshot.Properties)
         {
-            resource.Properties.Add(new ResourceProperty { Name = property.Name, Value = property.Value, IsSensitive = property.IsSensitive });
+            var resourceProperty = new ResourceProperty
+            {
+                Name = property.Name,
+                Value = property.Value,
+                IsSensitive = property.IsSensitive,
+                IsHighlighted = property.IsHighlighted
+            };
+
+            if (!string.IsNullOrEmpty(property.DisplayName))
+            {
+                resourceProperty.DisplayName = property.DisplayName;
+            }
+
+            if (property.SortOrder is { } sortOrder)
+            {
+                resourceProperty.SortOrder = sortOrder;
+            }
+
+            resource.Properties.Add(resourceProperty);
         }
 
         foreach (var volume in snapshot.Volumes)

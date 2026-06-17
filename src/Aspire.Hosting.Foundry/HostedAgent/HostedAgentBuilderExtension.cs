@@ -6,7 +6,6 @@ using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Foundry;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting;
 
@@ -46,8 +45,8 @@ public static class HostedAgentResourceBuilderExtensions
     }
 
     // The internal AsHostedAgentForExport overload below is the polyglot-exported version of AsHostedAgent.
-    // The method name differs from AsHostedAgent to avoid C# overload ambiguity with the Action-based
-    // overload; the polyglot-facing name is set back to "asHostedAgent" via [AspireExport(MethodName)].
+    // The CLR method name differs from AsHostedAgent to avoid C# overload ambiguity with the Action-based
+    // overload, but the ATS capability name must stay "asHostedAgent" for compatibility.
     // .NET callers should keep using the Action<HostedAgentConfiguration> overload, which exposes the
     // full HostedAgentConfiguration surface (tools, content filters, container protocol versions, etc.).
 
@@ -61,7 +60,7 @@ public static class HostedAgentResourceBuilderExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="project"/> is <see langword="null"/>.</exception>
-    [AspireExport("asHostedAgentExecutable", MethodName = "asHostedAgent")]
+    [AspireExport("asHostedAgent", MethodName = "asHostedAgent")]
     internal static IResourceBuilder<T> AsHostedAgentForExport<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureCognitiveServicesProjectResource> project,
@@ -202,30 +201,41 @@ public static class HostedAgentResourceBuilderExtensions
                 path: protocol.Path,
                 displayName: "Send Message",
                 endpointName: "http",
+                commandName: "send-message",
                 commandOptions: new()
                 {
                     Method = HttpMethod.Post,
                     IconName = "ChatSparkle",
                     IconVariant = IconVariant.Regular,
                     IsHighlighted = true,
-                    PrepareRequest = async ctx =>
-                    {
-                        var interactionService = ctx.ServiceProvider.GetRequiredService<IInteractionService>();
-                        var result = await interactionService.PromptInputAsync(
-                            title: protocol.PromptTitle,
-                            message: "Enter a message to send to the agent.",
-                            inputLabel: "Message",
-                            placeHolder: "I would like to know the weather today.",
-                            cancellationToken: ctx.CancellationToken
-                        ).ConfigureAwait(true);
-                        if (result.Canceled || string.IsNullOrWhiteSpace(result.Data.Value))
+                    Arguments =
+                    [
+                        new InteractionInput
                         {
-                            ctx.HttpClient.CancelPendingRequests();
-                            throw new OperationCanceledException("User canceled the input prompt.");
+                            Name = "message",
+                            InputType = InputType.Text,
+                            Label = "Message",
+                            Required = true,
+                            Placeholder = "I would like to know the weather today.",
+                            Description = "Enter a message to send to the agent."
                         }
+                    ],
+                    ValidateArguments = ctx =>
+                    {
+                        var message = ctx.Inputs["message"];
+                        if (string.IsNullOrWhiteSpace(message.Value))
+                        {
+                            ctx.AddValidationError(message, "Message is required.");
+                        }
+
+                        return Task.CompletedTask;
+                    },
+                    PrepareRequest = ctx =>
+                    {
+                        var input = ctx.Arguments.GetString("message")!;
                         var request = ctx.Request;
-                        var input = result.Data.Value;
                         request.Content = protocol.CreateRequestContent(input);
+                        return Task.CompletedTask;
                     },
                     GetCommandResult = async ctx =>
                     {
@@ -402,6 +412,18 @@ public static class HostedAgentResourceBuilderExtensions
             throw new InvalidOperationException($"Unable to create hosted agent for resource '{resource.Name}' because it is not a container, executable, or project resource.");
         }
 
+        EnsureDefaultHostedAgentEndpoint(builder, target);
+
+        if (target is ProjectResource projectTarget)
+        {
+            // Foundry hosted agents are containerized and the platform owns the listening port contract.
+            // Keep the user's local endpoint metadata intact, but do not emit project endpoint variables
+            // such as ASPNETCORE_URLS/HTTP_PORTS because they require EndpointProperty.TargetPort, which
+            // Foundry hosted-agent deployment endpoints intentionally do not support.
+            builder.ApplicationBuilder.CreateResourceBuilder(projectTarget)
+                .WithEndpointsInEnvironment(_ => false);
+        }
+
         // The hosted agent wrapper is not the deployed workload. Apply the Foundry
         // reference to the target so its connection annotations flow into the deployment.
         builder.ApplicationBuilder.CreateResourceBuilder(target)
@@ -451,6 +473,19 @@ public static class HostedAgentResourceBuilderExtensions
 #pragma warning restore ASPIREAZURE003
     }
 
+    private static void EnsureDefaultHostedAgentEndpoint<T>(IResourceBuilder<T> builder, IResourceWithEnvironment target)
+        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
+    {
+        if (target is not IResourceWithEndpoints targetWithEndpoints ||
+            targetWithEndpoints.Annotations.OfType<EndpointAnnotation>().Any(e => string.Equals(e.Name, "http", StringComparisons.EndpointAnnotationName)))
+        {
+            return;
+        }
+
+        builder.ApplicationBuilder.CreateResourceBuilder(targetWithEndpoints)
+            .WithHttpEndpoint(name: "http", isProxied: true);
+    }
+
     private sealed class HostedAgentRunProtocol
     {
         public static HostedAgentRunProtocol Responses { get; } = new()
@@ -484,4 +519,3 @@ public static class HostedAgentResourceBuilderExtensions
         public required Func<string, HttpContent> CreateRequestContent { get; init; }
     }
 }
-

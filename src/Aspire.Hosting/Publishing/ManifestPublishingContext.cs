@@ -378,7 +378,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
                 var resourceDockerfilePath = Path.Combine(manifestDirectory, $"{container.Name}.Dockerfile");
                 var dockerfileContext = new DockerfileFactoryContext
                 {
-                    Services = ExecutionContext.ServiceProvider,
+                    Services = ExecutionContext.Services,
                     Resource = container,
                     CancellationToken = CancellationToken
                 };

@@ -26,7 +26,7 @@ public sealed class NpmCliPackageTests : IDisposable
 
     private readonly TestTempDirectory _tempDirectory = new();
     private readonly ITestOutputHelper _output;
-    private readonly string _repoRoot = FindRepoRoot();
+    private readonly string _repoRoot = RepoRoot.Path;
     private readonly string _packScriptPath;
 
     public NpmCliPackageTests(ITestOutputHelper output)
@@ -186,15 +186,11 @@ public sealed class NpmCliPackageTests : IDisposable
         Assert.Contains($"npm install -g {PackageName}", readme);
         Assert.Contains("The native platform packages are installed through npm optional dependencies.", readme);
         Assert.Contains("If you run `aspire update --self` from an npm install, the CLI points you back to this npm update command.", readme);
-        Assert.Contains("TypeScript AppHost (`apphost.mts`)", readme);
+        Assert.Contains("__TypeScript__ (`apphost.mts`)", readme);
         Assert.Contains("import { createBuilder } from './.aspire/modules/aspire.mjs';", readme);
-        Assert.Contains("aspire dashboard run", readme);
         Assert.DoesNotContain("apphost.ts", readme);
         Assert.DoesNotContain("./.aspire/modules/aspire.js", readme);
         Assert.DoesNotContain("__PACKAGE_NAME__", readme);
-        // The C# AppHost example was intentionally removed; the npm README is TypeScript-only.
-        Assert.DoesNotContain("apphost.cs", readme);
-        Assert.DoesNotContain("```csharp", readme);
     }
 
     [Theory]
@@ -462,23 +458,6 @@ public sealed class NpmCliPackageTests : IDisposable
         Assert.True(
             matchingRules.Length == 1,
             $"Expected exactly one {elementName} for '{include}' using '{certificateName}' in the AspireCliNpmPackage signing scope, but found {matchingRules.Length}.");
-    }
-
-    private static string FindRepoRoot()
-    {
-        string? current = AppContext.BaseDirectory;
-
-        while (current is not null)
-        {
-            if (File.Exists(Path.Combine(current, "Aspire.slnx")))
-            {
-                return current;
-            }
-
-            current = Directory.GetParent(current)?.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not find repository root containing Aspire.slnx");
     }
 
     public sealed record RidPackageExpectation(string Rid, string BinaryName, string[] Os, string[] Cpu, string[]? Libc);

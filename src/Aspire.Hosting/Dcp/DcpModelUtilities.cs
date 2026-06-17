@@ -150,10 +150,10 @@ internal static class DcpModelUtilities
         }
     }
 
-    private static bool TryAddLocalhostAllocatedEndpoint(ServiceWithModelResource sp, bool allowPending)
+    private static bool TryAddLocalhostAllocatedEndpoint(ServiceWithModelResource sp, bool allowPending, int? fallbackPort = null)
     {
         var svc = sp.DcpResource;
-        var allocatedPort = svc.AllocatedPort;
+        var allocatedPort = svc.AllocatedPort ?? fallbackPort;
 
         if (sp.EndpointAnnotation.AllocatedEndpoint is not null)
         {

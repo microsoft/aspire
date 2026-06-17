@@ -48,14 +48,14 @@ internal sealed class VsCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
     {
         _logger.LogDebug("Starting VS Code environment scan in directory: {WorkingDirectory}", context.WorkingDirectory.FullName);
         _logger.LogDebug("Workspace root: {RepositoryRoot}", context.RepositoryRoot.FullName);
-        
+
         _logger.LogDebug("Searching for .vscode folder...");
         var vsCodeFolder = FindVsCodeFolder(context.WorkingDirectory, context.RepositoryRoot);
 
         if (vsCodeFolder is not null)
         {
             _logger.LogDebug("Found .vscode folder at: {VsCodeFolder}", vsCodeFolder.FullName);
-            
+
             // Check if the aspire server is already configured
             if (!HasAspireServerConfigured(vsCodeFolder))
             {
@@ -79,7 +79,7 @@ internal sealed class VsCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
             var targetVsCodeFolder = new DirectoryInfo(Path.Combine(context.RepositoryRoot.FullName, VsCodeFolderName));
             _logger.LogDebug("Adding VS Code applicator for new .vscode folder at: {VsCodeFolder}", targetVsCodeFolder.FullName);
             context.AddApplicator(CreateAspireApplicator(targetVsCodeFolder));
-            
+
             // Register Playwright CLI installation applicator
             CommonAgentApplicators.AddPlaywrightCliApplicator(context, _playwrightCliInstaller, s_skillBaseDirectory);
         }

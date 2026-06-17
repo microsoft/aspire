@@ -30,7 +30,7 @@ internal sealed class ConsoleCancellationManager : IDisposable
     private readonly PosixSignalRegistration? _sigQuitRegistration;
     private readonly CancellationToken _token;
     private ILogger _logger;
-    private Task<int>? _startedHandler;
+    private Task? _startedHandler;
     private int _cancelCalled;
 
     private readonly TaskCompletionSource<int> _processTerminationCompletionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -45,7 +45,7 @@ internal sealed class ConsoleCancellationManager : IDisposable
     /// Sets the handler task that represents the currently executing command. When a termination
     /// signal arrives, the manager will wait for this task to complete within the configured timeout.
     /// </summary>
-    internal void SetStartedHandler(Task<int> handler) => Volatile.Write(ref _startedHandler, handler);
+    internal void SetStartedHandler(Task handler) => Volatile.Write(ref _startedHandler, handler);
 
     /// <summary>
     /// Sets the logger instance used for diagnostic messages during signal handling.

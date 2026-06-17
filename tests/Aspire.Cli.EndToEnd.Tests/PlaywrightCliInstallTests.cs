@@ -84,7 +84,7 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
     /// to be dropped in the CLI process's current working directory.
     /// </summary>
     [Fact]
-    public async Task AgentInit_WhenCwdDiffersFromWorkspaceRoot_PlacesSkillFilesInWorkspaceRoot()
+    public async Task AgentInit_CwdDiffersFromRoot_PlacesSkillsInWorkspaceRoot()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);

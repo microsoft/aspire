@@ -540,7 +540,7 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
         var sdksDirectory = settingsDirectory.CreateSubdirectory("sdks");
         var logsDirectory = settingsDirectory.CreateSubdirectory("logs");
 
-        return new Aspire.Cli.CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, logsDirectory, "test.log");
+        return new Aspire.Cli.CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, logsDirectory, "test.log", identityChannel: "local");
     }
 
     private static ProfilingTelemetry CreateProfilingTelemetry(params (string Key, string? Value)[] values)

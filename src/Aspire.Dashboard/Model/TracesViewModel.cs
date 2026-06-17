@@ -84,7 +84,7 @@ public class TracesViewModel
 
             var result = _telemetryRepository.GetTraces(new GetTracesRequest
             {
-                ResourceKey = ResourceKey,
+                ResourceKeys = ResourceKey is { } key ? [key] : [],
                 StartIndex = StartIndex,
                 Count = Count,
                 Filters = filters,
@@ -116,7 +116,7 @@ public class TracesViewModel
 
         var errorTraces = _telemetryRepository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = ResourceKey,
+            ResourceKeys = ResourceKey is { } key ? [key] : [],
             StartIndex = 0,
             Count = count,
             Filters = filters,

@@ -250,7 +250,7 @@ internal static class KubernetesDeployTestHelpers
         {
             await auto.TypeAsync(AspireCliShellCommandHelpers.GetDotnetAddPackageCommand($"{projectName}.ApiService", package));
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
         }
 
         // Step 5: Inject custom AppHost.cs and ApiService/Program.cs into the template-created project

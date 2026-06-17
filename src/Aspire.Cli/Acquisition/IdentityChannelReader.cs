@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Aspire.Cli.Packaging;
 
@@ -22,17 +23,12 @@ namespace Aspire.Cli.Acquisition;
 internal interface IIdentityChannelReader
 {
     /// <summary>
-    /// Returns the channel baked into the CLI assembly.
+    /// Attempts to read the channel baked into the CLI assembly.
     /// </summary>
-    /// <returns>
-    /// One of <c>stable</c>, <c>staging</c>, <c>daily</c>, <c>local</c>, or
-    /// <c>pr-&lt;N&gt;</c> (with <c>&lt;N&gt;</c> one or more ASCII digits).
-    /// </returns>
-    /// <exception cref="InvalidOperationException">
-    /// Thrown when the <c>AspireCliChannel</c> assembly metadata is missing,
-    /// empty, or does not match the accepted shape.
-    /// </exception>
-    string ReadChannel();
+    /// <param name="channel">When this method returns <see langword="true"/>, contains the resolved channel value.</param>
+    /// <param name="error">When this method returns <see langword="false"/>, contains the error message describing the failure.</param>
+    /// <returns><see langword="true"/> if the channel was successfully read; otherwise, <see langword="false"/>.</returns>
+    bool TryReadChannel([NotNullWhen(true)] out string? channel, [NotNullWhen(false)] out string? error);
 }
 
 /// <summary>
@@ -51,7 +47,7 @@ internal sealed class IdentityChannelReader : IIdentityChannelReader
     private const string PrChannelPrefix = "pr-";
 
     private readonly Assembly _assembly;
-    private readonly Lazy<string> _channel;
+    private readonly Lazy<(bool Success, string? Channel, string? Error)> _cached;
 
     /// <summary>
     /// Initializes a new instance that reads metadata from the supplied
@@ -70,48 +66,61 @@ internal sealed class IdentityChannelReader : IIdentityChannelReader
     /// <exception cref="ArgumentNullException">
     /// Thrown when <paramref name="assembly"/> is <see langword="null"/>.
     /// </exception>
-    /// <remarks>
-    /// The constructor does NOT read or validate the metadata; that is deferred
-    /// to the first <see cref="ReadChannel"/> call so DI consumers see the
-    /// validation error eagerly when they first try to read the channel rather
-    /// than at container build time. The resolved value is cached for the
-    /// lifetime of this instance via <see cref="Lazy{T}"/> with
-    /// <see cref="LazyThreadSafetyMode.ExecutionAndPublication"/> (the default),
-    /// avoiding repeated <see cref="AssemblyMetadataAttribute"/> scans under
-    /// the singleton DI registration.
-    /// </remarks>
     public IdentityChannelReader(Assembly assembly)
     {
         ArgumentNullException.ThrowIfNull(assembly);
         _assembly = assembly;
-        _channel = new Lazy<string>(ResolveChannel, LazyThreadSafetyMode.ExecutionAndPublication);
+        _cached = new Lazy<(bool, string?, string?)>(() =>
+        {
+            var success = TryResolveChannel(_assembly, out var ch, out var err);
+            return (success, ch, err);
+        }, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     /// <inheritdoc />
-    public string ReadChannel() => _channel.Value;
-
-    private string ResolveChannel()
+    public bool TryReadChannel([NotNullWhen(true)] out string? channel, [NotNullWhen(false)] out string? error)
     {
-        var metadata = _assembly
+        var result = _cached.Value;
+        channel = result.Channel;
+        error = result.Error;
+        return result.Success;
+    }
+
+    /// <summary>
+    /// Attempts to resolve the channel from the specified assembly's metadata.
+    /// </summary>
+    /// <param name="assembly">The assembly to read <c>AspireCliChannel</c> metadata from.</param>
+    /// <param name="channel">When this method returns <see langword="true"/>, contains the resolved channel value.</param>
+    /// <param name="error">When this method returns <see langword="false"/>, contains the error message describing the failure.</param>
+    /// <returns><see langword="true"/> if the channel was successfully resolved; otherwise, <see langword="false"/>.</returns>
+    private static bool TryResolveChannel(Assembly assembly, [NotNullWhen(true)] out string? channel, [NotNullWhen(false)] out string? error)
+    {
+        ArgumentNullException.ThrowIfNull(assembly);
+
+        var metadata = assembly
             .GetCustomAttributes<AssemblyMetadataAttribute>()
             .FirstOrDefault(a => string.Equals(a.Key, ChannelMetadataKey, StringComparison.Ordinal));
 
         if (metadata is null || string.IsNullOrEmpty(metadata.Value))
         {
-            throw new InvalidOperationException(
-                $"Assembly metadata '{ChannelMetadataKey}' is missing or empty on '{_assembly.GetName().Name}'. " +
-                "The CLI must be built with /p:AspireCliChannel=<channel> (one of stable, staging, daily, local, or pr-<N>).");
+            channel = null;
+            error = $"Assembly metadata '{ChannelMetadataKey}' is missing or empty on '{assembly.GetName().Name}'. " +
+                "The CLI must be built with /p:AspireCliChannel=<channel> (one of stable, staging, daily, local, or pr-<N>).";
+            return false;
         }
 
         var value = metadata.Value;
         if (!IsValidChannel(value))
         {
-            throw new InvalidOperationException(
-                $"Assembly metadata '{ChannelMetadataKey}' on '{_assembly.GetName().Name}' has invalid value '{value}'. " +
-                "Expected one of: stable, staging, daily, local, or pr-<N> where <N> is one or more ASCII digits.");
+            channel = null;
+            error = $"Assembly metadata '{ChannelMetadataKey}' on '{assembly.GetName().Name}' has invalid value '{value}'. " +
+                "Expected one of: stable, staging, daily, local, or pr-<N> where <N> is one or more ASCII digits.";
+            return false;
         }
 
-        return value;
+        channel = value;
+        error = null;
+        return true;
     }
 
     /// <summary>

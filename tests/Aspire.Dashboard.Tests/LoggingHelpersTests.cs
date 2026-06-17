@@ -209,7 +209,8 @@ public class LoggingHelpersTests
             isContainer: true);
 
         Assert.Equal(3, sink.Writes.Count);
-        var containerWrite = sink.Writes.Last();
+
+        var containerWrite = sink.Writes.ElementAt(2);
         Assert.Equal("Dashboard is running in a container. Access the dashboard from the host using port forwarding.", containerWrite.Message);
     }
 

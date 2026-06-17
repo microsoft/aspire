@@ -3,6 +3,7 @@
 
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Threading.Channels;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Model.Otlp;
@@ -45,22 +46,18 @@ internal sealed class TelemetryApiService(
         var spanFilters = new List<TelemetryFilter>();
         var searchTextFragments = ParseAndApplySearchFilters(search, spanFilters, AddSpanFiltersFromQualifiers, key => ResolveSpanFieldKey(key) is not null);
 
-        // Get spans for all resource keys
-        var allSpans = new List<OtlpSpan>();
-        foreach (var resourceKey in resourceKeys)
+        // Get spans for all resource keys (empty list means no filter / all resources)
+        var result = telemetryRepository.GetSpans(new GetSpansRequest
         {
-            var result = telemetryRepository.GetSpans(new GetSpansRequest
-            {
-                ResourceKey = resourceKey,
-                StartIndex = 0,
-                Count = int.MaxValue,
-                Filters = spanFilters,
-                TraceId = traceId,
-                HasError = hasError,
-                TextFragments = searchTextFragments
-            });
-            allSpans.AddRange(result.PagedResult.Items);
-        }
+            ResourceKeys = resourceKeys,
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters = spanFilters,
+            TraceId = traceId,
+            HasError = hasError,
+            TextFragments = searchTextFragments
+        });
+        var allSpans = result.PagedResult.Items;
 
         var totalCount = allSpans.Count;
 
@@ -102,20 +99,16 @@ internal sealed class TelemetryApiService(
         var traceFilters = new List<TelemetryFilter>();
         var searchTextFragments = ParseAndApplySearchFilters(search, traceFilters, AddSpanFiltersFromQualifiers, key => ResolveSpanFieldKey(key) is not null);
 
-        // Get traces for all resource keys
-        var allTraces = new List<OtlpTrace>();
-        foreach (var resourceKey in resourceKeys)
+        // Get traces for all resource keys (empty list means no filter / all resources)
+        var result = telemetryRepository.GetTraces(new GetTracesRequest
         {
-            var result = telemetryRepository.GetTraces(new GetTracesRequest
-            {
-                ResourceKey = resourceKey,
-                StartIndex = 0,
-                Count = int.MaxValue,
-                Filters = traceFilters,
-                TextFragments = searchTextFragments
-            });
-            allTraces.AddRange(result.PagedResult.Items);
-        }
+            ResourceKeys = resourceKeys,
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters = traceFilters,
+            TextFragments = searchTextFragments
+        });
+        var allTraces = result.PagedResult.Items;
 
         var traces = allTraces;
 
@@ -220,22 +213,17 @@ internal sealed class TelemetryApiService(
 
         var searchTextFragments = ParseAndApplySearchFilters(search, filters, AddLogFiltersFromQualifiers, key => ResolveLogFieldKey(key) is not null);
 
-        // Get logs for all resource keys
-        var allLogs = new List<OtlpLogEntry>();
-        foreach (var resourceKey in resourceKeys)
+        // Get logs for all resource keys (empty list means no filter / all resources)
+        var result = telemetryRepository.GetLogs(new GetLogsContext
         {
-            var result = telemetryRepository.GetLogs(new GetLogsContext
-            {
-                ResourceKey = resourceKey,
-                StartIndex = 0,
-                Count = int.MaxValue,
-                Filters = filters,
-                TextFragments = searchTextFragments
-            });
-            allLogs.AddRange(result.Items);
-        }
+            ResourceKeys = resourceKeys,
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters = filters,
+            TextFragments = searchTextFragments
+        });
 
-        var logs = allLogs;
+        var logs = result.Items;
 
         var totalCount = logs.Count;
 
@@ -266,18 +254,9 @@ internal sealed class TelemetryApiService(
         string? search,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        // Resolve resource keys
-        var resources = telemetryRepository.GetResources();
-        var resourceKeys = ResolveResourceKeys(resources, resourceNames);
-
-        // For streaming, if resources were specified but can't be resolved, filter everything out
-        var hasResourceFilter = resourceNames is { Length: > 0 };
-        var invalidResourceFilter = hasResourceFilter && resourceKeys is null;
-
-        if (invalidResourceFilter)
-        {
-            yield break;
-        }
+        // Resolve resource keys, waiting for the resource to appear if it doesn't exist yet.
+        // Throws OperationCanceledException if the client disconnects before the resource appears.
+        var resourceKeys = await WaitForResourceKeysAsync(resourceNames, cancellationToken).ConfigureAwait(false);
 
         // Convert structured search qualifiers into TelemetryFilter objects for per-span filtering
         List<TelemetryFilter> spanFilters = [];
@@ -286,7 +265,7 @@ internal sealed class TelemetryApiService(
         // Build the watch request with all filters pushed into the repository
         var watchRequest = new WatchSpansRequest
         {
-            ResourceKey = resourceKeys is { Count: 1 } ? resourceKeys[0] : null,
+            ResourceKeys = resourceKeys,
             Filters = spanFilters,
             TraceId = traceId,
             HasError = hasError,
@@ -296,14 +275,6 @@ internal sealed class TelemetryApiService(
         // Watch spans with filtering done inside the repository
         await foreach (var span in telemetryRepository.WatchSpansAsync(watchRequest, cancellationToken).ConfigureAwait(false))
         {
-            // Multi-resource filtering: repository only supports single ResourceKey,
-            // so for multi-resource queries we filter here.
-            if (resourceKeys is { Count: > 1 } &&
-                !resourceKeys.Any(k => k?.EqualsCompositeName(span.Source.ResourceKey.GetCompositeName()) == true))
-            {
-                continue;
-            }
-
             // Use compact JSON for NDJSON streaming (no indentation)
             yield return TelemetryExportService.ConvertSpanToJson(span, _outgoingPeerResolvers, logs: null, indent: false);
         }
@@ -320,18 +291,9 @@ internal sealed class TelemetryApiService(
         string? search,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        // Resolve resource keys
-        var resources = telemetryRepository.GetResources();
-        var resourceKeys = ResolveResourceKeys(resources, resourceNames);
-
-        // For streaming, if resources were specified but can't be resolved, filter everything out
-        var hasResourceFilter = resourceNames is { Length: > 0 };
-        var invalidResourceFilter = hasResourceFilter && resourceKeys is null;
-
-        if (invalidResourceFilter)
-        {
-            yield break;
-        }
+        // Resolve resource keys, waiting for the resource to appear if it doesn't exist yet.
+        // Throws OperationCanceledException if the client disconnects before the resource appears.
+        var resourceKeys = await WaitForResourceKeysAsync(resourceNames, cancellationToken).ConfigureAwait(false);
 
         // Build filters
         var filters = new List<TelemetryFilter>();
@@ -365,7 +327,7 @@ internal sealed class TelemetryApiService(
         // Build the watch request with all filters pushed into the repository
         var watchRequest = new WatchLogsRequest
         {
-            ResourceKey = resourceKeys is { Count: 1 } ? resourceKeys[0] : null,
+            ResourceKeys = resourceKeys,
             Filters = filters,
             TextFragments = searchTextFragments
         };
@@ -373,14 +335,6 @@ internal sealed class TelemetryApiService(
         // Watch logs with filtering done inside the repository
         await foreach (var log in telemetryRepository.WatchLogsAsync(watchRequest, cancellationToken).ConfigureAwait(false))
         {
-            // Multi-resource filtering: repository only supports single ResourceKey,
-            // so for multi-resource queries we filter here.
-            if (resourceKeys is { Count: > 1 } &&
-                !resourceKeys.Any(k => k?.EqualsCompositeName(log.ResourceView.ResourceKey.GetCompositeName()) == true))
-            {
-                continue;
-            }
-
             var otlpData = TelemetryExportService.ConvertLogsToOtlpJson([log]);
             yield return JsonSerializer.Serialize(otlpData, OtlpJsonSerializerContext.DefaultOptions);
         }
@@ -523,6 +477,7 @@ internal sealed class TelemetryApiService(
         "trace-id" or "traceid" => KnownStructuredLogFields.TraceIdField,
         "span-id" or "spanid" => KnownStructuredLogFields.SpanIdField,
         "event" => KnownStructuredLogFields.EventNameField,
+        "timestamp" => KnownStructuredLogFields.TimestampField,
         _ => null
     };
 
@@ -540,6 +495,7 @@ internal sealed class TelemetryApiService(
         "trace-id" or "traceid" => KnownTraceFields.TraceIdField,
         "span-id" or "spanid" => KnownTraceFields.SpanIdField,
         "duration" => KnownTraceFields.DurationField,
+        "timestamp" => KnownTraceFields.TimestampField,
         _ => null
     };
 
@@ -563,26 +519,63 @@ internal sealed class TelemetryApiService(
     };
 
     /// <summary>
-    /// Resolves resource names to ResourceKeys.
-    /// Returns null if any specified resource is not found.
-    /// If no resources are specified, returns a list with a single null key (no filter).
+    /// Resolves resource names to ResourceKeys, waiting for the resources to appear if they
+    /// don't exist yet. This enables streaming subscriptions started before telemetry arrives
+    /// to pick up data once the resource is first seen.
+    /// Throws OperationCanceledException if cancellation is triggered before the resources appear.
     /// </summary>
-    private static List<ResourceKey?>? ResolveResourceKeys(IReadOnlyList<OtlpResource> resources, string[]? resourceNames)
+    private async Task<List<ResourceKey>> WaitForResourceKeysAsync(string[]? resourceNames, CancellationToken cancellationToken)
     {
         if (resourceNames is null || resourceNames.Length == 0)
         {
-            // No filter - return a list with null to indicate "all resources"
-            return [null];
+            // No filter - return immediately without allocating a channel or subscription.
+            return [];
         }
 
-        var keys = new List<ResourceKey?>();
+        // Subscribe before the first check so no notification can be missed between
+        // GetResources() and the subscription registration.
+        var signal = Channel.CreateBounded<bool>(new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropOldest });
+        using var subscription = telemetryRepository.OnNewResources(() =>
+        {
+            signal.Writer.TryWrite(true);
+            return Task.CompletedTask;
+        });
+
+        while (true)
+        {
+            var resources = telemetryRepository.GetResources();
+            if (ResolveResourceKeys(resources, resourceNames) is { } result)
+            {
+                return result;
+            }
+
+            await signal.Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Resolves resource names to ResourceKeys.
+    /// Returns null if any specified resource is not found.
+    /// Returns an empty list when no resource filter is specified (meaning all resources).
+    /// </summary>
+    private static List<ResourceKey>? ResolveResourceKeys(IReadOnlyList<OtlpResource> resources, string[]? resourceNames)
+    {
+        if (resourceNames is null || resourceNames.Length == 0)
+        {
+            return [];
+        }
+
+        var keys = new List<ResourceKey>();
         foreach (var resourceName in resourceNames)
         {
             if (!AIHelpers.TryResolveResourceForTelemetry(resources, resourceName, out _, out var resourceKey))
             {
                 return null;
             }
-            keys.Add(resourceKey);
+            if (resourceKey is { } key)
+            {
+                keys.Add(key);
+            }
         }
         return keys;
     }

@@ -11,7 +11,6 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
-using AspireCliProfilingTelemetry = Aspire.Cli.Telemetry.ProfilingTelemetry;
 using Aspire.Dashboard.Utils;
 using Aspire.Hosting;
 using Aspire.Otlp.Serialization;
@@ -19,6 +18,7 @@ using Aspire.Shared;
 using Aspire.Shared.Export;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using AspireCliProfilingTelemetry = Aspire.Cli.Telemetry.ProfilingTelemetry;
 
 namespace Aspire.Cli.Profiling;
 

@@ -621,7 +621,7 @@ internal abstract record ScriptBody
             var lines = Stdout.Split('\n');
             var sb = new System.Text.StringBuilder();
             sb.AppendLine("@echo off");
-            sb.AppendLine("if not \"%~1\" == \"doctor\" exit /b 127");
+            AppendBatchContainsArgGuard(sb, "doctor");
             foreach (var line in lines)
             {
                 sb.Append("echo ").AppendLine(line.TrimEnd('\r'));
@@ -648,7 +648,7 @@ internal abstract record ScriptBody
         {
             var sb = new StringBuilder();
             sb.AppendLine("@echo off");
-            sb.AppendLine("if not \"%~1\" == \"doctor\" exit /b 127");
+            AppendBatchContainsArgGuard(sb, "doctor");
             sb.AppendLine($"powershell -NoProfile -ExecutionPolicy Bypass -Command \"[Console]::Error.Write(('x' * {ByteCount}))\"");
             sb.AppendLine($"exit /b {ExitCode}");
             return sb.ToString();
@@ -711,8 +711,10 @@ internal abstract record ScriptBody
         {
             var sb = new System.Text.StringBuilder();
             sb.AppendLine("@echo off");
-            sb.AppendLine("if \"%~1\" == \"doctor\" goto :doctor");
-            sb.AppendLine("if \"%~1\" == \"--version\" goto :version");
+            sb.AppendLine("echo %* | findstr /C:\"doctor\" > nul");
+            sb.AppendLine("if not errorlevel 1 goto :doctor");
+            sb.AppendLine("echo %* | findstr /C:\"--version\" > nul");
+            sb.AppendLine("if not errorlevel 1 goto :version");
             sb.AppendLine("exit /b 127");
             sb.AppendLine(":doctor");
             foreach (var line in DoctorStdout.Split('\n'))
@@ -803,5 +805,11 @@ internal abstract record ScriptBody
 
         var encoded = Convert.ToBase64String(Encoding.UTF8.GetBytes(stderr));
         sb.AppendLine($"powershell -NoProfile -ExecutionPolicy Bypass -Command \"$bytes=[Convert]::FromBase64String('{encoded}'); [Console]::Error.Write([Text.Encoding]::UTF8.GetString($bytes))\"");
+    }
+
+    private static void AppendBatchContainsArgGuard(StringBuilder sb, string arg)
+    {
+        sb.AppendLine($"echo %* | findstr /C:\"{arg}\" > nul");
+        sb.AppendLine("if errorlevel 1 exit /b 127");
     }
 }

@@ -112,11 +112,11 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
 
-        // Replicas get shortened GUID appended: apiservice-11111111 and apiservice-aaaaaaaa
+        // Replicas get shortened GUID appended: apiservice-55555555 and apiservice-eeeeeeee
         var logLines = outputWriter.Logs.Where(l => l.Contains("apiservice")).ToList();
         Assert.Equal(2, logLines.Count);
-        Assert.Equal($"{FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime)} INFO apiservice-11111111 Hello from replica 1", logLines[0]);
-        Assert.Equal($"{FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime.AddSeconds(1))} WARN apiservice-aaaaaaaa Slow response from replica 2", logLines[1]);
+        Assert.Equal($"{FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime)} INFO apiservice-55555555 Hello from replica 1", logLines[0]);
+        Assert.Equal($"{FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime.AddSeconds(1))} WARN apiservice-eeeeeeee Slow response from replica 2", logLines[1]);
     }
 
     [Fact]

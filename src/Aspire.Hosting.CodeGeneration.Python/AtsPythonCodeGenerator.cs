@@ -125,6 +125,10 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
     private sealed record MergedCapabilityDispatch(string AlternateCapabilityId, string DiscriminatingParamName);
     private readonly Dictionary<string, MergedCapabilityDispatch> _mergedCapabilityDispatches = new(StringComparer.Ordinal);
 
+    // Type ID of InteractionInputCollection. The by-name accessors below are hand-authored on top of the
+    // generated to_array capability so Python matches the .NET indexer and TypeScript get/value helpers.
+    private const string InteractionInputCollectionTypeId = "Aspire.Hosting/Aspire.Hosting.InteractionInputCollection";
+
     private PythonModuleBuilder _moduleBuilder = null!;
 
     // Mapping of typeId -> wrapper class name for all generated wrapper types
@@ -334,8 +338,14 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
             var capWithExtra = items.First(c => c.Parameters.Any(p => string.Equals(p.Name, extraParamName, StringComparison.Ordinal)));
             var extraParam = capWithExtra.Parameters.First(p => string.Equals(p.Name, extraParamName, StringComparison.Ordinal));
 
-            // Only merge if the extra param is required (not already optional)
-            if (extraParam.IsOptional || extraParam.IsNullable)
+            // Only merge if the extra param is required (not already optional).
+            // Never merge when the differing parameter is a callback: a callback cannot be represented as a
+            // positional tuple element, so merging would (a) change the option shape from the published
+            // `str | tuple[...]` shorthand to a TypedDict (a breaking change for the non-callback overload)
+            // and (b) require conditional capability dispatch that always registers the callback argument even
+            // when routing to the non-callback capability. Keeping the callback overload as its own separate
+            // option avoids both problems.
+            if (extraParam.IsOptional || extraParam.IsNullable || extraParam.IsCallback)
             {
                 result.AddRange(items);
                 continue;
@@ -832,7 +842,14 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
             sb.AppendLine(CultureInfo.InvariantCulture, $"class {className}(typing.TypedDict, total=False):");
             foreach (var prop in dtoType.Properties)
             {
-                var propType = MapDtoPropertyTypeToPython(prop.Type);
+                // Callback-typed DTO properties carry the same CallbackParameters/CallbackReturnType
+                // metadata as method parameters, so render the strongly-typed Callable signature
+                // (e.g. typing.Callable[[InputsDialogValidationContext], None]) instead of a bare
+                // typing.Callable. The runtime marshaller already registers callables embedded in
+                // DTO dicts, so no serialization change is needed.
+                var propType = prop.IsCallback
+                    ? GenerateCallbackTypeSignature(prop.CallbackParameters, prop.CallbackReturnType)
+                    : MapDtoPropertyTypeToPython(prop.Type);
                 sb.AppendLine(CultureInfo.InvariantCulture, $"    {prop.Name}: {propType}");
             }
             sb.AppendLine();
@@ -1054,6 +1071,45 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         {
             GenerateTypeClassMethod(sb, method);
         }
+
+        if (string.Equals(model.TypeId, InteractionInputCollectionTypeId, StringComparison.Ordinal))
+        {
+            EmitInteractionInputCollectionAccessors(sb);
+        }
+    }
+
+    private static void EmitInteractionInputCollectionAccessors(System.Text.StringBuilder sb)
+    {
+        sb.AppendLine("    def get(self, name: str) -> InteractionInput | None:");
+        sb.AppendLine("        \"\"\"Get the input with the specified name, or None if no input matches.\"\"\"");
+        sb.AppendLine("        lookup_name = name.lower()");
+        sb.AppendLine("        for interaction_input in self.to_array():");
+        sb.AppendLine("            input_name = interaction_input.get(\"Name\")");
+        sb.AppendLine("            if input_name is not None and input_name.lower() == lookup_name:");
+        sb.AppendLine("                return interaction_input");
+        sb.AppendLine("        return None");
+        sb.AppendLine();
+
+        sb.AppendLine("    def required(self, name: str) -> InteractionInput:");
+        sb.AppendLine("        \"\"\"Get the input with the specified name, or raise ValueError if no input matches.\"\"\"");
+        sb.AppendLine("        interaction_input = self.get(name)");
+        sb.AppendLine("        if interaction_input is None:");
+        sb.AppendLine("            raise ValueError(f\"no input with name '{name}' was found\")");
+        sb.AppendLine("        return interaction_input");
+        sb.AppendLine();
+
+        sb.AppendLine("    def value(self, name: str) -> str:");
+        sb.AppendLine("        \"\"\"Get the input value with the specified name, or an empty string if no input matches.\"\"\"");
+        sb.AppendLine("        interaction_input = self.get(name)");
+        sb.AppendLine("        if interaction_input is None:");
+        sb.AppendLine("            return \"\"");
+        sb.AppendLine("        return interaction_input.get(\"Value\") or \"\"");
+        sb.AppendLine();
+
+        sb.AppendLine("    def required_value(self, name: str) -> str:");
+        sb.AppendLine("        \"\"\"Get the input value with the specified name, or raise ValueError if no input matches.\"\"\"");
+        sb.AppendLine("        return self.required(name).get(\"Value\") or \"\"");
+        sb.AppendLine();
     }
 
     /// <summary>

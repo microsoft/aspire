@@ -8,6 +8,7 @@ using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Otlp.Serialization;
 using Google.Protobuf.Collections;
+using Microsoft.AspNetCore.InternalTesting;
 using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
@@ -26,10 +27,9 @@ public class TelemetryApiServiceTests
         AddSpans(repository, count: 5);
 
         var service = CreateService(repository);
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
 
         var receivedItems = new List<string>();
-        await foreach (var item in service.FollowSpansAsync(null, null, null, null, cancellationToken: cts.Token))
+        await foreach (var item in service.FollowSpansAsync(null, null, null, null).DefaultTimeout())
         {
             receivedItems.Add(item);
             if (receivedItems.Count >= 5)
@@ -48,10 +48,9 @@ public class TelemetryApiServiceTests
         AddLogs(repository, ["log1", "log2", "log3", "log4", "log5"]);
 
         var service = CreateService(repository);
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
 
         var receivedItems = new List<string>();
-        await foreach (var item in service.FollowLogsAsync(null, null, null, null, cts.Token))
+        await foreach (var item in service.FollowLogsAsync(null, null, null, null, default).DefaultTimeout())
         {
             receivedItems.Add(item);
             if (receivedItems.Count >= 5)
@@ -87,17 +86,16 @@ public class TelemetryApiServiceTests
         AddSpans(repository, count: 1);
 
         var service = CreateService(repository);
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
 
         var receivedItems = new List<string>();
         try
         {
-            await foreach (var item in service.FollowSpansAsync(["nonexistent-service"], null, null, null, cancellationToken: cts.Token))
+            await foreach (var item in service.FollowSpansAsync(["nonexistent-service"], null, null, null).DefaultTimeout())
             {
                 receivedItems.Add(item);
             }
         }
-        catch (OperationCanceledException)
+        catch (TimeoutException)
         {
         }
 
@@ -111,17 +109,16 @@ public class TelemetryApiServiceTests
         AddLogs(repository, ["log1"]);
 
         var service = CreateService(repository);
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
 
         var receivedItems = new List<string>();
         try
         {
-            await foreach (var item in service.FollowLogsAsync(["nonexistent-service"], null, null, null, cts.Token))
+            await foreach (var item in service.FollowLogsAsync(["nonexistent-service"], null, null, null, default).DefaultTimeout())
             {
                 receivedItems.Add(item);
             }
         }
-        catch (OperationCanceledException)
+        catch (TimeoutException)
         {
         }
 
@@ -169,10 +166,9 @@ public class TelemetryApiServiceTests
         ]);
 
         var service = CreateService(repository);
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
 
         var receivedItems = new List<string>();
-        await foreach (var streamedItem in service.FollowSpansAsync(null, "7472616", null, null, cancellationToken: cts.Token))
+        await foreach (var streamedItem in service.FollowSpansAsync(null, "7472616", null, null).DefaultTimeout())
         {
             receivedItems.Add(streamedItem);
             break;
@@ -540,6 +536,166 @@ public class TelemetryApiServiceTests
         Assert.Equal(1, result.ReturnedCount);
     }
 
+    [Fact]
+    public void GetSpans_WithTimestampGreaterThan_FiltersCorrectly()
+    {
+        var repository = CreateRepository();
+        // Spans at s_testTime+1min, +2min, +3min
+        AddSpans(repository, count: 3);
+
+        var service = CreateService(repository);
+
+        // Filter for spans after s_testTime+1.5min (should return spans at +2min and +3min)
+        var cutoff = s_testTime.AddMinutes(1).AddSeconds(30).ToString("O");
+        var result = service.GetSpans(resourceNames: null, traceId: null, hasError: null, limit: null, search: $"timestamp:>{cutoff}");
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result.ReturnedCount);
+    }
+
+    [Fact]
+    public void GetSpans_WithTimestampLessThan_FiltersCorrectly()
+    {
+        var repository = CreateRepository();
+        // Spans at s_testTime+1min, +2min, +3min
+        AddSpans(repository, count: 3);
+
+        var service = CreateService(repository);
+
+        // Filter for spans before s_testTime+2.5min (should return spans at +1min and +2min)
+        var cutoff = s_testTime.AddMinutes(2).AddSeconds(30).ToString("O");
+        var result = service.GetSpans(resourceNames: null, traceId: null, hasError: null, limit: null, search: $"timestamp:<{cutoff}");
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result.ReturnedCount);
+    }
+
+    [Fact]
+    public void GetSpans_WithTimestampGreaterThanOrEqual_FiltersCorrectly()
+    {
+        var repository = CreateRepository();
+        // Spans at s_testTime+1min, +2min, +3min
+        AddSpans(repository, count: 3);
+
+        var service = CreateService(repository);
+
+        // Filter for spans at or after exactly s_testTime+2min (should return spans at +2min and +3min)
+        var cutoff = s_testTime.AddMinutes(2).ToString("O");
+        var result = service.GetSpans(resourceNames: null, traceId: null, hasError: null, limit: null, search: $"timestamp:>={cutoff}");
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result.ReturnedCount);
+    }
+
+    [Fact]
+    public void GetLogs_WithTimestampGreaterThan_FiltersCorrectly()
+    {
+        var repository = CreateRepository();
+        // Logs at s_testTime, +1min, +2min
+        AddLogs(repository, ["log1", "log2", "log3"]);
+
+        var service = CreateService(repository);
+
+        // Filter for logs after s_testTime+0.5min (should return logs at +1min and +2min)
+        var cutoff = s_testTime.AddSeconds(30).ToString("O");
+        var result = service.GetLogs(resourceNames: null, traceId: null, severity: null, limit: null, search: $"timestamp:>{cutoff}");
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result.ReturnedCount);
+    }
+
+    [Fact]
+    public void GetSpans_WithTimestampInvalidDate_ReturnsNoResults()
+    {
+        var repository = CreateRepository();
+        AddSpans(repository, count: 3);
+
+        var service = CreateService(repository);
+
+        // Invalid date string should not match anything
+        var result = service.GetSpans(resourceNames: null, traceId: null, hasError: null, limit: null, search: "timestamp:>not-a-date");
+
+        Assert.NotNull(result);
+        Assert.Equal(0, result.ReturnedCount);
+    }
+
+    [Fact]
+    public void GetSpans_WithTimestampUtcSuffix_TreatedAsUtc()
+    {
+        var repository = CreateRepository();
+        // Spans at s_testTime+1min, +2min, +3min (s_testTime is 1970-01-01T00:00:00Z)
+        AddSpans(repository, count: 3);
+
+        var service = CreateService(repository);
+
+        // A timestamp ending in Z is UTC and should not be adjusted.
+        // s_testTime+1.5min = 1970-01-01T00:01:30Z — should match spans at +2min and +3min
+        var result = service.GetSpans(resourceNames: null, traceId: null, hasError: null, limit: null, search: "timestamp:>1970-01-01T00:01:30Z");
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result.ReturnedCount);
+    }
+
+    [Fact]
+    public void GetSpans_WithTimestampNoTimezone_TreatedAsLocalTime()
+    {
+        var repository = CreateRepository();
+        // Spans at s_testTime+1min, +2min, +3min (s_testTime is 1970-01-01T00:00:00Z)
+        AddSpans(repository, count: 3);
+
+        var service = CreateService(repository);
+
+        // A timestamp without Z or offset is treated as local time and converted to UTC.
+        // Compute what local time corresponds to s_testTime+1.5min UTC so the filter matches the same spans.
+        var utcCutoff = s_testTime.AddMinutes(1).AddSeconds(30);
+        var localCutoff = utcCutoff.ToLocalTime();
+        var localString = localCutoff.ToString("yyyy-MM-dd'T'HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+
+        var result = service.GetSpans(resourceNames: null, traceId: null, hasError: null, limit: null, search: $"timestamp:>{localString}");
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result.ReturnedCount);
+    }
+
+    [Fact]
+    public void GetSpans_WithTimestampOffset_AdjustedToUtc()
+    {
+        var repository = CreateRepository();
+        // Spans at s_testTime+1min, +2min, +3min (s_testTime is 1970-01-01T00:00:00Z)
+        AddSpans(repository, count: 3);
+
+        var service = CreateService(repository);
+
+        // A timestamp with an explicit offset is adjusted to UTC.
+        // 1970-01-01T01:01:30+01:00 = 1970-01-01T00:01:30Z — should match spans at +2min and +3min
+        var result = service.GetSpans(resourceNames: null, traceId: null, hasError: null, limit: null, search: "timestamp:>1970-01-01T01:01:30+01:00");
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result.ReturnedCount);
+    }
+
+    [Fact]
+    public void GetSpans_WithTimestampDateOnly_FiltersCorrectly()
+    {
+        var repository = CreateRepository();
+        // Create spans on two different days: 1970-01-01 and 1970-01-02
+        AddSpansToRepository(repository, [
+            CreateSpan(traceId: "trace1", spanId: "span1", startTime: new DateTime(1970, 1, 1, 12, 0, 0, DateTimeKind.Utc), endTime: new DateTime(1970, 1, 1, 12, 1, 0, DateTimeKind.Utc))
+        ]);
+        AddSpansToRepository(repository, [
+            CreateSpan(traceId: "trace2", spanId: "span2", startTime: new DateTime(1970, 1, 2, 12, 0, 0, DateTimeKind.Utc), endTime: new DateTime(1970, 1, 2, 12, 1, 0, DateTimeKind.Utc))
+        ]);
+
+        var service = CreateService(repository);
+
+        // A date-only string (no time component) should be parsed as midnight UTC and filter correctly.
+        // "1970-01-02" = midnight 1970-01-02 UTC — only the span on 1970-01-02 has a start time >= that.
+        var result = service.GetSpans(resourceNames: null, traceId: null, hasError: null, limit: null, search: "timestamp:>=1970-01-02");
+
+        Assert.NotNull(result);
+        Assert.Equal(1, result.ReturnedCount);
+    }
+
     /// <summary>
     /// Adds spans with sequential trace/span IDs to the repository. Each span is added in a separate
     /// AddTraces call so that it gets its own trace entry.
@@ -643,6 +799,50 @@ public class TelemetryApiServiceTests
             .SelectMany(rs => rs.ScopeSpans ?? [])
             .SelectMany(ss => ss.Spans ?? [])
             .ToList() ?? [];
+    }
+
+    [Fact]
+    public async Task FollowSpansAsync_WaitsForResourceToAppear_ThenStreams()
+    {
+        var repository = CreateRepository(subscriptionMinExecuteInterval: TimeSpan.Zero);
+        var service = CreateService(repository);
+
+        // Start enumerating - MoveNextAsync will block until data arrives.
+        var enumerator = service.FollowSpansAsync(["service1"], null, null, null).GetAsyncEnumerator();
+        var moveNextTask = enumerator.MoveNextAsync();
+
+        // The task should not complete yet because the resource doesn't exist.
+        Assert.False(moveNextTask.IsCompleted);
+
+        // Now add spans for the resource - this should unblock the stream.
+        AddSpans(repository, count: 1);
+
+        Assert.True(await moveNextTask.DefaultTimeout());
+        Assert.NotNull(enumerator.Current);
+
+        await enumerator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task FollowLogsAsync_WaitsForResourceToAppear_ThenStreams()
+    {
+        var repository = CreateRepository(subscriptionMinExecuteInterval: TimeSpan.Zero);
+        var service = CreateService(repository);
+
+        // Start enumerating - MoveNextAsync will block until data arrives.
+        var enumerator = service.FollowLogsAsync(["service1"], null, null, null, default).GetAsyncEnumerator();
+        var moveNextTask = enumerator.MoveNextAsync();
+
+        // The task should not complete yet because the resource doesn't exist.
+        Assert.False(moveNextTask.IsCompleted);
+
+        // Now add logs for the resource - this should unblock the stream.
+        AddLogs(repository, ["hello"]);
+
+        Assert.True(await moveNextTask.DefaultTimeout());
+        Assert.NotNull(enumerator.Current);
+
+        await enumerator.DisposeAsync();
     }
 
     // SpanId is serialized as lowercase hex per the OTLP/JSON spec

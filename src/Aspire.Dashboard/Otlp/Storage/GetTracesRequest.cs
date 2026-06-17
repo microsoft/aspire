@@ -7,7 +7,7 @@ namespace Aspire.Dashboard.Otlp.Storage;
 
 public sealed class GetTracesRequest
 {
-    public required ResourceKey? ResourceKey { get; init; }
+    public required IReadOnlyList<ResourceKey> ResourceKeys { get; init; }
     public required int StartIndex { get; init; }
     public required int Count { get; init; }
     public required List<TelemetryFilter> Filters { get; init; }
@@ -16,7 +16,7 @@ public sealed class GetTracesRequest
 
     public static GetTracesRequest ForResourceKey(ResourceKey resourceKey) => new()
     {
-        ResourceKey = resourceKey,
+        ResourceKeys = [resourceKey],
         StartIndex = 0,
         Count = int.MaxValue,
         Filters = []

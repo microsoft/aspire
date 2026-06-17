@@ -10,8 +10,6 @@ using System.Text.Json.Serialization;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
-using Aspire.Cli.Telemetry;
-using Aspire.Cli.Utils;
 using Aspire.Shared.Json;
 using Microsoft.Extensions.Logging;
 using Semver;
@@ -57,13 +55,9 @@ internal sealed class SdkDumpCommand : BaseCommand
 
     public SdkDumpCommand(
         IAppHostServerProjectFactory appHostServerProjectFactory,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        IInteractionService interactionService,
         ILogger<SdkDumpCommand> logger,
-        AspireCliTelemetry telemetry)
-        : base("dump", "Dump ATS capabilities from Aspire integration libraries.", features, updateNotifier, executionContext, interactionService, telemetry)
+        CommonCommandServices services)
+        : base("dump", "Dump ATS capabilities from Aspire integration libraries.", services)
     {
         _appHostServerProjectFactory = appHostServerProjectFactory;
         _logger = logger;
@@ -179,7 +173,7 @@ internal sealed class SdkDumpCommand : BaseCommand
             _logger.LogDebug("Building AppHost server for capability scanning with {Count} integrations", integrations.Count);
 
             var prepareResult = await appHostServerProject.PrepareAsync(
-                VersionHelper.GetDefaultTemplateVersion(),
+                ExecutionContext.IdentityVersion,
                 integrations,
                 cancellationToken: cancellationToken);
 
@@ -278,7 +272,7 @@ internal sealed class SdkDumpCommand : BaseCommand
             _logger.LogDebug("Building AppHost server for batched capability scanning with {Count} integrations", integrations.Count);
 
             var prepareResult = await appHostServerProject.PrepareAsync(
-                VersionHelper.GetDefaultTemplateVersion(),
+                ExecutionContext.IdentityVersion,
                 integrations,
                 cancellationToken: cancellationToken);
 
