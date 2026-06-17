@@ -71,8 +71,11 @@ public sealed class OllamaIntegrationTests(ITestOutputHelper output)
         }
 
         // Step 5: Enable crash diagnostics so the native stack trace is captured if the AppHost segfaults.
+        // Write crash reports to the workspace logs directory so they get captured on failure.
+        var crashDir = Path.Combine(workspace.WorkspaceRoot.FullName, ProjectName, "crash");
+        await auto.RunCommandAsync($"mkdir -p {crashDir}", counter);
         await auto.RunCommandAsync(
-            "export DOTNET_EnableCrashReport=1 DOTNET_DbgEnableMiniDump=1 DOTNET_DbgMiniDumpType=1 COREHOST_TRACE=1",
+            $"export DOTNET_EnableCrashReport=1 DOTNET_DbgEnableMiniDump=1 DOTNET_DbgMiniDumpType=1 DOTNET_DbgMiniDumpName={crashDir}/coredump.%p",
             counter);
 
         // Step 6: Start the AppHost and verify it comes up successfully
