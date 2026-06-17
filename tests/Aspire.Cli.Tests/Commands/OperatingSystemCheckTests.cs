@@ -18,8 +18,8 @@ public class OperatingSystemCheckTests
 
         var result = Assert.Single(await check.CheckAsync(TestContext.Current.CancellationToken));
 
-        Assert.Equal("environment", result.Category);
-        Assert.Equal("operating-system", result.Name);
+        Assert.Equal(EnvironmentCheckCategories.Environment, result.Category);
+        Assert.Equal(OperatingSystemCheck.CheckName, result.Name);
         Assert.Equal(EnvironmentCheckStatus.Pass, result.Status);
         Assert.Equal("Operating system: Linux Ubuntu 24.04", result.Message);
         Assert.NotNull(result.Metadata);

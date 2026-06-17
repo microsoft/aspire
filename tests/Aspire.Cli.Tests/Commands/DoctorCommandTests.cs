@@ -47,8 +47,8 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 };
             });
 
-        var cliVersionCheck = GetCheckByName(doc, "cli-version");
-        Assert.Equal("aspire", cliVersionCheck.GetProperty("category").GetString());
+        var cliVersionCheck = GetCheckByName(doc, AspireVersionCheck.CliVersionCheckName);
+        Assert.Equal(EnvironmentCheckCategories.Aspire, cliVersionCheck.GetProperty("category").GetString());
         Assert.Equal("warning", cliVersionCheck.GetProperty("status").GetString());
         Assert.Contains("13.0.0", cliVersionCheck.GetProperty("message").GetString()!);
         Assert.Contains("13.1.0", cliVersionCheck.GetProperty("message").GetString()!);
@@ -68,8 +68,8 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 options.CliUpdateNotifierFactory = _ => new TestCliUpdateNotifier();
             });
 
-        var osCheck = GetCheckByName(doc, "operating-system");
-        Assert.Equal("environment", osCheck.GetProperty("category").GetString());
+        var osCheck = GetCheckByName(doc, OperatingSystemCheck.CheckName);
+        Assert.Equal(EnvironmentCheckCategories.Environment, osCheck.GetProperty("category").GetString());
         Assert.Equal("pass", osCheck.GetProperty("status").GetString());
         Assert.StartsWith("Operating system: ", osCheck.GetProperty("message").GetString(), StringComparison.Ordinal);
         var metadata = osCheck.GetProperty("metadata");
@@ -95,7 +95,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 options.CliUpdateNotifierFactory = _ => new TestCliUpdateNotifier();
             });
 
-        var osCheck = GetCheckByName(doc, "operating-system");
+        var osCheck = GetCheckByName(doc, OperatingSystemCheck.CheckName);
         var metadata = osCheck.GetProperty("metadata");
         var expectedDisplayName = GetExpectedLinuxDisplayName(name);
 
@@ -176,8 +176,8 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 };
             });
 
-        var appHostVersionCheck = GetCheckByName(doc, "apphost-version");
-        Assert.Equal("apphost", appHostVersionCheck.GetProperty("category").GetString());
+        var appHostVersionCheck = GetCheckByName(doc, AspireVersionCheck.AppHostVersionCheckName);
+        Assert.Equal(EnvironmentCheckCategories.AppHost, appHostVersionCheck.GetProperty("category").GetString());
         Assert.Equal("pass", appHostVersionCheck.GetProperty("status").GetString());
         Assert.Contains("13.0.0", appHostVersionCheck.GetProperty("message").GetString()!);
         Assert.Contains("AppHost.csproj", appHostVersionCheck.GetProperty("message").GetString()!);
@@ -225,8 +225,8 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
 
         Assert.False(runnerCalled);
 
-        var appHostVersionCheck = GetCheckByName(doc, "apphost-version");
-        Assert.Equal("apphost", appHostVersionCheck.GetProperty("category").GetString());
+        var appHostVersionCheck = GetCheckByName(doc, AspireVersionCheck.AppHostVersionCheckName);
+        Assert.Equal(EnvironmentCheckCategories.AppHost, appHostVersionCheck.GetProperty("category").GetString());
         Assert.Equal("pass", appHostVersionCheck.GetProperty("status").GetString());
         Assert.Contains("13.1.0", appHostVersionCheck.GetProperty("message").GetString()!);
         Assert.Contains("apphost.ts", appHostVersionCheck.GetProperty("message").GetString()!);
@@ -259,7 +259,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
 
         Assert.False(versionLookupCalled);
         Assert.DoesNotContain(doc.RootElement.GetProperty("checks").EnumerateArray(),
-            check => check.GetProperty("name").GetString() == "apphost-version");
+            check => check.GetProperty("name").GetString() == AspireVersionCheck.AppHostVersionCheckName);
     }
 
     [Fact]
@@ -287,7 +287,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
 
         Assert.False(versionLookupCalled);
         Assert.DoesNotContain(doc.RootElement.GetProperty("checks").EnumerateArray(),
-            check => check.GetProperty("name").GetString() == "apphost-version");
+            check => check.GetProperty("name").GetString() == AspireVersionCheck.AppHostVersionCheckName);
     }
 
     [Fact]
@@ -313,7 +313,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
             });
 
         Assert.DoesNotContain(doc.RootElement.GetProperty("checks").EnumerateArray(),
-            check => check.GetProperty("name").GetString() == "apphost-version");
+            check => check.GetProperty("name").GetString() == AspireVersionCheck.AppHostVersionCheckName);
     }
 
     [Fact]
@@ -340,7 +340,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
 
         Assert.False(versionLookupCalled);
         Assert.DoesNotContain(doc.RootElement.GetProperty("checks").EnumerateArray(),
-            check => check.GetProperty("name").GetString() == "apphost-version");
+            check => check.GetProperty("name").GetString() == AspireVersionCheck.AppHostVersionCheckName);
     }
 
     [Fact]
@@ -363,8 +363,8 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 };
             });
 
-        var cliVersionCheck = GetCheckByName(doc, "cli-version");
-        var appHostVersionCheck = GetCheckByName(doc, "apphost-version");
+        var cliVersionCheck = GetCheckByName(doc, AspireVersionCheck.CliVersionCheckName);
+        var appHostVersionCheck = GetCheckByName(doc, AspireVersionCheck.AppHostVersionCheckName);
 
         Assert.Equal("pass", cliVersionCheck.GetProperty("status").GetString());
         Assert.Equal("warning", appHostVersionCheck.GetProperty("status").GetString());
@@ -389,8 +389,8 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 };
             });
 
-        var cliVersionCheck = GetCheckByName(doc, "cli-version");
-        var appHostVersionCheck = GetCheckByName(doc, "apphost-version");
+        var cliVersionCheck = GetCheckByName(doc, AspireVersionCheck.CliVersionCheckName);
+        var appHostVersionCheck = GetCheckByName(doc, AspireVersionCheck.AppHostVersionCheckName);
 
         Assert.Equal("pass", cliVersionCheck.GetProperty("status").GetString());
         Assert.Equal("warning", appHostVersionCheck.GetProperty("status").GetString());
@@ -423,8 +423,8 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 };
             });
 
-        var appHostVersionCheck = GetCheckByName(doc, "apphost-version");
-        Assert.Equal("apphost", appHostVersionCheck.GetProperty("category").GetString());
+        var appHostVersionCheck = GetCheckByName(doc, AspireVersionCheck.AppHostVersionCheckName);
+        Assert.Equal(EnvironmentCheckCategories.AppHost, appHostVersionCheck.GetProperty("category").GetString());
         Assert.Equal("pass", appHostVersionCheck.GetProperty("status").GetString());
         Assert.Contains("13.2.0", appHostVersionCheck.GetProperty("message").GetString()!);
         Assert.Contains("AppHost.csproj", appHostVersionCheck.GetProperty("message").GetString()!);
@@ -456,7 +456,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 services.AddSingleton<IIdentityChannelReader>(_ => new FakeIdentityChannelReader("staging"));
             });
 
-        var cliVersionCheck = GetCheckByName(doc, "cli-version");
+        var cliVersionCheck = GetCheckByName(doc, AspireVersionCheck.CliVersionCheckName);
         var metadata = cliVersionCheck.GetProperty("metadata");
         Assert.Equal("staging", metadata.GetProperty("identityChannel").GetString());
         Assert.Contains("channel: staging", cliVersionCheck.GetProperty("message").GetString()!);
@@ -482,7 +482,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
             });
 
         // The channel lookup failing is informational; the rest of doctor should still complete.
-        var cliVersionCheck = GetCheckByName(doc, "cli-version");
+        var cliVersionCheck = GetCheckByName(doc, AspireVersionCheck.CliVersionCheckName);
         var metadata = cliVersionCheck.GetProperty("metadata");
         Assert.False(metadata.TryGetProperty("identityChannel", out _));
         Assert.DoesNotContain("channel:", cliVersionCheck.GetProperty("message").GetString()!);
@@ -512,7 +512,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 };
             });
 
-        var appHostVersionCheck = GetCheckByName(doc, "apphost-version");
+        var appHostVersionCheck = GetCheckByName(doc, AspireVersionCheck.AppHostVersionCheckName);
         var metadata = appHostVersionCheck.GetProperty("metadata");
         Assert.Equal("daily", metadata.GetProperty("pinnedChannel").GetString());
         Assert.Contains("channel: daily", appHostVersionCheck.GetProperty("message").GetString()!);
@@ -546,7 +546,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 };
             });
 
-        var appHostVersionCheck = GetCheckByName(doc, "apphost-version");
+        var appHostVersionCheck = GetCheckByName(doc, AspireVersionCheck.AppHostVersionCheckName);
         var metadata = appHostVersionCheck.GetProperty("metadata");
         Assert.Equal("daily", metadata.GetProperty("pinnedChannel").GetString());
         Assert.Contains("channel: daily", appHostVersionCheck.GetProperty("message").GetString()!);
@@ -571,7 +571,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 };
             });
 
-        var appHostVersionCheck = GetCheckByName(doc, "apphost-version");
+        var appHostVersionCheck = GetCheckByName(doc, AspireVersionCheck.AppHostVersionCheckName);
         var metadata = appHostVersionCheck.GetProperty("metadata");
         Assert.False(metadata.TryGetProperty("pinnedChannel", out _));
         Assert.DoesNotContain("channel:", appHostVersionCheck.GetProperty("message").GetString()!);
@@ -604,7 +604,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 services.AddSingleton<IIdentityChannelReader>(_ => new FakeIdentityChannelReader("local"));
             });
 
-        var cliVersionCheck = GetCheckByName(doc, "cli-version");
+        var cliVersionCheck = GetCheckByName(doc, AspireVersionCheck.CliVersionCheckName);
 
         // Both channels surface in metadata.
         var metadata = cliVersionCheck.GetProperty("metadata");

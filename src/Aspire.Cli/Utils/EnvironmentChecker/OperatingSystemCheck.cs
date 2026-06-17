@@ -13,6 +13,8 @@ namespace Aspire.Cli.Utils.EnvironmentChecker;
 /// </summary>
 internal sealed class OperatingSystemCheck : IEnvironmentCheck
 {
+    internal const string CheckName = "operating-system";
+
     private readonly Func<OperatingSystemDetails> _getOperatingSystemDetails;
 
     public OperatingSystemCheck()
@@ -36,8 +38,8 @@ internal sealed class OperatingSystemCheck : IEnvironmentCheck
         var details = _getOperatingSystemDetails();
         var result = new EnvironmentCheckResult
         {
-            Category = "environment",
-            Name = "operating-system",
+            Category = EnvironmentCheckCategories.Environment,
+            Name = CheckName,
             Status = details.Type.Equals("Unknown", StringComparison.OrdinalIgnoreCase)
                 ? EnvironmentCheckStatus.Warning
                 : EnvironmentCheckStatus.Pass,
