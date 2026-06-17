@@ -181,17 +181,16 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
 
             var lookup = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(certificate.Thumbprint)));
             var cacheDirectory = Path.Combine(homePath, ".aspire", "dev-certs", "https");
-            var sessionDirectory = Path.Combine(homePath, "session");
             Directory.CreateDirectory(cacheDirectory);
-            Directory.CreateDirectory(sessionDirectory);
+            var certificatePath = Path.Combine(cacheDirectory, $"{lookup}.crt");
             var keyPath = Path.Combine(cacheDirectory, $"{lookup}.key");
             File.WriteAllText(keyPath, "cached key");
 
-            var paths = DcpDeveloperCertificateCache.TryPrepareCertificateFilePaths(certificate, sessionDirectory);
+            var paths = DcpDeveloperCertificateCache.TryPrepareCertificateFilePaths(certificate);
 
             Assert.NotNull(paths);
-            Assert.Equal(Path.Combine(sessionDirectory, "dcp-dev-cert.crt"), paths.Value.CertificatePath);
-            Assert.Equal(certificate.ExportCertificatePem(), File.ReadAllText(paths.Value.CertificatePath));
+            Assert.Equal(certificatePath, paths.Value.CertificatePath);
+            Assert.Equal(certificate.ExportCertificatePem(), File.ReadAllText(certificatePath));
             Assert.Equal(keyPath, paths.Value.KeyPath);
         }, homeDirectory.Path, options).Dispose();
     }

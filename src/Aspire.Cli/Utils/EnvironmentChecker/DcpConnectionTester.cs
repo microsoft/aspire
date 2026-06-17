@@ -404,7 +404,7 @@ internal sealed class DcpConnectionTester(
                     return;
                 }
 
-                var cachedPaths = DcpDeveloperCertificateCache.TryPrepareCertificateFilePaths(certificate, sessionDirectory);
+                var cachedPaths = DcpDeveloperCertificateCache.TryPrepareCertificateFilePaths(certificate);
                 var (certificatePath, keyPath) = cachedPaths is null
                     ? ExportDeveloperCertificate(certificateManager, certificate, sessionDirectory)
                     : (cachedPaths.Value.CertificatePath, cachedPaths.Value.KeyPath);
@@ -463,7 +463,7 @@ internal sealed class DcpDeveloperCertificateUnavailableException(string message
 
 internal static class DcpDeveloperCertificateCache
 {
-    public static DcpDeveloperCertificateCachePaths? TryPrepareCertificateFilePaths(X509Certificate2 certificate, string sessionDirectory)
+    public static DcpDeveloperCertificateCachePaths? TryPrepareCertificateFilePaths(X509Certificate2 certificate)
     {
         if (!certificate.IsAspNetCoreDevelopmentCertificate() || string.IsNullOrWhiteSpace(certificate.Thumbprint))
         {
@@ -487,13 +487,10 @@ internal static class DcpDeveloperCertificateCache
         }
 
         var certificatePath = Path.Combine(cacheDirectory, $"{lookup}.crt");
-        if (File.Exists(certificatePath))
+        if (!File.Exists(certificatePath))
         {
-            return new DcpDeveloperCertificateCachePaths(certificatePath, keyPath);
+            File.WriteAllText(certificatePath, certificate.ExportCertificatePem());
         }
-
-        certificatePath = Path.Combine(sessionDirectory, "dcp-dev-cert.crt");
-        File.WriteAllText(certificatePath, certificate.ExportCertificatePem());
 
         return new DcpDeveloperCertificateCachePaths(certificatePath, keyPath);
     }
