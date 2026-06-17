@@ -79,6 +79,9 @@ ignore:
   - eng/scripts/debug-*.ps1                             # debug-aspire-channel/stable/staging: local channel-switch helpers
   - eng/scripts/debug-*.sh
   - eng/scripts/validate-cli-symbols.ps1                # AzDO native-AOT symbol publish validation; no GH-CI consumer
+  # Schedule-only workflows that regenerate API/ATS surface baselines; no PR-CI path.
+  - .github/workflows/generate-api-diffs.yml
+  - .github/workflows/generate-ats-diffs.yml
   # NOTE: src/Shared/**/*.cs and tests/Shared/**/*.cs are deliberately NOT ignored -- Layer 1 attributes
   # them to their consuming projects and the run-all fallback treats any attributed file as owned, so
   # they are selected precisely without an entry. **/*.md and other no-CI files are dropped by
@@ -205,18 +208,6 @@ path_rules:
       - eng/scripts/cli-starter-validation.ps1
     targets: [job:cli-starter]
     reason: Windows starter-app smoke installing the PR CLI via dogfood script; Cli/TypeSystem/Managed production projects are in affected_project_rules
-  - paths:
-      - src/**/*.csproj
-      - src/**/api/*.cs
-      - .github/workflows/generate-api-diffs.yml
-    targets: [job:api-diffs]
-    reason: SCHEDULE-ONLY today; regenerates src/*/api/*.cs reference baselines
-  - paths:
-      - src/Aspire.Hosting*/api/*.ats.txt
-      - src/**/*.tscompat.suppression.txt
-      - .github/workflows/generate-ats-diffs.yml
-    targets: [job:ats-diffs]
-    reason: SCHEDULE-ONLY today; regenerates *.ats.txt; Hosting/Cli production projects are in affected_project_rules
   - paths:
       - tests/Aspire.Deployment.EndToEnd.Tests/**
       - src/Aspire.ProjectTemplates/**
@@ -353,9 +344,6 @@ affected_project_rules:
   - projects: [Aspire.Cli, Aspire.TypeSystem, Aspire.Managed]
     targets: [job:cli-starter]
     reason: Windows starter-app smoke installing the PR CLI via dogfood script
-  - projects: [Aspire.Hosting*, Aspire.Cli]
-    targets: [job:ats-diffs]
-    reason: SCHEDULE-ONLY today; regenerates *.ats.txt via `aspire sdk dump`
   - projects: [Aspire.Hosting.Azure*, Aspire.Cli, Aspire.TypeSystem, Aspire.Managed]
     targets: [job:deployment-e2e]
     reason: SCHEDULE/DISPATCH-ONLY today; deploys generated apps to Azure
