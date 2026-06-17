@@ -222,8 +222,11 @@
     <value>TLS authentication failed: {0}</value>
     <comment>{0} is the TLS authentication error message.</comment>
   </data>
-  <data name="DcpConnectionFailedMessage" xml:space="preserve">
-    <value>Developer Control Plane (DCP) connection failed</value>
+  <data name="DcpEphemeralCertificateConnectionFailedMessage" xml:space="preserve">
+    <value>Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate failed</value>
+  </data>
+  <data name="DcpDeveloperCertificateConnectionFailedMessage" xml:space="preserve">
+    <value>Developer Control Plane (DCP) connection using the developer certificate failed</value>
   </data>
   <data name="DcpStartFailedMessage" xml:space="preserve">
     <value>Failed to start Developer Control Plane (DCP).</value>

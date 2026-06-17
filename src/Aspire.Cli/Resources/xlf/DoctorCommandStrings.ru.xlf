@@ -107,15 +107,15 @@
         <target state="new">Failed to check Developer Control Plane (DCP) connection health</target>
         <note />
       </trans-unit>
-      <trans-unit id="DcpConnectionFailedMessage">
-        <source>Developer Control Plane (DCP) connection failed</source>
-        <target state="new">Developer Control Plane (DCP) connection failed</target>
-        <note />
-      </trans-unit>
       <trans-unit id="DcpConnectionTimedOutMessageFormat">
         <source>Timed out after {0} seconds while checking Developer Control Plane (DCP) connection health.</source>
         <target state="new">Timed out after {0} seconds while checking Developer Control Plane (DCP) connection health.</target>
         <note>{0} is the timeout in seconds.</note>
+      </trans-unit>
+      <trans-unit id="DcpDeveloperCertificateConnectionFailedMessage">
+        <source>Developer Control Plane (DCP) connection using the developer certificate failed</source>
+        <target state="new">Developer Control Plane (DCP) connection using the developer certificate failed</target>
+        <note />
       </trans-unit>
       <trans-unit id="DcpDeveloperCertificateConnectionSucceededMessage">
         <source>Developer Control Plane (DCP) connection using the developer certificate succeeded</source>
@@ -155,6 +155,11 @@
       <trans-unit id="DcpDeveloperCertificateUserProfileMissingDetails">
         <source>The developer certificate could not be cached because the user profile directory could not be determined.</source>
         <target state="new">The developer certificate could not be cached because the user profile directory could not be determined.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpEphemeralCertificateConnectionFailedMessage">
+        <source>Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate failed</source>
+        <target state="new">Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate failed</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpEphemeralCertificateConnectionSucceededMessage">

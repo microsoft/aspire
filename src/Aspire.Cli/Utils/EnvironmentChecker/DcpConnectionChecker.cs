@@ -63,7 +63,7 @@ internal sealed class DcpConnectionChecker(
             {
                 return Failed(
                     useDeveloperCertificate,
-                    string.Format(
+                    details: string.Format(
                         CultureInfo.CurrentCulture,
                         DoctorCommandStrings.DcpApiServerReturnedHttpStatusMessageFormat,
                         (int)response.StatusCode,
@@ -80,15 +80,14 @@ internal sealed class DcpConnectionChecker(
         {
             throw;
         }
-        catch (OperationCanceledException ex)
+        catch (OperationCanceledException)
         {
             return Failed(
                 useDeveloperCertificate,
-                string.Format(
+                details: string.Format(
                     CultureInfo.CurrentCulture,
                     DoctorCommandStrings.DcpConnectionTimedOutMessageFormat,
-                    s_connectionTimeout.TotalSeconds),
-                ex.Message);
+                    s_connectionTimeout.TotalSeconds));
         }
         catch (DcpDeveloperCertificateUnavailableException ex)
         {
@@ -103,17 +102,16 @@ internal sealed class DcpConnectionChecker(
         {
             return Failed(
                 useDeveloperCertificate,
-                DoctorCommandStrings.DcpConnectionFailedMessage,
-                string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DcpTlsAuthenticationFailedDetailsFormat, ex.Message),
+                details: string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DcpTlsAuthenticationFailedDetailsFormat, ex.Message),
                 useDeveloperCertificate ? DoctorCommandStrings.DcpDeveloperCertificateRepairTrustFix : null);
         }
         catch (HttpRequestException ex)
         {
-            return Failed(useDeveloperCertificate, DoctorCommandStrings.DcpConnectionFailedMessage, ex.Message);
+            return Failed(useDeveloperCertificate, details: ex.Message);
         }
         catch (Exception ex)
         {
-            return Failed(useDeveloperCertificate, DoctorCommandStrings.DcpConnectionFailedMessage, ex.Message);
+            return Failed(useDeveloperCertificate, details: ex.Message);
         }
     }
 
@@ -167,8 +165,15 @@ internal sealed class DcpConnectionChecker(
     private static EnvironmentCheckResult Passed(bool useDeveloperCertificate, string message) =>
         CreateResult(useDeveloperCertificate, EnvironmentCheckStatus.Pass, message);
 
-    private static EnvironmentCheckResult Failed(bool useDeveloperCertificate, string message, string? details = null, string? fix = null) =>
-        CreateResult(useDeveloperCertificate, EnvironmentCheckStatus.Fail, message, details, fix);
+    private static EnvironmentCheckResult Failed(bool useDeveloperCertificate, string? details = null, string? fix = null) =>
+        CreateResult(
+            useDeveloperCertificate,
+            EnvironmentCheckStatus.Fail,
+            useDeveloperCertificate
+                ? DoctorCommandStrings.DcpDeveloperCertificateConnectionFailedMessage
+                : DoctorCommandStrings.DcpEphemeralCertificateConnectionFailedMessage,
+            details,
+            fix);
 
     private static EnvironmentCheckResult CreateResult(bool useDeveloperCertificate, EnvironmentCheckStatus status, string message, string? details = null, string? fix = null)
     {

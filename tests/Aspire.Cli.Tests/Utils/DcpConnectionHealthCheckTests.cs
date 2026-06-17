@@ -130,6 +130,7 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
         var result = await TestRealDcpConnectionAsync(useDeveloperCertificate: false);
 
         Assert.Equal(EnvironmentCheckStatus.Pass, result.Status);
+        Assert.Contains("ephemeral DCP-managed certificate", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -142,6 +143,7 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
             result.Status == EnvironmentCheckStatus.Warning,
             result.Details ?? result.Message);
         Assert.Equal(EnvironmentCheckStatus.Pass, result.Status);
+        Assert.Contains("developer certificate", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]
