@@ -554,28 +554,10 @@ internal sealed class DcpKubeconfig : IDisposable
             return [X509CertificateLoader.LoadCertificate(bytes)];
         }
 
-        var certificates = new List<X509Certificate2>();
-        var startIndex = 0;
-        while (true)
-        {
-            var beginIndex = text.IndexOf("-----BEGIN CERTIFICATE-----", startIndex, StringComparison.Ordinal);
-            if (beginIndex < 0)
-            {
-                break;
-            }
+        var certificates = new X509Certificate2Collection();
+        certificates.ImportFromPem(text);
 
-            var endIndex = text.IndexOf("-----END CERTIFICATE-----", beginIndex, StringComparison.Ordinal);
-            if (endIndex < 0)
-            {
-                throw new InvalidOperationException("DCP kubeconfig contained an incomplete PEM certificate.");
-            }
-
-            endIndex += "-----END CERTIFICATE-----".Length;
-            certificates.Add(X509Certificate2.CreateFromPem(text.AsSpan(beginIndex, endIndex - beginIndex)));
-            startIndex = endIndex;
-        }
-
-        return certificates;
+        return certificates.OfType<X509Certificate2>().ToList();
     }
 
     private static X509Certificate2 LoadClientCertificate(string certificateData, string keyData)
