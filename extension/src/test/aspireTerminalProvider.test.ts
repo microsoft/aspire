@@ -215,6 +215,33 @@ suite('AspireTerminalProvider tests', () => {
             }
         });
 
+        test('creates a new editor terminal when terminalTarget is editor', async () => {
+            resolveCliPathStub.resolves({ cliPath: 'aspire', available: true, source: 'path' });
+            const createdTerminal = {
+                shellIntegration: {
+                    executeCommand: () => ({} as vscode.TerminalShellExecution)
+                },
+                sendText: () => { },
+                show: () => { },
+                dispose: () => { },
+            } as unknown as vscode.Terminal;
+            const createTerminalStub = sinon.stub(vscode.window, 'createTerminal').returns(createdTerminal);
+            const sharedTerminalStub = sinon.stub(terminalProvider, 'getAspireTerminal');
+
+            try {
+                await terminalProvider.sendAspireCommandToAspireTerminal('logs', true, undefined, { terminalTarget: 'editor' });
+
+                assert.strictEqual(sharedTerminalStub.called, false);
+                assert.strictEqual(createTerminalStub.calledOnce, true);
+                const options = createTerminalStub.firstCall.args[0] as vscode.TerminalOptions;
+                assert.strictEqual(options.location, vscode.TerminalLocation.Editor);
+            }
+            finally {
+                createTerminalStub.restore();
+                sharedTerminalStub.restore();
+            }
+        });
+
         test('quotes Windows CLI path with PowerShell escaping', async () => {
             const platformStub = sinon.stub(process, 'platform').value('win32');
             const cliPath = 'C:\\Tools\\$(bad)\\`bin\\aspire.exe';

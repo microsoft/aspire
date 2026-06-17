@@ -338,6 +338,12 @@
         "icon": "$(output)"
       },
       {
+        "command": "aspire-vscode.openResourceTerminal",
+        "title": "%command.openResourceTerminal%",
+        "category": "Aspire",
+        "icon": "$(terminal)"
+      },
+      {
         "command": "aspire-vscode.executeResourceCommand",
         "title": "%command.executeResourceCommand%",
         "category": "Aspire",
@@ -554,6 +560,10 @@
           "when": "false"
         },
         {
+          "command": "aspire-vscode.openResourceTerminal",
+          "when": "false"
+        },
+        {
           "command": "aspire-vscode.executeResourceCommand",
           "when": "false"
         },
@@ -728,14 +738,19 @@
           "group": "3_info@1"
         },
         {
+          "command": "aspire-vscode.openResourceTerminal",
+          "when": "view == aspire-vscode.appHosts && viewItem =~ /^resource.*:canOpenTerminal/",
+          "group": "1_open@1"
+        },
+        {
           "command": "aspire-vscode.openInExternalBrowser",
           "when": "view == aspire-vscode.appHosts && viewItem == endpointUrl",
-          "group": "1_open@1"
+          "group": "1_open@2"
         },
         {
           "command": "aspire-vscode.openInIntegratedBrowser",
           "when": "view == aspire-vscode.appHosts && viewItem == endpointUrl",
-          "group": "1_open@2"
+          "group": "1_open@3"
         },
         {
           "command": "aspire-vscode.copyEndpointUrl",

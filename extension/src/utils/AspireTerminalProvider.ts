@@ -15,6 +15,7 @@ export const enum AnsiColors {
     Blue = '\x1b[34m',
 }
 
+
 export interface AspireTerminal {
     terminal: vscode.Terminal;
     dispose: () => void;
@@ -22,6 +23,7 @@ export interface AspireTerminal {
 
 export interface SendAspireCommandOptions {
     redactAdditionalArgs?: boolean;
+    terminalTarget?: 'shared' | 'editor';
 }
 
 // String parts are fixed CLI syntax and are validated before interpolation.
@@ -169,13 +171,16 @@ export class AspireTerminalProvider implements vscode.Disposable {
             logCommand = `${baseCommand} ${logArgs.join(' ')}`;
         }
         const executionSuppressed = isE2eTerminalCommandExecutionSuppressed();
+        const terminalTarget = options?.terminalTarget ?? 'shared';
         let aspireTerminal: AspireTerminal | undefined;
         let executionMode: AspireTerminalCommandEvent['executionMode'];
         if (executionSuppressed) {
             executionMode = 'suppressed';
         }
         else {
-            aspireTerminal = this.getAspireTerminal();
+            aspireTerminal = terminalTarget === 'editor'
+                ? this.createAspireEditorTerminal()
+                : this.getAspireTerminal();
             executionMode = aspireTerminal.terminal.shellIntegration ? 'shellIntegration' : 'sendText';
         }
         this._onDidSendAspireCommand.fire({
@@ -227,18 +232,7 @@ export class AspireTerminalProvider implements vscode.Disposable {
         }
 
         extensionLogOutputChannel.info(`Creating new Aspire terminal`);
-        const terminalOptions: vscode.TerminalOptions = {
-            name: terminalName,
-            env: this.createEnvironment(),
-        };
-        if (process.platform === 'win32') {
-            // quoteShellArg uses PowerShell escaping on Windows. Do not rely on the
-            // user's default terminal profile because cmd.exe treats backticks as
-            // ordinary characters and would make quoted values containing " shell-sensitive again.
-            terminalOptions.shellPath = this.getWindowsPowerShellPath();
-        }
-
-        const terminal = vscode.window.createTerminal(terminalOptions);
+        const terminal = this.createTerminal();
 
         const aspireTerminal: AspireTerminal = {
             terminal,
@@ -251,6 +245,31 @@ export class AspireTerminalProvider implements vscode.Disposable {
         this._terminalByDebugSessionId.set(null, aspireTerminal);
 
         return aspireTerminal;
+    }
+
+    createAspireEditorTerminal(): AspireTerminal {
+        extensionLogOutputChannel.info('Creating Aspire editor terminal');
+        const terminal = this.createTerminal(vscode.TerminalLocation.Editor);
+        return {
+            terminal,
+            dispose: () => terminal.dispose(),
+        };
+    }
+
+    private createTerminal(location?: vscode.TerminalLocation): vscode.Terminal {
+        const terminalOptions: vscode.TerminalOptions = {
+            name: aspireTerminalName,
+            env: this.createEnvironment(),
+            location,
+        };
+        if (process.platform === 'win32') {
+            // quoteShellArg uses PowerShell escaping on Windows. Do not rely on the
+            // user's default terminal profile because cmd.exe treats backticks as
+            // ordinary characters and would make quoted values containing " shell-sensitive again.
+            terminalOptions.shellPath = this.getWindowsPowerShellPath();
+        }
+
+        return vscode.window.createTerminal(terminalOptions);
     }
 
     createEnvironment(debugSessionId?: string, noDebug?: boolean, noExtensionVariables?: boolean): any {

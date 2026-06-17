@@ -528,8 +528,11 @@ suite('AspireAppHostTreeProvider', () => {
             await provider.viewResourceLogs(resourceItem as any);
             proof.run(commandLines[1], ['logs', resourceName, '--apphost', appHostPath]);
 
+            await provider.openResourceTerminal(resourceItem as any);
+            proof.run(commandLines[2], ['terminal', 'attach', resourceName, '--apphost', appHostPath]);
+
             await provider.restartResource(resourceItem as any);
-            proof.run(commandLines[2], ['resource', resourceName, 'restart', '--apphost', appHostPath]);
+            proof.run(commandLines[3], ['resource', resourceName, 'restart', '--apphost', appHostPath]);
         }
         finally {
             provider.dispose();
@@ -575,8 +578,11 @@ suite('AspireAppHostTreeProvider', () => {
             await provider.viewResourceLogs(resourceItem as any);
             proof.runPowerShell(commandLines[1], ['logs', resourceName, '--apphost', appHostPath], powerShellPath);
 
+            await provider.openResourceTerminal(resourceItem as any);
+            proof.runPowerShell(commandLines[2], ['terminal', 'attach', resourceName, '--apphost', appHostPath], powerShellPath);
+
             await provider.restartResource(resourceItem as any);
-            proof.runPowerShell(commandLines[2], ['resource', resourceName, 'restart', '--apphost', appHostPath], powerShellPath);
+            proof.runPowerShell(commandLines[3], ['resource', resourceName, 'restart', '--apphost', appHostPath], powerShellPath);
         }
         finally {
             platformStub.restore();
@@ -613,6 +619,7 @@ suite('AspireAppHostTreeProvider', () => {
 
             await assert.rejects(() => provider.stopAppHost(workspaceItem as any), { message: terminalCommandArgumentControlCharacters });
             await assert.rejects(() => provider.viewResourceLogs(resourceItem as any), { message: terminalCommandArgumentControlCharacters });
+            await assert.rejects(() => provider.openResourceTerminal(resourceItem as any), { message: terminalCommandArgumentControlCharacters });
             await assert.rejects(() => provider.restartResource(resourceItem as any), { message: terminalCommandArgumentControlCharacters });
 
             assert.deepStrictEqual(commandLines, []);
@@ -1274,6 +1281,23 @@ suite('getResourceContextValue', () => {
             },
         }));
         assert.strictEqual(result, 'resource:canRestart');
+    });
+
+    test('resource with terminal enabled property includes terminal context', () => {
+        const result = getResourceContextValue(makeResource({
+            properties: { 'terminal.enabled': 'true' },
+        }));
+        assert.strictEqual(result, 'resource:canOpenTerminal');
+    });
+
+    test('resource with lifecycle and terminal properties includes both contexts', () => {
+        const result = getResourceContextValue(makeResource({
+            commands: {
+                'restart': { displayName: null, description: null, state: 'Enabled' },
+            },
+            properties: { 'terminal.enabled': 'true' },
+        }));
+        assert.strictEqual(result, 'resource:canRestart:canOpenTerminal');
     });
 
     test('resource with disabled lifecycle command has base context only', () => {
@@ -2033,10 +2057,12 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         const resourceItem = provider.getChildren(resourcesGroup)[0];
 
         provider.viewResourceLogs(resourceItem as any);
+        provider.openResourceTerminal(resourceItem as any);
         provider.restartResource(resourceItem as any);
 
         assert.deepStrictEqual(commands, [
             ['logs', shellArg('cache'), '--apphost', shellArg(otherHostPath)],
+            ['terminal', 'attach', shellArg('cache-b'), '--apphost', shellArg(otherHostPath)],
             ['resource', shellArg('cache-b'), shellArg('restart'), '--apphost', shellArg(otherHostPath)],
         ]);
         provider.dispose();
@@ -2072,11 +2098,54 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         const resourceItem = provider.getChildren(runningAppHostItem)[0];
 
         provider.viewResourceLogs(resourceItem as any);
+        provider.openResourceTerminal(resourceItem as any);
         provider.restartResource(resourceItem as any);
 
         assert.deepStrictEqual(commands, [
             ['logs', shellArg('cache'), '--apphost', shellArg(runningHostPath)],
+            ['terminal', 'attach', shellArg('cache'), '--apphost', shellArg(runningHostPath)],
             ['resource', shellArg('cache'), shellArg('restart'), '--apphost', shellArg(runningHostPath)],
+        ]);
+        provider.dispose();
+    });
+
+    test('openResourceTerminal adds replica when terminal metadata includes index', async () => {
+        const commands: AspireSubcommand[] = [];
+        const appHostPath = '/repo/apps/Store/AppHost.csproj';
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        const repository = {
+            viewMode: 'workspace' as ViewMode,
+            appHosts: [],
+            workspaceResources: [],
+            workspaceAppHost: makeAppHost({
+                appHostPath,
+                resources: [makeResource({
+                    name: 'cache',
+                    properties: {
+                        'terminal.enabled': 'true',
+                        'terminal.replicaIndex': '2',
+                    },
+                })],
+            }),
+            workspaceAppHostPath: appHostPath,
+            workspaceAppHostName: 'apps/Store/AppHost.csproj',
+            workspaceAppHostCandidatePaths: [appHostPath],
+            workspaceAppHostDescription: undefined,
+            onDidChangeData,
+        } as unknown as AppHostDataRepository;
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => 'aspire',
+            createEnvironment: () => ({}),
+            sendAspireCommandToAspireTerminal: (command: AspireSubcommand) => commands.push(command),
+        } as unknown as AspireTerminalProvider;
+        const provider = new AspireAppHostTreeProvider(repository, terminalProvider, makeLaunchService());
+
+        const [workspaceItem] = provider.getChildren();
+        const [resourceItem] = provider.getChildren(workspaceItem);
+        await provider.openResourceTerminal(resourceItem as any);
+
+        assert.deepStrictEqual(commands, [
+            ['terminal', 'attach', shellArg('cache'), '--apphost', shellArg(appHostPath), '--replica', shellArg('2')],
         ]);
         provider.dispose();
     });

@@ -99,9 +99,12 @@ suite('extension/package.json', () => {
         const contextMenus = manifest.contributes.menus?.['view/item/context'] ?? [];
 
         const executeResourceCommandItem = contextMenus.find(item => item.command === 'aspire-vscode.executeResourceCommandItem');
+        const openResourceTerminal = contextMenus.find(item => item.command === 'aspire-vscode.openResourceTerminal');
 
         assertContains(executeResourceCommandItem?.when, 'view == aspire-vscode.appHosts');
         assertContains(executeResourceCommandItem?.when, 'viewItem == resourceCommand:enabled');
+        assertContains(openResourceTerminal?.when, 'view == aspire-vscode.appHosts');
+        assertContains(openResourceTerminal?.when, 'viewItem =~ /^resource.*:canOpenTerminal/');
     });
 
     test('running apphost context actions only target running apphost contexts', () => {

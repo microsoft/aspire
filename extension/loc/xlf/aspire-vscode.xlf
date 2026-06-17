@@ -439,6 +439,9 @@
     <trans-unit id="aspire-vscode.strings.directLink">
       <source xml:lang="en">Open local URL</source>
     </trans-unit>
+    <trans-unit id="command.openResourceTerminal">
+      <source xml:lang="en">Open terminal</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostPathLabel">
       <source xml:lang="en">Path</source>
     </trans-unit>
