@@ -1,0 +1,9 @@
+{
+  "author": "tommasodotNET",
+  "comment": "Bug fix for Foundry hosted agents deployment failure with explicit targetPort",
+  "mergedAt": "2026-06-17T16:30:05Z",
+  "number": 17903,
+  "runDate": "2026-06-17T18:50:47Z",
+  "status": "included",
+  "title": "Ignore hosted agent target port during deployment"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "martincostello",
+  "comment": "Internal vendored code update for OpenTelemetry Redis instrumentation - no explicit user-facing changes",
+  "mergedAt": "2026-06-17T18:06:54Z",
+  "number": 18274,
+  "runDate": "2026-06-17T18:50:47Z",
+  "status": "excluded",
+  "title": "Update OpenTelemetry.Instrumentation.StackExchangeRedis"
+}

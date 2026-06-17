@@ -1,0 +1,9 @@
+{
+  "author": "Falco20019",
+  "comment": "Dependency version bump - MongoDB.Driver 3.9.0",
+  "mergedAt": "2026-06-17T16:30:47Z",
+  "number": 18078,
+  "runDate": "2026-06-17T18:50:47Z",
+  "status": "excluded",
+  "title": "Update MongoDB.Driver to version 3.9.0"
+}

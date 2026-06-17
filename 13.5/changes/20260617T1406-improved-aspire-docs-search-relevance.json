@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The `aspire docs search` command now returns significantly more accurate results by normalizing query and document text consistently, applying inverse document frequency weighting, and rewarding phrase matches in titles, headings, and summaries over incidental body mentions. Benchmarks showed Top 1 accuracy improving from 31.5% to 86.5% on real aspire.dev content.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔍",
+  "firstMergedAt": "2026-06-17T14:06:09Z",
+  "lastMergedAt": "2026-06-17T14:06:09Z",
+  "name": "Improved docs search relevance",
+  "owner": "davidfowl",
+  "prs": [
+    18074
+  ]
+}

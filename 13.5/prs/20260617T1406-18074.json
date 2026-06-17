@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Improved docs search relevance in the aspire docs search CLI command",
+  "mergedAt": "2026-06-17T14:06:09Z",
+  "number": 18074,
+  "runDate": "2026-06-17T18:50:47Z",
+  "status": "included",
+  "title": "Improve Aspire docs search relevance"
+}

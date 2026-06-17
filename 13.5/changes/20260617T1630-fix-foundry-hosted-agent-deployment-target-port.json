@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a deployment failure when Foundry hosted agents were configured with an explicit `targetPort` (e.g., `.WithHttpEndpoint(targetPort: 9000).AsHostedAgent(...)`). The publish path no longer attempts to emit unsupported `TargetPort` endpoint metadata for Foundry deployment targets.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-06-17T16:30:05Z",
+  "lastMergedAt": "2026-06-17T16:30:05Z",
+  "name": "Fix Foundry hosted agent deployment with explicit target port",
+  "owner": "tommasodotNET",
+  "prs": [
+    17903
+  ]
+}
