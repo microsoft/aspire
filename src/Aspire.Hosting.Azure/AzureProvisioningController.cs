@@ -93,9 +93,16 @@ internal sealed class AzureProvisioningController(
     internal const string LocationOverrideKey = "LocationOverride";
     internal const string MissingInAzureState = "Missing in Azure";
     internal const string DriftedState = "Drifted";
+    internal const string StartingState = "Starting";
+    internal const string CompilingArmTemplateState = "Compiling ARM template";
     internal const string CreatingArmDeploymentState = "Creating ARM Deployment";
     internal const string WaitingForDeploymentState = "Waiting for Deployment";
+    internal const string ChangingLocationState = "Changing location";
+    internal const string DeletingState = "Deleting";
+    internal const string CancelingState = "Canceling";
+    internal const string ProvisionedState = "Provisioned";
     private const string KeyVaultVaultResourceType = "Microsoft.KeyVault/vaults";
+    private const string ProvisioningStatePrefix = "Provisioning ";
     private const string SubscriptionIdArgumentName = "subscriptionId";
     private const string ResourceGroupArgumentName = "resourceGroup";
     private const string LocationArgumentName = "location";
@@ -936,15 +943,15 @@ internal sealed class AzureProvisioningController(
     private static bool IsActiveOperationCancelableResourceState(CustomResourceSnapshot snapshot)
         => snapshot.State?.Text switch
         {
-            "Starting" or
-            "Compiling ARM template" or
+            StartingState or
+            CompilingArmTemplateState or
             CreatingArmDeploymentState or
             WaitingForDeploymentState or
-            "Changing location" or
-            "Deleting" or
-            "Canceling" or
-            "Provisioned" => true,
-            { } state when state.StartsWith("Provisioning ", StringComparison.Ordinal) => true,
+            ChangingLocationState or
+            DeletingState or
+            CancelingState or
+            ProvisionedState => true,
+            { } state when state.StartsWith(ProvisioningStatePrefix, StringComparison.Ordinal) => true,
             _ => false
         };
 
@@ -976,7 +983,7 @@ internal sealed class AzureProvisioningController(
 
         await PublishAzureEnvironmentStateAsync(
             model,
-            new ResourceStateSnapshot("Starting", KnownResourceStateStyles.Info),
+            new ResourceStateSnapshot(StartingState, KnownResourceStateStyles.Info),
             cancellationToken).ConfigureAwait(false);
 
         var parentChildLookup = model.Resources.OfType<IResourceWithParent>().ToLookup(r => r.Parent);
@@ -998,7 +1005,7 @@ internal sealed class AzureProvisioningController(
 
             await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
             {
-                State = new("Starting", KnownResourceStateStyles.Info),
+                State = new(StartingState, KnownResourceStateStyles.Info),
                 Properties = state.Properties.WithoutAzureProvisioningFailureProperties()
             }).ConfigureAwait(false);
 
@@ -1633,7 +1640,7 @@ internal sealed class AzureProvisioningController(
         // instead, since individual Azure resources may not map one-to-one to a resource group.
         await PublishAzureEnvironmentStateAsync(
             model,
-            new ResourceStateSnapshot("Deleting", KnownResourceStateStyles.Info),
+            new ResourceStateSnapshot(DeletingState, KnownResourceStateStyles.Info),
             cancellationToken).ConfigureAwait(false);
 
         string? resourceGroupName;
@@ -1700,12 +1707,12 @@ internal sealed class AzureProvisioningController(
     {
         var targetResources = GetTargetAzureResources(model, intent.ResourceName);
         var parentChildLookup = model.Resources.OfType<IResourceWithParent>().ToLookup(r => r.Parent);
-        UpdateActiveOperationPhase(intent, "Changing location", $"Changing location to {intent.Location}");
+        UpdateActiveOperationPhase(intent, ChangingLocationState, $"Changing location to {intent.Location}");
         foreach (var resource in targetResources)
         {
             await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
             {
-                State = new("Changing location", KnownResourceStateStyles.Info)
+                State = new(ChangingLocationState, KnownResourceStateStyles.Info)
             }).ConfigureAwait(false);
         }
 
@@ -1808,7 +1815,7 @@ internal sealed class AzureProvisioningController(
             {
                 await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
                 {
-                    State = new("Canceling", KnownResourceStateStyles.Info)
+                    State = new(CancelingState, KnownResourceStateStyles.Info)
                 }).ConfigureAwait(false);
             }
         }
@@ -1849,7 +1856,7 @@ internal sealed class AzureProvisioningController(
             // dashboard reflects that child resources/role assignments are part of the operation.
             await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
             {
-                State = new("Deleting", KnownResourceStateStyles.Info)
+                State = new(DeletingState, KnownResourceStateStyles.Info)
             }).ConfigureAwait(false);
         }
 

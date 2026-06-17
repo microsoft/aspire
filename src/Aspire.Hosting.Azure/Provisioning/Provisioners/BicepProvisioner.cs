@@ -140,7 +140,7 @@ internal sealed class BicepProvisioner(
 
             return state with
             {
-                State = new("Provisioned", KnownResourceStateStyles.Success),
+                State = new(AzureProvisioningController.ProvisionedState, KnownResourceStateStyles.Success),
                 Urls = [.. portalUrls],
                 Properties = props
             };
@@ -530,7 +530,7 @@ internal sealed class BicepProvisioner(
         await notificationService.PublishUpdateAsync(resource, state => state with
         {
             ResourceType = resource.GetType().Name,
-            State = new("Starting", KnownResourceStateStyles.Info),
+            State = new(AzureProvisioningController.StartingState, KnownResourceStateStyles.Info),
             Properties = WithoutDeploymentOperationProperties(state.Properties.WithoutAzureProvisioningFailureProperties()).SetResourcePropertyRange(
                 AzureResourceProperties.CreateContextProperties(
                     subscription.Id.Name,
@@ -553,7 +553,7 @@ internal sealed class BicepProvisioner(
         {
             return state with
             {
-                State = new("Compiling ARM template", KnownResourceStateStyles.Info)
+                State = new(AzureProvisioningController.CompilingArmTemplateState, KnownResourceStateStyles.Info)
             };
         })
         .ConfigureAwait(false);
@@ -827,7 +827,7 @@ internal sealed class BicepProvisioner(
 
             return state with
             {
-                State = new("Provisioned", KnownResourceStateStyles.Success),
+                State = new(AzureProvisioningController.ProvisionedState, KnownResourceStateStyles.Success),
                 CreationTimeStamp = _timeProvider.GetUtcNow().UtcDateTime,
                 Properties = properties
             };
