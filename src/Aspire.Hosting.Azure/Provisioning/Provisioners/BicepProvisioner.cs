@@ -360,6 +360,10 @@ internal sealed class BicepProvisioner(
         // Scope is optional cached state. If it is missing or malformed, we can still
         // adopt the succeeded deployment because the current Azure context supplies
         // the resource group scope when ConfigureResourceAsync reloads the outputs.
+        // The cached value is the JSON string produced by BicepUtilities.SetScopeAsync:
+        //   {"resourceGroup":"<group>","subscription":"<subscription>"}
+        // Tenant-scoped resources also include "tenant": "current"; resources without
+        // an explicit/existing scope persist {"resourceGroup":null}.
         JsonObject? scope = null;
         if (TryGetDeploymentStateJsonObject(stateSection, BicepUtilities.DeploymentStateScopeKey, resource.Name, out var cachedScope))
         {
