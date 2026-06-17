@@ -1,0 +1,41 @@
+<Project>
+  <!--
+    Downloads Microsoft.AspNetCore.App.Internal.Assets NuGet packages at restore time and copies
+    blazor.web.js from each package into wwwroot/framework/blazor.web.{major}.js.
+
+    The dashboard targets net8.0 but rolls forward to .NET 10 or 11 at runtime. In .NET 10+ the
+    Blazor JS file is a static web asset delivered by the SDK, but since we don't target 10+ the
+    SDK never provides it. This target bridges that gap by extracting the JS from the published
+    NuGet package for each supported major runtime version.
+  -->
+
+  <ItemGroup>
+    <!--
+      Download both asset packages to the NuGet global cache (no assembly reference added).
+      Multiple versions of the same package use semicolon-separated exact-version syntax.
+      See: https://learn.microsoft.com/en-us/nuget/consume-packages/package-references-in-project-files#packagedownload-element
+    -->
+    <PackageDownload Include="Microsoft.AspNetCore.App.Internal.Assets" Version="[$(MicrosoftAspNetCoreAppInternalAssetsNet10Version)];[$(MicrosoftAspNetCoreAppInternalAssetsNet11Version)]" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Map each supported runtime major version to the package version that supplies its blazor.web.js.
+      Adding a new runtime: add a row here and a matching version property in eng/Versions.props.
+    -->
+    <BlazorAssetPackage Include="10" PackageVersion="$(MicrosoftAspNetCoreAppInternalAssetsNet10Version)" />
+    <BlazorAssetPackage Include="11" PackageVersion="$(MicrosoftAspNetCoreAppInternalAssetsNet11Version)" />
+  </ItemGroup>
+
+  <Target Name="CopyBlazorWebJs" BeforeTargets="BeforeBuild;PrepareForPublish">
+    <Copy SourceFiles="$(NuGetPackageRoot)microsoft.aspnetcore.app.internal.assets\%(BlazorAssetPackage.PackageVersion)\_framework\blazor.web.js"
+          DestinationFiles="$(MSBuildProjectDirectory)\wwwroot\framework\blazor.web.%(BlazorAssetPackage.Identity).js"
+          SkipUnchangedFiles="true"
+          OverwriteReadOnlyFiles="true" />
+  </Target>
+
+  <Target Name="CleanBlazorWebJs" AfterTargets="Clean">
+    <Delete Files="@(BlazorAssetPackage->'$(MSBuildProjectDirectory)\wwwroot\framework\blazor.web.%(Identity).js')" />
+  </Target>
+
+</Project>

@@ -28,13 +28,13 @@
     <!-- Package versions defined directly in <reporoot>/Directory.Packages.props -->
     <MicrosoftDotnetSdkInternalVersion>8.0.100-rtm.23512.16</MicrosoftDotnetSdkInternalVersion>
     <!-- DCP -->
-    <MicrosoftDeveloperControlPlanedarwinamd64Version>0.24.3</MicrosoftDeveloperControlPlanedarwinamd64Version>
-    <MicrosoftDeveloperControlPlanedarwinarm64Version>0.24.3</MicrosoftDeveloperControlPlanedarwinarm64Version>
-    <MicrosoftDeveloperControlPlanelinuxamd64Version>0.24.3</MicrosoftDeveloperControlPlanelinuxamd64Version>
-    <MicrosoftDeveloperControlPlanelinuxarm64Version>0.24.3</MicrosoftDeveloperControlPlanelinuxarm64Version>
-    <MicrosoftDeveloperControlPlanelinuxmuslamd64Version>0.24.3</MicrosoftDeveloperControlPlanelinuxmuslamd64Version>
-    <MicrosoftDeveloperControlPlanewindowsamd64Version>0.24.3</MicrosoftDeveloperControlPlanewindowsamd64Version>
-    <MicrosoftDeveloperControlPlanewindowsarm64Version>0.24.3</MicrosoftDeveloperControlPlanewindowsarm64Version>
+    <MicrosoftDeveloperControlPlanedarwinamd64Version>0.25.1</MicrosoftDeveloperControlPlanedarwinamd64Version>
+    <MicrosoftDeveloperControlPlanedarwinarm64Version>0.25.1</MicrosoftDeveloperControlPlanedarwinarm64Version>
+    <MicrosoftDeveloperControlPlanelinuxamd64Version>0.25.1</MicrosoftDeveloperControlPlanelinuxamd64Version>
+    <MicrosoftDeveloperControlPlanelinuxarm64Version>0.25.1</MicrosoftDeveloperControlPlanelinuxarm64Version>
+    <MicrosoftDeveloperControlPlanelinuxmuslamd64Version>0.25.1</MicrosoftDeveloperControlPlanelinuxmuslamd64Version>
+    <MicrosoftDeveloperControlPlanewindowsamd64Version>0.25.1</MicrosoftDeveloperControlPlanewindowsamd64Version>
+    <MicrosoftDeveloperControlPlanewindowsarm64Version>0.25.1</MicrosoftDeveloperControlPlanewindowsarm64Version>
     <!-- Other -->
     <MicrosoftDotNetRemoteExecutorVersion>10.0.0-beta.26208.4</MicrosoftDotNetRemoteExecutorVersion>
     <MicrosoftDotNetXUnitV3ExtensionsVersion>10.0.0-beta.26208.4</MicrosoftDotNetXUnitV3ExtensionsVersion>
@@ -61,96 +61,104 @@
     <!-- MicroBuild.Core version for VS Code extension signing -->
     <MicrosoftVisualStudioEngMicroBuildCoreVersion>1.0.0</MicrosoftVisualStudioEngMicroBuildCoreVersion>
   </PropertyGroup>
+  <!-- Blazor JS asset package versions — one per supported runtime major version.
+       The dashboard downloads these at build time to extract blazor.web.js for each runtime it may roll-forward to.
+       Versions must be available on the dnceng dotnet-public mirror (originally published to nuget.org). -->
+  <PropertyGroup Label="BlazorAssets">
+    <MicrosoftAspNetCoreAppInternalAssetsNet10Version>10.0.8</MicrosoftAspNetCoreAppInternalAssetsNet10Version>
+    <MicrosoftAspNetCoreAppInternalAssetsNet11Version>11.0.0-preview.5.26302.115</MicrosoftAspNetCoreAppInternalAssetsNet11Version>
+  </PropertyGroup>
   <!-- .NET 10.0 Package Versions -->
   <PropertyGroup Label="Preview">
     <!-- EF -->
-    <MicrosoftEntityFrameworkCoreCosmosPreviewVersion>10.0.8</MicrosoftEntityFrameworkCoreCosmosPreviewVersion>
-    <MicrosoftEntityFrameworkCoreDesignPreviewVersion>10.0.8</MicrosoftEntityFrameworkCoreDesignPreviewVersion>
-    <MicrosoftEntityFrameworkCoreSqlServerPreviewVersion>10.0.8</MicrosoftEntityFrameworkCoreSqlServerPreviewVersion>
-    <MicrosoftEntityFrameworkCoreToolsPreviewVersion>10.0.8</MicrosoftEntityFrameworkCoreToolsPreviewVersion>
+    <MicrosoftEntityFrameworkCoreCosmosPreviewVersion>10.0.9</MicrosoftEntityFrameworkCoreCosmosPreviewVersion>
+    <MicrosoftEntityFrameworkCoreDesignPreviewVersion>10.0.9</MicrosoftEntityFrameworkCoreDesignPreviewVersion>
+    <MicrosoftEntityFrameworkCoreSqlServerPreviewVersion>10.0.9</MicrosoftEntityFrameworkCoreSqlServerPreviewVersion>
+    <MicrosoftEntityFrameworkCoreToolsPreviewVersion>10.0.9</MicrosoftEntityFrameworkCoreToolsPreviewVersion>
     <!-- ASP.NET Core -->
-    <MicrosoftAspNetCoreAuthenticationCertificatePreviewVersion>10.0.8</MicrosoftAspNetCoreAuthenticationCertificatePreviewVersion>
-    <MicrosoftAspNetCoreAuthenticationJwtBearerPreviewVersion>10.0.8</MicrosoftAspNetCoreAuthenticationJwtBearerPreviewVersion>
-    <MicrosoftAspNetCoreAuthenticationOpenIdConnectPreviewVersion>10.0.8</MicrosoftAspNetCoreAuthenticationOpenIdConnectPreviewVersion>
-    <MicrosoftAspNetCoreOpenApiPreviewVersion>10.0.8</MicrosoftAspNetCoreOpenApiPreviewVersion>
-    <MicrosoftAspNetCoreOutputCachingStackExchangeRedisPreviewVersion>10.0.8</MicrosoftAspNetCoreOutputCachingStackExchangeRedisPreviewVersion>
-    <MicrosoftAspNetCoreTestHostPreviewVersion>10.0.8</MicrosoftAspNetCoreTestHostPreviewVersion>
-    <MicrosoftExtensionsCachingStackExchangeRedisPreviewVersion>10.0.8</MicrosoftExtensionsCachingStackExchangeRedisPreviewVersion>
-    <MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCorePreviewVersion>10.0.8</MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCorePreviewVersion>
-    <MicrosoftExtensionsDiagnosticsHealthChecksPreviewVersion>10.0.8</MicrosoftExtensionsDiagnosticsHealthChecksPreviewVersion>
-    <MicrosoftExtensionsFeaturesPreviewVersion>10.0.8</MicrosoftExtensionsFeaturesPreviewVersion>
-    <MicrosoftAspNetCoreSignalRClientPreviewVersion>10.0.8</MicrosoftAspNetCoreSignalRClientPreviewVersion>
+    <MicrosoftAspNetCoreAuthenticationCertificatePreviewVersion>10.0.9</MicrosoftAspNetCoreAuthenticationCertificatePreviewVersion>
+    <MicrosoftAspNetCoreAuthenticationJwtBearerPreviewVersion>10.0.9</MicrosoftAspNetCoreAuthenticationJwtBearerPreviewVersion>
+    <MicrosoftAspNetCoreAuthenticationOpenIdConnectPreviewVersion>10.0.9</MicrosoftAspNetCoreAuthenticationOpenIdConnectPreviewVersion>
+    <MicrosoftAspNetCoreOpenApiPreviewVersion>10.0.9</MicrosoftAspNetCoreOpenApiPreviewVersion>
+    <MicrosoftAspNetCoreOutputCachingStackExchangeRedisPreviewVersion>10.0.9</MicrosoftAspNetCoreOutputCachingStackExchangeRedisPreviewVersion>
+    <MicrosoftAspNetCoreTestHostPreviewVersion>10.0.9</MicrosoftAspNetCoreTestHostPreviewVersion>
+    <MicrosoftExtensionsCachingStackExchangeRedisPreviewVersion>10.0.9</MicrosoftExtensionsCachingStackExchangeRedisPreviewVersion>
+    <MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCorePreviewVersion>10.0.9</MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCorePreviewVersion>
+    <MicrosoftExtensionsDiagnosticsHealthChecksPreviewVersion>10.0.9</MicrosoftExtensionsDiagnosticsHealthChecksPreviewVersion>
+    <MicrosoftExtensionsFeaturesPreviewVersion>10.0.9</MicrosoftExtensionsFeaturesPreviewVersion>
+    <MicrosoftAspNetCoreSignalRClientPreviewVersion>10.0.9</MicrosoftAspNetCoreSignalRClientPreviewVersion>
     <!-- Runtime -->
-    <MicrosoftBclMemoryPreviewVersion>10.0.8</MicrosoftBclMemoryPreviewVersion>
-    <MicrosoftExtensionsHostingAbstractionsPreviewVersion>10.0.8</MicrosoftExtensionsHostingAbstractionsPreviewVersion>
-    <MicrosoftExtensionsHostingPreviewVersion>10.0.8</MicrosoftExtensionsHostingPreviewVersion>
-    <MicrosoftExtensionsCachingMemoryPreviewVersion>10.0.8</MicrosoftExtensionsCachingMemoryPreviewVersion>
-    <MicrosoftExtensionsConfigurationAbstractionsPreviewVersion>10.0.8</MicrosoftExtensionsConfigurationAbstractionsPreviewVersion>
-    <MicrosoftExtensionsConfigurationBinderPreviewVersion>10.0.8</MicrosoftExtensionsConfigurationBinderPreviewVersion>
-    <MicrosoftExtensionsDependencyInjectionAbstractionsPreviewVersion>10.0.8</MicrosoftExtensionsDependencyInjectionAbstractionsPreviewVersion>
-    <MicrosoftExtensionsFileSystemGlobbingPreviewVersion>10.0.8</MicrosoftExtensionsFileSystemGlobbingPreviewVersion>
-    <MicrosoftExtensionsLoggingAbstractionsPreviewVersion>10.0.8</MicrosoftExtensionsLoggingAbstractionsPreviewVersion>
-    <MicrosoftExtensionsLoggingPreviewVersion>10.0.8</MicrosoftExtensionsLoggingPreviewVersion>
-    <MicrosoftExtensionsOptionsPreviewVersion>10.0.8</MicrosoftExtensionsOptionsPreviewVersion>
-    <MicrosoftExtensionsPrimitivesPreviewVersion>10.0.8</MicrosoftExtensionsPrimitivesPreviewVersion>
-    <MicrosoftExtensionsHttpPreviewVersion>10.0.8</MicrosoftExtensionsHttpPreviewVersion>
-    <SystemFormatsAsn1PreviewVersion>10.0.8</SystemFormatsAsn1PreviewVersion>
-    <SystemSecurityCryptographyPkcsVersion>10.0.8</SystemSecurityCryptographyPkcsVersion>
-    <SystemTextJsonPreviewVersion>10.0.8</SystemTextJsonPreviewVersion>
+    <MicrosoftBclMemoryPreviewVersion>10.0.9</MicrosoftBclMemoryPreviewVersion>
+    <MicrosoftExtensionsHostingAbstractionsPreviewVersion>10.0.9</MicrosoftExtensionsHostingAbstractionsPreviewVersion>
+    <MicrosoftExtensionsHostingPreviewVersion>10.0.9</MicrosoftExtensionsHostingPreviewVersion>
+    <MicrosoftExtensionsCachingMemoryPreviewVersion>10.0.9</MicrosoftExtensionsCachingMemoryPreviewVersion>
+    <MicrosoftExtensionsConfigurationAbstractionsPreviewVersion>10.0.9</MicrosoftExtensionsConfigurationAbstractionsPreviewVersion>
+    <MicrosoftExtensionsConfigurationBinderPreviewVersion>10.0.9</MicrosoftExtensionsConfigurationBinderPreviewVersion>
+    <MicrosoftExtensionsConfigurationEnvironmentVariablesPreviewVersion>10.0.9</MicrosoftExtensionsConfigurationEnvironmentVariablesPreviewVersion>
+    <MicrosoftExtensionsDependencyInjectionAbstractionsPreviewVersion>10.0.9</MicrosoftExtensionsDependencyInjectionAbstractionsPreviewVersion>
+    <MicrosoftExtensionsFileSystemGlobbingPreviewVersion>10.0.9</MicrosoftExtensionsFileSystemGlobbingPreviewVersion>
+    <MicrosoftExtensionsLoggingAbstractionsPreviewVersion>10.0.9</MicrosoftExtensionsLoggingAbstractionsPreviewVersion>
+    <MicrosoftExtensionsLoggingPreviewVersion>10.0.9</MicrosoftExtensionsLoggingPreviewVersion>
+    <MicrosoftExtensionsOptionsPreviewVersion>10.0.9</MicrosoftExtensionsOptionsPreviewVersion>
+    <MicrosoftExtensionsPrimitivesPreviewVersion>10.0.9</MicrosoftExtensionsPrimitivesPreviewVersion>
+    <MicrosoftExtensionsHttpPreviewVersion>10.0.9</MicrosoftExtensionsHttpPreviewVersion>
+    <SystemFormatsAsn1PreviewVersion>10.0.9</SystemFormatsAsn1PreviewVersion>
+    <SystemSecurityCryptographyPkcsVersion>10.0.9</SystemSecurityCryptographyPkcsVersion>
+    <SystemTextJsonPreviewVersion>10.0.9</SystemTextJsonPreviewVersion>
   </PropertyGroup>
   <!-- .NET 9.0 Package Versions -->
   <PropertyGroup Label="Current">
     <!-- EF -->
-    <MicrosoftEntityFrameworkCoreCosmosVersion>9.0.16</MicrosoftEntityFrameworkCoreCosmosVersion>
-    <MicrosoftEntityFrameworkCoreDesignVersion>9.0.16</MicrosoftEntityFrameworkCoreDesignVersion>
-    <MicrosoftEntityFrameworkCoreSqlServerVersion>9.0.16</MicrosoftEntityFrameworkCoreSqlServerVersion>
-    <MicrosoftEntityFrameworkCoreToolsVersion>9.0.16</MicrosoftEntityFrameworkCoreToolsVersion>
+    <MicrosoftEntityFrameworkCoreCosmosVersion>9.0.17</MicrosoftEntityFrameworkCoreCosmosVersion>
+    <MicrosoftEntityFrameworkCoreDesignVersion>9.0.17</MicrosoftEntityFrameworkCoreDesignVersion>
+    <MicrosoftEntityFrameworkCoreSqlServerVersion>9.0.17</MicrosoftEntityFrameworkCoreSqlServerVersion>
+    <MicrosoftEntityFrameworkCoreToolsVersion>9.0.17</MicrosoftEntityFrameworkCoreToolsVersion>
     <!-- ASP.NET Core -->
-    <MicrosoftAspNetCoreAuthenticationCertificateVersion>9.0.16</MicrosoftAspNetCoreAuthenticationCertificateVersion>
-    <MicrosoftAspNetCoreAuthenticationJwtBearerVersion>9.0.16</MicrosoftAspNetCoreAuthenticationJwtBearerVersion>
-    <MicrosoftAspNetCoreAuthenticationOpenIdConnectVersion>9.0.16</MicrosoftAspNetCoreAuthenticationOpenIdConnectVersion>
-    <MicrosoftAspNetCoreOpenApiVersion>9.0.16</MicrosoftAspNetCoreOpenApiVersion>
-    <MicrosoftAspNetCoreOutputCachingStackExchangeRedisVersion>9.0.16</MicrosoftAspNetCoreOutputCachingStackExchangeRedisVersion>
-    <MicrosoftAspNetCoreTestHostVersion>9.0.16</MicrosoftAspNetCoreTestHostVersion>
-    <MicrosoftExtensionsCachingStackExchangeRedisVersion>9.0.16</MicrosoftExtensionsCachingStackExchangeRedisVersion>
-    <MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCoreVersion>9.0.16</MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCoreVersion>
-    <MicrosoftExtensionsDiagnosticsHealthChecksVersion>9.0.16</MicrosoftExtensionsDiagnosticsHealthChecksVersion>
-    <MicrosoftExtensionsFeaturesVersion>9.0.16</MicrosoftExtensionsFeaturesVersion>
-    <MicrosoftAspNetCoreSignalRClientVersion>9.0.16</MicrosoftAspNetCoreSignalRClientVersion>
+    <MicrosoftAspNetCoreAuthenticationCertificateVersion>9.0.17</MicrosoftAspNetCoreAuthenticationCertificateVersion>
+    <MicrosoftAspNetCoreAuthenticationJwtBearerVersion>9.0.17</MicrosoftAspNetCoreAuthenticationJwtBearerVersion>
+    <MicrosoftAspNetCoreAuthenticationOpenIdConnectVersion>9.0.17</MicrosoftAspNetCoreAuthenticationOpenIdConnectVersion>
+    <MicrosoftAspNetCoreOpenApiVersion>9.0.17</MicrosoftAspNetCoreOpenApiVersion>
+    <MicrosoftAspNetCoreOutputCachingStackExchangeRedisVersion>9.0.17</MicrosoftAspNetCoreOutputCachingStackExchangeRedisVersion>
+    <MicrosoftAspNetCoreTestHostVersion>9.0.17</MicrosoftAspNetCoreTestHostVersion>
+    <MicrosoftExtensionsCachingStackExchangeRedisVersion>9.0.17</MicrosoftExtensionsCachingStackExchangeRedisVersion>
+    <MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCoreVersion>9.0.17</MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCoreVersion>
+    <MicrosoftExtensionsDiagnosticsHealthChecksVersion>9.0.17</MicrosoftExtensionsDiagnosticsHealthChecksVersion>
+    <MicrosoftExtensionsFeaturesVersion>9.0.17</MicrosoftExtensionsFeaturesVersion>
+    <MicrosoftAspNetCoreSignalRClientVersion>9.0.17</MicrosoftAspNetCoreSignalRClientVersion>
     <!-- Runtime -->
-    <MicrosoftExtensionsHostingAbstractionsVersion>9.0.16</MicrosoftExtensionsHostingAbstractionsVersion>
-    <MicrosoftExtensionsHostingVersion>9.0.16</MicrosoftExtensionsHostingVersion>
-    <MicrosoftExtensionsCachingMemoryVersion>9.0.16</MicrosoftExtensionsCachingMemoryVersion>
-    <MicrosoftExtensionsConfigurationAbstractionsVersion>9.0.16</MicrosoftExtensionsConfigurationAbstractionsVersion>
-    <MicrosoftExtensionsConfigurationBinderVersion>9.0.16</MicrosoftExtensionsConfigurationBinderVersion>
-    <MicrosoftExtensionsDependencyInjectionAbstractionsVersion>9.0.16</MicrosoftExtensionsDependencyInjectionAbstractionsVersion>
-    <MicrosoftExtensionsLoggingAbstractionsVersion>9.0.16</MicrosoftExtensionsLoggingAbstractionsVersion>
-    <MicrosoftExtensionsOptionsVersion>9.0.16</MicrosoftExtensionsOptionsVersion>
-    <MicrosoftExtensionsPrimitivesVersion>9.0.16</MicrosoftExtensionsPrimitivesVersion>
-    <MicrosoftExtensionsHttpVersion>9.0.16</MicrosoftExtensionsHttpVersion>
-    <SystemFormatsAsn1Version>9.0.16</SystemFormatsAsn1Version>
-    <SystemTextJsonVersion>9.0.16</SystemTextJsonVersion>
+    <MicrosoftExtensionsHostingAbstractionsVersion>9.0.17</MicrosoftExtensionsHostingAbstractionsVersion>
+    <MicrosoftExtensionsHostingVersion>9.0.17</MicrosoftExtensionsHostingVersion>
+    <MicrosoftExtensionsCachingMemoryVersion>9.0.17</MicrosoftExtensionsCachingMemoryVersion>
+    <MicrosoftExtensionsConfigurationAbstractionsVersion>9.0.17</MicrosoftExtensionsConfigurationAbstractionsVersion>
+    <MicrosoftExtensionsConfigurationBinderVersion>9.0.17</MicrosoftExtensionsConfigurationBinderVersion>
+    <MicrosoftExtensionsDependencyInjectionAbstractionsVersion>9.0.17</MicrosoftExtensionsDependencyInjectionAbstractionsVersion>
+    <MicrosoftExtensionsLoggingAbstractionsVersion>9.0.17</MicrosoftExtensionsLoggingAbstractionsVersion>
+    <MicrosoftExtensionsOptionsVersion>9.0.17</MicrosoftExtensionsOptionsVersion>
+    <MicrosoftExtensionsPrimitivesVersion>9.0.17</MicrosoftExtensionsPrimitivesVersion>
+    <MicrosoftExtensionsHttpVersion>9.0.17</MicrosoftExtensionsHttpVersion>
+    <SystemFormatsAsn1Version>9.0.17</SystemFormatsAsn1Version>
+    <SystemTextJsonVersion>9.0.17</SystemTextJsonVersion>
   </PropertyGroup>
   <!-- .NET 8.0 Package Versions -->
   <PropertyGroup Label="LTS">
     <!-- EF -->
-    <MicrosoftEntityFrameworkCoreCosmosLTSVersion>8.0.27</MicrosoftEntityFrameworkCoreCosmosLTSVersion>
-    <MicrosoftEntityFrameworkCoreDesignLTSVersion>8.0.27</MicrosoftEntityFrameworkCoreDesignLTSVersion>
-    <MicrosoftEntityFrameworkCoreSqlServerLTSVersion>8.0.27</MicrosoftEntityFrameworkCoreSqlServerLTSVersion>
-    <MicrosoftEntityFrameworkCoreToolsLTSVersion>8.0.27</MicrosoftEntityFrameworkCoreToolsLTSVersion>
+    <MicrosoftEntityFrameworkCoreCosmosLTSVersion>8.0.28</MicrosoftEntityFrameworkCoreCosmosLTSVersion>
+    <MicrosoftEntityFrameworkCoreDesignLTSVersion>8.0.28</MicrosoftEntityFrameworkCoreDesignLTSVersion>
+    <MicrosoftEntityFrameworkCoreSqlServerLTSVersion>8.0.28</MicrosoftEntityFrameworkCoreSqlServerLTSVersion>
+    <MicrosoftEntityFrameworkCoreToolsLTSVersion>8.0.28</MicrosoftEntityFrameworkCoreToolsLTSVersion>
     <!-- ASP.NET Core -->
-    <MicrosoftAspNetCoreAuthenticationCertificateLTSVersion>8.0.27</MicrosoftAspNetCoreAuthenticationCertificateLTSVersion>
-    <MicrosoftAspNetCoreAuthenticationJwtBearerLTSVersion>8.0.27</MicrosoftAspNetCoreAuthenticationJwtBearerLTSVersion>
-    <MicrosoftAspNetCoreAuthenticationOpenIdConnectLTSVersion>8.0.27</MicrosoftAspNetCoreAuthenticationOpenIdConnectLTSVersion>
-    <MicrosoftAspNetCoreOpenApiLTSVersion>8.0.27</MicrosoftAspNetCoreOpenApiLTSVersion>
-    <MicrosoftAspNetCoreOutputCachingStackExchangeRedisLTSVersion>8.0.27</MicrosoftAspNetCoreOutputCachingStackExchangeRedisLTSVersion>
-    <MicrosoftAspNetCoreTestHostLTSVersion>8.0.27</MicrosoftAspNetCoreTestHostLTSVersion>
-    <MicrosoftExtensionsCachingStackExchangeRedisLTSVersion>8.0.27</MicrosoftExtensionsCachingStackExchangeRedisLTSVersion>
-    <MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCoreLTSVersion>8.0.27</MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCoreLTSVersion>
-    <MicrosoftExtensionsDiagnosticsHealthChecksLTSVersion>8.0.27</MicrosoftExtensionsDiagnosticsHealthChecksLTSVersion>
-    <MicrosoftExtensionsFeaturesLTSVersion>8.0.27</MicrosoftExtensionsFeaturesLTSVersion>
-    <MicrosoftExtensionsFileProvidersEmbeddedLTSVersion>8.0.27</MicrosoftExtensionsFileProvidersEmbeddedLTSVersion>
-    <MicrosoftAspNetCoreSignalRClientLTSVersion>8.0.27</MicrosoftAspNetCoreSignalRClientLTSVersion>
+    <MicrosoftAspNetCoreAuthenticationCertificateLTSVersion>8.0.28</MicrosoftAspNetCoreAuthenticationCertificateLTSVersion>
+    <MicrosoftAspNetCoreAuthenticationJwtBearerLTSVersion>8.0.28</MicrosoftAspNetCoreAuthenticationJwtBearerLTSVersion>
+    <MicrosoftAspNetCoreAuthenticationOpenIdConnectLTSVersion>8.0.28</MicrosoftAspNetCoreAuthenticationOpenIdConnectLTSVersion>
+    <MicrosoftAspNetCoreOpenApiLTSVersion>8.0.28</MicrosoftAspNetCoreOpenApiLTSVersion>
+    <MicrosoftAspNetCoreOutputCachingStackExchangeRedisLTSVersion>8.0.28</MicrosoftAspNetCoreOutputCachingStackExchangeRedisLTSVersion>
+    <MicrosoftAspNetCoreTestHostLTSVersion>8.0.28</MicrosoftAspNetCoreTestHostLTSVersion>
+    <MicrosoftExtensionsCachingStackExchangeRedisLTSVersion>8.0.28</MicrosoftExtensionsCachingStackExchangeRedisLTSVersion>
+    <MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCoreLTSVersion>8.0.28</MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCoreLTSVersion>
+    <MicrosoftExtensionsDiagnosticsHealthChecksLTSVersion>8.0.28</MicrosoftExtensionsDiagnosticsHealthChecksLTSVersion>
+    <MicrosoftExtensionsFeaturesLTSVersion>8.0.28</MicrosoftExtensionsFeaturesLTSVersion>
+    <MicrosoftExtensionsFileProvidersEmbeddedLTSVersion>8.0.28</MicrosoftExtensionsFileProvidersEmbeddedLTSVersion>
+    <MicrosoftAspNetCoreSignalRClientLTSVersion>8.0.28</MicrosoftAspNetCoreSignalRClientLTSVersion>
     <!-- Runtime -->
     <MicrosoftExtensionsHostingAbstractionsLTSVersion>8.0.1</MicrosoftExtensionsHostingAbstractionsLTSVersion>
     <MicrosoftExtensionsHostingLTSVersion>8.0.1</MicrosoftExtensionsHostingLTSVersion>

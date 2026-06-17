@@ -9,13 +9,44 @@ using Aspire.Cli.Acquisition;
 namespace Aspire.Cli.Utils.EnvironmentChecker;
 
 /// <summary>
+/// Well-known categories for environment check results.
+/// </summary>
+internal static class EnvironmentCheckCategories
+{
+    /// <summary>
+    /// Checks that report Aspire CLI state.
+    /// </summary>
+    internal const string Aspire = "aspire";
+
+    /// <summary>
+    /// Checks that report AppHost state.
+    /// </summary>
+    internal const string AppHost = "apphost";
+
+    /// <summary>
+    /// Checks that report container runtime state.
+    /// </summary>
+    internal const string Container = "container";
+
+    /// <summary>
+    /// Checks that report local machine environment state.
+    /// </summary>
+    internal const string Environment = "environment";
+
+    /// <summary>
+    /// Checks that report SDK state.
+    /// </summary>
+    internal const string Sdk = "sdk";
+}
+
+/// <summary>
 /// Represents the result of a prerequisite check.
 /// </summary>
 // `aspire doctor --format json` uses this shape; keep docs/specs/cli-output-formats.md in sync when changing it.
 internal sealed class EnvironmentCheckResult
 {
     /// <summary>
-    /// Gets the category of the check (e.g., "sdk", "container", "environment").
+    /// Gets the category of the check.
     /// </summary>
     [JsonPropertyName("category")]
     public string Category { get; init; } = string.Empty;

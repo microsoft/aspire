@@ -124,6 +124,141 @@ namespace Aspire.Hosting.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Container arguments.
+        /// </summary>
+        internal static string ResourcePropertyContainerArgumentsDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyContainerArgumentsDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Container command.
+        /// </summary>
+        internal static string ResourcePropertyContainerCommandDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyContainerCommandDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Container ID.
+        /// </summary>
+        internal static string ResourcePropertyContainerIdDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyContainerIdDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Container image.
+        /// </summary>
+        internal static string ResourcePropertyContainerImageDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyContainerImageDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Container lifetime.
+        /// </summary>
+        internal static string ResourcePropertyContainerLifetimeDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyContainerLifetimeDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Container ports.
+        /// </summary>
+        internal static string ResourcePropertyContainerPortsDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyContainerPortsDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Executable arguments.
+        /// </summary>
+        internal static string ResourcePropertyExecutableArgumentsDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyExecutableArgumentsDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Executable path.
+        /// </summary>
+        internal static string ResourcePropertyExecutablePathDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyExecutablePathDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Process ID.
+        /// </summary>
+        internal static string ResourcePropertyExecutableProcessIdDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyExecutableProcessIdDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Working directory.
+        /// </summary>
+        internal static string ResourcePropertyExecutableWorkingDirectoryDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyExecutableWorkingDirectoryDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Value.
+        /// </summary>
+        internal static string ResourcePropertyParameterValueDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyParameterValueDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Launch profile.
+        /// </summary>
+        internal static string ResourcePropertyProjectLaunchProfileDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyProjectLaunchProfileDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Project path.
+        /// </summary>
+        internal static string ResourcePropertyProjectPathDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyProjectPathDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Tool package.
+        /// </summary>
+        internal static string ResourcePropertyToolPackageDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyToolPackageDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Tool version.
+        /// </summary>
+        internal static string ResourcePropertyToolVersionDisplayName {
+            get {
+                return ResourceManager.GetString("ResourcePropertyToolVersionDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Required command &apos;{0}&apos; was not found on PATH or at the specified location..
         /// </summary>
         internal static string RequiredCommandNotFound {

@@ -56,6 +56,9 @@ _ReSharper*/
 # DotCover is a Code Coverage Tool
 *.dotCover
 
+# Generated blazor.web.js files (copied from NuGet packages at build time by BlazorAssets.targets)
+src/Aspire.Dashboard/wwwroot/framework/blazor.web.*.js
+
 # NuGet Packages
 *.nuget.props
 *.nuget.targets
@@ -200,6 +203,7 @@ extension/.test-artifacts/
 extension/.test-extensions/
 extension/.test-results/
 extension/.test-storage/
+extension/.test-workspace/
 extension/.test-workspaces/
 extension/node_modules/
 extension/.corepack-cache/

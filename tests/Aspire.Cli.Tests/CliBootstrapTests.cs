@@ -28,7 +28,8 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         var errorWriter = new TestStartupErrorWriter();
         var logBufferContext = new ConsoleLogBufferContext();
         var (loggerFactory, fileLoggerProvider) = Program.CreateLoggerFactory([], loggingOptions, errorWriter, logBufferContext);
-        var startupContext = new Program.CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, logBufferContext, loggerFactory.CreateLogger(Program.RootLoggerName), new ConsoleCancellationManager(processTerminationTimeout: Timeout.InfiniteTimeSpan));
+        var identityChannelReader = new IdentityChannelReader(typeof(Program).Assembly);
+        var startupContext = new Program.CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, logBufferContext, loggerFactory.CreateLogger(Program.RootLoggerName), new ConsoleCancellationManager(processTerminationTimeout: Timeout.InfiniteTimeSpan), identityChannelReader);
         return await Program.BuildApplicationAsync([], startupContext);
     }
 
@@ -49,7 +50,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
     {
         var reader = new IdentityChannelReader(typeof(Aspire.Cli.Program).Assembly);
 
-        var channel = reader.ReadChannel();
+        Assert.True(reader.TryReadChannel(out var channel, out _));
 
         // Test host can be built with /p:AspireCliChannel=<anything in the accepted set>;
         // assert shape, not a single literal, so this test stops being an accidental
@@ -85,7 +86,8 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         var reader = host.Services.GetRequiredService<IIdentityChannelReader>();
         var context = host.Services.GetRequiredService<CliExecutionContext>();
 
-        Assert.Equal(reader.ReadChannel(), context.IdentityChannel);
+        Assert.True(reader.TryReadChannel(out var channel, out _));
+        Assert.Equal(channel, context.IdentityChannel);
     }
 
     [Fact]
@@ -145,6 +147,49 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         Assert.Equal(logFilePath, context.LogFilePath);
         Assert.True(context.DebugMode);
         Assert.Equal("pr-17159", context.IdentityChannel);
+    }
+
+    [Fact]
+    public void BuildCliExecutionContext_NuGetServiceIndexOverrideFromEnv_MarksIdentityOverridden()
+    {
+        // Setting only ASPIRE_CLI_NUGET_SERVICE_INDEX must still flag the run as an emulation so the
+        // startup override notice fires and tooling does not mistake a diagnostic run for a real build.
+        // Regression guard: this source was previously omitted from the identityOverridden computation.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var resolver = new IdentityResolver(
+            new InstallSidecarReader(),
+            typeof(Program).Assembly,
+            binaryDir: null,
+            envReader: name => name == IdentityResolver.NuGetServiceIndexEnvVar ? "http://localhost:5000/v3/index.json" : null);
+
+        var context = Program.BuildCliExecutionContext(
+            debugMode: false,
+            logsDirectory: Path.Combine(workspace.WorkspaceRoot.FullName, "logs"),
+            logFilePath: Path.Combine(workspace.WorkspaceRoot.FullName, "logs", "aspire.log"),
+            identityResolver: resolver);
+
+        Assert.True(context.IdentityOverridden);
+        Assert.Equal("http://localhost:5000/v3/index.json", context.NuGetServiceIndexOverride);
+    }
+
+    [Fact]
+    public void BuildCliExecutionContext_NoOverrides_DoesNotMarkIdentityOverridden()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var resolver = new IdentityResolver(
+            new InstallSidecarReader(),
+            typeof(Program).Assembly,
+            binaryDir: null,
+            envReader: _ => null);
+
+        var context = Program.BuildCliExecutionContext(
+            debugMode: false,
+            logsDirectory: Path.Combine(workspace.WorkspaceRoot.FullName, "logs"),
+            logFilePath: Path.Combine(workspace.WorkspaceRoot.FullName, "logs", "aspire.log"),
+            identityResolver: resolver);
+
+        Assert.False(context.IdentityOverridden);
+        Assert.Null(context.NuGetServiceIndexOverride);
     }
 
     private static string WriteBinaryWithSidecar(string binaryDir, string source)

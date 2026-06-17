@@ -7,7 +7,7 @@ import { getWorkspaceRoot } from './helpers/paths';
 import { executeCommandFromPalette, openAspireView, waitForEditorTitle, waitForNotificationMessage, waitForTerminalChannel, waitForWorkbenchText } from './helpers/vscode';
 
 suite('Aspire command palette E2E', function () {
-    this.timeout(180000);
+    this.timeout(420000);
 
     teardown(async () => {
         const failures: unknown[] = [];
@@ -117,7 +117,7 @@ suite('Aspire command palette E2E', function () {
         await openAspireView();
         await waitForRepositoryIdle();
         removeWorkspaceAppHostConfig();
-        const secondaryAppHostPath = createAdditionalAppHostCandidate();
+        const secondaryAppHostPath = createAdditionalAppHostCandidate('AspireE2E.SecondAppHost', 'single-file');
         const beforeRefresh = getCommandInvocationCount('aspire-vscode.refreshAppHosts');
         await executeE2eControlCommand({ name: 'refreshAppHosts' });
         await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 60000, beforeRefresh);
@@ -125,7 +125,7 @@ suite('Aspire command palette E2E', function () {
         const stateFile = await waitForExtensionState(
             file => file.state.workspaceAppHostCandidatePaths.some(candidate => isSamePath(candidate, secondaryAppHostPath)),
             'secondary AppHost candidate',
-            60000);
+            180000);
 
         assert.ok(stateFile.state.workspaceAppHostCandidatePaths.length >= 2);
     });

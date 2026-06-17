@@ -504,6 +504,16 @@ For more information about using AI agents with the dashboard, including setting
         <target state="translated">Tamam</target>
         <note />
       </trans-unit>
+      <trans-unit id="ManageDataAllDataCheckboxLabel">
+        <source>All data</source>
+        <target state="new">All data</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ManageDataDataTypeForResourceCheckboxLabel">
+        <source>{0} for {1}</source>
+        <target state="new">{0} for {1}</target>
+        <note>{0} is the data type display name. {1} is the parent resource display name.</note>
+      </trans-unit>
       <trans-unit id="ManageDataDialogTitle">
         <source>Manage logs and telemetry</source>
         <target state="translated">Günlükleri ve telemetriyi yönet</target>

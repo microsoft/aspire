@@ -135,7 +135,34 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     {
         ObjectDisposedException.ThrowIf(_disposed, nameof(AppHostServerSession));
 
-        return _rpcClient ??= await AppHostRpcClient.ConnectAsync(_socketPath, _authenticationToken, _profilingTelemetry, cancellationToken);
+        if (_rpcClient is not null)
+        {
+            return _rpcClient;
+        }
+
+        // ConnectAsync already retries until the RPC socket is available. Race it against the
+        // server process lifetime instead of sleeping first, so fast startups connect immediately
+        // and failed server launches surface as soon as the process exits.
+        using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var connectTask = AppHostRpcClient.ConnectAsync(_socketPath, _authenticationToken, _profilingTelemetry, connectCts.Token);
+        var processExitTask = _serverProcess.WaitForExitAsync(connectCts.Token);
+        var completedTask = await Task.WhenAny(connectTask, processExitTask).ConfigureAwait(false);
+
+        if (completedTask == connectTask)
+        {
+            // Stop the process-exit watcher once the RPC connection wins the race.
+            connectCts.Cancel();
+            ObserveFaultedTask(processExitTask);
+            _rpcClient = await connectTask.ConfigureAwait(false);
+            return _rpcClient;
+        }
+
+        await processExitTask.ConfigureAwait(false);
+        // Stop the retrying connection attempt once the server has exited, then observe any
+        // cancellation/failure it reports so the losing task cannot raise an unobserved exception.
+        connectCts.Cancel();
+        ObserveFaultedTask(connectTask);
+        throw new InvalidOperationException($"AppHost server process exited before the RPC connection could be established. Exit code: {_serverProcess.ExitCode}.");
     }
 
     /// <inheritdoc />
@@ -175,6 +202,15 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         _serverProcess.Dispose();
         _projectLifetime?.Dispose();
         _activity.Dispose();
+    }
+
+    private static void ObserveFaultedTask(Task task)
+    {
+        _ = task.ContinueWith(
+            completedTask => _ = completedTask.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
     }
 }
 
@@ -243,5 +279,19 @@ internal sealed class AppHostServerSessionFactory : IAppHostServerSessionFactory
             Session: session,
             BuildOutput: prepareResult.Output,
             ChannelName: prepareResult.ChannelName);
+    }
+
+    /// <inheritdoc />
+    public IAppHostServerSession Start(
+        IAppHostServerProject appHostServerProject,
+        Dictionary<string, string>? environmentVariables,
+        bool debug)
+    {
+        return AppHostServerSession.Start(
+            appHostServerProject,
+            environmentVariables,
+            debug,
+            _logger,
+            _profilingTelemetry);
     }
 }

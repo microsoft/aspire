@@ -805,6 +805,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
             sdksDirectory: root,
             logsDirectory: root,
             logFilePath: Path.Combine(root.FullName, "test.log"),
+            identityChannel: "local",
             homeDirectory: userHome,
             aspireHomeDirectory: aspireHome);
         var discovery = new InstallationDiscovery(
@@ -980,6 +981,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
             sdksDirectory: root,
             logsDirectory: root,
             logFilePath: Path.Combine(root.FullName, "test.log"),
+            identityChannel: "local",
             homeDirectory: root);
     }
 

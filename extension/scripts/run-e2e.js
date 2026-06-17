@@ -818,7 +818,7 @@ function writeAppHostProject(projectName, resolvedAppHostSdkVersion) {
 `);
 
   fs.writeFileSync(path.join(projectDirectory, 'AppHost.cs'), `${csharpFileHeader}#pragma warning disable ASPIREINTERACTION001
-
+// The E2E fixture intentionally covers interaction command arguments while the API is still experimental.
 var builder = DistributedApplication.CreateBuilder(args);
 
 builder.AddProject<Projects.AspireE2E_Worker>("e2e-worker")
@@ -960,6 +960,7 @@ function getAspireCliEnvironment(extraEnv = {}) {
     ASPIRE_CLI_START_TIMEOUT: process.env.ASPIRE_EXTENSION_E2E_CLI_START_TIMEOUT || '300',
     ASPIRE_CLI_TELEMETRY_OPTOUT: 'true',
     ASPIRE_VERSION_CHECK_DISABLED: 'true',
+    DOTNET_CLI_UI_LANGUAGE: 'en',
     DOTNET_CLI_TELEMETRY_OPTOUT: '1',
     DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE: '1',
     DOTNET_NOLOGO: '1',

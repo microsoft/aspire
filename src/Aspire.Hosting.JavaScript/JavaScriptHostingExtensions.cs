@@ -1475,7 +1475,7 @@ public static class JavaScriptHostingExtensions
                     }
                     catch (Exception ex)
                     {
-                        var resourceLoggerService = ctx.ExecutionContext.ServiceProvider.GetRequiredService<ResourceLoggerService>();
+                        var resourceLoggerService = ctx.ExecutionContext.Services.GetRequiredService<ResourceLoggerService>();
                         var resourceLogger = resourceLoggerService.GetLogger(resource);
 
                         resourceLogger.LogWarning(ex, "Failed to generate Aspire Vite HTTPS config wrapper for resource '{ResourceName}'. Falling back to existing Vite config without Aspire modifications. Automatic HTTPS configuration won't be available", resource.Name);

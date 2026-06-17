@@ -36,6 +36,8 @@ import {
     resourceCommandDisabledDescription,
     appHostStartingDescription,
     appHostStoppingDescription,
+    dashboardUrlNotFound,
+    dashboardUrlUnsupported,
     errorMessage,
 } from '../loc/strings';
 import { isLinkableUrl } from '../utils/urlSchemes';
@@ -54,6 +56,8 @@ import { createResourceCommandArgumentLoader } from './ResourceCommandArgumentsL
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 
 type TreeElement = AppHostItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | WorkspaceAppHostItem | WorkspaceAppHostsGroupItem | RunningAppHostsGroupItem | WorkspaceAppHostActionItem | WorkspaceAppHostPathItem | HealthChecksGroupItem | HealthCheckItem | LogFileItem | CommandsGroupItem | ResourceCommandItem;
+
+const integratedBrowserOpenCommand = 'workbench.action.browser.open';
 
 function sortResources(resources: ResourceJson[]): ResourceJson[] {
     return [...resources].sort((a, b) => {
@@ -934,18 +938,21 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             const workspaceResources = [...this._repository.workspaceResources];
             const workspaceAppHost = this._repository.workspaceAppHost;
             const workspaceCandidatePaths = this._repository.workspaceAppHostCandidatePaths ?? [];
+            const workspaceAppHostPaths = workspaceCandidatePaths.length > 0
+                ? workspaceCandidatePaths
+                : this._repository.appHosts.map(appHost => appHost.appHostPath);
 
-            if (workspaceCandidatePaths.length > 1 || (workspaceResources.length === 0 && !workspaceAppHost)) {
+            if (workspaceAppHostPaths.length > 1 || (workspaceResources.length === 0 && !workspaceAppHost)) {
                 const selectedAppHostPath = workspaceAppHost?.appHostPath ?? this._repository.workspaceAppHostPath;
-                const labels = shortenPaths(workspaceCandidatePaths);
+                const labels = shortenPaths(workspaceAppHostPaths);
 
                 // When multiple workspace AppHosts are running, use global-style AppHostItem (nested view).
                 // When only one is running, use flat WorkspaceResourcesItem.
                 const runningItems: (AppHostItem | WorkspaceResourcesItem)[] = [];
                 const workspaceItems: WorkspaceAppHostItem[] = [];
 
-                for (let i = 0; i < workspaceCandidatePaths.length; i++) {
-                    const candidatePath = workspaceCandidatePaths[i];
+                for (let i = 0; i < workspaceAppHostPaths.length; i++) {
+                    const candidatePath = workspaceAppHostPaths[i];
                     // Use directory-equivalent matching (not exact path) because `aspire ls`
                     // resolves to a `.csproj` while `aspire ps` can report the AppHost source file
                     // (e.g. Program.cs) in the same directory. AppHostDataRepository uses the same
@@ -1192,7 +1199,45 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     }
 
     async openDashboard(element?: TreeElement): Promise<void> {
-        let url: string | null = null;
+        const url = await this._resolveDashboardUrl(element);
+        if (url === undefined) {
+            return;
+        }
+
+        if (url === null) {
+            vscode.window.showInformationMessage(dashboardUrlNotFound);
+            return;
+        }
+
+        if (!isWebDashboardUrl(url)) {
+            vscode.window.showWarningMessage(dashboardUrlUnsupported);
+            return;
+        }
+
+        await vscode.env.openExternal(vscode.Uri.parse(url));
+    }
+
+    async openDashboardToSide(element?: TreeElement): Promise<void> {
+        const url = await this._resolveDashboardUrl(element);
+        if (url === undefined) {
+            return;
+        }
+
+        if (url === null) {
+            vscode.window.showInformationMessage(dashboardUrlNotFound);
+            return;
+        }
+
+        if (!isWebDashboardUrl(url)) {
+            vscode.window.showWarningMessage(dashboardUrlUnsupported);
+            return;
+        }
+
+        await openDashboardUrlToSide(url);
+    }
+
+    private async _resolveDashboardUrl(element?: TreeElement): Promise<string | null | undefined> {
+        let url: string | null | undefined = null;
 
         if (element instanceof AppHostItem) {
             url = element.appHost.dashboardUrl;
@@ -1202,36 +1247,42 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             url = getBaseDashboardUrl(element.dashboardUrl);
         }
 
-        if (!url) {
+        if (!url && element === undefined) {
             if (this._repository.viewMode === 'workspace') {
                 const resources = [...this._repository.workspaceResources];
                 const resourceUrl = this._repository.workspaceAppHost?.dashboardUrl ?? resources.find(r => r.dashboardUrl)?.dashboardUrl ?? null;
                 url = getBaseDashboardUrl(resourceUrl);
-            } else {
-                const appHosts = this._repository.appHosts.filter(a => a.dashboardUrl);
-                if (appHosts.length === 1) {
-                    url = appHosts[0].dashboardUrl;
-                } else if (appHosts.length > 1) {
-                    const labels = shortenPaths(appHosts.map(a => a.appHostPath));
-                    const items = appHosts.map((a, index) => ({
-                        label: labels[index],
-                        description: pidDescription(a.appHostPid),
-                        dashboardUrl: a.dashboardUrl!,
-                    }));
-                    const selected = await vscode.window.showQuickPick(items, {
-                        placeHolder: selectDashboardPlaceholder,
-                    });
-                    if (!selected) {
-                        return;
-                    }
-                    url = selected.dashboardUrl;
-                }
+            }
+
+            if (!url) {
+                url = await this._resolveAppHostDashboardUrl();
             }
         }
 
-        if (url) {
-            vscode.env.openExternal(vscode.Uri.parse(url));
+        return url;
+    }
+
+    private async _resolveAppHostDashboardUrl(): Promise<string | null | undefined> {
+        const appHosts = this._repository.appHosts.filter(a => a.dashboardUrl);
+        if (appHosts.length === 1) {
+            return appHosts[0].dashboardUrl!;
         }
+
+        if (appHosts.length === 0) {
+            return null;
+        }
+
+        const labels = shortenPaths(appHosts.map(a => a.appHostPath));
+        const items = appHosts.map((a, index) => ({
+            label: labels[index],
+            description: pidDescription(a.appHostPid),
+            dashboardUrl: a.dashboardUrl!,
+        }));
+        const selected = await vscode.window.showQuickPick(items, {
+            placeHolder: selectDashboardPlaceholder,
+        });
+
+        return selected?.dashboardUrl;
     }
 
     async runAppHost(element: WorkspaceAppHostItem | undefined, noDebug: boolean): Promise<void> {
@@ -1447,8 +1498,8 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         vscode.env.openExternal(vscode.Uri.parse(element.url));
     }
 
-    openInIntegratedBrowser(element: EndpointUrlItem): void {
-        vscode.commands.executeCommand('simpleBrowser.show', element.url);
+    async openInIntegratedBrowser(element: EndpointUrlItem): Promise<void> {
+        await vscode.commands.executeCommand('simpleBrowser.show', element.url);
     }
 
     private async _runResourceCommand(element: ResourceItem, commandName: string, additionalArgs?: string[], redactAdditionalArgs = false): Promise<void> {
@@ -1505,6 +1556,31 @@ function getBaseDashboardUrl(resourceDashboardUrl: string | null): string | null
     }
     const idx = resourceDashboardUrl.indexOf('/?resource=');
     return idx >= 0 ? resourceDashboardUrl.substring(0, idx) : resourceDashboardUrl;
+}
+
+function isWebDashboardUrl(url: string): boolean {
+    try {
+        const parsed = new URL(url);
+        return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch {
+        return false;
+    }
+}
+
+async function openDashboardUrlToSide(url: string): Promise<void> {
+    const commands = await vscode.commands.getCommands(true);
+    if (commands.includes(integratedBrowserOpenCommand)) {
+        // VS Code 1.123+ exposes integrated-browser side placement through
+        // workbench.action.browser.open({ url, openToSide: true }).
+        // See https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/browserView/electron-browser/features/browserTabManagementFeatures.ts
+        await vscode.commands.executeCommand(integratedBrowserOpenCommand, { url, openToSide: true });
+        return;
+    }
+
+    await vscode.commands.executeCommand('simpleBrowser.api.open', vscode.Uri.parse(url), {
+        viewColumn: vscode.ViewColumn.Beside,
+        preserveFocus: false,
+    });
 }
 
 function isProjectFileToSourceFileMatch(left: string, right: string): boolean {

@@ -21,7 +21,7 @@ export interface ResourceCommandJson {
     description: string | null;
     visibility?: string | null;
     state?: string | null;
-    registrationOrder?: number | null;
+    sortOrder?: number | null;
     argumentInputs?: ResourceCommandArgumentInputJson[] | null;
 }
 
@@ -370,9 +370,12 @@ export class AppHostDataRepository {
     }
 
     private get _shouldPoll(): boolean {
-        // Workspace mode still polls ps after the selected AppHost path is known so
-        // a running AppHost can be shown even when describe has no resources to emit.
-        return this._dataActive && (this._viewMode === 'global' || this._workspaceAppHostCandidatePaths.length > 0);
+        // Workspace discovery can take longer than `aspire ps`. Poll immediately so
+        // already-running AppHosts appear in the pane while idle candidates stream in.
+        return this._dataActive
+            && (this._viewMode === 'global'
+                || !this._workspaceAppHostDiscoveryComplete
+                || this._workspaceAppHostCandidatePaths.length > 0);
     }
 
     private get _shouldWatchWorkspace(): boolean {
@@ -1020,14 +1023,14 @@ export class AppHostDataRepository {
         const hasWorkspaceAppHost = this._workspaceAppHost !== undefined;
         const hasResources = this._workspaceResources.size > 0;
         const hasRunningAppHosts = this._appHosts.length > 0;
+        const hasDashboardUrl = Boolean(this._workspaceAppHost?.dashboardUrl)
+            || Array.from(this._workspaceResources.values()).some(resource => Boolean(resource.dashboardUrl))
+            || this._appHosts.some(appHost => Boolean(appHost.dashboardUrl));
         const hasWorkspaceCandidates = this._workspaceAppHostCandidatePaths.length > 0;
         vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', !hasWorkspaceAppHost && !hasResources && !hasRunningAppHosts && !hasWorkspaceCandidates);
-        // `aspire.noRunningAppHosts` gates the Open Dashboard command palette entry,
-        // which requires a live dashboard URL. Keep this distinct from `noAppHosts`
-        // (which also considers discovered idle candidates) so the palette entry
-        // doesn't appear when only idle candidates exist — invoking it would silently
-        // no-op because no dashboard URL is available.
-        vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasRunningAppHosts);
+        // Keep this distinct from `noAppHosts`, which also considers discovered idle
+        // candidates that have no live dashboard URL.
+        vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasDashboardUrl);
         const clearLoading = options?.clearLoading ?? (hasResources || hasWorkspaceAppHost || hasRunningAppHosts || hasWorkspaceCandidates);
         if (this._loadingWorkspace && clearLoading) {
             this._loadingWorkspace = false;
@@ -1168,10 +1171,11 @@ export class AppHostDataRepository {
         }
 
         if (this._viewMode === 'global' && this._loadingGlobal) {
+            const hasDashboardUrl = this._appHosts.some(appHost => Boolean(appHost.dashboardUrl));
             this._loadingGlobal = false;
             this._updateLoadingContext();
             vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', this._appHosts.length === 0);
-            vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', this._appHosts.length === 0);
+            vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasDashboardUrl);
         }
     }
 
@@ -1279,8 +1283,9 @@ export class AppHostDataRepository {
             }
 
             if (changed) {
+                const hasDashboardUrl = this._appHosts.some(appHost => Boolean(appHost.dashboardUrl));
                 vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', appHosts.length === 0);
-                vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', appHosts.length === 0);
+                vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasDashboardUrl);
                 this._onDidChangeData.fire();
             }
         } catch (e) {
@@ -1301,9 +1306,15 @@ export class AppHostDataRepository {
 
     private _handleWorkspacePsOutput(appHosts: readonly AppHostDisplayInfo[]): void {
         let workspaceAppHostPath = this._workspaceAppHostPath;
-        const workspaceAppHosts = this._workspaceAppHostCandidatePaths.length > 0
-            ? appHosts.filter(appHost => this._workspaceAppHostCandidatePaths.some(candidatePath => isMatchingAppHostPath(appHost.appHostPath, candidatePath)))
-            : [];
+        const discoveryPending = !this._workspaceAppHostDiscoveryComplete;
+        let workspaceAppHosts: AppHostDisplayInfo[];
+        if (this._workspaceAppHostCandidatePaths.length === 0 && discoveryPending) {
+            workspaceAppHosts = appHosts.filter(appHost => isPathInWorkspace(appHost.appHostPath));
+        } else if (this._workspaceAppHostCandidatePaths.length > 0) {
+            workspaceAppHosts = appHosts.filter(appHost => this._workspaceAppHostCandidatePaths.some(candidatePath => isMatchingAppHostPath(appHost.appHostPath, candidatePath)));
+        } else {
+            workspaceAppHosts = [];
+        }
         let workspaceAppHost = workspaceAppHostPath
             ? workspaceAppHosts.find(appHost => isMatchingAppHostPath(appHost.appHostPath, workspaceAppHostPath))
             : undefined;
@@ -1350,7 +1361,7 @@ export class AppHostDataRepository {
         }
 
         if (changed || this._loadingWorkspace) {
-            this._updateWorkspaceContext({ clearLoading: true });
+            this._updateWorkspaceContext({ clearLoading: !discoveryPending || workspaceAppHosts.length > 0 });
         }
     }
 
@@ -1607,6 +1618,18 @@ function isWindowsDriveSegment(segment: string): boolean {
 
 function getComparisonKey(value: string): string {
     return process.platform === 'win32' ? value.toLowerCase() : value;
+}
+
+function isPathInWorkspace(filePath: string): boolean {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+        return false;
+    }
+
+    const relativePath = path.relative(workspaceFolder.uri.fsPath, filePath);
+    return relativePath !== ''
+        && !relativePath.startsWith('..')
+        && !path.isAbsolute(relativePath);
 }
 
 function isDescribeUnsupportedOutput(nonJsonLines: readonly string[], stderr: string): boolean {

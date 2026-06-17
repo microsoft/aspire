@@ -74,6 +74,31 @@ internal static class TelemetryConstants
         public const string CliBuildId = "aspire.cli.build_id";
 
         /// <summary>
+        /// Tag for the CLI's effective identity version. This is the version the CLI is
+        /// behaving as — which honors <c>ASPIRE_CLI_VERSION</c> / the sidecar config — and may
+        /// differ from <see cref="CliVersion"/> (the physical binary's assembly version) when the
+        /// CLI is emulating another build for reproduction/diagnosis. See
+        /// docs/specs/cli-identity-sidecar.md.
+        /// </summary>
+        public const string IdentityVersion = "aspire.cli.identity.version";
+
+        /// <summary>
+        /// Tag for the CLI's effective identity commit (honors <c>ASPIRE_CLI_COMMIT</c> / sidecar).
+        /// May differ from the physical binary's commit when emulating another build.
+        /// </summary>
+        public const string IdentityCommit = "aspire.cli.identity.commit";
+
+        /// <summary>
+        /// Tag for the CLI's effective identity channel (honors <c>ASPIRE_CLI_CHANNEL</c> / sidecar).
+        /// </summary>
+        public const string IdentityChannel = "aspire.cli.identity.channel";
+
+        /// <summary>
+        /// Tag for the detected coding agent that invoked the CLI process.
+        /// </summary>
+        public const string CodingAgent = "process.coding_agent";
+
+        /// <summary>
         /// Tag for the deployment environment name ("ci" or "local").
         /// </summary>
         public const string DeploymentEnvironmentName = "deployment.environment.name";

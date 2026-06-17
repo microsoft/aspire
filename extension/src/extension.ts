@@ -187,6 +187,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const switchToGlobalViewRegistration = registerInstrumentedCommand('aspire-vscode.switchToGlobalView', 'tree', () => dataRepository.setViewMode('global'));
   const switchToWorkspaceViewRegistration = registerInstrumentedCommand('aspire-vscode.switchToWorkspaceView', 'tree', () => dataRepository.setViewMode('workspace'));
   const openDashboardRegistration = registerInstrumentedCommand('aspire-vscode.openDashboard', 'tree', (element) => appHostTreeProvider.openDashboard(element));
+  const openDashboardToSideRegistration = registerInstrumentedCommand('aspire-vscode.openDashboardToSide', 'tree', (element) => appHostTreeProvider.openDashboardToSide(element));
   const openAppHostSourceRegistration = registerInstrumentedCommand('aspire-vscode.openAppHostSource', 'tree', (element) => appHostTreeProvider.openAppHostSource(element));
   const stopAppHostRegistration = registerInstrumentedCommand('aspire-vscode.stopAppHost', 'tree', (element) => appHostTreeProvider.stopAppHost(element));
   const runAppHostRegistration = registerInstrumentedCommand('aspire-vscode.runAppHost', 'tree', (element) => appHostTreeProvider.runAppHost(element, true));
@@ -215,7 +216,35 @@ export async function activate(context: vscode.ExtensionContext) {
   // Activate the data repository. Workspace describe watching and global polling begin when the panel is visible.
   dataRepository.activate();
 
-  context.subscriptions.push(appHostTreeView, globalRefreshAppHostsRegistration, refreshAppHostsRegistration, switchToGlobalViewRegistration, switchToWorkspaceViewRegistration, openDashboardRegistration, openAppHostSourceRegistration, stopAppHostRegistration, runAppHostRegistration, debugAppHostRegistration, stopResourceRegistration, startResourceRegistration, restartResourceRegistration, viewResourceLogsRegistration, executeResourceCommandRegistration, executeResourceCommandItemRegistration, copyEndpointUrlRegistration, openInExternalBrowserRegistration, openInIntegratedBrowserRegistration, copyResourceNameRegistration, copyAppHostPathRegistration, viewAppHostSourceRegistration, viewAppHostLogFileRegistration, copyLogFilePathRegistration, expandAllRegistration, debugSessionRefreshRegistration, { dispose: () => { appHostTreeProvider.dispose(); dataRepository.dispose(); } });
+  context.subscriptions.push(
+    appHostTreeView,
+    globalRefreshAppHostsRegistration,
+    refreshAppHostsRegistration,
+    switchToGlobalViewRegistration,
+    switchToWorkspaceViewRegistration,
+    openDashboardRegistration,
+    openDashboardToSideRegistration,
+    openAppHostSourceRegistration,
+    stopAppHostRegistration,
+    runAppHostRegistration,
+    debugAppHostRegistration,
+    stopResourceRegistration,
+    startResourceRegistration,
+    restartResourceRegistration,
+    viewResourceLogsRegistration,
+    executeResourceCommandRegistration,
+    executeResourceCommandItemRegistration,
+    copyEndpointUrlRegistration,
+    openInExternalBrowserRegistration,
+    openInIntegratedBrowserRegistration,
+    copyResourceNameRegistration,
+    copyAppHostPathRegistration,
+    viewAppHostSourceRegistration,
+    viewAppHostLogFileRegistration,
+    copyLogFilePathRegistration,
+    expandAllRegistration,
+    debugSessionRefreshRegistration,
+    { dispose: () => { appHostTreeProvider.dispose(); dataRepository.dispose(); } });
 
   // CodeLens provider — shows Debug on pipeline steps, resource state on resources
   const codeLensProvider = new AspireCodeLensProvider(appHostTreeProvider, dataRepository);
@@ -669,7 +698,7 @@ function isRetryableRenameError(error: unknown): boolean {
     return false;
   }
 
-  return error.code === 'EPERM' || error.code === 'EACCES' || error.code === 'EEXIST';
+  return error.code === 'EPERM' || error.code === 'EACCES' || error.code === 'EBUSY' || error.code === 'EEXIST';
 }
 
 function sleepSynchronously(milliseconds: number): void {
@@ -814,9 +843,11 @@ async function executeE2eControlCommand(
     }
     case 'openInIntegratedBrowser': {
       const element = getEndpointElement(appHostTreeProvider, command);
+      const endpointUrl = getEndpointUrl(element);
       const commandPromise = vscode.commands.executeCommand('aspire-vscode.openInIntegratedBrowser', element);
       markStarted();
-      return await commandPromise;
+      await commandPromise;
+      return { url: endpointUrl };
     }
     case 'stopResource': {
       const element = getResourceElement(appHostTreeProvider, command.resourceName, command.appHostPath);
@@ -1071,6 +1102,14 @@ function getEndpointElement(
   }
 
   return element;
+}
+
+function getEndpointUrl(element: unknown): string {
+  if (!element || typeof element !== 'object' || typeof (element as { url?: unknown }).url !== 'string') {
+    throw new Error('Aspire extension E2E endpoint command resolved an endpoint without a URL.');
+  }
+
+  return (element as { url: string }).url;
 }
 
 function getResourceCommandElement(

@@ -717,6 +717,171 @@ suite('AspireAppHostTreeProvider', () => {
         assert.strictEqual(openExternalStub.callCount, 1);
     });
 
+    test('workspace dashboard command falls back to running AppHost dashboards', async () => {
+        const appHosts = [
+            makeAppHost({
+                appHostPath: '/workspace/apps/Store/AppHost.csproj',
+                appHostPid: 1,
+                dashboardUrl: 'http://localhost:1001',
+            }),
+            makeAppHost({
+                appHostPath: '/workspace/samples/Store/AppHost.csproj',
+                appHostPid: 2,
+                dashboardUrl: 'http://localhost:1002',
+            }),
+        ];
+        const provider = makeTreeProvider(appHosts, 'workspace');
+        const showQuickPickStub = sandbox.stub(vscode.window, 'showQuickPick').callsFake(async items => (items as readonly vscode.QuickPickItem[])[1]);
+        const openExternalStub = sandbox.stub(vscode.env, 'openExternal').resolves(true);
+
+        await provider.openDashboard();
+
+        const items = showQuickPickStub.getCall(0).args[0] as readonly vscode.QuickPickItem[];
+        assert.deepStrictEqual(items.map(item => item.label), [
+            'apps/Store/AppHost.csproj',
+            'samples/Store/AppHost.csproj',
+        ]);
+        assert.strictEqual(openExternalStub.callCount, 1);
+        assert.strictEqual(openExternalStub.getCall(0).args[0].toString(), 'http://localhost:1002/');
+    });
+
+    test('workspace view shows multiple running AppHosts before workspace discovery completes', () => {
+        const provider = makeTreeProvider([
+            makeAppHost({
+                appHostPath: '/workspace/apps/Store/AppHost.csproj',
+                appHostPid: 1,
+            }),
+            makeAppHost({
+                appHostPath: '/workspace/samples/Store/AppHost.csproj',
+                appHostPid: 2,
+            }),
+        ], 'workspace');
+
+        const items = provider.getChildren();
+
+        assert.deepStrictEqual(items.map(item => item.label), [
+            'apps/Store/AppHost.csproj',
+            'samples/Store/AppHost.csproj',
+        ]);
+    });
+
+    test('openDashboard stays silent when dashboard selection is canceled', async () => {
+        const provider = makeTreeProvider([
+            makeAppHost({
+                appHostPath: '/workspace/apps/Store/AppHost.csproj',
+                appHostPid: 1,
+                dashboardUrl: 'http://localhost:1001',
+            }),
+            makeAppHost({
+                appHostPath: '/workspace/samples/Store/AppHost.csproj',
+                appHostPid: 2,
+                dashboardUrl: 'http://localhost:1002',
+            }),
+        ]);
+        sandbox.stub(vscode.window, 'showQuickPick').resolves(undefined);
+        const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves(undefined);
+        const openExternalStub = sandbox.stub(vscode.env, 'openExternal').resolves(true);
+
+        await provider.openDashboard();
+
+        assert.strictEqual(showInformationMessageStub.callCount, 0);
+        assert.strictEqual(openExternalStub.callCount, 0);
+    });
+
+    test('openDashboard does not fall back to another AppHost for an explicit AppHost item', async () => {
+        const provider = makeTreeProvider([
+            makeAppHost({
+                appHostPath: '/workspace/apps/Store/AppHost.csproj',
+                appHostPid: 1,
+                dashboardUrl: null,
+            }),
+            makeAppHost({
+                appHostPath: '/workspace/samples/Store/AppHost.csproj',
+                appHostPid: 2,
+                dashboardUrl: 'http://localhost:1002',
+            }),
+        ]);
+        const [appHostItem] = provider.getChildren();
+        const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves(undefined);
+        const showQuickPickStub = sandbox.stub(vscode.window, 'showQuickPick').resolves(undefined);
+        const openExternalStub = sandbox.stub(vscode.env, 'openExternal').resolves(true);
+
+        await provider.openDashboard(appHostItem);
+
+        assert.strictEqual(showInformationMessageStub.callCount, 1);
+        assert.strictEqual(showQuickPickStub.callCount, 0);
+        assert.strictEqual(openExternalStub.callCount, 0);
+    });
+
+    test('openDashboardToSide opens the dashboard in the integrated browser side group', async () => {
+        const provider = makeTreeProvider([
+            makeAppHost({
+                dashboardUrl: 'http://localhost:1001',
+            }),
+        ]);
+        sandbox.stub(vscode.commands, 'getCommands').resolves(['workbench.action.browser.open']);
+        const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand').resolves(undefined);
+        const openExternalStub = sandbox.stub(vscode.env, 'openExternal').resolves(true);
+
+        await provider.openDashboardToSide();
+
+        assert.strictEqual(openExternalStub.callCount, 0);
+        assert.strictEqual(executeCommandStub.callCount, 1);
+        assert.strictEqual(executeCommandStub.getCall(0).args[0], 'workbench.action.browser.open');
+        assert.deepStrictEqual(executeCommandStub.getCall(0).args[1], {
+            url: 'http://localhost:1001',
+            openToSide: true,
+        });
+    });
+
+    test('openDashboardToSide falls back to simple browser API on VS Code 1.98', async () => {
+        const provider = makeTreeProvider([
+            makeAppHost({
+                dashboardUrl: 'http://localhost:1001',
+            }),
+        ]);
+        sandbox.stub(vscode.commands, 'getCommands').resolves([]);
+        const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand').resolves(undefined);
+
+        await provider.openDashboardToSide();
+
+        assert.strictEqual(executeCommandStub.callCount, 1);
+        assert.strictEqual(executeCommandStub.getCall(0).args[0], 'simpleBrowser.api.open');
+        const uri = executeCommandStub.getCall(0).args[1] as vscode.Uri;
+        assert.strictEqual(uri.scheme, 'http');
+        assert.strictEqual(uri.authority, 'localhost:1001');
+        assert.deepStrictEqual(executeCommandStub.getCall(0).args[2], {
+            viewColumn: vscode.ViewColumn.Beside,
+            preserveFocus: false,
+        });
+    });
+
+    test('openDashboardToSide warns when there is no dashboard URL to open', async () => {
+        const provider = makeTreeProvider([]);
+        const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves(undefined);
+        const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand').resolves(undefined);
+
+        await provider.openDashboardToSide();
+
+        assert.strictEqual(showInformationMessageStub.callCount, 1);
+        assert.strictEqual(executeCommandStub.callCount, 0);
+    });
+
+    test('openDashboardToSide rejects non-web dashboard URLs', async () => {
+        const provider = makeTreeProvider([
+            makeAppHost({
+                dashboardUrl: 'vscode://malicious-command',
+            }),
+        ]);
+        const showWarningMessageStub = sandbox.stub(vscode.window, 'showWarningMessage').resolves(undefined);
+        const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand').resolves(undefined);
+
+        await provider.openDashboardToSide();
+
+        assert.strictEqual(showWarningMessageStub.callCount, 1);
+        assert.strictEqual(executeCommandStub.callCount, 0);
+    });
+
     test('non-http endpoints remain visible but are not clickable', () => {
         const provider = makeTreeProvider([
             makeAppHost({
@@ -2027,9 +2192,9 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         const sandbox = sinon.createSandbox();
         const resource = makeResource({
             commands: {
-                'set-parameter': { displayName: 'Set parameter', description: null, registrationOrder: 0 },
-                'custom-action': { displayName: 'Custom action', description: null, registrationOrder: 1 },
-                'delete-parameter': { displayName: 'Delete parameter', description: null, registrationOrder: 2 },
+                'set-parameter': { displayName: 'Set parameter', description: null, sortOrder: 0 },
+                'custom-action': { displayName: 'Custom action', description: null, sortOrder: 1 },
+                'delete-parameter': { displayName: 'Delete parameter', description: null, sortOrder: 2 },
             },
         });
         const provider = makeTreeProvider([

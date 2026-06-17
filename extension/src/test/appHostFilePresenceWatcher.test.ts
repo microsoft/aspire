@@ -66,6 +66,7 @@ function makeEditor(filePath: string, content: string): vscode.TextEditor {
 }
 
 const appHostCsContent = 'var builder = DistributedApplication.CreateBuilder(args);\nbuilder.AddRedis("cache");\nbuilder.Build().Run();';
+const appHostTsContent = 'import { createBuilder } from "@aspire/sdk";\nconst builder = await createBuilder();\nawait builder.addRedis("cache");';
 const nonAppHostCsContent = 'using System;\nclass Program { static void Main() { } }';
 
 suite('AppHostFilePresenceWatcher', () => {
@@ -120,6 +121,17 @@ suite('AppHostFilePresenceWatcher', () => {
 
     test('constructor reports true when an AppHost file is already visible', async () => {
         visibleEditors = [makeEditor('/test/AppHost.cs', appHostCsContent)];
+
+        const watcher = new AppHostFilePresenceWatcher(repository);
+        await waitForUpdate(watcher);
+
+        assert.strictEqual(setOpenSpy.calledOnce, true);
+        assert.strictEqual(setOpenSpy.firstCall.args[0], true);
+        watcher.dispose();
+    });
+
+    test('constructor reports true when an .mts AppHost file is already visible', async () => {
+        visibleEditors = [makeEditor('/test/apphost.mts', appHostTsContent)];
 
         const watcher = new AppHostFilePresenceWatcher(repository);
         await waitForUpdate(watcher);
