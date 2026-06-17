@@ -351,16 +351,12 @@ extends:
                   path: '$(Build.SourcesDirectory)/artifacts/DashboardArtifacts/$(_BuildConfig)'
                   artifactName: managed_dashboard_artifacts
 
-      # OneLocBuild is temporarily disabled while we work with the loc team
-      # to reconfigure it after the repo migration from dotnet/aspire to microsoft/aspire.
-      # - ${{ if and(notin(variables['Build.Reason'], 'PullRequest'), eq(variables['Build.SourceBranch'], 'refs/heads/main')) }}:
-      #   - template: /eng/common/templates-official/job/onelocbuild.yml@self
-      #     parameters:
-      #       LclSource: lclFilesfromPackage
-      #       LclPackageId: 'LCL-JUNO-PROD-ASPIRE'
-      #       GitHubOrg: microsoft
-      #       MirrorRepo: aspire
-      #       MirrorBranch: main
+      - ${{ if and(notin(variables['Build.Reason'], 'PullRequest'), eq(variables['Build.SourceBranch'], 'refs/heads/main')) }}:
+        - template: /eng/common/templates-official/job/onelocbuild.yml@self
+          parameters:
+            LclSource: lclFilesfromPackage
+            LclPackageId: 'LCL-JUNO-PROD-ASPIRE'
+            CreatePr: false
 
     # ----------------------------------------------------------------
     # Template tests: validate that the packed Aspire.* nupkgs produce

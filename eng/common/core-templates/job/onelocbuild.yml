@@ -73,7 +73,7 @@ jobs:
         displayName: Generate LocProject.json
         condition: ${{ parameters.condition }}
 
-    - task: OneLocBuild@2
+    - task: OneLocBuild@3
       displayName: OneLocBuild
       env:
         SYSTEM_ACCESSTOKEN: $(System.AccessToken)
