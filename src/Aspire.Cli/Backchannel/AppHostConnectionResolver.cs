@@ -8,9 +8,9 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
-
 namespace Aspire.Cli.Backchannel;
 
 /// <summary>
@@ -135,7 +135,10 @@ internal sealed class AppHostConnectionResolver(
                 };
             }
 
-            var targetPath = projectFile.FullName;
+            // Canonicalize the path to handle symlinks (e.g., /tmp -> /private/tmp on macOS).
+            // This ensures the socket lookup uses the same path as the running AppHost,
+            // which canonicalizes paths when computing backchannel socket keys.
+            var targetPath = PathNormalizer.ResolveToFilesystemPath(projectFile.FullName);
             var matchingSockets = AppHostHelper.FindMatchingNonOrphanedSockets(
                 targetPath,
                 executionContext.HomeDirectory.FullName,
