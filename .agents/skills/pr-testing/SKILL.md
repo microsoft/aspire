@@ -1,9 +1,9 @@
 ---
 name: pr-testing
-description: Downloads and tests Aspire CLI from a PR build, preferably in the repo-local container runner under eng/scripts, verifies version, and runs test scenarios based on PR changes. Use this when asked to test a pull request.
+description: Use when asked to test a microsoft/aspire pull request, including CLI, hosting, dashboard, component, template, and VS Code extension changes. Also covers testing PRs that change CI infrastructure — GitHub Actions (workflows, actions, gh-aw agentic workflows, CI scripts under .github/ and eng/) and Azure DevOps pipelines (eng/pipelines, eng/common).
 ---
 
-You are a specialized PR testing agent for the microsoft/aspire repository. Your primary function is to download the Aspire CLI from a PR's "Dogfood this PR" comment, verify it matches the PR's latest commit, analyze the PR changes, and run appropriate test scenarios.
+You are a specialized PR testing agent for the microsoft/aspire repository. Your primary function is to test the artifacts or source that actually contain a PR's changes, verify they match the PR's latest commit, analyze the PR changes, and run appropriate test scenarios. Most product PRs use the Aspire CLI from a PR's "Dogfood this PR" comment; VS Code extension PRs require testing the PR extension source or a VSIX built from that source.
 
 ## Understanding User Requests
 
@@ -55,11 +55,13 @@ Or in PowerShell:
 iex "& { $(irm https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.ps1) } 16093"
 ```
 
+If the PR only changes `extension/` and no dogfood comment is available, do not stop here. Continue by checking out the PR branch in an isolated workspace and testing the extension source or a VSIX built from that branch. Still use the dogfood CLI when the extension change must be validated against a PR CLI artifact or a specific CLI version.
+
 ### 3. Choose Execution Mode and Install the CLI
 
 Before installing the CLI, decide whether the testing should run **locally** or in the repo-local **container runner**. Use the container runner when you need an isolated CLI install or to reproduce Linux/container-specific behavior. Prefer local mode when the user is likely to keep the generated app for manual follow-up on the host machine.
 
-In either mode, use the dogfood command from the PR comment as the install step. Do not add extra installer flags unless the user explicitly asks to debug the install flow.
+In either mode, use the dogfood command from the PR comment as the install step. Do not add extra installer flags unless the user explicitly asks to debug the install flow. For extension-only PRs with no dogfood CLI, skip this CLI install step and build the extension/CLI from the PR branch with `extension/build.sh` or `extension/build.ps1`.
 
 The container runner lives at:
 
@@ -241,7 +243,11 @@ Categorize the changes:
 - **Dashboard changes**: Files in `src/Aspire.Dashboard/`
 - **Client/Component changes**: Files in `src/Components/`
 - **Template changes**: Files in `src/Aspire.ProjectTemplates/`
+- **VS Code extension changes**: Files in `extension/`
 - **Test changes**: Files in `tests/`
+- **CI infrastructure changes**: GitHub Actions — files in `.github/workflows/`, `.github/actions/`, `.github/aw/`, `.github/agents/`, or CI scripts under `eng/scripts/`, `eng/testing/github-ci-trigger-patterns.txt`, `eng/test-retry-patterns.json`; **and** Azure DevOps — `eng/pipelines/`, `eng/common/`, and the signing/packaging/publishing plumbing those pipelines call. More broadly, anything that changes *how CI selects, builds, or runs* (e.g. `tools/**` invoked by CI, MSBuild test plumbing in `eng/**/*.props`/`*.targets`, or CI config/data JSON), even when no `.github/` or `eng/pipelines/` file is touched. (Skill/doc-only edits under `.agents/skills/**` or `docs/**` are **not** tested by this skill — there is nothing to run for them.)
+
+> **If the PR touches CI infrastructure, follow the `ci-infra-testing.md` reference in this skill directory for that part.** Those changes are *not* validated by the CLI dogfood / template scenarios below. The reference has two tracks: **GitHub Actions** (most workflows don't run on the PR; unit tests don't catch trigger / permission / fork / portability / lock-drift gotchas) and **Azure DevOps** (no AzDO pipeline runs on a GitHub PR — a non-trivial change must be run on the `dnceng/internal` mirror via the `azdo-internal` skill). For an **infra-only** PR, skip the CLI install and template scenarios in Steps 3–9 entirely and use `ci-infra-testing.md` instead. For a mixed PR, do both.
 
 ### 6. Generate Test Scenarios
 
@@ -277,6 +283,19 @@ Based on the PR changes, generate appropriate test scenarios. Always use new pro
 - Add the corresponding hosting resource
 - Test the client can connect to the resource
 
+**For CI infrastructure changes (`.github/**`, `eng/pipelines/**`, `eng/common/**`, CI scripts under `eng/`):**
+- Follow `ci-infra-testing.md` in this skill directory. It splits into a **GitHub Actions** track and an **Azure DevOps** track. In brief — GitHub: enumerate every workflow the diff affects (changed `.yml`, every workflow that consumes a changed script/action/reusable-workflow/data file, *and* every consumer of an artifact a changed job produces), trace the producer→consumer graph (`needs:`, `outputs`, `upload`/`download-artifact`, `workflow_run`), determine which actually run on this PR, run the matching `Infrastructure.Tests` classes, recompile any gh-aw `.lock.yml` and confirm no diff, manually dispatch the affected workflows that don't run on the PR (prefer a `dry_run` input or your fork), validate each run's *results* (job logs, binlog, downloaded artifacts) rather than just that it went green, and confirm no *fewer* tests/jobs run than baseline when enumeration/matrix/job structure changes. AzDO: no pipeline runs on the PR — for a non-trivial change, run def-1602 on the `dnceng/internal` mirror via the `azdo-internal` skill, check stage `dependsOn` + published/consumed artifacts (including the cross-pipeline release consumer), and validate the change took effect from the timeline + downloaded artifacts. Scan the failure-mode tables for the gotchas the unit tests can't catch.
+
+**For VS Code extension changes (`extension/`):**
+- Test the PR extension source or a VSIX built from the PR branch. The dogfood CLI installer only validates the PR CLI; it does not install the PR's VS Code extension changes.
+- Use a short checkout path for extension test workspaces (for example `/tmp/aspire-pr-<number>` on macOS/Linux). VS Code's IPC socket path can exceed platform limits in deeply nested worktrees, causing `listen EINVAL` before tests run.
+- From `extension/`, run `./build.sh` (Linux/macOS) or `./build.ps1` (Windows) before extension tests when the PR may depend on current CLI behavior. The script installs the pinned Corepack/Yarn toolchain, runs `corepack yarn install --frozen-lockfile --non-interactive`, compiles the extension, and builds `src/Aspire.Cli`.
+- Run `corepack yarn run test` for extension compile, lint, and VS Code unit tests. For dependency-only changes to `extension/package.json` or `extension/yarn.lock`, also verify `corepack yarn install --frozen-lockfile --non-interactive` and inspect that `yarn.lock` uses the approved internal npm feed.
+- For user-visible commands, views, debugger behavior, AppHost discovery, DCP/RPC/MCP behavior, or CLI integration, run or add focused E2E coverage with the repo's `vscode-extension-tester` harness via `corepack yarn run test:e2e`. Use `ASPIRE_EXTENSION_E2E_SPEC='out/test-e2e/test-e2e/<spec>.e2e.test.js'` (or a narrower glob under `out/test-e2e/**`) to keep the run focused when the changed surface has an existing E2E spec.
+- If no matching E2E exists for a user-visible behavior, create a temporary focused E2E spec in the PR checkout and run it against the PR VSIX/source. Keep the temporary spec out of the final PR-testing skill changes, but use it to capture evidence from a real Extension Host run: Extension Development Host/VSIX version, command invoked, workspace/AppHost state, `.test-results/e2e/<shard>/extension-state.json`, VS Code logs, screenshots/recordings when helpful, and failure diagnostics.
+- Use Playwright or manual VS Code exploration only to understand a scenario that the E2E harness does not yet cover. If that exploration is needed, convert the repro into `test:e2e` or capture equivalent Extension Host evidence before concluding the PR works.
+- When testing compatibility with a separately installed or dogfood CLI, set `ASPIRE_EXTENSION_E2E_CLI_PATH` to that exact `aspire` binary. If the extension is expected to work with older published CLIs, also run a compatibility scenario against that CLI; set `ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS=true` only for tests that intentionally cover bugs fixed by the current repo-built CLI.
+
 #### Unhappy-Path Coverage
 
 For every changed user-facing behavior, include 1-3 high-value unhappy-path, negative, or boundary test cases after the happy-path scenario. Do not add generic torture tests that are unrelated to the diff, and do not include every example below by default. Each case should have an expected outcome, such as a clear validation error, a safe failed state, a non-zero exit code, or a recoverable dashboard/resource state.
@@ -290,6 +309,7 @@ Use these examples as a starting point and adapt them to the actual PR:
 | Dashboard UI | Empty data sets, failed/unhealthy/unknown resource states, long resource names, large resource counts, malformed telemetry/log data from a resource |
 | Templates | Invalid project names, non-empty output directories, unsupported template option values, disabled optional services, non-interactive creation with all prompt-suppressing flags |
 | Client/components | Missing configuration, connection refusal, auth failure, unavailable resource, malformed endpoint metadata |
+| VS Code extension | No workspace folder, no AppHost discovered, multiple AppHosts, missing/old CLI, stopped AppHost, command invoked from tree item vs command palette, closed dashboard URL, failed RPC/DCP session, malformed launch profile, localized command title/string coverage |
 
 Prefer cases that reproduce how a real user could break or misuse the changed feature. If no meaningful unhappy-path case applies to a changed behavior, say so in the plan instead of adding noisy filler. Avoid destructive external side effects, credential exposure, or tests that require private infrastructure unless the PR specifically changes that behavior and the user confirms it.
 
@@ -310,6 +330,7 @@ Based on analyzing the PR changes, I've identified the following test scenarios:
 - **Dashboard changes**: [Yes/No] - [brief description if yes]
 - **Template changes**: [Yes/No] - [brief description if yes]
 - **Client/Component changes**: [Yes/No] - [brief description if yes]
+- **VS Code extension changes**: [Yes/No] - [brief description if yes]
 - **Test changes**: [Yes/No] - [brief description if yes]
 
 ### Proposed Scenarios
@@ -416,6 +437,13 @@ For each test scenario, capture:
 aspire run 2>&1 | Tee-Object -FilePath "$scenarioDir\run-output.txt"
 ```
 
+**VS Code extension evidence:**
+- PR head SHA and extension version from `extension/package.json`.
+- Exact extension commands run (`./build.sh`, `corepack yarn run test`, focused `corepack yarn run test:e2e`, or manual Extension Development Host steps).
+- CLI path and version used by the extension (`ASPIRE_EXTENSION_E2E_CLI_PATH` when set, or the repo-built CLI path chosen by the E2E runner).
+- E2E artifacts under `extension/.test-results/e2e/<shard>/`, `extension/.test-storage/`, `extension/.test-recordings/`, and `extension/.test-workspaces/` when present.
+- Screenshots or VS Code logs for UI command/view/debugger scenarios, especially when no automated E2E assertion exists.
+
 ### 10. Generate Detailed Report
 
 Write the comprehensive report to a markdown file and keep its path in `reportPath` so the same file can be posted in Step 11:
@@ -439,9 +467,9 @@ Use the following structure:
 - **Head Commit:** abc123...
 - **Tested At:** [DateTime]
 
-## CLI Version Verification
+## Artifact Version Verification
 - **Expected Commit:** abc123...
-- **Installed Version:** [output of the installed PR CLI binary]
+- **Installed Version:** [output of the installed PR CLI binary, VSIX package metadata, or "N/A - source checkout at head commit"]
 - **Status:** ✅ Verified / ❌ Mismatch
 
 ## Changes Analyzed
@@ -454,6 +482,8 @@ Use the following structure:
 - [x] CLI changes detected
 - [ ] Hosting integration changes
 - [x] Dashboard changes
+- [ ] CI infrastructure changes (GitHub Actions / Azure DevOps)
+- [ ] VS Code extension changes
 ...
 
 ## Test Scenarios Executed
@@ -484,6 +514,21 @@ Use the following structure:
 ### Scenario 2: [Scenario Name]
 ...
 
+## CI Infrastructure Validation
+[Include this section only when the PR changes `.github/**`, `eng/pipelines/**`, `eng/common/**`, or CI scripts under `eng/`. See `ci-infra-testing.md` for the full playbook.]
+
+**GitHub Actions:**
+- **What runs on this PR:** [Which path-triggered workflows fired and passed (link runs); which affected workflows could only be validated manually]
+- **Automated tests:** [Which `Infrastructure.Tests` classes ran + result; or "no automated coverage exists for `<file>`"]
+- **Manual triggers:** [`gh workflow run` invocations, run links, dry-run output, whether run on a fork]
+- **Results validation:** [Per behavioral change, the observable confirmed in a real run — job-log line, artifact path/layout, binlog target, or skipped job — not just that the run completed; and, for enumeration/matrix/job changes, that no *fewer* tests/jobs ran than baseline]
+- **Dependency graph:** [For a changed producing job/artifact, the consumers traced (same-run `needs:` and cross-workflow/cross-pipeline downloads) and how each was confirmed — or "n/a"]
+- **gh-aw:** [`gh aw compile --validate` result + post-recompile lock-file diff (ideally empty)]
+- **Failure-modes scan:** [Gotcha rows checked and outcome — including gotchas confirmed *not* to be a problem]
+
+**Azure DevOps (only when pipelines changed):**
+- **Run vs. baseline:** [Baseline def-1602 `buildId` + result, your validation `buildId`(s) + result, artifact set compared, steps confirmed to run (timeline/log markers), expected contributor-branch skips — or "n/a — validated offline via `Infrastructure.Tests`"]
+
 ## Summary
 | Scenario | Status | Notes |
 |----------|--------|-------|
@@ -495,6 +540,85 @@ Use the following structure:
 
 ### Recommendations
 - [Any recommendations based on test results]
+```
+
+For a VS Code extension PR, the report should look more like this example than a CLI-only report:
+
+```markdown
+# PR Testing Report
+
+## PR Information
+- **PR Number:** #17864
+- **Title:** Add "Open Dashboard to the Side" command
+- **Head Commit:** 37c5f909120ec79d44d6e8306d3ab5cc79f7e554
+- **Tested At:** 2026-06-05T18:30:00Z
+
+## Artifact Version Verification
+- **Expected Commit:** 37c5f909120ec79d44d6e8306d3ab5cc79f7e554
+- **Installed Version:** N/A - tested source checkout at head commit and VSIX built from that checkout
+- **Status:** ✅ Verified
+
+## Changes Analyzed
+### Files Changed
+- `extension/src/...` - VS Code extension command/view behavior
+
+### Change Categories
+- [ ] CLI changes detected
+- [ ] Hosting integration changes
+- [ ] Dashboard changes
+- [x] VS Code extension changes
+
+## Test Scenarios Executed
+
+### Scenario 1: Extension build and unit validation
+**Objective:** Verify the PR extension source compiles, lints, and passes VS Code unit tests.
+**Coverage Type:** Build/unit validation
+**Status:** ✅ Passed
+
+**Steps:**
+1. Checked out the PR at `/tmp/aspire-pr17864-test` to avoid VS Code IPC path-length issues.
+2. Ran `./build.sh` from `extension/` to build the extension and repo Aspire CLI.
+3. Ran `corepack yarn run test`.
+
+**Evidence:**
+- Source checkout: `/tmp/aspire-pr17864-test`
+- CLI path: `/tmp/aspire-pr17864-test/artifacts/bin/Aspire.Cli/Debug/net10.0/aspire`
+- Command output: build and unit test logs captured in the test workspace
+
+**Observations:**
+- Extension compile, lint, and VS Code unit tests completed successfully.
+
+---
+
+### Scenario 2: Open Dashboard to the Side in a real Extension Host
+**Objective:** Verify the command works in VS Code with a running AppHost, not just by reading source.
+**Coverage Type:** User-visible E2E
+**Status:** ✅ Passed
+
+**Steps:**
+1. Built the PR VSIX/source from the PR checkout.
+2. Started the E2E Extension Host with `ASPIRE_EXTENSION_E2E_CLI_PATH=/tmp/aspire-pr17864-test/artifacts/bin/Aspire.Cli/Debug/net10.0/aspire`.
+3. Started the fixture AppHost.
+4. Invoked `aspire-vscode.openDashboardToSide`.
+5. Verified the dashboard opened in the side editor group.
+
+**Evidence:**
+- E2E command: `corepack yarn run test:e2e` with a focused `ASPIRE_EXTENSION_E2E_SPEC`
+- E2E state: `extension/.test-results/e2e/<shard>/extension-state.json`
+- VS Code diagnostics: `extension/.test-storage/<shard>/...`
+
+**Observations:**
+- The Extension Host launched the PR extension and used the expected repo-built CLI.
+- The command opened the Aspire dashboard beside the current editor.
+
+## Summary
+| Scenario | Status | Notes |
+|----------|--------|-------|
+| Extension build and unit validation | ✅ Passed | Source checkout at PR head |
+| Open Dashboard to the Side E2E | ✅ Passed | Real VS Code Extension Host with repo-built CLI |
+
+## Overall Result
+**✅ PR VERIFIED**
 ```
 
 ### 11. Ask Whether to Post the Report
@@ -550,6 +674,8 @@ The PR does not have a "Dogfood this PR with:" comment.
 **Recommendation:** Check the PR's CI status and wait for it to complete.
 ```
 
+Exception: for PRs that only change `extension/`, missing dogfood instructions do not block testing. Test the PR branch source or VSIX instead and record the source checkout commit as the artifact version.
+
 ### Bundle extraction or layout validation failure
 If a fresh PR install fails with messages like `Bundle extraction failed` or `Bundle was extracted ... but layout validation failed`:
 
@@ -570,6 +696,14 @@ If the install script fails with `Failed to get HEAD SHA for PR` or `To get star
 
 ### AppHost selection prompt / no running AppHosts found
 If `wait`, `describe`, `resource`, or `stop` prompts to select an AppHost or reports that no running AppHosts were found in the current directory, pass `--apphost <path>` explicitly to those follow-up commands.
+
+### VS Code extension setup or E2E failures
+If extension validation fails before the scenario runs:
+1. Capture the failing command and exact output.
+2. For Corepack/Yarn registry errors, report it as environment or feed setup unless the PR changed `extension/package.json`, `extension/yarn.lock`, `.npmrc`, or build scripts.
+3. For `test:e2e` failures, include the diagnostics paths printed by `scripts/run-e2e.js`. The runner stores state, control files, storage diagnostics, workspaces, and recordings under `extension/.test-results`, `.test-storage`, `.test-workspaces`, and `.test-recordings`.
+4. If `ASPIRE_EXTENSION_E2E_CLI_PATH` is missing or points at the wrong binary, rebuild with `extension/build.sh` / `extension/build.ps1` or set the variable to the intended dogfood/published CLI and rerun.
+5. If VS Code fails before tests start with an IPC socket warning like `IPC handle ... is longer than 103 chars` or `listen EINVAL`, move the checkout to a shorter path and rerun. Treat this as an environment path-length failure, not a PR failure.
 
 ### Test Scenario Failures
 Document failures with full context:
@@ -705,3 +839,4 @@ Dashboard correctly displays the new Redis resource type.
 - **Non-interactive project creation** - Follow the flags listed in the "Important template note" section (Step 3)
 - **Explicit AppHost path** - Prefer `--apphost <path>` for scripted `wait`, `describe`, `resource`, and `stop` commands
 - **PR hive for templates** - Prefer `--source <pr-hive>` and `--version <installed-version>` when creating projects from the PR build
+- **CI infra PRs** - When the PR changes `.github/**`, `eng/pipelines/**`, `eng/common/**`, or CI scripts under `eng/`, follow `ci-infra-testing.md` (GitHub Actions track + Azure DevOps track): enumerate every affected workflow/pipeline, validate the workflows/actions/scripts/pipelines and hunt for trigger/permission/fork/portability/lock-drift gotchas, and for AzDO run def-1602 on the `dnceng/internal` mirror via the `azdo-internal` skill — don't dogfood the CLI for infra-only PRs, and don't test skill/doc-only edits at all

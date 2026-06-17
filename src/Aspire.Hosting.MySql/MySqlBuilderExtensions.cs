@@ -164,9 +164,20 @@ public static class MySqlBuilderExtensions
             }
             else
             {
+                logger.LogInformation("Executing custom creation script for database '{DatabaseName}'", sqlDatabase.DatabaseName);
                 using var command = sqlConnection.CreateCommand();
                 command.CommandText = scriptAnnotation.Script;
-                await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+                var rowsAffected = await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+                // ADO.NET returns -1 for DDL statements (CREATE DATABASE, etc.) because they don't affect data rows.
+                // Only include the rows-affected count when it carries meaningful information.
+                if (rowsAffected >= 0)
+                {
+                    logger.LogInformation("Completed custom creation script for database '{DatabaseName}' ({RowsAffected} rows affected)", sqlDatabase.DatabaseName, rowsAffected);
+                }
+                else
+                {
+                    logger.LogInformation("Completed custom creation script for database '{DatabaseName}'", sqlDatabase.DatabaseName);
+                }
             }
 
             logger.LogDebug("Database '{DatabaseName}' created successfully", sqlDatabase.DatabaseName);

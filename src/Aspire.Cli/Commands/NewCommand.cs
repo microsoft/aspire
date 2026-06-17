@@ -92,6 +92,8 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         Options.Add(s_sourceOption);
         Options.Add(s_versionOption);
         Options.Add(s_suppressAgentInitOption);
+        Options.Add(AgentInitCommand.s_skillLocationsOption);
+        Options.Add(AgentInitCommand.s_skillsOption);
 
         // Customize description based on whether staging channel is enabled
         var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(services.Features, configuration)
@@ -169,11 +171,12 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         return selected.LanguageId;
     }
 
-    private static NuGetPackage? TryGetCurrentCliTemplateVersionPackage(PackageChannel selectedChannel, NuGetPackage[] packages, bool hasPrHives)
+    private static NuGetPackage? TryGetCurrentCliTemplateVersionPackage(PackageChannel selectedChannel, NuGetPackage[] packages, bool hasPrHives, string cliSdkVersion)
     {
         if (VersionHelper.TryGetCurrentCliVersionMatch(
             packages,
             p => p.Version,
+            cliSdkVersion,
             out var cliVersionPackage,
             channelName: selectedChannel.Name,
             hasPrHives: hasPrHives))
@@ -204,7 +207,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             return new NuGetPackage
             {
                 Id = TemplateNuGetConfigService.TemplatesPackageName,
-                Version = VersionHelper.GetDefaultSdkVersion(),
+                Version = cliSdkVersion,
                 Source = selectedChannel.SourceDetails
             };
         }
@@ -414,7 +417,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
                         .ToArray();
                     var hasPrHives = ExecutionContext.GetHiveCount() > 0;
 
-                    var package = TryGetCurrentCliTemplateVersionPackage(selectedChannel, packages, hasPrHives);
+                    var package = TryGetCurrentCliTemplateVersionPackage(selectedChannel, packages, hasPrHives, ExecutionContext.IdentitySdkVersion);
 
                     package ??= packages
                         .OrderByDescending(p => Semver.SemVersion.Parse(p.Version, Semver.SemVersionStyles.Strict), Semver.SemVersion.PrecedenceComparer)
@@ -425,9 +428,11 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
                         return new ResolveTemplateVersionResult { ErrorMessage = $"No template versions found in channel '{selectedChannel.Name}'." };
                     }
 
-                    // Only persist explicit channel names (e.g. local, daily) — implicit channels
-                    // (stable/nuget.org) should not be written so aspire add uses its default behavior.
-                    var channelName = selectedChannel.Type is PackageChannelType.Explicit ? selectedChannel.Name : null;
+                    // Only persist channel names that should be pinned (e.g. local, daily,
+                    // staging, pr-<N>). The `stable` channel is excluded (ShouldPersistChannelName)
+                    // — its packages are on nuget.org, so leaving the project unpinned lets
+                    // `aspire add`/`aspire restore` use the ambient NuGet config.
+                    var channelName = selectedChannel.ShouldPersistChannelName() ? selectedChannel.Name : null;
 
                     return new ResolveTemplateVersionResult { Version = package.Version, ChannelName = channelName };
                 }
@@ -520,9 +525,11 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
         var workspaceRoot = new DirectoryInfo(templateResult.OutputPath ?? ExecutionContext.WorkingDirectory.FullName);
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, s_suppressAgentInitOption, defaultValue: true);
+        var skillLocationsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillLocationsOption);
+        var skillsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption);
         // The template already produced the AppHost, so don't pre-select the one-time aspireify
         // wiring skill — users can still opt into it from the prompt.
-        var agentInitResult = await _agentInitCommand.PromptAndChainAsync(InteractionService, templateResult.ExitCode, workspaceRoot, agentInitBinding, cancellationToken, AgentInitCommand.ExcludeOneTimeSetupSkillsFromDefaults);
+        var agentInitResult = await _agentInitCommand.PromptAndChainAsync(InteractionService, templateResult.ExitCode, workspaceRoot, agentInitBinding, skillLocationsBinding, skillsBinding, AgentInitCommand.ExcludeOneTimeSetupSkillsFromDefaults, cancellationToken);
 
         if (templateResult.OutputPath is not null && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _))
         {
@@ -558,11 +565,15 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         var match = channels.FirstOrDefault(c =>
             string.Equals(c.Name, identity, StringComparisons.ChannelName));
 
-        // Only persist Explicit channel names — Implicit channels (the nuget.org fallback)
-        // are deliberately left unpinned so `aspire add` and later restores use ambient
-        // NuGet configuration. Mirrors the same rule applied at the end of
-        // ResolveCliTemplateVersionAsync.
-        return match is { Type: PackageChannelType.Explicit } ? match.Name : null;
+        // Only forward channel names that should be pinned (daily, staging, pr-<N>, local).
+        // `stable` is excluded (ShouldPersistChannelName): a stable CLI's packages are on
+        // nuget.org, so returning null lets DotNetTemplateFactory resolve the Implicit
+        // (nuget.org) channel and leaves the scaffolded project with no channel pin and no
+        // NuGet.config — `aspire add`/`aspire restore` then use the ambient NuGet config.
+        // Forwarding is only needed for non-stable identities (daily/pr/staging), whose
+        // packages live on a custom feed the Implicit channel would otherwise miss. Mirrors
+        // the same rule applied at the end of ResolveCliTemplateVersionAsync.
+        return match?.ShouldPersistChannelName() is true ? match.Name : null;
     }
 }
 
@@ -570,7 +581,7 @@ internal interface INewCommandPrompter
 {
     Task<ITemplate> PromptForTemplateAsync(ITemplate[] validTemplates, CancellationToken cancellationToken);
     Task<string> PromptForProjectNameAsync(string defaultName, ParseResult parseResult, CancellationToken cancellationToken);
-    Task<string> PromptForOutputPath(string v, ParseResult parseResult, Func<string, ValidationResult>? validator = null, CancellationToken cancellationToken = default, Func<string, string>? outputPathResolver = null);
+    Task<string> PromptForOutputPath(string v, ParseResult parseResult, Func<string, ValidationResult>? validator = null, Func<string, string>? outputPathResolver = null, CancellationToken cancellationToken = default);
 }
 
 internal interface ITemplateVersionPrompter
@@ -683,7 +694,7 @@ internal class NewCommandPrompter(IInteractionService interactionService) : INew
         return await topSelection.Action(cancellationToken);
     }
 
-    public virtual async Task<string> PromptForOutputPath(string path, ParseResult parseResult, Func<string, ValidationResult>? validator = null, CancellationToken cancellationToken = default, Func<string, string>? outputPathResolver = null)
+    public virtual async Task<string> PromptForOutputPath(string path, ParseResult parseResult, Func<string, ValidationResult>? validator = null, Func<string, string>? outputPathResolver = null, CancellationToken cancellationToken = default)
     {
         var resolvedValidator = validator;
         if (validator is not null && outputPathResolver is not null)

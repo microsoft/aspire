@@ -266,10 +266,19 @@ public class AspireCliTelemetryTests
 
     [Theory]
     [MemberData(nameof(CodingAgentTelemetryTestCases))]
-    public void CodingAgentDetector_DetectsKnownCodingAgents(Dictionary<string, string?> environmentVariables, string? expectedCodingAgent)
+    public void CodingAgentDetector_DetectsKnownCodingAgents((string, string?)[] environmentVariables, string? expectedCodingAgent)
     {
+        var configurationValues = new Dictionary<string, string?>();
+        foreach (var environmentVariable in environmentVariables)
+        {
+            if (environmentVariable.Item1.Length > 0)
+            {
+                configurationValues.Add(environmentVariable.Item1, environmentVariable.Item2);
+            }
+        }
+
         var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(environmentVariables)
+            .AddInMemoryCollection(configurationValues)
             .Build();
 
         var detector = new CodingAgentDetector(configuration);
@@ -307,7 +316,7 @@ public class AspireCliTelemetryTests
         var provider = new TelemetryFixture.TestMachineInformationProvider();
         var ciDetector = new TelemetryFixture.TestCIEnvironmentDetector();
         var codingAgentDetector = new TelemetryFixture.TestCodingAgentDetector();
-        var telemetry = new AspireCliTelemetry(NullLogger<AspireCliTelemetry>.Instance, provider, ciDetector, codingAgentDetector);
+        var telemetry = new AspireCliTelemetry(NullLogger<AspireCliTelemetry>.Instance, provider, ciDetector, codingAgentDetector, Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)));
 
         var exception = Assert.Throws<InvalidOperationException>(() => telemetry.StartReportedActivity("test"));
         Assert.Contains("not been initialized", exception.Message);
@@ -319,7 +328,7 @@ public class AspireCliTelemetryTests
         var provider = new TelemetryFixture.TestMachineInformationProvider();
         var ciDetector = new TelemetryFixture.TestCIEnvironmentDetector();
         var codingAgentDetector = new TelemetryFixture.TestCodingAgentDetector();
-        var telemetry = new AspireCliTelemetry(NullLogger<AspireCliTelemetry>.Instance, provider, ciDetector, codingAgentDetector);
+        var telemetry = new AspireCliTelemetry(NullLogger<AspireCliTelemetry>.Instance, provider, ciDetector, codingAgentDetector, Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)));
 
         await telemetry.InitializeAsync().DefaultTimeout();
         var tagsAfterFirstInit = telemetry.GetDefaultTags().Count;
@@ -329,65 +338,110 @@ public class AspireCliTelemetryTests
         Assert.Equal(tagsAfterFirstInit, tags.Count); // Should have the same number of tags after second init
     }
 
-    public static TheoryData<Dictionary<string, string?>, string?> CodingAgentTelemetryTestCases => new()
+    [Fact]
+    public void InitializeAsync_AddsIdentityTags_WhenExecutionContextProvided()
     {
-        { new Dictionary<string, string?> { { "CLAUDECODE", "1" } }, "claude" },
-        { new Dictionary<string, string?> { { "CLAUDE_CODE", "1" } }, "claude" },
-        { new Dictionary<string, string?> { { "CLAUDE_CODE_ENTRYPOINT", "some_value" } }, "claude" },
-        { new Dictionary<string, string?> { { "CLAUDE_CODE_IS_COWORK", "1" } }, "cowork" },
-        { new Dictionary<string, string?> { { "CURSOR_EDITOR", "1" } }, "cursor" },
-        { new Dictionary<string, string?> { { "CURSOR_AI", "1" } }, "cursor" },
-        { new Dictionary<string, string?> { { "CURSOR_TRACE_ID", "abc" } }, "cursor" },
-        { new Dictionary<string, string?> { { "CURSOR_AGENT", "1" } }, "cursor" },
-        { new Dictionary<string, string?> { { "GEMINI_CLI", "true" } }, "gemini" },
-        { new Dictionary<string, string?> { { "GEMINI_CLI", "0" } }, "gemini" },
-        { new Dictionary<string, string?> { { "GITHUB_COPILOT_CLI_MODE", "true" } }, "copilot" },
-        { new Dictionary<string, string?> { { "GH_COPILOT_WORKING_DIRECTORY", "/repo" } }, "copilot" },
-        { new Dictionary<string, string?> { { "COPILOT_CLI", "1" } }, "copilot" },
-        { new Dictionary<string, string?> { { "COPILOT_AGENT", "1" } }, "copilot" },
-        { new Dictionary<string, string?> { { "COPILOT_MODEL", "gpt" } }, "copilot" },
-        { new Dictionary<string, string?> { { "COPILOT_ALLOW_ALL", "1" } }, "copilot" },
-        { new Dictionary<string, string?> { { "COPILOT_GITHUB_TOKEN", "token" } }, "copilot" },
-        { new Dictionary<string, string?> { { "CODEX_CLI", "1" } }, "codex" },
-        { new Dictionary<string, string?> { { "CODEX_SANDBOX", "1" } }, "codex" },
-        { new Dictionary<string, string?> { { "CODEX_CI", "1" } }, "codex" },
-        { new Dictionary<string, string?> { { "CODEX_THREAD_ID", "thread1" } }, "codex" },
-        { new Dictionary<string, string?> { { "OR_APP_NAME", "Aider" } }, "aider" },
-        { new Dictionary<string, string?> { { "OR_APP_NAME", "aider" } }, "aider" },
-        { new Dictionary<string, string?> { { "OR_APP_NAME", "plandex" } }, "plandex" },
-        { new Dictionary<string, string?> { { "OR_APP_NAME", "Plandex" } }, "plandex" },
-        { new Dictionary<string, string?> { { "AMP_HOME", "/path/to/amp" } }, "amp" },
-        { new Dictionary<string, string?> { { "QWEN_CODE", "1" } }, "qwen" },
-        { new Dictionary<string, string?> { { "DROID_CLI", "true" } }, "droid" },
-        { new Dictionary<string, string?> { { "OPENCODE_AI", "1" } }, "opencode" },
-        { new Dictionary<string, string?> { { "ZED_ENVIRONMENT", "1" } }, "zed" },
-        { new Dictionary<string, string?> { { "ZED_TERM", "1" } }, "zed" },
-        { new Dictionary<string, string?> { { "KIMI_CLI", "true" } }, "kimi" },
-        { new Dictionary<string, string?> { { "OR_APP_NAME", "OpenHands" } }, "openhands" },
-        { new Dictionary<string, string?> { { "OR_APP_NAME", "openhands" } }, "openhands" },
-        { new Dictionary<string, string?> { { "GOOSE_TERMINAL", "1" } }, "goose" },
-        { new Dictionary<string, string?> { { "GOOSE_PROVIDER", "openai" } }, "goose" },
-        { new Dictionary<string, string?> { { "CLINE_TASK_ID", "task123" } }, "cline" },
-        { new Dictionary<string, string?> { { "ROO_CODE_TASK_ID", "task456" } }, "roo" },
-        { new Dictionary<string, string?> { { "WINDSURF_SESSION", "session789" } }, "windsurf" },
-        { new Dictionary<string, string?> { { "REPL_ID", "repl1" } }, "replit" },
-        { new Dictionary<string, string?> { { "AUGMENT_AGENT", "1" } }, "augment" },
-        { new Dictionary<string, string?> { { "ANTIGRAVITY_AGENT", "1" } }, "antigravity" },
-        { new Dictionary<string, string?> { { "AGENT_CLI", "true" } }, "generic_agent" },
-        { new Dictionary<string, string?> { { "CLAUDECODE", "1" }, { "CURSOR_EDITOR", "1" } }, "claude, cursor" },
-        { new Dictionary<string, string?> { { "GEMINI_CLI", "true" }, { "GITHUB_COPILOT_CLI_MODE", "true" } }, "gemini, copilot" },
-        { new Dictionary<string, string?> { { "CLAUDECODE", "1" }, { "GEMINI_CLI", "true" }, { "AGENT_CLI", "true" } }, "claude, gemini, generic_agent" },
-        { new Dictionary<string, string?> { { "CLAUDECODE", "1" }, { "CURSOR_EDITOR", "1" }, { "GEMINI_CLI", "true" }, { "GITHUB_COPILOT_CLI_MODE", "true" }, { "AGENT_CLI", "true" } }, "claude, cursor, gemini, copilot, generic_agent" },
-        { new Dictionary<string, string?> { { "OR_APP_NAME", "Aider" }, { "CLINE_TASK_ID", "task123" } }, "aider, cline" },
-        { new Dictionary<string, string?> { { "CODEX_CLI", "1" }, { "WINDSURF_SESSION", "session789" } }, "codex, windsurf" },
-        { new Dictionary<string, string?> { { "GOOSE_TERMINAL", "1" }, { "ROO_CODE_TASK_ID", "task456" } }, "goose, roo" },
-        { new Dictionary<string, string?> { { "GEMINI_CLI", "false" } }, "gemini" },
-        { new Dictionary<string, string?> { { "GITHUB_COPILOT_CLI_MODE", "false" } }, "copilot" },
-        { new Dictionary<string, string?> { { "AGENT_CLI", "false" } }, "generic_agent" },
-        { new Dictionary<string, string?> { { "DROID_CLI", "false" } }, "droid" },
-        { new Dictionary<string, string?> { { "KIMI_CLI", "false" } }, "kimi" },
-        { new Dictionary<string, string?> { { "CLAUDE_CODE_IS_COWORK", "1" }, { "CLAUDE_CODE", "1" } }, "cowork, claude" },
-        { new Dictionary<string, string?> { { "OR_APP_NAME", "SomeOtherApp" } }, null },
-        { new Dictionary<string, string?>(), null },
+        // The execution context only needs a valid root for path composition; telemetry init
+        // does not touch the filesystem for identity, so reuse the test base directory.
+        var executionContext = Utils.TestExecutionContextHelper.CreateExecutionContext(
+            new DirectoryInfo(AppContext.BaseDirectory),
+            identityChannel: "daily",
+            identityVersion: "13.5.0-preview.1.26310.9",
+            identityCommit: "95f0d2968",
+            identityOverridden: true);
+
+        using var fixture = new TelemetryFixture(executionContext: executionContext);
+
+        var tags = fixture.Telemetry.GetDefaultTags();
+
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.IdentityVersion && (string?)t.Value == "13.5.0-preview.1.26310.9");
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.IdentityChannel && (string?)t.Value == "daily");
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.IdentityCommit && (string?)t.Value == "95f0d2968");
+
+        // The binary tags must remain distinct from the identity tags so an emulated run is
+        // distinguishable from the physical binary that produced the telemetry.
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.CliVersion);
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.CliBuildId);
+    }
+
+    [Fact]
+    public void InitializeAsync_OmitsIdentityCommitTag_WhenCommitIsEmpty()
+    {
+        var executionContext = Utils.TestExecutionContextHelper.CreateExecutionContext(
+            new DirectoryInfo(AppContext.BaseDirectory),
+            identityChannel: "stable",
+            identityVersion: "13.5.0",
+            identityCommit: null,
+            identityOverridden: true);
+
+        using var fixture = new TelemetryFixture(executionContext: executionContext);
+
+        var tags = fixture.Telemetry.GetDefaultTags();
+
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.IdentityVersion && (string?)t.Value == "13.5.0");
+        Assert.DoesNotContain(tags, t => t.Key == TelemetryConstants.Tags.IdentityCommit);
+    }
+
+    public static TheoryData<(string, string?)[], string?> CodingAgentTelemetryTestCases => new()
+    {
+        { [("CLAUDECODE", "1")], "claude" },
+        { [("CLAUDE_CODE", "1")], "claude" },
+        { [("CLAUDE_CODE_ENTRYPOINT", "some_value")], "claude" },
+        { [("CLAUDE_CODE_IS_COWORK", "1")], "cowork" },
+        { [("CURSOR_EDITOR", "1")], "cursor" },
+        { [("CURSOR_AI", "1")], "cursor" },
+        { [("CURSOR_TRACE_ID", "abc")], "cursor" },
+        { [("CURSOR_AGENT", "1")], "cursor" },
+        { [("GEMINI_CLI", "true")], "gemini" },
+        { [("GEMINI_CLI", "0")], "gemini" },
+        { [("GITHUB_COPILOT_CLI_MODE", "true")], "copilot-cli" },
+        { [("GH_COPILOT_WORKING_DIRECTORY", "/repo")], "copilot-cli" },
+        { [("COPILOT_CLI", "1")], "copilot-cli" },
+        { [("COPILOT_MODEL", "gpt")], "copilot-cli" },
+        { [("COPILOT_ALLOW_ALL", "1")], "copilot-cli" },
+        { [("COPILOT_GITHUB_TOKEN", "token")], "copilot-cli" },
+        { [("AI_AGENT", "github_copilot_vscode_agent")], "copilot-vscode" },
+        { [("COPILOT_AGENT", "1")], "copilot-vscode" },
+        { [("CODEX_CLI", "1")], "codex" },
+        { [("CODEX_SANDBOX", "1")], "codex" },
+        { [("CODEX_CI", "1")], "codex" },
+        { [("CODEX_THREAD_ID", "thread1")], "codex" },
+        { [("OR_APP_NAME", "Aider")], "aider" },
+        { [("OR_APP_NAME", "aider")], "aider" },
+        { [("OR_APP_NAME", "plandex")], "plandex" },
+        { [("OR_APP_NAME", "Plandex")], "plandex" },
+        { [("AMP_HOME", "/path/to/amp")], "amp" },
+        { [("QWEN_CODE", "1")], "qwen" },
+        { [("DROID_CLI", "true")], "droid" },
+        { [("OPENCODE_AI", "1")], "opencode" },
+        { [("ZED_ENVIRONMENT", "1")], "zed" },
+        { [("ZED_TERM", "1")], "zed" },
+        { [("KIMI_CLI", "true")], "kimi" },
+        { [("OR_APP_NAME", "OpenHands")], "openhands" },
+        { [("OR_APP_NAME", "openhands")], "openhands" },
+        { [("GOOSE_TERMINAL", "1")], "goose" },
+        { [("GOOSE_PROVIDER", "openai")], "goose" },
+        { [("CLINE_TASK_ID", "task123")], "cline" },
+        { [("ROO_CODE_TASK_ID", "task456")], "roo" },
+        { [("WINDSURF_SESSION", "session789")], "windsurf" },
+        { [("REPL_ID", "repl1")], "replit" },
+        { [("AUGMENT_AGENT", "1")], "augment" },
+        { [("ANTIGRAVITY_AGENT", "1")], "antigravity" },
+        { [("AGENT_CLI", "true")], "generic_agent" },
+        { [("CLAUDECODE", "1"), ("CURSOR_EDITOR", "1") ], "claude, cursor" },
+        { [("GEMINI_CLI", "true"), ("GITHUB_COPILOT_CLI_MODE", "true") ], "gemini, copilot-cli" },
+        { [("CLAUDECODE", "1"), ("GEMINI_CLI", "true"), ("AGENT_CLI", "true") ], "claude, gemini, generic_agent" },
+        { [("CLAUDECODE", "1"), ("CURSOR_EDITOR", "1"), ("GEMINI_CLI", "true"), ("GITHUB_COPILOT_CLI_MODE", "true"), ("AGENT_CLI", "true") ], "claude, cursor, gemini, copilot-cli, generic_agent" },
+        { [("OR_APP_NAME", "Aider"), ("CLINE_TASK_ID", "task123") ], "aider, cline" },
+        { [("CODEX_CLI", "1"), ("WINDSURF_SESSION", "session789") ], "codex, windsurf" },
+        { [("GOOSE_TERMINAL", "1"), ("ROO_CODE_TASK_ID", "task456") ], "goose, roo" },
+        { [("GEMINI_CLI", "false")], "gemini" },
+        { [("GITHUB_COPILOT_CLI_MODE", "false")], "copilot-cli" },
+        { [("AGENT_CLI", "false")], "generic_agent" },
+        { [("DROID_CLI", "false")], "droid" },
+        { [("KIMI_CLI", "false")], "kimi" },
+        { [("CLAUDE_CODE_IS_COWORK", "1"), ("CLAUDE_CODE", "1")], "cowork, claude" },
+        { [("OR_APP_NAME", "SomeOtherApp")], null },
+        { [("", "")], null }
     };
 }

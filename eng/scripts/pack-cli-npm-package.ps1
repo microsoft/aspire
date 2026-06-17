@@ -102,6 +102,23 @@ function Write-TextFile([string]$Path, [string]$Value) {
   [System.IO.File]::WriteAllText($Path, $Value, $utf8NoBom)
 }
 
+function Read-TemplateFile([string]$Path) {
+  if (-not (Test-Path -LiteralPath $Path)) {
+    throw "Template file does not exist: $Path"
+  }
+
+  return [System.IO.File]::ReadAllText($Path)
+}
+
+function Expand-Template([string]$Template, [hashtable]$Values) {
+  $result = $Template
+  foreach ($entry in $Values.GetEnumerator()) {
+    $result = $result.Replace("__$($entry.Key)__", [string]$entry.Value)
+  }
+
+  return $result
+}
+
 function Invoke-NpmPack([string]$PackageDirectory, [string]$DestinationDirectory) {
   Write-Host "Packing npm package from $PackageDirectory"
   & npm pack $PackageDirectory --pack-destination $DestinationDirectory
@@ -157,22 +174,12 @@ if ($ridInfo.Contains('Libc')) {
 }
 
 Write-JsonFile (Join-Path $ridPackageRoot 'package.json') $ridPackageJson
-# Use a non-expanding here-string so the markdown backticks (`) survive verbatim.
-# In a normal (double-quoted) here-string ` is the PowerShell escape character, which
-# both swallows the backticks and suppresses $-interpolation; using @'...'@ and a
-# manual -replace lets us emit literal `<value>` code spans for $Rid / $PackageName.
-$ridReadmeTemplate = @'
-# __RID_PACKAGE_NAME__
-
-Native Aspire CLI binary for `__RID__`.
-
-This package is installed as an optional dependency of `__PACKAGE_NAME__`.
-'@
-
-$ridReadme = $ridReadmeTemplate `
-  -replace '__RID_PACKAGE_NAME__', $ridPackageName `
-  -replace '__RID__', $Rid `
-  -replace '__PACKAGE_NAME__', $PackageName
+$ridReadmeTemplate = Read-TemplateFile (Join-Path $PSScriptRoot 'pack-cli-npm-package.rid.README.md')
+$ridReadme = Expand-Template $ridReadmeTemplate @{
+  RID_PACKAGE_NAME = $ridPackageName
+  RID = $Rid
+  PACKAGE_NAME = $PackageName
+}
 
 Write-TextFile (Join-Path $ridPackageRoot 'README.md') $ridReadme
 
@@ -200,8 +207,10 @@ foreach ($supportedRid in $supportedRids) {
 $pointerPackageJson = [ordered]@{
   name = $PackageName
   version = $Version
-  description = 'Command line tool for Aspire developers.'
+  description = 'The Aspire CLI lets you build, run, manage, and deploy distributed applications in a terminal.'
   license = 'MIT'
+  keywords = New-StringList @('aspire', 'typescript', 'dotnet', 'apphost', 'polyglot', 'distributed-applications', 'code-first', 'orchestration', 'observability', 'opentelemetry', 'local-development')
+  homepage = 'https://aspire.dev'
   repository = [ordered]@{
     type = 'git'
     url = 'git+https://github.com/microsoft/aspire.git'
@@ -227,13 +236,12 @@ $pointerPackageJson = [ordered]@{
 
 Write-JsonFile (Join-Path $pointerPackageRoot 'package.json') $pointerPackageJson
 Write-JsonFile (Join-Path $pointerPackageBin 'aspire-package-map.json') $ridPackageMap
-Write-TextFile (Join-Path $pointerPackageRoot 'README.md') @"
-# $PackageName
+$pointerReadmeTemplate = Read-TemplateFile (Join-Path $PSScriptRoot 'pack-cli-npm-package.pointer.README.md')
+$pointerReadme = Expand-Template $pointerReadmeTemplate @{
+  PACKAGE_NAME = $PackageName
+}
 
-Npm package for the Aspire CLI.
-
-This package installs a small JavaScript launcher and resolves the matching native Aspire CLI package for the current platform.
-"@
+Write-TextFile (Join-Path $pointerPackageRoot 'README.md') $pointerReadme
 
 Invoke-NpmPack $ridPackageRoot $OutputPath
 Invoke-NpmPack $pointerPackageRoot $OutputPath

@@ -7,16 +7,14 @@ namespace Aspire.Cli.Tests;
 
 public class CliExecutionContextTests(ITestOutputHelper outputHelper)
 {
-    private static CliExecutionContext CreateContext(string? channel = "daily")
+    private static CliExecutionContext CreateContext(string channel = "local")
     {
         var workingDir = new DirectoryInfo(AppContext.BaseDirectory);
         var hivesDir = new DirectoryInfo(Path.Combine(AppContext.BaseDirectory, "hives"));
         var cacheDir = new DirectoryInfo(Path.Combine(AppContext.BaseDirectory, "cache"));
         var sdksDir = new DirectoryInfo(Path.Combine(AppContext.BaseDirectory, "sdks"));
         var logsDir = new DirectoryInfo(Path.Combine(AppContext.BaseDirectory, "logs"));
-        return channel is null
-            ? new CliExecutionContext(workingDir, hivesDir, cacheDir, sdksDir, logsDir, "test.log")
-            : new CliExecutionContext(workingDir, hivesDir, cacheDir, sdksDir, logsDir, "test.log", identityChannel: channel);
+        return new CliExecutionContext(workingDir, hivesDir, cacheDir, sdksDir, logsDir, "test.log", identityChannel: channel);
     }
 
     private static CliExecutionContext CreateContextWithHives(DirectoryInfo hivesDir)
@@ -25,13 +23,16 @@ public class CliExecutionContextTests(ITestOutputHelper outputHelper)
         var cacheDir = new DirectoryInfo(Path.Combine(workingDir.FullName, "cache"));
         var sdksDir = new DirectoryInfo(Path.Combine(workingDir.FullName, "sdks"));
         var logsDir = new DirectoryInfo(Path.Combine(workingDir.FullName, "logs"));
-        return new CliExecutionContext(workingDir, hivesDir, cacheDir, sdksDir, logsDir, "test.log");
+        return new CliExecutionContext(workingDir, hivesDir, cacheDir, sdksDir, logsDir, "test.log", identityChannel: "local");
     }
 
     [Fact]
-    public void Channel_DefaultsToLocal_WhenNotSpecified()
+    public void Helper_DefaultsIdentityChannelToLocal_WhenNotSpecified()
     {
-        var ctx = CreateContext(channel: null);
+        // identityChannel is a required constructor parameter (a CLI build always has an
+        // identity), so the "local" convenience default now lives in the test factory —
+        // mirroring production, where Program.BuildCliExecutionContext always supplies it.
+        var ctx = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory));
 
         Assert.Equal("local", ctx.IdentityChannel);
     }

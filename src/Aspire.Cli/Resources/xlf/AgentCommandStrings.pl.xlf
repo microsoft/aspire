@@ -172,6 +172,11 @@
         <target state="new">Integrity verification failed for {0}. The downloaded package may have been tampered with.</target>
         <note />
       </trans-unit>
+      <trans-unit id="PlaywrightCliInstaller_InvalidVersionOverride">
+        <source>The value of configuration setting '{0}' ('{1}') is not a valid SemVer 2.0 version.</source>
+        <target state="new">The value of configuration setting '{0}' ('{1}') is not a valid SemVer 2.0 version.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_ProvenanceVerificationFailed">
         <source>Provenance verification failed for {0}: {1}</source>
         <target state="new">Provenance verification failed for {0}: {1}</target>

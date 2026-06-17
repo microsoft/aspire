@@ -20,6 +20,7 @@ public class VersionHelperTests
         var result = VersionHelper.TryGetCurrentCliVersionMatch(
             candidates,
             version => version,
+            cliVersion,
             out var match,
             channelName: null,
             hasPrHives: true);
@@ -44,6 +45,7 @@ public class VersionHelperTests
         var result = VersionHelper.TryGetCurrentCliVersionMatch(
             candidates,
             version => version,
+            cliVersion,
             out var match,
             channelName: channelName,
             hasPrHives: false);
@@ -64,6 +66,7 @@ public class VersionHelperTests
         var result = VersionHelper.TryGetCurrentCliVersionMatch(
             candidates,
             version => version,
+            VersionHelper.GetDefaultSdkVersion(),
             out var match,
             channelName: "daily",
             hasPrHives: false);
@@ -85,6 +88,7 @@ public class VersionHelperTests
         var result = VersionHelper.TryGetCurrentCliVersionMatch(
             candidates,
             version => version,
+            cliVersion,
             out var match,
             channelName: null,
             hasPrHives: false);

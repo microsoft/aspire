@@ -415,6 +415,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
         var updatePrompt = new CellPatternSearcher().Find("Perform updates?");
         var upToDateMessage = new CellPatternSearcher().Find("Project is up to date! (no updates necessary)");
         var channelUpdateLine = new CellPatternSearcher().Find("aspire.config.json#channel");
+        var cliUpdatePrompt = new CellPatternSearcher().Find("Update the Aspire CLI now and re-run");
         var expectedPackageLine = expectedPackageInPlan is not null
             ? new CellPatternSearcher().Find(expectedPackageInPlan)
             : null;
@@ -422,20 +423,41 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
         var sawChannelUpdateLine = false;
         var sawExpectedPackageLine = expectedPackageLine is null;
         var sawUpdatePrompt = false;
+        var sawUpToDateMessage = false;
+        var sawCliUpdatePrompt = false;
 
         await auto.TypeAsync("aspire update --channel stable --nuget-config-dir .");
         await auto.EnterAsync();
-        await auto.WaitUntilAsync(snapshot =>
-        {
-            sawChannelUpdateLine |= channelUpdateLine.Search(snapshot).Count > 0;
-            if (expectedPackageLine is not null && expectedPackageLine.Search(snapshot).Count > 0)
-            {
-                sawExpectedPackageLine = true;
-            }
-            sawUpdatePrompt |= updatePrompt.Search(snapshot).Count > 0;
 
-            return sawUpdatePrompt || upToDateMessage.Search(snapshot).Count > 0;
-        }, TimeSpan.FromMinutes(3), description: "waiting for stable update preview");
+        async Task WaitForStableUpdatePreviewAsync(bool allowCliUpdatePrompt)
+        {
+            await auto.WaitUntilAsync(snapshot =>
+            {
+                sawChannelUpdateLine |= channelUpdateLine.Search(snapshot).Count > 0;
+                if (expectedPackageLine is not null && expectedPackageLine.Search(snapshot).Count > 0)
+                {
+                    sawExpectedPackageLine = true;
+                }
+                sawUpdatePrompt |= updatePrompt.Search(snapshot).Count > 0;
+                sawUpToDateMessage |= upToDateMessage.Search(snapshot).Count > 0;
+                var foundCliUpdatePrompt = cliUpdatePrompt.Search(snapshot).Count > 0;
+                sawCliUpdatePrompt |= foundCliUpdatePrompt;
+
+                return sawUpdatePrompt || sawUpToDateMessage || (allowCliUpdatePrompt && foundCliUpdatePrompt);
+            }, TimeSpan.FromMinutes(3), description: "waiting for stable update preview");
+        }
+
+        await WaitForStableUpdatePreviewAsync(allowCliUpdatePrompt: true);
+
+        if (sawCliUpdatePrompt && !sawUpdatePrompt && !sawUpToDateMessage)
+        {
+            // Stable release versions sort higher than same-base PR prerelease versions
+            // (for example, 13.4.3 > 13.4.3-pr.18093.g...). Decline the CLI self-update
+            // prompt so the project update preview can continue. The prompt remains in the
+            // terminal snapshot after the key is accepted, so the second wait must ignore it.
+            await auto.TypeAsync("n");
+            await WaitForStableUpdatePreviewAsync(allowCliUpdatePrompt: false);
+        }
 
         Assert.False(sawChannelUpdateLine, "Stable channel updates should not enqueue an aspire.config.json#channel rewrite.");
         Assert.True(sawExpectedPackageLine, $"Expected the stable update preview to include '{expectedPackageInPlan}'.");

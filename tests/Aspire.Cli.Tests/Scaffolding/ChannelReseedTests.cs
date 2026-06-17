@@ -48,7 +48,7 @@ public class ChannelReseedTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var scaffoldingService = CreateScaffoldingService();
+        var scaffoldingService = CreateScaffoldingService(workspace);
 
         var ctx = new ScaffoldContext(
             Language: s_testLanguage,
@@ -87,7 +87,8 @@ public class ChannelReseedTests(ITestOutputHelper outputHelper)
             },
             languageDiscovery: new TestLanguageDiscovery(language),
             interactionService: new TestInteractionService(),
-            logger: NullLogger<ScaffoldingService>.Instance);
+            logger: NullLogger<ScaffoldingService>.Instance,
+            executionContext: workspace.CreateExecutionContext());
 
         var context = new ScaffoldContext(
             Language: language,
@@ -110,13 +111,14 @@ public class ChannelReseedTests(ITestOutputHelper outputHelper)
         CodeGenerator: "TypeScript",
         AppHostFileName: "apphost.ts");
 
-    private static ScaffoldingService CreateScaffoldingService()
+    private static ScaffoldingService CreateScaffoldingService(TemporaryWorkspace workspace)
     {
         return new ScaffoldingService(
             appHostServerProjectFactory: new TestAppHostServerProjectFactory(),
             languageDiscovery: new TestLanguageDiscovery(s_testLanguage),
             interactionService: new TestInteractionService(),
-            logger: NullLogger<ScaffoldingService>.Instance);
+            logger: NullLogger<ScaffoldingService>.Instance,
+            executionContext: workspace.CreateExecutionContext());
     }
 
     private sealed class CapturingAppHostServerProject(string appDirectoryPath) : IAppHostServerProject

@@ -42,7 +42,7 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
 
         var result = Assert.Single(results);
         Assert.Equal(EnvironmentCheckStatus.Pass, result.Status);
-        Assert.Equal("typescript-apphost-tools", result.Name);
+        Assert.Equal(TypeScriptAppHostToolingCheck.ToolsCheckName, result.Name);
         foreach (var command in requiredCommands)
         {
             Assert.Contains(command, result.Message, StringComparison.OrdinalIgnoreCase);
@@ -74,7 +74,7 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
         Assert.All(results, result =>
         {
             Assert.Equal(EnvironmentCheckStatus.Fail, result.Status);
-            Assert.Equal("environment", result.Category);
+            Assert.Equal(EnvironmentCheckCategories.Environment, result.Category);
             Assert.Equal(expectedInstallLink, result.Link);
             Assert.Equal(
                 $"Install {installDisplayName} tooling and rerun 'aspire doctor'.",
@@ -85,7 +85,7 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
 
         foreach (var command in requiredCommands)
         {
-            var commandResult = Assert.Single(results, r => r.Name == $"typescript-apphost-{command}");
+            var commandResult = Assert.Single(results, r => r.Name == TypeScriptAppHostToolingCheck.GetMissingCommandCheckName(command));
             Assert.Contains($"'{command}'", commandResult.Message, StringComparison.Ordinal);
             Assert.Contains(command, commandResult.Details!, StringComparison.Ordinal);
         }
@@ -110,7 +110,7 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
 
         var result = Assert.Single(results);
         Assert.Equal(EnvironmentCheckStatus.Fail, result.Status);
-        Assert.Equal($"typescript-apphost-{missingCommand}", result.Name);
+        Assert.Equal(TypeScriptAppHostToolingCheck.GetMissingCommandCheckName(missingCommand), result.Name);
         Assert.Equal("https://nodejs.org/en/download", result.Link);
         Assert.Contains($"'{missingCommand}'", result.Message, StringComparison.Ordinal);
     }
@@ -138,8 +138,8 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
 
         var result = Assert.Single(results);
         Assert.Equal(EnvironmentCheckStatus.Fail, result.Status);
-        Assert.Equal("typescript-apphost-yarn-classic", result.Name);
-        Assert.Equal("environment", result.Category);
+        Assert.Equal(TypeScriptAppHostToolingCheck.YarnClassicCheckName, result.Name);
+        Assert.Equal(EnvironmentCheckCategories.Environment, result.Category);
         Assert.Equal("https://yarnpkg.com/getting-started/install", result.Link);
         Assert.Equal("TypeScript AppHost does not support Yarn Classic.", result.Message);
         Assert.Contains("Yarn Classic is not supported", result.Details ?? string.Empty);
@@ -162,8 +162,8 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
 
         var result = Assert.Single(results);
         Assert.Equal(EnvironmentCheckStatus.Fail, result.Status);
-        Assert.Equal("typescript-apphost-yarn-classic", result.Name);
-        Assert.Equal("environment", result.Category);
+        Assert.Equal(TypeScriptAppHostToolingCheck.YarnClassicCheckName, result.Name);
+        Assert.Equal(EnvironmentCheckCategories.Environment, result.Category);
         Assert.Equal("https://yarnpkg.com/getting-started/install", result.Link);
         Assert.Contains("yarn.lock", result.Details ?? string.Empty);
     }
@@ -201,5 +201,6 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
             cacheDirectory: workspace.WorkspaceRoot.CreateSubdirectory(".aspire-cache"),
             sdksDirectory: workspace.WorkspaceRoot.CreateSubdirectory(".aspire-sdks"),
             logsDirectory: workspace.WorkspaceRoot.CreateSubdirectory(".aspire-logs"),
-            logFilePath: "test.log");
+            logFilePath: "test.log",
+            identityChannel: "local");
 }
