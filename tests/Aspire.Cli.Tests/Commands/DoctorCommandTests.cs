@@ -79,6 +79,42 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    [SkipOnPlatform(TestPlatforms.Windows | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Validates Linux /etc/os-release values.")]
+    public async Task DoctorCommand_Json_OnLinux_UsesOsReleaseValues()
+    {
+        Assert.SkipUnless(File.Exists("/etc/os-release"), "Linux /etc/os-release is required for this test.");
+
+        var osRelease = OperatingSystemCheck.ParseLinuxOsRelease(
+            await File.ReadAllTextAsync("/etc/os-release", TestContext.Current.CancellationToken));
+        Assert.True(TryGetOsReleaseValue(osRelease, "NAME", out var name), "Expected /etc/os-release to include NAME.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var doc = await RunDoctorJsonAsync(workspace,
+            configureOptions: options =>
+            {
+                options.CliUpdateNotifierFactory = _ => new TestCliUpdateNotifier();
+            });
+
+        var osCheck = GetCheckByName(doc, "operating-system");
+        var metadata = osCheck.GetProperty("metadata");
+        var expectedDisplayName = GetExpectedLinuxDisplayName(name);
+
+        Assert.Equal("Linux", metadata.GetProperty("osType").GetString());
+        Assert.Equal(expectedDisplayName, metadata.GetProperty("displayName").GetString());
+
+        if (TryGetOsReleaseValue(osRelease, "VERSION_ID", out var version))
+        {
+            Assert.Equal(version, metadata.GetProperty("version").GetString());
+            Assert.Equal($"Operating system: {expectedDisplayName} {version}", osCheck.GetProperty("message").GetString());
+        }
+
+        if (TryGetOsReleaseValue(osRelease, "PRETTY_NAME", out var prettyName))
+        {
+            Assert.Equal(prettyName, metadata.GetProperty("description").GetString());
+        }
+    }
+
+    [Fact]
     public async Task DoctorCommand_Json_VersionUpdateBanner_IsSuppressed()
     {
         // The cli-version environment check already surfaces "newer version available" inside
@@ -1039,5 +1075,32 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
         }
 
         return new FileInfo(Path.Combine(directory.FullName, "AppHost.csproj"));
+    }
+
+    private static bool TryGetOsReleaseValue(Dictionary<string, string> osRelease, string key, out string value)
+    {
+        if (osRelease.TryGetValue(key, out var rawValue) && !string.IsNullOrWhiteSpace(rawValue))
+        {
+            value = rawValue;
+            return true;
+        }
+
+        value = string.Empty;
+        return false;
+    }
+
+    private static string GetExpectedLinuxDisplayName(string osReleaseName)
+    {
+        var name = osReleaseName.Trim();
+        foreach (var suffix in new[] { " GNU/Linux", " Linux" })
+        {
+            if (name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            {
+                name = name[..^suffix.Length];
+                break;
+            }
+        }
+
+        return name.Equals("Linux", StringComparison.OrdinalIgnoreCase) ? "Linux" : $"Linux {name}";
     }
 }
