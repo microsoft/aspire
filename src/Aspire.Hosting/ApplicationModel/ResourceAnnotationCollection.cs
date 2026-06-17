@@ -10,11 +10,6 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <summary>
 /// Represents a collection of resource metadata annotations.
 /// </summary>
-/// <remarks>
-/// This collection is thread-safe for concurrent reads and writes. Enumeration (including LINQ
-/// methods like <c>OfType</c>, <c>Any</c>, <c>ToArray</c>, etc.) operates on a point-in-time
-/// snapshot and is safe from concurrent modification exceptions.
-/// </remarks>
 // Inherits from Collection<T> to maintain binary compatibility with assemblies compiled against
 // earlier Aspire versions. Externally compiled code references Collection<T>.Add() etc. via
 // method tokens on the base class; removing the base class causes an ExecutionEngineException
