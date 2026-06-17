@@ -20,7 +20,16 @@ internal static class TestTelemetryHelper
         var ciDetector = new TestCIEnvironmentDetector();
         var codingAgentDetector = new TestCodingAgentDetector();
         var internalMicrosoftDetector = new TestInternalMicrosoftDetector();
-        var telemetry = new AspireCliTelemetry(NullLogger<AspireCliTelemetry>.Instance, provider, ciDetector, codingAgentDetector, internalMicrosoftDetector);
+        var telemetry = new AspireCliTelemetry(
+            NullLogger<AspireCliTelemetry>.Instance,
+            provider,
+            ciDetector,
+            codingAgentDetector,
+            internalMicrosoftDetector,
+            static () => true,
+            AspireCliTelemetry.ReportedActivitySourceName,
+            AspireCliTelemetry.DiagnosticsActivitySourceName,
+            CreateExecutionContext());
         telemetry.InitializeAsync().GetAwaiter().GetResult();
         return telemetry;
     }
@@ -34,10 +43,13 @@ internal static class TestTelemetryHelper
         var ciDetector = new TestCIEnvironmentDetector();
         var codingAgentDetector = new TestCodingAgentDetector();
         var internalMicrosoftDetector = new TestInternalMicrosoftDetector();
-        var telemetry = new AspireCliTelemetry(NullLogger<AspireCliTelemetry>.Instance, provider, ciDetector, codingAgentDetector, internalMicrosoftDetector, reportedSourceName, diagnosticsSourceName);
+        var telemetry = new AspireCliTelemetry(NullLogger<AspireCliTelemetry>.Instance, provider, ciDetector, codingAgentDetector, internalMicrosoftDetector, reportedSourceName, diagnosticsSourceName, CreateExecutionContext());
         telemetry.InitializeAsync().GetAwaiter().GetResult();
         return telemetry;
     }
+
+    private static CliExecutionContext CreateExecutionContext()
+        => Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory));
 
     private sealed class TestMachineInformationProvider : IMachineInformationProvider
     {

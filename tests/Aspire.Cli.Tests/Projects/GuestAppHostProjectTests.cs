@@ -924,6 +924,23 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.Equal(seededChannel, reloaded.Channel);
     }
 
+    [Fact]
+    public void IsUsingProjectReferencesReturnsFalseWhenIdentityIsOverridden()
+    {
+        // When ASPIRE_CLI_* identity overrides (or the install sidecar) are active the CLI is
+        // emulating an installed build, which is never resolving Aspire packages through in-repo
+        // project references. This must hold even for a source (DEBUG) build run from inside the
+        // Aspire repo, where AspireRepositoryDetector would otherwise match the repo's Aspire.slnx
+        // (via its Environment.ProcessPath fallback) and force project-reference mode — which
+        // short-circuits channel resolution so an emulated staging/daily apphost silently resolves
+        // stable nuget.org packages instead of its pinned channel's feed.
+        var project = CreateGuestAppHostProject(identityOverridden: true);
+
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+
+        Assert.False(project.IsUsingProjectReferences(new FileInfo(appHostPath)));
+    }
+
     private GuestAppHostProject CreateGuestAppHostProject()
         => CreateGuestAppHostProject(interactionService: null, identityChannel: "local");
 
@@ -944,7 +961,8 @@ public class GuestAppHostProjectTests : IDisposable
     private GuestAppHostProject CreateGuestAppHostProject(
         TestInteractionService? interactionService = null,
         string identityChannel = "local",
-        TestAppHostServerProjectFactory? appHostServerProjectFactory = null)
+        TestAppHostServerProjectFactory? appHostServerProjectFactory = null,
+        bool identityOverridden = false)
     {
         var language = new LanguageInfo(
             LanguageId: "typescript/nodejs",
@@ -958,7 +976,8 @@ public class GuestAppHostProjectTests : IDisposable
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(
             new DirectoryInfo(AppContext.BaseDirectory),
             identityChannel: identityChannel,
-            logFilePath: logFilePath);
+            logFilePath: logFilePath,
+            identityOverridden: identityOverridden);
 
         return new GuestAppHostProject(
             language: language,

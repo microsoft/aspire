@@ -441,7 +441,7 @@ internal class ConsoleInteractionService : IInteractionService
 
     public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion)
     {
-        var cliInformationalVersion = VersionHelper.GetDefaultTemplateVersion();
+        var cliInformationalVersion = _executionContext.IdentityVersion;
 
         // When both versions parse, tell the user which side is older and how to
         // update it rather than the ambiguous "upgrade the AppHost or Aspire CLI".

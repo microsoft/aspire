@@ -426,6 +426,62 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
             hivesDirectory: hivesDirectory);
     }
 
+    // Emulating a released build via ASPIRE_CLI_PACKAGES / the sidecar `packages` field: the
+    // synthesized channel is named after the emulated identity (here "stable", a NON-local-build
+    // name) and points Aspire.* at a local directory. Even with IncludePrHives:false (the
+    // `aspire init` shape) and no hive on disk, the deliberate local-packages override must be
+    // honored so templates resolve from the local directory instead of silently falling back to
+    // nuget.org. Regression guard for the identity-sidecar emulation bug where a stable/daily/
+    // staging emulated name caused the local channel to be filtered out of template resolution.
+    [Fact]
+    public async Task ResolveTemplatePackageAsync_IdentityPackagesOverride_IncludesLocalChannelEvenWhenPrHivesSuppressed()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var packagesDir = workspace.CreateDirectory("identity-packages");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            workspace.WorkspaceRoot,
+            identityChannel: "stable",
+            identityVersion: "13.5.0",
+            identityOverridden: true,
+            identityPackagesDirectory: packagesDir);
+
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ =>
+            {
+                var implicitCh = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache
+                {
+                    GetTemplatePackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(
+                    [
+                        new Aspire.Shared.NuGetPackageCli { Id = TemplateNuGetConfigService.TemplatesPackageName, Version = "13.4.3", Source = "nuget.org" }
+                    ])
+                }, new TestFeatures());
+                var localStableCh = PackageChannel.CreateExplicitChannel(
+                    "stable",
+                    PackageChannelQuality.Both,
+                    [new PackageMapping("Aspire*", packagesDir.FullName.Replace('\\', '/'))],
+                    new FakeNuGetPackageCache(),
+                    features: new TestFeatures(),
+                    pinnedVersion: "13.5.0");
+                return Task.FromResult<IEnumerable<PackageChannel>>([implicitCh, localStableCh]);
+            }
+        };
+
+        var service = CreateService(packagingService: packagingService, executionContext: executionContext);
+
+        var query = new TemplatePackageQuery(
+            RequestedChannel: null,
+            VersionOverride: null,
+            SourceOverride: null,
+            IncludePrHives: false);
+
+        var selection = await service.ResolveTemplatePackageAsync(query, CancellationToken.None);
+
+        Assert.Equal("13.5.0", selection.Package.Version);
+        Assert.Equal(PackageChannelType.Explicit, selection.Channel.Type);
+        Assert.Equal("stable", selection.Channel.Name);
+    }
+
     private static string[] GetPackagePatternsForSource(XDocument doc, string source)
     {
         var packageSourceMapping = doc.Root!.Element("packageSourceMapping");
@@ -454,7 +510,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         {
             GetChannelsAsyncCallback = _ =>
             {
-                // Simulate the daily channel: explicit and RequiresProjectNuGetConfig = true (default)
+                // Simulate the daily channel: explicit, custom feed → drops a config.
                 var dailyCh = PackageChannel.CreateExplicitChannel(
                     "daily",
                     PackageChannelQuality.Prerelease,
@@ -472,7 +528,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
 
         await service.PromptToCreateOrUpdateNuGetConfigAsync(channelName: "daily", outputDir.FullName, CancellationToken.None);
 
-        // nuget.config should be created because RequiresProjectNuGetConfig is true
+        // nuget.config should be created because the daily channel routes Aspire* to a custom feed
         var configPath = Path.Combine(outputDir.FullName, "nuget.config");
         Assert.True(File.Exists(configPath));
         var doc = XDocument.Load(configPath);
@@ -485,7 +541,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PromptToCreateOrUpdateNuGetConfigAsync_ChannelWithRequiresProjectNuGetConfigFalse_DoesNotCreateConfig()
+    public async Task PromptToCreateOrUpdateNuGetConfigAsync_StableChannel_DoesNotCreateConfig()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputDir = workspace.WorkspaceRoot.CreateSubdirectory("output");
@@ -494,14 +550,14 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         {
             GetChannelsAsyncCallback = _ =>
             {
-                // Simulate the stable channel: explicit but RequiresProjectNuGetConfig = false
+                // Simulate the stable channel: explicit but mapped to nuget.org (ambient default),
+                // so ShouldCreateNuGetConfig() is false (excluded by name).
                 var stableCh = PackageChannel.CreateExplicitChannel(
                     "stable",
                     PackageChannelQuality.Stable,
                     [new PackageMapping("*", "https://api.nuget.org/v3/index.json")],
                     new FakeNuGetPackageCache(),
-                    features: new TestFeatures(),
-                    requiresProjectNuGetConfig: false);
+                    features: new TestFeatures());
                 return Task.FromResult<IEnumerable<PackageChannel>>([stableCh]);
             }
         };
@@ -510,12 +566,12 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
 
         await service.PromptToCreateOrUpdateNuGetConfigAsync(channelName: "stable", outputDir.FullName, CancellationToken.None);
 
-        // No nuget.config should be created because RequiresProjectNuGetConfig is false
+        // No nuget.config should be created because the stable channel maps to nuget.org
         Assert.False(File.Exists(Path.Combine(outputDir.FullName, "nuget.config")));
     }
 
     [Fact]
-    public async Task PromptToCreateOrUpdateNuGetConfigAsync_ChannelWithRequiresProjectNuGetConfigFalse_UpdatesExistingConfig()
+    public async Task PromptToCreateOrUpdateNuGetConfigAsync_StableChannel_UpdatesExistingConfig()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputDir = workspace.WorkspaceRoot.CreateSubdirectory("output");
@@ -546,8 +602,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
                     PackageChannelQuality.Stable,
                     [new PackageMapping("*", "https://api.nuget.org/v3/index.json")],
                     new FakeNuGetPackageCache(),
-                    features: new TestFeatures(),
-                    requiresProjectNuGetConfig: false);
+                    features: new TestFeatures());
                 return Task.FromResult<IEnumerable<PackageChannel>>([stableCh]);
             }
         };
@@ -571,7 +626,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task CreateOrUpdateNuGetConfigWithoutPromptAsync_ChannelWithRequiresProjectNuGetConfigFalse_RespectsExistingConfig(bool hasExistingConfig)
+    public async Task CreateOrUpdateNuGetConfigWithoutPromptAsync_StableChannel_RespectsExistingConfig(bool hasExistingConfig)
     {
         // The "without prompt" path is used by aspire init. When the channel does not
         // require a project-level nuget.config (e.g. stable → nuget.org only):
@@ -604,8 +659,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
                     PackageChannelQuality.Stable,
                     [new PackageMapping("*", "https://api.nuget.org/v3/index.json")],
                     new FakeNuGetPackageCache(),
-                    features: new TestFeatures(),
-                    requiresProjectNuGetConfig: false);
+                    features: new TestFeatures());
                 return Task.FromResult<IEnumerable<PackageChannel>>([stableCh]);
             }
         };

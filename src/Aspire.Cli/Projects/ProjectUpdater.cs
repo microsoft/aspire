@@ -116,12 +116,14 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 _ => throw new InvalidOperationException(UpdateCommandStrings.UnexpectedCodePath)
             };
 
-            // For channels that don't require a project-level nuget.config (e.g. stable,
-            // whose mappings only point to nuget.org), only update an existing config to
-            // clean up old channel feeds — don't create a new one.
-            // See: https://github.com/microsoft/aspire/issues/18124
-            if (!channel.RequiresProjectNuGetConfig)
+            if (!channel.ShouldCreateNuGetConfig())
             {
+                // The channel maps Aspire packages only to ambient sources (the stable channel
+                // points at nuget.org), so a project-level NuGet.config is redundant. Only refresh
+                // an *existing* config to clean up feeds left over from a previous channel; never
+                // create a fresh one and don't prompt for a location, because dropping a
+                // <clear/>-based config here would wipe the user's other feeds.
+                // See: https://github.com/microsoft/aspire/issues/18124
                 var candidateDirectory = new DirectoryInfo(recommendedNuGetConfigFileDirectory!);
                 if (NuGetConfigMerger.TryFindNuGetConfigInDirectory(candidateDirectory, out _))
                 {

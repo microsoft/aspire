@@ -25,13 +25,15 @@ internal sealed class TelemetryFixture : IDisposable
     /// <param name="internalMicrosoftDetector">Optional internal Microsoft detector. Uses a default test detector if not specified.</param>
     /// <param name="logger">Optional logger. Uses <see cref="NullLogger"/> if not specified.</param>
     /// <param name="sampleResult">The sampling result for the activity listener. Defaults to <see cref="ActivitySamplingResult.AllDataAndRecorded"/>.</param>
+    /// <param name="executionContext">Optional CLI execution context. Defaults to a local-identity context so the telemetry's required context is always satisfied.</param>
     public TelemetryFixture(
         IMachineInformationProvider? machineInfoProvider = null,
         ICIEnvironmentDetector? ciEnvironmentDetector = null,
         ICodingAgentDetector? codingAgentDetector = null,
         IInternalMicrosoftDetector? internalMicrosoftDetector = null,
         ILogger<AspireCliTelemetry>? logger = null,
-        ActivitySamplingResult sampleResult = ActivitySamplingResult.AllDataAndRecorded)
+        ActivitySamplingResult sampleResult = ActivitySamplingResult.AllDataAndRecorded,
+        CliExecutionContext? executionContext = null)
     {
         ReportedSourceName = $"Test.{Path.GetRandomFileName()}";
         DiagnosticsSourceName = $"Test.{Path.GetRandomFileName()}";
@@ -49,8 +51,9 @@ internal sealed class TelemetryFixture : IDisposable
         codingAgentDetector ??= new TestCodingAgentDetector();
         internalMicrosoftDetector ??= new TestInternalMicrosoftDetector();
         logger ??= NullLogger<AspireCliTelemetry>.Instance;
+        executionContext ??= Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory));
 
-        Telemetry = new AspireCliTelemetry(logger, machineInfoProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector, ReportedSourceName, DiagnosticsSourceName);
+        Telemetry = new AspireCliTelemetry(logger, machineInfoProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector, ReportedSourceName, DiagnosticsSourceName, executionContext);
         Telemetry.InitializeAsync().GetAwaiter().GetResult();
     }
 

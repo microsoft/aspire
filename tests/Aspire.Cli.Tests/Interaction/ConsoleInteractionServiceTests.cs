@@ -23,7 +23,7 @@ public class ConsoleInteractionServiceTests
     private static readonly DirectoryInfo s_logsDirectory = s_tempRoot.CreateSubdirectory("logs");
 
     private static CliExecutionContext CreateExecutionContext(bool debugMode = false, string? logFilePath = null) =>
-        new(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), s_runtimeDirectory, s_logsDirectory, logFilePath ?? "test.log", debugMode: debugMode);
+        new(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), s_runtimeDirectory, s_logsDirectory, logFilePath ?? "test.log", identityChannel: "local", debugMode: debugMode);
 
     private static ConsoleInteractionService CreateInteractionService(IAnsiConsole console, CliExecutionContext? executionContext = null, ICliHostEnvironment? hostEnvironment = null)
     {
