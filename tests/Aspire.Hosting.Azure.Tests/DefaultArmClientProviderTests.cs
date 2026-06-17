@@ -22,6 +22,8 @@ public class DefaultArmClientProviderTests
     private const string KeyVaultResourceId = $"/subscriptions/{SubscriptionId}/resourceGroups/test-rg/providers/Microsoft.KeyVault/vaults/kv-test";
     private const string DeletedKeyVaultPath = $"/subscriptions/{SubscriptionId}/providers/Microsoft.KeyVault/locations/westus2/deletedVaults/kv-test";
     private const string DeletedKeyVaultPurgePath = $"/subscriptions/{SubscriptionId}/providers/Microsoft.KeyVault/locations/westus2/deletedVaults/kv-test/purge";
+    private static readonly TimeSpan s_keyVaultPollInterval = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan s_keyVaultDeleteTimeout = TimeSpan.FromMinutes(10);
 
     [Fact]
     public async Task GetSupportedLocationsAsyncUsesConfiguredArmEnvironment()
@@ -174,6 +176,61 @@ public class DefaultArmClientProviderTests
             request.Uri.AbsolutePath == DeletedKeyVaultPath);
     }
 
+    [Fact]
+    public async Task DeleteResourceAsyncPollsKeyVaultDeletionAndPurgeWithConfiguredTimeProvider()
+    {
+        var timeProvider = new ManualTimeProvider();
+        var transport = new ProviderMetadataTransport(keyVaultDeletePollsBeforeDeleted: 1, deletedKeyVaultPurgePollsBeforePurged: 1);
+        var provider = new DefaultArmClientProvider(new ArmClientOptions
+        {
+            Transport = transport
+        }, timeProvider);
+        var armClient = provider.GetArmClient(new CapturingTokenCredential(), SubscriptionId);
+
+        var deleteTask = armClient.DeleteResourceAsync(KeyVaultResourceId, cancellationToken: CancellationToken.None);
+
+        await transport.WaitForKeyVaultDeletePollAsync();
+        await timeProvider.WaitForTimerAsync(s_keyVaultPollInterval);
+        Assert.False(deleteTask.IsCompleted);
+
+        timeProvider.FireTimer(s_keyVaultPollInterval);
+
+        await transport.WaitForDeletedKeyVaultPurgePollAsync();
+        await timeProvider.WaitForTimerAsync(s_keyVaultPollInterval);
+        Assert.False(deleteTask.IsCompleted);
+
+        timeProvider.FireTimer(s_keyVaultPollInterval);
+
+        await deleteTask;
+
+        Assert.Contains(transport.Requests, static request =>
+            request.Method == RequestMethod.Post.ToString() &&
+            request.Uri.AbsolutePath == DeletedKeyVaultPurgePath &&
+            request.Uri.Query.Contains("api-version=", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task DeleteResourceAsyncUsesConfiguredTimeProviderForKeyVaultDeleteTimeout()
+    {
+        var timeProvider = new ManualTimeProvider();
+        var transport = new ProviderMetadataTransport(keyVaultDeletePollsBeforeDeleted: int.MaxValue);
+        var provider = new DefaultArmClientProvider(new ArmClientOptions
+        {
+            Transport = transport
+        }, timeProvider);
+        var armClient = provider.GetArmClient(new CapturingTokenCredential(), SubscriptionId);
+
+        var deleteTask = armClient.DeleteResourceAsync(KeyVaultResourceId, cancellationToken: CancellationToken.None);
+
+        await transport.WaitForKeyVaultDeletePollAsync();
+        await timeProvider.WaitForTimerAsync(s_keyVaultDeleteTimeout);
+
+        timeProvider.FireTimer(s_keyVaultDeleteTimeout);
+
+        var exception = await Assert.ThrowsAsync<TimeoutException>(() => deleteTask);
+        Assert.Contains("to be deleted", exception.Message, StringComparison.Ordinal);
+    }
+
     private sealed class CapturingTokenCredential : TokenCredential
     {
         private readonly object _lock = new();
@@ -223,8 +280,15 @@ public class DefaultArmClientProviderTests
         private readonly IReadOnlyList<string> _providerLocations;
         private readonly int _keyVaultGetStatus;
         private readonly int _keyVaultDeleteStatus;
+        private readonly int _keyVaultDeletePollsBeforeDeleted;
+        private readonly int _deletedKeyVaultPurgePollsBeforePurged;
         private bool _keyVaultDeleteRequested;
+        private bool _deletedKeyVaultPurgeRequested;
+        private int _keyVaultDeletePollCount;
+        private int _deletedKeyVaultPurgePollCount;
         private readonly TaskCompletionSource _nestedDeploymentOperationRequestsStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _keyVaultDeletePollStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _deletedKeyVaultPurgePollStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private int _activeNestedDeploymentOperationRequests;
         private int _maxConcurrentNestedDeploymentOperationRequests;
         private int _nestedDeploymentOperationRequestCount;
@@ -233,7 +297,9 @@ public class DefaultArmClientProviderTests
             IReadOnlyList<(string Name, string DisplayName)>? locations = null,
             IReadOnlyList<string>? providerLocations = null,
             int keyVaultGetStatus = 200,
-            int keyVaultDeleteStatus = 200)
+            int keyVaultDeleteStatus = 200,
+            int keyVaultDeletePollsBeforeDeleted = 0,
+            int deletedKeyVaultPurgePollsBeforePurged = 0)
         {
             _locations = locations ??
             [
@@ -243,6 +309,8 @@ public class DefaultArmClientProviderTests
             _providerLocations = providerLocations ?? ["East US", "West US 3"];
             _keyVaultGetStatus = keyVaultGetStatus;
             _keyVaultDeleteStatus = keyVaultDeleteStatus;
+            _keyVaultDeletePollsBeforeDeleted = keyVaultDeletePollsBeforeDeleted;
+            _deletedKeyVaultPurgePollsBeforePurged = deletedKeyVaultPurgePollsBeforePurged;
         }
 
         public IReadOnlyList<Uri> RequestUris
@@ -268,6 +336,12 @@ public class DefaultArmClientProviderTests
         }
 
         public int MaxConcurrentNestedDeploymentOperationRequests => Volatile.Read(ref _maxConcurrentNestedDeploymentOperationRequests);
+
+        public Task WaitForKeyVaultDeletePollAsync()
+            => _keyVaultDeletePollStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        public Task WaitForDeletedKeyVaultPurgePollAsync()
+            => _deletedKeyVaultPurgePollStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         public override Request CreateRequest()
             => new TestRequest();
@@ -304,6 +378,30 @@ public class DefaultArmClientProviderTests
         private Response CreateResponse(CapturedRequest request)
         {
             var uri = request.Uri;
+            if (request.Method == RequestMethod.Get.ToString() &&
+                string.Equals(uri.AbsolutePath, KeyVaultResourceId, StringComparison.Ordinal))
+            {
+                return CreateKeyVaultGetResponse();
+            }
+
+            if (request.Method == RequestMethod.Delete.ToString() &&
+                string.Equals(uri.AbsolutePath, KeyVaultResourceId, StringComparison.Ordinal))
+            {
+                return CreateKeyVaultDeleteResponse();
+            }
+
+            if (request.Method == RequestMethod.Post.ToString() &&
+                IsDeletedKeyVaultPurgePath(uri.AbsolutePath))
+            {
+                return CreateDeletedKeyVaultPurgeResponse(uri.AbsolutePath);
+            }
+
+            if (request.Method == RequestMethod.Get.ToString() &&
+                IsDeletedKeyVaultPath(uri.AbsolutePath))
+            {
+                return CreateDeletedKeyVaultGetResponse(uri.AbsolutePath);
+            }
+
             var content = uri.AbsolutePath switch
             {
                 $"/subscriptions/{SubscriptionId}" => $$"""
@@ -329,45 +427,76 @@ public class DefaultArmClientProviderTests
                 var path when string.Equals(path, $"{NestedBDeploymentId}/operations", StringComparison.Ordinal) => CreateDeploymentOperationsContent(
                     NestedBDeploymentId,
                     ("storage-b", $"/subscriptions/{SubscriptionId}/resourceGroups/test-rg/providers/Microsoft.Storage/storageAccounts/storage-b", "Microsoft.Storage/storageAccounts", "storage-b")),
-                var path when string.Equals(path, KeyVaultResourceId, StringComparison.Ordinal) && request.Method == RequestMethod.Get.ToString() => _keyVaultGetStatus == 404 || _keyVaultDeleteRequested ? null : CreateKeyVaultResourceContent(),
-                var path when string.Equals(path, KeyVaultResourceId, StringComparison.Ordinal) && request.Method == RequestMethod.Delete.ToString() => null,
-                var path when IsDeletedKeyVaultPath(path) && request.Method == RequestMethod.Get.ToString() => null,
-                var path when IsDeletedKeyVaultPurgePath(path) && request.Method == RequestMethod.Post.ToString() => null,
                 _ => throw new InvalidOperationException($"Unexpected ARM request: {uri}")
             };
 
-            if (request.Method == RequestMethod.Get.ToString() &&
-                string.Equals(uri.AbsolutePath, KeyVaultResourceId, StringComparison.Ordinal) &&
-                (_keyVaultGetStatus == 404 || _keyVaultDeleteRequested))
-            {
-                return CreateEmptyResponse(404);
-            }
-
-            if (request.Method == RequestMethod.Delete.ToString() &&
-                string.Equals(uri.AbsolutePath, KeyVaultResourceId, StringComparison.Ordinal))
-            {
-                if (_keyVaultDeleteStatus == 404)
-                {
-                    return CreateEmptyResponse(404);
-                }
-
-                _keyVaultDeleteRequested = true;
-            }
-
-            if (request.Method == RequestMethod.Post.ToString() &&
-                IsDeletedKeyVaultPurgePath(uri.AbsolutePath) &&
-                !string.Equals(uri.AbsolutePath, DeletedKeyVaultPurgePath, StringComparison.Ordinal))
-            {
-                return CreateEmptyResponse(404);
-            }
-
-            if (request.Method == RequestMethod.Get.ToString() &&
-                IsDeletedKeyVaultPath(uri.AbsolutePath))
-            {
-                return CreateEmptyResponse(404);
-            }
-
             return content is null ? CreateEmptyResponse(200) : CreateJsonResponse(content);
+        }
+
+        private Response CreateKeyVaultGetResponse()
+        {
+            if (_keyVaultGetStatus == 404)
+            {
+                return CreateEmptyResponse(404);
+            }
+
+            if (!_keyVaultDeleteRequested)
+            {
+                return CreateJsonResponse(CreateKeyVaultResourceContent());
+            }
+
+            var pollCount = Interlocked.Increment(ref _keyVaultDeletePollCount);
+            if (pollCount <= _keyVaultDeletePollsBeforeDeleted)
+            {
+                _keyVaultDeletePollStarted.TrySetResult();
+                return CreateJsonResponse(CreateKeyVaultResourceContent());
+            }
+
+            return CreateEmptyResponse(404);
+        }
+
+        private Response CreateKeyVaultDeleteResponse()
+        {
+            if (_keyVaultDeleteStatus == 404)
+            {
+                return CreateEmptyResponse(404);
+            }
+
+            _keyVaultDeleteRequested = true;
+            return CreateEmptyResponse(200);
+        }
+
+        private Response CreateDeletedKeyVaultPurgeResponse(string path)
+        {
+            if (!string.Equals(path, DeletedKeyVaultPurgePath, StringComparison.Ordinal))
+            {
+                return CreateEmptyResponse(404);
+            }
+
+            _deletedKeyVaultPurgeRequested = true;
+            return CreateEmptyResponse(200);
+        }
+
+        private Response CreateDeletedKeyVaultGetResponse(string path)
+        {
+            if (!string.Equals(path, DeletedKeyVaultPath, StringComparison.Ordinal))
+            {
+                return CreateEmptyResponse(404);
+            }
+
+            if (!_deletedKeyVaultPurgeRequested)
+            {
+                return CreateJsonResponse(CreateDeletedKeyVaultResourceContent(path));
+            }
+
+            var pollCount = Interlocked.Increment(ref _deletedKeyVaultPurgePollCount);
+            if (pollCount <= _deletedKeyVaultPurgePollsBeforePurged)
+            {
+                _deletedKeyVaultPurgePollStarted.TrySetResult();
+                return CreateJsonResponse(CreateDeletedKeyVaultResourceContent(path));
+            }
+
+            return CreateEmptyResponse(404);
         }
 
         private async Task WaitForConcurrentNestedDeploymentOperationRequestAsync()
@@ -523,6 +652,23 @@ public class DefaultArmClientProviderTests
             });
         }
 
+        private static string CreateDeletedKeyVaultResourceContent(string deletedVaultPath)
+        {
+            return JsonSerializer.Serialize(new
+            {
+                id = deletedVaultPath,
+                name = "kv-test",
+                type = "Microsoft.KeyVault/deletedVaults",
+                properties = new
+                {
+                    vaultId = KeyVaultResourceId,
+                    location = "westus2",
+                    deletionDate = "2026-06-17T00:00:00Z",
+                    scheduledPurgeDate = "2026-09-15T00:00:00Z"
+                }
+            });
+        }
+
         private static MockResponse CreateJsonResponse(string content)
         {
             var response = new MockResponse(200)
@@ -536,6 +682,125 @@ public class DefaultArmClientProviderTests
             => new(status);
 
         public sealed record CapturedRequest(string Method, Uri Uri);
+    }
+
+    private sealed class ManualTimeProvider : TimeProvider
+    {
+        private readonly object _lock = new();
+        private readonly List<ManualTimer> _timers = [];
+        private TaskCompletionSource _timerCreated = CreateCompletionSource();
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = new ManualTimer(callback, state, dueTime);
+
+            lock (_lock)
+            {
+                _timers.Add(timer);
+                _timerCreated.TrySetResult();
+                _timerCreated = CreateCompletionSource();
+            }
+
+            return timer;
+        }
+
+        public async Task WaitForTimerAsync(TimeSpan dueTime)
+        {
+            while (true)
+            {
+                Task timerCreatedTask;
+                lock (_lock)
+                {
+                    if (_timers.Any(timer => timer.IsActiveFor(dueTime)))
+                    {
+                        return;
+                    }
+
+                    timerCreatedTask = _timerCreated.Task;
+                }
+
+                await timerCreatedTask.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            }
+        }
+
+        public void FireTimer(TimeSpan dueTime)
+        {
+            ManualTimer? timer;
+            lock (_lock)
+            {
+                timer = _timers.FirstOrDefault(timer => timer.IsActiveFor(dueTime));
+            }
+
+            if (timer is null)
+            {
+                throw new InvalidOperationException($"No active timer exists for '{dueTime}'.");
+            }
+
+            timer.Fire();
+        }
+
+        private static TaskCompletionSource CreateCompletionSource()
+            => new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        private sealed class ManualTimer(TimerCallback callback, object? state, TimeSpan dueTime) : ITimer
+        {
+            private readonly object _lock = new();
+            private TimeSpan _dueTime = dueTime;
+            private bool _disposed;
+            private bool _fired;
+
+            public bool IsActiveFor(TimeSpan dueTime)
+            {
+                lock (_lock)
+                {
+                    return !_disposed && !_fired && _dueTime == dueTime;
+                }
+            }
+
+            public void Fire()
+            {
+                lock (_lock)
+                {
+                    if (_disposed || _fired)
+                    {
+                        return;
+                    }
+
+                    _fired = true;
+                }
+
+                callback(state);
+            }
+
+            public bool Change(TimeSpan dueTime, TimeSpan period)
+            {
+                lock (_lock)
+                {
+                    if (_disposed)
+                    {
+                        return false;
+                    }
+
+                    _dueTime = dueTime;
+                    _fired = false;
+                    return true;
+                }
+            }
+
+            public void Dispose()
+            {
+                lock (_lock)
+                {
+                    _disposed = true;
+                }
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                Dispose();
+                return ValueTask.CompletedTask;
+            }
+        }
     }
 
     private sealed class TestRequest : Request

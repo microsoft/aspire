@@ -25,29 +25,39 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
     private static readonly TimeSpan s_keyVaultDeleteTimeout = TimeSpan.FromMinutes(10);
 
     private readonly ArmClientOptions? _options;
+    private readonly TimeProvider _timeProvider;
 
     public DefaultArmClientProvider()
     {
+        _timeProvider = TimeProvider.System;
     }
 
-    internal DefaultArmClientProvider(ArmClientOptions options)
+    public DefaultArmClientProvider(TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(timeProvider);
+
+        _timeProvider = timeProvider;
+    }
+
+    internal DefaultArmClientProvider(ArmClientOptions options, TimeProvider? timeProvider = null)
     {
         _options = options;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public IArmClient GetArmClient(TokenCredential credential, string subscriptionId)
     {
         var armClient = new ArmClient(credential, subscriptionId, _options);
-        return new DefaultArmClient(armClient);
+        return new DefaultArmClient(armClient, _timeProvider);
     }
 
     public IArmClient GetArmClient(TokenCredential credential)
     {
         var armClient = new ArmClient(credential, default, _options);
-        return new DefaultArmClient(armClient);
+        return new DefaultArmClient(armClient, _timeProvider);
     }
 
-    private sealed class DefaultArmClient(ArmClient armClient) : IArmClient
+    private sealed class DefaultArmClient(ArmClient armClient, TimeProvider timeProvider) : IArmClient
     {
         private const string KeyVaultResourceType = "Microsoft.KeyVault/vaults";
 
@@ -245,7 +255,7 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
                 try
                 {
                     await resource.DeleteAsync(WaitUntil.Started, cancellationToken).ConfigureAwait(false);
-                    await WaitForKeyVaultToBeDeletedAsync(resource, cancellationToken).ConfigureAwait(false);
+                    await WaitForKeyVaultToBeDeletedAsync(resource, timeProvider, cancellationToken).ConfigureAwait(false);
                 }
                 catch (RequestFailedException ex) when (ex.Status == 404)
                 {
@@ -285,7 +295,7 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
             try
             {
                 await deletedVault.PurgeDeletedAsync(WaitUntil.Started, cancellationToken).ConfigureAwait(false);
-                await WaitForDeletedKeyVaultToBePurgedAsync(deletedVault, cancellationToken).ConfigureAwait(false);
+                await WaitForDeletedKeyVaultToBePurgedAsync(deletedVault, timeProvider, cancellationToken).ConfigureAwait(false);
             }
             catch (RequestFailedException ex) when (ex.Status == 404)
             {
@@ -295,9 +305,9 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
             return true;
         }
 
-        private static async Task WaitForKeyVaultToBeDeletedAsync(GenericResource keyVault, CancellationToken cancellationToken)
+        private static async Task WaitForKeyVaultToBeDeletedAsync(GenericResource keyVault, TimeProvider timeProvider, CancellationToken cancellationToken)
         {
-            using var timeoutCts = new CancellationTokenSource(s_keyVaultDeleteTimeout);
+            using var timeoutCts = new CancellationTokenSource(s_keyVaultDeleteTimeout, timeProvider);
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
             while (true)
@@ -317,7 +327,7 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
 
                 try
                 {
-                    await Task.Delay(s_keyVaultDeletePollInterval, linkedCts.Token).ConfigureAwait(false);
+                    await Task.Delay(s_keyVaultDeletePollInterval, timeProvider, linkedCts.Token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeoutCts.IsCancellationRequested)
                 {
@@ -326,9 +336,9 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
             }
         }
 
-        private static async Task WaitForDeletedKeyVaultToBePurgedAsync(DeletedKeyVaultResource deletedVault, CancellationToken cancellationToken)
+        private static async Task WaitForDeletedKeyVaultToBePurgedAsync(DeletedKeyVaultResource deletedVault, TimeProvider timeProvider, CancellationToken cancellationToken)
         {
-            using var timeoutCts = new CancellationTokenSource(s_keyVaultPurgeTimeout);
+            using var timeoutCts = new CancellationTokenSource(s_keyVaultPurgeTimeout, timeProvider);
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
             while (true)
@@ -348,7 +358,7 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
 
                 try
                 {
-                    await Task.Delay(s_keyVaultPurgePollInterval, linkedCts.Token).ConfigureAwait(false);
+                    await Task.Delay(s_keyVaultPurgePollInterval, timeProvider, linkedCts.Token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeoutCts.IsCancellationRequested)
                 {
