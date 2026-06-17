@@ -228,6 +228,15 @@ internal sealed class CSharpCliManagedAppHostModuleGenerator(
     internal static void AddBuildProperty(ProcessInvocationOptions options)
     {
         options.MSBuildProperties[BuildPropertyName] = "true";
+
+        // File-based AppHosts compiled by `dotnet run --file` do not import the
+        // Aspire.Hosting.AppHost SDK targets that normally enable reflection-based
+        // System.Text.Json serialization. In .NET 10, reflection-based serialization
+        // is disabled by default, which breaks Aspire.Hosting runtime serialization
+        // for the resource model and backchannel. Playground file-based AppHosts use
+        // `#:property JsonSerializerIsReflectionEnabledByDefault=true`; CLI-managed
+        // AppHosts need the equivalent property injected here because they bypass the
+        // SDK directive.
         options.MSBuildProperties["JsonSerializerIsReflectionEnabledByDefault"] = "true";
     }
 
