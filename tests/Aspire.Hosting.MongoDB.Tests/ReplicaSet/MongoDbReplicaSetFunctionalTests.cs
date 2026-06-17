@@ -5,6 +5,7 @@ using Aspire.TestUtilities;
 using Aspire.Hosting.Utils;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using Polly;
 
 namespace Aspire.Hosting.MongoDB.Tests;
 
@@ -34,6 +35,9 @@ public class MongoDbReplicaSetFunctionalTests(ITestOutputHelper testOutputHelper
     public async Task VerifyMongoDBReplicaSetResource()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+        var pipeline = new ResiliencePipelineBuilder()
+            .AddRetry(new() { MaxRetryAttempts = 10, Delay = TimeSpan.FromSeconds(1) })
+            .Build();
 
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
 
@@ -47,9 +51,12 @@ public class MongoDbReplicaSetFunctionalTests(ITestOutputHelper testOutputHelper
 
         var connectionString = await rs.Resource.ConnectionStringExpression.GetValueAsync(cts.Token);
 
-        var client = new MongoClient(connectionString);
-        var db = client.GetDatabase(DbName);
-        await CreateTestDataWithReplicaSetFeaturesAsync(db, cts.Token);
+        await pipeline.ExecuteAsync(async token =>
+        {
+            var client = new MongoClient(connectionString);
+            var db = client.GetDatabase(DbName);
+            await CreateTestDataWithReplicaSetFeaturesAsync(db, cts.Token);
+        }, cts.Token);
 
         await app.StopAsync();
     }
@@ -59,6 +66,9 @@ public class MongoDbReplicaSetFunctionalTests(ITestOutputHelper testOutputHelper
     public async Task VerifyMongoDBMultiNodeReplicaSetResource()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+        var pipeline = new ResiliencePipelineBuilder()
+            .AddRetry(new() { MaxRetryAttempts = 10, Delay = TimeSpan.FromSeconds(1) })
+            .Build();
 
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
 
@@ -77,9 +87,12 @@ public class MongoDbReplicaSetFunctionalTests(ITestOutputHelper testOutputHelper
 
         var connectionString = await rs.Resource.ConnectionStringExpression.GetValueAsync(cts.Token);
 
-        var client = new MongoClient(connectionString);
-        var db = client.GetDatabase(DbName);
-        await CreateTestDataWithReplicaSetFeaturesAsync(db, cts.Token);
+        await pipeline.ExecuteAsync(async token =>
+        {
+            var client = new MongoClient(connectionString);
+            var db = client.GetDatabase(DbName);
+            await CreateTestDataWithReplicaSetFeaturesAsync(db, cts.Token);
+        }, cts.Token);
 
         await app.StopAsync();
     }
