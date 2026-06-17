@@ -3,7 +3,6 @@
 
 using System.Globalization;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Resources;
 
@@ -108,8 +107,8 @@ internal sealed class OperatingSystemCheck : IEnvironmentCheck
             // /etc/os-release uses KEY=VALUE lines, for example:
             //   NAME="Ubuntu"
             //   VERSION_ID="24.04"
-            // Strip surrounding quotes for display. Double-quoted values can escape special
-            // characters; remove those escape markers because doctor displays the values as text.
+            // Strip surrounding quotes for display. The values doctor surfaces are not expected
+            // to contain shell-special characters, so leave any backslashes unchanged.
             var line = rawLine.Trim();
             if (line.Length == 0 || line[0] == '#')
             {
@@ -215,23 +214,7 @@ internal sealed class OperatingSystemCheck : IEnvironmentCheck
         }
 
         var unquoted = value[1..^1];
-        return quote == '"' ? RemoveEscapeMarkers(unquoted) : unquoted;
-    }
-
-    private static string RemoveEscapeMarkers(string value)
-    {
-        var builder = new StringBuilder(value.Length);
-        for (var i = 0; i < value.Length; i++)
-        {
-            if (value[i] == '\\' && i + 1 < value.Length)
-            {
-                i++;
-            }
-
-            builder.Append(value[i]);
-        }
-
-        return builder.ToString();
+        return unquoted;
     }
 }
 

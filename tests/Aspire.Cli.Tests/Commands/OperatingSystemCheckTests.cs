@@ -54,7 +54,7 @@ public class OperatingSystemCheckTests
     }
 
     [Fact]
-    public void ParseLinuxOsRelease_StripsQuotesAndDoubleQuotedEscapes()
+    public void ParseLinuxOsRelease_StripsQuotesAndPreservesEscapes()
     {
         var values = OperatingSystemCheck.ParseLinuxOsRelease("""
             NAME="Example \"Linux\""
@@ -64,8 +64,8 @@ public class OperatingSystemCheckTests
             ID=example-linux
             """);
 
-        Assert.Equal("Example \"Linux\"", values["NAME"]);
-        Assert.Equal("Cost $1!", values["PRETTY_NAME"]);
+        Assert.Equal("Example \\\"Linux\\\"", values["NAME"]);
+        Assert.Equal(@"Cost \$1\!", values["PRETTY_NAME"]);
         Assert.Equal("1.0", values["VERSION_ID"]);
         Assert.Equal(@"path\\to", values["PATH"]);
         Assert.Equal("example-linux", values["ID"]);
