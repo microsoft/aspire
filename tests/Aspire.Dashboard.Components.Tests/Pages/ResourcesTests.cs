@@ -542,6 +542,46 @@ public partial class ResourcesTests : DashboardTestContext
     }
 
     [Fact]
+    public void GetVisibleViewKindForSelectedResource_GraphParameter_ReturnsParameters()
+    {
+        var parameter = CreateResource("myparameter", KnownResourceTypes.Parameter, "Running", null);
+
+        var viewKind = Components.Pages.Resources.GetVisibleViewKindForSelectedResource(Components.Pages.Resources.ResourceViewKind.Graph, parameter);
+
+        Assert.Equal(Components.Pages.Resources.ResourceViewKind.Parameters, viewKind);
+    }
+
+    [Fact]
+    public void GetVisibleViewKindForSelectedResource_GraphNonParameter_ReturnsGraph()
+    {
+        var resource = CreateResource("myapp", "Project", "Running", null);
+
+        var viewKind = Components.Pages.Resources.GetVisibleViewKindForSelectedResource(Components.Pages.Resources.ResourceViewKind.Graph, resource);
+
+        Assert.Equal(Components.Pages.Resources.ResourceViewKind.Graph, viewKind);
+    }
+
+    [Fact]
+    public void GetVisibleViewKindForViewChange_GraphParameter_ReturnsParameters()
+    {
+        var parameter = CreateResource("myparameter", KnownResourceTypes.Parameter, "Running", null);
+
+        var viewKind = Components.Pages.Resources.GetVisibleViewKindForViewChange(Components.Pages.Resources.ResourceViewKind.Graph, parameter);
+
+        Assert.Equal(Components.Pages.Resources.ResourceViewKind.Parameters, viewKind);
+    }
+
+    [Fact]
+    public void GetVisibleViewKindForViewChange_ParametersNonParameter_ReturnsParameters()
+    {
+        var resource = CreateResource("myapp", "Project", "Running", null);
+
+        var viewKind = Components.Pages.Resources.GetVisibleViewKindForViewChange(Components.Pages.Resources.ResourceViewKind.Parameters, resource);
+
+        Assert.Equal(Components.Pages.Resources.ResourceViewKind.Parameters, viewKind);
+    }
+
+    [Fact]
     public void ParametersView_IncludesParametersWithValues()
     {
         // Arrange

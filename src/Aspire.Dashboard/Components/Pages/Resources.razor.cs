@@ -685,14 +685,14 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                 break;
             }
 
-            if (PageViewModel.SelectedViewKind == ResourceViewKind.Graph)
+            var resourceViewKind = GetVisibleViewKindForSelectedResource(PageViewModel.SelectedViewKind, resource);
+            if (resourceViewKind == ResourceViewKind.Graph)
             {
                 await UpdateResourceGraphSelectedAsync();
             }
             else
             {
                 // Parameters have their own view. If required, switch view so the selected resource is visible.
-                var resourceViewKind = (resource.IsParameter) ? ResourceViewKind.Parameters : ResourceViewKind.Table;
                 if (resourceViewKind != PageViewModel.SelectedViewKind)
                 {
                     PageViewModel.SelectedViewKind = resourceViewKind;
@@ -885,6 +885,8 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     private async Task OnViewChangedAsync(ResourceViewKind newView)
     {
+        newView = GetVisibleViewKindForViewChange(newView, PageViewModel.SelectedResource);
+
         PageViewModel.SelectedViewKind = newView;
         await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
 
@@ -900,6 +902,23 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             UpdateMaxHighlightedCount();
             await _dataGrid.SafeRefreshDataAsync();
         }
+    }
+
+    internal static ResourceViewKind GetVisibleViewKindForSelectedResource(ResourceViewKind selectedViewKind, ResourceViewModel resource)
+    {
+        return (selectedViewKind, resource.IsParameter) switch
+        {
+            (ResourceViewKind.Graph, false) => ResourceViewKind.Graph,
+            (_, true) => ResourceViewKind.Parameters,
+            _ => ResourceViewKind.Table
+        };
+    }
+
+    internal static ResourceViewKind GetVisibleViewKindForViewChange(ResourceViewKind requestedViewKind, ResourceViewModel? selectedResource)
+    {
+        return requestedViewKind == ResourceViewKind.Graph && selectedResource?.IsParameter == true
+            ? ResourceViewKind.Parameters
+            : requestedViewKind;
     }
 
     private async Task UpdateResourceGraphSelectedAsync()
