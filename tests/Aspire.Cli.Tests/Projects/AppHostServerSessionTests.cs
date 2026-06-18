@@ -232,6 +232,9 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
         using var stopCts = new CancellationTokenSource();
         using var shutdownService = new GracefulShutdownService();
 
+        // Model the run path: graceful shutdown is enabled so the session routes through the ladder.
+        shutdownService.Configure(TimeSpan.FromSeconds(30));
+
         var signaler = new RecordingGracefulSignaler(onSignal: pid =>
         {
             try
@@ -282,6 +285,10 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
         using var stopCts = new CancellationTokenSource();
         using var shutdownService = new GracefulShutdownService();
 
+        // Model the run path: graceful shutdown is enabled so the session routes through the ladder.
+        // Escalation is driven by the explicit Expire() below, not by the budget elapsing.
+        shutdownService.Configure(TimeSpan.FromSeconds(30));
+
         var signaled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var signaler = new RecordingGracefulSignaler(onSignal: _ =>
         {
@@ -328,6 +335,9 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
         using var stopCts = new CancellationTokenSource();
         using var shutdownService = new GracefulShutdownService();
 
+        // Model the run path: graceful shutdown is enabled so the session routes through the ladder.
+        shutdownService.Configure(TimeSpan.FromSeconds(30));
+
         var signaler = new RecordingGracefulSignaler(onSignal: _ =>
             throw new InvalidOperationException("simulated DCP failure"));
 
@@ -354,13 +364,14 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task DisposeAsync_WithGracefulServicesButNoExternalStop_ForceKillsWithoutSignaling()
+    public async Task DisposeAsync_WithUnconfiguredGracefulService_ForceKillsWithoutSignaling()
     {
-        // Dispose-only teardown must NOT take the graceful path: the central GracefulShutdownService
-        // is timed by ConsoleCancellationManager, and a dispose without an external stop means CCM
-        // never started that timer. Running the graceful ladder would hang on WaitForExitAsync
-        // until the central token fires (which it never will). The session detects this by reading
-        // the external token's IsCancellationRequested state inside OnStopRequested.
+        // A graceful service that was never Configure()'d models a non-run command (IsEnabled is
+        // false). The coordinator's graceful-vs-force decision is all-or-nothing per command and keys
+        // off IsEnabled, so dispose-only teardown here must take the force-kill path and never invoke
+        // the signaler. (On the run path the service IS configured, so completion routes through the
+        // bounded ladder instead — that bound comes from GracefulShutdownService self-arming its timer,
+        // not from a per-session external-stop flag.)
         var project = new LongRunningAppHostServerProject();
         using var stopCts = new CancellationTokenSource();
         using var shutdownService = new GracefulShutdownService();

@@ -34,7 +34,6 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     private readonly ProfilingTelemetry? _profilingTelemetry;
     private readonly string _authenticationToken;
     private readonly CancellationTokenSource _stopCts;
-    private readonly CancellationToken _externalStopToken;
     private readonly IProcessTreeGracefulShutdownSignaler? _gracefulShutdownSignaler;
     private readonly GracefulShutdownService? _shutdownService;
     private readonly bool _isolateConsole;
@@ -78,17 +77,15 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _profilingTelemetry = profilingTelemetry;
         _authenticationToken = TokenGenerator.GenerateToken();
-        _externalStopToken = stopRequested;
         _gracefulShutdownSignaler = gracefulShutdownSignaler;
         _shutdownService = shutdownService;
         _isolateConsole = isolateConsole;
 
         // Linked CTS so caller-initiated cancellation AND DisposeAsync both flow through the
         // same stop trigger. The registered callback on _stopCts.Token (wired in StartAsync) is
-        // the single kill site for the process. OnStopRequested reads _externalStopToken to
-        // distinguish "caller-initiated stop" (run the graceful ladder) from "dispose-only stop"
-        // (force-kill immediately — graceful ladder would hang because nothing started the
-        // central GracefulShutdownService timer).
+        // the single kill site for the process. The graceful-vs-force decision is made centrally by
+        // the coordinator off GracefulShutdownService.IsEnabled — there is no per-stop distinction
+        // here, and the coordinator bounds the graceful wait by starting the central clock itself.
         _stopCts = CancellationTokenSource.CreateLinkedTokenSource(stopRequested);
     }
 
@@ -533,25 +530,20 @@ internal sealed class AppHostServerSession : IAppHostServerSession
             return;
         }
 
-        // _externalStopToken.IsCancellationRequested distinguishes "caller cancelled the external
-        // token" (we're on the propagation path and the token reads as cancelled) from
-        // "DisposeAsync cancelled the internal linked CTS" (the external token never fired).
-        // Only the former should run the graceful ladder — the latter must force-kill because
-        // nothing started the central GracefulShutdownService timer.
-        _shutdownTask = ShutdownAsync(process, externalStopFired: _externalStopToken.IsCancellationRequested);
+        _shutdownTask = ShutdownAsync(process);
     }
 
-    private Task ShutdownAsync(Process process, bool externalStopFired)
+    private Task ShutdownAsync(Process process)
     {
-        // externalStopFired distinguishes "caller cancelled the external token" (the central
-        // graceful budget is live, so run the ladder) from "DisposeAsync cancelled the internal
-        // linked CTS" (the external token never fired, so nothing started the central timer and
-        // we must force-kill). See OnStopRequested for the full rationale.
+        // The graceful-vs-force decision is owned centrally by the coordinator, keyed off
+        // GracefulShutdownService.IsEnabled. When graceful is enabled for the command (aspire run),
+        // the coordinator starts the central clock and runs the bounded ladder regardless of whether
+        // this stop came from a user signal or from DisposeAsync. When graceful is not wired/enabled
+        // (non-Run callers: SDK gen, scaffolding, publish, dump), it force-kills.
         return ProcessShutdownCoordinator.ShutdownAsync(
             process,
             _gracefulShutdownSignaler,
             _shutdownService,
-            gracefulBudgetActive: externalStopFired,
             fallbackRequestGracefulShutdown: false,
             fallbackKillEntireProcessTree: !OperatingSystem.IsWindows(),
             _logger,

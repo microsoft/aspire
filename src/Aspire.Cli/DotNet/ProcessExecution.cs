@@ -98,7 +98,6 @@ internal sealed class ProcessExecution : IProcessExecution
                 process.Process,
                 _options.GracefulShutdownSignaler,
                 _options.ShutdownService,
-                gracefulBudgetActive: true,
                 fallbackRequestGracefulShutdown: !OperatingSystem.IsWindows(),
                 fallbackKillEntireProcessTree: _options.KillEntireProcessTreeOnCancel,
                 _logger,

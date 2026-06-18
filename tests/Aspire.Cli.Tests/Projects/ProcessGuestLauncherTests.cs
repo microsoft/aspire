@@ -60,6 +60,8 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper)
 
         using var cts = new CancellationTokenSource();
         using var shutdownService = new GracefulShutdownService();
+        // Model the run path: graceful shutdown is enabled so the launcher routes through the ladder.
+        shutdownService.Configure(TimeSpan.FromSeconds(30));
         var signaler = new RecordingGracefulSignaler(onSignal: pid =>
         {
             try
@@ -110,6 +112,8 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper)
 
         using var cts = new CancellationTokenSource();
         using var shutdownService = new GracefulShutdownService();
+        // Model the run path: graceful shutdown is enabled so the launcher routes through the ladder.
+        shutdownService.Configure(TimeSpan.FromSeconds(30));
         var signalerNeverCompletes = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var signaler = new RecordingGracefulSignaler(onSignal: pid =>
         {
@@ -168,6 +172,10 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper)
 
         using var cts = new CancellationTokenSource();
         using var shutdownService = new GracefulShutdownService();
+
+        // Model the run path: graceful shutdown is enabled so the launcher routes through the ladder.
+        // Escalation is driven by the explicit Expire() below, not by the budget elapsing.
+        shutdownService.Configure(TimeSpan.FromSeconds(30));
 
         var signaled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var signaler = new RecordingGracefulSignaler(onSignal: _ =>
@@ -231,6 +239,9 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper)
 
         using var cts = new CancellationTokenSource();
         using var shutdownService = new GracefulShutdownService();
+
+        // Model the run path: graceful shutdown is enabled so the launcher routes through the ladder.
+        shutdownService.Configure(TimeSpan.FromSeconds(30));
 
         var signaler = new RecordingGracefulSignaler(onSignal: _ =>
             throw new InvalidOperationException("simulated DCP failure"));

@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -66,7 +65,6 @@ internal sealed class ConsoleCancellationManager : IDisposable
     // drive this counter — they rely on disposable-based cleanup (`await using` of the
     // server session + guest launcher) to run the per-process shutdown ladders.
     private int _signalCount;
-    private TimeSpan _gracefulBudget = TimeSpan.Zero;
 
     private readonly TaskCompletionSource<int> _processTerminationCompletionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -156,20 +154,15 @@ internal sealed class ConsoleCancellationManager : IDisposable
     public bool IsCancellationRequested => _cts.IsCancellationRequested;
 
     /// <summary>
-    /// Sets the graceful-shutdown budget for the currently-executing command. Default is zero, meaning
-    /// ladders that consume <see cref="GracefulShutdownToken"/> fall through to escalation immediately
-    /// (preserving today's behavior for every command that doesn't opt in). The <c>aspire run</c> handler
-    /// calls this with five seconds so DCP and the AppHost get a real cooperative-shutdown window before
-    /// escalation.
+    /// Sets the graceful-shutdown budget for the currently-executing command by forwarding it to
+    /// <see cref="GracefulShutdownService.Configure"/>. Default is zero, meaning ladders that consume
+    /// <see cref="GracefulShutdownToken"/> fall through to escalation immediately (preserving today's
+    /// behavior for every command that doesn't opt in). The <c>aspire run</c> handler calls this with
+    /// five seconds so DCP and the AppHost get a real cooperative-shutdown window before escalation.
     /// </summary>
     public void ConfigureForCommand(TimeSpan gracefulBudget)
     {
-        if (gracefulBudget < TimeSpan.Zero)
-        {
-            throw new ArgumentOutOfRangeException(nameof(gracefulBudget), "Graceful budget cannot be negative.");
-        }
-
-        _gracefulBudget = gracefulBudget;
+        _gracefulService.Configure(gracefulBudget);
     }
 
     private void OnPosixSignal(PosixSignalContext context)
@@ -235,35 +228,25 @@ internal sealed class ConsoleCancellationManager : IDisposable
     {
         try
         {
-            // When a debugger is attached, don't escalate or force-terminate — the developer needs
-            // unlimited time to step through cancellation/cleanup logic. The graceful token therefore
-            // never fires under the debugger via this watcher; ladders that observe it sit indefinitely
-            // (the right behavior for stepping). A manual second Ctrl+C still works because it calls
-            // _gracefulService.Expire() synchronously via the signal counter, bypassing this method.
-            if (Debugger.IsAttached)
-            {
-                return;
-            }
+            // Phase 1: graceful window. Start the central clock on the service, then wait for the
+            // graceful token to fire. BeginGracefulWindow arms a CancelAfter(budget) (or, for a
+            // zero-budget command, expires immediately), so the token is guaranteed to fire without us
+            // owning a timer here. A 2nd Ctrl+C calls _gracefulService.Expire() from the signal counter,
+            // which fires the token early and drops us straight into Phase 2.
+            //
+            // Under a debugger BeginGracefulWindow is a no-op (the developer needs unlimited time to
+            // step), so the token never auto-fires and this await sits indefinitely — the right behavior
+            // for stepping. A manual second Ctrl+C still escalates via Expire().
+            _gracefulService.BeginGracefulWindow();
 
-            // Phase 1: graceful window. Delay is cancellable via the graceful token so a 2nd Ctrl+C
-            // (which calls _gracefulService.Expire from the signal counter) drops us straight into
-            // Phase 2 without waiting out the remaining budget. Zero-budget commands skip the delay
-            // entirely and fall through to the unconditional Expire() below.
-            if (_gracefulBudget > TimeSpan.Zero)
+            try
             {
-                try
-                {
-                    await Task.Delay(_gracefulBudget, _gracefulService.Token).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                    // 2nd Ctrl+C arrived; fall through to Phase 2.
-                }
+                await Task.Delay(Timeout.InfiniteTimeSpan, _gracefulService.Token).ConfigureAwait(false);
             }
-
-            // Guarantees the graceful token fires before Phase 2 starts, even when the budget was zero
-            // (no Phase 1 delay) or when the delay elapsed without a 2nd Ctrl+C. Idempotent.
-            _gracefulService.Expire();
+            catch (OperationCanceledException)
+            {
+                // Graceful window expired (budget elapsed or 2nd Ctrl+C); fall through to Phase 2.
+            }
 
             // Phase 2: final drain. Give the handler a chance to finish gracefully within the configured
             // drain budget. Task.WhenAny completes when either the handler or the delay finishes first,

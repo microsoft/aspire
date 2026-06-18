@@ -278,14 +278,13 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
         GuestLaunchOptions? options)
     {
         // Run-path graceful ladder shared with AppHostServerSession and ProcessExecution when the
-        // central budget is wired; otherwise a best-effort force-kill for non-Run callers (publish,
-        // extension adapter) that didn't opt into the central shutdown budget. Whoever initiated
-        // shutdown (user Ctrl+C via CCM.Cancel) already started the central graceful clock.
+        // central budget is wired and enabled; otherwise a best-effort force-kill for non-Run callers
+        // (publish, extension adapter) that didn't opt into the central shutdown budget. The coordinator
+        // starts the central graceful clock when it selects the ladder, so the wait is always bounded.
         return ProcessShutdownCoordinator.ShutdownAsync(
             process,
             options?.GracefulShutdownSignaler,
             options?.ShutdownService,
-            gracefulBudgetActive: true,
             fallbackRequestGracefulShutdown: !OperatingSystem.IsWindows(),
             fallbackKillEntireProcessTree: true,
             _logger,

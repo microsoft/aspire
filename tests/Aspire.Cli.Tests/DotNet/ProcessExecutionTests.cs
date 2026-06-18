@@ -168,6 +168,9 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var scriptFile = await CreateLongRunningScriptAsync(workspace.WorkspaceRoot);
         using var shutdownService = new GracefulShutdownService();
+        // Model the run path: graceful shutdown is enabled (positive budget) so the coordinator runs
+        // the ladder. Escalation in this test is driven explicitly (signaler kill), not by the budget.
+        shutdownService.Configure(TimeSpan.FromSeconds(30));
         var signaler = new RecordingGracefulSignaler(onSignal: pid =>
         {
             TryKillProcess(pid);
@@ -196,6 +199,9 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var scriptFile = await CreateLongRunningScriptAsync(workspace.WorkspaceRoot);
         using var shutdownService = new GracefulShutdownService();
+        // Model the run path: graceful shutdown is enabled so the coordinator runs the ladder.
+        // Escalation is driven by the explicit Expire() below, not by the budget elapsing.
+        shutdownService.Configure(TimeSpan.FromSeconds(30));
         var signaled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var signaler = new RecordingGracefulSignaler(onSignal: _ =>
         {
@@ -229,6 +235,8 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var scriptFile = await CreateLongRunningScriptAsync(workspace.WorkspaceRoot);
         using var shutdownService = new GracefulShutdownService();
+        // Model the run path: graceful shutdown is enabled so the coordinator runs the ladder.
+        shutdownService.Configure(TimeSpan.FromSeconds(30));
         var signaler = new RecordingGracefulSignaler(onSignal: _ =>
             throw new InvalidOperationException("simulated DCP failure"));
 
