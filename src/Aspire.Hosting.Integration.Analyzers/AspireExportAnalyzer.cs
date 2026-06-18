@@ -661,7 +661,12 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
         INamedTypeSymbol aspireExportAttribute,
         HashSet<ITypeSymbol> currentAssemblyExportedTypes)
     {
-        // Only check public static extension methods
+        // Only check public static extension methods.
+        // C# 14 extension block instance members are intentionally not covered here yet: they surface as
+        // non-static (IsStatic == false) and IsExtensionMethod == false, so the guard below skips them.
+        // ASPIREEXPORT008 only nudges authors to add a missing [AspireExport], so the gap is non-blocking
+        // (it can cause a missing suggestion, never a false positive). This parallels the ASPIREEXPORT010
+        // limitation; expand coverage here only if extension-block authors need the same nudge.
         if (!method.IsStatic || !method.IsExtensionMethod || method.DeclaredAccessibility != Accessibility.Public)
         {
             return;
