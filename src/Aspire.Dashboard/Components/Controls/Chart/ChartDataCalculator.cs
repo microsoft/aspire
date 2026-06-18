@@ -147,7 +147,15 @@ internal sealed class ChartDataCalculator
                 // if a DateTime with Kind=Unspecified is ever stored.
                 var metricStart = new DateTimeOffset(metric.Start, TimeSpan.Zero);
                 var metricEnd = new DateTimeOffset(metric.End, TimeSpan.Zero);
-                if (metricStart <= end && metricEnd >= start)
+
+                // Values are stored chronologically (oldest at index 0). We iterate newest-first,
+                // so once a metric ends before our window starts, all remaining are older — stop.
+                if (metricEnd < start)
+                {
+                    break;
+                }
+
+                if (metricStart <= end)
                 {
                     var value = metric switch
                     {
