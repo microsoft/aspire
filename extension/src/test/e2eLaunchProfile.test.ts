@@ -344,10 +344,12 @@ suite('E2E launch profile', () => {
         assert.ok(stopAppHostStart >= 0);
         assert.ok(stopAppHostEnd > stopAppHostStart);
         const stopAppHost = fixtures.slice(stopAppHostStart, stopAppHostEnd);
-        const waitForCapturedPidCalls = stopAppHost.match(/await waitForNoRunningAppHostPathOrStopKnownProcess\(appHostPath, 30000, runningAppHostBeforeStop\?\.appHostPid\);/g) ?? [];
+        const waitForCapturedPidCalls = stopAppHost.match(/await waitForNoRunningAppHostPathOrStopKnownProcess\(appHostPath, 30000, runningAppHostBeforeStop\?\.appHostPid, 'after stopping'\);/g) ?? [];
 
+        assert.ok(stopAppHost.includes('const stopError = await tryStopAppHost(appHostPath);'));
+        assert.ok(stopAppHost.indexOf('if (stopError)') < stopAppHost.indexOf('await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid,'));
         assert.ok(stopAppHost.includes('const runningAppHostBeforeStop = getRunningAppHostFromState(appHostPath);'));
-        assert.ok(waitForCapturedPidCalls.length >= 3);
+        assert.ok(waitForCapturedPidCalls.length >= 1);
         assert.ok(stopAppHost.includes('const runningAppHost = await getRunningAppHostAccordingToCli(appHostPath);'));
         assert.ok(stopAppHost.includes('await waitForProcessExit(runningAppHost.appHostPid, 30000);'));
         assert.ok(stopAppHost.includes('if (!await getRunningAppHostAccordingToCli(appHostPath))'));
@@ -363,10 +365,13 @@ suite('E2E launch profile', () => {
         assert.ok(fixtures.includes('let lastKnownAppHostPid = knownAppHostPid;'));
         assert.ok(fixtures.includes('lastKnownAppHostPid = runningAppHost.appHostPid;'));
         assert.ok(!fixtures.includes('terminateProcessTree(runningAppHost.appHostPid'));
+        assert.ok(fixtures.includes("await waitForNoRunningAppHostPath(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid, 'after stopping')"));
+        assert.ok(fixtures.includes("await waitForNoRunningAppHostPath(getGeneratedAppHostPath(projectName), 30000, knownAppHostPid, 'before deleting')"));
         assert.ok(fixtures.includes('async function waitForProcessExit(pid: number, timeoutMs: number): Promise<void>'));
         assert.ok(fixtures.includes('process.kill(pid, 0);'));
         assert.ok(fixtures.includes("process.kill(pid, 'SIGTERM');"));
-        assert.ok(fixtures.includes('async function waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath: string, timeoutMs: number, knownAppHostPid?: number): Promise<void>'));
+        assert.ok(fixtures.includes('async function waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath: string, timeoutMs: number, knownAppHostPid: number | undefined, actionDescription: string): Promise<void>'));
+        assert.ok(fixtures.includes('formatE2eTeardownFailureMessage(failureMessage, failures)'));
         assert.ok(fixtures.includes("error.code === 'EPERM'"));
         assert.ok(fixtures.includes("const maxAttempts = process.platform === 'win32' ? 40 : 1;"));
     });

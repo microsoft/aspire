@@ -77,8 +77,18 @@ export async function runE2eTeardown(cleanups: ReadonlyArray<() => unknown | Pro
     }
 
     if (failures.length > 0) {
-        throw new AggregateError(failures, failureMessage);
+        throw new AggregateError(failures, formatE2eTeardownFailureMessage(failureMessage, failures));
     }
+}
+
+function formatE2eTeardownFailureMessage(failureMessage: string, failures: ReadonlyArray<unknown>): string {
+    const formattedFailures = failures.map((failure, index) => {
+        const error = failure instanceof Error ? failure : undefined;
+        const details = error?.stack ?? error?.message ?? String(failure);
+        return `${index + 1}. ${details}`;
+    });
+
+    return `${failureMessage}\n${formattedFailures.join('\n')}`;
 }
 
 export async function createEmptyAppHostProject(projectName: string): Promise<string> {
@@ -136,7 +146,7 @@ export async function clearBreakpoints(): Promise<void> {
 }
 
 export async function removeGeneratedProject(projectName: string, knownAppHostPid?: number): Promise<void> {
-    await waitForNoRunningAppHostPath(getGeneratedAppHostPath(projectName), 30000, knownAppHostPid);
+    await waitForNoRunningAppHostPath(getGeneratedAppHostPath(projectName), 30000, knownAppHostPid, 'before deleting');
     removePath(getGeneratedProjectRoot(projectName), { recursive: true, force: true });
 }
 
@@ -280,38 +290,47 @@ export async function stopPrimaryAppHostIfRunning(): Promise<void> {
 
 export async function stopAppHostIfRunning(appHostPath: string): Promise<void> {
     const runningAppHostBeforeStop = getRunningAppHostFromState(appHostPath);
+    const stopError = await tryStopAppHost(appHostPath);
 
+    if (!stopError) {
+        await waitForNoRunningAppHostPath(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid, 'after stopping');
+        return;
+    }
+
+    if (/not running|No running AppHost|No AppHost/i.test(stopError.message)) {
+        await waitForNoRunningAppHostPath(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid, 'after stopping');
+        return;
+    }
+
+    if (/timed out|Failed to stop/i.test(stopError.message)) {
+        const runningAppHost = await getRunningAppHostAccordingToCli(appHostPath);
+        if (!runningAppHost) {
+            await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid, 'after stopping');
+            return;
+        }
+
+        await waitForProcessExit(runningAppHost.appHostPid, 30000);
+        if (!await getRunningAppHostAccordingToCli(appHostPath)) {
+            await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid, 'after stopping');
+            return;
+        }
+
+        throw new Error(`AppHost is still running according to aspire ps: ${appHostPath}`);
+    }
+
+    throw stopError;
+}
+
+async function tryStopAppHost(appHostPath: string): Promise<Error | undefined> {
     try {
         await runProcess(getCliPath(), ['stop', '--non-interactive', '--apphost', appHostPath], {
             cwd: getWorkspaceRoot(),
             timeoutMs: 60000,
         });
-        await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid);
-    }
-    catch (error) {
-        if (!(error instanceof Error)) {
-            throw error;
-        }
-
-        if (/not running|No running AppHost|No AppHost/i.test(error.message)) {
-            await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid);
-            return;
-        }
-
-        if (/timed out|Failed to stop/i.test(error.message)) {
-            const runningAppHost = await getRunningAppHostAccordingToCli(appHostPath);
-            if (!runningAppHost) {
-                await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid);
-                return;
-            }
-
-            await waitForProcessExit(runningAppHost.appHostPid, 30000);
-            if (!await getRunningAppHostAccordingToCli(appHostPath)) {
-                await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid);
-                return;
-            }
-
-            throw new Error(`AppHost is still running according to aspire ps: ${appHostPath}`);
+        return undefined;
+    } catch (error) {
+        if (error instanceof Error) {
+            return error;
         }
 
         throw error;
@@ -357,7 +376,7 @@ function isPsAppHost(value: unknown): value is PsAppHost {
         && (candidate.status === undefined || typeof candidate.status === 'string');
 }
 
-async function waitForNoRunningAppHostPath(appHostPath: string, timeoutMs: number, knownAppHostPid?: number): Promise<void> {
+async function waitForNoRunningAppHostPath(appHostPath: string, timeoutMs: number, knownAppHostPid: number | undefined, actionDescription: string): Promise<void> {
     const started = Date.now();
     let lastKnownAppHostPid = knownAppHostPid;
 
@@ -375,12 +394,12 @@ async function waitForNoRunningAppHostPath(appHostPath: string, timeoutMs: numbe
     }
 
     const runningAppHost = getRunningAppHostFromState(appHostPath);
-    throw new Error(`Timed out after ${timeoutMs}ms waiting for AppHost process ${runningAppHost?.appHostPid ?? lastKnownAppHostPid ?? '<unknown>'} to exit before deleting ${path.dirname(appHostPath)}.`);
+    throw new Error(`Timed out after ${timeoutMs}ms waiting for AppHost process ${runningAppHost?.appHostPid ?? lastKnownAppHostPid ?? '<unknown>'} to exit ${actionDescription} ${path.dirname(appHostPath)}.`);
 }
 
-async function waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath: string, timeoutMs: number, knownAppHostPid?: number): Promise<void> {
+async function waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath: string, timeoutMs: number, knownAppHostPid: number | undefined, actionDescription: string): Promise<void> {
     try {
-        await waitForNoRunningAppHostPath(appHostPath, timeoutMs, knownAppHostPid);
+        await waitForNoRunningAppHostPath(appHostPath, timeoutMs, knownAppHostPid, actionDescription);
     }
     catch (error) {
         const runningAppHostPid = getRunningAppHostFromState(appHostPath)?.appHostPid;
@@ -389,7 +408,7 @@ async function waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath: string
         }
 
         await stopProcess(runningAppHostPid, 30000);
-        await waitForNoRunningAppHostPath(appHostPath, 5000, runningAppHostPid);
+        await waitForNoRunningAppHostPath(appHostPath, 5000, runningAppHostPid, actionDescription);
     }
 }
 
