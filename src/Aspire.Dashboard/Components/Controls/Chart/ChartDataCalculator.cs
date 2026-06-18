@@ -124,7 +124,7 @@ internal sealed class ChartDataCalculator
 
         return new ChartData
         {
-            Traces = traces.Select(kvp => kvp.Value).ToList(),
+            Traces = traces.OrderBy(kvp => kvp.Key).Select(kvp => kvp.Value).ToList(),
             XValues = xValues,
             Exemplars = exemplars
         };
@@ -142,7 +142,7 @@ internal sealed class ChartDataCalculator
             for (var i = dimensionValues.Count - 1; i >= 0; i--)
             {
                 var metric = dimensionValues[i];
-                if ((metric.Start <= end && metric.End >= start) || (metric.Start >= start && metric.End <= end))
+                if (metric.Start <= end && metric.End >= start)
                 {
                     var value = metric switch
                     {
