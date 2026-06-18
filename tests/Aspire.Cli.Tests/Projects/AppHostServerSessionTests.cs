@@ -33,13 +33,14 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
         {
             ["EXISTING_VALUE"] = "present"
         };
+        using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration());
+        var factory = CreateSessionFactory(profilingTelemetry);
 
         // Act
-        await using var session = AppHostServerSession.Start(
+        await using var session = factory.Start(
             project,
             environmentVariables,
-            debug: false,
-            NullLogger<AppHostServerSession>.Instance);
+            debug: false);
 
         // Assert
         Assert.Equal("present", environmentVariables["EXISTING_VALUE"]);
@@ -62,13 +63,12 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1")));
         using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource);
+        var factory = CreateSessionFactory(profilingTelemetry);
 
-        await using var session = AppHostServerSession.Start(
+        await using var session = factory.Start(
             project,
             environmentVariables,
-            debug: false,
-            NullLogger<AppHostServerSession>.Instance,
-            profilingTelemetry);
+            debug: false);
 
         Assert.Equal("present", environmentVariables["EXISTING_VALUE"]);
         Assert.False(environmentVariables.ContainsKey(KnownConfigNames.RemoteAppHostToken));
@@ -97,16 +97,15 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1")));
         using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource);
+        var factory = CreateSessionFactory(profilingTelemetry);
 
         using var parentActivity = parentSource.StartActivity("aspire/cli/run");
         Assert.NotNull(parentActivity);
 
-        await using var session = AppHostServerSession.Start(
+        await using var session = factory.Start(
             project,
             environmentVariables: null,
-            debug: false,
-            NullLogger<AppHostServerSession>.Instance,
-            profilingTelemetry);
+            debug: false);
 
         Assert.Same(parentActivity, Activity.Current);
 
@@ -120,12 +119,13 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
         var project = new RecordingAppHostServerProject();
 
         using var loggerFactory = LoggerFactory.Create(builder => builder.AddXunit(outputHelper));
+        using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration());
+        var factory = CreateSessionFactory(profilingTelemetry, loggerFactory.CreateLogger<AppHostServerSession>());
 
-        await using var session = AppHostServerSession.Start(
+        await using var session = factory.Start(
             project,
             environmentVariables: null,
-            debug: false,
-            loggerFactory.CreateLogger<AppHostServerSession>());
+            debug: false);
 
         // Wait for the process to exit so the stopwatch measures only the early-exit detection
         // latency, not the variable execution time of "dotnet --version" on loaded CI machines.
@@ -205,6 +205,15 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
         return new ConfigurationBuilder()
             .AddInMemoryCollection(values.Select(value => new KeyValuePair<string, string?>(value.Key, value.Value)))
             .Build();
+    }
+
+    private static AppHostServerSessionFactory CreateSessionFactory(ProfilingTelemetry profilingTelemetry, ILogger<AppHostServerSession>? logger = null)
+    {
+        var projectFactory = CreateAppHostServerProjectFactory();
+        return new AppHostServerSessionFactory(
+            projectFactory,
+            logger ?? NullLogger<AppHostServerSession>.Instance,
+            profilingTelemetry);
     }
 
     private static AppHostServerProjectFactory CreateAppHostServerProjectFactory()
