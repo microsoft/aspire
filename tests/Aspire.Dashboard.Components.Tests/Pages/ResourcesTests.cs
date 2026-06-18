@@ -709,7 +709,9 @@ public partial class ResourcesTests : DashboardTestContext
                 ProtobufValue.ForString("https://example.com"),
                 isValueSensitive: false,
                 knownProperty: null,
-                priority: 0));
+                sortOrder: 0,
+                displayName: null,
+                isHighlighted: false));
 
         var initialResources = new List<ResourceViewModel>
         {
