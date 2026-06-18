@@ -1521,10 +1521,15 @@ public class AzureEnvironmentResourceExtensionsTests
     public async Task MutatingResourceCommands_FailFastDuringConflictingQueuedOperation()
     {
         var builder = CreateBuilder(isRunMode: true);
+        var testBicepProvisioner = new BlockingTestBicepProvisioner();
 
-        AddTestAzureProvisioning(builder);
+        builder.Configuration["Azure:SubscriptionId"] = "12345678-1234-1234-1234-123456789012";
+        builder.Configuration["Azure:Location"] = "westus2";
+        builder.Configuration["Azure:ResourceGroup"] = "test-rg";
+        AddTestAzureProvisioning(builder, bicepProvisioner: testBicepProvisioner);
 
-        var storage = builder.AddBicepTemplateString("storage", "resource storage 'Microsoft.Storage/storageAccounts@2024-01-01' = {}");
+        var storage1 = builder.AddBicepTemplateString("storage1", "resource storage1 'Microsoft.Storage/storageAccounts@2024-01-01' = {}");
+        var storage2 = builder.AddBicepTemplateString("storage2", "resource storage2 'Microsoft.Storage/storageAccounts@2024-01-01' = {}");
 
         using var app = builder.Build();
 
@@ -1536,13 +1541,40 @@ public class AzureEnvironmentResourceExtensionsTests
 
         await preparer.OnBeforeStartAsync(new BeforeStartEvent(app.Services, model), CancellationToken.None);
 
-        using var queuedRegistration = controller.RegisterReprovisionResourceQueuedOperationForTesting(model, storage.Resource.Name);
+        var activeReprovisionTask = controller.ReprovisionResourceAsync(model, storage1.Resource.Name, CancellationToken.None);
+        await WaitForSignalBeforeOperationCompletesAsync(
+            testBicepProvisioner.FirstProvisionStarted.Task,
+            activeReprovisionTask,
+            "Reprovision completed before the first resource started provisioning.");
 
-        var exception = Assert.Throws<InvalidOperationException>(() =>
+        var queuedReprovisionCommand = Assert.Single(storage2.Resource.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == AzureProvisioningController.ReprovisionResourceCommandName);
+        var queuedReprovisionTask = queuedReprovisionCommand.ExecuteCommand(new ExecuteCommandContext
         {
-            using var conflictingRegistration = controller.RegisterDeleteAzureResourceQueuedOperationForTesting(model, storage.Resource.Name);
+            Services = app.Services,
+            ResourceName = storage2.Resource.Name,
+            CancellationToken = CancellationToken.None,
+            Logger = NullLogger.Instance,
+            Arguments = new InteractionInputCollection([])
         });
-        Assert.Contains("already running or queued", exception.Message, StringComparison.Ordinal);
+
+        Assert.False(queuedReprovisionTask.IsCompleted);
+
+        var conflictingCommand = Assert.Single(storage2.Resource.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == AzureProvisioningController.DeleteAzureResourceCommandName);
+        var result = await conflictingCommand.ExecuteCommand(new ExecuteCommandContext
+        {
+            Services = app.Services,
+            ResourceName = storage2.Resource.Name,
+            CancellationToken = CancellationToken.None,
+            Logger = NullLogger.Instance,
+            Arguments = new InteractionInputCollection([])
+        }).WaitAsync(s_testSynchronizationTimeout);
+
+        Assert.False(result.Success);
+        Assert.Contains("already running or queued", result.Message, StringComparison.Ordinal);
+
+        testBicepProvisioner.AllowFirstProvisionToComplete.TrySetResult();
+        Assert.True(await activeReprovisionTask.WaitAsync(s_testSynchronizationTimeout));
+        Assert.True((await queuedReprovisionTask.WaitAsync(s_testSynchronizationTimeout)).Success);
     }
 
     [Fact]
