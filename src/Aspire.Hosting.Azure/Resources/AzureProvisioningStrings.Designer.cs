@@ -738,6 +738,42 @@ namespace Aspire.Hosting.Azure.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Azure deployment diagnostics.
+        /// </summary>
+        internal static string DeploymentOperationSummaryDisplayName {
+            get {
+                return ResourceManager.GetString("DeploymentOperationSummaryDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Failed Azure resources: {0}.
+        /// </summary>
+        internal static string DeploymentOperationFailedResourcesFormat {
+            get {
+                return ResourceManager.GetString("DeploymentOperationFailedResourcesFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Canceled Azure resources: {0}.
+        /// </summary>
+        internal static string DeploymentOperationCanceledResourcesFormat {
+            get {
+                return ResourceManager.GetString("DeploymentOperationCanceledResourcesFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Provisioning Azure resources: {0}.
+        /// </summary>
+        internal static string DeploymentOperationRunningResourcesFormat {
+            get {
+                return ResourceManager.GetString("DeploymentOperationRunningResourcesFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Azure operation.
         /// </summary>
         internal static string OperationPropertyNameDisplayName {

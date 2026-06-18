@@ -345,6 +345,18 @@ To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/pro
   <data name="ContextPropertyTenantIdDisplayName" xml:space="preserve">
     <value>Azure tenant ID</value>
   </data>
+  <data name="DeploymentOperationSummaryDisplayName" xml:space="preserve">
+    <value>Azure deployment diagnostics</value>
+  </data>
+  <data name="DeploymentOperationFailedResourcesFormat" xml:space="preserve">
+    <value>Failed Azure resources: {0}</value>
+  </data>
+  <data name="DeploymentOperationCanceledResourcesFormat" xml:space="preserve">
+    <value>Canceled Azure resources: {0}</value>
+  </data>
+  <data name="DeploymentOperationRunningResourcesFormat" xml:space="preserve">
+    <value>Provisioning Azure resources: {0}</value>
+  </data>
   <data name="OperationPropertyNameDisplayName" xml:space="preserve">
     <value>Azure operation</value>
   </data>

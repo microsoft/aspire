@@ -43,6 +43,7 @@ internal sealed class BicepProvisioner(
 
     private const string DeploymentActiveErrorCode = "DeploymentActive";
     private const string DeploymentOperationPropertyPrefix = "azure.deployment.operations.";
+    private const string DeploymentOperationSummaryPropertyName = DeploymentOperationPropertyPrefix + "summary";
     private static readonly TimeSpan s_deploymentOperationPollingInterval = TimeSpan.FromSeconds(2);
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
@@ -1115,6 +1116,12 @@ internal sealed class BicepProvisioner(
     private static ImmutableArray<ResourcePropertySnapshot> CreateDeploymentOperationProperties(AzureDeploymentOperationSummary summary)
     {
         var properties = ImmutableArray.CreateBuilder<ResourcePropertySnapshot>();
+
+        if (CreateDeploymentOperationSummaryProperty(summary) is { } summaryProperty)
+        {
+            properties.Add(summaryProperty);
+        }
+
         properties.Add(new("azure.deployment.operations.total", summary.Operations.Length));
         properties.Add(new("azure.deployment.operations.running", summary.RunningOperations.Length));
         properties.Add(new("azure.deployment.operations.succeeded", summary.SucceededOperations.Length));
@@ -1135,6 +1142,48 @@ internal sealed class BicepProvisioner(
             {
                 properties.Add(new(propertyName, labels));
             }
+        }
+    }
+
+    private static ResourcePropertySnapshot? CreateDeploymentOperationSummaryProperty(AzureDeploymentOperationSummary summary)
+    {
+        if (TryCreateSummaryValue(summary.FailedOperations, AzureProvisioningStrings.DeploymentOperationFailedResourcesFormat, out var failedValue))
+        {
+            return CreateSummaryProperty(failedValue);
+        }
+
+        if (TryCreateSummaryValue(summary.CanceledOperations, AzureProvisioningStrings.DeploymentOperationCanceledResourcesFormat, out var canceledValue))
+        {
+            return CreateSummaryProperty(canceledValue);
+        }
+
+        if (TryCreateSummaryValue(summary.RunningOperations, AzureProvisioningStrings.DeploymentOperationRunningResourcesFormat, out var runningValue))
+        {
+            return CreateSummaryProperty(runningValue);
+        }
+
+        return null;
+
+        static bool TryCreateSummaryValue(ImmutableArray<AzureDeploymentOperationDetails> operations, string format, [NotNullWhen(true)] out string? value)
+        {
+            var labels = CreateOperationResourceLabels(operations);
+            if (labels.Length > 0)
+            {
+                value = string.Format(CultureInfo.CurrentCulture, format, string.Join(", ", labels));
+                return true;
+            }
+
+            value = null;
+            return false;
+        }
+
+        static ResourcePropertySnapshot CreateSummaryProperty(string value)
+        {
+            return new(DeploymentOperationSummaryPropertyName, value)
+            {
+                DisplayName = AzureProvisioningStrings.DeploymentOperationSummaryDisplayName,
+                IsHighlighted = true
+            };
         }
     }
 

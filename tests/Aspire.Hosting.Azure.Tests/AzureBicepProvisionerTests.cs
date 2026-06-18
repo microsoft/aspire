@@ -1059,6 +1059,7 @@ public class AzureBicepProvisionerTests
             property => AssertHighlightedResourceProperty(property, "azure.tenant.domain", "testdomain.onmicrosoft.com", AzureProvisioningStrings.ContextPropertyTenantDomainDisplayName),
             property => AssertHighlightedResourceProperty(property, "azure.location", "westus2", AzureProvisioningStrings.ContextPropertyLocationDisplayName),
             property => AssertResourceProperty(property, CustomResourceKnownProperties.Source, deploymentId),
+            property => AssertHighlightedResourceProperty(property, "azure.deployment.operations.summary", "Failed Azure resources: alpha-search (Microsoft.Search/searchServices), search (Microsoft.Search/searchServices)", AzureProvisioningStrings.DeploymentOperationSummaryDisplayName),
             property => AssertResourceProperty(property, "azure.deployment.operations.total", 3),
             property => AssertResourceProperty(property, "azure.deployment.operations.running", 0),
             property => AssertResourceProperty(property, "azure.deployment.operations.succeeded", 0),
@@ -1095,7 +1096,9 @@ public class AzureBicepProvisionerTests
             });
 
         Assert.All(
-            resourceEvent.Snapshot.Properties.Where(property => property.Name.StartsWith("azure.deployment.operations.", StringComparison.Ordinal)),
+            resourceEvent.Snapshot.Properties.Where(static property =>
+                property.Name.StartsWith("azure.deployment.operations.", StringComparison.Ordinal) &&
+                !string.Equals(property.Name, "azure.deployment.operations.summary", StringComparison.Ordinal)),
             property => Assert.False(property.IsHighlighted));
 
         static void AssertResourceProperty(ResourcePropertySnapshot property, string name, object value)

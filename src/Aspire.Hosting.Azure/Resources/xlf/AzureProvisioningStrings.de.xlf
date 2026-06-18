@@ -137,6 +137,26 @@
         <target state="new">Azure resources deleted and provisioning state reset.</target>
         <note />
       </trans-unit>
+      <trans-unit id="DeploymentOperationCanceledResourcesFormat">
+        <source>Canceled Azure resources: {0}</source>
+        <target state="new">Canceled Azure resources: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeploymentOperationFailedResourcesFormat">
+        <source>Failed Azure resources: {0}</source>
+        <target state="new">Failed Azure resources: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeploymentOperationRunningResourcesFormat">
+        <source>Provisioning Azure resources: {0}</source>
+        <target state="new">Provisioning Azure resources: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeploymentOperationSummaryDisplayName">
+        <source>Azure deployment diagnostics</source>
+        <target state="new">Azure deployment diagnostics</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FailurePropertyCodeDisplayName">
         <source>Azure error code</source>
         <target state="new">Azure error code</target>
