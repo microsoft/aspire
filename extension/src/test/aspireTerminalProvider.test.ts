@@ -637,6 +637,19 @@ suite('AspireTerminalProvider tests', () => {
 
             assert.strictEqual(env.AspireCliPath, commandShimPath);
         });
+
+        test('does not set MSBuild AspireCliPath from raw configured setting without a resolved CLI path', () => {
+            const getConfiguredCliPathStub = sinon.stub(cliPathModule, 'getConfiguredCliPath').returns('/stale/configured/aspire');
+
+            try {
+                const env = terminalProvider.createEnvironment();
+
+                assert.strictEqual(env.AspireCliPath, undefined);
+            }
+            finally {
+                getConfiguredCliPathStub.restore();
+            }
+        });
     });
 
     // The Windows quoting form targets PowerShell (powershell.exe / pwsh.exe),

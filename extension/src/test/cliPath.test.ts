@@ -210,6 +210,20 @@ suite('utils/cliPath tests', () => {
             assert.strictEqual(result.available, true);
         });
 
+        test('falls through to PATH check when custom configured path is relative', async () => {
+            const deps = createMockDeps({
+                getConfiguredPath: () => path.join('artifacts', 'bin', 'Aspire.Cli', 'Debug', 'net10.0', 'aspire'),
+                tryExecute: async () => true,
+                isOnPath: async () => true,
+            });
+
+            const result = await resolveCliPath(deps);
+
+            assert.strictEqual(result.source, 'path');
+            assert.strictEqual(result.available, true);
+            assert.strictEqual(result.cliPath, 'aspire');
+        });
+
         test('falls through to default path when custom configured path is invalid and not on PATH', async () => {
             const setConfiguredPath = sinon.stub().resolves();
 

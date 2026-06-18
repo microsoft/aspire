@@ -173,13 +173,18 @@ export async function resolveCliPath(deps: CliPathDependencies = defaultDependen
 
     // Check if user has configured a custom path (not one of the defaults)
     if (configuredPath && !defaultPaths.includes(configuredPath)) {
-        const isValid = await deps.tryExecute(configuredPath);
-        if (isValid) {
-            return { cliPath: configuredPath, available: true, source: 'configured' };
-        }
+        if (path.isAbsolute(configuredPath)) {
+            const isValid = await deps.tryExecute(configuredPath);
+            if (isValid) {
+                return { cliPath: configuredPath, available: true, source: 'configured' };
+            }
 
-        extensionLogOutputChannel.warn(`Configured CLI path is invalid: ${configuredPath}`);
-        // Continue to check other locations
+            extensionLogOutputChannel.warn(`Configured CLI path is invalid: ${configuredPath}`);
+            // Continue to check other locations
+        }
+        else {
+            extensionLogOutputChannel.warn(`Configured CLI path must be absolute: ${configuredPath}`);
+        }
     }
 
     // 2. Check if CLI is on PATH

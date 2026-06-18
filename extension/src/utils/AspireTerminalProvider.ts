@@ -6,7 +6,7 @@ import { RpcServerConnectionInfo } from '../server/AspireRpcServer';
 import { DcpServerConnectionInfo } from '../dcp/types';
 import { getRunSessionInfo, getSupportedCapabilities } from '../capabilities';
 import { aspireCliPathEnvironmentVariableName, EnvironmentVariables, getAspireCliPathForMSBuild, getEnvironmentWithoutE2EBridgeVariables } from './environment';
-import { getConfiguredCliPath, resolveCliPath } from './cliPath';
+import { resolveCliPath } from './cliPath';
 import path from 'path';
 
 export const enum AnsiColors {
@@ -360,7 +360,7 @@ export class AspireTerminalProvider implements vscode.Disposable {
 
     private getAspireCliPathForTerminalEnvironment(aspireCliPath?: string): string | undefined {
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0];
-        return getAspireCliPathForMSBuild(aspireCliPath ?? getConfiguredCliPath(), workspaceRoot?.uri.fsPath);
+        return getAspireCliPathForMSBuild(aspireCliPath, workspaceRoot?.uri.fsPath);
     }
 
     private getWindowsPowerShellPath(): string {

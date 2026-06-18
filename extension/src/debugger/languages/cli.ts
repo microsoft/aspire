@@ -44,7 +44,10 @@ export function spawnCliProcess(terminalProvider: AspireTerminalProvider, comman
         Object.assign(env, { [aspireCliPathEnvironmentVariableName]: aspireCliPath });
     }
     if (options?.env) {
-        Object.assign(env, Object.fromEntries(options.env.map(e => [e.name, e.value])));
+        const aspireCliPathKey = aspireCliPathEnvironmentVariableName.toLowerCase();
+        Object.assign(env, Object.fromEntries(options.env
+            .filter(e => e.name.toLowerCase() !== aspireCliPathKey)
+            .map(e => [e.name, e.value])));
     }
 
     const child = spawn(spawnCommand.command, spawnCommand.args, {

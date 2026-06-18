@@ -72,4 +72,32 @@ suite('spawnCliProcess tests', () => {
         assert.strictEqual(stdout, process.execPath);
         assert.strictEqual(createEnvironmentStub.calledOnceWith(undefined, undefined, true, process.execPath), true);
     });
+
+    test('keeps computed MSBuild AspireCliPath when caller env contains AspireCliPath', async () => {
+        const createEnvironmentStub = sinon.stub().returns({});
+        const terminalProvider = {
+            createEnvironment: createEnvironmentStub
+        } as unknown as AspireTerminalProvider;
+        let stdout = '';
+        let stderr = '';
+
+        const exitCode = await new Promise<number | null>((resolve, reject) => {
+            const child = spawnCliProcess(terminalProvider, process.execPath, ['-e', 'process.stdout.write(process.env.AspireCliPath ?? "")'], {
+                noExtensionVariables: true,
+                env: [
+                    { name: 'AspireCliPath', value: '/stale/from/launch-config/aspire' },
+                    { name: 'ELECTRON_RUN_AS_NODE', value: '1' }
+                ],
+                stdoutCallback: data => { stdout += data; },
+                stderrCallback: data => { stderr += data; },
+                exitCallback: resolve,
+                errorCallback: reject,
+            });
+
+            child.on('error', reject);
+        });
+
+        assert.strictEqual(exitCode, 0, stderr);
+        assert.strictEqual(stdout, process.execPath);
+    });
 });
