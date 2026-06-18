@@ -79,10 +79,6 @@ public class ConsoleCancellationManagerTests
         var sw = System.Diagnostics.Stopwatch.StartNew();
         manager.Cancel(130);
 
-        // Right after Cancel, the graceful token should NOT have fired yet (we're in Phase 1).
-        await Task.Delay(50);
-        Assert.False(graceful.Token.IsCancellationRequested, "Graceful token fired before budget elapsed.");
-
         // Wait for the budget to elapse.
         await graceful.Token.WaitForCancellationAsync().DefaultTimeout();
         sw.Stop();

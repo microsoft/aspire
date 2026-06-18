@@ -4,11 +4,12 @@
 using System.Diagnostics;
 using Aspire.Cli.Processes;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Projects;
 
-public class ProcessGuestLauncherTests
+public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task LaunchAsync_NoOptions_OnCancellation_ForceKillsProcessTreeAndReturns()
@@ -98,14 +99,71 @@ public class ProcessGuestLauncherTests
     }
 
     [Fact]
+    public async Task LaunchAsync_WithGracefulServices_BlockingSignalerDoesNotConsumeGracefulBudget()
+    {
+        // Regression coverage for DCP's stop-process-tree behavior: the graceful signaler can
+        // deliver the signal quickly and then block until the target exits. The ladder must wait
+        // for process exit in parallel with that signaler instead of awaiting the signaler first.
+        var launcher = new ProcessGuestLauncher("test", NullLogger<ProcessGuestLauncher>.Instance);
+        var (command, args) = GetLongRunningCommand();
+
+        using var cts = new CancellationTokenSource();
+        using var shutdownService = new GracefulShutdownService();
+        var signalerNeverCompletes = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var signaler = new RecordingGracefulSignaler(onSignal: pid =>
+        {
+            try
+            {
+                using var proc = Process.GetProcessById(pid);
+                proc.Kill(entireProcessTree: true);
+            }
+            catch (ArgumentException)
+            {
+                // Already exited; treat as graceful success.
+            }
+
+            return signalerNeverCompletes.Task;
+        });
+
+        var options = new GuestLaunchOptions(
+            IsolateConsoleForGracefulShutdown: false,
+            GracefulShutdownSignaler: signaler,
+            ShutdownService: shutdownService);
+
+        var launchTask = launcher.LaunchAsync(
+            command,
+            args,
+            new DirectoryInfo(Path.GetTempPath()),
+            new Dictionary<string, string>(),
+            cts.Token,
+            afterLaunchAsync: null,
+            options: options);
+
+        await Task.Delay(500);
+        cts.Cancel();
+
+        var stopwatch = Stopwatch.StartNew();
+        var (exitCode, _) = await launchTask.WaitAsync(TimeSpan.FromSeconds(10));
+        stopwatch.Stop();
+
+        Assert.NotEqual(0, exitCode);
+        Assert.Single(signaler.Pids);
+        Assert.False(shutdownService.Token.IsCancellationRequested);
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5),
+            $"Expected process exit to win over the still-blocked signaler but it took {stopwatch.Elapsed}.");
+    }
+
+    [Fact]
     public async Task LaunchAsync_WithGracefulServices_ProcessIgnoresSignal_ExpireEscalatesToTreeKill()
     {
         // Run-path bad-citizen case: graceful signaler accepts the request but the process ignores
         // it (the canonical tsx-swallows-Ctrl+Break scenario on Windows). Expiring the central token
         // must break the ladder out of WaitForExitAsync and escalate to Kill(entireProcessTree: true)
         // so the tree dies even when the cooperative path fails.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
         var launcher = new ProcessGuestLauncher("test", NullLogger<ProcessGuestLauncher>.Instance);
-        var (command, args) = GetLongRunningCommand();
+        var descendantPidFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "descendant.pid"));
+        var (command, args) = await GetProcessTreeCommandAsync(workspace.WorkspaceRoot, descendantPidFile);
 
         using var cts = new CancellationTokenSource();
         using var shutdownService = new GracefulShutdownService();
@@ -126,29 +184,38 @@ public class ProcessGuestLauncherTests
         var launchTask = launcher.LaunchAsync(
             command,
             args,
-            new DirectoryInfo(Path.GetTempPath()),
+            workspace.WorkspaceRoot,
             new Dictionary<string, string>(),
             cts.Token,
             afterLaunchAsync: null,
             options: options);
 
-        await Task.Delay(500);
-        cts.Cancel();
+        var descendantPid = await WaitForPidFileAsync(descendantPidFile);
 
-        // Wait until the ladder has actually called the signaler before expiring. Otherwise Expire()
-        // could fire before the ladder reaches WaitForExitAsync and we'd be testing cancellation
-        // ordering rather than the escalation path.
-        await signaled.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        try
+        {
+            cts.Cancel();
 
-        shutdownService.Expire();
+            // Wait until the ladder has actually called the signaler before expiring. Otherwise Expire()
+            // could fire before the ladder reaches WaitForExitAsync and we'd be testing cancellation
+            // ordering rather than the escalation path.
+            await signaled.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
-        var stopwatch = Stopwatch.StartNew();
-        var (exitCode, _) = await launchTask.WaitAsync(TimeSpan.FromSeconds(30));
-        stopwatch.Stop();
+            shutdownService.Expire();
 
-        Assert.NotEqual(0, exitCode);
-        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(15),
-            $"Expected escalation to tree-kill within 15s of Expire() but it took {stopwatch.Elapsed}.");
+            var stopwatch = Stopwatch.StartNew();
+            var (exitCode, _) = await launchTask.WaitAsync(TimeSpan.FromSeconds(30));
+            stopwatch.Stop();
+
+            Assert.NotEqual(0, exitCode);
+            Assert.True(WaitForProcessExit(descendantPid, TimeSpan.FromSeconds(10)), $"Expected descendant process {descendantPid} to be killed with the root process tree.");
+            Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(15),
+                $"Expected escalation to tree-kill within 15s of Expire() but it took {stopwatch.Elapsed}.");
+        }
+        finally
+        {
+            TryKillProcess(descendantPid);
+        }
     }
 
     [Fact]
@@ -208,6 +275,110 @@ public class ProcessGuestLauncherTests
         }
 
         return ("sleep", ["60"]);
+    }
+
+    private static async Task<(string Command, string[] Args)> GetProcessTreeCommandAsync(DirectoryInfo workspaceRoot, FileInfo descendantPidFile)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var scriptFile = new FileInfo(Path.Combine(workspaceRoot.FullName, "spawn-descendant.ps1"));
+            var content =
+                "$child = Start-Process -FilePath powershell.exe -ArgumentList '-NoProfile', '-Command', 'Start-Sleep -Seconds 60' -PassThru" + Environment.NewLine +
+                $"Set-Content -Path '{descendantPidFile.FullName}' -Value $child.Id" + Environment.NewLine +
+                "Wait-Process -Id $child.Id" + Environment.NewLine;
+            await File.WriteAllTextAsync(scriptFile.FullName, content);
+
+            return ("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptFile.FullName]);
+        }
+
+        var shellFile = new FileInfo(Path.Combine(workspaceRoot.FullName, "spawn-descendant.sh"));
+        var shellContent =
+            "#!/usr/bin/env bash" + Environment.NewLine +
+            "sleep 60 &" + Environment.NewLine +
+            $"echo $! > \"{descendantPidFile.FullName}\"" + Environment.NewLine +
+            "wait $!" + Environment.NewLine;
+        await File.WriteAllTextAsync(shellFile.FullName, shellContent);
+        File.SetUnixFileMode(
+            shellFile.FullName,
+            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+            UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+            UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+
+        return ("/bin/bash", [shellFile.FullName]);
+    }
+
+    private static async Task<int> WaitForPidFileAsync(FileInfo pidFile)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (pidFile.Exists)
+            {
+                var text = await File.ReadAllTextAsync(pidFile.FullName);
+                if (int.TryParse(text.Trim(), out var pid))
+                {
+                    return pid;
+                }
+            }
+
+            await Task.Delay(50);
+            pidFile.Refresh();
+        }
+
+        throw new TimeoutException($"Timed out waiting for descendant pid file '{pidFile.FullName}'.");
+    }
+
+    private static bool WaitForProcessExit(int pid, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (IsProcessExited(pid))
+            {
+                return true;
+            }
+
+            Thread.Sleep(25);
+        }
+
+        return false;
+    }
+
+    private static bool IsProcessExited(int pid)
+    {
+        try
+        {
+            using var probe = Process.GetProcessById(pid);
+            return probe.HasExited;
+        }
+        catch (ArgumentException)
+        {
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            return true;
+        }
+    }
+
+    private static void TryKillProcess(int pid)
+    {
+        if (IsProcessExited(pid))
+        {
+            return;
+        }
+
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+            process.Kill(entireProcessTree: true);
+        }
+        catch (ArgumentException)
+        {
+        }
+        catch (InvalidOperationException)
+        {
+        }
     }
 
     private sealed class RecordingGracefulSignaler : IProcessTreeGracefulShutdownSignaler

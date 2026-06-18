@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -176,6 +177,92 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         Assert.True(process.HasExited);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WaitForExitAsync_WithGracefulServices_InvokesSignalerAndThrowsOnCancellation(bool isolateConsole)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var scriptFile = await CreateLongRunningScriptAsync(workspace.WorkspaceRoot);
+        using var shutdownService = new GracefulShutdownService();
+        var signaler = new RecordingGracefulSignaler(onSignal: pid =>
+        {
+            TryKillProcess(pid);
+            return Task.FromResult(true);
+        });
+
+        using var execution = CreateExecution(scriptFile, isolateConsole, signaler, shutdownService);
+
+        Assert.True(execution.Start());
+
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => execution.WaitForExitAsync(cts.Token));
+
+        Assert.Single(signaler.Pids);
+        Assert.False(shutdownService.Token.IsCancellationRequested);
+        Assert.True(WaitForProcessExit(execution.ProcessId, TimeSpan.FromSeconds(10)), $"Expected process {execution.ProcessId} to exit after graceful signal.");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WaitForExitAsync_WithGracefulServices_ProcessIgnoresSignal_ExpireEscalatesToKill(bool isolateConsole)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var scriptFile = await CreateLongRunningScriptAsync(workspace.WorkspaceRoot);
+        using var shutdownService = new GracefulShutdownService();
+        var signaled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var signaler = new RecordingGracefulSignaler(onSignal: _ =>
+        {
+            signaled.TrySetResult();
+            return Task.FromResult(true);
+        });
+
+        using var execution = CreateExecution(scriptFile, isolateConsole, signaler, shutdownService);
+
+        Assert.True(execution.Start());
+
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        var waitTask = Assert.ThrowsAsync<OperationCanceledException>(() => execution.WaitForExitAsync(cts.Token));
+        await signaled.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        shutdownService.Expire();
+
+        await waitTask.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Single(signaler.Pids);
+        Assert.True(WaitForProcessExit(execution.ProcessId, TimeSpan.FromSeconds(10)), $"Expected process {execution.ProcessId} to be killed after graceful expiration.");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WaitForExitAsync_WithGracefulServices_SignalerThrows_StillEscalatesToKill(bool isolateConsole)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var scriptFile = await CreateLongRunningScriptAsync(workspace.WorkspaceRoot);
+        using var shutdownService = new GracefulShutdownService();
+        var signaler = new RecordingGracefulSignaler(onSignal: _ =>
+            throw new InvalidOperationException("simulated DCP failure"));
+
+        using var execution = CreateExecution(scriptFile, isolateConsole, signaler, shutdownService);
+
+        Assert.True(execution.Start());
+
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+        shutdownService.Expire();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => execution.WaitForExitAsync(cts.Token));
+
+        Assert.Single(signaler.Pids);
+        Assert.True(WaitForProcessExit(execution.ProcessId, TimeSpan.FromSeconds(10)), $"Expected process {execution.ProcessId} to be killed after signaler failure.");
+    }
+
     private static string CreateJsonPayload(int lineCount)
     {
         var builder = new StringBuilder();
@@ -312,5 +399,169 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
             WorkingDirectory = scriptFile.Directory!.FullName,
             ArgumentList = { scriptFile.FullName }
         };
+    }
+
+    private static IProcessExecution CreateExecution(
+        FileInfo scriptFile,
+        bool isolateConsole,
+        IProcessTreeGracefulShutdownSignaler signaler,
+        GracefulShutdownService shutdownService)
+    {
+        var factory = new ProcessExecutionFactory(NullLogger<ProcessExecutionFactory>.Instance);
+        WindowsConsoleProcessJob? consoleProcessJob = null;
+
+        if (OperatingSystem.IsWindows() && isolateConsole)
+        {
+            consoleProcessJob = new WindowsConsoleProcessJob();
+        }
+
+        try
+        {
+            var startInfo = CreateStartInfo(scriptFile);
+            return new ProcessExecutionWithJob(
+                factory.CreateExecution(
+                    startInfo.FileName,
+                    startInfo.ArgumentList.ToArray(),
+                    env: null,
+                    new DirectoryInfo(startInfo.WorkingDirectory),
+                    new ProcessInvocationOptions
+                    {
+                        IsolateConsole = isolateConsole,
+                        ConsoleProcessJob = consoleProcessJob,
+                        GracefulShutdownSignaler = signaler,
+                        ShutdownService = shutdownService
+                    }),
+                consoleProcessJob);
+        }
+        catch
+        {
+            DisposeConsoleProcessJob(consoleProcessJob);
+            throw;
+        }
+    }
+
+    private static void DisposeConsoleProcessJob(WindowsConsoleProcessJob? consoleProcessJob)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            consoleProcessJob?.Dispose();
+        }
+    }
+
+    private static bool WaitForProcessExit(int pid, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (IsProcessExited(pid))
+            {
+                return true;
+            }
+
+            Thread.Sleep(25);
+        }
+
+        return false;
+    }
+
+    private static bool IsProcessExited(int pid)
+    {
+        try
+        {
+            using var probe = Process.GetProcessById(pid);
+            return probe.HasExited;
+        }
+        catch (ArgumentException)
+        {
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            return true;
+        }
+    }
+
+    private static void TryKillProcess(int pid)
+    {
+        if (IsProcessExited(pid))
+        {
+            return;
+        }
+
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+            process.Kill(entireProcessTree: true);
+        }
+        catch (ArgumentException)
+        {
+        }
+        catch (InvalidOperationException)
+        {
+        }
+    }
+
+    private sealed class ProcessExecutionWithJob(IProcessExecution inner, WindowsConsoleProcessJob? consoleProcessJob) : IProcessExecution
+    {
+        public string FileName => inner.FileName;
+
+        public IReadOnlyList<string> Arguments => inner.Arguments;
+
+        public IReadOnlyDictionary<string, string?> EnvironmentVariables => inner.EnvironmentVariables;
+
+        public bool HasExited => inner.HasExited;
+
+        public int ExitCode => inner.ExitCode;
+
+        public int ProcessId => inner.ProcessId;
+
+        public bool Start() => inner.Start();
+
+        public Task<int> WaitForExitAsync(CancellationToken cancellationToken) => inner.WaitForExitAsync(cancellationToken);
+
+        public void Kill(bool entireProcessTree) => inner.Kill(entireProcessTree);
+
+        public void Dispose()
+        {
+            inner.Dispose();
+            DisposeConsoleProcessJob(consoleProcessJob);
+        }
+    }
+
+    private sealed class RecordingGracefulSignaler : IProcessTreeGracefulShutdownSignaler
+    {
+        private readonly object _lock = new();
+        private readonly Func<int, Task<bool>>? _onSignal;
+        private readonly List<int> _pids = new();
+
+        public RecordingGracefulSignaler(Func<int, Task<bool>>? onSignal = null)
+        {
+            _onSignal = onSignal;
+        }
+
+        public IReadOnlyList<int> Pids
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _pids.ToArray();
+                }
+            }
+        }
+
+        public Task<bool> RequestProcessTreeGracefulShutdownAsync(
+            int pid,
+            DateTimeOffset? startTime,
+            bool includeStartTimeForDcp,
+            CancellationToken cancellationToken)
+        {
+            lock (_lock)
+            {
+                _pids.Add(pid);
+            }
+
+            return _onSignal?.Invoke(pid) ?? Task.FromResult(true);
+        }
     }
 }
