@@ -1317,10 +1317,14 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return;
         }
 
+        this._markAppHostStopping(appHostPath);
+        this._repository.requestAppHostStopRefresh?.(appHostPath);
+    }
+
+    private _markAppHostStopping(appHostPath: string): void {
         if (this._isKnownRunningAppHost(appHostPath)) {
             this._trackStoppingAppHost(appHostPath);
         }
-        this._repository.requestAppHostStopRefresh?.(appHostPath);
         this._onDidChangeTreeData.fire();
     }
 
@@ -1331,9 +1335,10 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return;
         }
 
-        this.notifyAppHostStopping(appHostPath);
+        this._markAppHostStopping(appHostPath);
         try {
             await this._terminalProvider.sendAspireCommandToAspireTerminal(['stop', '--apphost', shellArg(appHostPath)]);
+            this._repository.requestAppHostStopRefresh?.(appHostPath);
         } catch (err) {
             const stoppingKey = this._findStoppingAppHostKey(appHostPath);
             if (stoppingKey) {

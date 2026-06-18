@@ -603,6 +603,90 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('stop refresh retries while apphost remains running', async () => {
+        const clock = sinon.useFakeTimers();
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discoveryService = {
+            discover: async () => [{
+                path: '/workspace/AppHost.csproj',
+                language: 'csharp' as const,
+                status: 'buildable' as const,
+                selected: true,
+            }],
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            dispose: () => { },
+        } as unknown as AppHostDiscoveryService;
+        const spawned: { args: string[]; options: any }[] = [];
+        spawnStub.callsFake((_terminalProvider, _cliPath, args, options) => {
+            spawned.push({ args, options });
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            const initialFollowCall = spawned.find(call => JSON.stringify(call.args) === JSON.stringify(['ps', '--follow', '--format', 'json']));
+            assert.ok(initialFollowCall);
+            initialFollowCall.options.lineCallback(JSON.stringify({
+                appHostPath: '/workspace/AppHost.csproj',
+                appHostPid: 1234,
+                status: 'running',
+            }));
+            await waitForCondition(() => repository.workspaceAppHost?.appHostPath === '/workspace/AppHost.csproj', 'workspace apphost did not become running');
+
+            repository.requestAppHostStopRefresh('/workspace/AppHost.csproj');
+            await clock.tickAsync(400);
+            await waitForMicrotasks();
+
+            const snapshotArgs = JSON.stringify(['ps', '--format', 'json']);
+            const firstSnapshot = spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).at(-1);
+            assert.ok(firstSnapshot);
+            firstSnapshot.options.stdoutCallback(JSON.stringify([{
+                appHostPath: '/workspace/AppHost.csproj',
+                appHostPid: 1234,
+                status: 'running',
+            }]));
+            firstSnapshot.options.exitCallback(0);
+            await waitForMicrotasks();
+
+            await clock.tickAsync(400);
+            await waitForMicrotasks();
+
+            assert.strictEqual(
+                spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).length,
+                2,
+                'expected retry snapshot while apphost is still running'
+            );
+
+            const secondSnapshot = spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).at(-1);
+            assert.ok(secondSnapshot);
+            secondSnapshot.options.stdoutCallback(JSON.stringify([]));
+            secondSnapshot.options.exitCallback(0);
+            await waitForMicrotasks();
+
+            await clock.tickAsync(400);
+            await waitForMicrotasks();
+
+            assert.strictEqual(
+                spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).length,
+                2,
+                'expected stop refresh to stop retrying after apphost disappears'
+            );
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+            clock.restore();
+        }
+    });
+
     test('stop refresh clears snapshot-running AppHost without restarting follow', async () => {
         const clock = sinon.useFakeTimers();
         const workspaceFolder = {

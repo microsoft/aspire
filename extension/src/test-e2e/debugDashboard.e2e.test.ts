@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getCommandInvocationCount, getTreeAppHostLabel, isSamePath, waitForAppHostLaunching, waitForCommandOutcome, waitForDebugConsoleOutput, waitForDebugDashboardUrl, waitForDebugSessionStartup, waitForExtensionState, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForRunningAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
+import { getCommandInvocationCount, getDebugLaunchCount, getTreeAppHostLabel, isSamePath, waitForAppHostLaunching, waitForCommandOutcome, waitForDebugConsoleOutput, waitForDebugDashboardUrl, waitForDebugLaunch, waitForDebugSessionStartup, waitForExtensionState, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForRunningAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
 import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setShowStatusDelayForE2E, stopPrimaryAppHostIfRunning, writeFileWithRetry } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { openAspireView, waitForEditorTitle, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
@@ -137,11 +137,20 @@ suite('Aspire debug dashboard E2E', function () {
         await waitForDebugSessionStartup(appHostPath);
         await waitForRunningAppHost();
 
+        const beforePublishLaunch = getCommandInvocationCount('aspire-vscode.publishAppHost');
+        const beforeDebugLaunch = getDebugLaunchCount();
         await setShowStatusDelayForE2E(2500);
         try {
             await executeE2eControlCommand({ name: 'publishAppHost', appHostPath }, { waitFor: 'started', timeoutMs: 30000 });
+            await waitForDebugLaunch(
+                event => event.command === 'publish' && event.appHostPath !== undefined && isSamePath(event.appHostPath, appHostPath),
+                `publish launch for AppHost '${appHostPath}'`,
+                30000,
+                beforeDebugLaunch);
+            await waitForCommandOutcome('aspire-vscode.publishAppHost', 'success', 60000, beforePublishLaunch);
             await waitForExtensionState(
                 file =>
+                    file.state.debugSessions.length === 1 &&
                     file.state.debugSessions.some(session => session.appHostPath !== undefined && isSamePath(session.appHostPath, appHostPath) && session.startupCompleted) &&
                     !file.state.stoppingPaths.some(stoppingPath => isSamePath(stoppingPath, appHostPath)),
                 `AppHost '${appHostPath}' to remain running without entering stopping state after publish`,

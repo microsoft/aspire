@@ -105,6 +105,10 @@ interface GlobalDescribeStream {
     version: number;
 }
 
+interface PostStopRefreshTimer {
+    timer: ReturnType<typeof setTimeout>;
+}
+
 /**
  * Central data repository for app host and resource information.
  *
@@ -123,6 +127,7 @@ interface GlobalDescribeStream {
 export class AppHostDataRepository {
     private static readonly _processShutdownGracePeriodMs = 5000;
     private static readonly _appHostStopRefreshDelayMs = 400;
+    private static readonly _appHostStopRefreshMaxAttempts = 75;
 
     private readonly _onDidChangeData = new vscode.EventEmitter<void>();
     readonly onDidChangeData = this._onDidChangeData.event;
@@ -163,7 +168,7 @@ export class AppHostDataRepository {
     private _psFetchVersion = 0;
     private _supportsPsFollow = true;
     private _fetchInProgress = false;
-    private _postStopRefreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    private _postStopRefreshTimers = new Map<string, PostStopRefreshTimer>();
     private _authoritativeSnapshotInProgress = false;
     private _authoritativeSnapshotPending = false;
     private _authoritativeSnapshotRequestId = 0;
@@ -368,21 +373,36 @@ export class AppHostDataRepository {
         }
 
         const key = this._resolveStopRefreshKey(appHostPath);
-        const timer = this._postStopRefreshTimers.get(key);
-        if (timer) {
-            clearTimeout(timer);
+        this._schedulePostStopRefresh(key, AppHostDataRepository._appHostStopRefreshMaxAttempts);
+    }
+
+    private _schedulePostStopRefresh(appHostPath: string, remainingAttempts: number): void {
+        const existing = this._postStopRefreshTimers.get(appHostPath);
+        if (existing) {
+            clearTimeout(existing.timer);
         }
 
         const refreshTimer = setTimeout(() => {
-            this._postStopRefreshTimers.delete(key);
+            this._postStopRefreshTimers.delete(appHostPath);
             if (this._disposed || !this._shouldPoll) {
                 return;
             }
 
+            if (remainingAttempts < AppHostDataRepository._appHostStopRefreshMaxAttempts && !this._hasAppHost(appHostPath)) {
+                return;
+            }
+
             this._refreshAppHostsFromAuthoritativeSnapshot();
+            if (remainingAttempts > 1) {
+                this._schedulePostStopRefresh(appHostPath, remainingAttempts - 1);
+            }
         }, AppHostDataRepository._appHostStopRefreshDelayMs);
         (refreshTimer as { unref?: () => void }).unref?.();
-        this._postStopRefreshTimers.set(key, refreshTimer);
+        this._postStopRefreshTimers.set(appHostPath, { timer: refreshTimer });
+    }
+
+    private _hasAppHost(appHostPath: string): boolean {
+        return this._appHosts.some(appHost => isMatchingAppHostPath(appHost.appHostPath, appHostPath));
     }
 
     private _resolveStopRefreshKey(appHostPath: string): string {
@@ -396,8 +416,8 @@ export class AppHostDataRepository {
     }
 
     private _clearPostStopRefreshTimers(): void {
-        for (const timer of this._postStopRefreshTimers.values()) {
-            clearTimeout(timer);
+        for (const state of this._postStopRefreshTimers.values()) {
+            clearTimeout(state.timer);
         }
         this._postStopRefreshTimers.clear();
     }
