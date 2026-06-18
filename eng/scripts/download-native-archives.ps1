@@ -59,6 +59,21 @@
 .PARAMETER ThrottleLimit
     Maximum concurrent download jobs. Defaults to 10.
 
+.PARAMETER MaxDownloadAttempts
+    Total number of attempts per artifact download before giving up. Defaults
+    to 4 (i.e. the initial attempt plus up to 3 retries). Retries cover
+    transient artifact-store failures — HTTP 408, 429, and 5xx responses;
+    transport-level errors such as "An existing connection was forcibly closed
+    by the remote host"; and corrupt zip downloads that fail the integrity check.
+    Non-transient HTTP 4xx responses fail immediately. (`Invoke-WebRequest
+    -MaximumRetryCount` only retries on HTTP status codes, not on transport
+    exceptions or corrupt downloads, so the retry is implemented explicitly here.)
+
+.PARAMETER RetryBaseDelaySeconds
+    Base delay for exponential backoff between download retries. The wait before
+    retry N is `RetryBaseDelaySeconds * 2^(N-1)` seconds (e.g. 3, 6, 12 with the
+    default of 3). Set to 0 to retry without waiting (used by tests).
+
 .PARAMETER ApiVersion
     AzDO REST API version. Defaults to `7.1`.
 
@@ -100,6 +115,12 @@ param(
 
     [ValidateRange(1, 64)]
     [int]$ThrottleLimit = 10,
+
+    [ValidateRange(1, 10)]
+    [int]$MaxDownloadAttempts = 4,
+
+    [ValidateRange(0, 60)]
+    [int]$RetryBaseDelaySeconds = 3,
 
     [string]$ApiVersion = '7.1'
 )
@@ -184,7 +205,9 @@ $DownloadOneArtifact = {
         [string]$ArtifactName,
         [string]$DownloadUrl,
         [string]$ArchivesTargetDir,
-        [string]$NupkgsTargetDir
+        [string]$NupkgsTargetDir,
+        [int]$MaxDownloadAttempts,
+        [int]$RetryBaseDelaySeconds
     )
 
     Set-StrictMode -Version 3.0
@@ -193,30 +216,71 @@ $DownloadOneArtifact = {
     $tempBase = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [System.IO.Path]::GetTempPath() }
     $tempZip = Join-Path $tempBase "$ArtifactName.zip"
 
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
-    try {
-        Invoke-WebRequest -Uri $DownloadUrl -OutFile $tempZip `
-            -Headers @{ Authorization = "Bearer $AccessToken" } -UseBasicParsing
-    }
-    catch {
-        # Preserve $tempZip on failure (do NOT remove it) so a developer can
-        # inspect partial download contents. See Get-MatchingArtifacts above
-        # for why the throw message is constructed from $_.Exception.Message
-        # rather than the full ErrorRecord (token-leak hardening).
-        $status = $null
-        try { $status = $_.Exception.Response.StatusCode } catch { }
-        $statusPart = if ($null -ne $status) { " (HTTP $status)" } else { "" }
-        throw "Download failed for '$ArtifactName' from $DownloadUrl$statusPart. Temp file (may be partial): $tempZip. $($_.Exception.Message)"
+    # Retry transient download failures. AzDO's artifact store intermittently
+    # drops connections mid-transfer ("An existing connection was forcibly
+    # closed by the remote host"), which surfaces as a transport-level
+    # exception with no HTTP response — so `Invoke-WebRequest -MaximumRetryCount`
+    # (which only retries on HTTP status codes) does not cover it. Retry the
+    # whole request explicitly with exponential backoff so one flaky artifact
+    # doesn't fail the entire assemble stage. See
+    # https://github.com/microsoft/aspire/issues/18055.
+    #
+    # Opening the zip is done INSIDE the retry scope as an integrity check: a
+    # connection dropped mid-transfer usually throws from Invoke-WebRequest, but
+    # could also leave a truncated-yet-complete-looking file that only fails when
+    # ZipFile::OpenRead rejects it. Re-downloading is the correct remedy for that
+    # too, so a corrupt-zip failure should retry rather than fail the stage.
+    $attempt = 0
+    $zip = $null
+    while ($true) {
+        $attempt++
+        try {
+            Invoke-WebRequest -Uri $DownloadUrl -OutFile $tempZip `
+                -Headers @{ Authorization = "Bearer $AccessToken" } -UseBasicParsing
+            $zip = [System.IO.Compression.ZipFile]::OpenRead($tempZip)
+            break
+        }
+        catch {
+            # Construct the message from $_.Exception.Message + status code only,
+            # not the full ErrorRecord. The ErrorRecord's string form can include
+            # the request's Authorization header on some Invoke-WebRequest failure
+            # modes; AzDO log scrubbing masks $(System.AccessToken), but the
+            # -AccessToken parameter is also designed for non-AzDO use where
+            # nothing scrubs.
+            $errorMessage = $_.Exception.Message
+            $statusCode = $null
+            try {
+                if ($null -ne $_.Exception.Response -and $null -ne $_.Exception.Response.StatusCode) {
+                    $statusCode = [int]$_.Exception.Response.StatusCode
+                }
+            } catch { }
+            $statusPart = if ($null -ne $statusCode) { " (HTTP $statusCode)" } else { "" }
+            $isRetryable = ($null -eq $statusCode) -or ($statusCode -eq 408) -or ($statusCode -eq 429) -or ($statusCode -ge 500)
+
+            if (-not $isRetryable) {
+                throw "Download of '$ArtifactName' from $DownloadUrl$statusPart failed with non-retryable HTTP $statusCode. Temp file (may be partial or corrupt): $tempZip. $errorMessage"
+            }
+
+            if ($attempt -ge $MaxDownloadAttempts) {
+                # Final attempt failed. Preserve $tempZip (do NOT remove it) so a
+                # developer can inspect partial / corrupt download contents.
+                throw "Download of '$ArtifactName' from $DownloadUrl$statusPart failed after $attempt attempt(s). Temp file (may be partial or corrupt): $tempZip. $errorMessage"
+            }
+
+            # Remove the partial/corrupt temp file before retrying so a
+            # half-written zip from a dropped connection isn't reused on the next
+            # attempt.
+            Remove-Item -LiteralPath $tempZip -Force -ErrorAction SilentlyContinue
+
+            $delay = [int]($RetryBaseDelaySeconds * [math]::Pow(2, $attempt - 1))
+            Write-Host "##[warning]Download attempt $attempt/$MaxDownloadAttempts failed for '$ArtifactName'$statusPart; retrying in ${delay}s. $errorMessage"
+            if ($delay -gt 0) { Start-Sleep -Seconds $delay }
+        }
     }
     $downloadMs = $sw.ElapsedMilliseconds
-
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    try {
-        $zip = [System.IO.Compression.ZipFile]::OpenRead($tempZip)
-    }
-    catch {
-        throw "Could not open downloaded zip for '$ArtifactName' at $tempZip. The file may be corrupt or not a zip. $_"
-    }
 
     $archivesCount = 0
     $nupkgsCount = 0
@@ -300,7 +364,9 @@ function Invoke-ParallelDownloads {
         [Parameter(Mandatory)] [string]$ArchivesTargetDir,
         [Parameter(Mandatory)] [string]$NupkgsTargetDir,
         [Parameter(Mandatory)] [scriptblock]$Worker,
-        [Parameter(Mandatory)] [int]$ThrottleLimit
+        [Parameter(Mandatory)] [int]$ThrottleLimit,
+        [Parameter(Mandatory)] [int]$MaxDownloadAttempts,
+        [Parameter(Mandatory)] [int]$RetryBaseDelaySeconds
     )
 
     # The cmdlet shipped under the bare name `ThreadJob` in PS 7.0-7.3 and was
@@ -335,7 +401,7 @@ function Invoke-ParallelDownloads {
     $jobs = @(foreach ($a in $Artifacts) {
         Start-ThreadJob `
             -ScriptBlock $Worker `
-            -ArgumentList @($AccessToken, $a.name, $a.resource.downloadUrl, $ArchivesTargetDir, $NupkgsTargetDir) `
+            -ArgumentList @($AccessToken, $a.name, $a.resource.downloadUrl, $ArchivesTargetDir, $NupkgsTargetDir, $MaxDownloadAttempts, $RetryBaseDelaySeconds) `
             -ThrottleLimit $ThrottleLimit `
             -Name $a.name
     })
@@ -383,4 +449,6 @@ Invoke-ParallelDownloads `
     -ArchivesTargetDir $ArchivesTargetDir `
     -NupkgsTargetDir $NupkgsTargetDir `
     -Worker $DownloadOneArtifact `
-    -ThrottleLimit $ThrottleLimit
+    -ThrottleLimit $ThrottleLimit `
+    -MaxDownloadAttempts $MaxDownloadAttempts `
+    -RetryBaseDelaySeconds $RetryBaseDelaySeconds

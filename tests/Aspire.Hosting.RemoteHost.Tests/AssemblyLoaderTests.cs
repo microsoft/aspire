@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Aspire.Hosting.RemoteHost.Diagnostics;
+using Aspire.Tests;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -171,8 +172,6 @@ public class AssemblyLoaderTests
     [Fact]
     public void GetAssemblies_AddsAssemblyNamesToProfilingSpan()
     {
-        var activities = new List<Activity>();
-        using var listener = CreateActivityListener(RemoteHostProfilingTelemetry.ActivitySourceName, activities.Add);
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -181,7 +180,10 @@ public class AssemblyLoaderTests
             })
             .Build();
 
-        var loader = new AssemblyLoader(configuration, NullLogger<AssemblyLoader>.Instance, new RemoteHostProfilingTelemetry(configuration));
+        var telemetry = new RemoteHostProfilingTelemetry(configuration);
+        var activities = new List<Activity>();
+        using var listener = ActivityListenerHelper.Create(telemetry.ActivitySource, onActivityStopped: activities.Add);
+        var loader = new AssemblyLoader(configuration, NullLogger<AssemblyLoader>.Instance, telemetry);
 
         var assemblies = loader.GetAssemblies();
 
@@ -238,18 +240,5 @@ public class AssemblyLoaderTests
     private static RemoteHostProfilingTelemetry CreateProfilingTelemetry()
     {
         return new RemoteHostProfilingTelemetry(new ConfigurationBuilder().Build());
-    }
-
-    private static ActivityListener CreateActivityListener(string sourceName, Action<Activity> activityStopped)
-    {
-        var listener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == sourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStopped = activityStopped
-        };
-
-        ActivitySource.AddActivityListener(listener);
-        return listener;
     }
 }

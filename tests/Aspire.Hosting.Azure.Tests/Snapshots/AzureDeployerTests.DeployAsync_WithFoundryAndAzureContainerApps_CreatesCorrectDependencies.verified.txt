@@ -49,11 +49,11 @@ Steps with no dependencies run first, followed by steps that depend on them.
  33. deploy
  34. deploy-api
  35. destroy-prereq
- 36. destroy-azure-azure634f9
+ 36. destroy-azure-azure-environment
  37. destroy
  38. diagnostics
  39. publish-prereq
- 40. publish-azure634f9
+ 40. publish-azure-environment
  41. publish
  42. publish-manifest
  43. push
@@ -66,7 +66,7 @@ Shows each step's dependencies, associated resources, tags, and descriptions.
 Step: azure-prepare-resources
     Description: Prepares the Azure resources.
     Dependencies: none
-    Resource: azure634f9 (AzureEnvironmentResource)
+    Resource: azure-environment (AzureEnvironmentResource)
 
 Step: before-start
     Description: Aggregation step for operations that run before the application starts.
@@ -103,7 +103,7 @@ Step: compute-endpoints-foundry-project
 Step: create-provisioning-context
     Description: Creates the Azure provisioning context for infrastructure deployment.
     Dependencies: ✓ deploy-prereq, ✓ validate-azure-login
-    Resource: azure634f9 (AzureEnvironmentResource)
+    Resource: azure-environment (AzureEnvironmentResource)
 
 Step: deploy
     Description: Aggregation step for all deploy operations. All deploy steps should be required by this step.
@@ -126,12 +126,12 @@ Step: deploy-prereq
 
 Step: destroy
     Description: Aggregation step for all destroy operations. All destroy steps should be required by this step.
-    Dependencies: ✓ destroy-azure-azure634f9
+    Dependencies: ✓ destroy-azure-azure-environment
 
-Step: destroy-azure-azure634f9
-    Description: Destroys the Azure resource group and all resources for azure634f9.
+Step: destroy-azure-azure-environment
+    Description: Destroys the Azure resource group and all resources for azure-environment.
     Dependencies: ✓ destroy-prereq
-    Resource: azure634f9 (AzureEnvironmentResource)
+    Resource: azure-environment (AzureEnvironmentResource)
 
 Step: destroy-prereq
     Description: Prerequisite step that runs before any destroy operations.
@@ -198,7 +198,7 @@ Step: provision-api-containerapp
 Step: provision-azure-bicep-resources
     Description: Aggregation step for all Azure infrastructure provisioning operations.
     Dependencies: ✓ create-provisioning-context, ✓ deploy-prereq, ✓ provision-aca-env, ✓ provision-aca-env-acr, ✓ provision-api-containerapp, ✓ provision-foundry, ✓ provision-foundry-project, ✓ provision-foundry-project-acr
-    Resource: azure634f9 (AzureEnvironmentResource)
+    Resource: azure-environment (AzureEnvironmentResource)
     Tags: provision-infra
 
 Step: provision-foundry
@@ -221,12 +221,12 @@ Step: provision-foundry-project-acr
 
 Step: publish
     Description: Aggregation step for all publish operations. All publish steps should be required by this step.
-    Dependencies: ✓ publish-azure634f9
+    Dependencies: ✓ publish-azure-environment
 
-Step: publish-azure634f9
-    Description: Publishes the Azure environment configuration for azure634f9.
+Step: publish-azure-environment
+    Description: Publishes the Azure environment configuration for azure-environment.
     Dependencies: ✓ publish-prereq
-    Resource: azure634f9 (AzureEnvironmentResource)
+    Resource: azure-environment (AzureEnvironmentResource)
 
 Step: publish-manifest
     Description: Publishes the Aspire application model as a JSON manifest file.
@@ -260,7 +260,7 @@ Step: validate-azure-container-apps
 Step: validate-azure-login
     Description: Validates Azure CLI authentication before deployment.
     Dependencies: ✓ deploy-prereq
-    Resource: azure634f9 (AzureEnvironmentResource)
+    Resource: azure-environment (AzureEnvironmentResource)
 
 Step: validate-build-only-container-references
     Description: Validates that build-only containers are consumed by another resource before publish or deploy.
@@ -415,19 +415,19 @@ If targeting 'deploy-prereq':
     [1] deploy-prereq
 
 If targeting 'destroy':
-  Direct dependencies: destroy-azure-azure634f9
+  Direct dependencies: destroy-azure-azure-environment
   Total steps: 3
   Execution order:
     [0] destroy-prereq
-    [1] destroy-azure-azure634f9
+    [1] destroy-azure-azure-environment
     [2] destroy
 
-If targeting 'destroy-azure-azure634f9':
+If targeting 'destroy-azure-azure-environment':
   Direct dependencies: destroy-prereq
   Total steps: 2
   Execution order:
     [0] destroy-prereq
-    [1] destroy-azure-azure634f9
+    [1] destroy-azure-azure-environment
 
 If targeting 'destroy-prereq':
   Direct dependencies: none
@@ -596,21 +596,21 @@ If targeting 'provision-foundry-project-acr':
     [4] provision-foundry-project-acr
 
 If targeting 'publish':
-  Direct dependencies: publish-azure634f9
+  Direct dependencies: publish-azure-environment
   Total steps: 5
   Execution order:
     [0] process-parameters | validate-build-only-container-references (parallel)
     [1] publish-prereq
-    [2] publish-azure634f9
+    [2] publish-azure-environment
     [3] publish
 
-If targeting 'publish-azure634f9':
+If targeting 'publish-azure-environment':
   Direct dependencies: publish-prereq
   Total steps: 4
   Execution order:
     [0] process-parameters | validate-build-only-container-references (parallel)
     [1] publish-prereq
-    [2] publish-azure634f9
+    [2] publish-azure-environment
 
 If targeting 'publish-manifest':
   Direct dependencies: none

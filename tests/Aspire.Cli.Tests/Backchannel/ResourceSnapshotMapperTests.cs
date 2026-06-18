@@ -176,9 +176,9 @@ public class ResourceSnapshotMapperTests
     }
 
     [Fact]
-    public void MapToResourceJson_IncludeDisabledStream_StampsRegistrationOrderOnCommands()
+    public void MapToResourceJson_IncludeDisabledStream_StampsSortOrderOnCommands()
     {
-        // Commands are provided in non-alphabetical order so RegistrationOrder must reflect
+        // Commands are provided in non-alphabetical order so SortOrder must reflect
         // registration (set-parameter before delete-parameter), not key order.
         var snapshot = new ResourceSnapshot
         {
@@ -196,22 +196,18 @@ public class ResourceSnapshotMapperTests
 
         var result = ResourceSnapshotMapper.MapToResourceJson(snapshot, [snapshot], includeDisabledCommands: true);
 
-        // Keys stay alphabetical for a stable JSON shape...
-        Assert.Equal(
-            ["custom-action", "delete-parameter", "set-parameter"],
-            result.Commands!.Keys);
-
-        // ...while RegistrationOrder reflects the registration order the dashboard uses.
-        Assert.Equal(0, result.Commands["set-parameter"].RegistrationOrder);
-        Assert.Equal(1, result.Commands["custom-action"].RegistrationOrder);
-        Assert.Equal(2, result.Commands["delete-parameter"].RegistrationOrder);
+        // SortOrder reflects the registration order the dashboard uses.
+        // Keys are sorted alphabetically for a stable JSON shape.
+        Assert.Equal(["custom-action", "delete-parameter", "set-parameter"], result.Commands!.Keys);
+        Assert.Equal(0, result.Commands["set-parameter"].SortOrder);
+        Assert.Equal(1, result.Commands["custom-action"].SortOrder);
+        Assert.Equal(2, result.Commands["delete-parameter"].SortOrder);
     }
 
     [Fact]
-    public void MapToResourceJson_DefaultStream_SortsCommandsAlphabeticallyAndStampsRegistrationOrder()
+    public void MapToResourceJson_DefaultStream_StampsSortOrder()
     {
-        // The default/API stream keeps alphabetical keys but still stamps RegistrationOrder,
-        // exactly like the include-disabled stream.
+        // The default/API stream stamps SortOrder just like the include-disabled stream.
         var snapshot = new ResourceSnapshot
         {
             Name = "parameter",
@@ -228,15 +224,12 @@ public class ResourceSnapshotMapperTests
 
         var result = ResourceSnapshotMapper.MapToResourceJson(snapshot, [snapshot]);
 
-        // Keys stay alphabetical for a stable JSON shape...
-        Assert.Equal(
-            ["custom-action", "delete-parameter", "set-parameter"],
-            result.Commands!.Keys);
-
-        // ...and RegistrationOrder reflects the registration order even on the default stream.
-        Assert.Equal(0, result.Commands["set-parameter"].RegistrationOrder);
-        Assert.Equal(1, result.Commands["custom-action"].RegistrationOrder);
-        Assert.Equal(2, result.Commands["delete-parameter"].RegistrationOrder);
+        // SortOrder reflects the registration order even on the default stream.
+        // Keys are sorted alphabetically for a stable JSON shape.
+        Assert.Equal(["custom-action", "delete-parameter", "set-parameter"], result.Commands!.Keys);
+        Assert.Equal(0, result.Commands["set-parameter"].SortOrder);
+        Assert.Equal(1, result.Commands["custom-action"].SortOrder);
+        Assert.Equal(2, result.Commands["delete-parameter"].SortOrder);
     }
 
     [Fact]

@@ -14,7 +14,10 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Shared;
+using Aspire.Tests;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Projects;
@@ -55,10 +58,10 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
         {
             ["EXISTING_VALUE"] = "present"
         };
-        using var listener = CreateActivityListener(ProfilingTelemetry.ActivitySourceName);
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1")));
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource);
 
         await using var session = AppHostServerSession.Start(
             project,
@@ -89,11 +92,11 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
     {
         var project = new RecordingAppHostServerProject();
         using var parentSource = new ActivitySource("test-apphost-server-parent");
-        using var parentListener = CreateActivityListener("test-apphost-server-parent");
-        using var listener = CreateActivityListener(ProfilingTelemetry.ActivitySourceName);
+        using var parentListener = ActivityListenerHelper.Create(parentSource);
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1")));
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource);
 
         using var parentActivity = parentSource.StartActivity("aspire/cli/run");
         Assert.NotNull(parentActivity);
@@ -109,6 +112,33 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
 
         var receivedEnvironmentVariables = Assert.IsType<Dictionary<string, string>>(project.ReceivedEnvironmentVariables);
         Assert.NotEqual(parentActivity.Id, receivedEnvironmentVariables[ProfilingTelemetry.EnvironmentVariables.TraceParent]);
+    }
+
+    [Fact]
+    public async Task GetRpcClientAsync_WhenServerExitsBeforeSocketIsAvailable_FailsWithoutWaitingForConnectionTimeout()
+    {
+        var project = new RecordingAppHostServerProject();
+
+        using var loggerFactory = LoggerFactory.Create(builder => builder.AddXunit(outputHelper));
+
+        await using var session = AppHostServerSession.Start(
+            project,
+            environmentVariables: null,
+            debug: false,
+            loggerFactory.CreateLogger<AppHostServerSession>());
+
+        // Wait for the process to exit so the stopwatch measures only the early-exit detection
+        // latency, not the variable execution time of "dotnet --version" on loaded CI machines.
+        await project.StartedProcess!.WaitForExitAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+
+        var stopwatch = Stopwatch.StartNew();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => session.GetRpcClientAsync(TestContext.Current.CancellationToken)).DefaultTimeout();
+        stopwatch.Stop();
+
+        Assert.Equal("AppHost server process exited before the RPC connection could be established. Exit code: 0.", exception.Message);
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5),
+            $"Expected RPC connection to fail promptly after the server process exited, but it took {stopwatch.Elapsed}.");
     }
 
     [Fact]
@@ -170,17 +200,6 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
         }
     }
 
-    private static ActivityListener CreateActivityListener(string sourceName)
-    {
-        var listener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == sourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded
-        };
-        ActivitySource.AddActivityListener(listener);
-        return listener;
-    }
-
     private static IConfiguration CreateConfiguration(params (string Key, string? Value)[] values)
     {
         return new ConfigurationBuilder()
@@ -214,6 +233,8 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
 
         public Dictionary<string, string>? ReceivedEnvironmentVariables { get; private set; }
 
+        public Process? StartedProcess { get; private set; }
+
         public string GetInstanceIdentifier() => AppDirectoryPath;
 
         public Task<AppHostServerPrepareResult> PrepareAsync(
@@ -241,6 +262,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
                 UseShellExecute = false
             })!;
 
+            StartedProcess = process;
             return ("test.sock", process, new OutputCollector());
         }
     }

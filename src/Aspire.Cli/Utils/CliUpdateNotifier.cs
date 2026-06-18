@@ -89,6 +89,10 @@ internal class CliUpdateNotifier(
 
     protected virtual SemVersion? GetCurrentVersion()
     {
+        // physical-binary-version-by-design (see docs/specs/cli-identity-sidecar.md):
+        // the update check compares the ACTUAL installed binary against the latest available
+        // package to decide whether to recommend an update, so it must read the real assembly
+        // version rather than an emulated ASPIRE_CLI_VERSION identity.
         return PackageUpdateHelpers.GetCurrentPackageVersion();
     }
 

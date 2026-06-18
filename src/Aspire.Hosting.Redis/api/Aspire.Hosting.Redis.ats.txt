@@ -6,6 +6,12 @@ Aspire.Hosting.Redis/Aspire.Hosting.ApplicationModel.RedisResource [ExposeProper
 Aspire.Hosting.Redis/Aspire.Hosting.Redis.RedisCommanderResource
 Aspire.Hosting.Redis/Aspire.Hosting.Redis.RedisInsightResource
 
+# Exported Values
+RedisModules.BloomFilter: string = "/usr/local/lib/redis/modules/redisbloom.so" # The Redis Bloom Filter module path for probabilistic data structures including Bloom filters, Cuckoo filters, Count-Min Sketches, and Top-K filters.
+RedisModules.Json: string = "/usr/local/lib/redis/modules/rejson.so" # The Redis JSON module path for storing, updating, and querying JSON documents in Redis.
+RedisModules.Search: string = "/usr/local/lib/redis/modules/redisearch.so" # The Redis Search module path for secondary indexing and querying of data stored in Redis.
+RedisModules.TimeSeries: string = "/usr/local/lib/redis/modules/redistimeseries.so" # The Redis TimeSeries module path for efficient storage and querying of time series data in Redis.
+
 # Capabilities
 Aspire.Hosting.ApplicationModel/RedisResource.connectionStringExpression(context: Aspire.Hosting.Redis/Aspire.Hosting.ApplicationModel.RedisResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
 Aspire.Hosting.ApplicationModel/RedisResource.host(context: Aspire.Hosting.Redis/Aspire.Hosting.ApplicationModel.RedisResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression
@@ -19,6 +25,7 @@ Aspire.Hosting.Redis/addRedis(name: string, port?: number, password?: Aspire.Hos
 Aspire.Hosting.Redis/withDataBindMount(source: string, isReadOnly?: boolean) -> Aspire.Hosting.Redis/Aspire.Hosting.ApplicationModel.RedisResource
 Aspire.Hosting.Redis/withDataVolume(name?: string, isReadOnly?: boolean) -> Aspire.Hosting.Redis/Aspire.Hosting.ApplicationModel.RedisResource
 Aspire.Hosting.Redis/withHostPort(port: number) -> Aspire.Hosting.Redis/Aspire.Hosting.ApplicationModel.RedisResource
+Aspire.Hosting.Redis/withModule(path: string) -> Aspire.Hosting.Redis/Aspire.Hosting.ApplicationModel.RedisResource
 Aspire.Hosting.Redis/withPassword(password: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Redis/Aspire.Hosting.ApplicationModel.RedisResource
 Aspire.Hosting.Redis/withPersistence(interval?: timespan, keysChangedThreshold?: number) -> Aspire.Hosting.Redis/Aspire.Hosting.ApplicationModel.RedisResource
 Aspire.Hosting.Redis/withRedisCommander(configureContainer?: callback, containerName?: string) -> Aspire.Hosting.Redis/Aspire.Hosting.ApplicationModel.RedisResource

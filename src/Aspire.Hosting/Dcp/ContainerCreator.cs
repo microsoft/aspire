@@ -199,7 +199,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             }
 
             var containerAppResource = new RenderedModelResource<Container>(container, ctr);
-            DcpModelUtilities.AddServicesProducedInfo(containerAppResource, _appResources.Get(), _logger);
+            DcpModelUtilities.AddServicesProducedInfo(containerAppResource, _appResources.Get());
             _appResources.Add(containerAppResource);
             result.Add(containerAppResource);
         }
@@ -316,11 +316,6 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         spec.RunArgs = runArgs;
 
         var (configuration, pemCertificates, createFiles) = await BuildContainerConfiguration(cr, logger, cToken).ConfigureAwait(false);
-        // Configuration callbacks are the last pre-creation point where on-demand allocation can run.
-        cr.ModelResource.Annotations
-            .OfType<OnDemandEndpointAllocationAnnotation>()
-            .SingleOrDefault()
-            ?.StopAllocating();
 
         if (configuration.Exception is not null)
         {
@@ -356,6 +351,38 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             spec.Command = containerResource.Entrypoint;
         }
         spec.PemCertificates = pemCertificates;
+
+        // Configure the terminal spec if the resource has a TerminalAnnotation.
+        // Containers are always single-replica, so we use the host at index 0
+        // (TerminalAnnotation always has at least one entry). PTY allocation
+        // is implemented by DCP for Windows (ConPTY), Linux, and macOS
+        // (Unix98 /dev/ptmx); the container runtime CLI's `attach` command
+        // is what actually gets PTY-attached, so behaviour is uniform across
+        // hosts that support docker/podman.
+        if (modelContainer.TryGetAnnotationsOfType<TerminalAnnotation>(out var terminalAnnotations))
+        {
+            var terminalAnnotation = terminalAnnotations.FirstOrDefault();
+            if (terminalAnnotation is not null)
+            {
+                if (terminalAnnotation.TerminalHosts.Count > 0)
+                {
+                    spec.Terminal = new TerminalSpec
+                    {
+                        UdsPath = terminalAnnotation.TerminalHosts[0].Layout.ProducerUdsPath,
+                        // The Aspire terminal host owns the listener at UdsPath; DCP must dial it.
+                        SocketMode = "connect",
+                        Cols = terminalAnnotation.Options.Columns,
+                        Rows = terminalAnnotation.Options.Rows
+                    };
+                }
+                else
+                {
+                    logger.LogWarning(
+                        "Could not determine a producer UDS path for container resource '{ResourceName}'; terminal will not be attached.",
+                        modelContainer.Name);
+                }
+            }
+        }
 
         var dcpInfo = await _dcpDependencyCheckService.GetDcpInfoAsync(cancellationToken: cToken).ConfigureAwait(false);
         if (dcpInfo is not null)

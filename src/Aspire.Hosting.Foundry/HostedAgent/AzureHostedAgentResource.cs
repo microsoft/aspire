@@ -319,6 +319,15 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
                 continue;
             }
 
+            if (IsHostedAgentTargetPortValue(value, hostedAgent))
+            {
+                // Endpoint target-port variables model how a local process or container binds. Foundry
+                // hosted agents own the container port contract during deployment, and their endpoint
+                // resolver intentionally does not support EndpointProperty.TargetPort.
+                logger.LogDebug("Environment variable '{Key}' for resource '{Name}' references the hosted agent target port and will be skipped.", key, resource.Name);
+                continue;
+            }
+
             switch (value)
             {
                 case null:
@@ -339,6 +348,26 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
             }
         }
         return resolvedEnvVars;
+    }
+
+    private static bool IsHostedAgentTargetPortValue(object? value, AzureHostedAgentResource hostedAgent)
+    {
+        return value switch
+        {
+            EndpointReferenceExpression endpointReferenceExpression => IsHostedAgentTargetPortExpression(endpointReferenceExpression, hostedAgent),
+            ReferenceExpression referenceExpression when referenceExpression.IsConditional =>
+                IsHostedAgentTargetPortValue(referenceExpression.Condition, hostedAgent) ||
+                IsHostedAgentTargetPortValue(referenceExpression.WhenTrue, hostedAgent) ||
+                IsHostedAgentTargetPortValue(referenceExpression.WhenFalse, hostedAgent),
+            ReferenceExpression referenceExpression => referenceExpression.ValueProviders.Any(valueProvider => IsHostedAgentTargetPortValue(valueProvider, hostedAgent)),
+            _ => false
+        };
+    }
+
+    private static bool IsHostedAgentTargetPortExpression(EndpointReferenceExpression endpointReferenceExpression, AzureHostedAgentResource hostedAgent)
+    {
+        return endpointReferenceExpression.Property == EndpointProperty.TargetPort &&
+            ReferenceEquals(endpointReferenceExpression.Endpoint.Resource, hostedAgent.Target);
     }
 
     private static async ValueTask<string?> ResolveValueProviderAsync(

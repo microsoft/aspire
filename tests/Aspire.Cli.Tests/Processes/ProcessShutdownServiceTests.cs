@@ -156,7 +156,8 @@ public class ProcessShutdownServiceTests(ITestOutputHelper outputHelper)
             workspace.WorkspaceRoot.CreateSubdirectory("cache"),
             workspace.WorkspaceRoot.CreateSubdirectory("sdks"),
             workspace.WorkspaceRoot.CreateSubdirectory("logs"),
-            Path.Combine(workspace.WorkspaceRoot.FullName, "test.log"));
+            Path.Combine(workspace.WorkspaceRoot.FullName, "test.log"),
+            identityChannel: "local");
 
         return new ProcessShutdownService(
             new FixedLayoutDiscovery(dcpDirectory),

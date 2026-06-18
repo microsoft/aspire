@@ -245,7 +245,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
             {
                 var defaultOutputPath = pathDeriver(_executionContext, projectName);
                 var outputPathValidator = OutputPathHelper.CreateOutputPathValidator(_executionContext.WorkingDirectory.FullName);
-                return await _prompter.PromptForOutputPath(defaultOutputPath, parseResult, outputPathValidator, cancellationToken, outputPathResolver);
+                return await _prompter.PromptForOutputPath(defaultOutputPath, parseResult, outputPathValidator, outputPathResolver, cancellationToken);
             },
             _interactionService);
     }

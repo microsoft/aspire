@@ -344,7 +344,43 @@ public class Program
         builder.Services.AddSingleton(sp => new TelemetryManager(sp.GetRequiredService<IConfiguration>(), args));
 
         // Shared services.
+        // Two identity readers coexist by design. `IdentityChannelReader` is constructed early in
+        // CliStartupContext so the channel can be logged at startup before DI is fully wired, and it
+        // continues to power that early startup log. `IIdentityResolver` is the richer reader that
+        // also resolves sidecar/env overrides for version, commit, and the NuGet service index; it
+        // powers `CliExecutionContext` construction.
         builder.Services.AddSingleton<IIdentityChannelReader>(startupContext.IdentityChannelReader);
+        builder.Services.AddSingleton<IIdentityResolver>(sp =>
+        {
+            // Binary dir is the directory containing the running executable.
+            // We pass it explicitly because the sidecar reader resolves the
+            // sidecar path relative to it (<binaryDir>/.aspire-install.json).
+            //
+            // This is the right anchor for every shipping install route because
+            // Environment.ProcessPath resolves to the actual native CLI binary
+            // that is running, and each route either co-locates its sidecar next
+            // to that binary or intentionally ships none (see
+            // docs/specs/install-routes.md):
+            //   - dotnet tool: the RID-specific tool nupkg payload-embeds
+            //     .aspire-install.json next to the native binary (staged by
+            //     Aspire.Cli.csproj _PreparePreBuiltCliBinaryForPackTool), so
+            //     ProcessPath points at the payload binary and the sidecar is found.
+            //   - npm: eng/clipack/npm/aspire.js spawns the extracted native binary
+            //     directly (child_process.spawn), so ProcessPath is that native exe.
+            //     The npm package consumes the sidecar-free shared archive and there
+            //     is no npm install source, so no sidecar is found and identity falls
+            //     back to the assembly stamp — correct for an official npm build.
+            //   - managed-host launch (dotnet aspire.dll in tests/dev) or a null
+            //     ProcessPath: the resolver simply skips the sidecar layer and the
+            //     env → assembly → terminal default fallbacks still apply.
+            var binaryDir = Environment.ProcessPath is { Length: > 0 } p
+                ? Path.GetDirectoryName(p)
+                : null;
+            return new IdentityResolver(
+                sp.GetRequiredService<IInstallSidecarReader>(),
+                typeof(Program).Assembly,
+                binaryDir);
+        });
         if (OperatingSystem.IsWindows())
         {
             builder.Services.AddSingleton<IWindowsRegistryReader, WindowsRegistryReader>();
@@ -356,12 +392,16 @@ public class Program
         builder.Services.AddSingleton<WingetFirstRunProbe>();
         builder.Services.AddSingleton(sp =>
         {
-            var channelReader = sp.GetRequiredService<IIdentityChannelReader>();
-            if (!channelReader.TryReadChannel(out var channel, out var error))
-            {
-                throw new InvalidOperationException(error);
-            }
-            return BuildCliExecutionContext(startupContext.LoggingOptions.DebugMode, startupContext.LoggingOptions.LogsDirectory, startupContext.LoggingOptions.LogFilePath, channel);
+            // Use the resolver overload so env/sidecar overrides apply to
+            // version, commit, and the nuget service-index URL — not just
+            // the channel. The IdentityChannelReader registered above
+            // continues to serve callers that only need the channel string.
+            var resolver = sp.GetRequiredService<IIdentityResolver>();
+            return BuildCliExecutionContext(
+                startupContext.LoggingOptions.DebugMode,
+                startupContext.LoggingOptions.LogsDirectory,
+                startupContext.LoggingOptions.LogFilePath,
+                resolver);
         });
         builder.Services.AddSingleton(s => new ConsoleEnvironment(
             BuildAnsiConsole(s, Console.Out),
@@ -509,13 +549,17 @@ public class Program
 
         // Environment checking services.
         builder.Services.AddSingleton<IEnvironmentCheck, AspireVersionCheck>();
+        builder.Services.AddSingleton<IEnvironmentCheck, OperatingSystemCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, WslEnvironmentCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DotNetSdkCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, TypeScriptAppHostToolingCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DeprecatedWorkloadCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DevCertsCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, ContainerRuntimeCheck>();
+        builder.Services.AddSingleton<IDcpConnectionChecker, DcpConnectionChecker>();
+        builder.Services.AddSingleton<IEnvironmentCheck, DcpConnectionHealthCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DeprecatedAgentConfigCheck>();
+        builder.Services.AddSingleton<IEnvironmentCheck, LegacySettingsFileCheck>();
         builder.Services.AddSingleton<IEnvironmentChecker, EnvironmentChecker>();
 
         // MCP server transport factory - creates transport only when needed to avoid
@@ -540,6 +584,9 @@ public class Program
         builder.Services.AddTransient<IntegrationCommand>();
         builder.Services.AddTransient<IntegrationListCommand>();
         builder.Services.AddTransient<IntegrationSearchCommand>();
+        builder.Services.AddTransient<TerminalCommand>();
+        builder.Services.AddTransient<TerminalAttachCommand>();
+        builder.Services.AddTransient<TerminalPsCommand>();
         builder.Services.AddTransient<AddCommand>();
         builder.Services.AddTransient<PublishCommand>();
         builder.Services.AddTransient<ConfigCommand>();
@@ -619,7 +666,56 @@ public class Program
         var sdksDirectory = GetSdksDirectory(processPath);
         var packagesDirectory = GetPackagesDirectory(processPath);
         var aspireHomeDirectory = new DirectoryInfo(GetUsersAspirePath(processPath));
-        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, new DirectoryInfo(logsDirectory), logFilePath, debugMode, packagesDirectory: packagesDirectory, identityChannel: channel, aspireHomeDirectory: aspireHomeDirectory);
+        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, new DirectoryInfo(logsDirectory), logFilePath, identityChannel: channel, debugMode: debugMode, packagesDirectory: packagesDirectory, aspireHomeDirectory: aspireHomeDirectory);
+    }
+
+    internal static CliExecutionContext BuildCliExecutionContext(bool debugMode, string logsDirectory, string logFilePath, IIdentityResolver identityResolver, string? processPath = null)
+    {
+        ArgumentNullException.ThrowIfNull(identityResolver);
+
+        var workingDirectory = new DirectoryInfo(Environment.CurrentDirectory);
+        var hivesDirectory = GetHivesDirectory(processPath);
+        var cacheDirectory = GetCacheDirectory(processPath);
+        var sdksDirectory = GetSdksDirectory(processPath);
+        var packagesDirectory = GetPackagesDirectory(processPath);
+        var aspireHomeDirectory = new DirectoryInfo(GetUsersAspirePath(processPath));
+
+        var channel = identityResolver.ResolveChannel();
+        var version = identityResolver.ResolveVersion();
+        var commit = identityResolver.ResolveCommit();
+        var nugetServiceIndexOverride = identityResolver.ResolveNuGetServiceIndexOverride();
+        var packagesOverride = identityResolver.ResolvePackagesDirectory();
+
+        // The CLI is "emulating" another build whenever any identity field was supplied by an
+        // ASPIRE_CLI_* env var or the install sidecar rather than the assembly's build-time stamp.
+        // This drives the startup override notice so a diagnostic run is never mistaken for a real one.
+        // Every override source participates — including the NuGet service-index override — so a run
+        // that sets only ASPIRE_CLI_NUGET_SERVICE_INDEX is still flagged as a diagnostic emulation.
+        static bool IsOverride(IdentitySource source) => source is IdentitySource.Environment or IdentitySource.Sidecar;
+        var identityOverridden = IsOverride(channel.Source) || IsOverride(version.Source) || IsOverride(commit.Source) || IsOverride(nugetServiceIndexOverride.Source) || IsOverride(packagesOverride.Source);
+
+        // A null/whitespace value means "no override"; only materialize a DirectoryInfo when a real
+        // path was supplied. PackagingService validates existence + uniqueness when it consumes this.
+        var identityPackagesDirectory = string.IsNullOrWhiteSpace(packagesOverride.Value)
+            ? null
+            : new DirectoryInfo(packagesOverride.Value);
+
+        return new CliExecutionContext(
+            workingDirectory,
+            hivesDirectory,
+            cacheDirectory,
+            sdksDirectory,
+            new DirectoryInfo(logsDirectory),
+            logFilePath,
+            identityChannel: channel.Value,
+            identityVersion: version.Value,
+            identityCommit: commit.Value,
+            nugetServiceIndexOverride: nugetServiceIndexOverride.Value,
+            identityOverridden: identityOverridden,
+            identityPackagesDirectory: identityPackagesDirectory,
+            debugMode: debugMode,
+            packagesDirectory: packagesDirectory,
+            aspireHomeDirectory: aspireHomeDirectory);
     }
 
     private static DirectoryInfo GetCacheDirectory(string? processPath = null)
@@ -722,6 +818,29 @@ public class Program
             {
                 sentinel.CreateIfNotExists();
             }
+        }
+
+        // Surface a notice whenever the CLI is emulating another build via ASPIRE_CLI_* env vars
+        // or the install sidecar, so a diagnostic run is never mistaken for a real installed build.
+        // This is independent of first-run/banner state but is suppressed for machine-readable
+        // output so structured payloads stay clean. Written to stderr for the same reason.
+        var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
+        if (executionContext.IdentityOverridden && !isMachineReadableOutput)
+        {
+            var consoleEnvironment = serviceProvider.GetRequiredService<ConsoleEnvironment>();
+            var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
+            var notice = string.Format(
+                CultureInfo.CurrentCulture,
+                RootCommandStrings.IdentityOverrideNotice,
+                executionContext.IdentityChannel,
+                executionContext.IdentityVersion);
+
+            // Route through the interaction service with a warning icon, but force the notice
+            // to stderr (ConsoleOutput.Error) so it never contaminates stdout for callers that
+            // parse it. The surrounding blank lines stay on the same stderr stream for spacing.
+            consoleEnvironment.Error.WriteLine();
+            interactionService.DisplayMessage(KnownEmojis.Warning, $"[yellow]{notice.EscapeMarkup()}[/]", allowMarkup: true, consoleOverride: ConsoleOutput.Error);
+            consoleEnvironment.Error.WriteLine();
         }
     }
 
