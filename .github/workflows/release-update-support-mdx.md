@@ -10,6 +10,8 @@ description: |
   out-of-support row. The "Last updated" date badge at the top of the file is
   refreshed in all three cases.
 
+max-daily-ai-credits: -1
+
 on:
   release:
     types: [published]
