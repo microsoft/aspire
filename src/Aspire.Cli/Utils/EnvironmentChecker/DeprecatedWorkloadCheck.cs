@@ -15,6 +15,8 @@ namespace Aspire.Cli.Utils.EnvironmentChecker;
 /// </remarks>
 internal sealed class DeprecatedWorkloadCheck(ILogger<DeprecatedWorkloadCheck> logger) : IEnvironmentCheck
 {
+    internal const string CheckName = "aspire-workload";
+
     private static readonly TimeSpan s_processTimeout = TimeSpan.FromSeconds(10);
 
     public int Order => 32; // After SDK check (30), before dev certs (35)
@@ -72,8 +74,8 @@ internal sealed class DeprecatedWorkloadCheck(ILogger<DeprecatedWorkloadCheck> l
             {
                 return [new EnvironmentCheckResult
                 {
-                    Category = "sdk",
-                    Name = "aspire-workload",
+                    Category = EnvironmentCheckCategories.Sdk,
+                    Name = CheckName,
                     Status = EnvironmentCheckStatus.Fail,
                     Message = "Deprecated 'aspire' workload is installed",
                     Details = "The 'aspire' workload has been deprecated and causes conflicts with modern Aspire projects.",

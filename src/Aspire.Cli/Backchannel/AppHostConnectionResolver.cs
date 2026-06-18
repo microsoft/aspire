@@ -44,6 +44,7 @@ internal sealed class AppHostConnectionResolver(
     IInteractionService interactionService,
     IProjectLocator projectLocator,
     CliExecutionContext executionContext,
+    ICliHostEnvironment hostEnvironment,
     ILogger logger,
     ProfilingTelemetry? profilingTelemetry = null)
 {
@@ -162,7 +163,9 @@ internal sealed class AppHostConnectionResolver(
                 }
             }
 
-            var displayPath = Path.GetRelativePath(PathNormalizer.ResolveToFilesystemPath(executionContext.WorkingDirectory.FullName), targetPath);
+            // Display the path the user supplied (not the symlink-resolved lookup path) so the
+            // error message stays relative to the working directory and matches what they typed.
+            var displayPath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, projectFile.FullName);
 
             return new AppHostConnectionResult
             {
@@ -200,6 +203,17 @@ internal sealed class AppHostConnectionResolver(
         }
         else if (inScopeConnections.Count > 1)
         {
+            if (!hostEnvironment.SupportsInteractiveInput)
+            {
+                // Can't prompt the user to pick an AppHost in non-interactive mode;
+                // fail with an actionable message instead of letting the prompt throw.
+                return new AppHostConnectionResult
+                {
+                    ErrorMessage = SharedCommandStrings.MultipleAppHostsNonInteractive,
+                    ExitCode = CliExitCodes.FailedToFindProject,
+                };
+            }
+
             selectedConnection = await PromptForAppHostSelectionAsync(
                 inScopeConnections,
                 SharedCommandStrings.MultipleInScopeAppHosts,
@@ -209,6 +223,18 @@ internal sealed class AppHostConnectionResolver(
         }
         else if (outOfScopeConnections.Count > 0)
         {
+            if (!hostEnvironment.SupportsInteractiveInput)
+            {
+                // No in-scope AppHosts, and selecting from out-of-scope AppHosts requires
+                // a prompt. In non-interactive mode treat this as "not found" so scripts
+                // get a clean error and exit code instead of an unexpected prompt failure.
+                return new AppHostConnectionResult
+                {
+                    ErrorMessage = notFoundMessage,
+                    ExitCode = CliExitCodes.FailedToFindProject,
+                };
+            }
+
             selectedConnection = await PromptForAppHostSelectionAsync(
                 outOfScopeConnections,
                 SharedCommandStrings.NoInScopeAppHostsShowingAll,

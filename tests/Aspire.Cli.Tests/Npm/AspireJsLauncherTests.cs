@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Aspire.TestUtilities;
+using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Npm;
 
@@ -377,7 +378,7 @@ public class AspireJsLauncherTests
         var stdoutTask = process.StandardOutput.ReadToEndAsync();
         var stderrTask = process.StandardError.ReadToEndAsync();
 
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        using var timeout = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
         try
         {
             process.WaitForExitAsync(timeout.Token).GetAwaiter().GetResult();
@@ -392,7 +393,7 @@ public class AspireJsLauncherTests
             {
             }
 
-            throw new TimeoutException($"Process '{psi.FileName}' did not exit within 30 seconds.");
+            throw new TimeoutException($"Process '{psi.FileName}' did not exit within the timeout.");
         }
 
         var stdout = stdoutTask.GetAwaiter().GetResult();

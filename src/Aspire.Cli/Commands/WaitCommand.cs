@@ -47,7 +47,7 @@ internal sealed class WaitCommand : BaseCommand
         TimeProvider? timeProvider = null)
         : base("wait", WaitCommandStrings.Description, services)
     {
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, ExecutionContext, logger);
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, ExecutionContext, services.HostEnvironment, logger);
         _logger = logger;
         _timeProvider = timeProvider ?? TimeProvider.System;
 
