@@ -43,8 +43,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerGraphAccessibleLabel">
-        <source>Graph. For an accessible view please navigate to the Resources tab</source>
-        <target state="translated">그래프. 액세스 가능한 보기를 보려면 리소스 탭으로 이동하세요.</target>
+        <source>Graph. For an accessible view please navigate to the Table tab</source>
+        <target state="needs-review-translation">그래프. 액세스 가능한 보기를 보려면 리소스 탭으로 이동하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerGraphTab">
@@ -83,7 +83,7 @@
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerTableTab">
-        <source>Resources</source>
+        <source>Table</source>
         <target state="needs-review-translation">리소스</target>
         <note />
       </trans-unit>
@@ -157,9 +157,24 @@
         <target state="translated">.env 내보내기</target>
         <note />
       </trans-unit>
-      <trans-unit id="MetricsTableTab">
-        <source>Table</source>
-        <target state="new">Table</target>
+      <trans-unit id="ResourcesContainerGraphAccessibleLabel">
+        <source>Graph. For an accessible view please navigate to the Resources tab</source>
+        <target state="new">Graph. For an accessible view please navigate to the Resources tab</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcesContainerGraphTab">
+        <source>Graph</source>
+        <target state="new">Graph</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcesContainerParametersTab">
+        <source>Parameters</source>
+        <target state="new">Parameters</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcesContainerTableTab">
+        <source>Resources</source>
+        <target state="new">Resources</target>
         <note />
       </trans-unit>
       <trans-unit id="ViewJson">

@@ -43,8 +43,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerGraphAccessibleLabel">
-        <source>Graph. For an accessible view please navigate to the Resources tab</source>
-        <target state="translated">Graph. Navigieren Sie zur Registerkarte „Ressourcen“, um eine barrierefreie Ansicht anzuzeigen.</target>
+        <source>Graph. For an accessible view please navigate to the Table tab</source>
+        <target state="needs-review-translation">Graph. Navigieren Sie zur Registerkarte „Ressourcen“, um eine barrierefreie Ansicht anzuzeigen.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerGraphTab">
@@ -83,7 +83,7 @@
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerTableTab">
-        <source>Resources</source>
+        <source>Table</source>
         <target state="needs-review-translation">Ressourcen</target>
         <note />
       </trans-unit>
@@ -157,9 +157,24 @@
         <target state="translated">.env exportieren</target>
         <note />
       </trans-unit>
-      <trans-unit id="MetricsTableTab">
-        <source>Table</source>
-        <target state="new">Table</target>
+      <trans-unit id="ResourcesContainerGraphAccessibleLabel">
+        <source>Graph. For an accessible view please navigate to the Resources tab</source>
+        <target state="new">Graph. For an accessible view please navigate to the Resources tab</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcesContainerGraphTab">
+        <source>Graph</source>
+        <target state="new">Graph</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcesContainerParametersTab">
+        <source>Parameters</source>
+        <target state="new">Parameters</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcesContainerTableTab">
+        <source>Resources</source>
+        <target state="new">Resources</target>
         <note />
       </trans-unit>
       <trans-unit id="ViewJson">

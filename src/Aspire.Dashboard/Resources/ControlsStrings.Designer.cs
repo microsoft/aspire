@@ -205,7 +205,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Resources.
+        ///   Looks up a localized string similar to Table.
         /// </summary>
         public static string ChartContainerTableTab {
             get {
@@ -610,15 +610,6 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Table.
-        /// </summary>
-        public static string MetricsTableTab {
-            get {
-                return ResourceManager.GetString("MetricsTableTab", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Exemplars.
         /// </summary>
         public static string MetricTableExemplarsColumnHeader {
@@ -930,6 +921,42 @@ namespace Aspire.Dashboard.Resources {
         public static string ResourceLabel {
             get {
                 return ResourceManager.GetString("ResourceLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Graph. For an accessible view please navigate to the Resources tab.
+        /// </summary>
+        public static string ResourcesContainerGraphAccessibleLabel {
+            get {
+                return ResourceManager.GetString("ResourcesContainerGraphAccessibleLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Graph.
+        /// </summary>
+        public static string ResourcesContainerGraphTab {
+            get {
+                return ResourceManager.GetString("ResourcesContainerGraphTab", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Parameters.
+        /// </summary>
+        public static string ResourcesContainerParametersTab {
+            get {
+                return ResourceManager.GetString("ResourcesContainerParametersTab", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Resources.
+        /// </summary>
+        public static string ResourcesContainerTableTab {
+            get {
+                return ResourceManager.GetString("ResourcesContainerTableTab", resourceCulture);
             }
         }
         

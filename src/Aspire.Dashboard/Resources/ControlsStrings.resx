@@ -126,16 +126,25 @@
   <data name="ChartContainerGraphTab" xml:space="preserve">
     <value>Graph</value>
   </data>
-  <data name="MetricsTableTab" xml:space="preserve">
-    <value>Table</value>
-  </data>
   <data name="ChartContainerTableTab" xml:space="preserve">
-    <value>Resources</value>
+    <value>Table</value>
   </data>
   <data name="ChartContainerParametersTab" xml:space="preserve">
     <value>Parameters</value>
   </data>
+  <data name="ResourcesContainerTableTab" xml:space="preserve">
+    <value>Resources</value>
+  </data>
+  <data name="ResourcesContainerParametersTab" xml:space="preserve">
+    <value>Parameters</value>
+  </data>
+  <data name="ResourcesContainerGraphTab" xml:space="preserve">
+    <value>Graph</value>
+  </data>
   <data name="ChartContainerGraphAccessibleLabel" xml:space="preserve">
+    <value>Graph. For an accessible view please navigate to the Table tab</value>
+  </data>
+  <data name="ResourcesContainerGraphAccessibleLabel" xml:space="preserve">
     <value>Graph. For an accessible view please navigate to the Resources tab</value>
   </data>
   <data name="EnvironmentVariablesFilterToggleShowSpecOnly" xml:space="preserve">
