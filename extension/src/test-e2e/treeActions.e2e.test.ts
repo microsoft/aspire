@@ -104,7 +104,7 @@ suite('Aspire tree action command E2E', function () {
         const copiedLogPath = await executeE2eControlCommand({ name: 'copyLogFilePath', appHostPath });
         assert.ok(path.isAbsolute(String(copiedLogPath.result)));
 
-        let terminalBefore = getTerminalCommandCount();
+        let terminalBefore: number;
         await setTerminalCommandExecutionSuppressedForE2E(true);
         before = getCommandInvocationCount('aspire-vscode.viewResourceLogs');
         terminalBefore = getTerminalCommandCount();

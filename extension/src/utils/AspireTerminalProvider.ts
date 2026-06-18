@@ -247,7 +247,7 @@ export class AspireTerminalProvider implements vscode.Disposable {
         return aspireTerminal;
     }
 
-    createAspireEditorTerminal(): AspireTerminal {
+    private createAspireEditorTerminal(): AspireTerminal {
         extensionLogOutputChannel.info('Creating Aspire editor terminal');
         const terminal = this.createTerminal(vscode.TerminalLocation.Editor);
         return {
