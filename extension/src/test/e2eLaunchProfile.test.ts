@@ -387,7 +387,7 @@ suite('E2E launch profile', () => {
         assert.ok(fixtures.includes('lastKnownAppHostPid = runningAppHost.appHostPid;'));
         assert.ok(!fixtures.includes('terminateProcessTree(runningAppHost.appHostPid'));
         assert.ok(fixtures.includes("await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid, 'after stopping')"));
-        assert.ok(fixtures.includes("await waitForNoRunningAppHostPath(getGeneratedAppHostPath(projectName), 30000, knownAppHostPid, 'before deleting')"));
+        assert.ok(fixtures.includes("await waitForNoRunningAppHostPathOrStopKnownProcess(getGeneratedAppHostPath(projectName), 30000, knownAppHostPid, 'before deleting')"));
         assert.ok(fixtures.includes('async function waitForProcessExit(pid: number, timeoutMs: number): Promise<void>'));
         assert.ok(fixtures.includes('process.kill(pid, 0);'));
         assert.ok(fixtures.includes("process.kill(pid, 'SIGTERM');"));

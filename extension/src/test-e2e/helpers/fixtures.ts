@@ -150,7 +150,7 @@ export async function clearBreakpoints(): Promise<void> {
 }
 
 export async function removeGeneratedProject(projectName: string, knownAppHostPid?: number): Promise<void> {
-    await waitForNoRunningAppHostPath(getGeneratedAppHostPath(projectName), 30000, knownAppHostPid, 'before deleting');
+    await waitForNoRunningAppHostPathOrStopKnownProcess(getGeneratedAppHostPath(projectName), 30000, knownAppHostPid, 'before deleting');
     removePath(getGeneratedProjectRoot(projectName), { recursive: true, force: true });
 }
 
