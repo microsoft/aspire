@@ -3542,6 +3542,9 @@ public class DcpExecutorTests
 
         // WithTerminal adds a disabled SupportsDebuggingAnnotation that must win over the enabled
         // "project" debug support AddProject adds, so the resource runs under a PTY rather than the IDE.
+        // We disable debugging for usability: attaching the debugger breaks the PTY flow and the user
+        // would see an empty terminal with no output. Temporary until DCP can run a process under the
+        // debugger and a PTY at the same time: https://github.com/microsoft/dcp/issues/189.
         builder.AddProject<Projects.ServiceA>("ServiceA").WithTerminal();
 
         // Simulate a debug session whose capability list advertises "project" support.
@@ -3583,7 +3586,9 @@ public class DcpExecutorTests
         builder.AddProject<Projects.ServiceA>("ServiceA").WithTerminal();
 
         // No DebugSessionInfo simulates the Visual Studio scenario, where project resources normally
-        // fall back to IDE execution. A terminal-attached resource must still run as a plain process.
+        // fall back to IDE execution. A terminal-attached resource must still run as a plain process,
+        // because attaching the debugger would break the PTY flow and leave the user with an empty
+        // terminal. Temporary until DCP supports both at once: https://github.com/microsoft/dcp/issues/189.
         var configDict = new Dictionary<string, string?>
         {
             [DcpExecutor.DebugSessionPortVar] = "12345",

@@ -592,9 +592,15 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         }
 
         // An explicit opt-out (a disabled SupportsDebuggingAnnotation, e.g. from WithTerminal())
-        // must beat the Visual Studio fallback below.
-        // Without this, a project resource that disabled debugging would still be routed to IDE
-        // execution whenever the IDE did not advertise a capability list via DEBUG_SESSION_INFO.
+        // must beat the Visual Studio fallback below. Without this, a project resource that disabled
+        // debugging would still be routed to IDE execution whenever the IDE did not advertise a
+        // capability list via DEBUG_SESSION_INFO.
+        //
+        // The opt-out exists for usability: DCP cannot yet run a process under the debugger and a
+        // pseudo-terminal (PTY) at the same time, and attaching the debugger breaks the PTY flow,
+        // leaving the user with an empty terminal and no output. We prefer to keep the PTY working;
+        // the user can attach the debugger themselves afterwards. Remove once DCP supports both
+        // simultaneously: https://github.com/microsoft/dcp/issues/189.
         if (supportsDebuggingAnnotation is { Enabled: false })
         {
             return false;

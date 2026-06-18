@@ -95,6 +95,11 @@ public static class TerminalResourceBuilderExtensions
         // uses the last annotation on the resource, this must be added after the enabled
         // annotation that AddProject applies — WithTerminal() always runs afterwards.
         //
+        // We make this trade-off for usability: if we let the debugger attach, it breaks the PTY
+        // flow and the user is left looking at an empty terminal with no output, which is very
+        // confusing. We prefer to keep the terminal (PTY) working out of the box; a user who wants
+        // to debug can attach the debugger to the process themselves afterwards.
+        //
         // This is a temporary workaround: DCP cannot yet run a process under the debugger and a
         // PTY at the same time. Remove this once that support ships. Tracked by:
         // https://github.com/microsoft/dcp/issues/189

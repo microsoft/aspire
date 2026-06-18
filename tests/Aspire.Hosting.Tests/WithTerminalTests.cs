@@ -560,7 +560,10 @@ public class WithTerminalTests
         // A terminal-attached resource is launched by DCP under a PTY, which is incompatible with
         // IDE/debugger execution. WithTerminal() adds a disabled SupportsDebuggingAnnotation so the
         // resource always runs as a plain process, and it must be the last debug annotation so it
-        // wins over the enabled "project" support that AddProject adds.
+        // wins over the enabled "project" support that AddProject adds. We disable debugging here for
+        // usability: attaching the debugger breaks the PTY flow and the user would see an empty
+        // terminal with no output. Temporary until DCP can run a process under the debugger and a PTY
+        // at the same time: https://github.com/microsoft/dcp/issues/189.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         var resource = builder.AddProject<TestProject>("myproj", options => { options.ExcludeLaunchProfile = true; });
 

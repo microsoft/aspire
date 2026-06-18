@@ -25,10 +25,15 @@ internal static class ExtensionUtils
         }
 
         // An explicitly disabled annotation (SupportsDebuggingAnnotation.Disabled(), e.g. from
-        // WithTerminal()) opts the resource out of
-        // IDE/debugger execution entirely. Return false but keep the annotation in the out parameter so
-        // callers (e.g. ShouldFallBackToIdeExecution) can distinguish an explicit opt-out from a resource
-        // that simply has no debugging annotation.
+        // WithTerminal()) opts the resource out of IDE/debugger execution entirely. Return false but
+        // keep the annotation in the out parameter so callers (e.g. ShouldFallBackToIdeExecution) can
+        // distinguish an explicit opt-out from a resource that simply has no debugging annotation.
+        //
+        // Rationale is usability: DCP cannot yet run a process under the debugger and a pseudo-terminal
+        // (PTY) at the same time, and attaching the debugger breaks the PTY flow. If we let the debugger
+        // attach, the user would just see an empty terminal with no output, which is confusing. We prefer
+        // to keep the PTY working; the user can attach the debugger themselves afterwards. Remove once DCP
+        // supports both simultaneously: https://github.com/microsoft/dcp/issues/189.
         if (!supportsDebuggingAnnotation.Enabled)
         {
             return false;
