@@ -9,7 +9,6 @@ using System.Xml.Linq;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Packaging;
-using Aspire.Cli.Processes;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Shared;
@@ -38,6 +37,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     private readonly string _repoRoot;
     private readonly IDotNetCliRunner _dotNetCliRunner;
     private readonly IPackagingService _packagingService;
+    private readonly IProcessExecutionFactory _processExecutionFactory;
     private readonly ILogger _logger;
     private readonly string? _logFilePath;
 
@@ -47,6 +47,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         string repoRoot,
         IDotNetCliRunner dotNetCliRunner,
         IPackagingService packagingService,
+        IProcessExecutionFactory processExecutionFactory,
         ILogger<DotNetBasedAppHostServerProject> logger,
         string? projectModelPath = null,
         string? logFilePath = null)
@@ -58,6 +59,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         _repoRoot = Path.GetFullPath(repoRoot) + Path.DirectorySeparatorChar;
         _dotNetCliRunner = dotNetCliRunner;
         _packagingService = packagingService;
+        _processExecutionFactory = processExecutionFactory;
         _logger = logger;
         _logFilePath = logFilePath;
 
@@ -469,7 +471,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         IReadOnlyDictionary<string, string>? environmentVariables = null,
         string[]? additionalArgs = null,
         bool debug = false,
-        bool isolateConsole = false)
+        AppHostServerRunControl? runControl = null)
     {
         var assemblyPath = Path.Combine(BuildPath, ProjectDllName);
         var dotnetExe = OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet";
@@ -540,67 +542,51 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         startInfo.RedirectStandardError = true;
 
         var outputCollector = new OutputCollector();
-        var arguments = startInfo.ArgumentList.ToArray();
 
-        // Pulled out so the inherited-console (event-based) and isolated (handler-based) paths
-        // produce identical log/collector output. Keeps the per-line behavior in one place even
-        // if we end up with a third spawn variant later.
-        void OnStdout(int pid, string line)
+        // The execution local is forward-referenced by the log callbacks so they can read the
+        // child's pid per line. ProcessInvocationOptions.StandardOutputCallback is Action<string>
+        // (line only), but the AppHost wants the pid in each trace line (#16729). The callbacks
+        // only fire after Start(), by which point `execution` is assigned and ProcessId is valid.
+        ProcessExecution execution = null!;
+
+        void OnStdout(string line)
         {
-            _logger.LogTrace("AppHostServer({ProcessId}) stdout: {Line}", pid, line);
+            _logger.LogTrace("AppHostServer({ProcessId}) stdout: {Line}", execution.ProcessId, line);
             outputCollector.AppendOutput(line);
         }
 
-        void OnStderr(int pid, string line)
+        void OnStderr(string line)
         {
-            _logger.LogTrace("AppHostServer({ProcessId}) stderr: {Line}", pid, line);
+            _logger.LogTrace("AppHostServer({ProcessId}) stderr: {Line}", execution.ProcessId, line);
             outputCollector.AppendError(line);
         }
 
-        if (isolateConsole)
+        var options = new ProcessInvocationOptions
         {
-            var isolated = IsolatedConsoleSpawner.StartIsolated(startInfo, OnStdout, OnStderr);
-            return new AppHostServerRunResult(
-                _socketPath,
-                isolated.Process,
-                outputCollector,
-                startInfo.FileName,
-                arguments,
-                isolated,
-                // Route exit-code/has-exited reads through IsolatedProcess so the isolated
-                // Windows path can use its kept CreateProcess handle instead of the managed
-                // Process.GetProcessById instance (which throws on ExitCode). See
-                // https://github.com/dotnet/runtime/issues/45003.
-                ExitCodeOverride: () => isolated.ExitCode,
-                HasExitedOverride: () => isolated.HasExited);
+            StandardOutputCallback = OnStdout,
+            StandardErrorCallback = OnStderr,
+            IsolateConsole = runControl?.IsolateConsole ?? false,
+            GracefulShutdownSignaler = runControl?.GracefulShutdownSignaler,
+            ShutdownService = runControl?.ShutdownService,
+            // The graceful ladder always tree-kills on escalation; this fallback only matters when
+            // graceful services were not wired (non-Run callers), where it preserves the old session
+            // behavior of force-killing the tree on Unix but only the root on Windows.
+            KillEntireProcessTreeOnCancel = !OperatingSystem.IsWindows(),
+        };
+
+        execution = (ProcessExecution)_processExecutionFactory.CreateExecution(startInfo, options);
+
+        try
+        {
+            execution.Start();
+        }
+        catch
+        {
+            execution.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            throw;
         }
 
-        var process = Process.Start(startInfo)!;
-
-        process.OutputDataReceived += (sender, e) =>
-        {
-            if (e.Data is not null)
-            {
-                OnStdout(process.Id, e.Data);
-            }
-        };
-        process.ErrorDataReceived += (sender, e) =>
-        {
-            if (e.Data is not null)
-            {
-                OnStderr(process.Id, e.Data);
-            }
-        };
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-
-        return new AppHostServerRunResult(
-            _socketPath,
-            process,
-            outputCollector,
-            startInfo.FileName,
-            arguments,
-            ProcessLifetimeAdapter.ForProcess(process));
+        return new AppHostServerRunResult(_socketPath, outputCollector, execution);
     }
 
     private static string? FindNuGetConfig(string workingDirectory)

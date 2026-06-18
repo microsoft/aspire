@@ -148,6 +148,26 @@ internal sealed class ProcessExecution : IProcessExecution
             return;
         }
 
+        // Terminate the child if it is still running. On the normal teardown paths the caller drives
+        // WaitForExitAsync(token) first, so the shutdown ladder has already exited or killed the
+        // process by the time we get here and this is a no-op. It matters for the path where an
+        // execution was started but never driven (e.g. a fault between Start and the caller wiring up
+        // its wait loop): IsolatedProcess.DisposeAsync only drains pumps and releases handles — it
+        // does NOT terminate the process — so without this kill the child would be orphaned. Owning
+        // "kill if still alive on dispose" here keeps that responsibility off every consumer.
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch
+        {
+            // Best effort: the process may have exited between the check and the kill, or be
+            // unkillable. The drain/handle release below still runs.
+        }
+
         try
         {
             await process.DisposeAsync().ConfigureAwait(false);

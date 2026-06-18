@@ -4,9 +4,9 @@
 using System.Diagnostics;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
-using Aspire.Cli.Processes;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Mcp;
@@ -150,7 +150,11 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
 
         // Wait for the process to exit so the stopwatch measures only the early-exit detection
         // latency, not the variable execution time of "dotnet --version" on loaded CI machines.
-        await project.StartedProcess!.WaitForExitAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+        // Poll the OS by pid rather than awaiting the execution's WaitForExitAsync, which the
+        // session's own drive loop is already awaiting on the same execution instance.
+        Assert.True(
+            WaitForProcessExit(project.StartedExecution!.ProcessId, TimeSpan.FromSeconds(30)),
+            "Expected the server probe process to exit.");
 
         var stopwatch = Stopwatch.StartNew();
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
@@ -175,7 +179,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
 
         Assert.Null(session.SocketPath);
         Assert.Null(session.Output);
-        Assert.Null(session.ServerProcess);
+        Assert.Null(session.ServerProcessId);
     }
 
     [Fact]
@@ -210,15 +214,15 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
 
         // Process should be running before we ask the session to stop.
         Assert.False(completion.IsCompleted);
-        Assert.False(session.ServerProcess!.HasExited);
+        Assert.False(session.HasServerExited);
 
         stopCts.Cancel();
 
         // The session's stop registration fires Kill synchronously inline. The Exited
         // event fires asynchronously, so allow the completion task to observe the result.
         var exitCode = await completion.WaitAsync(TimeSpan.FromSeconds(30));
-        Assert.True(session.ServerProcess!.HasExited);
-        Assert.Equal(session.ServerProcess.ExitCode, exitCode);
+        Assert.True(session.HasServerExited);
+        Assert.Equal(session.TryGetServerExitCode(), exitCode);
     }
 
     [Fact]
@@ -260,13 +264,13 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
 
         var completion = session.StartAsync();
         Assert.False(completion.IsCompleted);
-        var serverPid = session.ServerProcess!.Id;
+        var serverPid = session.ServerProcessId!.Value;
 
         stopCts.Cancel();
 
         await completion.WaitAsync(TimeSpan.FromSeconds(30));
 
-        Assert.True(session.ServerProcess.HasExited);
+        Assert.True(session.HasServerExited);
         Assert.Contains(serverPid, signaler.Pids);
         // Graceful budget was never exhausted in this scenario — the signaler simulated success
         // and WaitForExitAsync observed the exit before anyone called Expire().
@@ -319,7 +323,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
 
         await completion.WaitAsync(TimeSpan.FromSeconds(30));
 
-        Assert.True(session.ServerProcess!.HasExited);
+        Assert.True(session.HasServerExited);
     }
 
     [Fact]
@@ -356,7 +360,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
 
         await completion.WaitAsync(TimeSpan.FromSeconds(30));
 
-        Assert.True(session.ServerProcess!.HasExited);
+        Assert.True(session.HasServerExited);
         Assert.Single(signaler.Pids);
     }
 
@@ -385,9 +389,8 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
 
         var completion = session.StartAsync();
         Assert.False(completion.IsCompleted);
-        var serverProcess = session.ServerProcess!;
-        var pid = serverProcess.Id;
-        Assert.False(serverProcess.HasExited);
+        var pid = session.ServerProcessId!.Value;
+        Assert.False(session.HasServerExited);
 
         // DisposeAsync must return promptly even though the graceful token will never fire and
         // the process would otherwise run for a minute. The 30 s timeout is the regression check:
@@ -508,6 +511,24 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
         }
     }
 
+    private static IProcessExecution CreateServerExecution(ProcessStartInfo startInfo, AppHostServerRunControl? runControl)
+    {
+        // Build a real execution through the production factory so the test exercises the unified
+        // IProcessExecution shutdown ladder rather than a bespoke fake. The options mirror what
+        // DotNetBasedAppHostServerProject.Run wires from the run control.
+        var options = new ProcessInvocationOptions
+        {
+            GracefulShutdownSignaler = runControl?.GracefulShutdownSignaler,
+            ShutdownService = runControl?.ShutdownService,
+            // Matches production: the graceful ladder always tree-kills on escalation; this fallback
+            // only governs the no-graceful-services path, where Unix force-kills the tree.
+            KillEntireProcessTreeOnCancel = !OperatingSystem.IsWindows(),
+        };
+
+        return new ProcessExecutionFactory(NullLogger<ProcessExecutionFactory>.Instance)
+            .CreateExecution(startInfo, options);
+    }
+
     private static bool WaitForProcessExit(int pid, TimeSpan timeout)
     {
         var deadline = DateTime.UtcNow + timeout;
@@ -566,6 +587,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             nugetService,
             new TestDotNetSdkInstaller(),
             executionContext,
+            new TestProcessExecutionFactory(),
             NullLoggerFactory.Instance);
     }
 
@@ -575,7 +597,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
 
         public Dictionary<string, string>? ReceivedEnvironmentVariables { get; private set; }
 
-        public Process? StartedProcess { get; private set; }
+        public IProcessExecution? StartedExecution { get; private set; }
 
         public string GetInstanceIdentifier() => AppDirectoryPath;
 
@@ -592,28 +614,28 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             IReadOnlyDictionary<string, string>? environmentVariables = null,
             string[]? additionalArgs = null,
             bool debug = false,
-            bool isolateConsole = false)
+            AppHostServerRunControl? runControl = null)
         {
             ReceivedEnvironmentVariables = environmentVariables is null
                 ? null
                 : new Dictionary<string, string>(environmentVariables);
 
-            var startInfo = new ProcessStartInfo("dotnet", "--version")
+            var startInfo = new ProcessStartInfo("dotnet")
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false
             };
-            var process = Process.Start(startInfo)!;
+            startInfo.ArgumentList.Add("--version");
 
-            StartedProcess = process;
+            var execution = CreateServerExecution(startInfo, runControl);
+            execution.Start();
+
+            StartedExecution = execution;
             return new AppHostServerRunResult(
                 SocketPath: "test.sock",
-                Process: process,
                 OutputCollector: new OutputCollector(),
-                FileName: startInfo.FileName,
-                Arguments: new[] { "--version" },
-                ProcessLifetime: ProcessLifetimeAdapter.ForProcess(process));
+                Execution: execution);
         }
     }
 
@@ -636,30 +658,32 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             IReadOnlyDictionary<string, string>? environmentVariables = null,
             string[]? additionalArgs = null,
             bool debug = false,
-            bool isolateConsole = false)
+            AppHostServerRunControl? runControl = null)
         {
             // Use a cross-platform long-running command so the test exercises the kill path
             // rather than a quickly-exiting probe like `dotnet --version`.
             var (fileName, arguments) = OperatingSystem.IsWindows()
-                ? ("cmd.exe", "/c pause")
-                : ("sleep", "60");
+                ? ("cmd.exe", new[] { "/c", "pause" })
+                : ("sleep", new[] { "60" });
 
-            var startInfo = new ProcessStartInfo(fileName, arguments)
+            var startInfo = new ProcessStartInfo(fileName)
             {
-                RedirectStandardInput = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false
             };
-            var process = Process.Start(startInfo)!;
+            foreach (var arg in arguments)
+            {
+                startInfo.ArgumentList.Add(arg);
+            }
+
+            var execution = CreateServerExecution(startInfo, runControl);
+            execution.Start();
 
             return new AppHostServerRunResult(
                 SocketPath: "test.sock",
-                Process: process,
                 OutputCollector: new OutputCollector(),
-                FileName: fileName,
-                Arguments: new[] { arguments },
-                ProcessLifetime: ProcessLifetimeAdapter.ForProcess(process));
+                Execution: execution);
         }
     }
 
@@ -684,7 +708,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             IReadOnlyDictionary<string, string>? environmentVariables = null,
             string[]? additionalArgs = null,
             bool debug = false,
-            bool isolateConsole = false) =>
+            AppHostServerRunControl? runControl = null) =>
             throw new InvalidOperationException("simulated launch failure");
 
         public void Dispose() => Disposed = true;

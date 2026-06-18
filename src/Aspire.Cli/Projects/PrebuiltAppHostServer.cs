@@ -13,7 +13,6 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
-using Aspire.Cli.Processes;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Shared;
@@ -45,6 +44,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
     private readonly IDotNetSdkInstaller _sdkInstaller;
     private readonly IPackagingService _packagingService;
     private readonly CliExecutionContext _executionContext;
+    private readonly IProcessExecutionFactory _processExecutionFactory;
     private readonly ILogger _logger;
     private readonly BundleLayoutLease? _layoutLease;
     private readonly string _workingDirectory;
@@ -67,6 +67,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
     /// <param name="sdkInstaller">The SDK installer for checking .NET SDK availability.</param>
     /// <param name="packagingService">The packaging service for channel resolution.</param>
     /// <param name="executionContext">The CLI execution context providing identity channel information.</param>
+    /// <param name="processExecutionFactory">The factory used to spawn and manage the AppHost server child process.</param>
     /// <param name="logger">The logger for diagnostic output.</param>
     /// <param name="layoutLease">The active bundle layout lease, if this server is running from a versioned bundle.</param>
     public PrebuiltAppHostServer(
@@ -78,6 +79,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         IDotNetSdkInstaller sdkInstaller,
         IPackagingService packagingService,
         CliExecutionContext executionContext,
+        IProcessExecutionFactory processExecutionFactory,
         ILogger logger,
         BundleLayoutLease? layoutLease = null)
     {
@@ -89,6 +91,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         _sdkInstaller = sdkInstaller;
         _packagingService = packagingService;
         _executionContext = executionContext;
+        _processExecutionFactory = processExecutionFactory;
         _logger = logger;
         _layoutLease = layoutLease;
 
@@ -917,17 +920,19 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         IReadOnlyDictionary<string, string>? environmentVariables = null,
         string[]? additionalArgs = null,
         bool debug = false,
-        bool isolateConsole = false)
+        AppHostServerRunControl? runControl = null)
     {
         var startInfo = CreateStartInfo(hostPid, environmentVariables, additionalArgs, debug);
         var outputCollector = new OutputCollector();
-        var arguments = startInfo.ArgumentList.ToArray();
 
-        // Pulled out so the inherited-console (event-based) and isolated (handler-based) paths
-        // produce identical log/collector output. The log level + prefix differ from the dotnet-based
-        // server (see DotNetBasedAppHostServerProject.Run) — keeping them here keeps both spawn
-        // variants on the same per-line behavior for this server.
-        void OnStdout(int pid, string line)
+        // The execution local is forward-referenced by the log callbacks so they can read the
+        // child's pid per line (ProcessInvocationOptions.StandardOutputCallback is line-only). The
+        // log level + prefix differ from the dotnet-based server (#16729); keeping them here keeps
+        // this server's per-line behavior in one place. Callbacks only fire after Start(), so
+        // `execution` is assigned and ProcessId is valid by then.
+        ProcessExecution execution = null!;
+
+        void OnStdout(string line)
         {
             // Promoted from LogTrace to LogDebug so that apphost-server stdout reaches the
             // CLI's on-disk log under the default file-logger filter (Debug). Previously
@@ -935,65 +940,43 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
             // (for example, "LoaderExceptions" from the type-discovery path) invisible to
             // anyone diagnosing a "no code generator found" / "no language support found"
             // error. See https://github.com/microsoft/aspire/issues/16729.
-            _logger.LogDebug("PrebuiltAppHostServer({ProcessId}) stdout: {Line}", pid, line);
+            _logger.LogDebug("PrebuiltAppHostServer({ProcessId}) stdout: {Line}", execution.ProcessId, line);
             outputCollector.AppendOutput(line);
         }
 
-        void OnStderr(int pid, string line)
+        void OnStderr(string line)
         {
             // Promoted from LogTrace to LogInformation so that apphost-server stderr is
             // visible at the default console log level (Information). Stderr is reserved
             // for genuine problems in well-behaved server processes, so surfacing it
             // by default is appropriate. See https://github.com/microsoft/aspire/issues/16729.
-            _logger.LogInformation("PrebuiltAppHostServer({ProcessId}) stderr: {Line}", pid, line);
+            _logger.LogInformation("PrebuiltAppHostServer({ProcessId}) stderr: {Line}", execution.ProcessId, line);
             outputCollector.AppendError(line);
         }
 
-        if (isolateConsole)
+        var options = new ProcessInvocationOptions
         {
-            var isolated = IsolatedConsoleSpawner.StartIsolated(startInfo, OnStdout, OnStderr);
-            return new AppHostServerRunResult(
-                _socketPath,
-                isolated.Process,
-                outputCollector,
-                startInfo.FileName,
-                arguments,
-                isolated,
-                // Route exit-code/has-exited reads through IsolatedProcess so the isolated
-                // Windows path can use its kept CreateProcess handle instead of the managed
-                // Process.GetProcessById instance (which throws on ExitCode). See
-                // https://github.com/dotnet/runtime/issues/45003.
-                ExitCodeOverride: () => isolated.ExitCode,
-                HasExitedOverride: () => isolated.HasExited);
+            StandardOutputCallback = OnStdout,
+            StandardErrorCallback = OnStderr,
+            IsolateConsole = runControl?.IsolateConsole ?? false,
+            GracefulShutdownSignaler = runControl?.GracefulShutdownSignaler,
+            ShutdownService = runControl?.ShutdownService,
+            KillEntireProcessTreeOnCancel = !OperatingSystem.IsWindows(),
+        };
+
+        execution = (ProcessExecution)_processExecutionFactory.CreateExecution(startInfo, options);
+
+        try
+        {
+            execution.Start();
+        }
+        catch
+        {
+            execution.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            throw;
         }
 
-        var process = Process.Start(startInfo)!;
-
-        process.OutputDataReceived += (_, e) =>
-        {
-            if (e.Data is not null)
-            {
-                OnStdout(process.Id, e.Data);
-            }
-        };
-        process.ErrorDataReceived += (_, e) =>
-        {
-            if (e.Data is not null)
-            {
-                OnStderr(process.Id, e.Data);
-            }
-        };
-
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-
-        return new AppHostServerRunResult(
-            _socketPath,
-            process,
-            outputCollector,
-            startInfo.FileName,
-            arguments,
-            ProcessLifetimeAdapter.ForProcess(process));
+        return new AppHostServerRunResult(_socketPath, outputCollector, execution);
     }
 
     internal ProcessStartInfo CreateStartInfo(

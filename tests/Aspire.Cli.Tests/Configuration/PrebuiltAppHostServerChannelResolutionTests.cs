@@ -107,6 +107,7 @@ public class PrebuiltAppHostServerChannelResolutionTests(ITestOutputHelper outpu
             new TestDotNetSdkInstaller(),
             MockPackagingServiceFactory.Create(),
             TestExecutionContextFactory.CreateTestContext(),
+            new TestProcessExecutionFactory(),
             NullLogger.Instance);
     }
 }

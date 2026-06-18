@@ -143,7 +143,7 @@ public class ChannelReseedTests(ITestOutputHelper outputHelper)
             IReadOnlyDictionary<string, string>? environmentVariables = null,
             string[]? additionalArgs = null,
             bool debug = false,
-            bool isolateConsole = false) =>
+            AppHostServerRunControl? runControl = null) =>
             throw new NotSupportedException("Run should not be invoked when PrepareAsync fails.");
     }
 }

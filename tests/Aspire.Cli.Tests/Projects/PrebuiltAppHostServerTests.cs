@@ -242,6 +242,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new TestDotNetSdkInstaller(),
             Aspire.Cli.Tests.Mcp.MockPackagingServiceFactory.Create(),
             Aspire.Cli.Tests.Mcp.TestExecutionContextFactory.CreateTestContext(),
+            new TestProcessExecutionFactory(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
 
         var workingDirectory = Assert.IsType<string>(
@@ -292,6 +293,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new TestDotNetSdkInstaller(),
             Aspire.Cli.Tests.Mcp.MockPackagingServiceFactory.Create(),
             Aspire.Cli.Tests.Mcp.TestExecutionContextFactory.CreateTestContext(),
+            new TestProcessExecutionFactory(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
 
         var firstServer = CreateServer(firstAppHost.FullName);
@@ -923,6 +925,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new TestDotNetSdkInstaller(),
             packagingService,
             executionContext,
+            new TestProcessExecutionFactory(),
             NullLogger.Instance);
 
         var sources = await server.GetNuGetSourcesAsync("daily", packageSourceOverride: null, CancellationToken.None);
@@ -969,6 +972,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new TestDotNetSdkInstaller(),
             packagingService,
             executionContext,
+            new TestProcessExecutionFactory(),
             NullLogger.Instance);
     }
 
@@ -1032,6 +1036,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new TestDotNetSdkInstaller(),
             packagingService,
             executionContext,
+            new TestProcessExecutionFactory(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
     }
 
@@ -1086,6 +1091,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new TestDotNetSdkInstaller(),
             Aspire.Cli.Tests.Mcp.MockPackagingServiceFactory.Create(),
             Aspire.Cli.Tests.Mcp.TestExecutionContextFactory.CreateTestContext(),
+            new TestProcessExecutionFactory(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
 
         var channel = server.ResolveRequestedChannel();
@@ -1108,6 +1114,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new TestDotNetSdkInstaller(),
             MockPackagingServiceFactory.Create(),
             TestExecutionContextFactory.CreateTestContext(),
+            new TestProcessExecutionFactory(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
 
         var workingDirectory = GetWorkingDirectory(server);
@@ -1772,6 +1779,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new TestDotNetSdkInstaller(),
             packagingService,
             TestExecutionContextFactory.CreateTestContext(),
+            new TestProcessExecutionFactory(),
             NullLogger.Instance);
         var workingDirectory = GetWorkingDirectory(server);
 
@@ -1916,6 +1924,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new TestDotNetSdkInstaller(),
             MockPackagingServiceFactory.Create(),
             TestExecutionContextFactory.CreateTestContext(),
+            new TestProcessExecutionFactory(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
         var workingDirectory = GetWorkingDirectory(server);
 
@@ -2011,6 +2020,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new TestDotNetSdkInstaller(),
             packagingService,
             executionContext,
+            new TestProcessExecutionFactory(),
             NullLogger.Instance);
         var workingDirectory = GetWorkingDirectory(server);
 
@@ -2493,6 +2503,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new TestDotNetSdkInstaller(),
             MockPackagingServiceFactory.Create(),
             TestExecutionContextFactory.CreateTestContext(),
+            new TestProcessExecutionFactory(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
     }
 
@@ -2523,6 +2534,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new TestDotNetSdkInstaller(),
             packagingService,
             TestExecutionContextFactory.CreateTestContext(),
+            new TestProcessExecutionFactory(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
 
         return (server, executionFactory);
@@ -2669,6 +2681,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new TestDotNetSdkInstaller(),
             MockPackagingServiceFactory.Create(),
             executionContext,
+            new TestProcessExecutionFactory(),
             NullLogger<PrebuiltAppHostServer>.Instance);
 
         var startInfo = server.CreateStartInfo(123);

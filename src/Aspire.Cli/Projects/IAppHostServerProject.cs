@@ -1,8 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Processes;
 using Aspire.Cli.Utils;
 
@@ -22,67 +22,50 @@ internal sealed record AppHostServerPrepareResult(
     bool NeedsCodeGeneration = false);
 
 /// <summary>
-/// Result of <see cref="IAppHostServerProject.Run"/> — a launched AppHost server process plus
-/// the cleanup handle that owns it.
+/// Result of <see cref="IAppHostServerProject.Run"/> — a launched AppHost server process plus the
+/// captured output.
 /// </summary>
 /// <param name="SocketPath">RPC socket the server is publishing on.</param>
-/// <param name="Process">
-/// The underlying <see cref="System.Diagnostics.Process"/>. Callers may observe state
-/// (<see cref="Process.HasExited"/>, <see cref="Process.Id"/>, etc.) and drive lifecycle APIs
-/// (<see cref="Process.Kill(bool)"/>, <see cref="Process.WaitForExitAsync(CancellationToken)"/>),
-/// but must dispose via <see cref="ProcessLifetime"/> instead of the <see cref="Process"/>
-/// directly so the isolated-spawn path can release its anonymous pipes and stdin handle.
-/// Callers should prefer the <see cref="ReadExitCode"/> / <see cref="ReadHasExited"/> accessors
-/// over <see cref="Process.ExitCode"/> / <see cref="Process.HasExited"/> for status checks,
-/// because the managed Process returned for the isolated Windows path is obtained via
-/// <see cref="Process.GetProcessById(int)"/> and cannot reliably surface ExitCode/HasExited
-/// (see https://github.com/dotnet/runtime/issues/45003 and <see cref="IsolatedProcess"/>).
-/// </param>
 /// <param name="OutputCollector">Captured stdout/stderr for failure display.</param>
-/// <param name="FileName">
-/// The launched executable, captured at spawn time. Reading <see cref="ProcessStartInfo.FileName"/>
-/// off <see cref="Process"/> is unreliable on the isolated Windows path (the Process is obtained
-/// via <see cref="Process.GetProcessById(int)"/>, which returns an empty <see cref="ProcessStartInfo"/>),
-/// so telemetry should read identity from this field instead.
+/// <param name="Execution">
+/// The started <see cref="IProcessExecution"/> that owns the server child. Callers observe state
+/// (<see cref="IProcessExecution.HasExited"/>, <see cref="IProcessExecution.ExitCode"/>,
+/// <see cref="IProcessExecution.ProcessId"/>), drive its lifetime via
+/// <see cref="IProcessExecution.WaitForExitAsync(CancellationToken)"/> (which runs the shared
+/// shutdown ladder on cancellation), and dispose it via
+/// <see cref="System.IAsyncDisposable.DisposeAsync"/>. The execution encapsulates the isolated
+/// Windows spawn quirk (the underlying Process is obtained via <see cref="System.Diagnostics.Process.GetProcessById(int)"/>),
+/// so its status getters are reliable on every path — see https://github.com/dotnet/runtime/issues/45003.
 /// </param>
-/// <param name="Arguments">The argument list, captured at spawn time. Same rationale as <paramref name="FileName"/>.</param>
-/// <param name="ProcessLifetime">
-/// Disposes the process and any associated isolated-spawn resources. Always non-null; for the
-/// non-isolated path this is a thin adapter that just disposes <paramref name="Process"/>, for
-/// the isolated path it is the <see cref="IsolatedProcess"/> wrapper that also drains the
-/// stdout/stderr pumps and closes the anonymous pipes + NUL stdin handle on Windows.
-/// </param>
-/// <param name="ExitCodeOverride">
-/// Optional override for <see cref="ReadExitCode"/>. The isolated Windows spawn path supplies
-/// one because <see cref="Process.ExitCode"/> on a <see cref="Process.GetProcessById(int)"/>
-/// instance throws <see cref="InvalidOperationException"/>. Non-isolated callers leave this
-/// <see langword="null"/> and the accessor reads from <see cref="Process"/> directly.
-/// </param>
-/// <param name="HasExitedOverride">Optional override for <see cref="ReadHasExited"/>. Same rationale as <paramref name="ExitCodeOverride"/>.</param>
 internal sealed record AppHostServerRunResult(
     string SocketPath,
-    Process Process,
     OutputCollector OutputCollector,
-    string FileName,
-    IReadOnlyList<string> Arguments,
-    IAsyncDisposable ProcessLifetime,
-    Func<int>? ExitCodeOverride = null,
-    Func<bool>? HasExitedOverride = null)
-{
-    /// <summary>
-    /// Reads the child's exit code. Use this instead of <c>Process.ExitCode</c> — on the
-    /// isolated Windows path that property throws because the managed Process came from
-    /// <see cref="Process.GetProcessById(int)"/>; the override consults the kept CreateProcess
-    /// handle directly.
-    /// </summary>
-    public int ReadExitCode() => ExitCodeOverride is { } reader ? reader() : Process.ExitCode;
+    IProcessExecution Execution);
 
-    /// <summary>
-    /// Reads whether the child has exited. Same rationale as <see cref="ReadExitCode"/> —
-    /// prefer this over <c>Process.HasExited</c> for status checks on the isolated Windows path.
-    /// </summary>
-    public bool ReadHasExited() => HasExitedOverride is { } reader ? reader() : Process.HasExited;
-}
+/// <summary>
+/// Controls how <see cref="IAppHostServerProject.Run"/> spawns and tears down the server child.
+/// The default (all-null / false) preserves today's force-kill-on-cancel behavior for the non-Run
+/// callers (SDK gen, scaffolding, publish, dump). The run path supplies the graceful infrastructure.
+/// </summary>
+/// <param name="IsolateConsole">
+/// When <see langword="true"/>, on Windows the server is spawned via <see cref="IsolatedProcess"/>
+/// into its own hidden console (CREATE_NEW_CONSOLE | SW_HIDE) so DCP's <c>stop-process-tree</c> can
+/// <c>AttachConsole</c> + post <c>CTRL_C_EVENT</c> against the server without also signalling the CLI,
+/// and the child is bound to the process-wide <see cref="WindowsConsoleProcessJob"/> kill-on-close
+/// safety net. On Unix the spawn is effectively the same as today's path.
+/// </param>
+/// <param name="GracefulShutdownSignaler">
+/// Issues the graceful shutdown signal during the shared ladder, or <see langword="null"/> to fall
+/// back to force-kill on cancellation.
+/// </param>
+/// <param name="ShutdownService">
+/// The command-level graceful window bounding the ladder, or <see langword="null"/> to fall back to
+/// force-kill on cancellation.
+/// </param>
+internal sealed record AppHostServerRunControl(
+    bool IsolateConsole = false,
+    IProcessTreeGracefulShutdownSignaler? GracefulShutdownSignaler = null,
+    IGracefulShutdownWindow? ShutdownService = null);
 
 /// <summary>
 /// Represents an AppHost server that can be prepared and run.
@@ -122,22 +105,18 @@ internal interface IAppHostServerProject
     /// <param name="environmentVariables">Environment variables to pass to the server.</param>
     /// <param name="additionalArgs">Additional command-line arguments.</param>
     /// <param name="debug">Whether to enable debug logging.</param>
-    /// <param name="isolateConsole">
-    /// When <see langword="true"/>, on Windows the server is spawned via
-    /// <see cref="IsolatedProcess"/> into its own hidden console (CREATE_NEW_CONSOLE | SW_HIDE)
-    /// so DCP's <c>stop-process-tree</c> can <c>AttachConsole</c> + post <c>CTRL_C_EVENT</c>
-    /// against the server without also signalling the CLI. On Unix the flag is observed but the
-    /// resulting spawn is effectively the same as today's path (a thin <see cref="Process.Start(ProcessStartInfo)"/>
-    /// wrapper) because SIGTERM via the process group is enough. On Windows the server is bound to
-    /// the process-wide <see cref="WindowsConsoleProcessJob"/> kill-on-close safety net.
+    /// <param name="runControl">
+    /// Console-isolation + graceful-shutdown wiring for the spawn. <see langword="null"/> (the
+    /// default) preserves force-kill-on-cancel semantics for non-Run callers (SDK gen, scaffolding,
+    /// publish, dump). The run path passes a populated <see cref="AppHostServerRunControl"/>.
     /// </param>
-    /// <returns>The launched server process and its associated cleanup handle.</returns>
+    /// <returns>The launched server process execution and its captured output.</returns>
     AppHostServerRunResult Run(
         int hostPid,
         IReadOnlyDictionary<string, string>? environmentVariables = null,
         string[]? additionalArgs = null,
         bool debug = false,
-        bool isolateConsole = false);
+        AppHostServerRunControl? runControl = null);
 
     /// <summary>
     /// Gets a unique identifier path for this AppHost, used for running instance detection.
