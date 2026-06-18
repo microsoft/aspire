@@ -97,7 +97,7 @@ public class PathNormalizerTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ResolveToFilesystemPath_ResolvesSymlinkedDirectory()
     {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix symlink canonicalization is covered by this test.");
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix-only: validates symlink canonicalization that does not apply on Windows.");
 
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
