@@ -117,9 +117,11 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
 
         var versionsDir = Path.Combine(layoutRoot, BundleService.VersionsDirectoryName);
         var activeVersionDir = Assert.Single(Directory.GetDirectories(versionsDir));
+        var repairedAssetPath = Path.Combine("wwwroot", "css", "app.css");
+        Assert.Contains(repairedAssetPath, BundleService.s_requiredManagedDashboardAssets);
         var appCssPath = Path.Combine(activeVersionDir,
             BundleDiscovery.ManagedDirectoryName,
-            BundleService.s_requiredManagedDashboardAssets[0]);
+            repairedAssetPath);
 
         File.Delete(appCssPath);
         Assert.False(BundleService.IsVersionedLayoutValid(activeVersionDir));

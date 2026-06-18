@@ -5,6 +5,8 @@ using Aspire.Cli.Bundles;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Shared;
+using System.Globalization;
+using System.Xml.Linq;
 
 namespace Aspire.Cli.Tests;
 
@@ -163,6 +165,26 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
         Assert.False(BundleService.IsVersionedLayoutValid(dir));
     }
 
+    [Theory]
+    [InlineData("wwwroot/_content/Microsoft.FluentUI.AspNetCore.Components/css/reboot.css")]
+    [InlineData("wwwroot/Aspire.Dashboard.styles.css")]
+    [InlineData("wwwroot/_content/Microsoft.FluentUI.AspNetCore.Components/Microsoft.FluentUI.AspNetCore.Components.lib.module.js")]
+    public void IsVersionedLayoutValid_RequiresDirectlyReferencedDashboardAssets(string relativeAssetPath)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var dir = workspace.WorkspaceRoot.FullName;
+        CreateFakeBundleLayout(dir);
+
+        var managedDir = Path.Combine(dir, BundleDiscovery.ManagedDirectoryName);
+        WriteFakeDashboardAsset(managedDir, relativeAssetPath);
+
+        Assert.True(BundleService.IsVersionedLayoutValid(dir));
+
+        File.Delete(Path.Combine(managedDir, relativeAssetPath.Replace('/', Path.DirectorySeparatorChar)));
+
+        Assert.False(BundleService.IsVersionedLayoutValid(dir));
+    }
+
     [Fact]
     public void IsVersionedLayoutValid_RequiresBlazorFrameworkAsset()
     {
@@ -184,6 +206,25 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
     public void GetRequiredDashboardBlazorFrameworkAssetFileName_MatchesDashboardRuntimeClamp(int runtimeMajor, string expectedFileName)
     {
         Assert.Equal(expectedFileName, BundleService.GetRequiredDashboardBlazorFrameworkAssetFileName(runtimeMajor));
+    }
+
+    [Fact]
+    public void DashboardBlazorSupportedMajorBounds_MatchBlazorAssetsTargets()
+    {
+        var repoRoot = GetRepoRoot();
+        var targetsPath = Path.Combine(repoRoot, "src", "Aspire.Dashboard", "BlazorAssets.targets");
+        var targetDocument = XDocument.Load(targetsPath);
+        var packageMajors = targetDocument
+            .Descendants("BlazorAssetPackage")
+            .Select(e => int.Parse(e.Attribute("Include")!.Value, CultureInfo.InvariantCulture))
+            .Order()
+            .ToArray();
+
+        var expectedPackageMajors = Enumerable.Range(
+            BundleService.DashboardBlazorMinSupportedMajor,
+            BundleService.DashboardBlazorMaxSupportedMajor - BundleService.DashboardBlazorMinSupportedMajor + 1).ToArray();
+
+        Assert.Equal(expectedPackageMajors, packageMajors);
     }
 
     [Fact]
@@ -241,13 +282,21 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
     {
         foreach (var relativeAssetPath in BundleService.s_requiredManagedDashboardAssets)
         {
-            var assetPath = Path.Combine(managedDir, relativeAssetPath);
-            Directory.CreateDirectory(Path.GetDirectoryName(assetPath)!);
-            File.WriteAllText(assetPath, relativeAssetPath);
+            WriteFakeDashboardAsset(managedDir, relativeAssetPath);
         }
 
         var frameworkAssetPath = Path.Combine(managedDir, "wwwroot", "framework", BundleService.GetRequiredDashboardBlazorFrameworkAssetFileName());
         Directory.CreateDirectory(Path.GetDirectoryName(frameworkAssetPath)!);
         File.WriteAllText(frameworkAssetPath, BundleService.GetRequiredDashboardBlazorFrameworkAssetFileName());
     }
+
+    private static void WriteFakeDashboardAsset(string managedDir, string relativeAssetPath)
+    {
+        var assetPath = Path.Combine(managedDir, relativeAssetPath.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(assetPath)!);
+        File.WriteAllText(assetPath, relativeAssetPath);
+    }
+
+    private static string GetRepoRoot()
+        => Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 }

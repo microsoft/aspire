@@ -70,9 +70,12 @@ internal sealed class BundleService(
         Path.Combine("wwwroot", "css", "app.css"),
         Path.Combine("wwwroot", "css", "highlight.css"),
         Path.Combine("wwwroot", "css", "markdown.css"),
+        Path.Combine("wwwroot", "_content", "Microsoft.FluentUI.AspNetCore.Components", "css", "reboot.css"),
+        Path.Combine("wwwroot", "Aspire.Dashboard.styles.css"),
         Path.Combine("wwwroot", "js", "app.js"),
         Path.Combine("wwwroot", "js", "app-reconnect.js"),
         Path.Combine("wwwroot", "js", "app-theme.js"),
+        Path.Combine("wwwroot", "_content", "Microsoft.FluentUI.AspNetCore.Components", "Microsoft.FluentUI.AspNetCore.Components.lib.module.js"),
     ];
 
     internal const int DashboardBlazorMinSupportedMajor = 10;
