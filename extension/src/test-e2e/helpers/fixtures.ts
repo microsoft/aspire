@@ -299,24 +299,19 @@ export async function stopAppHostIfRunning(appHostPath: string): Promise<void> {
         }
 
         if (/timed out|Failed to stop/i.test(error.message)) {
-            try {
-                const runningAppHost = await getRunningAppHostAccordingToCli(appHostPath);
-                if (!runningAppHost) {
-                    await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid);
-                    return;
-                }
-
-                await waitForProcessExit(runningAppHost.appHostPid, 30000);
-                if (!await getRunningAppHostAccordingToCli(appHostPath)) {
-                    await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid);
-                    return;
-                }
-
-                throw new Error(`AppHost is still running according to aspire ps: ${appHostPath}`);
+            const runningAppHost = await getRunningAppHostAccordingToCli(appHostPath);
+            if (!runningAppHost) {
+                await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid);
+                return;
             }
-            catch {
-                throw error;
+
+            await waitForProcessExit(runningAppHost.appHostPid, 30000);
+            if (!await getRunningAppHostAccordingToCli(appHostPath)) {
+                await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid);
+                return;
             }
+
+            throw new Error(`AppHost is still running according to aspire ps: ${appHostPath}`);
         }
 
         throw error;
@@ -388,7 +383,7 @@ async function waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath: string
         await waitForNoRunningAppHostPath(appHostPath, timeoutMs, knownAppHostPid);
     }
     catch (error) {
-        const runningAppHostPid = getRunningAppHostFromState(appHostPath)?.appHostPid ?? knownAppHostPid;
+        const runningAppHostPid = getRunningAppHostFromState(appHostPath)?.appHostPid;
         if (runningAppHostPid === undefined || !isProcessRunning(runningAppHostPid)) {
             throw error;
         }

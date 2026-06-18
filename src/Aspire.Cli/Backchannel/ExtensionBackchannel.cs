@@ -61,12 +61,23 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
     private readonly ILogger<ExtensionBackchannel> _logger;
     private readonly IExtensionRpcTarget _target;
     private readonly IConfiguration _configuration;
+    private readonly Func<CancellationToken, Task>? _connectCoreAsyncOverride;
 
     public ExtensionBackchannel(ILogger<ExtensionBackchannel> logger, IExtensionRpcTarget target, IConfiguration configuration)
+        : this(logger, target, configuration, connectCoreAsyncOverride: null)
+    {
+    }
+
+    internal ExtensionBackchannel(
+        ILogger<ExtensionBackchannel> logger,
+        IExtensionRpcTarget target,
+        IConfiguration configuration,
+        Func<CancellationToken, Task>? connectCoreAsyncOverride)
     {
         _logger = logger;
         _target = target;
         _configuration = configuration;
+        _connectCoreAsyncOverride = connectCoreAsyncOverride;
         _token = configuration[KnownConfigNames.ExtensionToken]
                       ?? throw new InvalidOperationException(ErrorStrings.ExtensionTokenMustBeSet);
 
@@ -214,6 +225,12 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         async Task ConnectCoreAsync()
         {
+            if (_connectCoreAsyncOverride is not null)
+            {
+                await _connectCoreAsyncOverride(cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
             try
             {
                 using var activity = _activitySource.StartActivity();
