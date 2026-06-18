@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Utils;
+using Aspire.Tests;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -1156,7 +1157,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     public async Task GetDashboardUrlsAsync_ReturnsBaseUrl_WhenDashboardAllowsAnonymousAccess()
     {
         var activities = new List<Activity>();
-        using var listener = CreateActivityListener(ProfilingTelemetry.ActivitySourceName, activities.Add);
+        using var listener = ActivityListenerHelper.Create(ProfilingTelemetry.ActivitySource, onActivityStopped: activities.Add);
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.DisableDashboard = false,
             outputHelper,
@@ -1874,19 +1875,6 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         var result = await target.GetAppHostInfoAsync().DefaultTimeout();
 
         Assert.Equal("/logs/cli_session.log", result.CliLogFilePath);
-    }
-
-    private static ActivityListener CreateActivityListener(string sourceName, Action<Activity> activityStopped)
-    {
-        var listener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == sourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStopped = activityStopped
-        };
-
-        ActivitySource.AddActivityListener(listener);
-        return listener;
     }
 }
 

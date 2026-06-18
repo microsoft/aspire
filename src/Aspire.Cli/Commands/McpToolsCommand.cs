@@ -35,7 +35,7 @@ internal sealed class McpToolsCommand : BaseCommand
         CommonCommandServices services)
         : base("tools", McpCommandStrings.ToolsCommand_Description, services)
     {
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, services.ExecutionContext, logger);
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, services.ExecutionContext, services.HostEnvironment, logger);
 
         Options.Add(s_appHostOption);
         Options.Add(s_formatOption);

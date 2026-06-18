@@ -10,6 +10,8 @@ description: |
   Data is collected in `pre-agent-steps` using `gh api`. The agent reads
   the resulting JSON files and renders the issue body.
 
+max-daily-ai-credits: -1
+
 on:
   schedule:
     - cron: "0 16 * * *"   # 16:00 UTC daily (08:00 PT in PST / 09:00 PT in PDT)
@@ -19,6 +21,7 @@ permissions:
   contents: read
   issues: read
   pull-requests: read
+  copilot-requests: write
 
 network: defaults
 

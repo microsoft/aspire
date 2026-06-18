@@ -128,7 +128,7 @@ internal sealed class LogsCommand : BaseCommand
         _resourceColorMap = resourceColorMap;
         _hostEnvironment = hostEnvironment;
         _logger = logger;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, services.ExecutionContext, logger, profilingTelemetry);
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, services.ExecutionContext, services.HostEnvironment, logger, profilingTelemetry);
 
         Arguments.Add(s_resourceArgument);
         Options.Add(s_appHostOption);

@@ -1279,7 +1279,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Confirm you want to show the value. In the future, opening the text visualizer will automatically display all values.
+        ///   Looks up a localized string similar to Confirm you want to show this value. Once confirmed, the text visualizer in the browser will show values automatically.
         /// </summary>
         public static string TextVisualizerSecretWarningDescription {
             get {

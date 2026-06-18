@@ -23,19 +23,21 @@ git checkout tags/Instrumentation.ConfluentKafka-0.1.0-alpha.2
 ```console
 git clone https://github.com/open-telemetry/opentelemetry-dotnet-contrib.git
 git fetch --tags
-git checkout tags/Instrumentation.StackExchangeRedis-1.0.0-rc9.13
+git checkout tags/Instrumentation.StackExchangeRedis-1.15.1-beta.2
 ```
 
 ### Instructions
 
 - Copy files from `src/OpenTelemetry.Instrumentation.StackExchangeRedis` to `src/Vendoring/OpenTelemetry.Instrumentation.StackExchangeRedis`:
-    - `**\*.cs` minus `AssemblyInfo.cs`
+    - `**\*.cs` minus `IsExternalInit.cs`
 - Copy files from `src/Shared` to `src/Vendoring/OpenTelemetry.Instrumentation.StackExchangeRedis/Shared`:
+    - `ActivitySourceFactory.cs`
+    - `AssemblyVersionExtensions.cs`
+    - `DatabaseSemanticConventionHelper.cs`
     - `Guard.cs`
-    - `PropertyFetcher.AOT.cs`
+    - `PropertyFetcher.cs`
     - `SemanticConventions.cs`
-- In `StackExchangeRedisConnectionInstrumentation.cs` update `ActivitySourceName` to `internal const string ActivitySourceName = "OpenTelemetry.Instrumentation.StackExchangeRedis";` and `Version` to `internal static readonly Version Version = new Version(1, 0, 0, 13);`
-- Apply the changes from https://github.com/open-telemetry/opentelemetry-dotnet-contrib/pull/1625 if necessary.
+- In `StackExchangeRedisConnectionInstrumentation.cs` ensure that the activity source name is overridden to `OpenTelemetry.Instrumentation.StackExchangeRedis`.
 
 ## Customizations
 

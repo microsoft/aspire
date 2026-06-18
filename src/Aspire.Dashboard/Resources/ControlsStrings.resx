@@ -520,8 +520,8 @@
   <data name="SpanTypeCloud" xml:space="preserve">
     <value>Cloud</value>
   </data>
-  <data name="ExportJson" xml:space="preserve">
-    <value>Export JSON</value>
+  <data name="ViewJson" xml:space="preserve">
+    <value>View JSON</value>
   </data>
   <data name="ExportEnv" xml:space="preserve">
     <value>Export .env</value>

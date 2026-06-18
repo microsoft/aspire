@@ -14,6 +14,7 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Shared;
+using Aspire.Tests;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -57,10 +58,10 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
         {
             ["EXISTING_VALUE"] = "present"
         };
-        using var listener = CreateActivityListener(ProfilingTelemetry.ActivitySourceName);
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1")));
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource);
 
         await using var session = AppHostServerSession.Start(
             project,
@@ -91,11 +92,11 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
     {
         var project = new RecordingAppHostServerProject();
         using var parentSource = new ActivitySource("test-apphost-server-parent");
-        using var parentListener = CreateActivityListener("test-apphost-server-parent");
-        using var listener = CreateActivityListener(ProfilingTelemetry.ActivitySourceName);
+        using var parentListener = ActivityListenerHelper.Create(parentSource);
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1")));
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource);
 
         using var parentActivity = parentSource.StartActivity("aspire/cli/run");
         Assert.NotNull(parentActivity);
@@ -197,17 +198,6 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
         {
             layoutLease.Dispose();
         }
-    }
-
-    private static ActivityListener CreateActivityListener(string sourceName)
-    {
-        var listener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == sourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded
-        };
-        ActivitySource.AddActivityListener(listener);
-        return listener;
     }
 
     private static IConfiguration CreateConfiguration(params (string Key, string? Value)[] values)
