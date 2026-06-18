@@ -220,6 +220,10 @@ export class AspireTerminalProvider implements vscode.Disposable {
 
         const existingTerminal = this._terminalByDebugSessionId.get(null);
         if (existingTerminal) {
+            if (!forceCreate && aspireCliPath === undefined) {
+                return existingTerminal;
+            }
+
             if (!forceCreate && existingTerminal.msBuildAspireCliPath === msBuildAspireCliPath) {
                 return existingTerminal;
             }

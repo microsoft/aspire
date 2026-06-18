@@ -196,6 +196,42 @@ suite('AspireTerminalProvider tests', () => {
                 createTerminalStub.restore();
             }
         });
+
+        test('reuses existing terminal when caller does not supply a CLI path', () => {
+            terminalProvider.rpcServerConnectionInfo = {
+                address: 'http://localhost:1234',
+                token: 'rpc-token',
+                cert: 'rpc-cert',
+            };
+            terminalProvider.dcpServerConnectionInfo = {
+                address: 'http://localhost:5678',
+                token: 'dcp-token',
+                certificate: 'dcp-cert',
+            };
+            const disposedTerminals: string[] = [];
+            const explicitTerminal = {
+                dispose: () => disposedTerminals.push('explicit')
+            } as unknown as vscode.Terminal;
+            const replacementTerminal = {
+                dispose: () => disposedTerminals.push('replacement')
+            } as unknown as vscode.Terminal;
+            const createTerminalStub = sinon.stub(vscode.window, 'createTerminal');
+            createTerminalStub.onCall(0).returns(explicitTerminal);
+            createTerminalStub.onCall(1).returns(replacementTerminal);
+
+            try {
+                const first = terminalProvider.getAspireTerminal(false, '/repo/artifacts/bin/Aspire.Cli/Debug/net10.0/aspire');
+                const second = terminalProvider.getAspireTerminal(false);
+
+                assert.strictEqual(second, first);
+                assert.deepStrictEqual(disposedTerminals, []);
+                assert.strictEqual(createTerminalStub.callCount, 1);
+            }
+            finally {
+                terminalProvider.dispose();
+                createTerminalStub.restore();
+            }
+        });
     });
 
     suite('sendAspireCommandToAspireTerminal', () => {

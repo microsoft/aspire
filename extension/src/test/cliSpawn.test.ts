@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as sinon from 'sinon';
 import { getCliSpawnCommand, spawnCliProcess } from '../debugger/languages/cli';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
-import { getAspireCliPathForMSBuild } from '../utils/environment';
+import { getAspireCliPathForMSBuild, withAspireCliPathForMSBuild } from '../utils/environment';
 
 suite('spawnCliProcess tests', () => {
     test('runs Windows cmd wrappers through cmd.exe', () => {
@@ -45,6 +45,17 @@ suite('spawnCliProcess tests', () => {
         assert.strictEqual(getAspireCliPathForMSBuild(absoluteCliPath, workingDirectory), absoluteCliPath);
         assert.strictEqual(getAspireCliPathForMSBuild(relativeCliPath, workingDirectory), path.resolve(workingDirectory, relativeCliPath));
         assert.strictEqual(getAspireCliPathForMSBuild(commandShimPath, workingDirectory), commandShimPath);
+    });
+
+    test('removes stale MSBuild AspireCliPath when resolved CLI is a PATH command', () => {
+        const env = [
+            { name: 'AspireCliPath', value: '/stale/from/old/session/aspire' },
+            { name: 'OTHER_ENV', value: '1' },
+        ];
+
+        assert.deepStrictEqual(withAspireCliPathForMSBuild(env, 'aspire'), [
+            { name: 'OTHER_ENV', value: '1' },
+        ]);
     });
 
     test('sets MSBuild AspireCliPath when extension variables are disabled', async () => {

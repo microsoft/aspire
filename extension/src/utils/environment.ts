@@ -32,13 +32,15 @@ export function getAspireCliPathForMSBuild(cliPath: string | undefined, workingD
 
 export function withAspireCliPathForMSBuild(env: EnvVar[], cliPath: string | undefined, workingDirectory?: string): EnvVar[] {
     const aspireCliPath = getAspireCliPathForMSBuild(cliPath, workingDirectory);
+    const aspireCliPathKey = aspireCliPathEnvironmentVariableName.toLowerCase();
+    const filteredEnv = env.filter(variable => variable.name.toLowerCase() !== aspireCliPathKey);
+
     if (!aspireCliPath) {
-        return env;
+        return filteredEnv;
     }
 
-    const aspireCliPathKey = aspireCliPathEnvironmentVariableName.toLowerCase();
     return [
-        ...env.filter(variable => variable.name.toLowerCase() !== aspireCliPathKey),
+        ...filteredEnv,
         { name: aspireCliPathEnvironmentVariableName, value: aspireCliPath },
     ];
 }
