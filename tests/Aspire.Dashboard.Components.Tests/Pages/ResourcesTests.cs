@@ -513,7 +513,7 @@ public partial class ResourcesTests : DashboardTestContext
     }
 
     [Fact]
-    public void GraphView_ShowsAllResources()
+    public void GraphView_ExcludesParameters()
     {
         // Arrange
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
@@ -539,11 +539,11 @@ public partial class ResourcesTests : DashboardTestContext
         cut.Instance.PageViewModel.SelectedViewKind = Components.Pages.Resources.ResourceViewKind.Graph;
         cut.Render();
 
-        // Assert - Graph view should show all resources (no parameter filtering)
+        // Assert - Graph view should exclude parameters (they have their own dedicated view)
         var filteredResources = cut.Instance.GetFilteredResources().ToList();
-        Assert.Equal(2, filteredResources.Count);
+        Assert.Single(filteredResources);
         Assert.Contains(filteredResources, r => r.Name == "myapp");
-        Assert.Contains(filteredResources, r => r.Name == "myparameter");
+        Assert.DoesNotContain(filteredResources, r => r.Name == "myparameter");
     }
 
     [Fact]
