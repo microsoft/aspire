@@ -130,6 +130,7 @@ internal sealed class AzureProvisioningController(
     });
     private readonly ILogger<AzureProvisioningController> _logger = logger;
     private readonly object _operationStateLock = new();
+    private readonly List<AzureOperationState> _queuedOperationStates = [];
     private AzureControllerState _state = AzureControllerState.Empty;
     private int _operationLoopStarted;
     private int _driftMonitorStarted;
@@ -1274,6 +1275,8 @@ internal sealed class AzureProvisioningController(
         // in apps that reference Azure hosting packages but never provision in run mode.
         EnsureDriftMonitorStarted(model);
         EnsureOperationLoopStarted();
+        var queuedOperationState = CreateQueuedOperationState(model, intent);
+        RegisterQueuedOperation(intent, queuedOperationState);
 
         var queuedOperation = new QueuedOperation(
             model,
@@ -1281,11 +1284,18 @@ internal sealed class AzureProvisioningController(
             new(TaskCreationOptions.RunContinuationsAsynchronously),
             cancellationToken);
 
-        // All dashboard, CLI, and background Azure operations enter through this queue.
-        // Running them inline would reintroduce re-entrancy between command handlers and
-        // provisioning callbacks; the single reader below is the synchronization boundary.
-        await _operationChannel.Writer.WriteAsync(queuedOperation, cancellationToken).ConfigureAwait(false);
-        return await queuedOperation.Completion.Task.ConfigureAwait(false);
+        try
+        {
+            // All dashboard, CLI, and background Azure operations enter through this queue.
+            // Running them inline would reintroduce re-entrancy between command handlers and
+            // provisioning callbacks; the single reader below is the synchronization boundary.
+            await _operationChannel.Writer.WriteAsync(queuedOperation, cancellationToken).ConfigureAwait(false);
+            return await queuedOperation.Completion.Task.ConfigureAwait(false);
+        }
+        finally
+        {
+            UnregisterQueuedOperation(queuedOperationState);
+        }
     }
 
     private void EnsureDriftMonitorStarted(DistributedApplicationModel model)
@@ -1753,7 +1763,9 @@ internal sealed class AzureProvisioningController(
         {
             return await EnsureProvisionedOrThrowAsync(model, targetResources, cancellationToken).ConfigureAwait(false);
         }
-        catch (InvalidOperationException ex) when (!cancellationToken.IsCancellationRequested && TryGetKeyVaultSoftDeleteConflictResourceId(ex, out var keyVaultResourceId))
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested &&
+            ex is InvalidOperationException or AzureProvisioningFailureException &&
+            TryGetKeyVaultSoftDeleteConflictResourceId(ex, out var keyVaultResourceId))
         {
             // If a delete command is canceled after the live vault is deleted but before purge finishes,
             // the next reprovision sees ARM's soft-delete conflict. At that point the user explicitly
@@ -1762,7 +1774,7 @@ internal sealed class AzureProvisioningController(
                 intent,
                 AzureProvisioningStrings.OperationPhasePurgingDeletedKeyVault,
                 FormatUserString(AzureProvisioningStrings.OperationPhasePurgingRecoverableKeyVaultFormat, new ResourceIdentifier(keyVaultResourceId).Name));
-            await DeleteAzureResourceIdsAsync([keyVaultResourceId], intent.ResourceName, effectiveLocation, currentContext.Location, cancellationToken).ConfigureAwait(false);
+            await DeleteAzureResourceIdsAsync([keyVaultResourceId], intent.ResourceName, effectiveLocation, currentContext.Location, allowKeyVaultPurgeTimeout: false, cancellationToken).ConfigureAwait(false);
             await ResetResourcesAsync(model, targetResources, preserveOverrides: true, cancellationToken).ConfigureAwait(false);
             return await EnsureProvisionedOrThrowAsync(model, targetResources, cancellationToken).ConfigureAwait(false);
         }
@@ -1901,7 +1913,7 @@ internal sealed class AzureProvisioningController(
 
             var effectiveLocation = await GetEffectiveResourceLocationAsync(GetDeploymentStateResourceName(targetResources[0]), cancellationToken).ConfigureAwait(false);
             var currentContext = await GetCurrentAzureContextAsync(cancellationToken).ConfigureAwait(false);
-            await DeleteAzureResourceIdsAsync(resourceIds, intent.ResourceName, effectiveLocation, currentContext.Location, cancellationToken).ConfigureAwait(false);
+            await DeleteAzureResourceIdsAsync(resourceIds, intent.ResourceName, effectiveLocation, currentContext.Location, allowKeyVaultPurgeTimeout: true, cancellationToken).ConfigureAwait(false);
             await ResetResourcesAsync(model, targetResources, preserveOverrides: true, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -2072,6 +2084,82 @@ internal sealed class AzureProvisioningController(
         return AzureOperationState.Resources(resourceNames, intent.Operation.DisplayName);
     }
 
+    private static AzureOperationState CreateQueuedOperationState(DistributedApplicationModel model, AzureIntent intent)
+    {
+        if (intent.Operation.IsNone)
+        {
+            return AzureOperationState.None;
+        }
+
+        return CreateActiveOperationState(model, intent);
+    }
+
+    private void RegisterQueuedOperation(AzureIntent intent, AzureOperationState queuedOperationState)
+    {
+        if (queuedOperationState.IsNone)
+        {
+            return;
+        }
+
+        lock (_operationStateLock)
+        {
+            if (_state.Status.ActiveOperation?.Operation is { } activeOperation &&
+                OperationsConflict(activeOperation, queuedOperationState))
+            {
+                throw new InvalidOperationException(FormatUserString(
+                    AzureProvisioningStrings.OperationAlreadyRunningOrQueued,
+                    activeOperation.DisplayName,
+                    intent.Operation.DisplayName,
+                    CancelCommandName));
+            }
+
+            foreach (var queuedOperation in _queuedOperationStates)
+            {
+                if (OperationsConflict(queuedOperation, queuedOperationState))
+                {
+                    throw new InvalidOperationException(FormatUserString(
+                        AzureProvisioningStrings.OperationAlreadyRunningOrQueued,
+                        queuedOperation.DisplayName,
+                        intent.Operation.DisplayName,
+                        CancelCommandName));
+                }
+            }
+
+            // The queue is single-reader but multi-writer. Track accepted operations before they
+            // become active so rapid CLI/MCP calls cannot bypass dashboard disabled-state checks by
+            // slipping multiple conflicting commands into the channel before the reader runs.
+            _queuedOperationStates.Add(queuedOperationState);
+        }
+    }
+
+    private void UnregisterQueuedOperation(AzureOperationState queuedOperationState)
+    {
+        if (queuedOperationState.IsNone)
+        {
+            return;
+        }
+
+        lock (_operationStateLock)
+        {
+            _queuedOperationStates.Remove(queuedOperationState);
+        }
+    }
+
+    private static bool OperationsConflict(AzureOperationState currentOperation, AzureOperationState requestedOperation)
+    {
+        if (currentOperation.IsNone || requestedOperation.IsNone)
+        {
+            return false;
+        }
+
+        if (currentOperation.IsAllResources || requestedOperation.IsAllResources)
+        {
+            return true;
+        }
+
+        return currentOperation.ResourceNames.Any(requestedOperation.ResourceNames.Contains);
+    }
+
     private static AzureControllerState CreateControllerState(AzureIntent? currentIntent, ActiveAzureOperation? activeOperation)
         => new(new AzureControllerStatus(currentIntent, activeOperation));
 
@@ -2222,11 +2310,13 @@ internal sealed class AzureProvisioningController(
             ["resourcePortalUrl"] = resourceId is not null ? AzurePortalUrls.GetResourceUrl(resourceId, tenantId) : null,
             ["locationOverride"] = section.Data[LocationOverrideKey]?.GetValue<string>(),
             ["checksum"] = section.Data["CheckSum"]?.GetValue<string>(),
-            ["parameters"] = ParseDeploymentStateParametersJson(resource.Name, section.Data["Parameters"]?.GetValue<string>()),
             ["outputs"] = outputs,
             ["scope"] = ParseDeploymentStateJson(resource.Name, "Scope", section.Data["Scope"]?.GetValue<string>())
         };
 
+        // Do not echo cached deployment parameters in user-facing diagnostics. ARM parameter
+        // files can contain secure values such as generated passwords or connection strings;
+        // location and override information is surfaced separately above.
         if (section.Data[BicepProvisioner.DeploymentStateProvisioningStateKey]?.GetValue<string>() is { Length: > 0 } provisioningState)
         {
             json["provisioningState"] = provisioningState;
@@ -2242,72 +2332,6 @@ internal sealed class AzureProvisioningController(
         }
 
         return json;
-    }
-
-    private JsonNode? ParseDeploymentStateParametersJson(string resourceName, string? value)
-    {
-        var parameters = ParseDeploymentStateJson(resourceName, "Parameters", value);
-        if (parameters is not JsonObject parametersObject)
-        {
-            return parameters;
-        }
-
-        RedactSensitiveDeploymentParameterValues(parametersObject);
-
-        return parameters;
-    }
-
-    private static void RedactSensitiveDeploymentParameterValues(JsonObject parameters)
-    {
-        // Deployment parameters are cached in ARM parameter-file shape:
-        //   { "administratorLoginPassword": { "value": "..." }, "location": { "value": "westus2" } }
-        // get-azure-resource is displayed directly to users and agents, so preserve useful
-        // non-secret parameters while removing values that are likely credentials.
-        foreach (var (parameterName, parameterNode) in parameters.ToArray())
-        {
-            if (parameterNode is not JsonObject parameterObject ||
-                !IsSensitiveDeploymentParameter(parameterName, parameterObject))
-            {
-                continue;
-            }
-
-            if (parameterObject.ContainsKey("value"))
-            {
-                parameterObject["value"] = null;
-            }
-
-            if (parameterObject.ContainsKey("secureValue"))
-            {
-                parameterObject["secureValue"] = null;
-            }
-
-            parameterObject["redacted"] = true;
-        }
-    }
-
-    private static bool IsSensitiveDeploymentParameter(string parameterName, JsonObject parameter)
-    {
-        if (parameter.TryGetPropertyValue("type", out var typeNode) &&
-            typeNode is JsonValue typeValue &&
-            typeValue.TryGetValue<string>(out var type) &&
-            type.Contains("secure", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        var normalizedParameterName = parameterName
-            .Replace("-", string.Empty, StringComparison.Ordinal)
-            .Replace("_", string.Empty, StringComparison.Ordinal)
-            .Replace(".", string.Empty, StringComparison.Ordinal);
-
-        return normalizedParameterName.Contains("password", StringComparison.OrdinalIgnoreCase) ||
-            normalizedParameterName.Contains("secret", StringComparison.OrdinalIgnoreCase) ||
-            normalizedParameterName.Contains("token", StringComparison.OrdinalIgnoreCase) ||
-            normalizedParameterName.Contains("credential", StringComparison.OrdinalIgnoreCase) ||
-            normalizedParameterName.Contains("connectionstring", StringComparison.OrdinalIgnoreCase) ||
-            normalizedParameterName.Contains("accesskey", StringComparison.OrdinalIgnoreCase) ||
-            normalizedParameterName.Contains("accountkey", StringComparison.OrdinalIgnoreCase) ||
-            normalizedParameterName.Contains("apikey", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<JsonObject> CreateLiveResourceInfoAsync(string? resourceId, AzureContextState context, CancellationToken cancellationToken)
@@ -2706,7 +2730,7 @@ internal sealed class AzureProvisioningController(
         }
     }
 
-    private async Task DeleteAzureResourceIdsAsync(IReadOnlyList<string> resourceIds, string resourceName, string? resourceLocation, string? fallbackResourceLocation, CancellationToken cancellationToken)
+    private async Task DeleteAzureResourceIdsAsync(IReadOnlyList<string> resourceIds, string resourceName, string? resourceLocation, string? fallbackResourceLocation, bool allowKeyVaultPurgeTimeout, CancellationToken cancellationToken)
     {
         foreach (var resourceId in resourceIds)
         {
@@ -2725,11 +2749,11 @@ internal sealed class AzureProvisioningController(
                 _logger.LogInformation(ex, "Azure resource {ResourceId} was already absent while deleting resources for {ResourceName}.", resourceId, resourceName);
             }
 
-            await PurgeDeletedKeyVaultAsync(armClient, resourceId, resourceName, resourceLocation, fallbackResourceLocation, cancellationToken).ConfigureAwait(false);
+            await PurgeDeletedKeyVaultAsync(armClient, resourceId, resourceName, resourceLocation, fallbackResourceLocation, allowKeyVaultPurgeTimeout, cancellationToken).ConfigureAwait(false);
         }
     }
 
-    private async Task PurgeDeletedKeyVaultAsync(IArmClient armClient, string resourceId, string resourceName, string? resourceLocation, string? fallbackResourceLocation, CancellationToken cancellationToken)
+    private async Task PurgeDeletedKeyVaultAsync(IArmClient armClient, string resourceId, string resourceName, string? resourceLocation, string? fallbackResourceLocation, bool allowTimeout, CancellationToken cancellationToken)
     {
         if (!IsKeyVaultResourceId(resourceId))
         {
@@ -2742,9 +2766,17 @@ internal sealed class AzureProvisioningController(
 
         foreach (var keyVaultLocation in keyVaultLocations)
         {
-            if (await armClient.PurgeDeletedKeyVaultAsync(resourceId, keyVaultLocation, cancellationToken).ConfigureAwait(false))
+            try
             {
-                _logger.LogInformation("Purged deleted Azure Key Vault {ResourceId} in {Location} for {ResourceName}.", resourceId, keyVaultLocation, resourceName);
+                if (await armClient.PurgeDeletedKeyVaultAsync(resourceId, keyVaultLocation, cancellationToken).ConfigureAwait(false))
+                {
+                    _logger.LogInformation("Purged deleted Azure Key Vault {ResourceId} in {Location} for {ResourceName}.", resourceId, keyVaultLocation, resourceName);
+                    return;
+                }
+            }
+            catch (TimeoutException ex) when (allowTimeout)
+            {
+                _logger.LogWarning(ex, "Timed out waiting for deleted Azure Key Vault {ResourceId} in {Location} to be purged for {ResourceName}. The live vault was deleted and purge was requested; a later reprovision can retry if Azure is still finalizing the tombstone.", resourceId, keyVaultLocation, resourceName);
                 return;
             }
         }
@@ -3173,7 +3205,7 @@ internal sealed class AzureProvisioningController(
                 requestedLocation);
         }
 
-        await PurgeDeletedKeyVaultAsync(armClient, resourceId, resource.Name, currentLocation, null, cancellationToken).ConfigureAwait(false);
+        await PurgeDeletedKeyVaultAsync(armClient, resourceId, resource.Name, currentLocation, null, allowTimeout: false, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<string?> TryGetPersistedResourceLocationAsync(AzureBicepResource resource, CancellationToken cancellationToken)
@@ -3768,6 +3800,7 @@ internal sealed class AzureProvisioningController(
         public string DisplayName { get; } = displayName;
         public bool IsAllResources { get; } = isAllResources;
         public IReadOnlySet<string> ResourceNames { get; } = resourceNames;
+        public bool IsNone => !IsAllResources && ResourceNames.Count == 0;
 
         public static AzureOperationState None { get; } = new(string.Empty, false, new HashSet<string>(StringComparers.ResourceName));
 

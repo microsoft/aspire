@@ -675,6 +675,15 @@ namespace Aspire.Hosting.Azure.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Azure operation '{0}' is already running or queued for the same resource scope. Wait for it to finish or run '{2}' before starting '{1}'..
+        /// </summary>
+        internal static string OperationAlreadyRunningOrQueued {
+            get {
+                return ResourceManager.GetString("OperationAlreadyRunningOrQueued", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Azure location.
         /// </summary>
         internal static string ContextPropertyLocationDisplayName {

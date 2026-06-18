@@ -24,6 +24,7 @@ public class DefaultArmClientProviderTests
     private const string DeletedKeyVaultPurgePath = $"/subscriptions/{SubscriptionId}/providers/Microsoft.KeyVault/locations/westus2/deletedVaults/kv-test/purge";
     private static readonly TimeSpan s_keyVaultPollInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan s_keyVaultDeleteTimeout = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan s_keyVaultPurgeTimeout = TimeSpan.FromMinutes(10);
 
     [Fact]
     public async Task GetSupportedLocationsAsyncUsesConfiguredArmEnvironment()
@@ -230,6 +231,28 @@ public class DefaultArmClientProviderTests
 
         var exception = await Assert.ThrowsAsync<TimeoutException>(() => deleteTask);
         Assert.Contains("to be deleted", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task PurgeDeletedKeyVaultAsyncUsesConfiguredTimeProviderForKeyVaultPurgeTimeout()
+    {
+        var timeProvider = new ManualTimeProvider();
+        var transport = new ProviderMetadataTransport(deletedKeyVaultPurgePollsBeforePurged: int.MaxValue);
+        var provider = new DefaultArmClientProvider(new ArmClientOptions
+        {
+            Transport = transport
+        }, timeProvider);
+        var armClient = provider.GetArmClient(new CapturingTokenCredential(), SubscriptionId);
+
+        var purgeTask = armClient.PurgeDeletedKeyVaultAsync(KeyVaultResourceId, "westus2", CancellationToken.None);
+
+        await transport.WaitForDeletedKeyVaultPurgePollAsync();
+        await timeProvider.WaitForTimerAsync(s_keyVaultPurgeTimeout);
+
+        timeProvider.FireTimer(s_keyVaultPurgeTimeout);
+
+        var exception = await Assert.ThrowsAsync<TimeoutException>(() => purgeTask);
+        Assert.Contains("to be purged", exception.Message, StringComparison.Ordinal);
     }
 
     private sealed class CapturingTokenCredential : TokenCredential

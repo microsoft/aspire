@@ -291,6 +291,11 @@ To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/pro
         <target state="translated">Azure 佈建</target>
         <note />
       </trans-unit>
+      <trans-unit id="OperationAlreadyRunningOrQueued">
+        <source>Azure operation '{0}' is already running or queued for the same resource scope. Wait for it to finish or run '{2}' before starting '{1}'.</source>
+        <target state="new">Azure operation '{0}' is already running or queued for the same resource scope. Wait for it to finish or run '{2}' before starting '{1}'.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="OperationPhaseApplyingAzureContext">
         <source>Applying Azure context</source>
         <target state="new">Applying Azure context</target>

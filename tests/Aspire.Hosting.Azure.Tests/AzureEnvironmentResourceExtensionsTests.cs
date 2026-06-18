@@ -712,12 +712,7 @@ public class AzureEnvironmentResourceExtensionsTests
             {
               // Cached deployment state can be hand-edited while recovering local state.
               "location": { "value": "westus2", },
-              "administratorLoginPassword": { "value": "P@ssw0rd123456789!" },
-              "clientSecret": { "value": "client-secret-value" },
-              "storageAccountKey": { "secureValue": "storage-account-key-value" },
-              "databaseConnectionString": { "value": "Host=example;Password=secret" },
-              "secureConfig": { "type": "secureObject", "value": { "apiKey": "api-key-value" } },
-              "safeParameterWithObjectType": { "type": { "name": "custom" }, "value": "visible" },
+              "administratorLoginPassword": { "value": "P@ssw0rd123456789!" }
             }
             """;
         storageSection.Data["Outputs"] = $$"""
@@ -783,15 +778,7 @@ public class AzureEnvironmentResourceExtensionsTests
 
         var outputs = Assert.IsType<JsonObject>(deployment["outputs"]);
         Assert.Equal("https://storage.blob.core.windows.net/", outputs["blobEndpoint"]?["value"]?.GetValue<string>());
-        var parameters = Assert.IsType<JsonObject>(deployment["parameters"]);
-        Assert.Equal("westus2", parameters["location"]?["value"]?.GetValue<string>());
-        Assert.False(parameters["location"]?["redacted"]?.GetValue<bool>() ?? false);
-        AssertRedactedParameter(parameters, "administratorLoginPassword", "value");
-        AssertRedactedParameter(parameters, "clientSecret", "value");
-        AssertRedactedParameter(parameters, "storageAccountKey", "secureValue");
-        AssertRedactedParameter(parameters, "databaseConnectionString", "value");
-        AssertRedactedParameter(parameters, "secureConfig", "value");
-        Assert.Equal("visible", parameters["safeParameterWithObjectType"]?["value"]?.GetValue<string>());
+        Assert.False(deployment.ContainsKey("parameters"));
         var scope = Assert.IsType<JsonObject>(deployment["scope"]);
         Assert.Equal(resourceGroup, scope["resourceGroup"]?.GetValue<string>());
 
@@ -1446,6 +1433,64 @@ public class AzureEnvironmentResourceExtensionsTests
     }
 
     [Fact]
+    public async Task MutatingResourceCommands_FailFastDuringConflictingActiveOperation()
+    {
+        var builder = CreateBuilder(isRunMode: true);
+        var testBicepProvisioner = new BlockingTestBicepProvisioner();
+
+        builder.Configuration["Azure:SubscriptionId"] = "12345678-1234-1234-1234-123456789012";
+        builder.Configuration["Azure:Location"] = "westus2";
+        builder.Configuration["Azure:ResourceGroup"] = "test-rg";
+        AddTestAzureProvisioning(builder, bicepProvisioner: testBicepProvisioner);
+
+        var storage = builder.AddBicepTemplateString("storage", "resource storage 'Microsoft.Storage/storageAccounts@2024-01-01' = {}");
+
+        using var app = builder.Build();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var preparer = new AzureResourcePreparer(
+            app.Services.GetRequiredService<IOptions<AzureProvisioningOptions>>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>());
+        var controller = app.Services.GetRequiredService<AzureProvisioningController>();
+
+        await preparer.OnBeforeStartAsync(new BeforeStartEvent(app.Services, model), CancellationToken.None);
+
+        var activeReprovisionTask = controller.ReprovisionResourceAsync(model, storage.Resource.Name, CancellationToken.None);
+        await WaitForSignalBeforeOperationCompletesAsync(
+            testBicepProvisioner.FirstProvisionStarted.Task,
+            activeReprovisionTask,
+            "Reprovision completed before the first resource started provisioning.");
+
+        foreach (var commandName in new[]
+        {
+            AzureProvisioningController.ReprovisionResourceCommandName,
+            AzureProvisioningController.DeleteAzureResourceCommandName,
+            AzureProvisioningController.ForgetStateCommandName
+        })
+        {
+            var command = Assert.Single(storage.Resource.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == commandName);
+
+            var result = await command.ExecuteCommand(new ExecuteCommandContext
+            {
+                Services = app.Services,
+                ResourceName = storage.Resource.Name,
+                CancellationToken = CancellationToken.None,
+                Logger = NullLogger.Instance,
+                Arguments = new InteractionInputCollection([])
+            }).WaitAsync(s_testSynchronizationTimeout);
+
+            Assert.False(result.Success);
+            Assert.Contains("already running or queued", result.Message, StringComparison.Ordinal);
+        }
+
+        Assert.False(activeReprovisionTask.IsCompleted);
+        Assert.Equal([storage.Resource.Name], testBicepProvisioner.ProvisionedResources);
+
+        testBicepProvisioner.AllowFirstProvisionToComplete.TrySetResult();
+        Assert.True(await activeReprovisionTask.WaitAsync(s_testSynchronizationTimeout));
+    }
+
+    [Fact]
     public async Task CancelCommand_IsHiddenWhenResourceIsNotWaitingForDeployment()
     {
         var builder = CreateBuilder(isRunMode: true);
@@ -1635,6 +1680,85 @@ public class AzureEnvironmentResourceExtensionsTests
 
         Assert.True(notifications.TryGetCurrentState(storage2.Resource.Name, out var storage2Event));
         Assert.Equal(KnownResourceStates.Running, storage2Event.Snapshot.State?.Text);
+    }
+
+    [Fact]
+    public async Task DeleteAzureResourceCommand_SucceedsWhenKeyVaultPurgeTimesOutAfterDelete()
+    {
+        var builder = CreateBuilder(isRunMode: true);
+        var deploymentStateManager = new TestDeploymentStateManager();
+        var deletedResourceIds = new List<string>();
+        var purgedDeletedKeyVaults = new List<(string ResourceId, string Location)>();
+        const string subscriptionId = "12345678-1234-1234-1234-123456789012";
+        const string resourceGroup = "test-rg";
+        const string deploymentId = $"/subscriptions/{subscriptionId}/resourceGroups/{resourceGroup}/providers/Microsoft.Resources/deployments/kv";
+        const string keyVaultResourceId = $"/subscriptions/{subscriptionId}/resourceGroups/{resourceGroup}/providers/Microsoft.KeyVault/vaults/kv-test";
+
+        builder.Configuration["Azure:SubscriptionId"] = subscriptionId;
+        builder.Configuration["Azure:Location"] = "westus2";
+        builder.Configuration["Azure:ResourceGroup"] = resourceGroup;
+        AddTestAzureProvisioning(builder, armClientProvider: ProvisioningTestHelpers.CreateArmClientProvider(
+            existingResourceIds: [keyVaultResourceId],
+            deletedResourceIds: deletedResourceIds,
+            deploymentTargetResourceIds: null,
+            canceledDeploymentIds: null,
+            purgedDeletedKeyVaults: purgedDeletedKeyVaults,
+            purgeDeletedKeyVaultException: new TimeoutException("Timed out waiting for deleted Azure Key Vault to be purged.")),
+            deploymentStateManager: deploymentStateManager);
+
+        var keyVault = builder.AddBicepTemplateString("kv", "resource kv 'Microsoft.KeyVault/vaults@2024-11-01' = {}");
+
+        using var app = builder.Build();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
+        var preparer = new AzureResourcePreparer(
+            app.Services.GetRequiredService<IOptions<AzureProvisioningOptions>>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>());
+
+        await preparer.OnBeforeStartAsync(new BeforeStartEvent(app.Services, model), CancellationToken.None);
+
+        var keyVaultSection = await deploymentStateManager.AcquireSectionAsync("Azure:Deployments:kv");
+        keyVaultSection.Data["Id"] = deploymentId;
+        keyVaultSection.Data["Outputs"] = new JsonObject
+        {
+            ["id"] = new JsonObject
+            {
+                ["type"] = "String",
+                ["value"] = keyVaultResourceId
+            }
+        }.ToJsonString();
+        keyVaultSection.Data[BicepProvisioner.DeploymentStateProvisioningStateKey] = BicepProvisioner.DeploymentStateProvisioningStateRunning;
+        await deploymentStateManager.SaveSectionAsync(keyVaultSection);
+
+        await notifications.PublishUpdateAsync(keyVault.Resource, state => state with { State = new("Failed to Provision", KnownResourceStateStyles.Error) });
+
+        var deleteCommand = Assert.Single(keyVault.Resource.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == AzureProvisioningController.DeleteAzureResourceCommandName);
+
+        var result = await deleteCommand.ExecuteCommand(new ExecuteCommandContext
+        {
+            Services = app.Services,
+            ResourceName = keyVault.Resource.Name,
+            CancellationToken = CancellationToken.None,
+            Logger = NullLogger.Instance,
+            Arguments = new InteractionInputCollection([])
+        });
+
+        Assert.True(result.Success);
+        Assert.Equal([keyVaultResourceId], deletedResourceIds);
+        var purgedDeletedKeyVault = Assert.Single(purgedDeletedKeyVaults);
+        Assert.Equal(keyVaultResourceId, purgedDeletedKeyVault.ResourceId);
+        Assert.Equal("westus2", purgedDeletedKeyVault.Location);
+
+        var resultData = AssertCommandJsonData(result);
+        Assert.Equal(1, resultData["deletedResourceCount"]?.GetValue<int>());
+
+        keyVaultSection = await deploymentStateManager.AcquireSectionAsync("Azure:Deployments:kv");
+        Assert.False(keyVaultSection.Data.ContainsKey("Id"));
+        Assert.False(keyVaultSection.Data.ContainsKey("Outputs"));
+
+        Assert.True(notifications.TryGetCurrentState(keyVault.Resource.Name, out var keyVaultEvent));
+        Assert.Equal(KnownResourceStates.NotStarted, keyVaultEvent.Snapshot.State?.Text);
     }
 
     [Fact]
@@ -4303,13 +4427,6 @@ public class AzureEnvironmentResourceExtensionsTests
         var data = result.Data!;
         Assert.Equal(CommandResultFormat.Json, data.Format);
         return Assert.IsType<JsonObject>(JsonNode.Parse(data.Value));
-    }
-
-    private static void AssertRedactedParameter(JsonObject parameters, string parameterName, string valuePropertyName)
-    {
-        var parameter = Assert.IsType<JsonObject>(parameters[parameterName]);
-        Assert.Null(parameter[valuePropertyName]);
-        Assert.True(parameter["redacted"]?.GetValue<bool>());
     }
 
     private static void AssertAffectedResourceCommandsDuringOperation(CustomResourceSnapshot snapshot)

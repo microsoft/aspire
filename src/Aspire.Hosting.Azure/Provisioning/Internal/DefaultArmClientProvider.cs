@@ -22,10 +22,11 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
     // Key Vault delete and purge operations are started through Azure SDK LROs, then
     // observed with ARM GET polling because real Azure can expose the live-vault deletion
     // and deleted-vault purge state before the SDK's completed wait returns.
-    // Keep the local poll budget short so a dashboard or CLI command does not sit blocked
-    // for the full service-side duration; if ARM needs longer, the user can retry.
+    // Deleting the live Key Vault is usually quick, but purging the deleted-vault tombstone can
+    // take several minutes in real Azure. Reprovision cannot reuse the globally unique vault name
+    // until that tombstone disappears, so give purge a longer command-side recovery window.
     private static readonly TimeSpan s_keyVaultPurgePollInterval = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan s_keyVaultPurgeTimeout = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan s_keyVaultPurgeTimeout = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan s_keyVaultDeletePollInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan s_keyVaultDeleteTimeout = TimeSpan.FromMinutes(1);
 

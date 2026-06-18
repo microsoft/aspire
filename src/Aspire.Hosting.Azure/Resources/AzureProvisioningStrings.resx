@@ -300,6 +300,9 @@ To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/pro
   <data name="ReprovisionResourceCommandSuccess" xml:space="preserve">
     <value>Azure resource reprovisioning completed.</value>
   </data>
+  <data name="OperationAlreadyRunningOrQueued" xml:space="preserve">
+    <value>Azure operation '{0}' is already running or queued for the same resource scope. Wait for it to finish or run '{2}' before starting '{1}'.</value>
+  </data>
   <data name="ReprovisionAllCommandName" xml:space="preserve">
     <value>Reprovision all</value>
   </data>
