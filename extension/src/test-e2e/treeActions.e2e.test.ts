@@ -118,6 +118,25 @@ suite('Aspire tree action command E2E', function () {
             'open resource terminal command',
             60000,
             terminalBefore);
+
+        // e2e-terminal is registered with .WithTerminal(), so the real Aspire CLI surfaces
+        // terminal.enabled and terminal.replicaIndex over the backchannel. Opening its terminal
+        // must therefore append --replica derived from that metadata, unlike e2e-worker above
+        // which has no terminal annotation and emits no --replica. This proves the terminal
+        // properties flow end-to-end through a real CLI process and drive the Open terminal action.
+        await waitForResource('e2e-terminal');
+        await waitForResourceState('e2e-terminal', ['Running'], 180000);
+        const terminalEnabledBefore = getTerminalCommandCount();
+        before = getCommandInvocationCount('aspire-vscode.openResourceTerminal');
+        await executeE2eControlCommand({ name: 'openResourceTerminal', appHostPath, resourceName: 'e2e-terminal' });
+        await waitForCommandOutcome('aspire-vscode.openResourceTerminal', 'success', 60000, before);
+        await waitForTerminalCommand(
+            event => event.subcommand.includes(`terminal attach ${quoteExpectedShellArg('e2e-terminal')}`)
+                && event.subcommand.includes('--replica')
+                && event.executionSuppressed,
+            'open terminal-enabled resource terminal command',
+            60000,
+            terminalEnabledBefore);
         await setTerminalCommandExecutionSuppressedForE2E(false);
 
         await waitForResource('e2e-worker');
