@@ -142,7 +142,12 @@ internal sealed class ChartDataCalculator
             for (var i = dimensionValues.Count - 1; i >= 0; i--)
             {
                 var metric = dimensionValues[i];
-                if (metric.Start <= end && metric.End >= start)
+                // MetricValueBase.Start/End are DateTime (Kind=Utc from Unix timestamps).
+                // Use explicit DateTimeOffset conversion to avoid silent local-time assumption
+                // if a DateTime with Kind=Unspecified is ever stored.
+                var metricStart = new DateTimeOffset(metric.Start, TimeSpan.Zero);
+                var metricEnd = new DateTimeOffset(metric.End, TimeSpan.Zero);
+                if (metricStart <= end && metricEnd >= start)
                 {
                     var value = metric switch
                     {
@@ -186,7 +191,10 @@ internal sealed class ChartDataCalculator
             for (var i = dimensionValues.Count - 1; i >= 0; i--)
             {
                 var metric = dimensionValues[i];
-                if (metric.Start >= start && metric.Start <= end)
+                // MetricValueBase.Start is DateTime (Kind=Utc from Unix timestamps).
+                // Use explicit DateTimeOffset conversion to avoid silent local-time assumption.
+                var metricStart = new DateTimeOffset(metric.Start, TimeSpan.Zero);
+                if (metricStart >= start && metricStart <= end)
                 {
                     var histogramValue = GetHistogramValue(metric);
 
