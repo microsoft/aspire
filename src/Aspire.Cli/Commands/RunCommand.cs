@@ -29,6 +29,7 @@ internal sealed class RunCommand : BaseCommand
     private readonly AspireCliTelemetry _telemetry;
     private readonly IConfiguration _configuration;
     private readonly IDotNetSdkInstaller _sdkInstaller;
+    private readonly IDotNetRuntimeSelector _runtimeSelector;
     private readonly IServiceProvider _serviceProvider;
 
     public RunCommand(
@@ -40,6 +41,7 @@ internal sealed class RunCommand : BaseCommand
         AspireCliTelemetry telemetry,
         IConfiguration configuration,
         IDotNetSdkInstaller sdkInstaller,
+        IDotNetRuntimeSelector runtimeSelector,
         IFeatures features,
         ICliUpdateNotifier updateNotifier,
         IServiceProvider serviceProvider)
@@ -53,6 +55,7 @@ internal sealed class RunCommand : BaseCommand
         ArgumentNullException.ThrowIfNull(telemetry);
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(sdkInstaller);
+        ArgumentNullException.ThrowIfNull(runtimeSelector);
 
         _runner = runner;
         _interactionService = interactionService;
@@ -63,6 +66,7 @@ internal sealed class RunCommand : BaseCommand
         _configuration = configuration;
         _serviceProvider = serviceProvider;
         _sdkInstaller = sdkInstaller;
+        _runtimeSelector = runtimeSelector;
 
         var projectOption = new Option<FileInfo?>("--project");
         projectOption.Description = RunCommandStrings.ProjectArgumentDescription;
@@ -78,7 +82,7 @@ internal sealed class RunCommand : BaseCommand
     protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         // Check if the .NET SDK is available
-        if (!await SdkInstallHelper.EnsureSdkInstalledAsync(_sdkInstaller, _interactionService, cancellationToken))
+        if (!await SdkInstallHelper.EnsureSdkInstalledAsync(_sdkInstaller, _interactionService, _runtimeSelector, cancellationToken))
         {
             return ExitCodeConstants.SdkNotInstalled;
         }

@@ -16,9 +16,9 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.DotNetSdkInstallerFactory = _ => new TestDotNetSdkInstaller
+            options.DotNetRuntimeSelectorFactory = _ => new TestDotNetRuntimeSelector
             {
-                CheckAsyncCallback = _ => false // SDK not installed
+                InitializeAsyncCallback = _ => false // SDK not installed
             };
         });
         var provider = services.BuildServiceProvider();
@@ -36,9 +36,9 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.DotNetSdkInstallerFactory = _ => new TestDotNetSdkInstaller
+            options.DotNetRuntimeSelectorFactory = _ => new TestDotNetRuntimeSelector
             {
-                CheckAsyncCallback = _ => false // SDK not installed
+                InitializeAsyncCallback = _ => false // SDK not installed
             };
         });
         var provider = services.BuildServiceProvider();
@@ -56,9 +56,9 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.DotNetSdkInstallerFactory = _ => new TestDotNetSdkInstaller
+            options.DotNetRuntimeSelectorFactory = _ => new TestDotNetRuntimeSelector
             {
-                CheckAsyncCallback = _ => false // SDK not installed
+                InitializeAsyncCallback = _ => false // SDK not installed
             };
         });
         var provider = services.BuildServiceProvider();
@@ -76,9 +76,9 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.DotNetSdkInstallerFactory = _ => new TestDotNetSdkInstaller
+            options.DotNetRuntimeSelectorFactory = _ => new TestDotNetRuntimeSelector
             {
-                CheckAsyncCallback = _ => false // SDK not installed
+                InitializeAsyncCallback = _ => false // SDK not installed
             };
         });
         var provider = services.BuildServiceProvider();
@@ -96,9 +96,9 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.DotNetSdkInstallerFactory = _ => new TestDotNetSdkInstaller
+            options.DotNetRuntimeSelectorFactory = _ => new TestDotNetRuntimeSelector
             {
-                CheckAsyncCallback = _ => false // SDK not installed
+                InitializeAsyncCallback = _ => false // SDK not installed
             };
         });
         var provider = services.BuildServiceProvider();
@@ -117,9 +117,9 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.EnabledFeatures = [KnownFeatures.ExecCommandEnabled];
-            options.DotNetSdkInstallerFactory = _ => new TestDotNetSdkInstaller
+            options.DotNetRuntimeSelectorFactory = _ => new TestDotNetRuntimeSelector
             {
-                CheckAsyncCallback = _ => false // SDK not installed
+                InitializeAsyncCallback = _ => false // SDK not installed
             };
         });
         var provider = services.BuildServiceProvider();
@@ -137,9 +137,9 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.DotNetSdkInstallerFactory = _ => new TestDotNetSdkInstaller
+            options.DotNetRuntimeSelectorFactory = _ => new TestDotNetRuntimeSelector
             {
-                CheckAsyncCallback = _ => true // SDK installed
+                InitializeAsyncCallback = _ => true // SDK installed
             };
             // Make sure project locator doesn't find projects so it fails at the expected point
             options.ProjectLocatorFactory = _ => new NoProjectFileProjectLocator();

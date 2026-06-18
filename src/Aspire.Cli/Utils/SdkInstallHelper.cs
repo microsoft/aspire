@@ -15,6 +15,8 @@ internal static class SdkInstallHelper
 {
     /// <summary>
     /// Ensures that the .NET SDK is installed and available, attempting installation if needed.
+    /// The runtime selector handles both system and private SDK scenarios; if it initializes
+    /// successfully the SDK is ready to use and no further check is required.
     /// </summary>
     /// <param name="sdkInstaller">The SDK installer service.</param>
     /// <param name="interactionService">The interaction service for user communication.</param>
@@ -31,20 +33,11 @@ internal static class SdkInstallHelper
         ArgumentNullException.ThrowIfNull(interactionService);
         ArgumentNullException.ThrowIfNull(runtimeSelector);
 
-        // First, try to initialize the runtime selector (which may install a private SDK)
+        // The runtime selector handles finding or installing the SDK (system or private).
+        // If it returns true, the dotnet executable is ready and no further check is needed.
         var isInitialized = await runtimeSelector.InitializeAsync(cancellationToken);
-        
+
         if (!isInitialized)
-        {
-            var sdkErrorMessage = string.Format(CultureInfo.InvariantCulture, ErrorStrings.MininumSdkVersionMissing, DotNetSdkInstaller.MinimumSdkVersion);
-            interactionService.DisplayError(sdkErrorMessage);
-            return false;
-        }
-
-        // Re-check the SDK after initialization
-        var isSdkAvailable = await sdkInstaller.CheckAsync(cancellationToken);
-
-        if (!isSdkAvailable)
         {
             var sdkErrorMessage = string.Format(CultureInfo.InvariantCulture, ErrorStrings.MininumSdkVersionMissing, DotNetSdkInstaller.MinimumSdkVersion);
             interactionService.DisplayError(sdkErrorMessage);
@@ -56,7 +49,6 @@ internal static class SdkInstallHelper
 
     /// <summary>
     /// Ensures that the .NET SDK is installed and available, displaying an error message if it's not.
-    /// This is the legacy method signature for backwards compatibility.
     /// </summary>
     /// <param name="sdkInstaller">The SDK installer service.</param>
     /// <param name="interactionService">The interaction service for user communication.</param>
