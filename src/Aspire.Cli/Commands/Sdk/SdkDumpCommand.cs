@@ -33,6 +33,7 @@ namespace Aspire.Cli.Commands.Sdk;
 internal sealed class SdkDumpCommand : BaseCommand
 {
     private readonly IAppHostServerProjectFactory _appHostServerProjectFactory;
+    private readonly IAppHostServerSessionFactory _appHostServerSessionFactory;
     private readonly ILogger<SdkDumpCommand> _logger;
 
     private static readonly Argument<string[]> s_integrationArgument = new("integrations")
@@ -55,11 +56,13 @@ internal sealed class SdkDumpCommand : BaseCommand
 
     public SdkDumpCommand(
         IAppHostServerProjectFactory appHostServerProjectFactory,
+        IAppHostServerSessionFactory appHostServerSessionFactory,
         ILogger<SdkDumpCommand> logger,
         CommonCommandServices services)
         : base("dump", "Dump ATS capabilities from Aspire integration libraries.", services)
     {
         _appHostServerProjectFactory = appHostServerProjectFactory;
+        _appHostServerSessionFactory = appHostServerSessionFactory;
         _logger = logger;
 
         Arguments.Add(s_integrationArgument);
@@ -190,11 +193,10 @@ internal sealed class SdkDumpCommand : BaseCommand
                 return CliExitCodes.FailedToBuildArtifacts;
             }
 
-            await using var serverSession = AppHostServerSession.Start(
+            await using var serverSession = _appHostServerSessionFactory.Start(
                 appHostServerProject,
                 environmentVariables: null,
-                debug: false,
-                _logger);
+                debug: false);
 
             // Connect and get capabilities
             var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
@@ -289,11 +291,10 @@ internal sealed class SdkDumpCommand : BaseCommand
                 return CliExitCodes.FailedToBuildArtifacts;
             }
 
-            await using var serverSession = AppHostServerSession.Start(
+            await using var serverSession = _appHostServerSessionFactory.Start(
                 appHostServerProject,
                 environmentVariables: null,
-                debug: false,
-                _logger);
+                debug: false);
 
             var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
             outputDirectory.Create();
