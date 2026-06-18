@@ -14,6 +14,7 @@ using ProtobufValue = Google.Protobuf.WellKnownTypes.Value;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
@@ -211,6 +212,34 @@ public partial class ResourcesTests : DashboardTestContext
         var focusInvocation = JSInterop.Invocations.Single(i => i.Identifier == "focusElement");
         Assert.Equal("resourcesGraphContainer", focusInvocation.Arguments[0]);
         Assert.Equal(true, focusInvocation.Arguments[1]);
+    }
+
+    [Fact]
+    public void TableView_FocusesAccessibleScrollContainerOnInitialRender()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: [], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        var scrollContainer = cut.Find("#resourcesScrollContainer");
+        var loc = Services.GetRequiredService<IStringLocalizer<Dashboard.Resources.Resources>>();
+
+        Assert.Equal("0", scrollContainer.GetAttribute("tabindex"));
+        Assert.Equal("region", scrollContainer.GetAttribute("role"));
+        Assert.Equal(loc[nameof(Dashboard.Resources.Resources.ResourcesHeader)].Value, scrollContainer.GetAttribute("aria-label"));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains(JSInterop.Invocations, invocation =>
+                invocation.Identifier == "focusElement" &&
+                invocation.Arguments.Count == 2 &&
+                string.Equals(invocation.Arguments[0]?.ToString(), "resourcesScrollContainer", StringComparison.Ordinal) &&
+                string.Equals(invocation.Arguments[1]?.ToString(), bool.TrueString, StringComparison.OrdinalIgnoreCase));
+        });
     }
 
     [Fact]

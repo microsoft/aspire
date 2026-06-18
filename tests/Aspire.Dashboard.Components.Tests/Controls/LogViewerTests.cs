@@ -6,6 +6,7 @@ using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Shared.ConsoleLogs;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Localization;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Controls;
@@ -62,6 +63,32 @@ public class LogViewerTests : DashboardTestContext
         });
     }
 
+    [Fact]
+    public void LogViewer_FocusesAccessibleScrollContainerOnInitialRender()
+    {
+        SetupLogViewerServices();
+
+        var cut = RenderComponent<LogViewer>(builder =>
+        {
+            builder.Add(p => p.LogEntries, new LogEntries(maximumEntryCount: int.MaxValue));
+        });
+
+        var scrollContainer = cut.Find("#logScrollContainer");
+        var loc = Services.GetRequiredService<IStringLocalizer<Resources.ConsoleLogs>>();
+
+        Assert.Equal("0", scrollContainer.GetAttribute("tabindex"));
+        Assert.Equal("region", scrollContainer.GetAttribute("role"));
+        Assert.Equal(loc[nameof(Resources.ConsoleLogs.ConsoleLogsHeader)].Value, scrollContainer.GetAttribute("aria-label"));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains(JSInterop.Invocations, invocation =>
+                invocation.Identifier == "focusElement" &&
+                invocation.Arguments.Count == 2 &&
+                string.Equals(invocation.Arguments[0]?.ToString(), "logScrollContainer", StringComparison.Ordinal) &&
+                string.Equals(invocation.Arguments[1]?.ToString(), bool.TrueString, StringComparison.OrdinalIgnoreCase));
+        });
+    }
+
     private static string GetBackgroundAccentVariableName(string style)
     {
         var background = GetCssPropertyValue(style, "background");
@@ -104,8 +131,8 @@ public class LogViewerTests : DashboardTestContext
         FluentUISetupHelpers.AddCommonDashboardServices(this, browserTimeProvider: new TestTimeProvider());
         Services.AddLogging();
 
-        JSInterop.SetupVoid("initializeContinuousScroll");
-        JSInterop.SetupVoid("resetContinuousScrollPosition");
+        JSInterop.SetupVoid("initializeContinuousScroll").SetVoidResult();
+        JSInterop.SetupVoid("resetContinuousScrollPosition").SetVoidResult();
         JSInterop.SetupVoid("focusElement", _ => true);
     }
 }
