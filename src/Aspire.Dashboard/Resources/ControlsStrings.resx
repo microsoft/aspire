@@ -127,7 +127,7 @@
     <value>Graph</value>
   </data>
   <data name="ChartContainerTableTab" xml:space="preserve">
-    <value>Resources</value>
+    <value>Table</value>
   </data>
   <data name="ChartContainerParametersTab" xml:space="preserve">
     <value>Parameters</value>

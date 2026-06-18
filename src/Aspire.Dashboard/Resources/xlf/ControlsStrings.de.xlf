@@ -83,8 +83,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerTableTab">
-        <source>Resources</source>
-        <target state="translated">Ressourcen</target>
+        <source>Table</source>
+        <target state="needs-review-translation">Ressourcen</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerUnableToDisplay">
