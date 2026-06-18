@@ -64,7 +64,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         _resourceColorMap = resourceColorMap;
         _timeProvider = timeProvider;
         _logger = logger;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, services.ExecutionContext, logger);
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, services.ExecutionContext, services.HostEnvironment, logger);
 
         Arguments.Add(s_resourceArgument);
         Options.Add(s_appHostOption);

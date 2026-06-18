@@ -44,7 +44,7 @@ internal sealed class StopCommand : BaseCommand
         CommonCommandServices services)
         : base("stop", StopCommandStrings.Description, services)
     {
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, services.ExecutionContext, logger, profilingTelemetry);
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, services.ExecutionContext, services.HostEnvironment, logger, profilingTelemetry);
         _hostEnvironment = hostEnvironment;
         _processShutdownService = processShutdownService;
         _logger = logger;

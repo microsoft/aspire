@@ -66,7 +66,7 @@ internal sealed class TerminalAttachCommand : BaseCommand
     {
         _interactionService = services.InteractionService;
         _logger = logger;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, services.InteractionService, projectLocator, services.ExecutionContext, logger);
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, services.InteractionService, projectLocator, services.ExecutionContext, services.HostEnvironment, logger);
 
         Arguments.Add(s_resourceArgument);
         Options.Add(s_appHostOption);

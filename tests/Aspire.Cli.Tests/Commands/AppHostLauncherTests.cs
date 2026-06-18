@@ -10,6 +10,7 @@ using Aspire.Cli.Layout;
 using Aspire.Cli.Processes;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
+using Aspire.Tests;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Telemetry;
@@ -413,8 +414,8 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     [Fact]
     public void DetachedChildEnvironment_IncludesProfilingTelemetryContext()
     {
-        using var listener = CreateActivityListener("test-detached-child-environment");
         using var source = new ActivitySource("test-detached-child-environment");
+        using var listener = ActivityListenerHelper.Create(source);
         using var activity = source.StartActivity("parent");
         Assert.NotNull(activity);
         activity.SetBaggage(ProfilingTelemetry.Baggage.SessionId, "session-1");
@@ -441,9 +442,9 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     [Fact]
     public void DetachedChildEnvironment_IncludesProfilingTelemetryContextFromActiveProfilingSpan()
     {
-        using var listener = CreateActivityListener(ProfilingTelemetry.ActivitySourceName);
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true")));
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource);
 
         using var activity = profilingTelemetry.StartDetachedSpawnChild("aspire", ["run"], childCommand: "run");
         Assert.True(activity.IsRunning);
@@ -461,8 +462,8 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     [Fact]
     public void DetachedChildEnvironment_DoesNotEnableProfilingForNonProfilingActivity()
     {
-        using var listener = CreateActivityListener("test-detached-child-environment");
         using var source = new ActivitySource("test-detached-child-environment");
+        using var listener = ActivityListenerHelper.Create(source);
         using var activity = source.StartActivity("parent");
         Assert.NotNull(activity);
 
@@ -632,17 +633,6 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 Assert.Equal(CliLogFormat.Categories.Build, entry.Category);
                 Assert.Equal("Build FAILED.", entry.Message);
             });
-    }
-
-    private static ActivityListener CreateActivityListener(string sourceName)
-    {
-        var listener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == sourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded
-        };
-        ActivitySource.AddActivityListener(listener);
-        return listener;
     }
 
     private static IConfiguration CreateConfiguration(params (string Key, string? Value)[] values)

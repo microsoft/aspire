@@ -1,27 +1,20 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-#nullable enable
-
-// Note: When implicit usings are enabled in a project this file will generate
-// warnings/errors without this suppression.
-#pragma warning disable IDE0005 // Using directive is unnecessary.
-
 // Note: For some targets this file will contain more than one type/namespace.
 #pragma warning disable IDE0161 // Convert to file-scoped namespace
 
-using System;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.CompilerServices;
-using System.Threading;
 
 #pragma warning disable SA1402 // File may only contain a single type
 #pragma warning disable SA1403 // File may only contain a single namespace
 #pragma warning disable SA1649 // File name should match first type name
+#pragma warning disable IDE0022 // Use expression body for method
 
-#if !NET6_0_OR_GREATER
+#if !NET
 namespace System.Runtime.CompilerServices
 {
     /// <summary>Allows capturing of the expressions passed to a method.</summary>
@@ -38,7 +31,7 @@ namespace System.Runtime.CompilerServices
 }
 #endif
 
-#if !NET6_0_OR_GREATER && !NETSTANDARD2_1_OR_GREATER
+#if !NET && !NETSTANDARD2_1_OR_GREATER
 namespace System.Diagnostics.CodeAnalysis
 {
     /// <summary>Specifies that an output is not <see langword="null"/> even if
@@ -67,10 +60,14 @@ namespace OpenTelemetry.Internal
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void ThrowIfNull([NotNull] object? value, [CallerArgumentExpression(nameof(value))] string? paramName = null)
         {
+#if NET
+            ArgumentNullException.ThrowIfNull(value, paramName);
+#else
             if (value is null)
             {
                 throw new ArgumentNullException(paramName, "Must not be null");
             }
+#endif
         }
 
         /// <summary>
@@ -83,10 +80,14 @@ namespace OpenTelemetry.Internal
         public static void ThrowIfNullOrEmpty([NotNull] string? value, [CallerArgumentExpression(nameof(value))] string? paramName = null)
 #pragma warning disable CS8777 // Parameter must have a non-null value when exiting.
         {
+#if NET
+            ArgumentException.ThrowIfNullOrEmpty(value, paramName);
+#else
             if (string.IsNullOrEmpty(value))
             {
                 throw new ArgumentException("Must not be null or empty", paramName);
             }
+#endif
         }
 #pragma warning restore CS8777 // Parameter must have a non-null value when exiting.
 
@@ -100,10 +101,14 @@ namespace OpenTelemetry.Internal
         public static void ThrowIfNullOrWhitespace([NotNull] string? value, [CallerArgumentExpression(nameof(value))] string? paramName = null)
 #pragma warning disable CS8777 // Parameter must have a non-null value when exiting.
         {
+#if NET
+            ArgumentException.ThrowIfNullOrWhiteSpace(value, paramName);
+#else
             if (string.IsNullOrWhiteSpace(value))
             {
                 throw new ArgumentException("Must not be null or whitespace", paramName);
             }
+#endif
         }
 #pragma warning restore CS8777 // Parameter must have a non-null value when exiting.
 
@@ -117,9 +122,29 @@ namespace OpenTelemetry.Internal
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void ThrowIfZero(int value, string message = "Must not be zero", [CallerArgumentExpression(nameof(value))] string? paramName = null)
         {
+#if NET
+            ArgumentOutOfRangeException.ThrowIfZero(value, paramName);
+#else
             if (value == 0)
             {
                 throw new ArgumentException(message, paramName);
+            }
+#endif
+        }
+
+        /// <summary>
+        /// Throw an exception if the value is negative.
+        /// </summary>
+        /// <param name="value">The value to check.</param>
+        /// <param name="message">The message to use in the thrown exception.</param>
+        /// <param name="paramName">The parameter name to use in the thrown exception.</param>
+        [DebuggerHidden]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void ThrowIfNegative(int value, string message = "Must not be negative", [CallerArgumentExpression(nameof(value))] string? paramName = null)
+        {
+            if (value < 0)
+            {
+                throw new ArgumentOutOfRangeException(paramName, message);
             }
         }
 
@@ -180,12 +205,9 @@ namespace OpenTelemetry.Internal
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static T ThrowIfNotOfType<T>([NotNull] object? value, [CallerArgumentExpression(nameof(value))] string? paramName = null)
         {
-            if (value is not T result)
-            {
-                throw new InvalidCastException($"Cannot cast '{paramName}' from '{value?.GetType().ToString() ?? "null"}' to '{typeof(T)}'");
-            }
-
-            return result;
+            return value is not T result
+                ? throw new InvalidCastException($"Cannot cast '{paramName}' from '{value?.GetType().ToString() ?? "null"}' to '{typeof(T)}'")
+                : result;
         }
 
         [DebuggerHidden]

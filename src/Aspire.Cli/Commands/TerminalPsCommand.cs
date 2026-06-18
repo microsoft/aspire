@@ -63,7 +63,7 @@ internal sealed class TerminalPsCommand : BaseCommand
     {
         _interactionService = services.InteractionService;
         _logger = logger;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, services.InteractionService, projectLocator, services.ExecutionContext, logger);
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, services.InteractionService, projectLocator, services.ExecutionContext, services.HostEnvironment, logger);
 
         Options.Add(s_appHostOption);
         Options.Add(s_formatOption);
