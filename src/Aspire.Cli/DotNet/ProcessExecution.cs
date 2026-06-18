@@ -21,6 +21,13 @@ internal sealed class ProcessExecution : IProcessExecution
     private static readonly TimeSpan s_drainIdleTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan s_drainPollInterval = TimeSpan.FromMilliseconds(100);
 
+    // Pre-cancelled token handed to the force-kill fallback's graceful wait. An already-cancelled
+    // token makes ProcessTerminator dispatch the best-effort SIGTERM (Unix) and then immediately
+    // escalate to Kill, rather than waiting for a graceful exit. CancellationToken.None must NOT
+    // be used here: with requestGracefulShutdown the terminator would WaitForExitAsync(None) and
+    // block forever if the child ignores SIGTERM.
+    private static readonly CancellationToken s_immediateEscalation = new(canceled: true);
+
     private readonly IsolatedProcessStartInfo _startInfo;
     private readonly string _fileName;
     private readonly IReadOnlyList<string> _arguments;
@@ -94,14 +101,7 @@ internal sealed class ProcessExecution : IProcessExecution
         {
             _logger.LogDebug("{FileName}({ProcessId}) wait was canceled, stopping it", _fileName, process.Id);
 
-            await ProcessShutdownCoordinator.ShutdownAsync(
-                process.Process,
-                _options.GracefulShutdownSignaler,
-                _options.ShutdownService,
-                fallbackRequestGracefulShutdown: !OperatingSystem.IsWindows(),
-                fallbackKillEntireProcessTree: _options.KillEntireProcessTreeOnCancel,
-                _logger,
-                _fileName).ConfigureAwait(false);
+            await ShutdownOnCancelAsync(process.Process).ConfigureAwait(false);
 
             // The child has now been signalled/killed by the coordinator. Drain trailing stdout/stderr
             // before propagating the cancellation so callers that observe output — or that swallow the
@@ -124,6 +124,49 @@ internal sealed class ProcessExecution : IProcessExecution
         await DrainOutputAsync(process, cancellationToken).ConfigureAwait(false);
 
         return process.ExitCode;
+    }
+
+    /// <summary>
+    /// The single decision point this execution routes through when its child must be torn down on
+    /// cancellation. Picks between the shared <see cref="ProcessGracefulShutdownLadder"/> (graceful
+    /// signal → bounded wait → tree-kill, used on the <c>aspire run</c> path) and the best-effort
+    /// <see cref="ProcessTerminator"/> force-kill fallback (non-Run callers).
+    /// </summary>
+    /// <remarks>
+    /// The graceful-vs-force decision is command-level and all-or-nothing: it keys off
+    /// <see cref="IGracefulShutdownWindow.IsEnabled"/> (true when the running command configured a
+    /// positive budget). There is no per-child or per-call flag. When the ladder is selected this also
+    /// starts the central clock via <see cref="IGracefulShutdownWindow.BeginGracefulWindow"/>, so the
+    /// ladder's wait is always bounded regardless of whether teardown was initiated by a user signal or
+    /// by disposal of the child owner.
+    /// </remarks>
+    private Task ShutdownOnCancelAsync(Process process)
+    {
+        var signaler = _options.GracefulShutdownSignaler;
+        var gracefulShutdownWindow = _options.ShutdownService;
+
+        if (signaler is not null && gracefulShutdownWindow is { IsEnabled: true })
+        {
+            // Start the central clock so the ladder's wait is bounded even when teardown was triggered
+            // by disposal (e.g. normal aspire run completion) rather than a user signal. Idempotent —
+            // if a user Ctrl+C already armed the window this is a no-op.
+            gracefulShutdownWindow.BeginGracefulWindow();
+
+            return ProcessGracefulShutdownLadder.ExecuteAsync(
+                process,
+                signaler,
+                gracefulShutdownWindow.GracefulShutdownToken,
+                _logger,
+                _fileName);
+        }
+
+        return ProcessTerminator.ShutdownAsync(
+            process,
+            requestGracefulShutdown: !OperatingSystem.IsWindows(),
+            entireProcessTree: _options.KillEntireProcessTreeOnCancel,
+            _logger,
+            _fileName,
+            gracefulShutdownCancellationToken: s_immediateEscalation);
     }
 
     /// <inheritdoc />

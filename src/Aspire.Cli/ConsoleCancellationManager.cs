@@ -374,7 +374,7 @@ internal sealed class ConsoleCancellationManager : IDisposable, IGracefulShutdow
 
 /// <summary>
 /// The command-level graceful-shutdown window consumed by every per-child shutdown path
-/// (<see cref="Processes.ProcessShutdownCoordinator"/> and the ladders it drives). Implemented by
+/// (<see cref="DotNet.ProcessExecution"/> and the ladders it drives). Implemented by
 /// <see cref="ConsoleCancellationManager"/>, which owns the budget, the clock, and the token as part
 /// of the single CLI shutdown service. This narrow contract is what the process-spawn sites depend on
 /// so they don't take a dependency on the console signal manager in full. It lives in this file rather
