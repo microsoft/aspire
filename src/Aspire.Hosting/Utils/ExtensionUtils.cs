@@ -24,6 +24,16 @@ internal static class ExtensionUtils
             return false;
         }
 
+        // An explicitly disabled annotation (SupportsDebuggingAnnotation.Disabled(), e.g. from
+        // WithTerminal()) opts the resource out of
+        // IDE/debugger execution entirely. Return false but keep the annotation in the out parameter so
+        // callers (e.g. ShouldFallBackToIdeExecution) can distinguish an explicit opt-out from a resource
+        // that simply has no debugging annotation.
+        if (!supportsDebuggingAnnotation.Enabled)
+        {
+            return false;
+        }
+
         // When the IDE did not send DEBUG_SESSION_INFO (e.g. Visual Studio), fall back to the
         // legacy rule that "project" launch configuration support is implicit. VS launches all
         // project resources natively without advertising a capability list.

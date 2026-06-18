@@ -86,6 +86,22 @@ public static class TerminalResourceBuilderExtensions
         var annotation = new TerminalAnnotation(options);
         builder.WithAnnotation(annotation);
 
+        // Suppress IDE/debugger execution for terminal-attached resources. DCP launches a
+        // terminal resource under a pseudo-terminal (PTY) and bridges its traffic through a
+        // per-replica TerminalHostResource. Routing the resource to ExecutionType.IDE (which
+        // AddProject's "project" debug support would do inside a debug session) bypasses that
+        // PTY/terminal-host wiring entirely, so the terminal would never attach. A disabled
+        // SupportsDebuggingAnnotation forces plain process execution. Because debug detection
+        // uses the last annotation on the resource, this must be added after the enabled
+        // annotation that AddProject applies — WithTerminal() always runs afterwards.
+        //
+        // This is a temporary workaround: DCP cannot yet run a process under the debugger and a
+        // PTY at the same time. Remove this once that support ships. Tracked by:
+        // https://github.com/microsoft/dcp/issues/__DCP_ISSUE_PLACEHOLDER__
+#pragma warning disable ASPIREEXTENSION001 // SupportsDebuggingAnnotation is experimental.
+        builder.WithAnnotation(SupportsDebuggingAnnotation.Disabled());
+#pragma warning restore ASPIREEXTENSION001
+
         var parent = builder.Resource;
         var appBuilder = builder.ApplicationBuilder;
 

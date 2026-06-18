@@ -14,20 +14,35 @@ namespace Aspire.Hosting.ApplicationModel;
 [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 internal sealed class SupportsDebuggingAnnotation : IResourceAnnotation
 {
-    private SupportsDebuggingAnnotation(string launchConfigurationType, Action<Executable, string> launchConfigurationAnnotator)
+    private SupportsDebuggingAnnotation(bool enabled, string? launchConfigurationType, Action<Executable, string>? launchConfigurationAnnotator)
     {
+        Enabled = enabled;
         LaunchConfigurationType = launchConfigurationType;
         LaunchConfigurationAnnotator = launchConfigurationAnnotator;
     }
 
-    public string LaunchConfigurationType { get; }
-    public Action<Executable, string> LaunchConfigurationAnnotator { get; }
+    /// <summary>
+    /// Gets a value indicating whether debugging is enabled for the resource. When <see langword="false"/>
+    /// the annotation is an explicit opt-out (created via <see cref="Disabled"/>, e.g. by <c>WithTerminal()</c>) that forces the
+    /// resource to run as a plain process even inside an IDE debug session. A disabled annotation carries
+    /// no launch configuration, so <see cref="LaunchConfigurationType"/> and
+    /// <see cref="LaunchConfigurationAnnotator"/> are <see langword="null"/>.
+    /// </summary>
+    public bool Enabled { get; }
+
+    public string? LaunchConfigurationType { get; }
+    public Action<Executable, string>? LaunchConfigurationAnnotator { get; }
 
     internal static SupportsDebuggingAnnotation Create<T>(string launchConfigurationType, Func<string, T> launchProfileProducer)
     {
-        return new SupportsDebuggingAnnotation(launchConfigurationType, (exe, mode) =>
+        return new SupportsDebuggingAnnotation(enabled: true, launchConfigurationType, (exe, mode) =>
         {
             exe.AnnotateAsObjectList(Executable.LaunchConfigurationsAnnotation, launchProfileProducer(mode));
         });
+    }
+
+    internal static SupportsDebuggingAnnotation Disabled()
+    {
+        return new SupportsDebuggingAnnotation(enabled: false, launchConfigurationType: null, launchConfigurationAnnotator: null);
     }
 }

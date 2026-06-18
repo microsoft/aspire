@@ -166,7 +166,9 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             {
                 // Clear any existing launch configurations (needed for restart scenarios).
                 exe.Annotate(Executable.LaunchConfigurationsAnnotation, string.Empty);
-                supportsDebuggingAnnotation.LaunchConfigurationAnnotator(exe, mode);
+                // SupportsDebugging only returns true for an enabled annotation, which always carries a
+                // non-null annotator (a disabled opt-out annotation never reaches here).
+                supportsDebuggingAnnotation.LaunchConfigurationAnnotator!(exe, mode);
             }
             catch (Exception ex)
             {
@@ -577,11 +579,23 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
     /// pass <see cref="ExtensionUtils.SupportsDebugging"/>. Returns <see langword="true"/> when
     /// the app host is running inside a debug session and either the resource has no
     /// <see cref="SupportsDebuggingAnnotation"/> (e.g. AddResource-based subclasses) or the
-    /// IDE did not send <c>DEBUG_SESSION_INFO</c> (Visual Studio scenario).
+    /// IDE did not send <c>DEBUG_SESSION_INFO</c> (Visual Studio scenario). Always returns
+    /// <see langword="false"/> when the resource carries an explicitly disabled
+    /// <see cref="SupportsDebuggingAnnotation"/> (added via <see cref="SupportsDebuggingAnnotation.Disabled"/>,
+    /// e.g. by <c>WithTerminal()</c>).
     /// </summary>
     private bool ShouldFallBackToIdeExecution(bool isInDebugSession, SupportsDebuggingAnnotation? supportsDebuggingAnnotation)
     {
         if (!isInDebugSession)
+        {
+            return false;
+        }
+
+        // An explicit opt-out (a disabled SupportsDebuggingAnnotation, e.g. from WithTerminal())
+        // must beat the Visual Studio fallback below.
+        // Without this, a project resource that disabled debugging would still be routed to IDE
+        // execution whenever the IDE did not advertise a capability list via DEBUG_SESSION_INFO.
+        if (supportsDebuggingAnnotation is { Enabled: false })
         {
             return false;
         }

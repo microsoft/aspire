@@ -553,4 +553,28 @@ public class WithTerminalTests
         await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
         return model;
     }
+
+    [Fact]
+    public void WithTerminalDisablesDebugging()
+    {
+        // A terminal-attached resource is launched by DCP under a PTY, which is incompatible with
+        // IDE/debugger execution. WithTerminal() adds a disabled SupportsDebuggingAnnotation so the
+        // resource always runs as a plain process, and it must be the last debug annotation so it
+        // wins over the enabled "project" support that AddProject adds.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var resource = builder.AddProject<TestProject>("myproj", options => { options.ExcludeLaunchProfile = true; });
+
+        resource.WithTerminal();
+
+#pragma warning disable ASPIREEXTENSION001 // SupportsDebuggingAnnotation is experimental.
+        var debugAnnotation = resource.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().LastOrDefault();
+        Assert.NotNull(debugAnnotation);
+        Assert.False(debugAnnotation.Enabled);
+#pragma warning restore ASPIREEXTENSION001
+    }
+
+    private sealed class TestProject : IProjectMetadata
+    {
+        public string ProjectPath => "another-path";
+    }
 }
