@@ -4,16 +4,14 @@
 using System.CommandLine;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
-using Aspire.Shared.ConsoleLogs;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Utils;
 using Aspire.Otlp.Serialization;
+using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -51,17 +49,14 @@ internal sealed class TelemetryLogsCommand : BaseCommand
     public TelemetryLogsCommand(
         IInteractionService interactionService,
         IAuxiliaryBackchannelMonitor backchannelMonitor,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
         IProjectLocator projectLocator,
-        AspireCliTelemetry telemetry,
         ICliHostEnvironment hostEnvironment,
         IHttpClientFactory httpClientFactory,
         ResourceColorMap resourceColorMap,
         TimeProvider timeProvider,
-        ILogger<TelemetryLogsCommand> logger)
-        : base("logs", TelemetryCommandStrings.LogsDescription, features, updateNotifier, executionContext, interactionService, telemetry)
+        ILogger<TelemetryLogsCommand> logger,
+        CommonCommandServices services)
+        : base("logs", TelemetryCommandStrings.LogsDescription, services)
     {
         _interactionService = interactionService;
         _hostEnvironment = hostEnvironment;
@@ -69,7 +64,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         _resourceColorMap = resourceColorMap;
         _timeProvider = timeProvider;
         _logger = logger;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, executionContext, logger);
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, services.ExecutionContext, services.HostEnvironment, logger);
 
         Arguments.Add(s_resourceArgument);
         Options.Add(s_appHostOption);

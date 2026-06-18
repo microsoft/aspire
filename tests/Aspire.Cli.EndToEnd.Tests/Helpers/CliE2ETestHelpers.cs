@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
@@ -189,6 +190,7 @@ internal static class CliE2ETestHelpers
         bool mountDockerSocket = false,
         TemporaryWorkspace? workspace = null,
         IEnumerable<string>? additionalVolumes = null,
+        string? network = null,
         int width = 160,
         int height = 48,
         [CallerMemberName] string testName = "")
@@ -229,6 +231,11 @@ internal static class CliE2ETestHelpers
                 if (mountDockerSocket)
                 {
                     c.MountDockerSocket = true;
+                }
+
+                if (network is not null)
+                {
+                    c.Network = network;
                 }
 
                 if (workspace is not null)
@@ -611,6 +618,291 @@ internal static class CliE2ETestHelpers
             $"by walking up from {AppContext.BaseDirectory}");
     }
 
+    private static readonly HttpClient s_nuGetHttpClient = new() { Timeout = TimeSpan.FromSeconds(30) };
+
+    /// <summary>
+    /// Queries nuget.org for the latest stable (non-prerelease) version of the Aspire project
+    /// templates package. Used by emulated-released-build tests to coerce a locally built CLI into
+    /// reporting and resolving against the latest shipped release via the <c>ASPIRE_CLI_*</c>
+    /// identity overrides. Returns <see langword="null"/> when nuget.org cannot be reached or no
+    /// stable version is found, so callers can <c>Assert.Skip</c> rather than fail on a network
+    /// outage.
+    /// </summary>
+    internal static async Task<string?> TryGetLatestStableAspireVersionAsync(Action<string> log, CancellationToken cancellationToken)
+    {
+        // Package Base Address ("flat container") index for aspire.projecttemplates. Shape:
+        //   { "versions": ["13.4.1", "13.4.2", "13.4.3", "13.5.0-preview.1.25600.1", ...] }
+        // Versions are listed oldest-to-newest but we sort explicitly rather than trust order.
+        // See https://learn.microsoft.com/nuget/api/package-base-address-resource.
+        const string indexUrl = "https://api.nuget.org/v3-flatcontainer/aspire.projecttemplates/index.json";
+
+        try
+        {
+            using var response = await s_nuGetHttpClient.GetAsync(indexUrl, cancellationToken);
+            response.EnsureSuccessStatusCode();
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+
+            if (!document.RootElement.TryGetProperty("versions", out var versions) ||
+                versions.ValueKind != JsonValueKind.Array)
+            {
+                log("nuget.org flat-container index for aspire.projecttemplates had no 'versions' array.");
+                return null;
+            }
+
+            Version? bestParsed = null;
+            string? bestRaw = null;
+            foreach (var element in versions.EnumerateArray())
+            {
+                var raw = element.GetString();
+                if (string.IsNullOrEmpty(raw))
+                {
+                    continue;
+                }
+
+                // A pre-release label ('-') or build metadata ('+') means it is not a shipped GA
+                // release; only stable versions can stand in for "latest released build".
+                if (raw.Contains('-', StringComparison.Ordinal) || raw.Contains('+', StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (Version.TryParse(raw, out var parsed) && (bestParsed is null || parsed > bestParsed))
+                {
+                    bestParsed = parsed;
+                    bestRaw = raw;
+                }
+            }
+
+            if (bestRaw is null)
+            {
+                log("No stable aspire.projecttemplates version was found on nuget.org.");
+            }
+
+            return bestRaw;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException)
+        {
+            log($"Failed to query nuget.org for the latest stable Aspire version: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Identifies the latest published <c>staging</c> ("rc/daily") Aspire build: the SDK version it
+    /// stamps and the source commit it was built from. Used by the emulated-staging E2E test to coerce
+    /// a locally built CLI into reporting and resolving as that staging build via the
+    /// <c>ASPIRE_CLI_*</c> identity overrides, so the staging feed-routing behavior (dropping a
+    /// <c>NuGet.config</c> that maps <c>Aspire*</c> to the SHA-specific darc feed) can be validated
+    /// without producing a real official build.
+    /// </summary>
+    /// <remarks>
+    /// Discovery is intentionally lightweight (it never downloads the ~120&#160;MB CLI binary):
+    /// <list type="number">
+    /// <item>The <c>https://aka.ms/dotnet/9/aspire/rc/daily/...</c> download redirect is resolved to
+    /// read the published version from the final ci.dot.net URL (e.g. <c>13.4.4</c>).</item>
+    /// <item>Recent commits on the matching <c>release/&lt;major&gt;.&lt;minor&gt;</c> branch are
+    /// listed via the GitHub API.</item>
+    /// <item>The SHA-specific <c>darc-pub-microsoft-aspire-&lt;sha8&gt;</c> feed for each commit
+    /// (newest first) is probed until one is found that carries <c>Aspire.ProjectTemplates</c> at the
+    /// published version. That commit is the staging build — verified empirically to match the commit
+    /// baked into the published binary's informational version.</item>
+    /// </list>
+    /// Returns <see langword="null"/> on any failure (network, GitHub rate limit, not found) so callers
+    /// can <c>Assert.Skip</c> rather than fail. The identity can also be pinned explicitly via the
+    /// <c>ASPIRE_E2E_STAGING_VERSION</c> and <c>ASPIRE_E2E_STAGING_COMMIT</c> environment variables,
+    /// which bypasses discovery entirely.
+    /// </remarks>
+    internal static async Task<StagingBuildIdentity?> TryGetLatestStagingBuildAsync(Action<string> log, CancellationToken cancellationToken)
+    {
+        // Escape hatch: an explicit pin via env vars bypasses all network discovery. Useful when the
+        // GitHub API is rate-limited, or the latest staging build is older than the probe window.
+        var pinnedVersion = Environment.GetEnvironmentVariable("ASPIRE_E2E_STAGING_VERSION");
+        var pinnedCommit = Environment.GetEnvironmentVariable("ASPIRE_E2E_STAGING_COMMIT");
+        if (!string.IsNullOrWhiteSpace(pinnedVersion) && !string.IsNullOrWhiteSpace(pinnedCommit))
+        {
+            log($"Using pinned staging identity from environment: version={pinnedVersion.Trim()}, commit={pinnedCommit.Trim()}");
+            return new StagingBuildIdentity(pinnedVersion.Trim(), pinnedCommit.Trim());
+        }
+
+        try
+        {
+            var version = await ResolveLatestStagingVersionAsync(log, cancellationToken);
+            if (version is null)
+            {
+                return null;
+            }
+
+            // Staging builds are published from a release branch. Derive release/<major>.<minor> from
+            // the version so we only probe the commits that could have produced this build.
+            var branchMatch = Regex.Match(version, @"^(?<major>\d+)\.(?<minor>\d+)\.");
+            if (!branchMatch.Success)
+            {
+                log($"Could not derive a release branch from staging version '{version}'.");
+                return null;
+            }
+
+            var branch = $"release/{branchMatch.Groups["major"].Value}.{branchMatch.Groups["minor"].Value}";
+            var commits = await GetRecentBranchCommitShasAsync(branch, commitCount: 40, log, cancellationToken);
+            if (commits.Count == 0)
+            {
+                log($"No commits returned for branch '{branch}'.");
+                return null;
+            }
+
+            // Probe the SHA-specific darc feeds newest-first. The first commit whose feed carries
+            // Aspire.ProjectTemplates whose release part matches the published version is the staging
+            // build. The exact feed version is used as the emulated version so it matches the feed
+            // packages whether the build is stable-shaped (13.4.4) or prerelease-shaped
+            // (13.4.4-preview.*).
+            foreach (var sha in commits)
+            {
+                var matchedVersion = await TryGetMatchingTemplateVersionAsync(sha, version, cancellationToken);
+                if (matchedVersion is not null)
+                {
+                    log($"Resolved latest staging build: version={matchedVersion}, commit={sha} (branch {branch}).");
+                    return new StagingBuildIdentity(matchedVersion, sha);
+                }
+            }
+
+            log($"No darc feed carrying Aspire.ProjectTemplates {version} found in the last {commits.Count} commits of '{branch}'.");
+            return null;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException)
+        {
+            log($"Failed to discover the latest staging build: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Resolves the <c>https://aka.ms/dotnet/9/aspire/rc/daily</c> CLI download redirect and reads the
+    /// published staging version from the final ci.dot.net URL. The request follows redirects but only
+    /// reads response headers, so the large CLI archive body is never downloaded.
+    /// </summary>
+    private static async Task<string?> ResolveLatestStagingVersionAsync(Action<string> log, CancellationToken cancellationToken)
+    {
+        // The aka.ms link 301-redirects to the versioned blob, e.g.:
+        //   https://ci.dot.net/public/aspire/13.4.4-preview.1.26310.6/aspire-cli-linux-x64-13.4.4.tar.gz
+        // The file name carries the package-shaped version (13.4.4) that the darc feed and the CLI's
+        // own stamp use; the directory segment is a CI-artifact version we ignore.
+        const string stagingDownloadUrl = "https://aka.ms/dotnet/9/aspire/rc/daily/aspire-cli-linux-x64.tar.gz";
+
+        using var response = await s_nuGetHttpClient.GetAsync(stagingDownloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var finalUrl = response.RequestMessage?.RequestUri?.ToString();
+        if (string.IsNullOrEmpty(finalUrl))
+        {
+            log("Could not determine the final URL for the staging CLI download redirect.");
+            return null;
+        }
+
+        // aspire-cli-<rid>-<version>.tar.gz  (version may be stable- or prerelease-shaped)
+        var match = Regex.Match(finalUrl, @"aspire-cli-[^/]+?-(?<version>\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)\.tar\.gz", RegexOptions.IgnoreCase);
+        if (!match.Success)
+        {
+            log($"Could not parse a staging version from '{finalUrl}'.");
+            return null;
+        }
+
+        return match.Groups["version"].Value;
+    }
+
+    /// <summary>
+    /// Lists the most recent commit SHAs on a branch via the GitHub commits API. Uses a token from
+    /// <c>GH_TOKEN</c>/<c>GITHUB_TOKEN</c> when present to avoid the unauthenticated rate limit, but
+    /// the microsoft/aspire repo is public so the call also works anonymously.
+    /// </summary>
+    private static async Task<IReadOnlyList<string>> GetRecentBranchCommitShasAsync(string branch, int commitCount, Action<string> log, CancellationToken cancellationToken)
+    {
+        var url = $"https://api.github.com/repos/microsoft/aspire/commits?sha={Uri.EscapeDataString(branch)}&per_page={commitCount}";
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        // GitHub requires a User-Agent; the API also returns richer data with the modern Accept header.
+        request.Headers.TryAddWithoutValidation("User-Agent", "aspire-cli-e2e-tests");
+        request.Headers.TryAddWithoutValidation("Accept", "application/vnd.github+json");
+        var token = Environment.GetEnvironmentVariable("GH_TOKEN") ?? Environment.GetEnvironmentVariable("GITHUB_TOKEN");
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {token}");
+        }
+
+        using var response = await s_nuGetHttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            log($"GitHub commits API for '{branch}' returned {(int)response.StatusCode} {response.ReasonPhrase}.");
+            return [];
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        if (document.RootElement.ValueKind != JsonValueKind.Array)
+        {
+            log($"GitHub commits API for '{branch}' returned an unexpected payload.");
+            return [];
+        }
+
+        var shas = new List<string>();
+        foreach (var commit in document.RootElement.EnumerateArray())
+        {
+            if (commit.TryGetProperty("sha", out var sha) && sha.GetString() is { Length: > 0 } value)
+            {
+                shas.Add(value);
+            }
+        }
+
+        return shas;
+    }
+
+    /// <summary>
+    /// Returns the exact <c>Aspire.ProjectTemplates</c> version published to the
+    /// <c>darc-pub-microsoft-aspire-&lt;sha8&gt;</c> feed for <paramref name="commitSha"/> whose
+    /// release part (major.minor.patch) matches <paramref name="releaseVersion"/>, or
+    /// <see langword="null"/> when no such feed/package exists. Matching on the release part (rather
+    /// than the full string) lets a stable-shaped published version (13.4.4) resolve a prerelease-shaped
+    /// feed package (13.4.4-preview.*) and vice versa.
+    /// </summary>
+    private static async Task<string?> TryGetMatchingTemplateVersionAsync(string commitSha, string releaseVersion, CancellationToken cancellationToken)
+    {
+        var shortSha = commitSha.Length >= 8 ? commitSha[..8].ToLowerInvariant() : commitSha.ToLowerInvariant();
+        // NuGet v3 "flat container" (Package Base Address) index for the darc feed, e.g.:
+        //   { "versions": ["13.4.4"] }
+        var indexUrl = $"https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-{shortSha}/nuget/v3/flat2/aspire.projecttemplates/index.json";
+
+        using var response = await s_nuGetHttpClient.GetAsync(indexUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        if (!document.RootElement.TryGetProperty("versions", out var versions) || versions.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        // The release part is everything before the first '-' (semver prerelease) or '+' (build metadata).
+        static string ReleasePart(string v)
+        {
+            var end = v.IndexOfAny(['-', '+']);
+            return end >= 0 ? v[..end] : v;
+        }
+
+        var releaseTarget = ReleasePart(releaseVersion);
+        foreach (var element in versions.EnumerateArray())
+        {
+            if (element.GetString() is { Length: > 0 } candidate &&
+                string.Equals(ReleasePart(candidate), releaseTarget, StringComparison.OrdinalIgnoreCase))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>
     /// Converts a host-side path (under the workspace root) to the corresponding
     /// container-side path (under /workspace/{workspaceName}). Use this when a path
@@ -764,6 +1056,59 @@ internal static class CliE2ETestHelpers
         return new LocalChannelInfo(sdkVersion);
     }
 
+    /// <summary>
+    /// Detects whether the host's packed Aspire packages contain a <b>stable-shaped</b> release version
+    /// (e.g. <c>13.5.0</c>) and returns the highest such version, or <c>null</c> when only the usual
+    /// pre-release packages (e.g. <c>13.5.0-dev</c>) are present.
+    /// </summary>
+    /// <remarks>
+    /// This gates the all-local emulated-release E2E tests. Those tests only make sense when a developer
+    /// has deliberately built a stable-shaped archive with <c>localhive --version X.Y.Z</c>; in every
+    /// other configuration (default CI uses a pre-release <c>LocalArchive</c>; a normal local hive build
+    /// produces a pre-release <c>-dev</c> version) there is no stable package to emulate and the test
+    /// skips. A future release version such as <c>13.5.0</c> exists <em>only</em> in this local build, so
+    /// a successful resolve against it later proves resolution came from the local packages rather than
+    /// nuget.org.
+    /// </remarks>
+    internal static string? TryGetLocalStableAspireVersion(string repoRoot)
+    {
+        var shippingDirectories = new[]
+        {
+            Path.Combine(repoRoot, "artifacts", "packages", "Debug", "Shipping"),
+            Path.Combine(repoRoot, "artifacts", "packages", "Release", "Shipping")
+        };
+
+        // A stable-shaped package is named exactly Aspire.Hosting.<major>.<minor>.<patch>.nupkg with no
+        // pre-release label and no build metadata, e.g. "Aspire.Hosting.13.5.0.nupkg". The default
+        // pre-release packages look like "Aspire.Hosting.13.5.0-dev.nupkg" and must NOT match.
+        var stablePackageRegex = new Regex(@"^Aspire\.Hosting\.(?<version>\d+\.\d+\.\d+)\.nupkg$", RegexOptions.IgnoreCase);
+
+        Version? bestParsed = null;
+        string? bestRaw = null;
+        foreach (var directory in shippingDirectories.Where(Directory.Exists))
+        {
+            foreach (var file in Directory.EnumerateFiles(directory, "Aspire.Hosting.*.nupkg", SearchOption.TopDirectoryOnly))
+            {
+                var fileName = Path.GetFileName(file);
+                if (fileName.EndsWith(".symbols.nupkg", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var match = stablePackageRegex.Match(fileName);
+                if (match.Success &&
+                    Version.TryParse(match.Groups["version"].Value, out var parsed) &&
+                    (bestParsed is null || parsed > bestParsed))
+                {
+                    bestParsed = parsed;
+                    bestRaw = match.Groups["version"].Value;
+                }
+            }
+        }
+
+        return bestRaw;
+    }
+
     internal static void WriteLocalChannelSettings(string projectRoot, string sdkVersion)
     {
         var configPath = Path.Combine(projectRoot, "aspire.config.json");
@@ -864,4 +1209,22 @@ internal static class CliE2ETestHelpers
             CopyDirectory(dir, Path.Combine(destDir, destDirName), log);
         }
     }
+}
+
+/// <summary>
+/// Identifies a published <c>staging</c> Aspire build for emulation: the SDK version it stamps and the
+/// source commit it was built from. The CLI derives its SHA-specific
+/// <c>darc-pub-microsoft-aspire-&lt;sha8&gt;</c> staging feed from the commit, so both values are
+/// required to make a locally built CLI resolve <c>Aspire.*</c> packages exactly as that staging build
+/// would. See <see cref="CliE2ETestHelpers.TryGetLatestStagingBuildAsync"/>.
+/// </summary>
+/// <param name="Version">The package-shaped SDK version (e.g. <c>13.4.4</c> or <c>13.4.4-preview.*</c>).</param>
+/// <param name="Commit">The full source commit SHA the build was produced from.</param>
+internal sealed record StagingBuildIdentity(string Version, string Commit)
+{
+    /// <summary>
+    /// The first 8 lowercase hex characters of <see cref="Commit"/> — the segment the CLI embeds in the
+    /// <c>darc-pub-microsoft-aspire-&lt;sha8&gt;</c> feed name.
+    /// </summary>
+    internal string ShortCommit => Commit.Length >= 8 ? Commit[..8].ToLowerInvariant() : Commit.ToLowerInvariant();
 }

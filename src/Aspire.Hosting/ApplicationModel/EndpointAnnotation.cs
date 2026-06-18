@@ -1,10 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
-using System.Collections.Concurrent;
-using System.Net.Sockets;
 using System.Collections;
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using System.Net.Sockets;
 
 namespace Aspire.Hosting.ApplicationModel;
 
@@ -452,6 +453,24 @@ public class NetworkEndpointSnapshotList : IEnumerable<NetworkEndpointSnapshot>
     {
         var nes = GetSnapshotFor(networkId);
         return nes.Snapshot.GetValueAsync(cancellationToken);
+    }
+
+    internal bool TryGetAllocatedEndpoint(NetworkIdentifier networkId, [NotNullWhen(true)] out AllocatedEndpoint? endpoint)
+    {
+        endpoint = null;
+
+        foreach (var endpointSnapshot in _snapshots)
+        {
+            if (!endpointSnapshot.NetworkID.Equals(networkId) || !endpointSnapshot.Snapshot.IsValueSet)
+            {
+                continue;
+            }
+
+            endpoint = endpointSnapshot.Snapshot.GetValueAsync().GetAwaiter().GetResult();
+            return true;
+        }
+
+        return false;
     }
 
     private NetworkEndpointSnapshot GetSnapshotFor(NetworkIdentifier networkId)

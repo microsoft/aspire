@@ -145,7 +145,7 @@ If such a comment exists, stay within the noted version range (e.g., v2.5.x for 
 #### Rule 5: Skip Non-Updatable Tags
 
 - Tags set to `"latest"` — cannot be version-bumped
-- Tags set to `"vnext-preview"` — not a version scheme
+- Tags set to `"vnext-latest"` — not a version scheme
 - Derived/computed tags (e.g., `$"{Tag}-management"`) — updated automatically
 
 ### Step 4: Present Update Summary

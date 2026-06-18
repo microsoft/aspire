@@ -8,6 +8,9 @@ Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeStartEvent [ExposePropertie
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsEditor
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ConnectionStringAvailableEvent [ExposeProperties]
+Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext [ExposeProperties]
+Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerFileSystemCallbackContext
+Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerFileSystemItem
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptions [ExposeProperties]
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptionsCallbackContext [ExposeProperties]
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImageReference [ExposeProperties]
@@ -29,6 +32,9 @@ Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentEditor
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext [ExposeProperties]
+Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpCommandPrepareRequestContext [ExposeProperties]
+Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext
+Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsEndpointUpdateCallbackContext [ExposeProperties]
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.IAspireStore [interface, ExposeProperties]
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeEnvironmentResource [interface]
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationBuilder [interface]
@@ -47,6 +53,8 @@ Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpressionBuilder [ExposeProperties]
+Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationContext [ExposeProperties, ExposeMethods]
+Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationResult [ExposeProperties]
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceCommandService
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceEndpointsAllocatedEvent [ExposeProperties]
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceLoggerService
@@ -57,6 +65,10 @@ Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsEditor
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext [ExposeProperties]
 Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext [ExposeProperties]
+Aspire.Hosting/Aspire.Hosting.Ats.InputsInteractionResult [ExposeProperties]
+Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder
+Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputLoadContext [ExposeProperties]
+Aspire.Hosting/Aspire.Hosting.Ats.InteractionLoadingInput
 Aspire.Hosting/Aspire.Hosting.DistributedApplication
 Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext [ExposeProperties]
 Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContextOptions
@@ -67,6 +79,7 @@ Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationEventing [interfac
 Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationResourceEvent [interface]
 Aspire.Hosting/Aspire.Hosting.ExternalServiceResource
 Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder [interface]
+Aspire.Hosting/Aspire.Hosting.IInteractionService [interface]
 Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext [ExposeProperties]
 Aspire.Hosting/Aspire.Hosting.InteractionInputCollection
 Aspire.Hosting/Aspire.Hosting.IResourceWithContainerFiles [interface]
@@ -131,6 +144,7 @@ Aspire.Hosting/Aspire.Hosting.ApplicationModel.GenerateParameterDefault # Repres
   Upper: boolean # Gets or sets a value indicating whether to include uppercase alphabet characters in the result.
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpCommandExportOptions # ATS-friendly configuration for resource HTTP commands.
   CommandName: string # Gets or sets the command name.
+  CommandOptions?: Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandOptions # Optional command configuration.
   ConfirmationMessage: string # When a confirmation message is specified, the UI will prompt with an OK/Cancel dialog before starting the command.
   Description: string # Optional description of the command, to be shown in the UI.
   EndpointName: string # Gets or sets the HTTP endpoint name to send the request to when the command is invoked.
@@ -138,7 +152,13 @@ Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpCommandExportOptions # ATS-fr
   IconVariant?: enum:Aspire.Hosting.ApplicationModel.IconVariant # The icon variant.
   IsHighlighted: boolean # A flag indicating whether the command is highlighted in the UI.
   MethodName: string # Gets or sets the HTTP method name to use when sending the request.
+  PrepareRequest?: callback # Gets or sets a callback to be invoked to configure the request before it is sent.
   ResultMode: enum:Aspire.Hosting.ApplicationModel.HttpCommandResultMode # Gets or sets how the HTTP response content should be returned as command result data.
+Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpCommandRequestExportData # ATS-friendly request data returned from HTTP command prepare-request callbacks.
+  Content: string # Gets or sets the request content.
+  ContentType: string # Gets or sets the request content type.
+  Headers: Aspire.Hosting/Dict<string,string> # Gets or sets the request headers.
+  MethodName: string # Gets or sets the HTTP method name to use when sending the request.
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateExecutionConfigurationContext # Configuration context for server authentication certificate configuration.
   CertificatePath: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression # Expression that will resolve to the path of the server authentication certificate in PEM format. For containers this will be a path inside the container.
   KeyPath: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression # Expression that will resolve to the path of the server authentication certificate key in PEM format. For containers this will be a path inside the container.
@@ -146,6 +166,7 @@ Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateExecutionConfigur
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProcessCommandExportOptions # ATS-friendly configuration for resource process commands.
   Arguments: string[] # The command-line arguments for the process.
   CommandOptions: Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandOptions # Optional command configuration.
+  CreateProcessSpec?: callback # A callback that creates the local process specification when the command is invoked.
   DisplayImmediately?: boolean # A value indicating whether returned command output should be displayed immediately in the dashboard.
   EnvironmentVariables: Aspire.Hosting/Dict<string,string> # The environment variables to set for the process.
   ExecutablePath: string # The executable path or command name to start.
@@ -182,10 +203,17 @@ Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateResourceSnapsho
 Aspire.Hosting/Aspire.Hosting.Ats.AddContainerOptions # Options for configuring a container image in polyglot apphosts.
   Image: string # The container image name.
   Tag?: string # The container image tag.
+Aspire.Hosting/Aspire.Hosting.Ats.BoolInteractionResult # The result of a boolean interaction prompt.
+  Canceled: boolean # Gets a value indicating whether the interaction was canceled by the user.
+  Value?: boolean # Gets the value returned from the interaction. Not meaningful when `Canceled` is `true`.
 Aspire.Hosting/Aspire.Hosting.Ats.CertificateTrustExecutionConfigurationExportData # ATS-friendly certificate trust data returned from an execution-configuration result.
   CertificateSubjects: string[] # The certificate subjects included in the trust configuration.
   CustomBundlePaths: string[] # The relative custom bundle paths.
   Scope: enum:Aspire.Hosting.ApplicationModel.CertificateTrustScope # The certificate trust scope.
+Aspire.Hosting/Aspire.Hosting.Ats.ContainerFilesOptions # Options for creating or updating files and directories in a container from polyglot apphosts.
+  DefaultGroup?: number # The default group ID for the created or updated file system entries. Defaults to 0 for root if not set.
+  DefaultOwner?: number # The default owner UID for the created or updated file system entries. Defaults to 0 for root if not set.
+  Umask?: number # The Unix umask to apply to files or directories without explicit permissions. Use octal literals in JavaScript or TypeScript, for example `0o022`.
 Aspire.Hosting/Aspire.Hosting.Ats.CreateBuilderOptions # Options for creating a distributed application builder from polyglot apphosts.
   AllowUnsecuredTransport: boolean # Allows the use of HTTP urls for the AppHost resource endpoint.
   AppHostFilePath: string # The full path to the AppHost file (e.g., apphost.ts, apphost.py). Used for consistent socket path computation across CLI and AppHost.
@@ -195,6 +223,23 @@ Aspire.Hosting/Aspire.Hosting.Ats.CreateBuilderOptions # Options for creating a 
   DisableDashboard: boolean # Determines whether the dashboard is disabled.
   EnableResourceLogging: boolean # Enables resource logging.
   ProjectDirectory: string # The directory containing the AppHost project file.
+Aspire.Hosting/Aspire.Hosting.Ats.CreateInteractionInputOptions # Optional configuration shared by interaction input factory capabilities.
+  AllowCustomChoice?: boolean # Gets or sets a value indicating whether a custom choice is allowed. Only used by choice inputs.
+  Description?: string # Gets or sets the description for the input.
+  Disabled?: boolean # Gets or sets a value indicating whether the input is disabled.
+  EnableDescriptionMarkdown?: boolean # Gets or sets a value indicating whether the description is rendered as Markdown.
+  Label?: string # Gets or sets the label for the input. Defaults to the input name when not specified.
+  MaxLength?: number # Gets or sets the maximum length for text inputs.
+  Placeholder?: string # Gets or sets the placeholder text for the input.
+  Required?: boolean # Gets or sets a value indicating whether the input is required.
+  Value?: string # Gets or sets the initial value of the input.
+Aspire.Hosting/Aspire.Hosting.Ats.DynamicLoadingOptions # Options controlling when a dynamic-loading callback runs.
+  AlwaysLoadOnStart?: boolean # Gets or sets a value indicating whether the callback always runs at the start of the prompt.
+  DependsOnInputs?: string[] # Gets or sets the names of inputs this input depends on. The callback runs when any of them change.
+Aspire.Hosting/Aspire.Hosting.Ats.HealthCheckResult # ATS-friendly custom health check result.
+  Data?: Aspire.Hosting/Dict<string,string> # Gets optional string data for the health check result.
+  Description?: string # Gets an optional description for the health check result.
+  Status: enum:Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus # Gets the health status returned by the health check.
 Aspire.Hosting/Aspire.Hosting.Ats.HttpsCertificateExecutionConfigurationExportData # ATS-friendly HTTPS certificate data returned from an execution-configuration result.
   IsKeyPathReferenced: boolean # Indicates whether the key path was referenced.
   IsPfxPathReferenced: boolean # Indicates whether the PFX path was referenced.
@@ -207,6 +252,35 @@ Aspire.Hosting/Aspire.Hosting.Ats.HttpsCertificateInfo # ATS-friendly certificat
   Issuer: string # The certificate issuer.
   Subject: string # The certificate subject.
   Thumbprint?: string # The certificate thumbprint.
+Aspire.Hosting/Aspire.Hosting.Ats.InputInteractionResult # The result of a single-input interaction prompt.
+  Canceled: boolean # Gets a value indicating whether the interaction was canceled by the user.
+  Input?: Aspire.Hosting/Aspire.Hosting.InteractionInput # Gets the input returned from the interaction. Not present when `Canceled` is `true`.
+Aspire.Hosting/Aspire.Hosting.Ats.InteractionChoiceOption # A single selectable option for a choice input. Options are presented in the order supplied.
+  Label: string # Gets or sets the label displayed for this option.
+  Value: string # Gets or sets the value submitted when this option is selected.
+Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputsDialogOptions # Options for inputs dialog prompts.
+  EnableMessageMarkdown?: boolean # Gets or sets a value indicating whether Markdown in the message is rendered.
+  PrimaryButtonText?: string # Gets or sets the primary button text.
+  SecondaryButtonText?: string # Gets or sets the secondary button text.
+  ShowDismiss?: boolean # Gets or sets a value indicating whether the dismiss button is shown.
+  ShowSecondaryButton?: boolean # Gets or sets a value indicating whether the secondary button is shown.
+  ValidationCallback?: callback # Gets or sets a callback invoked to validate the inputs before the dialog is accepted. The callback receives a validation context that exposes the current inputs and can record validation errors.
+Aspire.Hosting/Aspire.Hosting.Ats.InteractionMessageBoxOptions # Options for message box and confirmation prompts.
+  EnableMessageMarkdown?: boolean # Gets or sets a value indicating whether Markdown in the message is rendered.
+  Intent?: enum:Aspire.Hosting.MessageIntent # Gets or sets the intent of the message box.
+  PrimaryButtonText?: string # Gets or sets the primary button text.
+  SecondaryButtonText?: string # Gets or sets the secondary button text.
+  ShowDismiss?: boolean # Gets or sets a value indicating whether the dismiss button is shown.
+  ShowSecondaryButton?: boolean # Gets or sets a value indicating whether the secondary button is shown.
+Aspire.Hosting/Aspire.Hosting.Ats.InteractionNotificationOptions # Options for notification prompts.
+  EnableMessageMarkdown?: boolean # Gets or sets a value indicating whether Markdown in the message is rendered.
+  Intent?: enum:Aspire.Hosting.MessageIntent # Gets or sets the intent of the notification.
+  LinkText?: string # Gets or sets the text for a link in the notification.
+  LinkUrl?: string # Gets or sets the URL for the link in the notification.
+  PrimaryButtonText?: string # Gets or sets the primary button text.
+  SecondaryButtonText?: string # Gets or sets the secondary button text.
+  ShowDismiss?: boolean # Gets or sets a value indicating whether the dismiss button is shown.
+  ShowSecondaryButton?: boolean # Gets or sets a value indicating whether the secondary button is shown.
 Aspire.Hosting/Aspire.Hosting.Ats.ParameterCustomInputOptions # Options for customizing parameter inputs from polyglot app hosts.
   AllowCustomChoice?: boolean # Gets or sets whether custom choices are allowed.
   Description: string # Gets or sets the description for the input.
@@ -234,7 +308,6 @@ Aspire.Hosting/Aspire.Hosting.InteractionInput # Represents an input for an inte
   AllowCustomChoice?: boolean # Gets a value indicating whether a custom choice is allowed. Only used by `Choice` inputs.
   Description?: string # Gets or sets the description for the input.
   Disabled: boolean # Gets or sets a value indicating whether a custom choice is allowed. Only used by `Choice` inputs.
-  DynamicLoading?: Aspire.Hosting/Aspire.Hosting.InputLoadOptions # Gets the `InputLoadOptions` for the input. Dynamic loading is used to load data and update inputs after a prompt has started. It can also be used to reload data and update inputs after a dependant input has changed.
   EnableDescriptionMarkdown?: boolean # Gets or sets a value indicating whether the description should be rendered as Markdown. Setting this to `true` allows a description to contain Markdown elements such as links, text decoration and lists.
   InputType: enum:Aspire.Hosting.InputType # Gets or sets the type of the input.
   Label?: string # Gets or sets the label for the input. If not specified, the name will be used as the label.
@@ -261,7 +334,11 @@ enum:Aspire.Hosting.ApplicationModel.UrlDisplayLocation = SummaryAndDetails | De
 enum:Aspire.Hosting.ApplicationModel.WaitBehavior = WaitOnResourceUnavailable | StopOnResourceUnavailable
 enum:Aspire.Hosting.DistributedApplicationOperation = Run | Publish
 enum:Aspire.Hosting.InputType = Text | SecretText | Choice | Boolean | Number
+enum:Aspire.Hosting.MessageIntent = None | Success | Warning | Error | Information | Confirmation
 enum:Aspire.Hosting.OtlpProtocol = Grpc | HttpProtobuf | HttpJson
+enum:Aspire.Hosting.Publishing.ContainerImageDestination = Registry | Archive
+enum:Aspire.Hosting.Publishing.ContainerImageFormat = Docker | Oci
+enum:Aspire.Hosting.Publishing.ContainerTargetPlatform = LinuxAmd64 | LinuxArm64 | AllLinux | LinuxArm | Linux386 | WindowsAmd64 | WindowsArm64
 enum:Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus = Unhealthy | Degraded | Healthy
 enum:System.Net.Sockets.ProtocolType = IP | IPv6HopByHopOptions | Unspecified | Icmp | Igmp | Ggp | IPv4 | Tcp | Pup | Udp | Idp | IPv6 | IPv6RoutingHeader | IPv6FragmentHeader | IPSecEncapsulatingSecurityPayload | IPSecAuthenticationHeader | IcmpV6 | IPv6NoNextHeader | IPv6DestinationOptions | ND | Raw | Ipx | Spx | SpxII | Unknown
 
@@ -304,6 +381,25 @@ Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.log(context: Aspi
 Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.resource(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting.ApplicationModel/ConnectionStringAvailableEvent.resource(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ConnectionStringAvailableEvent) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting.ApplicationModel/ConnectionStringAvailableEvent.services(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ConnectionStringAvailableEvent) -> System.ComponentModel/System.IServiceProvider
+Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.cancellationToken(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext) -> cancellationToken
+Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.destination(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext) -> enum:Aspire.Hosting.Publishing.ContainerImageDestination
+Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.executionContext(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext) -> Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext
+Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.imageFormat(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext) -> enum:Aspire.Hosting.Publishing.ContainerImageFormat
+Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.localImageName(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext) -> string
+Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.localImageTag(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext) -> string
+Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.logger(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext) -> Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILogger
+Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.outputPath(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext) -> string
+Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.resource(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
+Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.services(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext) -> System.ComponentModel/System.IServiceProvider
+Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setDestination(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext, value: enum:Aspire.Hosting.Publishing.ContainerImageDestination) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext
+Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setImageFormat(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext, value: enum:Aspire.Hosting.Publishing.ContainerImageFormat) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext
+Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setLocalImageName(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext, value: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext
+Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setLocalImageTag(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext, value: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext
+Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setOutputPath(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext, value: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext
+Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setTargetPlatform(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext, value: enum:Aspire.Hosting.Publishing.ContainerTargetPlatform) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext
+Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.targetPlatform(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext) -> enum:Aspire.Hosting.Publishing.ContainerTargetPlatform
+Aspire.Hosting.ApplicationModel/ContainerFileSystemCallbackContext.model(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerFileSystemCallbackContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
+Aspire.Hosting.ApplicationModel/ContainerFileSystemCallbackContext.services(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerFileSystemCallbackContext) -> System.ComponentModel/System.IServiceProvider
 Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.remoteImageName(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptions) -> string
 Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.remoteImageTag(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptions) -> string
 Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.setRemoteImageName(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptions, value: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptions
@@ -376,8 +472,25 @@ Aspire.Hosting.ApplicationModel/ExecuteCommandContext.arguments(context: Aspire.
 Aspire.Hosting.ApplicationModel/ExecuteCommandContext.cancellationToken(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext) -> cancellationToken
 Aspire.Hosting.ApplicationModel/ExecuteCommandContext.logger(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext) -> Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILogger
 Aspire.Hosting.ApplicationModel/ExecuteCommandContext.resourceName(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext) -> string
+Aspire.Hosting.ApplicationModel/ExecuteCommandContext.services(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext) -> System.ComponentModel/System.IServiceProvider
 Aspire.Hosting.ApplicationModel/getEndpoint(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext, name: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference
 Aspire.Hosting.ApplicationModel/getValueAsync(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression, cancellationToken: cancellationToken) -> string
+Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.arguments(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpCommandPrepareRequestContext) -> Aspire.Hosting/Aspire.Hosting.InteractionInputCollection
+Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.cancellationToken(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpCommandPrepareRequestContext) -> cancellationToken
+Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.endpoint(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpCommandPrepareRequestContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference
+Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.resourceName(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpCommandPrepareRequestContext) -> string
+Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.arguments(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsEditor
+Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.cancellationToken(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext) -> cancellationToken
+Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.certificatePath(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
+Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.environment(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentEditor
+Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.executionContext(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext) -> Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext
+Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.keyPath(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
+Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.pfxPath(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
+Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.resource(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
+Aspire.Hosting.ApplicationModel/HttpsEndpointUpdateCallbackContext.cancellationToken(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsEndpointUpdateCallbackContext) -> cancellationToken
+Aspire.Hosting.ApplicationModel/HttpsEndpointUpdateCallbackContext.model(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsEndpointUpdateCallbackContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.DistributedApplicationModel
+Aspire.Hosting.ApplicationModel/HttpsEndpointUpdateCallbackContext.resource(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsEndpointUpdateCallbackContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
+Aspire.Hosting.ApplicationModel/HttpsEndpointUpdateCallbackContext.services(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsEndpointUpdateCallbackContext) -> System.ComponentModel/System.IServiceProvider
 Aspire.Hosting.ApplicationModel/IAspireStore.basePath(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IAspireStore) -> string
 Aspire.Hosting.ApplicationModel/info(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.LogFacade, message: string) -> void
 Aspire.Hosting.ApplicationModel/InitializeResourceEvent.eventing(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent) -> Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationEventing
@@ -386,6 +499,13 @@ Aspire.Hosting.ApplicationModel/InitializeResourceEvent.notifications(context: A
 Aspire.Hosting.ApplicationModel/InitializeResourceEvent.resource(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting.ApplicationModel/InitializeResourceEvent.services(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent) -> System.ComponentModel/System.IServiceProvider
 Aspire.Hosting.ApplicationModel/ReferenceExpressionBuilder.isEmpty(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpressionBuilder) -> boolean
+Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.cancellationToken(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationContext) -> cancellationToken
+Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.failure(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationContext, validationMessage: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationResult
+Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.resolvedPath(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationContext) -> string
+Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.services(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationContext) -> System.ComponentModel/System.IServiceProvider
+Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.success(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationResult
+Aspire.Hosting.ApplicationModel/RequiredCommandValidationResult.isValid(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationResult) -> boolean
+Aspire.Hosting.ApplicationModel/RequiredCommandValidationResult.validationMessage(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationResult) -> string
 Aspire.Hosting.ApplicationModel/ResourceEndpointsAllocatedEvent.resource(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceEndpointsAllocatedEvent) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting.ApplicationModel/ResourceEndpointsAllocatedEvent.services(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceEndpointsAllocatedEvent) -> System.ComponentModel/System.IServiceProvider
 Aspire.Hosting.ApplicationModel/ResourceReadyEvent.resource(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceReadyEvent) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
@@ -401,9 +521,20 @@ Aspire.Hosting.ApplicationModel/ResourceUrlsEditor.addForEndpoint(context: Aspir
 Aspire.Hosting.ApplicationModel/ResourceUrlsEditor.executionContext(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsEditor) -> Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext
 Aspire.Hosting.ApplicationModel/set(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentEditor, name: string, value: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression|Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource|Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString|Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue) -> void
 Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.resourceSnapshot(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateResourceSnapshot
+Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.services(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext) -> System.ComponentModel/System.IServiceProvider
 Aspire.Hosting.ApplicationModel/warning(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.LogFacade, message: string) -> void
 Aspire.Hosting.Ats/EventingSubscriberRegistrationContext.cancellationToken(context: Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext) -> cancellationToken
 Aspire.Hosting.Ats/EventingSubscriberRegistrationContext.executionContext(context: Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext) -> Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext
+Aspire.Hosting.Ats/getName(context: Aspire.Hosting/Aspire.Hosting.Ats.InteractionLoadingInput) -> string
+Aspire.Hosting.Ats/input(context: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputLoadContext) -> Aspire.Hosting/Aspire.Hosting.Ats.InteractionLoadingInput
+Aspire.Hosting.Ats/InputsInteractionResult.canceled(context: Aspire.Hosting/Aspire.Hosting.Ats.InputsInteractionResult) -> boolean
+Aspire.Hosting.Ats/InputsInteractionResult.inputs(context: Aspire.Hosting/Aspire.Hosting.Ats.InputsInteractionResult) -> Aspire.Hosting/Aspire.Hosting.InteractionInputCollection
+Aspire.Hosting.Ats/InteractionInputLoadContext.inputs(context: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputLoadContext) -> Aspire.Hosting/Aspire.Hosting.InteractionInputCollection
+Aspire.Hosting.Ats/setChoiceOptions(context: Aspire.Hosting/Aspire.Hosting.Ats.InteractionLoadingInput, choices: Aspire.Hosting/Aspire.Hosting.Ats.InteractionChoiceOption[]) -> void
+Aspire.Hosting.Ats/setValue(context: Aspire.Hosting/Aspire.Hosting.Ats.InteractionLoadingInput, value: string) -> void
+Aspire.Hosting.Ats/withChoiceOptions(context: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder, choices: Aspire.Hosting/Aspire.Hosting.Ats.InteractionChoiceOption[]) -> Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder
+Aspire.Hosting.Ats/withDynamicLoading(context: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder, callback: callback, options?: Aspire.Hosting/Aspire.Hosting.Ats.DynamicLoadingOptions) -> Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder
+Aspire.Hosting.Ats/withValue(context: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder, value: string) -> Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder
 Aspire.Hosting.Eventing/IDistributedApplicationEventing.unsubscribe(context: Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationEventing, subscription: Aspire.Hosting/Aspire.Hosting.Eventing.DistributedApplicationEventSubscription) -> void
 Aspire.Hosting.Pipelines/addTag(context: Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStep, tag: string) -> void
 Aspire.Hosting.Pipelines/dependsOn(context: Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStep, stepName: string) -> void
@@ -451,6 +582,7 @@ Aspire.Hosting/addDotnetTool(name: string, packageId: string) -> Aspire.Hosting/
 Aspire.Hosting/addEventingSubscriber(subscribe: callback) -> void
 Aspire.Hosting/addExecutable(name: string, command: string, workingDirectory: string, args: string[]) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource
 Aspire.Hosting/addExternalService(name: string, url: string|uri|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting/Aspire.Hosting.ExternalServiceResource
+Aspire.Hosting/addHealthCheck(name: string, check: callback) -> void
 Aspire.Hosting/addMarkdown(key: string, markdownString: string) -> void
 Aspire.Hosting/addParameter(name: string, value?: string, publishValueAsDefault?: boolean, secret?: boolean) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource
 Aspire.Hosting/addParameterFromConfiguration(name: string, configurationKey: string, secret?: boolean) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource
@@ -470,11 +602,19 @@ Aspire.Hosting/completeStepMarkdown(markdownString: string, completionState?: st
 Aspire.Hosting/completeTask(completionMessage?: string, completionState?: string, cancellationToken?: cancellationToken) -> void
 Aspire.Hosting/completeTaskMarkdown(markdownString: string, completionState?: string, cancellationToken?: cancellationToken) -> void
 Aspire.Hosting/configure(callback: callback) -> void
+Aspire.Hosting/createBooleanInput(name: string, options?: Aspire.Hosting/Aspire.Hosting.Ats.CreateInteractionInputOptions) -> Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder
 Aspire.Hosting/createBuilder() -> Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder
+Aspire.Hosting/createCertificateFile(name: string, contents?: string, sourcePath?: string, owner?: number, group?: number, mode?: number, continueOnError?: boolean) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerFileSystemItem
+Aspire.Hosting/createChoiceInput(name: string, choices?: Aspire.Hosting/Aspire.Hosting.Ats.InteractionChoiceOption[], options?: Aspire.Hosting/Aspire.Hosting.Ats.CreateInteractionInputOptions) -> Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder
+Aspire.Hosting/createDirectory(name: string, entries: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerFileSystemItem[], owner?: number, group?: number, mode?: number) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerFileSystemItem
 Aspire.Hosting/createExecutionConfiguration() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationBuilder
+Aspire.Hosting/createFile(name: string, contents?: string, sourcePath?: string, owner?: number, group?: number, mode?: number, continueOnError?: boolean) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerFileSystemItem
 Aspire.Hosting/createLogger(categoryName: string) -> Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILogger
 Aspire.Hosting/createMarkdownTask(markdownString: string, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.Pipelines.IReportingTask
+Aspire.Hosting/createNumberInput(name: string, options?: Aspire.Hosting/Aspire.Hosting.Ats.CreateInteractionInputOptions) -> Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder
+Aspire.Hosting/createSecretInput(name: string, options?: Aspire.Hosting/Aspire.Hosting.Ats.CreateInteractionInputOptions) -> Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder
 Aspire.Hosting/createTask(statusText: string, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.Pipelines.IReportingTask
+Aspire.Hosting/createTextInput(name: string, options?: Aspire.Hosting/Aspire.Hosting.Ats.CreateInteractionInputOptions) -> Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder
 Aspire.Hosting/Dict.clear() -> void
 Aspire.Hosting/Dict.count() -> number
 Aspire.Hosting/Dict.get(key: any) -> any
@@ -491,6 +631,7 @@ Aspire.Hosting/DistributedApplicationExecutionContext.isRunMode(context: Aspire.
 Aspire.Hosting/DistributedApplicationExecutionContext.operation(context: Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext) -> enum:Aspire.Hosting.DistributedApplicationOperation
 Aspire.Hosting/DistributedApplicationExecutionContext.publisherName(context: Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext) -> string
 Aspire.Hosting/DistributedApplicationExecutionContext.serviceProvider(context: Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext) -> System.ComponentModel/System.IServiceProvider
+Aspire.Hosting/DistributedApplicationExecutionContext.services(context: Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext) -> System.ComponentModel/System.IServiceProvider
 Aspire.Hosting/DistributedApplicationExecutionContext.setPublisherName(context: Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext, value: string) -> Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext
 Aspire.Hosting/dockerfileBuilderAddContainerFilesStages(resource: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource, logger?: Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILogger) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileBuilder
 Aspire.Hosting/dockerfileBuilderArg(name: string, defaultValue?: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileBuilder
@@ -525,6 +666,7 @@ Aspire.Hosting/getEndpoint(name: string) -> Aspire.Hosting/Aspire.Hosting.Applic
 Aspire.Hosting/getEventing() -> Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationEventing
 Aspire.Hosting/getFileNameWithContent(filenameTemplate: string, sourceFilename: string) -> string
 Aspire.Hosting/getHttpsCertificateData() -> Aspire.Hosting/Aspire.Hosting.Ats.HttpsCertificateExecutionConfigurationExportData
+Aspire.Hosting/getInteractionService() -> Aspire.Hosting/Aspire.Hosting.IInteractionService
 Aspire.Hosting/getLoggerFactory() -> Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILoggerFactory
 Aspire.Hosting/getOrSetSecret(resourceBuilder: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource, name: string, value: string) -> void
 Aspire.Hosting/getResourceCommandService() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceCommandService
@@ -543,7 +685,9 @@ Aspire.Hosting/IDistributedApplicationBuilder.userSecretsManager(context: Aspire
 Aspire.Hosting/InputsDialogValidationContext.addValidationError(context: Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext, inputName: string, errorMessage: string) -> void
 Aspire.Hosting/InputsDialogValidationContext.cancellationToken(context: Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext) -> cancellationToken
 Aspire.Hosting/InputsDialogValidationContext.inputs(context: Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext) -> Aspire.Hosting/Aspire.Hosting.InteractionInputCollection
+Aspire.Hosting/InputsDialogValidationContext.services(context: Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext) -> System.ComponentModel/System.IServiceProvider
 Aspire.Hosting/InteractionInputCollection.toArray(context: Aspire.Hosting/Aspire.Hosting.InteractionInputCollection) -> Aspire.Hosting/Aspire.Hosting.InteractionInput[]
+Aspire.Hosting/isAvailable() -> boolean
 Aspire.Hosting/isDevelopment() -> boolean
 Aspire.Hosting/isEnvironment(environmentName: string) -> boolean
 Aspire.Hosting/isProduction() -> boolean
@@ -580,6 +724,11 @@ Aspire.Hosting/ProjectResourceOptions.launchProfileName(context: Aspire.Hosting/
 Aspire.Hosting/ProjectResourceOptions.setExcludeKestrelEndpoints(context: Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions, value: boolean) -> Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions
 Aspire.Hosting/ProjectResourceOptions.setExcludeLaunchProfile(context: Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions, value: boolean) -> Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions
 Aspire.Hosting/ProjectResourceOptions.setLaunchProfileName(context: Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions, value: string) -> Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions
+Aspire.Hosting/promptConfirmation(title: string, message: string, options?: Aspire.Hosting/Aspire.Hosting.Ats.InteractionMessageBoxOptions, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.Ats.BoolInteractionResult
+Aspire.Hosting/promptInput(title: string, message: string, input: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder, options?: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputsDialogOptions, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.Ats.InputInteractionResult
+Aspire.Hosting/promptInputs(title: string, message: string, inputs: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder[], options?: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputsDialogOptions, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.Ats.InputsInteractionResult
+Aspire.Hosting/promptMessageBox(title: string, message: string, options?: Aspire.Hosting/Aspire.Hosting.Ats.InteractionMessageBoxOptions, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.Ats.BoolInteractionResult
+Aspire.Hosting/promptNotification(title: string, message: string, options?: Aspire.Hosting/Aspire.Hosting.Ats.InteractionNotificationOptions, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.Ats.BoolInteractionResult
 Aspire.Hosting/publishAsConnectionString() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/publishAsContainer() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/publishAsDockerFile(configure: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource
@@ -593,6 +742,7 @@ Aspire.Hosting/subscribeAfterPublish(callback: callback) -> Aspire.Hosting/Aspir
 Aspire.Hosting/subscribeAfterResourcesCreated(callback: callback) -> Aspire.Hosting/Aspire.Hosting.Eventing.DistributedApplicationEventSubscription
 Aspire.Hosting/subscribeBeforePublish(callback: callback) -> Aspire.Hosting/Aspire.Hosting.Eventing.DistributedApplicationEventSubscription
 Aspire.Hosting/subscribeBeforeStart(callback: callback) -> Aspire.Hosting/Aspire.Hosting.Eventing.DistributedApplicationEventSubscription
+Aspire.Hosting/subscribeHttpsEndpointsUpdate(callback: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/tryAddEventingSubscriber(subscribe: callback) -> void
 Aspire.Hosting/tryGetResourceState(resourceName: string) -> Aspire.Hosting/Aspire.Hosting.Ats.ResourceEventDto
 Aspire.Hosting/updateTask(statusText: string, cancellationToken?: cancellationToken) -> void
@@ -618,7 +768,10 @@ Aspire.Hosting/withCertificateTrustScope(scope: enum:Aspire.Hosting.ApplicationM
 Aspire.Hosting/withCommand(name: string, displayName: string, executeCommand: callback, commandOptions?: Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandOptions) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withComputeEnvironment(computeEnvironmentResource: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeEnvironmentResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource
 Aspire.Hosting/withConnectionProperty(name: string, value: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString
+Aspire.Hosting/withContainerBuildOptions(callback: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withContainerCertificatePaths(customCertificatesDestination?: string, defaultCertificateBundlePaths?: string[], defaultCertificateDirectoryPaths?: string[]) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
+Aspire.Hosting/withContainerFiles(destinationPath: string, sourcePath: string, options?: Aspire.Hosting/Aspire.Hosting.Ats.ContainerFilesOptions) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
+Aspire.Hosting/withContainerFilesCallback(destinationPath: string, callback: callback, options?: Aspire.Hosting/Aspire.Hosting.Ats.ContainerFilesOptions) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/withContainerFilesSource(sourcePath: string) -> Aspire.Hosting/Aspire.Hosting.IResourceWithContainerFiles
 Aspire.Hosting/withContainerName(name: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/withContainerNetworkAlias(alias: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
@@ -634,6 +787,7 @@ Aspire.Hosting/withDockerfileFactory(contextPath: string, dockerfileFactory: cal
 Aspire.Hosting/withEndpoint(port?: number, targetPort?: number, scheme?: string, name?: string, env?: string, isProxied?: boolean, isExternal?: boolean, protocol?: enum:System.Net.Sockets.ProtocolType) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
 Aspire.Hosting/withEndpointCallback(endpointName: string, callback: callback, createIfNotExists?: boolean) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
 Aspire.Hosting/withEndpointProxySupport(proxyEnabled: boolean) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
+Aspire.Hosting/withEndpointsInEnvironment(endpointNames: string[]) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource
 Aspire.Hosting/withEntrypoint(entrypoint: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/withEnvironment(name: string, value: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression|Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource|Aspire.Hosting/Aspire.Hosting.ExternalServiceResource|Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString|Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
 Aspire.Hosting/withEnvironmentCallback(callback: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
@@ -651,6 +805,7 @@ Aspire.Hosting/withHttpEndpointCallback(callback: callback, name?: string, creat
 Aspire.Hosting/withHttpHealthCheck(path?: string, statusCode?: number, endpointName?: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
 Aspire.Hosting/withHttpProbe(probeType: enum:Aspire.Hosting.ApplicationModel.ProbeType, path?: string, initialDelaySeconds?: number, periodSeconds?: number, timeoutSeconds?: number, failureThreshold?: number, successThreshold?: number, endpointName?: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
 Aspire.Hosting/withHttpsCertificateConfigExport(configContextFactory: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationBuilder
+Aspire.Hosting/withHttpsCertificateConfiguration(callback: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
 Aspire.Hosting/withHttpsEndpoint(port?: number, targetPort?: number, name?: string, env?: string, isProxied?: boolean) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
 Aspire.Hosting/withHttpsEndpointCallback(callback: callback, name?: string, createIfNotExists?: boolean) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
 Aspire.Hosting/withIconName(iconName: string, iconVariant?: enum:Aspire.Hosting.ApplicationModel.IconVariant) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
@@ -679,7 +834,9 @@ Aspire.Hosting/withRemoteImageName(remoteImageName: string) -> Aspire.Hosting/As
 Aspire.Hosting/withRemoteImageTag(remoteImageTag: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource
 Aspire.Hosting/withReplicas(replicas: number) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource
 Aspire.Hosting/withRequiredCommand(command: string, helpLink?: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
+Aspire.Hosting/withRequiredCommandValidation(command: string, validationCallback: callback, helpLink?: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withSessionLifetime() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
+Aspire.Hosting/withTerminal() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withToolIgnoreExistingFeeds() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource
 Aspire.Hosting/withToolIgnoreFailedSources() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource
 Aspire.Hosting/withToolPackage(packageId: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource

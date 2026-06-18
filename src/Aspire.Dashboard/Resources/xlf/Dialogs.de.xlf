@@ -504,6 +504,16 @@ For more information about using AI agents with the dashboard, including setting
         <target state="translated">OK</target>
         <note />
       </trans-unit>
+      <trans-unit id="ManageDataAllDataCheckboxLabel">
+        <source>All data</source>
+        <target state="new">All data</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ManageDataDataTypeForResourceCheckboxLabel">
+        <source>{0} for {1}</source>
+        <target state="new">{0} for {1}</target>
+        <note>{0} is the data type display name. {1} is the parent resource display name.</note>
+      </trans-unit>
       <trans-unit id="ManageDataDialogTitle">
         <source>Manage logs and telemetry</source>
         <target state="translated">Protokolle und Telemetrie verwalten</target>
@@ -725,8 +735,8 @@ For more information about using AI agents with the dashboard, including setting
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerSecretWarningDescription">
-        <source>Confirm you want to show the value. In the future, opening the text visualizer will automatically display all values</source>
-        <target state="translated">Bestätigen Sie, dass Sie den Wert anzeigen möchten. In Zukunft wird beim Öffnen des Textvisualisierers automatisch der gesamte Wert angezeigt.</target>
+        <source>Confirm you want to show this value. Once confirmed, the text visualizer in the browser will show values automatically</source>
+        <target state="needs-review-translation">Bestätigen Sie, dass Sie den Wert anzeigen möchten. In Zukunft wird beim Öffnen des Textvisualisierers automatisch der gesamte Wert angezeigt.</target>
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerSecretWarningTitle">

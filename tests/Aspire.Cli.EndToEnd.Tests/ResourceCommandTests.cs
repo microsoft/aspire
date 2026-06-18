@@ -143,8 +143,6 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
         var newContent = $$"""
             {{sdkLine}}
 
-            #pragma warning disable ASPIREINTERACTION001
-
             var builder = DistributedApplication.CreateBuilder(args);
 
             var cache = builder.AddContainer("cache", "redis");
@@ -210,7 +208,7 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task ResourceCommand_FailedExecution_DisplaysAppHostLogPathAndLogContainsEntries()
+    public async Task ResourceCommand_FailedExec_ShowsLogPathAndLogHasEntries()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);

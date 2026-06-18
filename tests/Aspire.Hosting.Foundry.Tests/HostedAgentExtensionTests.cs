@@ -77,10 +77,45 @@ public class HostedAgentExtensionTests
         var resource = builder.Resources.Single(r => r.Name == "agent");
         var command = Assert.Single(resource.Annotations.OfType<ResourceCommandAnnotation>());
         Assert.Equal("Send Message", command.DisplayName);
-        Assert.EndsWith("-/responses", command.Name);
+        Assert.Equal("send-message", command.Name);
         Assert.Equal("ChatSparkle", command.IconName);
         Assert.Equal(IconVariant.Regular, command.IconVariant);
         Assert.True(command.IsHighlighted);
+        var argument = Assert.Single(command.Arguments);
+        Assert.Equal("message", argument.Name);
+        Assert.Equal(InputType.Text, argument.InputType);
+        Assert.Equal("Message", argument.Label);
+        Assert.True(argument.Required);
+        Assert.NotNull(command.ValidateArguments);
+    }
+
+    [Fact]
+    public async Task AsHostedAgent_InRunMode_SendMessageCommandRejectsWhitespaceMessage()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgent();
+
+        using var app = builder.Build();
+
+        var resource = builder.Resources.Single(r => r.Name == "agent");
+        var command = Assert.Single(resource.Annotations.OfType<ResourceCommandAnnotation>());
+        Assert.NotNull(command.ValidateArguments);
+        var arguments = new InteractionInputCollection(
+        [
+            new InteractionInput
+            {
+                Name = "message",
+                InputType = InputType.Text,
+                Value = "   "
+            }
+        ]);
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(resource, command.Name, arguments);
+
+        Assert.False(result.Success);
+        Assert.Equal("Command argument validation failed.", result.Message);
     }
 
     [Fact]
@@ -100,7 +135,7 @@ public class HostedAgentExtensionTests
 
         var resource = builder.Resources.Single(r => r.Name == "agent");
         var command = Assert.Single(resource.Annotations.OfType<ResourceCommandAnnotation>());
-        Assert.EndsWith("-/invocations", command.Name);
+        Assert.Equal("send-message", command.Name);
 
         var urlsCallback = Assert.Single(resource.Annotations.OfType<ResourceUrlsCallbackAnnotation>());
         var url = new ResourceUrlAnnotation
@@ -228,6 +263,56 @@ public class HostedAgentExtensionTests
         Assert.DoesNotContain(hostedAgent.Annotations.OfType<ResourceRelationshipAnnotation>(), r =>
             r.Type == "Reference" &&
             ReferenceEquals(r.Resource, project.Resource));
+    }
+
+    [Fact]
+    public void AsHostedAgent_InPublishMode_AddsDefaultHttpEndpointWhenMissing()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        builder.AddProject<Project>("agent", launchProfileName: null)
+            .AsHostedAgent(project);
+
+        builder.Build();
+
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+        var endpoint = Assert.Single(hostedAgent.Target.Annotations.OfType<EndpointAnnotation>());
+
+        Assert.Equal("http", endpoint.Name);
+        Assert.Equal("http", endpoint.UriScheme);
+        Assert.Null(endpoint.TargetPort);
+    }
+
+    [Fact]
+    public async Task AsHostedAgent_InPublishMode_IgnoresProjectEndpointTargetPortEnvironment()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        builder.AddProject<Project>("agent", launchProfileName: null)
+            .WithHttpEndpoint(targetPort: 9000, env: "DEFAULT_AD_PORT")
+            .AsHostedAgent(project);
+
+        using var app = builder.Build();
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+        var endpoint = Assert.Single(hostedAgent.Target.Annotations.OfType<EndpointAnnotation>());
+        SetFoundryProjectOutputs(project.Resource);
+
+        var envVars = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            hostedAgent,
+            hostedAgent.Target,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Equal(9000, endpoint.TargetPort);
+        Assert.DoesNotContain("ASPNETCORE_URLS", envVars.Keys);
+        Assert.DoesNotContain("HTTP_PORTS", envVars.Keys);
+        Assert.DoesNotContain("HTTPS_PORTS", envVars.Keys);
+        Assert.DoesNotContain("DEFAULT_AD_PORT", envVars.Keys);
     }
 
     [Fact]
@@ -447,6 +532,13 @@ public class HostedAgentExtensionTests
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
     private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
+
+    private static void SetFoundryProjectOutputs(AzureCognitiveServicesProjectResource project)
+    {
+        project.Outputs["endpoint"] = "https://account.services.ai.azure.com/api/projects/my-project";
+        project.Outputs["APPLICATION_INSIGHTS_CONNECTION_STRING"] = "";
+        project.ProvisioningTaskCompletionSource?.TrySetResult();
+    }
 
     [Fact]
     public void AsHostedAgent_StampsReferenceRoleAssignmentAnnotationOnTarget_WithAzureAIUserRole()

@@ -5,12 +5,8 @@ using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
-using Aspire.Cli.Configuration;
-using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
-using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
 
@@ -23,7 +19,6 @@ internal sealed class McpCallCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.ToolsAndConfiguration;
 
-    private readonly IInteractionService _interactionService;
     private readonly AppHostConnectionResolver _connectionResolver;
 
     private static readonly Argument<string> s_resourceArgument = new("resource")
@@ -44,18 +39,13 @@ internal sealed class McpCallCommand : BaseCommand
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", SharedCommandStrings.AppHostOptionDescription);
 
     public McpCallCommand(
-        IInteractionService interactionService,
         IAuxiliaryBackchannelMonitor backchannelMonitor,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
         IProjectLocator projectLocator,
-        AspireCliTelemetry telemetry,
-        ILogger<McpCallCommand> logger)
-        : base("call", McpCommandStrings.CallCommand_Description, features, updateNotifier, executionContext, interactionService, telemetry)
+        ILogger<McpCallCommand> logger,
+        CommonCommandServices services)
+        : base("call", McpCommandStrings.CallCommand_Description, services)
     {
-        _interactionService = interactionService;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, executionContext, logger);
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, services.ExecutionContext, services.HostEnvironment, logger);
 
         Arguments.Add(s_resourceArgument);
         Arguments.Add(s_toolArgument);
@@ -79,7 +69,7 @@ internal sealed class McpCallCommand : BaseCommand
 
         if (!result.Success)
         {
-            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsError(result, _interactionService, CliExitCodes.FailedToDotnetRunAppHost));
+            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsError(result, InteractionService, CliExitCodes.FailedToDotnetRunAppHost));
         }
 
         var connection = result.Connection!;
@@ -123,7 +113,7 @@ internal sealed class McpCallCommand : BaseCommand
                 {
                     if (content is TextContentBlock textContent)
                     {
-                        _interactionService.DisplayRawText(textContent.Text);
+                        InteractionService.DisplayRawText(textContent.Text);
                     }
                     else
                     {
@@ -134,7 +124,7 @@ internal sealed class McpCallCommand : BaseCommand
                             writer.WriteString("type", content.Type);
                             writer.WriteEndObject();
                         }
-                        _interactionService.DisplayRawText(System.Text.Encoding.UTF8.GetString(stream.ToArray()));
+                        InteractionService.DisplayRawText(System.Text.Encoding.UTF8.GetString(stream.ToArray()));
                     }
                 }
             }

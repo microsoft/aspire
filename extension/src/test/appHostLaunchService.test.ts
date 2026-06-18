@@ -86,6 +86,24 @@ suite('AppHostLaunchService', () => {
         assert.strictEqual(fired, false);
     });
 
+    test('clearMatchingLaunching matches project paths to AppHost source files in the same directory', async () => {
+        await service.launch('/repo/AppHost/AppHost.csproj', 'run', true);
+
+        service.clearMatchingLaunching('/repo/AppHost/Program.cs');
+
+        assert.strictEqual(service.isLaunching('/repo/AppHost/AppHost.csproj'), false);
+    });
+
+    test('clearMatchingLaunching does not clear unrelated paths in the same directory', async () => {
+        await service.launch('/repo/AppHost/First.csproj', 'run', true);
+        await service.launch('/repo/AppHost/Second.csproj', 'run', true);
+
+        service.clearMatchingLaunching('/repo/AppHost/Program.cs');
+
+        assert.strictEqual(service.isLaunching('/repo/AppHost/First.csproj'), true);
+        assert.strictEqual(service.isLaunching('/repo/AppHost/Second.csproj'), true);
+    });
+
     test('multiple paths can be tracked independently', async () => {
         await service.launch('/repo/AppHost1.csproj', 'run', true);
         await service.launch('/repo/AppHost2.csproj', 'run', true);
@@ -99,14 +117,14 @@ suite('AppHostLaunchService', () => {
         assert.strictEqual(service.isLaunching('/repo/AppHost2.csproj'), true);
     });
 
-    test('launch clears launching state when startDebugging returns false', async () => {
+    test('launch clears launching state and throws when startDebugging returns false', async () => {
         // vscode.debug.startDebugging returns Promise<boolean> and resolves false when
         // the debug adapter rejects or no provider matches — no terminate event is
         // emitted in that case. Without explicit cleanup the tree item would be stuck
         // showing the "Starting..." spinner forever.
         startDebuggingStub.resolves(false);
 
-        await service.launch('/repo/AppHost.csproj', 'run', true);
+        await assert.rejects(service.launch('/repo/AppHost.csproj', 'run', true), /did not start the Aspire run session/);
 
         assert.strictEqual(service.isLaunching('/repo/AppHost.csproj'), false);
     });

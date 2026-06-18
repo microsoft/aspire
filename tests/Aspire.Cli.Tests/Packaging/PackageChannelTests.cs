@@ -250,6 +250,180 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
         Assert.Contains(packages, p => string.Equals(p.Id, "Aspire.Hosting.Sql", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public void ShouldCreateNuGetConfig_StableChannel_ReturnsFalse()
+    {
+        // A real stable channel still carries mappings (everything -> nuget.org), so the
+        // exclusion must come from the channel name, not from an absence of mappings. This
+        // guards against scaffolding dropping a redundant <clear/>-based NuGet.config that
+        // would wipe the user's ambient feeds.
+        var cache = new FakeNuGetPackageCache();
+        var mappings = new[]
+        {
+            new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
+        };
+
+        var channel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Stable, mappings, cache, new TestFeatures());
+
+        Assert.False(channel.ShouldPersistChannelName());
+        Assert.False(channel.ShouldCreateNuGetConfig());
+    }
+
+    [Fact]
+    public void ShouldCreateNuGetConfig_DailyChannel_ReturnsTrue()
+    {
+        var cache = new FakeNuGetPackageCache();
+        var mappings = new[]
+        {
+            new PackageMapping("Aspire*", "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json"),
+            new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
+        };
+
+        var channel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Prerelease, mappings, cache, new TestFeatures());
+
+        Assert.True(channel.ShouldPersistChannelName());
+        Assert.True(channel.ShouldCreateNuGetConfig());
+    }
+
+    [Fact]
+    public void ShouldCreateNuGetConfig_StagingChannel_ReturnsTrue()
+    {
+        var cache = new FakeNuGetPackageCache();
+        var mappings = new[]
+        {
+            new PackageMapping("Aspire*", "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-abc1234/nuget/v3/index.json"),
+            new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
+        };
+
+        var channel = PackageChannel.CreateExplicitChannel("staging", PackageChannelQuality.Stable, mappings, cache, new TestFeatures());
+
+        Assert.True(channel.ShouldPersistChannelName());
+        Assert.True(channel.ShouldCreateNuGetConfig());
+    }
+
+    [Fact]
+    public void ShouldCreateNuGetConfig_PrChannel_ReturnsTrue()
+    {
+        var cache = new FakeNuGetPackageCache();
+        var mappings = new[]
+        {
+            new PackageMapping("Aspire*", "/tmp/pr-hive/12345"),
+            new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
+        };
+
+        var channel = PackageChannel.CreateExplicitChannel("pr-12345", PackageChannelQuality.Prerelease, mappings, cache, new TestFeatures());
+
+        Assert.True(channel.ShouldPersistChannelName());
+        Assert.True(channel.ShouldCreateNuGetConfig());
+    }
+
+    [Fact]
+    public void ShouldCreateNuGetConfig_ImplicitChannel_ReturnsFalse()
+    {
+        var cache = new FakeNuGetPackageCache();
+
+        var channel = PackageChannel.CreateImplicitChannel(cache, new TestFeatures());
+
+        Assert.False(channel.ShouldPersistChannelName());
+        Assert.False(channel.ShouldCreateNuGetConfig());
+    }
+
+    [Fact]
+    public void ShouldCreateNuGetConfig_ExplicitChannelWithoutMappings_ReturnsFalse()
+    {
+        // An Explicit channel constructed with an empty mappings array has no custom feed to
+        // pin, so there is nothing to write into a NuGet.config even though the name would
+        // otherwise be persisted.
+        var cache = new FakeNuGetPackageCache();
+
+        var channel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Prerelease, [], cache, new TestFeatures());
+
+        Assert.True(channel.ShouldPersistChannelName());
+        Assert.False(channel.ShouldCreateNuGetConfig());
+    }
+
+    [Fact]
+    public void IsBackedByLocalPackageDirectory_StableNamedChannelMappedToLocalDirectory_ReturnsTrue()
+    {
+        // This is the ASPIRE_CLI_PACKAGES emulation shape: a locally built CLI emulating a
+        // released build synthesizes a channel NAMED after the emulated identity (here "stable")
+        // whose Aspire* mapping points at a local directory of .nupkg files. The name-based
+        // VersionHelper.IsLocalBuildChannel("stable") would call this remote, so resolution must
+        // instead recognize the local directory from the mapping.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var packagesDirectory = workspace.CreateDirectory("packages");
+        var cache = new FakeNuGetPackageCache();
+        var mappings = new[]
+        {
+            new PackageMapping("Aspire*", packagesDirectory.FullName.Replace('\\', '/')),
+            new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
+        };
+
+        var channel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Both, mappings, cache, new TestFeatures());
+
+        Assert.True(channel.IsBackedByLocalPackageDirectory);
+    }
+
+    [Fact]
+    public void IsBackedByLocalPackageDirectory_RemoteStableChannel_ReturnsFalse()
+    {
+        // A real stable channel maps everything to nuget.org, so it is not locally backed.
+        var cache = new FakeNuGetPackageCache();
+        var mappings = new[]
+        {
+            new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
+        };
+
+        var channel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Stable, mappings, cache, new TestFeatures());
+
+        Assert.False(channel.IsBackedByLocalPackageDirectory);
+    }
+
+    [Fact]
+    public void IsBackedByLocalPackageDirectory_RemoteDailyFeed_ReturnsFalse()
+    {
+        // Daily routes Aspire* to an http(s) feed; an http source is never a local directory.
+        var cache = new FakeNuGetPackageCache();
+        var mappings = new[]
+        {
+            new PackageMapping("Aspire*", "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json"),
+            new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
+        };
+
+        var channel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Prerelease, mappings, cache, new TestFeatures());
+
+        Assert.False(channel.IsBackedByLocalPackageDirectory);
+    }
+
+    [Fact]
+    public void IsBackedByLocalPackageDirectory_AspireMappingToNonExistentDirectory_ReturnsFalse()
+    {
+        // Guard against a stale override: if the mapped directory no longer exists, do not claim
+        // the channel can resolve Aspire packages locally (callers would otherwise skip the feed
+        // fallback and fail to find any packages).
+        var cache = new FakeNuGetPackageCache();
+        var missingDirectory = Path.Combine(Path.GetTempPath(), $"aspire-missing-{Guid.NewGuid():N}");
+        var mappings = new[]
+        {
+            new PackageMapping("Aspire*", missingDirectory.Replace('\\', '/')),
+            new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
+        };
+
+        var channel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Both, mappings, cache, new TestFeatures());
+
+        Assert.False(channel.IsBackedByLocalPackageDirectory);
+    }
+
+    [Fact]
+    public void IsBackedByLocalPackageDirectory_ImplicitChannel_ReturnsFalse()
+    {
+        var cache = new FakeNuGetPackageCache();
+
+        var channel = PackageChannel.CreateImplicitChannel(cache, new TestFeatures());
+
+        Assert.False(channel.IsBackedByLocalPackageDirectory);
+    }
+
     private static PackageChannel CreateLocalChannel(DirectoryInfo packagesDirectory, PackageChannelQuality quality, IFeatures? features = null)
     {
         var cache = new FakeNuGetPackageCache

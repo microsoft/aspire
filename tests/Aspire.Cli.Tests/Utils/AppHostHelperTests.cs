@@ -5,6 +5,8 @@ using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Utils;
 using Aspire.Hosting.Backchannel;
+using Aspire.Hosting.Utils;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Utils;
 
@@ -233,7 +235,7 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         var appHostPath = "/path/to/MyApp.AppHost.csproj";
         var homeDirectory = "/nonexistent/home/directory";
 
-        var sockets = AppHostHelper.FindMatchingSockets(appHostPath, homeDirectory);
+        var sockets = BackchannelConstants.FindMatchingSockets(appHostPath, homeDirectory);
 
         Assert.Empty(sockets);
     }
@@ -258,7 +260,7 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         var otherSocket = Path.Combine(backchannelsDir, "differentId1a1b2C3d4.99999");
         File.WriteAllText(otherSocket, "");
 
-        var sockets = AppHostHelper.FindMatchingSockets(appHostPath, workspace.WorkspaceRoot.FullName);
+        var sockets = BackchannelConstants.FindMatchingSockets(appHostPath, workspace.WorkspaceRoot.FullName);
 
         Assert.Equal(2, sockets.Length);
         Assert.Contains(socket1, sockets);
@@ -283,7 +285,7 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         var legacyPidSocket = Path.Combine(legacyBackchannelsDir, $"auxi.sock.{hash}.12345");
         File.WriteAllText(legacyPidSocket, "");
 
-        var sockets = AppHostHelper.FindMatchingSockets(appHostPath, workspace.WorkspaceRoot.FullName);
+        var sockets = BackchannelConstants.FindMatchingSockets(appHostPath, workspace.WorkspaceRoot.FullName);
 
         // Should find both old and new format
         Assert.Equal(2, sockets.Length);
@@ -311,7 +313,7 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         var badPid = Path.Combine(backchannelsDir, $"{appHostId}AbCdEfGh.notapid");
         File.WriteAllText(badPid, "");
 
-        var sockets = AppHostHelper.FindMatchingSockets(appHostPath, workspace.WorkspaceRoot.FullName);
+        var sockets = BackchannelConstants.FindMatchingSockets(appHostPath, workspace.WorkspaceRoot.FullName);
 
         // Should NOT match the similar hash
         Assert.Empty(sockets);
@@ -330,7 +332,7 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         var otherSocket = Path.Combine(backchannelsDir, "differentId1a1b2C3d4.99999");
         File.WriteAllText(otherSocket, "");
 
-        var sockets = AppHostHelper.FindMatchingSockets(appHostPath, workspace.WorkspaceRoot.FullName);
+        var sockets = BackchannelConstants.FindMatchingSockets(appHostPath, workspace.WorkspaceRoot.FullName);
 
         Assert.Empty(sockets);
     }
@@ -366,6 +368,78 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         Assert.False(File.Exists(orphanedSocket), "Orphaned socket should be deleted");
         Assert.True(File.Exists(liveSocket), "Live socket should still exist");
     }
+
+    [Fact]
+    public void FindMatchingNonOrphanedSockets_RemovesDeadPidSocketsAndKeepsLiveAndPidlessSockets()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var backchannelsDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cli", "bch");
+        Directory.CreateDirectory(backchannelsDir);
+
+        var appHostPath = "/path/to/MyApp.AppHost.csproj";
+        // FindMatchingNonOrphanedSockets resolves symlinks (which canonicalizes via Path.GetFullPath)
+        // before hashing, so the socket files must be keyed off the same resolved path. On Windows
+        // Path.GetFullPath roots the drive-less "/path/to/..." to "C:\path\to\...", giving a different
+        // hash than the raw string; resolving here keeps both sides consistent across all platforms.
+        var resolvedAppHostPath = PathNormalizer.ResolveSymlinks(appHostPath);
+        var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(resolvedAppHostPath, workspace.WorkspaceRoot.FullName);
+        var appHostId = Path.GetFileName(prefix);
+        var deadPid = int.MaxValue - 1;
+        var currentPid = Environment.ProcessId;
+
+        var orphanedSocket = Path.Combine(backchannelsDir, $"{appHostId}a1b2C3d4.{deadPid}");
+        var liveSocket = Path.Combine(backchannelsDir, $"{appHostId}Z9y8X7w6.{currentPid}");
+        var pidlessSocket = Path.Combine(backchannelsDir, appHostId);
+        File.WriteAllText(orphanedSocket, "");
+        File.WriteAllText(liveSocket, "");
+        File.WriteAllText(pidlessSocket, "");
+
+        var remainingSockets = AppHostHelper.FindMatchingNonOrphanedSockets(
+            appHostPath,
+            workspace.WorkspaceRoot.FullName,
+            currentPid,
+            NullLogger.Instance);
+
+        Assert.Collection(
+            remainingSockets.Order(StringComparer.Ordinal),
+            socket => Assert.Equal(pidlessSocket, socket),
+            socket => Assert.Equal(liveSocket, socket));
+        Assert.False(File.Exists(orphanedSocket));
+        Assert.True(File.Exists(liveSocket));
+        Assert.True(File.Exists(pidlessSocket));
+    }
+
+    [Fact]
+    public void FindMatchingNonOrphanedSockets_WithSymlinkedPath_MatchesCanonicalSocket()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
+            "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var realDirectory = workspace.WorkspaceRoot.CreateSubdirectory("real");
+        var symlinkDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "link");
+        Directory.CreateSymbolicLink(symlinkDirectory, realDirectory.FullName);
+
+        var projectFileViaSymlink = Path.Combine(symlinkDirectory, "TestAppHost.csproj");
+        File.WriteAllText(projectFileViaSymlink, "<Project />");
+
+        var canonicalProjectPath = PathNormalizer.ResolveSymlinks(projectFileViaSymlink);
+        var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(canonicalProjectPath, workspace.WorkspaceRoot.FullName);
+        var appHostId = Path.GetFileName(prefix);
+        var currentPid = Environment.ProcessId;
+        var liveSocket = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cli", "bch", $"{appHostId}a1b2C3d4.{currentPid}");
+        Directory.CreateDirectory(Path.GetDirectoryName(liveSocket)!);
+        File.WriteAllText(liveSocket, "");
+
+        var remainingSockets = AppHostHelper.FindMatchingNonOrphanedSockets(
+            projectFileViaSymlink,
+            workspace.WorkspaceRoot.FullName,
+            currentPid,
+            NullLogger.Instance);
+
+        Assert.Collection(remainingSockets, socket => Assert.Equal(liveSocket, socket));
+    }
+
     [Theory]
     [InlineData("10.0.0", true)]
     [InlineData("9.2.0", true)]
@@ -458,7 +532,7 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         var socket = Path.Combine(backchannelsDir, $"{appHostId}a1b2C3d4.12345");
         File.WriteAllText(socket, "");
 
-        var found = AppHostHelper.FindMatchingSockets(mixedPath, workspace.WorkspaceRoot.FullName);
+        var found = BackchannelConstants.FindMatchingSockets(mixedPath, workspace.WorkspaceRoot.FullName);
         Assert.Single(found);
         Assert.Contains(socket, found);
     }
@@ -490,8 +564,8 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         File.WriteAllText(socket, "");
 
         // Both path variants should find the socket
-        var fromUpper = AppHostHelper.FindMatchingSockets(upperDrivePath, workspace.WorkspaceRoot.FullName);
-        var fromLower = AppHostHelper.FindMatchingSockets(lowerDrivePath, workspace.WorkspaceRoot.FullName);
+        var fromUpper = BackchannelConstants.FindMatchingSockets(upperDrivePath, workspace.WorkspaceRoot.FullName);
+        var fromLower = BackchannelConstants.FindMatchingSockets(lowerDrivePath, workspace.WorkspaceRoot.FullName);
 
         Assert.Single(fromUpper);
         Assert.Single(fromLower);
@@ -523,7 +597,7 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         Assert.NotEqual(currentHash, legacyHash);
 
         // FindMatchingSockets should still find the legacy socket via fallback
-        var found = AppHostHelper.FindMatchingSockets(appHostPath, workspace.WorkspaceRoot.FullName);
+        var found = BackchannelConstants.FindMatchingSockets(appHostPath, workspace.WorkspaceRoot.FullName);
         Assert.Single(found);
         Assert.Contains(legacySocket, found);
     }

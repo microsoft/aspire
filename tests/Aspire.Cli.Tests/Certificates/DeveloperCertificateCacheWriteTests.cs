@@ -1,10 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Reflection;
-using System.Text;
+using Aspire.Cli.Certificates;
 using Microsoft.AspNetCore.Certificates.Generation;
 using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -26,7 +25,7 @@ public class DeveloperCertificateCacheWriteTests
         RemoteExecutor.Invoke(static homePath =>
         {
             var userHttpsCertificateLocation = Path.Combine(homePath, ".aspnet", "dev-certs", "https");
-            var aspireDevCertsCacheDirectory = Path.Combine(homePath, ".aspire", "dev-certs", "https");
+            var aspireDevCertsCacheDirectory = CertificateHelpers.AspireDevCertsHttpsCacheDirectory;
             Directory.CreateDirectory(userHttpsCertificateLocation);
 
             var certificateManager = new MacOSCertificateManager(NullLogger.Instance);
@@ -39,7 +38,7 @@ public class DeveloperCertificateCacheWriteTests
 
             InvokeWriteAspireCacheFromDiskPfx(certificateManager, onDiskPfxPath, certificate);
 
-            var aspireLookup = GetAspireLookup(certificate);
+            var aspireLookup = CertificateHelpers.GetAspireCertificateHash(certificate);
             var cachedPfxPath = Path.Combine(aspireDevCertsCacheDirectory, $"{aspireLookup}.pfx");
             var cachedKeyPath = Path.Combine(aspireDevCertsCacheDirectory, $"{aspireLookup}.key");
 
@@ -50,9 +49,6 @@ public class DeveloperCertificateCacheWriteTests
             Assert.StartsWith("-----BEGIN PRIVATE KEY-----", File.ReadAllText(cachedKeyPath), StringComparison.Ordinal);
         }, homeDirectory.Path, options).Dispose();
     }
-
-    private static string GetAspireLookup(X509Certificate2 certificate) =>
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(certificate.Thumbprint)));
 
     private static void InvokeWriteAspireCacheFromDiskPfx(
         MacOSCertificateManager certificateManager,

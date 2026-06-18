@@ -8,7 +8,6 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Backchannel;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -79,7 +78,6 @@ internal sealed class LogsCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.Monitoring;
 
-    private readonly IInteractionService _interactionService;
     private readonly ICliHostEnvironment _hostEnvironment;
     private readonly AppHostConnectionResolver _connectionResolver;
     private readonly ILogger<LogsCommand> _logger;
@@ -118,24 +116,19 @@ internal sealed class LogsCommand : BaseCommand
     private readonly ResourceColorMap _resourceColorMap;
 
     public LogsCommand(
-        IInteractionService interactionService,
         IAuxiliaryBackchannelMonitor backchannelMonitor,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
         IProjectLocator projectLocator,
-        AspireCliTelemetry telemetry,
         ICliHostEnvironment hostEnvironment,
         ResourceColorMap resourceColorMap,
         ILogger<LogsCommand> logger,
-        ProfilingTelemetry profilingTelemetry)
-        : base("logs", LogsCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
+        ProfilingTelemetry profilingTelemetry,
+        CommonCommandServices services)
+        : base("logs", LogsCommandStrings.Description, services)
     {
         _resourceColorMap = resourceColorMap;
-        _interactionService = interactionService;
         _hostEnvironment = hostEnvironment;
         _logger = logger;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, executionContext, logger, profilingTelemetry);
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, services.ExecutionContext, services.HostEnvironment, logger, profilingTelemetry);
 
         Arguments.Add(s_resourceArgument);
         Options.Add(s_appHostOption);
@@ -175,7 +168,7 @@ internal sealed class LogsCommand : BaseCommand
 
         if (!result.Success)
         {
-            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsInformation(result, _interactionService));
+            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsInformation(result, InteractionService));
         }
 
         var connection = result.Connection!;
@@ -200,7 +193,7 @@ internal sealed class LogsCommand : BaseCommand
         {
             if (!resourceWatcher.GetResources().Any())
             {
-                _interactionService.DisplayMessage(KnownEmojis.Information, LogsCommandStrings.NoResourcesFound);
+                InteractionService.DisplayMessage(KnownEmojis.Information, LogsCommandStrings.NoResourcesFound);
                 return CommandResult.Success();
             }
         }
@@ -226,7 +219,7 @@ internal sealed class LogsCommand : BaseCommand
                 // logs --follow is active. Treat the lost stream as a normal end of stream
                 // rather than surfacing it as an unexpected CLI failure. Emit the status
                 // message on stderr so JSON output on stdout remains parseable.
-                AppHostFollowDisconnectHelpers.WriteStatusMessage(_interactionService, connection);
+                AppHostFollowDisconnectHelpers.WriteStatusMessage(InteractionService, connection);
 
                 return CommandResult.Success();
             }
@@ -248,7 +241,7 @@ internal sealed class LogsCommand : BaseCommand
         CancellationToken cancellationToken)
     {
         // Collect all logs, parsing into LogEntry with resolved resource names sorted by timestamp
-        var entries = await _interactionService.ShowStatusAsync(
+        var entries = await InteractionService.ShowStatusAsync(
             LogsCommandStrings.GettingLogs,
             async () => await CollectLogsAsync(connection, resourceWatcher, resourceName, tail, search, cancellationToken).ConfigureAwait(false));
 
@@ -281,13 +274,13 @@ internal sealed class LogsCommand : BaseCommand
             };
             var json = JsonSerializer.Serialize(logsOutput, LogsCommandJsonContext.Snapshot.LogsOutput);
             // Structured output always goes to stdout.
-            _interactionService.DisplayRawText(json, ConsoleOutput.Standard);
+            InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
         }
         else
         {
             if (entries.Count == 0)
             {
-                _interactionService.DisplayMessage(KnownEmojis.Information, LogsCommandStrings.NoLogsFound);
+                InteractionService.DisplayMessage(KnownEmojis.Information, LogsCommandStrings.NoLogsFound);
             }
             else
             {
@@ -316,7 +309,7 @@ internal sealed class LogsCommand : BaseCommand
         // If tail is specified, show last N lines first before streaming
         if (tail.HasValue)
         {
-            var entries = await _interactionService.ShowStatusAsync(
+            var entries = await InteractionService.ShowStatusAsync(
                 LogsCommandStrings.GettingLogs,
                 async () => await CollectLogsAsync(connection, resourceWatcher, resourceName, tail, search, cancellationToken).ConfigureAwait(false));
 
@@ -466,7 +459,7 @@ internal sealed class LogsCommand : BaseCommand
             };
             var output = JsonSerializer.Serialize(logLineJson, LogsCommandJsonContext.Ndjson.LogLineJson);
             // Structured output always goes to stdout.
-            _interactionService.DisplayRawText(output, ConsoleOutput.Standard);
+            InteractionService.DisplayRawText(output, ConsoleOutput.Standard);
         }
         else
         {
@@ -474,7 +467,7 @@ internal sealed class LogsCommand : BaseCommand
             var color = _resourceColorMap.GetColor(displayName);
             var escapedContent = displayContent.EscapeMarkup();
             var dimTimestamp = timestampPrefix.Length > 0 ? $"[dim]{timestampPrefix.EscapeMarkup()}[/]" : string.Empty;
-            _interactionService.DisplayMarkupLine($"{dimTimestamp}[{color}][[{displayName.EscapeMarkup()}]][/] {escapedContent}");
+            InteractionService.DisplayMarkupLine($"{dimTimestamp}[{color}][[{displayName.EscapeMarkup()}]][/] {escapedContent}");
         }
     }
 

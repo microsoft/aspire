@@ -40,7 +40,7 @@ public sealed class UpdateChannelNuGetConfigOrderingTests(ITestOutputHelper outp
 {
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task AspireUpdateAppliesAllPackageEditsBeforeRestoringWhenNuGetConfigGainsSourceMapping()
+    public async Task AspireUpdate_AppliesPkgEditsBeforeRestore_OnSourceMapping()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);

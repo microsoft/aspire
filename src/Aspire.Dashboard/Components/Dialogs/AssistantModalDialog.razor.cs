@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Model.Assistant;
 using Microsoft.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -27,9 +28,6 @@ public partial class AssistantModalDialog : IAsyncDisposable
 
     [Inject]
     public required IJSRuntime JS { get; init; }
-
-    [Inject]
-    public required IAIContextProvider AIContextProvider { get; init; }
 
     [Inject]
     public required IServiceProvider ServiceProvider { get; init; }
@@ -86,7 +84,7 @@ public partial class AssistantModalDialog : IAsyncDisposable
         return ValueTask.CompletedTask;
     }
 
-    public static async Task OpenDialogAsync(IDialogService dialogService, string title, AssistantDialogViewModel viewModel)
+    internal static async Task OpenDialogAsync(IDialogService dialogService, IJSRuntime js, string title, AssistantDialogViewModel viewModel, string? returnFocusElementId = null)
     {
         var parameters = new DialogParameters
         {
@@ -95,7 +93,15 @@ public partial class AssistantModalDialog : IAsyncDisposable
             Width = "min(800px, 100vw)",
             TrapFocus = true,
             Modal = true,
-            PreventScroll = true
+            PreventScroll = true,
+            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(dialogService, async _ =>
+            {
+                if (returnFocusElementId is not null && viewModel.Chat?.DisplayContainer != AssistantChatDisplayContainer.Switching)
+                {
+                    // FluentUI can restore focus to a shadow-DOM proxy instead of the launcher.
+                    await js.InvokeVoidAsync("focusElement", returnFocusElementId);
+                }
+            })
         };
 
         await dialogService.ShowDialogAsync<AssistantModalDialog>(viewModel, parameters);
@@ -116,7 +122,15 @@ public partial class AssistantModalDialog : IAsyncDisposable
 
     private async Task DisplaySidebarViewAsync()
     {
-        await AIContextProvider.LaunchAssistantSidebarAsync(Content.Chat);
+        var returnFocusElementId = GetSidebarReturnFocusElementId(Content.OpenedForMobileView, Content.ReturnFocusElementId);
+        await ServiceProvider.GetRequiredService<IAssistantDisplayContext>().LaunchAssistantSidebarAsync(Content.Chat, returnFocusElementId);
+    }
+
+    internal static string? GetSidebarReturnFocusElementId(bool openedForMobileView, string? returnFocusElementId)
+    {
+        return openedForMobileView
+            ? MainLayout.AssistantButtonId
+            : returnFocusElementId;
     }
 
     public async Task StartNewChatAsync()

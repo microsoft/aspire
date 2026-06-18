@@ -48,7 +48,7 @@ export default class AspireDcpServer {
     // the WebSocket notification arrives without that context.
     private readonly _runTelemetryById: Map<string, { startTimeMs: number; resourceType: string; mode: string; debugSessionId: string }>;
     // Per AppHost debug-session aggregate stats accumulated across the lifetime of the
-    // session. Used to emit the `debug/appHost/end` summary when an AppHost debug session
+    // session. Used to emit the `debug/apphost/end` summary when an AppHost debug session
     // terminates. Entries are added on first run_session for a debugSessionId and removed
     // (and returned) by takeDebugSessionAggregateStats().
     private readonly _debugSessionStats: Map<string, DebugSessionAggregateStats>;
@@ -79,7 +79,7 @@ export default class AspireDcpServer {
     /**
      * Returns and clears accumulated per-AppHost-debug-session telemetry stats for the
      * given debug session id. Called from AspireDebugSession.dispose() to emit the
-     * `debug/appHost/end` summary event. Returns undefined if no run_session was ever
+     * `debug/apphost/end` summary event. Returns undefined if no run_session was ever
      * accepted for this debug session.
      */
     takeDebugSessionAggregateStats(debugSessionId: string): { totalChildSessions: number; distinctResourceTypes: string[]; anyNonZeroExit: boolean } | undefined {
@@ -315,15 +315,15 @@ export default class AspireDcpServer {
                 // because the user did try to run something through us.
                 hooks.onRunSessionAccepted?.({ resourceType: launchConfig.type, mode });
                 const runSessionStartTimeMs = Date.now();
-                sendTelemetryEvent('debug/runSession/start', {
+                sendTelemetryEvent('debug/runsession/start', {
                     resource_type: supportedResourceType,
                     debugger_extension_matched: foundDebuggerExtension ? 'true' : 'false',
                     mode,
                 });
 
-                // Emits a `debug/runSession/end` event paired with the start above and
+                // Emits a `debug/runsession/end` event paired with the start above and
                 // updates the parent AppHost aggregate so failures captured on early-
-                // return paths still surface in the `debug/appHost/end` summary. All
+                // return paths still surface in the `debug/apphost/end` summary. All
                 // post-start failure paths in this handler must route through here so
                 // we never leave an orphaned start event in the telemetry pipeline.
                 const emitRunSessionFailureEnd = (endReason: string, errorKind?: string): void => {
@@ -332,7 +332,7 @@ export default class AspireDcpServer {
                     aggregate.distinctResourceTypes.add(supportedResourceType);
                     aggregate.anyNonZeroExit = true;
 
-                    sendTelemetryErrorEvent('debug/runSession/end', {
+                    sendTelemetryErrorEvent('debug/runsession/end', {
                         resource_type: supportedResourceType,
                         mode,
                         exit_code_bucket: 'nonzero',
@@ -409,7 +409,7 @@ export default class AspireDcpServer {
                     runTelemetryById.set(runId, { startTimeMs: runSessionStartTimeMs, resourceType: supportedResourceType, mode, debugSessionId });
 
                     // Track aggregate stats for the parent AppHost debug session so we can
-                    // emit a single `debug/appHost/end` summary when the AppHost terminates.
+                    // emit a single `debug/apphost/end` summary when the AppHost terminates.
                     const aggregate = getOrCreateDebugSessionStats(debugSessionId);
                     aggregate.totalChildSessions += 1;
                     aggregate.distinctResourceTypes.add(supportedResourceType);
@@ -421,7 +421,7 @@ export default class AspireDcpServer {
 
                     // Synchronous launch failure — emit the matching end event and update
                     // aggregate stats via the shared helper before responding so the eventual
-                    // `debug/appHost/end` summary reflects the failure.
+                    // `debug/apphost/end` summary reflects the failure.
                     emitRunSessionFailureEnd('launch_failed', err instanceof Error ? err.name || 'Error' : typeof err);
 
                     // Clean up any processes associated with this run (registered by resource-type extensions)
@@ -580,7 +580,7 @@ export default class AspireDcpServer {
                 // telemetry pipeline (consistent with the synchronous launch-failure path
                 // above and the dashboard fault path in DashboardTelemetryPassthrough).
                 const emitEnd = exitBucket === 'nonzero' ? sendTelemetryErrorEvent : sendTelemetryEvent;
-                emitEnd('debug/runSession/end', {
+                emitEnd('debug/runsession/end', {
                     resource_type: entry.resourceType,
                     mode: entry.mode,
                     exit_code_bucket: exitBucket,
@@ -590,7 +590,7 @@ export default class AspireDcpServer {
                 });
 
                 // Surface a non-zero exit on the parent AppHost debug-session aggregate so
-                // the eventual `debug/appHost/end` summary reflects whether any child
+                // the eventual `debug/apphost/end` summary reflects whether any child
                 // resource session ended unsuccessfully.
                 if (exitBucket === 'nonzero') {
                     this.recordAppHostProcessExit(entry.debugSessionId, exitCode);

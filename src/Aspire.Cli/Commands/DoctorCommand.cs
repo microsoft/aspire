@@ -4,11 +4,9 @@
 using System.CommandLine;
 using System.Globalization;
 using Aspire.Cli.Acquisition;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils.EnvironmentChecker;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
@@ -43,14 +41,10 @@ internal sealed class DoctorCommand : BaseCommand
         IEnvironmentChecker environmentChecker,
         IInstallationDiscovery installationDiscovery,
         WingetFirstRunProbe wingetFirstRunProbe,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        IInteractionService interactionService,
         IAnsiConsole ansiConsole,
         ILogger<DoctorCommand> logger,
-        AspireCliTelemetry telemetry)
-        : base("doctor", DoctorCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
+        CommonCommandServices services)
+        : base("doctor", DoctorCommandStrings.Description, services)
     {
         _environmentChecker = environmentChecker;
         _installationDiscovery = installationDiscovery;
@@ -172,15 +166,13 @@ internal sealed class DoctorCommand : BaseCommand
     private void OutputCheckResult(EnvironmentCheckResult result)
     {
         var (icon, color) = GetStatusIconAndColor(result.Status);
-        var iconPrefix = ConsoleHelpers.FormatEmojiPrefix(icon, _ansiConsole, suppressColor: true);
 
-        // Primary grid: icon + message (wrapped lines stay aligned with message text)
-        var messageGrid = new Grid();
-        messageGrid.AddColumn();
-        messageGrid.AddRow(
-            new Markup($"[{color}]{iconPrefix}{result.Message.EscapeMarkup()}[/]"));
+        var messageMarkup = new Markup($"[{color}]{result.Message.EscapeMarkup()}[/]");
 
-        _ansiConsole.Write(new Padder(messageGrid, new Padding(2, 0)));
+        // Use a two-column grid so wrapped message text stays aligned past the icon.
+        var grid = ConsoleHelpers.CreateEmojiGrid(icon, _ansiConsole, messageMarkup);
+
+        _ansiConsole.Write(new Padder(grid, new Padding(2, 0)));
 
         // Secondary grid: details, fix suggestions, and links (indented further than message)
         var hasDetails = !string.IsNullOrEmpty(result.Details);

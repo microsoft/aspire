@@ -116,23 +116,41 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 _ => throw new InvalidOperationException(UpdateCommandStrings.UnexpectedCodePath)
             };
 
-            interactionService.DisplayEmptyLine();
+            if (!channel.ShouldCreateNuGetConfig())
+            {
+                // The channel maps Aspire packages only to ambient sources (the stable channel
+                // points at nuget.org), so a project-level NuGet.config is redundant. Only refresh
+                // an *existing* config to clean up feeds left over from a previous channel; never
+                // create a fresh one and don't prompt for a location, because dropping a
+                // <clear/>-based config here would wipe the user's other feeds.
+                // See: https://github.com/microsoft/aspire/issues/18124
+                var candidateDirectory = new DirectoryInfo(recommendedNuGetConfigFileDirectory!);
+                if (NuGetConfigMerger.TryFindNuGetConfigInDirectory(candidateDirectory, out _))
+                {
+                    interactionService.DisplayEmptyLine();
+                    await NuGetConfigMerger.CreateOrUpdateAsync(candidateDirectory, channel, (_, orig, proposed, ct) => AnalyzeAndConfirmNuGetConfigChanges(context, orig, proposed, ct), cancellationToken: cancellationToken);
+                }
+            }
+            else
+            {
+                interactionService.DisplayEmptyLine();
 
-            // Carry the recommended directory as the default on the binding.
-            // The original binding (from UpdateCommand) may not have a default because
-            // the recommended directory is computed here, after NuGet config discovery.
-            var nugetConfigDirBinding = context.NuGetConfigDirBinding.WithDefault(recommendedNuGetConfigFileDirectory);
+                // Carry the recommended directory as the default on the binding.
+                // The original binding (from UpdateCommand) may not have a default because
+                // the recommended directory is computed here, after NuGet config discovery.
+                var nugetConfigDirBinding = context.NuGetConfigDirBinding.WithDefault(recommendedNuGetConfigFileDirectory);
 
-            var selectedPathForNewNuGetConfigFile = await interactionService.PromptForFilePathAsync(
-                promptText: UpdateCommandStrings.WhichDirectoryNuGetConfigPrompt,
-                binding: nugetConfigDirBinding,
-                validator: null,
-                directory: true,
-                required: true,
-                cancellationToken: cancellationToken);
+                var selectedPathForNewNuGetConfigFile = await interactionService.PromptForFilePathAsync(
+                    promptText: UpdateCommandStrings.WhichDirectoryNuGetConfigPrompt,
+                    binding: nugetConfigDirBinding,
+                    validator: null,
+                    directory: true,
+                    required: true,
+                    cancellationToken: cancellationToken);
 
-            var nugetConfigDirectory = new DirectoryInfo(selectedPathForNewNuGetConfigFile);
-            await NuGetConfigMerger.CreateOrUpdateAsync(nugetConfigDirectory, channel, (_, orig, proposed, ct) => AnalyzeAndConfirmNuGetConfigChanges(context, orig, proposed, ct), cancellationToken: cancellationToken);
+                var nugetConfigDirectory = new DirectoryInfo(selectedPathForNewNuGetConfigFile);
+                await NuGetConfigMerger.CreateOrUpdateAsync(nugetConfigDirectory, channel, (_, orig, proposed, ct) => AnalyzeAndConfirmNuGetConfigChanges(context, orig, proposed, ct), cancellationToken: cancellationToken);
+            }
         }
 
         interactionService.DisplayEmptyLine();
@@ -942,39 +960,39 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         {
             foreach (var packageReference in packageReferencesElement.EnumerateArray())
             {
-            var packageId = packageReference.GetProperty("Identity").GetString() ?? throw new ProjectUpdaterException(UpdateCommandStrings.PackageReferenceNoIdentity);
+                var packageId = packageReference.GetProperty("Identity").GetString() ?? throw new ProjectUpdaterException(UpdateCommandStrings.PackageReferenceNoIdentity);
 
-            if (!IsUpdatablePackage(packageId))
-            {
-                continue;
-            }
-
-            if (cpmInfo.UsesCentralPackageManagement)
-            {
-                await AnalyzePackageForCentralPackageManagementAsync(packageId, projectFile, cpmInfo.DirectoryPackagesPropsFile!, context, cancellationToken);
-            }
-            else
-            {
-                // Traditional package management - Version should be in PackageReference
-                if (!packageReference.TryGetProperty("Version", out var versionElement))
+                if (!IsUpdatablePackage(packageId))
                 {
-                    // Version attribute is missing - treat as wildcard
-                    var packageVersion = "*";
-                    await AnalyzePackageForTraditionalManagementAsync(packageId, packageVersion, projectFile, context, cancellationToken);
+                    continue;
+                }
+
+                if (cpmInfo.UsesCentralPackageManagement)
+                {
+                    await AnalyzePackageForCentralPackageManagementAsync(packageId, projectFile, cpmInfo.DirectoryPackagesPropsFile!, context, cancellationToken);
                 }
                 else
                 {
-                    var packageVersion = versionElement.GetString();
-                    if (string.IsNullOrEmpty(packageVersion) || packageVersion == "*")
+                    // Traditional package management - Version should be in PackageReference
+                    if (!packageReference.TryGetProperty("Version", out var versionElement))
                     {
-                        // Version is * or empty - treat as wildcard
-                        packageVersion = "*";
+                        // Version attribute is missing - treat as wildcard
+                        var packageVersion = "*";
+                        await AnalyzePackageForTraditionalManagementAsync(packageId, packageVersion, projectFile, context, cancellationToken);
                     }
-                    await AnalyzePackageForTraditionalManagementAsync(packageId, packageVersion, projectFile, context, cancellationToken);
+                    else
+                    {
+                        var packageVersion = versionElement.GetString();
+                        if (string.IsNullOrEmpty(packageVersion) || packageVersion == "*")
+                        {
+                            // Version is * or empty - treat as wildcard
+                            packageVersion = "*";
+                        }
+                        await AnalyzePackageForTraditionalManagementAsync(packageId, packageVersion, projectFile, context, cancellationToken);
+                    }
                 }
             }
         }
-    }
     }
 
     private static bool IsUpdatablePackage(string packageId)

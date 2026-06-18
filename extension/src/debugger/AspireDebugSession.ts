@@ -21,11 +21,13 @@ import os from "os";
 import { EnvironmentVariables } from "../utils/environment";
 import { sendTelemetryEvent } from "../utils/telemetry";
 import { classifyAppHostPath, classifyAppHostDirectory } from "../utils/appHostLanguage";
+import type { AspireDebugConsoleOutputEvent } from "../types/extensionApi";
 
 export type DashboardBrowserType = 'openExternalBrowser' | 'integratedBrowser' | 'debugChrome' | 'debugEdge' | 'debugFirefox';
 
 export class AspireDebugSession implements vscode.DebugAdapter {
   private readonly _onDidSendMessage = new EventEmitter<any>();
+  private readonly _onDidSendDebugConsoleOutput = new EventEmitter<AspireDebugConsoleOutputEvent>();
   private _messageSeq = 1;
   private readonly _appHostParentOutputFilter = new AppHostParentOutputFilter();
 
@@ -39,9 +41,12 @@ export class AspireDebugSession implements vscode.DebugAdapter {
   private _trackedDebugAdapters: string[] = [];
   private _rpcClient?: ICliRpcClient;
   private _dashboardDebugSession: vscode.DebugSession | null = null;
+  private _dashboardUrl: string | undefined;
+  private _startupCompleted = false;
+  private readonly _onDidChangeState = new EventEmitter<void>();
   private readonly _disposables: vscode.Disposable[] = [];
   private _disposed = false;
-  // Timestamp for the `debug/appHost/end` duration measurement. Captured the first
+  // Timestamp for the `debug/apphost/end` duration measurement. Captured the first
   // time we observe a `launch` request so it covers the actual user-visible session
   // lifetime, not the moment the AspireDebugSession object was constructed.
   private _appHostStartTimeMs: number | undefined = undefined;
@@ -53,8 +58,22 @@ export class AspireDebugSession implements vscode.DebugAdapter {
   private _appHostModeAtLaunch: 'run' | 'debug' = 'run';
 
   public readonly onDidSendMessage = this._onDidSendMessage.event;
+  public readonly onDidSendDebugConsoleOutput = this._onDidSendDebugConsoleOutput.event;
+  public readonly onDidChangeState = this._onDidChangeState.event;
   public readonly debugSessionId: string;
   public configuration: AspireExtendedDebugConfiguration;
+
+  get appHostPath(): string | undefined {
+    return typeof this.configuration.program === 'string' ? this.configuration.program : undefined;
+  }
+
+  get dashboardUrl(): string | undefined {
+    return this._dashboardUrl;
+  }
+
+  get startupCompleted(): boolean {
+    return this._startupCompleted;
+  }
 
   constructor(session: vscode.DebugSession, rpcServer: AspireRpcServer, dcpServer: AspireDcpServer, terminalProvider: AspireTerminalProvider, removeAspireDebugSession: (session: AspireDebugSession) => void) {
     this._session = session;
@@ -102,7 +121,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
       const appHostIsDirectory = isDirectory(appHostPath);
       const extensionArgs: string[] = [];
 
-      // Telemetry: emit `debug/appHost/start` once per AppHost launch. We do it
+      // Telemetry: emit `debug/apphost/start` once per AppHost launch. We do it
       // here (rather than in the constructor) because the constructor runs
       // before VS Code's debug-launch UX completes; this branch is the single
       // entry point that triggers an actual CLI spawn. The matching end event
@@ -119,7 +138,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
       // set so the dimension stays bounded.
       const knownCommands: ReadonlySet<string> = new Set(['run', 'deploy', 'publish', 'do']);
       const commandForTelemetry = knownCommands.has(command) ? command : 'other';
-      sendTelemetryEvent('debug/appHost/start', {
+      sendTelemetryEvent('debug/apphost/start', {
         mode: this._appHostModeAtLaunch,
         apphost_language: this._appHostLanguageAtLaunch,
         apphost_is_directory: appHostIsDirectory ? 'true' : 'false',
@@ -135,6 +154,10 @@ export class AspireDebugSession implements vscode.DebugAdapter {
       // --start-debug-session tells the CLI to launch the AppHost via the extension with debugger attached
       if (!noDebug) {
         extensionArgs.push('--start-debug-session');
+      }
+
+      if (!commandArgs.includes('--nologo')) {
+        extensionArgs.push('--nologo');
       }
 
       if (process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true') {
@@ -469,7 +492,9 @@ export class AspireDebugSession implements vscode.DebugAdapter {
    * For debugChrome/debugEdge/debugFirefox, launches as a child debug session that auto-closes with the Aspire debug session.
    */
   async openDashboard(url: string, browserType: DashboardBrowserType): Promise<void> {
-    extensionLogOutputChannel.info(`Opening dashboard in browser: ${browserType}, URL: ${url}`);
+    extensionLogOutputChannel.info(`Opening dashboard in browser: ${browserType}.`);
+    this._dashboardUrl = url;
+    this._onDidChangeState.fire();
 
     switch (browserType) {
       case 'debugChrome':
@@ -547,9 +572,10 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     }
     this._disposed = true;
     extensionLogOutputChannel.info('Stopping the Aspire debug session');
+    this._onDidChangeState.fire();
 
     // Snapshot start-event metadata before we run disposables so the deferred
-    // `debug/appHost/end` callback has a stable view even if instance state
+    // `debug/apphost/end` callback has a stable view even if instance state
     // mutates further (or the instance is reaped by VS Code before the timer
     // fires).
     const startMs = this._appHostStartTimeMs;
@@ -561,14 +587,15 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     // Stop child debug sessions first so their `sessionTerminated`
     // notifications can flow back through `AspireDcpServer.sendNotification`
     // and update the aggregate stats BEFORE we snapshot them for
-    // `debug/appHost/end`. Without this ordering, late nonzero exits (notably
+    // `debug/apphost/end`. Without this ordering, late nonzero exits (notably
     // Windows' SIGTERM → 143 exit code which is not normalized to 0) would
     // be missed and the summary would under-report failures.
     this._disposables.forEach(disposable => disposable.dispose());
     this._trackedDebugAdapters = [];
     vscode.debug.stopDebugging(this._session);
+    this._onDidSendDebugConsoleOutput.dispose();
 
-    // Telemetry: emit `debug/appHost/end` after a short grace window so any
+    // Telemetry: emit `debug/apphost/end` after a short grace window so any
     // pending `sessionTerminated` notifications kicked off by the child-stop
     // disposables above have time to flow through the adapterTracker → DCP
     // notification pipeline and update `anyNonZeroExit`. 500ms is enough for
@@ -579,7 +606,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     if (startMs !== undefined) {
       setTimeout(() => {
         const aggregate = dcpServer.takeDebugSessionAggregateStats(debugSessionId);
-        sendTelemetryEvent('debug/appHost/end', {
+        sendTelemetryEvent('debug/apphost/end', {
           mode,
           apphost_language: language,
           ended_with_error: aggregate?.anyNonZeroExit ? 'true' : 'false',
@@ -650,18 +677,27 @@ export class AspireDebugSession implements vscode.DebugAdapter {
   }
 
   sendMessage(message: string, addNewLine: boolean = true, category: 'stdout' | 'stderr' = 'stdout') {
+    const output = `${message}${addNewLine ? '\n' : ''}`;
     this.sendEvent({
       type: 'event',
       seq: this._messageSeq++,
       event: 'output',
       body: {
         category: category,
-        output: `${message}${addNewLine ? '\n' : ''}`
+        output
       }
+    });
+    this._onDidSendDebugConsoleOutput.fire({
+      debugSessionId: this.debugSessionId,
+      appHostPath: this.appHostPath,
+      category,
+      output,
     });
   }
 
   notifyAppHostStartupCompleted() {
+    this._startupCompleted = true;
+    this._onDidChangeState.fire();
     extensionLogOutputChannel.info(`AppHost startup completed and dashboard is running.`);
   }
 }

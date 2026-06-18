@@ -22,7 +22,7 @@
 <div class="page-content-container">
     <AspirePageContentLayout @ref="@_contentLayout"
                              AddNewlineOnToolbar="true"
-                             IsSummaryDetailsViewOpen="@(SelectedLogEntry is not null)">
+                             IsSummaryDetailsViewOpen="@(PageViewModel.SelectedLogEntry is not null)">
         <PageTitleSection>
             <h1 class="page-header">@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsHeader)]</h1>
         </PageTitleSection>
@@ -93,10 +93,10 @@
 
         <MainSection>
             <SummaryDetailsView
-                ShowDetails="@(SelectedLogEntry is not null)"
+                ShowDetails="@(PageViewModel.SelectedLogEntry is not null)"
                 OnDismiss="@(() => ClearSelectedLogEntryAsync(causedByUserAction: true))"
                 ViewKey="StructuredLogsList"
-                SelectedValue="@SelectedLogEntry"
+                SelectedValue="@PageViewModel.SelectedLogEntry"
                 OnResize="@(r => _manager.SetWidthFraction(r.Orientation == Orientation.Horizontal ? r.Panel1Fraction : 1))">
                 <DetailsTitleTemplate>
                     @{

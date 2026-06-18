@@ -9,18 +9,25 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Semver;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Packaging;
 
-internal class PackageChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, IFeatures features, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null)
+internal class PackageChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, IFeatures features, ILogger logger, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, string? currentCliVersion = null)
 {
     // Threaded so the local-folder integration listing can honor the same
     // ShowDeprecatedPackages flag that NuGetPackageCache honors on the feed-based path.
     // Without this, flipping the flag silently has no effect on local hive / PR hive listings
     // (https://github.com/microsoft/aspire/issues — divergence between two paths through the same intent).
     private readonly IFeatures _features = features;
+
+    // The running CLI's identity SDK version (CliExecutionContext.IdentitySdkVersion), threaded in
+    // by PackagingService so the template-package filter below honors ASPIRE_CLI_VERSION / sidecar
+    // overrides. Null when a channel is constructed directly (e.g. in tests) without identity, in
+    // which case the filter falls back to the assembly version.
+    private readonly string? _currentCliVersion = currentCliVersion;
 
     private const string GuestAppHostSdkPackageId = "Aspire.Hosting";
 
@@ -36,6 +43,43 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
     public bool ShouldPersistChannelName() =>
         Type is PackageChannelType.Explicit && !string.Equals(Name, PackageChannelNames.Stable, StringComparisons.ChannelName);
+
+    /// <summary>
+    /// Whether scaffolding (<c>aspire new</c>/<c>aspire init</c>) should drop a per-project
+    /// <c>NuGet.config</c> that pins Aspire packages to this channel's feed(s).
+    /// </summary>
+    /// <remarks>
+    /// Only channels that route Aspire packages to a <em>custom</em> feed need a per-project
+    /// <c>NuGet.config</c>. The <c>stable</c> channel maps everything to nuget.org — the ambient
+    /// default source — so emitting a <c>&lt;clear/&gt;</c>-based config would be redundant and,
+    /// worse, would wipe any additional feeds the user already relies on. Daily
+    /// (<c>dnceng/dotnet9</c>), staging (<c>darc-pub-microsoft-aspire-&lt;sha&gt;</c>), and
+    /// <c>pr-&lt;N&gt;</c>/local-hive channels all point at custom feeds, so their mappings must be
+    /// persisted for restore to succeed. This deliberately mirrors <see cref="ShouldPersistChannelName"/>:
+    /// the set of channels whose name we pin is exactly the set we drop a config for (those that
+    /// additionally carry feed mappings).
+    /// </remarks>
+    public bool ShouldCreateNuGetConfig() =>
+        ShouldPersistChannelName() && Mappings is { Length: > 0 };
+
+    /// <summary>
+    /// Whether this channel resolves Aspire.* packages from a local directory of <c>.nupkg</c>
+    /// files (a <c>~/.aspire/hives/&lt;name&gt;</c> hive, a PR-install hive, or an
+    /// <c>ASPIRE_CLI_PACKAGES</c> / sidecar <c>packages</c> override) rather than a remote feed.
+    /// </summary>
+    /// <remarks>
+    /// Unlike <see cref="VersionHelper.IsLocalBuildChannel(string)"/> — which keys off the channel
+    /// <em>name</em> (<c>local</c>/<c>pr-&lt;N&gt;</c>/<c>run-&lt;N&gt;</c>) — this inspects the actual
+    /// mappings via <see cref="PackageMapping.IsAspireDirectoryMapping"/>. That matters when a locally
+    /// built CLI emulates a released build: the synthesized channel is named after the emulated
+    /// identity (<c>stable</c>/<c>daily</c>/<c>staging</c>) yet points Aspire.* at a local directory.
+    /// The name check would misclassify it as remote and silently fall back to nuget.org; this
+    /// property recognizes it as locally backed so <c>aspire new</c>/<c>aspire add</c> resolve those
+    /// local packages. See <c>docs/specs/cli-identity-sidecar.md</c>.
+    /// </remarks>
+    public bool IsBackedByLocalPackageDirectory =>
+        Type is PackageChannelType.Explicit &&
+        Mappings?.Any(static mapping => mapping.IsAspireDirectoryMapping) == true;
 
     private static string ComputeSourceDetails(PackageMapping[]? mappings)
     {
@@ -87,7 +131,9 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         // When doing a `dotnet package search` the results may include stable packages even when searching for
         // prerelease packages. Keep the current CLI/SDK version so shipped CLIs can resolve their
         // matching template package from daily/staging feeds, then filter out the remaining noise.
-        var currentCliVersion = VersionHelper.GetDefaultSdkVersion();
+        // Falls back to the assembly version only when no identity was threaded in (direct construction);
+        // production channels created by PackagingService always supply CliExecutionContext.IdentitySdkVersion.
+        var currentCliVersion = _currentCliVersion ?? VersionHelper.GetDefaultSdkVersion();
         var filteredPackages = packages.Where(p => new { SemVer = SemVersion.Parse(p.Version), Quality = Quality } switch
         {
             { Quality: PackageChannelQuality.Both } => true,
@@ -398,10 +444,10 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             .SelectMany(mapping => CreateScopedMappings(mapping, requestedPackageIds, logger))
             .ToArray();
 
-        return new PackageChannel(Name, Quality, scopedMappings, nuGetPackageCache, _features, ConfigureGlobalPackagesFolder, CliDownloadBaseUrl, PinnedVersion, logger);
+        return new PackageChannel(Name, Quality, scopedMappings, nuGetPackageCache, _features, logger, ConfigureGlobalPackagesFolder, CliDownloadBaseUrl, PinnedVersion, _currentCliVersion);
     }
 
-    private static IEnumerable<PackageMapping> CreateScopedMappings(PackageMapping mapping, IReadOnlyCollection<string> packageIds, ILogger? logger)
+    private static IEnumerable<PackageMapping> CreateScopedMappings(PackageMapping mapping, IReadOnlyCollection<string> packageIds, ILogger logger)
     {
         if (!IsScopedAspireMapping(mapping))
         {
@@ -417,7 +463,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         }
     }
 
-    private static HashSet<string> GetScopedPackageIds(string source, IEnumerable<string> packageIds, ILogger? logger)
+    private static HashSet<string> GetScopedPackageIds(string source, IEnumerable<string> packageIds, ILogger logger)
     {
         var resolvedPackageIds = new HashSet<string>(packageIds, StringComparers.NuGetPackageId);
 
@@ -468,7 +514,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         return new PackageFileMetadata(packageIdentity.Value.PackageId, packageIdentity.Value.Version, packageFile);
     }
 
-    private static IEnumerable<string> GetDependencyPackageIds(string packageFile, ILogger? logger)
+    private static IEnumerable<string> GetDependencyPackageIds(string packageFile, ILogger logger)
     {
         try
         {
@@ -492,17 +538,17 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         }
         catch (IOException ex)
         {
-            logger?.LogDebug(ex, "Failed to read package file '{PackageFile}' while resolving dependencies.", packageFile);
+            logger.LogDebug(ex, "Failed to read package file '{PackageFile}' while resolving dependencies.", packageFile);
             return [];
         }
         catch (InvalidDataException ex)
         {
-            logger?.LogDebug(ex, "Package file '{PackageFile}' contains invalid data.", packageFile);
+            logger.LogDebug(ex, "Package file '{PackageFile}' contains invalid data.", packageFile);
             return [];
         }
         catch (System.Xml.XmlException ex)
         {
-            logger?.LogDebug(ex, "Failed to parse nuspec in package file '{PackageFile}'.", packageFile);
+            logger.LogDebug(ex, "Failed to parse nuspec in package file '{PackageFile}'.", packageFile);
             return [];
         }
     }
@@ -562,18 +608,18 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         return isHostingOrCommunityToolkitNamespaced && !isExcluded;
     }
 
-    public static PackageChannel CreateExplicitChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, IFeatures features, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null)
+    public static PackageChannel CreateExplicitChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, IFeatures features, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null, string? currentCliVersion = null)
     {
-        return new PackageChannel(name, quality, mappings, nuGetPackageCache, features, configureGlobalPackagesFolder, cliDownloadBaseUrl, pinnedVersion, logger);
+        return new PackageChannel(name, quality, mappings, nuGetPackageCache, features, logger ?? NullLogger.Instance, configureGlobalPackagesFolder, cliDownloadBaseUrl, pinnedVersion, currentCliVersion);
     }
 
-    public static PackageChannel CreateImplicitChannel(INuGetPackageCache nuGetPackageCache, IFeatures features, ILogger? logger = null)
+    public static PackageChannel CreateImplicitChannel(INuGetPackageCache nuGetPackageCache, IFeatures features, ILogger? logger = null, string? currentCliVersion = null)
     {
         // The reason that PackageChannelQuality.Both is because there are situations like
         // in community toolkit where there is a newer beta version available for a package
         // in the case of implicit feeds we want to be able to show that, along side the stable
         // version. Not really an issue for template selection though (unless we start allowing)
         // for broader templating options.
-        return new PackageChannel("default", PackageChannelQuality.Both, null, nuGetPackageCache, features, logger: logger);
+        return new PackageChannel("default", PackageChannelQuality.Both, null, nuGetPackageCache, features, logger ?? NullLogger.Instance, currentCliVersion: currentCliVersion);
     }
 }

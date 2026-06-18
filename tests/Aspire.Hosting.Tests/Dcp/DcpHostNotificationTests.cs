@@ -11,6 +11,7 @@ using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Resources;
 using Aspire.Hosting.Tests.Utils;
+using Aspire.Tests;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.Configuration;
@@ -23,7 +24,6 @@ using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Hosting.Tests.Dcp;
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 [Trait("Partition", "4")]
@@ -486,7 +486,7 @@ public sealed class DcpHostNotificationTests
     public async Task CreateDcpProcessSpec_WithDcpDeveloperCertificateDefault_IncludesDeveloperCertificateArguments()
     {
         var activities = new ConcurrentBag<Activity>();
-        using var listener = CreateActivityListener(ProfilingTelemetry.ActivitySourceName, activities.Add);
+        using var listener = ActivityListenerHelper.Create(ProfilingTelemetry.ActivitySource, onActivityStopped: activities.Add);
         using var certificate = CreateExportableCertificate();
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -746,18 +746,6 @@ public sealed class DcpHostNotificationTests
         Assert.NotEqual(-1, end);
 
         return arguments[start..end];
-    }
-
-    private static ActivityListener CreateActivityListener(string sourceName, Action<Activity> activityStopped)
-    {
-        var listener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == sourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStopped = activityStopped
-        };
-        ActivitySource.AddActivityListener(listener);
-        return listener;
     }
 
     [Fact]
@@ -1106,5 +1094,4 @@ public sealed class DcpHostNotificationTests
     }
 }
 
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning restore ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

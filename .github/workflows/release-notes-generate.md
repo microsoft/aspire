@@ -7,6 +7,8 @@ description: |
   generated notes match the tone, section layout, headings, and emoji usage
   of recent stable releases — this workflow does not invent a new format.
 
+max-daily-ai-credits: -1
+
 on:
   release:
     types: [published]
@@ -21,6 +23,11 @@ on:
   # to bail us out, and the lock file shouldn't drift just because the
   # frontmatter changed.
   stale-check: false
+  # Stable releases are published by the `aspire-repo-bot` GitHub App. gh-aw's
+  # activation gate checks the triggering actor's repo permission and GitHub
+  # Apps do not appear as collaborators, so allow-list the App the same way as
+  # other bot-triggered gh-aw workflows in this repo.
+  bots: [aspire-repo-bot]
 
 if: >-
   github.repository == 'microsoft/aspire'
@@ -43,6 +50,7 @@ concurrency:
 permissions:
   contents: read
   pull-requests: read
+  copilot-requests: write
 
 network:
   allowed:
@@ -201,12 +209,22 @@ type (Features / Fixes / etc.), group by type. Use PR labels (`area-*`,
 `feat`, `fix`, `breaking-change`, `security`) as hints but defer to the
 existing structure.
 
+Exclude anything that is not user-facing. A change is user-facing only when
+someone using Aspire can observe it in product behavior, supported APIs, CLI
+commands, dashboard/extension UX, templates, integrations, documented
+configuration, security posture, or meaningful compatibility/performance
+behavior. Do not mention issues or PRs that only affect repository operation or
+the engineering process.
+
 Exclude noise that the existing notes also tend to exclude:
 
 - Dependabot / dependency-bump PRs unless flagged as security.
 - Branch / build / CI infrastructure changes that aren't user-facing.
 - Internal refactors with no behavior change.
 - Test-only changes.
+- Agentic workflow, automation, release-engineering, changelog-generation, and
+  repository maintenance changes unless the change has a direct user-visible
+  effect in a released Aspire product.
 
 If the change set is large (more than ~80 PRs), summarize aggressively and
 keep only user-facing entries; the notes should be scannable.

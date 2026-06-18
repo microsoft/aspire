@@ -24,7 +24,8 @@ export type {
 // the command wrapper, the engagement reporter, the tree view, the debug
 // session, and the dashboard telemetry passthrough server.
 let reporter: TelemetryReporter | undefined;
-let telemetryEventPrefix: string | undefined;
+const defaultTelemetryReporterFactory = (aiKey: string): TelemetryReporter => new TelemetryReporter(aiKey);
+let telemetryReporterFactory = defaultTelemetryReporterFactory;
 
 // Common properties merged into every event we emit. The TelemetryReporter
 // already injects extension version, OS, machine id, etc., so this map is
@@ -52,8 +53,7 @@ export function initializeTelemetry(context: vscode.ExtensionContext): void {
     // telemetry initialization read from the same extension manifest.
     const aiKey = context.extension.packageJSON.aiKey;
     if (aiKey) {
-        telemetryEventPrefix = context.extension.id;
-        reporter = new TelemetryReporter(aiKey);
+        reporter = telemetryReporterFactory(aiKey);
         context.subscriptions.push({ dispose: () => reporter?.dispose() });
     }
 }
@@ -104,10 +104,6 @@ function mergeProperties<E extends KnownTelemetryEventName>(properties?: EventPr
     return { ...commonProperties, ...((properties ?? {}) as { [key: string]: string }) };
 }
 
-function formatEventName(eventName: KnownTelemetryEventName): string {
-    return telemetryEventPrefix ? `${telemetryEventPrefix}/${eventName}` : eventName;
-}
-
 /**
  * Emit a telemetry event. The `eventName` is constrained to entries in
  * {@link KnownTelemetryEventName} (see telemetryRegistry.ts) and the
@@ -120,7 +116,7 @@ export function sendTelemetryEvent<E extends KnownTelemetryEventName>(
     properties?: EventProperties<E>,
     measurements?: EventMeasurements<E>
 ): void {
-    reporter?.sendTelemetryEvent(formatEventName(eventName), mergeProperties(properties), measurements as { [key: string]: number } | undefined);
+    reporter?.sendTelemetryEvent(eventName, mergeProperties(properties), measurements as { [key: string]: number } | undefined);
 }
 
 /**
@@ -133,7 +129,7 @@ export function sendTelemetryErrorEvent<E extends KnownTelemetryEventName>(
     properties?: EventProperties<E>,
     measurements?: EventMeasurements<E>
 ): void {
-    reporter?.sendTelemetryErrorEvent(formatEventName(eventName), mergeProperties(properties), measurements as { [key: string]: number } | undefined);
+    reporter?.sendTelemetryErrorEvent(eventName, mergeProperties(properties), measurements as { [key: string]: number } | undefined);
 }
 
 /**
@@ -146,6 +142,17 @@ export function sendTelemetryErrorEvent<E extends KnownTelemetryEventName>(
  *  - `error`       : the command threw or rejected with anything else.
  */
 export type CommandOutcome = 'success' | 'canceled' | 'error';
+
+export interface CommandInvocationEvent {
+    command: string;
+    outcome: CommandOutcome;
+    durationMs: number;
+    source?: string;
+    errorKind?: string;
+}
+
+const commandInvocationEmitter = new vscode.EventEmitter<CommandInvocationEvent>();
+export const onDidInvokeCommand = commandInvocationEmitter.event;
 
 /**
  * Wraps an extension command invocation so we capture invocation, outcome and
@@ -197,6 +204,13 @@ export async function withCommandTelemetry<T>(
             properties.error_kind = errorKind;
         }
         sendTelemetryEvent('command/invoked', properties, { duration_ms: durationMs });
+        commandInvocationEmitter.fire({
+            command: commandName,
+            outcome,
+            durationMs,
+            source: additionalProperties?.source,
+            errorKind,
+        });
     }
 }
 
@@ -261,16 +275,16 @@ export function __setReporterForTests(fake: TelemetryReporter | undefined): () =
     return () => { reporter = previous; };
 }
 
-/** Test seam: override the event prefix applied at the reporter boundary. */
-export function __setTelemetryEventPrefixForTests(prefix: string | undefined): () => void {
-    const previous = telemetryEventPrefix;
-    telemetryEventPrefix = prefix;
-    return () => { telemetryEventPrefix = previous; };
+/** Test seam: replace TelemetryReporter construction without initializing the real VS Code sender. */
+export function __setTelemetryReporterFactoryForTests(factory: (aiKey: string) => TelemetryReporter): () => void {
+    const previous = telemetryReporterFactory;
+    telemetryReporterFactory = factory;
+    return () => { telemetryReporterFactory = previous; };
 }
 
-/** Test seam: clear the event prefix so tests don't bleed into each other. */
-export function __resetTelemetryEventPrefixForTests(): void {
-    telemetryEventPrefix = undefined;
+/** Test seam: reset TelemetryReporter construction so tests don't bleed into each other. */
+export function __resetTelemetryReporterFactoryForTests(): void {
+    telemetryReporterFactory = defaultTelemetryReporterFactory;
 }
 
 /** Test seam: clear common properties so tests don't bleed into each other. */

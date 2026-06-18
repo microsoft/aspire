@@ -256,12 +256,36 @@ public sealed record RelationshipSnapshot(string ResourceName, string Type);
 public sealed record ResourcePropertySnapshot(string Name, object? Value)
 {
     /// <summary>
+    /// The display name visible in UI.
+    /// </summary>
+    /// <remarks>
+    /// If not specified, clients may use the <see cref="Name"/> as the display name.
+    /// </remarks>
+    public string? DisplayName { get; init; }
+
+    /// <summary>
     /// Whether this property is considered sensitive or not.
     /// </summary>
     /// <remarks>
     /// Sensitive properties are masked when displayed in UI and require an explicit user action to reveal.
     /// </remarks>
     public bool IsSensitive { get; init; }
+
+    /// <summary>
+    /// A flag indicating whether the property is highlighted in the UI.
+    /// </summary>
+    /// <remarks>
+    /// Highlighted properties are shown by default even if the client does not otherwise recognize the property name.
+    /// </remarks>
+    public bool IsHighlighted { get; init; }
+
+    /// <summary>
+    /// Gets the optional sort order used when displaying the property in UI.
+    /// </summary>
+    /// <remarks>
+    /// Properties with lower values are displayed before properties with higher values.
+    /// </remarks>
+    public int? SortOrder { get; init; }
 
     internal void Deconstruct(out string name, out object? value, out bool isSensitive)
     {
@@ -295,12 +319,10 @@ public sealed record ResourcePropertySnapshot(string Name, object? Value)
 [DebuggerDisplay(null, Name = "{Name}")]
 public sealed record ResourceCommandSnapshot(string Name, ResourceCommandState State, string DisplayName, string? DisplayDescription, [property: Obsolete("Use Arguments to describe invocation arguments.")] object? Parameter, string? ConfirmationMessage, string? IconName, IconVariant? IconVariant, bool IsHighlighted)
 {
-#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe dashboard command arguments.
     /// <summary>
     /// Gets the invocation arguments accepted by the command.
     /// </summary>
     public IReadOnlyList<InteractionInput> Arguments { get; init; } = [];
-#pragma warning restore ASPIREINTERACTION001
 
     /// <summary>
     /// Gets where the command is visible to users and clients.

@@ -44,7 +44,7 @@
         "comment": "The number of workspace folders in the VS Code window."
       }
     },
-    "microsoft-aspire.aspire-vscode/runningAppHostsView/shown": {
+    "microsoft-aspire.aspire-vscode/runningapphostsview/shown": {
       "view_mode": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
@@ -66,7 +66,7 @@
         "comment": "The number of resources displayed across running AppHosts."
       }
     },
-    "microsoft-aspire.aspire-vscode/debug/appHost/start": {
+    "microsoft-aspire.aspire-vscode/debug/apphost/start": {
       "mode": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
@@ -88,7 +88,7 @@
         "comment": "The Aspire command used to start the AppHost."
       }
     },
-    "microsoft-aspire.aspire-vscode/debug/appHost/end": {
+    "microsoft-aspire.aspire-vscode/debug/apphost/end": {
       "mode": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
@@ -125,7 +125,7 @@
         "comment": "The number of distinct Aspire resource types observed in child debug sessions."
       }
     },
-    "microsoft-aspire.aspire-vscode/debug/runSession/start": {
+    "microsoft-aspire.aspire-vscode/debug/runsession/start": {
       "resource_type": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
@@ -142,7 +142,7 @@
         "comment": "Whether the resource was launched in run or debug mode."
       }
     },
-    "microsoft-aspire.aspire-vscode/debug/runSession/end": {
+    "microsoft-aspire.aspire-vscode/debug/runsession/end": {
       "resource_type": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
@@ -206,7 +206,7 @@
         "comment": "The dashboard operation result classification."
       }
     },
-    "microsoft-aspire.aspire-vscode/dashboard/userTask": {
+    "microsoft-aspire.aspire-vscode/dashboard/usertask": {
       "dashboard_event_name": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
@@ -395,7 +395,7 @@
         "comment": "A JSON object containing numeric dashboard measurements."
       }
     },
-    "microsoft-aspire.aspire-vscode/dashboard/commandLineFlags": {
+    "microsoft-aspire.aspire-vscode/dashboard/commandlineflags": {
       "flag_prefixes": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",

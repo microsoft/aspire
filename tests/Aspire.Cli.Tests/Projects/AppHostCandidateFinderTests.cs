@@ -7,6 +7,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Tests;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -138,10 +139,10 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var startedActivities = new List<Activity>();
-        using var listener = CreateProfilingActivityListener(startedActivities.Add);
         using var profilingTelemetry = CreateProfilingTelemetry(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1"));
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStarted: startedActivities.Add);
 
         var appHost = await WriteFileAsync(workspace.WorkspaceRoot, "App/AppHost.csproj");
         var gitRepository = CreateGitRepository(appHost.FullName);
@@ -194,10 +195,10 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var startedActivities = new List<Activity>();
-        using var listener = CreateProfilingActivityListener(startedActivities.Add);
         using var profilingTelemetry = CreateProfilingTelemetry(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1"));
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStarted: startedActivities.Add);
 
         var appHost = await WriteFileAsync(workspace.WorkspaceRoot, "App/AppHost.csproj");
         await WriteFileAsync(workspace.WorkspaceRoot, "node_modules/pkg/AppHost.csproj");
@@ -540,7 +541,7 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
         var sdksDirectory = settingsDirectory.CreateSubdirectory("sdks");
         var logsDirectory = settingsDirectory.CreateSubdirectory("logs");
 
-        return new Aspire.Cli.CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, logsDirectory, "test.log");
+        return new Aspire.Cli.CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, logsDirectory, "test.log", identityChannel: "local");
     }
 
     private static ProfilingTelemetry CreateProfilingTelemetry(params (string Key, string? Value)[] values)
@@ -549,17 +550,5 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
             .AddInMemoryCollection(values.Select(value => new KeyValuePair<string, string?>(value.Key, value.Value)))
             .Build();
         return new ProfilingTelemetry(configuration);
-    }
-
-    private static ActivityListener CreateProfilingActivityListener(Action<Activity> activityStarted)
-    {
-        var listener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == ProfilingTelemetry.ActivitySourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStarted = activityStarted
-        };
-        ActivitySource.AddActivityListener(listener);
-        return listener;
     }
 }

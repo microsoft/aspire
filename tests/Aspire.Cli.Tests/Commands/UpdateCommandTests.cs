@@ -14,6 +14,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 using Microsoft.AspNetCore.InternalTesting;
@@ -1156,8 +1157,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                 GetChannelsAsyncCallback = (ct) =>
                 {
                     // Create test channels matching the expected names
-                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!);
-                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!, null!);
+                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!, NullLogger.Instance);
+                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!, null!, NullLogger.Instance);
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel, dailyChannel });
                 }
             };
@@ -1221,8 +1222,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                 GetChannelsAsyncCallback = (ct) =>
                 {
                     // Create test channels matching the expected names
-                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!);
-                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!, null!);
+                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!, NullLogger.Instance);
+                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!, null!, NullLogger.Instance);
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel, dailyChannel });
                 }
             };
@@ -1275,8 +1276,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                 GetChannelsAsyncCallback = (ct) =>
                 {
                     // Create test channels matching the expected names
-                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!);
-                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!, null!);
+                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!, NullLogger.Instance);
+                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!, null!, NullLogger.Instance);
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel, dailyChannel });
                 }
             };
@@ -1342,8 +1343,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             {
                 GetChannelsAsyncCallback = (ct) =>
                 {
-                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!);
-                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!, null!);
+                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!, NullLogger.Instance);
+                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!, null!, NullLogger.Instance);
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel, dailyChannel });
                 }
             };
@@ -1403,7 +1404,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             {
                 GetChannelsAsyncCallback = (ct) =>
                 {
-                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!);
+                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!, NullLogger.Instance);
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel });
                 }
             };
@@ -2610,8 +2611,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             {
                 GetChannelsAsyncCallback = (ct) =>
                 {
-                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!);
-                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!, null!);
+                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!, NullLogger.Instance);
+                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!, null!, NullLogger.Instance);
                     return Task.FromResult<IEnumerable<PackageChannel>>([stableChannel, dailyChannel]);
                 }
             };
@@ -2630,6 +2631,121 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         Assert.NotNull(capturedChannel);
         Assert.Equal("stable", capturedChannel.Name);
         Assert.NotNull(capturedContext);
+    }
+
+    [Theory]
+    [InlineData("daily", "daily")]
+    [InlineData("stable", "stable")]
+    [InlineData("DAILY", "daily")] // case-insensitive match; canonical name from channels
+    public async Task UpdateCommand_SelfUpdate_NonInteractive_WhenIdentityChannelMatchesKnownChannel_UsesItWithoutPrompting(string identityChannel, string expectedChannel)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var (_, capturedChannel, promptInvoked, _) = await RunNonInteractiveSelfUpdateAsync(
+            workspace, identityChannel: identityChannel);
+
+        Assert.False(promptInvoked, "Identity-channel match should bypass the channel prompt.");
+        Assert.Equal(expectedChannel, capturedChannel);
+    }
+
+    [Fact]
+    public async Task UpdateCommand_SelfUpdate_NonInteractive_WhenIdentityChannelIsLocal_DefaultsToStable()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var (_, capturedChannel, promptInvoked, _) = await RunNonInteractiveSelfUpdateAsync(
+            workspace, identityChannel: PackageChannelNames.Local);
+
+        Assert.False(promptInvoked, "Non-interactive mode should not prompt; should default to stable.");
+        Assert.Equal(PackageChannelNames.Stable, capturedChannel);
+    }
+
+    [Fact]
+    public async Task UpdateCommand_SelfUpdate_NonInteractive_WhenIdentityChannelIsStalePr_RequiresExplicitChannel()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var (exitCode, capturedChannel, promptInvoked, interactionService) = await RunNonInteractiveSelfUpdateAsync(
+            workspace, identityChannel: "pr-99999");
+
+        Assert.Equal(CliExitCodes.MissingRequiredArgument, exitCode);
+        Assert.False(promptInvoked, "Non-interactive mode should not prompt when channel cannot be resolved.");
+        Assert.Null(capturedChannel);
+        Assert.Contains(
+            interactionService.DisplayedErrors,
+            e => e.Contains("--channel", StringComparison.Ordinal) && e.Contains("non-interactive", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task UpdateCommand_SelfUpdate_ExplicitChannelOverridesIdentityChannel()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var (_, capturedChannel, promptInvoked, _) = await RunNonInteractiveSelfUpdateAsync(
+            workspace, identityChannel: PackageChannelNames.Daily, updateArgs: "update --self --non-interactive --channel stable -y");
+
+        Assert.False(promptInvoked, "Explicit --channel should bypass the prompt.");
+        Assert.Equal(PackageChannelNames.Stable, capturedChannel);
+    }
+
+    [Fact]
+    public async Task UpdateCommand_SelfUpdate_NonInteractive_WhenIdentityChannelIsStalePr_ExplicitChannelSucceeds()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var (_, capturedChannel, promptInvoked, _) = await RunNonInteractiveSelfUpdateAsync(
+            workspace, identityChannel: "pr-99999", updateArgs: "update --self --non-interactive --channel daily -y");
+
+        Assert.False(promptInvoked, "Explicit --channel should bypass the prompt even with stale identity.");
+        Assert.Equal(PackageChannelNames.Daily, capturedChannel);
+    }
+
+    private async Task<(int ExitCode, string? CapturedChannel, bool PromptInvoked, TestInteractionService InteractionService)> RunNonInteractiveSelfUpdateAsync(
+        TemporaryWorkspace workspace,
+        string identityChannel,
+        string updateArgs = "update --self --non-interactive -y")
+    {
+        var promptForSelectionInvoked = false;
+        string? capturedChannel = null;
+        TestInteractionService? interactionService = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(identityChannel: identityChannel);
+
+            options.InteractionServiceFactory = _ =>
+            {
+                interactionService = new TestInteractionService()
+                {
+                    PromptForSelectionCallback = (prompt, choices, formatter, ct) =>
+                    {
+                        promptForSelectionInvoked = true;
+                        return PackageChannelNames.Stable;
+                    }
+                };
+                return interactionService;
+            };
+
+            options.CliDownloaderFactory = _ => new TestCliDownloader(workspace.WorkspaceRoot)
+            {
+                DownloadLatestCliAsyncCallback = (channel, ct) =>
+                {
+                    capturedChannel = channel;
+                    var archivePath = Path.Combine(workspace.WorkspaceRoot.FullName, "test-cli.tar.gz");
+                    File.WriteAllText(archivePath, "fake archive");
+                    return Task.FromResult(archivePath);
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(updateArgs);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        return (exitCode, capturedChannel, promptForSelectionInvoked, interactionService!);
     }
 
     private static string CreateCustomToolPathInstall(string toolPath)

@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import * as cliModule from '../debugger/languages/cli';
 import { AppHostDiscoveryService, findCandidateForEditorFile, findConfiguredAppHostPaths, getDebugTargetForCandidate, selectWorkspaceAppHostPath } from '../utils/appHostDiscovery';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
+import { appHostDiscoveryFindFilesMaxResults } from '../utils/workspaceFileSearch';
 
 suite('AppHost discovery', () => {
     test('resolves SDK-style C# AppHost source file to discovered project candidate', () => {
@@ -141,6 +142,7 @@ suite('AppHost discovery', () => {
 
         test('fires change event and invalidates cache when watched files change', async () => {
             const watcherCallbacks = stubFileSystemWatchers(sandbox);
+            const clock = sandbox.useFakeTimers();
             const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
                 options?.stdoutCallback?.('[]');
                 options?.exitCallback?.(0);
@@ -158,6 +160,11 @@ suite('AppHost discovery', () => {
                 assert.strictEqual(spawnStub.callCount, 1);
 
                 watcherCallbacks[0]();
+                assert.strictEqual(changedWorkspaceFolder, undefined);
+                await service.discover(workspaceFolder);
+                assert.strictEqual(spawnStub.callCount, 2);
+
+                await clock.tickAsync(250);
                 assert.strictEqual(changedWorkspaceFolder, workspaceFolder);
 
                 await service.discover(workspaceFolder);
@@ -165,6 +172,43 @@ suite('AppHost discovery', () => {
             }
             finally {
                 subscription.dispose();
+                service.dispose();
+            }
+        });
+
+        test('watches Node module AppHost filenames', async () => {
+            const watchedPatterns: string[] = [];
+            sandbox.stub(vscode.workspace, 'createFileSystemWatcher').callsFake((pattern) => {
+                watchedPatterns.push(typeof pattern === 'string' ? pattern : pattern.pattern);
+                return {
+                    ignoreCreateEvents: false,
+                    ignoreChangeEvents: false,
+                    ignoreDeleteEvents: false,
+                    onDidCreate: () => ({ dispose: () => { } }),
+                    onDidChange: () => ({ dispose: () => { } }),
+                    onDidDelete: () => ({ dispose: () => { } }),
+                    dispose: () => { },
+                } as vscode.FileSystemWatcher;
+            });
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                options?.stdoutCallback?.('[]');
+                options?.exitCallback?.(0);
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+
+            try {
+                await service.discover(workspaceFolder);
+
+                assert.ok(watchedPatterns.includes('**/apphost.ts'));
+                assert.ok(watchedPatterns.includes('**/apphost.mts'));
+                assert.ok(watchedPatterns.includes('**/apphost.cts'));
+                assert.ok(watchedPatterns.includes('**/apphost.js'));
+                assert.ok(watchedPatterns.includes('**/apphost.mjs'));
+                assert.ok(watchedPatterns.includes('**/apphost.cjs'));
+            }
+            finally {
                 service.dispose();
             }
         });
@@ -191,9 +235,159 @@ suite('AppHost discovery', () => {
                 assert.strictEqual(changeCount, 0);
                 watcherCallbacks[0](vscode.Uri.file(buildPath('workspace', '.worktrees', 'feature', 'AppHost', 'AppHost.csproj')));
                 assert.strictEqual(changeCount, 0);
+                watcherCallbacks[0](vscode.Uri.file(buildPath('workspace', '.claude', 'worktrees', 'feature', 'AppHost', 'AppHost.csproj')));
+                assert.strictEqual(changeCount, 0);
 
                 await service.discover(workspaceFolder);
                 assert.strictEqual(spawnStub.callCount, 1);
+            }
+            finally {
+                subscription.dispose();
+                service.dispose();
+            }
+        });
+
+        test('ignores watched files matched by user exclude patterns', async () => {
+            const watcherCallbacks = stubFileSystemWatchers(sandbox);
+            const clock = sandbox.useFakeTimers();
+            sandbox.stub(vscode.workspace, 'getConfiguration').callsFake((section?: string) => ({
+                get: () => section === 'files'
+                    ? { '**/private-checkouts/**': true }
+                    : {},
+            } as unknown as vscode.WorkspaceConfiguration));
+            const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                options?.stdoutCallback?.('[]');
+                options?.exitCallback?.(0);
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+            let changeCount = 0;
+            const subscription = service.onDidChangeCandidates(() => {
+                changeCount++;
+            });
+
+            try {
+                await service.discover(workspaceFolder);
+                assert.strictEqual(spawnStub.callCount, 1);
+
+                watcherCallbacks[0](vscode.Uri.file(buildPath('workspace', 'private-checkouts', 'feature', 'AppHost', 'AppHost.csproj')));
+                await clock.tickAsync(250);
+
+                assert.strictEqual(changeCount, 0);
+                await service.discover(workspaceFolder);
+                assert.strictEqual(spawnStub.callCount, 1);
+            }
+            finally {
+                subscription.dispose();
+                service.dispose();
+            }
+        });
+
+        test('ignores watched files matched by bracket user exclude patterns', async () => {
+            const watcherCallbacks = stubFileSystemWatchers(sandbox);
+            const clock = sandbox.useFakeTimers();
+            sandbox.stub(vscode.workspace, 'getConfiguration').callsFake((section?: string) => ({
+                get: () => section === 'files'
+                    ? { '**/[Pp]rivate-checkouts/**': true }
+                    : {},
+            } as unknown as vscode.WorkspaceConfiguration));
+            const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                options?.stdoutCallback?.('[]');
+                options?.exitCallback?.(0);
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+            let changeCount = 0;
+            const subscription = service.onDidChangeCandidates(() => {
+                changeCount++;
+            });
+
+            try {
+                await service.discover(workspaceFolder);
+                assert.strictEqual(spawnStub.callCount, 1);
+
+                watcherCallbacks[0](vscode.Uri.file(buildPath('workspace', 'private-checkouts', 'feature', 'AppHost', 'AppHost.csproj')));
+                await clock.tickAsync(250);
+
+                assert.strictEqual(changeCount, 0);
+                await service.discover(workspaceFolder);
+                assert.strictEqual(spawnStub.callCount, 1);
+            }
+            finally {
+                subscription.dispose();
+                service.dispose();
+            }
+        });
+
+        test('malformed bracket user exclude patterns do not break watcher invalidation', async () => {
+            const watcherCallbacks = stubFileSystemWatchers(sandbox);
+            const clock = sandbox.useFakeTimers();
+            sandbox.stub(vscode.workspace, 'getConfiguration').callsFake((section?: string) => ({
+                get: () => section === 'files'
+                    ? { '**/[z-a]/**': true }
+                    : {},
+            } as unknown as vscode.WorkspaceConfiguration));
+            const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                options?.stdoutCallback?.('[]');
+                options?.exitCallback?.(0);
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+            let changeCount = 0;
+            const subscription = service.onDidChangeCandidates(() => {
+                changeCount++;
+            });
+
+            try {
+                await service.discover(workspaceFolder);
+                assert.strictEqual(spawnStub.callCount, 1);
+
+                watcherCallbacks[0](vscode.Uri.file(buildPath('workspace', 'AppHost', 'AppHost.csproj')));
+                await clock.tickAsync(250);
+
+                assert.strictEqual(changeCount, 1);
+                await service.discover(workspaceFolder);
+                assert.strictEqual(spawnStub.callCount, 2);
+            }
+            finally {
+                subscription.dispose();
+                service.dispose();
+            }
+        });
+
+        test('negated bracket user exclude patterns do not match path separators', async () => {
+            const watcherCallbacks = stubFileSystemWatchers(sandbox);
+            const clock = sandbox.useFakeTimers();
+            sandbox.stub(vscode.workspace, 'getConfiguration').callsFake((section?: string) => ({
+                get: () => section === 'files'
+                    ? { '**[!x]AppHost.csproj': true }
+                    : {},
+            } as unknown as vscode.WorkspaceConfiguration));
+            const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                options?.stdoutCallback?.('[]');
+                options?.exitCallback?.(0);
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+            let changeCount = 0;
+            const subscription = service.onDidChangeCandidates(() => {
+                changeCount++;
+            });
+
+            try {
+                await service.discover(workspaceFolder);
+                assert.strictEqual(spawnStub.callCount, 1);
+
+                watcherCallbacks[0](vscode.Uri.file(buildPath('workspace', 'x', 'AppHost.csproj')));
+                await clock.tickAsync(250);
+
+                assert.strictEqual(changeCount, 1);
+                await service.discover(workspaceFolder);
+                assert.strictEqual(spawnStub.callCount, 2);
             }
             finally {
                 subscription.dispose();
@@ -223,6 +417,80 @@ suite('AppHost discovery', () => {
             assert.strictEqual(spawnStub.callCount, 1);
             assert.strictEqual(childProcess.kill.callCount, 1);
             assert.strictEqual(childProcess.killed, true);
+        });
+
+        test('caller cancellation does not reject shared discovery for other callers', async () => {
+            stubFileSystemWatchers(sandbox);
+            let options: cliModule.SpawnProcessOptions | undefined;
+            const childProcess = {
+                killed: false,
+                kill: sandbox.stub().callsFake(() => {
+                    childProcess.killed = true;
+                    return true;
+                }),
+            };
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, spawnOptions) => {
+                options = spawnOptions;
+                return childProcess as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+            const cancellationSource = new vscode.CancellationTokenSource();
+
+            try {
+                const cancelledDiscovery = service.discover(workspaceFolder, false, cancellationSource.token);
+                const sharedDiscovery = service.discover(workspaceFolder);
+                await waitForMicrotasks();
+                assert.ok(options);
+
+                cancellationSource.cancel();
+
+                await assert.rejects(cancelledDiscovery, /cancelled/);
+                assert.strictEqual(childProcess.kill.callCount, 0);
+
+                options.stdoutCallback?.(JSON.stringify([{
+                    path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
+                    language: 'csharp',
+                    status: 'buildable',
+                }]));
+                options.exitCallback?.(0);
+
+                assert.deepStrictEqual(await sharedDiscovery, [{
+                    path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
+                    language: 'csharp',
+                    status: 'buildable',
+                }]);
+            }
+            finally {
+                cancellationSource.dispose();
+                service.dispose();
+            }
+        });
+
+        test('already cancelled caller token does not start discovery on cache miss', async () => {
+            stubFileSystemWatchers(sandbox);
+            const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                options?.stdoutCallback?.('[]');
+                options?.exitCallback?.(0);
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+            const cancellationSource = new vscode.CancellationTokenSource();
+            cancellationSource.cancel();
+
+            try {
+                await assert.rejects(service.discover(workspaceFolder, false, cancellationSource.token), /cancelled/);
+                assert.strictEqual(spawnStub.callCount, 0);
+
+                const result = await service.discover(workspaceFolder);
+                assert.deepStrictEqual(result, []);
+                assert.strictEqual(spawnStub.callCount, 1);
+            }
+            finally {
+                cancellationSource.dispose();
+                service.dispose();
+            }
         });
 
         test('times out hung CLI process and allows retry', async () => {
@@ -330,12 +598,235 @@ suite('AppHost discovery', () => {
             }
         });
 
-        test('configured AppHost path search excludes git worktree folders', async () => {
-            await findConfiguredAppHostPaths(makeWorkspaceFolder(buildPath('workspace')));
+        test('falls back to project files when malformed config blocks CLI discovery', async () => {
+            const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-apphost-discovery-'));
+            try {
+                stubFileSystemWatchers(sandbox);
+                const appHostProjectPath = path.join(tempDir, 'AppHost', 'AppHost.csproj');
+                fs.mkdirSync(path.dirname(appHostProjectPath), { recursive: true });
+                fs.writeFileSync(appHostProjectPath, `<Project Sdk="Aspire.AppHost.Sdk/13.5.0">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+</Project>
+`);
+                findFilesStub.callsFake(async (include: vscode.GlobPattern) => {
+                    const pattern = typeof include === 'string' ? include : include.pattern;
+                    return pattern.endsWith('*.csproj') ? [vscode.Uri.file(appHostProjectPath)] : [];
+                });
+                sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                    options?.stderrCallback?.(`The configuration file '${path.join(tempDir, 'aspire.config.json')}' contains invalid JSON.`);
+                    options?.exitCallback?.(1);
+                    return { kill: () => { } } as any;
+                });
+                const service = new AppHostDiscoveryService(makeTerminalProvider());
 
-            const excludePatterns = findFilesStub.getCalls().map(call => String(call.args[1]));
-            assert.ok(excludePatterns.length > 0);
-            assert.ok(excludePatterns.every(pattern => pattern.includes('**/.worktrees/**')));
+                try {
+                    const result = await service.discover(makeWorkspaceFolder(tempDir));
+
+                    assert.deepStrictEqual(result, [{
+                        path: vscode.Uri.file(appHostProjectPath).fsPath,
+                        language: 'csharp',
+                        status: 'buildable',
+                    }]);
+                }
+                finally {
+                    service.dispose();
+                }
+            }
+            finally {
+                fs.rmSync(tempDir, { recursive: true, force: true });
+            }
+        });
+
+        test('uses VS Code file system when falling back to project files', async () => {
+            const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-apphost-discovery-'));
+            try {
+                stubFileSystemWatchers(sandbox);
+                const appHostProjectPath = path.join(tempDir, 'AppHost', 'AppHost.csproj');
+                const appHostProjectUri = vscode.Uri.file(appHostProjectPath);
+                fs.mkdirSync(path.dirname(appHostProjectPath), { recursive: true });
+                fs.writeFileSync(appHostProjectPath, `<Project Sdk="Aspire.AppHost.Sdk/13.5.0">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+</Project>
+`);
+                findFilesStub.callsFake(async (include: vscode.GlobPattern) => {
+                    const pattern = typeof include === 'string' ? include : include.pattern;
+                    return pattern.endsWith('*.csproj') ? [appHostProjectUri] : [];
+                });
+                const nodeReadStub = sandbox.stub(fs.promises, 'readFile').rejects(new Error('Node fs should not be used for workspace project fallback.'));
+                sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                    options?.stderrCallback?.('CLI discovery failed');
+                    options?.exitCallback?.(1);
+                    return { kill: () => { } } as any;
+                });
+                const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+                try {
+                    const result = await service.discover(makeWorkspaceFolder(tempDir));
+
+                    assert.deepStrictEqual(result, [{
+                        path: appHostProjectUri.fsPath,
+                        language: 'csharp',
+                        status: 'buildable',
+                    }]);
+                    assert.strictEqual(nodeReadStub.callCount, 0);
+                }
+                finally {
+                    service.dispose();
+                }
+            }
+            finally {
+                fs.rmSync(tempDir, { recursive: true, force: true });
+            }
+        });
+
+        test('workspace project fallback checks projects beyond bounded file-search batch', async () => {
+            const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-apphost-discovery-'));
+            try {
+                stubFileSystemWatchers(sandbox);
+                const projectPaths = Array.from({ length: appHostDiscoveryFindFilesMaxResults + 1 }, (_, index) => '/Project' + index + '/Project' + index + '.csproj');
+                const appHostProjectPath = projectPaths[projectPaths.length - 1];
+                const projectContentsByPath = new Map<string, string>();
+                for (const projectPath of projectPaths) {
+                    const projectContents = projectPath === appHostProjectPath
+                        ? '<Project Sdk="Aspire.AppHost.Sdk/13.5.0" />'
+                        : '<Project Sdk="Microsoft.NET.Sdk" />';
+                    projectContentsByPath.set(projectPath, projectContents);
+                }
+                const fileSystemProvider = new InMemoryProjectFileSystemProvider(projectContentsByPath);
+                const fileSystemRegistration = vscode.workspace.registerFileSystemProvider('aspire-discovery-test', fileSystemProvider, { isCaseSensitive: true });
+                findFilesStub.callsFake(async (include: vscode.GlobPattern, _exclude?: vscode.GlobPattern | null, maxResults?: number) => {
+                    const pattern = typeof include === 'string' ? include : include.pattern;
+                    if (!pattern.endsWith('*.csproj')) {
+                        return [];
+                    }
+
+                    const uris = projectPaths.map(projectPath => vscode.Uri.from({ scheme: 'aspire-discovery-test', path: projectPath }));
+                    return typeof maxResults === 'number' ? uris.slice(0, maxResults) : uris;
+                });
+                sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
+                    options?.stderrCallback?.(`${args.join(' ')} failed`);
+                    options?.exitCallback?.(1);
+                    return { kill: () => { } } as any;
+                });
+                const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+                try {
+                    const result = await service.discover(makeWorkspaceFolder(tempDir));
+
+                    assert.deepStrictEqual(result, [{
+                        path: vscode.Uri.from({ scheme: 'aspire-discovery-test', path: appHostProjectPath }).fsPath,
+                        language: 'csharp',
+                        status: 'buildable',
+                    }]);
+                }
+                finally {
+                    fileSystemRegistration.dispose();
+                    service.dispose();
+                }
+            }
+            finally {
+                fs.rmSync(tempDir, { recursive: true, force: true });
+            }
+        });
+
+        test('configured AppHost path search excludes nested worktrees and user excluded folders', async () => {
+            sandbox.stub(vscode.workspace, 'getConfiguration').callsFake((section?: string) => {
+                const values: Record<string, Record<string, boolean>> = {
+                    files: {
+                        '**/private-checkouts/**': true,
+                        '**/generated-but-enabled/**': false,
+                    },
+                    search: {
+                        '**/scratch-worktrees/**': true,
+                    },
+                };
+
+                return {
+                    get: <T>(key: string, defaultValue: T) => key === 'exclude' && section ? values[section] as T : defaultValue,
+                } as vscode.WorkspaceConfiguration;
+            });
+            const cancellationToken = makeCancellationToken();
+
+            await findConfiguredAppHostPaths(makeWorkspaceFolder(buildPath('workspace')), cancellationToken);
+
+            for (const call of findFilesStub.getCalls()) {
+                const excludePattern = String(call.args[1]);
+                assert.ok(excludePattern.includes('**/.worktrees/**'));
+                assert.ok(excludePattern.includes('**/.claude/**'));
+                assert.ok(excludePattern.includes('**/private-checkouts/**'));
+                assert.ok(excludePattern.includes('**/scratch-worktrees/**'));
+                assert.ok(!excludePattern.includes('**/generated-but-enabled/**'));
+                assert.strictEqual(call.args[2], appHostDiscoveryFindFilesMaxResults);
+                assert.strictEqual(call.args[3], cancellationToken);
+            }
+        });
+
+        test('caller cancellation does not reject shared configured AppHost path search for other callers', async () => {
+            stubFileSystemWatchers(sandbox);
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                options?.stdoutCallback?.('[]');
+                options?.exitCallback?.(0);
+                return { kill: () => { } } as any;
+            });
+            let resolveFindFiles: ((uris: vscode.Uri[]) => void) | undefined;
+            const findFilesPromise = new Promise<vscode.Uri[]>(resolve => {
+                resolveFindFiles = resolve;
+            });
+            findFilesStub.callsFake(() => findFilesPromise);
+            const cancellationSource = new vscode.CancellationTokenSource();
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+
+            try {
+                const cancelledDiscovery = service.discover(workspaceFolder, false, cancellationSource.token);
+                const sharedDiscovery = service.discover(workspaceFolder);
+                await waitForMicrotasks();
+                assert.ok(resolveFindFiles);
+
+                cancellationSource.cancel();
+                const cancelledResult = assert.rejects(cancelledDiscovery, /cancelled/);
+                resolveFindFiles([]);
+                await cancelledResult;
+
+                assert.deepStrictEqual(await sharedDiscovery, []);
+                assert.strictEqual(findFilesStub.callCount, 2);
+            }
+            finally {
+                cancellationSource.dispose();
+                service.dispose();
+            }
+        });
+
+        test('service discovery shares configured AppHost path search between concurrent callers', async () => {
+            stubFileSystemWatchers(sandbox);
+            let options: cliModule.SpawnProcessOptions | undefined;
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, spawnOptions) => {
+                options = spawnOptions;
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+
+            try {
+                const firstDiscovery = service.discover(workspaceFolder);
+                const secondDiscovery = service.discover(workspaceFolder);
+                await waitForMicrotasks();
+                assert.ok(options);
+
+                options.stdoutCallback?.('[]');
+                options.exitCallback?.(0);
+
+                await Promise.all([firstDiscovery, secondDiscovery]);
+
+                assert.strictEqual(findFilesStub.callCount, 2);
+            }
+            finally {
+                service.dispose();
+            }
         });
 
         test('selects configured path from recursive config during service discovery', async () => {
@@ -456,6 +947,13 @@ function makeTerminalProvider(): AspireTerminalProvider {
     } as unknown as AspireTerminalProvider;
 }
 
+function makeCancellationToken(): vscode.CancellationToken {
+    return {
+        isCancellationRequested: false,
+        onCancellationRequested: () => ({ dispose: () => { } }),
+    };
+}
+
 async function waitForMicrotasks(): Promise<void> {
     await Promise.resolve();
     await Promise.resolve();
@@ -480,4 +978,59 @@ function stubFileSystemWatchers(sandbox: sinon.SinonSandbox): Array<(uri?: vscod
     } as vscode.FileSystemWatcher));
 
     return callbacks;
+}
+
+class InMemoryProjectFileSystemProvider implements vscode.FileSystemProvider {
+    private readonly _onDidChangeFile = new vscode.EventEmitter<vscode.FileChangeEvent[]>();
+    readonly onDidChangeFile = this._onDidChangeFile.event;
+
+    public constructor(private readonly _files: Map<string, string>) {
+    }
+
+    public watch(): vscode.Disposable {
+        return { dispose: () => { } };
+    }
+
+    public stat(uri: vscode.Uri): vscode.FileStat {
+        const contents = this._files.get(uri.path);
+        if (contents === undefined) {
+            throw vscode.FileSystemError.FileNotFound(uri);
+        }
+
+        return {
+            type: vscode.FileType.File,
+            ctime: 0,
+            mtime: 0,
+            size: Buffer.byteLength(contents, 'utf8'),
+        };
+    }
+
+    public readDirectory(): [string, vscode.FileType][] {
+        return [];
+    }
+
+    public createDirectory(uri: vscode.Uri): void {
+        throw vscode.FileSystemError.NoPermissions(uri);
+    }
+
+    public readFile(uri: vscode.Uri): Uint8Array {
+        const contents = this._files.get(uri.path);
+        if (contents === undefined) {
+            throw vscode.FileSystemError.FileNotFound(uri);
+        }
+
+        return Buffer.from(contents, 'utf8');
+    }
+
+    public writeFile(uri: vscode.Uri): void {
+        throw vscode.FileSystemError.NoPermissions(uri);
+    }
+
+    public delete(uri: vscode.Uri): void {
+        throw vscode.FileSystemError.NoPermissions(uri);
+    }
+
+    public rename(_oldUri: vscode.Uri, newUri: vscode.Uri): void {
+        throw vscode.FileSystemError.NoPermissions(newUri);
+    }
 }

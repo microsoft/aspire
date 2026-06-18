@@ -2,9 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using Aspire.Cli.Utils;
-
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Projects;
 
@@ -62,6 +61,18 @@ internal interface IAppHostServerSessionFactory
         Dictionary<string, string>? launchSettingsEnvVars,
         bool debug,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Starts a server session from an already-prepared server project.
+    /// </summary>
+    /// <param name="appHostServerProject">The prepared server project to start.</param>
+    /// <param name="environmentVariables">Optional environment variables for the server process.</param>
+    /// <param name="debug">Whether to enable debug logging.</param>
+    /// <returns>The started server session.</returns>
+    IAppHostServerSession Start(
+        IAppHostServerProject appHostServerProject,
+        Dictionary<string, string>? environmentVariables,
+        bool debug);
 }
 
 /// <summary>

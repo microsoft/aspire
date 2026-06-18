@@ -49,7 +49,7 @@ public class ProgramTests(ITestOutputHelper outputHelper)
         }).Build());
         services.AddSingleton<ICliHostEnvironment>(new TestCliHostEnvironment(supportsAnsi: false, supportsInteractiveOutput: false));
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var writer = new StringWriter(new StringBuilder());
         var buildAnsiConsole = typeof(Program).GetMethod("BuildAnsiConsole", BindingFlags.NonPublic | BindingFlags.Static);
 

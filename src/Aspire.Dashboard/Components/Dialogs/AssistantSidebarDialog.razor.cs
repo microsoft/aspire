@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components.CustomIcons;
+using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Model.Assistant;
 using Microsoft.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -50,16 +51,28 @@ public partial class AssistantSidebarDialog : IAsyncDisposable
         }
     }
 
-    public void CloseDialog()
+    public async Task CloseDialogAsync()
     {
-        AIContextProvider.HideAssistantSidebarAsync();
+        await ServiceProvider.GetRequiredService<IAssistantDisplayContext>().HideAssistantSidebarAsync();
     }
 
     public async Task ExpandDialogAsync(bool openedForMobileView)
     {
         Content.Chat.DisplayContainer = AssistantChatDisplayContainer.Switching;
-        await AIContextProvider.HideAssistantSidebarAsync();
-        await AIContextProvider.LaunchAssistantModelDialogAsync(Content.Chat, openedForMobileView);
+        var assistantDisplayContext = ServiceProvider.GetRequiredService<IAssistantDisplayContext>();
+        await assistantDisplayContext.HideAssistantSidebarAsync(restoreFocus: false);
+
+        // The viewport switch changes which launcher is visible. Keep focus restoration
+        // pointed at the control users can actually reach after the switch completes.
+        var returnFocusElementId = GetReturnFocusElementId(openedForMobileView, Content.ReturnFocusElementId);
+        await assistantDisplayContext.LaunchAssistantModelDialogAsync(Content.Chat, openedForMobileView, returnFocusElementId);
+    }
+
+    internal static string? GetReturnFocusElementId(bool openedForMobileView, string? returnFocusElementId)
+    {
+        return openedForMobileView
+            ? MainLayout.NavigationButtonId
+            : returnFocusElementId;
     }
 
     public async Task StartNewChatAsync()

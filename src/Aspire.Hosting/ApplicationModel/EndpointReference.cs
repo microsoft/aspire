@@ -242,20 +242,9 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
             return null;
         }
 
-        foreach (var nes in endpointAnnotation.AllAllocatedEndpoints)
-        {
-            if (string.Equals(nes.NetworkID.Value, (_contextNetworkId ?? KnownNetworkIdentifiers.LocalhostNetwork).Value, StringComparisons.NetworkId))
-            {
-                if (!nes.Snapshot.IsValueSet)
-                {
-                    continue;
-                }
-
-                return nes.Snapshot.GetValueAsync().GetAwaiter().GetResult();
-            }
-        }
-
-        return null;
+        return endpointAnnotation.AllAllocatedEndpoints.TryGetAllocatedEndpoint(_contextNetworkId ?? KnownNetworkIdentifiers.LocalhostNetwork, out var allocatedEndpoint)
+            ? allocatedEndpoint
+            : null;
     }
 
     /// <summary>
@@ -382,8 +371,7 @@ public class EndpointReferenceExpression(EndpointReference endpointReference, En
 
         async ValueTask<string?> ResolveValueWithAllocatedAddress()
         {
-            var endpointSnapshots = Endpoint.EndpointAnnotation.AllAllocatedEndpoints;
-            var allocatedEndpoint = await endpointSnapshots.GetAllocatedEndpointAsync(networkContext, cancellationToken).ConfigureAwait(false);
+            var allocatedEndpoint = await Endpoint.EndpointAnnotation.AllAllocatedEndpoints.GetAllocatedEndpointAsync(networkContext, cancellationToken).ConfigureAwait(false);
 
             return Property switch
             {

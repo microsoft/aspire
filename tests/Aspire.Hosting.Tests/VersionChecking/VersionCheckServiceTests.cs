@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREUSERSECRETS001
 
 using System.Globalization;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.UserSecrets;
 using Aspire.Hosting.VersionChecking;
 using Aspire.Shared;
@@ -13,8 +14,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Semver;
 
 namespace Aspire.Hosting.Tests.VersionChecking;
-
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 [Trait("Partition", "4")]
 public class VersionCheckServiceTests
@@ -247,6 +246,112 @@ public class VersionCheckServiceTests
         Assert.False(interactionService.Interactions.Reader.TryRead(out var _));
     }
 
+    [Theory]
+    [InlineData("100.0.0-preview2", true)]
+    [InlineData("100.0.0-preview3", true)]
+    [InlineData("100.0.0-rc1", true)]
+    [InlineData("100.0.0", false)]
+    [InlineData("100.0.1-preview1", false)]
+    [InlineData("100.1.0-preview1", false)]
+    public async Task ExecuteAsync_IgnoredWildcardVersion_IgnoresPrereleasesOnly(string latestVersion, bool shouldBeIgnored)
+    {
+        // Arrange
+        var interactionService = new TestInteractionService();
+        var configurationManager = new ConfigurationManager();
+        configurationManager.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            // Simulates user having ignored 100.0.0-preview1, which stores "100.0.0-*"
+            [VersionCheckService.IgnoreVersionKey] = "100.0.0-*"
+        });
+        var packagesTcs = new TaskCompletionSource<List<NuGetPackage>>();
+        var packageFetcher = new TestPackageFetcher(packagesTcs.Task);
+        var service = CreateVersionCheckService(
+            interactionService: interactionService,
+            packageFetcher: packageFetcher,
+            configuration: configurationManager,
+            packageVersionProvider: new TestPackageVersionProvider(SemVersion.Parse("1.0.0-preview1")));
+
+        // Act
+        _ = service.StartAsync(CancellationToken.None);
+
+        packagesTcs.SetResult([new NuGetPackage { Id = PackageFetcher.PackageId, Version = latestVersion }]);
+
+        if (shouldBeIgnored)
+        {
+            await service.ExecuteTask!.DefaultTimeout();
+            interactionService.Interactions.Writer.Complete();
+            Assert.False(interactionService.Interactions.Reader.TryRead(out var _));
+        }
+        else
+        {
+            var interaction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+            interaction.CompletionTcs.TrySetResult(InteractionResult.Ok(true));
+            await service.ExecuteTask!.DefaultTimeout();
+        }
+
+        // Assert
+        Assert.True(packageFetcher.FetchCalled);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_IgnorePrerelease_StoresWildcardPattern()
+    {
+        // Arrange
+        var interactionService = new TestInteractionService();
+        var configurationManager = new ConfigurationManager();
+        var packagesTcs = new TaskCompletionSource<List<NuGetPackage>>();
+        var packageFetcher = new TestPackageFetcher(packagesTcs.Task);
+        var mockSecretsManager = new MockUserSecretsManager();
+        var service = CreateVersionCheckService(
+            interactionService: interactionService,
+            packageFetcher: packageFetcher,
+            configuration: configurationManager,
+            packageVersionProvider: new TestPackageVersionProvider(SemVersion.Parse("1.0.0-preview1")),
+            userSecretsManager: mockSecretsManager);
+
+        // Act
+        _ = service.StartAsync(CancellationToken.None);
+
+        packagesTcs.TrySetResult([new NuGetPackage { Id = PackageFetcher.PackageId, Version = "100.0.0-preview1" }]);
+
+        var interaction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        interaction.CompletionTcs.TrySetResult(InteractionResult.Ok(true));
+
+        await service.ExecuteTask!.DefaultTimeout();
+
+        // Assert - should store wildcard pattern instead of exact version
+        Assert.Equal("100.0.0-*", mockSecretsManager.Secrets[VersionCheckService.IgnoreVersionKey]);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_IgnoreStableVersion_StoresExactVersion()
+    {
+        // Arrange
+        var interactionService = new TestInteractionService();
+        var configurationManager = new ConfigurationManager();
+        var packagesTcs = new TaskCompletionSource<List<NuGetPackage>>();
+        var packageFetcher = new TestPackageFetcher(packagesTcs.Task);
+        var mockSecretsManager = new MockUserSecretsManager();
+        var service = CreateVersionCheckService(
+            interactionService: interactionService,
+            packageFetcher: packageFetcher,
+            configuration: configurationManager,
+            userSecretsManager: mockSecretsManager);
+
+        // Act
+        _ = service.StartAsync(CancellationToken.None);
+
+        packagesTcs.TrySetResult([new NuGetPackage { Id = PackageFetcher.PackageId, Version = "100.0.0" }]);
+
+        var interaction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        interaction.CompletionTcs.TrySetResult(InteractionResult.Ok(true));
+
+        await service.ExecuteTask!.DefaultTimeout();
+
+        // Assert - should store exact version for stable releases
+        Assert.Equal("100.0.0", mockSecretsManager.Secrets[VersionCheckService.IgnoreVersionKey]);
+    }
+
     private static VersionCheckService CreateVersionCheckService(
         IInteractionService? interactionService = null,
         IPackageFetcher? packageFetcher = null,
@@ -280,38 +385,5 @@ public class VersionCheckServiceTests
         }
     }
 
-    private sealed class TestPackageVersionProvider : IPackageVersionProvider
-    {
-        private readonly SemVersion _version;
-
-        public TestPackageVersionProvider(SemVersion? version = null)
-        {
-            _version = version ?? new SemVersion(1, 0, 0);
-        }
-
-        public SemVersion? GetPackageVersion()
-        {
-            return _version;
-        }
-    }
-
-    private sealed class TestPackageFetcher : IPackageFetcher
-    {
-        private readonly Task<List<NuGetPackage>> _versionTask;
-
-        public bool FetchCalled { get; private set; }
-
-        public TestPackageFetcher(Task<List<NuGetPackage>>? versionTask = null)
-        {
-            _versionTask = versionTask ?? Task.FromResult<List<NuGetPackage>>([]);
-        }
-
-        public Task<List<NuGetPackage>> TryFetchPackagesAsync(string appHostDirectory, CancellationToken cancellationToken)
-        {
-            FetchCalled = true;
-            return _versionTask;
-        }
-    }
 }
 
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

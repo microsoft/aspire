@@ -25,7 +25,8 @@ import {
     ReferenceExpression,
     refExpr,
     AspireDict,
-    AspireList
+    AspireList,
+    InteractionInputCollectionPromiseImpl
 } from './base.mjs';
 
 export {
@@ -35,13 +36,15 @@ export {
 
 export type {
     InteractionInput,
-    InteractionInputOption
+    InteractionInputOption,
+    InteractionInputCollectionPromise
 } from './base.mjs';
 
 import type {
     Awaitable,
     InteractionInput,
     InteractionInputCollection,
+    InteractionInputCollectionPromise,
     InputType
 } from './base.mjs';
 
@@ -111,6 +114,21 @@ type CommandLineArgsEditorHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Applica
 
 /** The {@link ConnectionStringAvailableEvent} is raised when a connection string becomes available for a resource. */
 type ConnectionStringAvailableEventHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.ConnectionStringAvailableEvent'>;
+
+/** Context for configuring container build options via a callback. */
+type ContainerBuildOptionsCallbackContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext'>;
+
+/** Represents the context for a `ContainerFileSystemCallbackAnnotation` callback. */
+type ContainerFileSystemCallbackContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerFileSystemCallbackContext'>;
+
+/**
+ * Represents a base class for file system entries in a container.
+ *
+ * Exported to ATS as an opaque handle type. Polyglot app hosts never construct or inspect these
+ * directly; they create concrete entries through the factory methods on
+ * `ContainerFileSystemCallbackContext` and pass the resulting handles back via the callback.
+ */
+type ContainerFileSystemItemHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerFileSystemItem'>;
 
 /**
  * Represents options for pushing container images to a registry.
@@ -187,6 +205,15 @@ type ExecutableResourceHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Applicatio
 
 /** Context for {@link ResourceCommandAnnotation.ExecuteCommand}. */
 type ExecuteCommandContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext'>;
+
+/** Provides context for HTTP command prepare-request callbacks in polyglot app hosts. */
+type HttpCommandPrepareRequestContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpCommandPrepareRequestContext'>;
+
+/** Context provided to a `HttpsCertificateConfigurationCallbackAnnotation` callback. */
+type HttpsCertificateConfigurationCallbackAnnotationContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext'>;
+
+/** Context provided to the callback of `SubscribeHttpsEndpointsUpdate``1` when an HTTPS certificate is determined to be available for the resource. */
+type HttpsEndpointUpdateCallbackContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsEndpointUpdateCallbackContext'>;
 
 /**
  * Represents a store for managing files in the Aspire hosting environment that can be reused across runs.
@@ -267,6 +294,12 @@ type ReferenceExpressionHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Applicati
 /** A builder for creating {@link ReferenceExpression} instances. */
 type ReferenceExpressionBuilderHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpressionBuilder'>;
 
+/** Provides context for validating a required command. */
+type RequiredCommandValidationContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationContext'>;
+
+/** Represents the result of validating a required command. */
+type RequiredCommandValidationResultHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationResult'>;
+
 /** A service to execute resource commands. */
 type ResourceCommandServiceHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceCommandService'>;
 
@@ -309,6 +342,37 @@ type UpdateCommandStateContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.App
 /** Context passed to ATS-friendly eventing subscriber registrations. */
 type EventingSubscriberRegistrationContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext'>;
 
+/**
+ * The result of a multi-input interaction prompt.
+ *
+ * Modeled as a handle (not a by-value DTO) so the returned inputs are surfaced as the
+ * `InteractionInputCollection` handle. That lets polyglot callers reuse the same name-based
+ * accessors (for example `result.inputs().value("color")`) that the validation and command-argument
+ * collections already expose, instead of having to scan a serialized array by hand.
+ */
+type InputsInteractionResultHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Ats.InputsInteractionResult'>;
+
+/**
+ * An opaque, server-side builder for an `InteractionInput` used by polyglot app hosts.
+ *
+ * The builder owns the live `InteractionInput` instance. Dynamic-loading callbacks mutate this same
+ * instance through `InteractionInputLoadContext`, which is why the input is modeled as a handle here
+ * instead of the by-value `InteractionInput` DTO.
+ */
+type InteractionInputBuilderHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder'>;
+
+/** The context passed to a polyglot dynamic-loading callback. Exposes the loading input as a handle and provides read access to the other inputs in the prompt. */
+type InteractionInputLoadContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputLoadContext'>;
+
+/**
+ * A handle to the input currently being loaded by a dynamic-loading callback. Mirrors the native `LoadInputContext.Input` by letting callbacks update the live input directly.
+ *
+ * The handle owns the live `InteractionInput` for the duration of the load callback. Setters are routed
+ * back to the server-side input across the ATS boundary, which is why this is a handle rather than the by-value
+ * `InteractionInput` DTO.
+ */
+type InteractionLoadingInputHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Ats.InteractionLoadingInput'>;
+
 /** Represents a distributed application that implements the {@link IHost} and {@link IAsyncDisposable} interfaces. */
 type DistributedApplicationHandle = Handle<'Aspire.Hosting/Aspire.Hosting.DistributedApplication'>;
 
@@ -326,6 +390,9 @@ type ExternalServiceResourceHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Exter
 
 /** A builder for creating instances of {@link DistributedApplication}. */
 type IDistributedApplicationBuilderHandle = Handle<'Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder'>;
+
+/** A service to interact with the current development environment. */
+type IInteractionServiceHandle = Handle<'Aspire.Hosting/Aspire.Hosting.IInteractionService'>;
 
 /** Represents the context for validating inputs in an inputs dialog interaction. */
 type InputsDialogValidationContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext'>;
@@ -438,6 +505,22 @@ export enum CommandResultFormat {
     Markdown = "Markdown",
 }
 
+/** Specifies the destination for container images. */
+export enum ContainerImageDestination {
+    /** Image will be pushed to a container registry. */
+    Registry = "Registry",
+    /** Image will be saved as an archive file. */
+    Archive = "Archive",
+}
+
+/** Specifies the format for container images. */
+export enum ContainerImageFormat {
+    /** Docker format (default). */
+    Docker = "Docker",
+    /** OCI format. */
+    Oci = "Oci",
+}
+
 /** Lifetime modes for container resources. */
 export enum ContainerLifetime {
     /** Create the resource when the app host process starts and dispose of it when the app host process shuts down. */
@@ -461,6 +544,24 @@ export enum ContainerMountType {
     BindMount = "BindMount",
     /** A volume. */
     Volume = "Volume",
+}
+
+/** Specifies the target platform for container images. */
+export enum ContainerTargetPlatform {
+    /** Linux AMD64 (linux/amd64). */
+    LinuxAmd64 = "LinuxAmd64",
+    /** Linux ARM64 (linux/arm64). */
+    LinuxArm64 = "LinuxArm64",
+    /** All Linux platforms (AMD64 and ARM64). */
+    AllLinux = "AllLinux",
+    /** Linux ARM (linux/arm). */
+    LinuxArm = "LinuxArm",
+    /** Linux 386 (linux/386). */
+    Linux386 = "Linux386",
+    /** Windows AMD64 (windows/amd64). */
+    WindowsAmd64 = "WindowsAmd64",
+    /** Windows ARM64 (windows/arm64). */
+    WindowsArm64 = "WindowsArm64",
 }
 
 /** Describes the context in which the AppHost is being executed. */
@@ -528,6 +629,22 @@ export enum ImagePullPolicy {
     Missing = "Missing",
     /** Never pull the image from the registry even if it is missing locally. */
     Never = "Never",
+}
+
+/** Specifies the intent or purpose of a message in an interaction. */
+export enum MessageIntent {
+    /** No specific intent. */
+    None = "None",
+    /** Indicates a successful operation. */
+    Success = "Success",
+    /** Indicates a warning. */
+    Warning = "Warning",
+    /** Indicates an error. */
+    Error = "Error",
+    /** Provides informational content. */
+    Information = "Information",
+    /** Requests confirmation from the user. */
+    Confirmation = "Confirmation",
 }
 
 /** Protocols available for OTLP exporters. */
@@ -646,6 +763,14 @@ export interface AddContainerOptions {
     tag?: string | null;
 }
 
+/** The result of a boolean interaction prompt. */
+export interface BoolInteractionResult {
+    /** Gets a value indicating whether the interaction was canceled by the user. */
+    canceled?: boolean;
+    /** Gets the value returned from the interaction. Not meaningful when `Canceled` is `true`. */
+    value?: boolean;
+}
+
 /** Context for configuring certificate trust configuration properties. */
 export interface CertificateTrustExecutionConfigurationContext {
     /** The path to the PEM certificate bundle file in the resource context (e.g., container filesystem). */
@@ -722,6 +847,16 @@ export interface CommandResultData {
     displayImmediately?: boolean;
 }
 
+/** Options for creating or updating files and directories in a container from polyglot apphosts. */
+export interface ContainerFilesOptions {
+    /** The default owner UID for the created or updated file system entries. Defaults to 0 for root if not set. */
+    defaultOwner?: number | null;
+    /** The default group ID for the created or updated file system entries. Defaults to 0 for root if not set. */
+    defaultGroup?: number | null;
+    /** The Unix umask to apply to files or directories without explicit permissions. Use octal literals in JavaScript or TypeScript, for example `0o022`. */
+    umask?: number | null;
+}
+
 /** Options for creating a distributed application builder from polyglot apphosts. */
 export interface CreateBuilderOptions {
     /** The command line arguments. */
@@ -742,6 +877,36 @@ export interface CreateBuilderOptions {
     enableResourceLogging?: boolean;
     /** When false, pre-flush rejected promises are not re-thrown by build(). Default: true. */
     throwOnPendingRejections?: boolean;
+}
+
+/** Optional configuration shared by interaction input factory capabilities. */
+export interface CreateInteractionInputOptions {
+    /** Gets or sets the label for the input. Defaults to the input name when not specified. */
+    label?: string | null;
+    /** Gets or sets the description for the input. */
+    description?: string | null;
+    /** Gets or sets a value indicating whether the description is rendered as Markdown. */
+    enableDescriptionMarkdown?: boolean | null;
+    /** Gets or sets a value indicating whether the input is required. */
+    required?: boolean | null;
+    /** Gets or sets the placeholder text for the input. */
+    placeholder?: string | null;
+    /** Gets or sets the initial value of the input. */
+    value?: string | null;
+    /** Gets or sets a value indicating whether a custom choice is allowed. Only used by choice inputs. */
+    allowCustomChoice?: boolean | null;
+    /** Gets or sets a value indicating whether the input is disabled. */
+    disabled?: boolean | null;
+    /** Gets or sets the maximum length for text inputs. */
+    maxLength?: number | null;
+}
+
+/** Options controlling when a dynamic-loading callback runs. */
+export interface DynamicLoadingOptions {
+    /** Gets or sets a value indicating whether the callback always runs at the start of the prompt. */
+    alwaysLoadOnStart?: boolean | null;
+    /** Gets or sets the names of inputs this input depends on. The callback runs when any of them change. */
+    dependsOnInputs?: string[];
 }
 
 /** The result of executing a command. Returned from `ExecuteCommand`. */
@@ -805,8 +970,20 @@ export interface GenerateParameterDefault {
     minSpecial?: number;
 }
 
+/** ATS-friendly custom health check result. */
+export interface HealthCheckResult {
+    /** Gets the health status returned by the health check. */
+    status?: HealthStatus;
+    /** Gets an optional description for the health check result. */
+    description?: string | null;
+    /** Gets optional string data for the health check result. */
+    data?: Record<string, string>;
+}
+
 /** ATS-friendly configuration for resource HTTP commands. */
 export interface HttpCommandExportOptions {
+    /** Optional command configuration. */
+    commandOptions?: CommandOptions;
     /** Optional description of the command, to be shown in the UI. */
     description?: string | null;
     /** When a confirmation message is specified, the UI will prompt with an OK/Cancel dialog before starting the command. */
@@ -823,8 +1000,22 @@ export interface HttpCommandExportOptions {
     endpointName?: string | null;
     /** Gets or sets the HTTP method name to use when sending the request. */
     methodName?: string | null;
+    /** Gets or sets a callback to be invoked to configure the request before it is sent. */
+    prepareRequest?: (arg: HttpCommandPrepareRequestContext) => Promise<HttpCommandRequestExportData>;
     /** Gets or sets how the HTTP response content should be returned as command result data. */
     resultMode?: HttpCommandResultMode;
+}
+
+/** ATS-friendly request data returned from HTTP command prepare-request callbacks. */
+export interface HttpCommandRequestExportData {
+    /** Gets or sets the HTTP method name to use when sending the request. */
+    methodName?: string | null;
+    /** Gets or sets the request headers. */
+    headers?: Record<string, string>;
+    /** Gets or sets the request content. */
+    content?: string | null;
+    /** Gets or sets the request content type. */
+    contentType?: string | null;
 }
 
 /** Configuration context for server authentication certificate configuration. */
@@ -863,6 +1054,74 @@ export interface HttpsCertificateInfo {
     issuer?: string;
     /** The certificate thumbprint. */
     thumbprint?: string | null;
+}
+
+/** The result of a single-input interaction prompt. */
+export interface InputInteractionResult {
+    /** Gets a value indicating whether the interaction was canceled by the user. */
+    canceled?: boolean;
+    /** Gets the input returned from the interaction. Not present when `Canceled` is `true`. */
+    input?: InteractionInput;
+}
+
+/** A single selectable option for a choice input. Options are presented in the order supplied. */
+export interface InteractionChoiceOption {
+    /** Gets or sets the value submitted when this option is selected. */
+    value?: string;
+    /** Gets or sets the label displayed for this option. */
+    label?: string;
+}
+
+/** Options for inputs dialog prompts. */
+export interface InteractionInputsDialogOptions {
+    /** Gets or sets the primary button text. */
+    primaryButtonText?: string | null;
+    /** Gets or sets the secondary button text. */
+    secondaryButtonText?: string | null;
+    /** Gets or sets a value indicating whether the secondary button is shown. */
+    showSecondaryButton?: boolean | null;
+    /** Gets or sets a value indicating whether the dismiss button is shown. */
+    showDismiss?: boolean | null;
+    /** Gets or sets a value indicating whether Markdown in the message is rendered. */
+    enableMessageMarkdown?: boolean | null;
+    /** Gets or sets a callback invoked to validate the inputs before the dialog is accepted. The callback receives a validation context that exposes the current inputs and can record validation errors. */
+    validationCallback?: (arg: InputsDialogValidationContext) => Promise<void>;
+}
+
+/** Options for message box and confirmation prompts. */
+export interface InteractionMessageBoxOptions {
+    /** Gets or sets the primary button text. */
+    primaryButtonText?: string | null;
+    /** Gets or sets the secondary button text. */
+    secondaryButtonText?: string | null;
+    /** Gets or sets a value indicating whether the secondary button is shown. */
+    showSecondaryButton?: boolean | null;
+    /** Gets or sets a value indicating whether the dismiss button is shown. */
+    showDismiss?: boolean | null;
+    /** Gets or sets a value indicating whether Markdown in the message is rendered. */
+    enableMessageMarkdown?: boolean | null;
+    /** Gets or sets the intent of the message box. */
+    intent?: MessageIntent | null;
+}
+
+/** Options for notification prompts. */
+export interface InteractionNotificationOptions {
+    /** Gets or sets the primary button text. */
+    primaryButtonText?: string | null;
+    /** Gets or sets the secondary button text. */
+    secondaryButtonText?: string | null;
+    /** Gets or sets a value indicating whether the secondary button is shown. */
+    showSecondaryButton?: boolean | null;
+    /** Gets or sets a value indicating whether the dismiss button is shown. */
+    showDismiss?: boolean | null;
+    /** Gets or sets a value indicating whether Markdown in the message is rendered. */
+    enableMessageMarkdown?: boolean | null;
+    /** Gets or sets the intent of the notification. */
+    intent?: MessageIntent | null;
+    /** Gets or sets the text for a link in the notification. */
+    linkText?: string | null;
+    /** Gets or sets the URL for the link in the notification. */
+    linkUrl?: string | null;
 }
 
 /** Options for customizing parameter inputs from polyglot app hosts. */
@@ -905,6 +1164,8 @@ export interface ProcessCommandExportOptions {
     standardInputContent?: string | null;
     /** A value indicating whether the entire process tree should be killed when the process is disposed. */
     killEntireProcessTree?: boolean | null;
+    /** A callback that creates the local process specification when the command is invoked. */
+    createProcessSpec?: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>;
     /** Optional command configuration. */
     commandOptions?: CommandOptions;
     /** The maximum number of stdout and stderr output lines returned as command result data. */
@@ -1245,6 +1506,52 @@ export interface CopyOptions {
     chown?: string;
 }
 
+export interface CreateCertificateFileOptions {
+    /** The inline PEM-encoded contents of the certificate. Mutually exclusive with `sourcePath`. */
+    contents?: string;
+    /** An absolute path to a PEM file on the host to copy. Mutually exclusive with `contents`. */
+    sourcePath?: string;
+    /** The owner UID, or `null` to inherit. */
+    owner?: number;
+    /** The group GID, or `null` to inherit. */
+    group?: number;
+    /** The Unix file mode as an integer (for example `0o644`), or `null` to inherit. */
+    mode?: number;
+    /** Whether to ignore errors creating this file. */
+    continueOnError?: boolean;
+}
+
+export interface CreateChoiceInputOptions {
+    /** The available choices, in display order. Each option pairs a submitted value with a display label. */
+    choices?: InteractionChoiceOption[];
+    /** Optional configuration for the input. */
+    options?: CreateInteractionInputOptions;
+}
+
+export interface CreateDirectoryOptions {
+    /** The owner UID, or `null` to inherit. */
+    owner?: number;
+    /** The group GID, or `null` to inherit. */
+    group?: number;
+    /** The Unix file mode as an integer (for example `0o755`), or `null` to inherit. */
+    mode?: number;
+}
+
+export interface CreateFileOptions {
+    /** The inline UTF-8 contents of the file. Mutually exclusive with `sourcePath`. */
+    contents?: string;
+    /** An absolute path to a file on the host to copy. Mutually exclusive with `contents`. */
+    sourcePath?: string;
+    /** The owner UID, or `null` to inherit. */
+    owner?: number;
+    /** The group GID, or `null` to inherit. */
+    group?: number;
+    /** The Unix file mode as an integer (for example `0o644`), or `null` to inherit. */
+    mode?: number;
+    /** Whether to ignore errors creating this file. */
+    continueOnError?: boolean;
+}
+
 export interface CreateMarkdownTaskOptions {
     cancellationToken?: AbortSignal | CancellationToken;
 }
@@ -1528,6 +1835,11 @@ export interface WithReferenceOptions {
 
 export interface WithRequiredCommandOptions {
     /** An optional help link URL to guide users when the command is missing. */
+    helpLink?: string;
+}
+
+export interface WithRequiredCommandValidationOptions {
+    /** An optional help link URL to guide users when the command is missing or fails validation. */
     helpLink?: string;
 }
 
@@ -2260,6 +2572,481 @@ class ConnectionStringAvailableEventPromiseImpl implements ConnectionStringAvail
 }
 
 // ============================================================================
+// ContainerBuildOptionsCallbackContext
+// ============================================================================
+
+/** Context for configuring container build options via a callback. */
+export interface ContainerBuildOptionsCallbackContext {
+    toJSON(): MarshalledHandle;
+    /** Gets the resource being built. */
+    resource(): ResourcePromise;
+    /** Gets the service provider. */
+    services(): ServiceProviderPromise;
+    /** Gets the logger instance. */
+    logger(): LoggerPromise;
+    /** Gets the cancellation token. */
+    cancellationToken(): Promise<CancellationToken>;
+    /**
+     * Gets the distributed application execution context.
+     *
+     * Use `IsPublishMode` or
+     * `IsRunMode` to vary build options
+     * (for example `TargetPlatform`) between local run and publish operations.
+     */
+    executionContext(): DistributedApplicationExecutionContextPromise;
+    /** Gets or sets the destination for the container image. */
+    destination: {
+        get: () => Promise<ContainerImageDestination | null>;
+        set: (value: ContainerImageDestination | null) => Promise<void>;
+    };
+    /** Gets or sets the output path for the container archive. */
+    outputPath: {
+        get: () => Promise<string | null>;
+        set: (value: string | null) => Promise<void>;
+    };
+    /** Gets or sets the container image format. */
+    imageFormat: {
+        get: () => Promise<ContainerImageFormat | null>;
+        set: (value: ContainerImageFormat | null) => Promise<void>;
+    };
+    /** Gets or sets the target platform for the container. */
+    targetPlatform: {
+        get: () => Promise<ContainerTargetPlatform | null>;
+        set: (value: ContainerTargetPlatform | null) => Promise<void>;
+    };
+    /** Gets or sets the local image name for the built container. */
+    localImageName: {
+        get: () => Promise<string | null>;
+        set: (value: string | null) => Promise<void>;
+    };
+    /** Gets or sets the local image tag for the built container. */
+    localImageTag: {
+        get: () => Promise<string | null>;
+        set: (value: string | null) => Promise<void>;
+    };
+}
+
+export interface ContainerBuildOptionsCallbackContextPromise extends PromiseLike<ContainerBuildOptionsCallbackContext> {
+    /** Gets the resource being built. */
+    resource(): ResourcePromise;
+    /** Gets the service provider. */
+    services(): ServiceProviderPromise;
+    /** Gets the logger instance. */
+    logger(): LoggerPromise;
+    /** Gets the cancellation token. */
+    cancellationToken(): Promise<CancellationToken>;
+    /**
+     * Gets the distributed application execution context.
+     *
+     * Use `IsPublishMode` or
+     * `IsRunMode` to vary build options
+     * (for example `TargetPlatform`) between local run and publish operations.
+     */
+    executionContext(): DistributedApplicationExecutionContextPromise;
+}
+
+// ============================================================================
+// ContainerBuildOptionsCallbackContextImpl
+// ============================================================================
+
+/** Context for configuring container build options via a callback. */
+class ContainerBuildOptionsCallbackContextImpl implements ContainerBuildOptionsCallbackContext {
+    constructor(private _handle: ContainerBuildOptionsCallbackContextHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    resource(): ResourcePromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.resource',
+                { context: this._handle }
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client, false);
+    }
+
+    services(): ServiceProviderPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<IServiceProviderHandle>(
+                'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.services',
+                { context: this._handle }
+            );
+            return new ServiceProviderImpl(handle, this._client);
+        })();
+        return new ServiceProviderPromiseImpl(promise, this._client, false);
+    }
+
+    logger(): LoggerPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<ILoggerHandle>(
+                'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.logger',
+                { context: this._handle }
+            );
+            return new LoggerImpl(handle, this._client);
+        })();
+        return new LoggerPromiseImpl(promise, this._client, false);
+    }
+
+    async cancellationToken(): Promise<CancellationToken> {
+        const result = await this._client.invokeCapability<string | null>(
+            'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.cancellationToken',
+            { context: this._handle }
+        );
+        return CancellationToken.fromValue(result);
+    }
+
+    executionContext(): DistributedApplicationExecutionContextPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<DistributedApplicationExecutionContextHandle>(
+                'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.executionContext',
+                { context: this._handle }
+            );
+            return new DistributedApplicationExecutionContextImpl(handle, this._client);
+        })();
+        return new DistributedApplicationExecutionContextPromiseImpl(promise, this._client, false);
+    }
+
+    destination = {
+        get: async (): Promise<ContainerImageDestination | null> => {
+            return await this._client.invokeCapability<ContainerImageDestination | null>(
+                'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.destination',
+                { context: this._handle }
+            );
+        },
+        set: async (value: ContainerImageDestination | null): Promise<void> => {
+            await this._client.invokeCapability<void>(
+                'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setDestination',
+                { context: this._handle, value }
+            );
+        }
+    };
+
+    outputPath = {
+        get: async (): Promise<string | null> => {
+            return await this._client.invokeCapability<string | null>(
+                'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.outputPath',
+                { context: this._handle }
+            );
+        },
+        set: async (value: string | null): Promise<void> => {
+            await this._client.invokeCapability<void>(
+                'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setOutputPath',
+                { context: this._handle, value }
+            );
+        }
+    };
+
+    imageFormat = {
+        get: async (): Promise<ContainerImageFormat | null> => {
+            return await this._client.invokeCapability<ContainerImageFormat | null>(
+                'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.imageFormat',
+                { context: this._handle }
+            );
+        },
+        set: async (value: ContainerImageFormat | null): Promise<void> => {
+            await this._client.invokeCapability<void>(
+                'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setImageFormat',
+                { context: this._handle, value }
+            );
+        }
+    };
+
+    targetPlatform = {
+        get: async (): Promise<ContainerTargetPlatform | null> => {
+            return await this._client.invokeCapability<ContainerTargetPlatform | null>(
+                'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.targetPlatform',
+                { context: this._handle }
+            );
+        },
+        set: async (value: ContainerTargetPlatform | null): Promise<void> => {
+            await this._client.invokeCapability<void>(
+                'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setTargetPlatform',
+                { context: this._handle, value }
+            );
+        }
+    };
+
+    localImageName = {
+        get: async (): Promise<string | null> => {
+            return await this._client.invokeCapability<string | null>(
+                'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.localImageName',
+                { context: this._handle }
+            );
+        },
+        set: async (value: string | null): Promise<void> => {
+            await this._client.invokeCapability<void>(
+                'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setLocalImageName',
+                { context: this._handle, value }
+            );
+        }
+    };
+
+    localImageTag = {
+        get: async (): Promise<string | null> => {
+            return await this._client.invokeCapability<string | null>(
+                'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.localImageTag',
+                { context: this._handle }
+            );
+        },
+        set: async (value: string | null): Promise<void> => {
+            await this._client.invokeCapability<void>(
+                'Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.setLocalImageTag',
+                { context: this._handle, value }
+            );
+        }
+    };
+
+}
+
+/**
+ * Thenable wrapper for ContainerBuildOptionsCallbackContext that enables fluent chaining.
+ */
+class ContainerBuildOptionsCallbackContextPromiseImpl implements ContainerBuildOptionsCallbackContextPromise {
+    constructor(private _promise: Promise<ContainerBuildOptionsCallbackContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = ContainerBuildOptionsCallbackContext, TResult2 = never>(
+        onfulfilled?: ((value: ContainerBuildOptionsCallbackContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    resource(): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.resource()), this._client, false);
+    }
+
+    services(): ServiceProviderPromise {
+        return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.services()), this._client, false);
+    }
+
+    logger(): LoggerPromise {
+        return new LoggerPromiseImpl(this._promise.then(obj => obj.logger()), this._client, false);
+    }
+
+    cancellationToken(): Promise<CancellationToken> {
+        return this._promise.then(obj => obj.cancellationToken());
+    }
+
+    executionContext(): DistributedApplicationExecutionContextPromise {
+        return new DistributedApplicationExecutionContextPromiseImpl(this._promise.then(obj => obj.executionContext()), this._client, false);
+    }
+
+}
+
+// ============================================================================
+// ContainerFileSystemCallbackContext
+// ============================================================================
+
+/** Represents the context for a `ContainerFileSystemCallbackAnnotation` callback. */
+export interface ContainerFileSystemCallbackContext {
+    toJSON(): MarshalledHandle;
+    /** A `IServiceProvider` that can be used to resolve services in the callback. */
+    services(): ServiceProviderPromise;
+    /** The app model resource the callback is associated with. */
+    model(): ResourcePromise;
+    /**
+     * Creates a container file entry with inline contents or a host source path.
+     * @param name The simple file name (no path separators).
+     * @param options Additional options.
+     * @returns The created file entry.
+     */
+    createFile(name: string, options?: CreateFileOptions): Promise<ContainerFileSystemItemHandle>;
+    /**
+     * Creates a PEM container certificate file entry with the OpenSSL subject-hash symlink.
+     * @param name The simple file name (no path separators).
+     * @param options Additional options.
+     * @returns The created certificate file entry.
+     */
+    createCertificateFile(name: string, options?: CreateCertificateFileOptions): Promise<ContainerFileSystemItemHandle>;
+    /**
+     * Creates a container directory entry containing the specified child entries.
+     * @param name The simple directory name (no path separators).
+     * @param entries The child entries (files and/or directories) created via this context.
+     * @param options Additional options.
+     * @returns The created directory entry.
+     */
+    createDirectory(name: string, entries: ContainerFileSystemItemHandle[], options?: CreateDirectoryOptions): Promise<ContainerFileSystemItemHandle>;
+}
+
+export interface ContainerFileSystemCallbackContextPromise extends PromiseLike<ContainerFileSystemCallbackContext> {
+    /** A `IServiceProvider` that can be used to resolve services in the callback. */
+    services(): ServiceProviderPromise;
+    /** The app model resource the callback is associated with. */
+    model(): ResourcePromise;
+    /**
+     * Creates a container file entry with inline contents or a host source path.
+     * @param name The simple file name (no path separators).
+     * @param options Additional options.
+     * @returns The created file entry.
+     */
+    createFile(name: string, options?: CreateFileOptions): Promise<ContainerFileSystemItemHandle>;
+    /**
+     * Creates a PEM container certificate file entry with the OpenSSL subject-hash symlink.
+     * @param name The simple file name (no path separators).
+     * @param options Additional options.
+     * @returns The created certificate file entry.
+     */
+    createCertificateFile(name: string, options?: CreateCertificateFileOptions): Promise<ContainerFileSystemItemHandle>;
+    /**
+     * Creates a container directory entry containing the specified child entries.
+     * @param name The simple directory name (no path separators).
+     * @param entries The child entries (files and/or directories) created via this context.
+     * @param options Additional options.
+     * @returns The created directory entry.
+     */
+    createDirectory(name: string, entries: ContainerFileSystemItemHandle[], options?: CreateDirectoryOptions): Promise<ContainerFileSystemItemHandle>;
+}
+
+// ============================================================================
+// ContainerFileSystemCallbackContextImpl
+// ============================================================================
+
+/** Represents the context for a `ContainerFileSystemCallbackAnnotation` callback. */
+class ContainerFileSystemCallbackContextImpl implements ContainerFileSystemCallbackContext {
+    constructor(private _handle: ContainerFileSystemCallbackContextHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    services(): ServiceProviderPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<IServiceProviderHandle>(
+                'Aspire.Hosting.ApplicationModel/ContainerFileSystemCallbackContext.services',
+                { context: this._handle }
+            );
+            return new ServiceProviderImpl(handle, this._client);
+        })();
+        return new ServiceProviderPromiseImpl(promise, this._client, false);
+    }
+
+    model(): ResourcePromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting.ApplicationModel/ContainerFileSystemCallbackContext.model',
+                { context: this._handle }
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client, false);
+    }
+
+    /**
+     * Creates a container file entry with inline contents or a host source path.
+     * @param name The simple file name (no path separators).
+     * @param options Additional options.
+     * @returns The created file entry.
+     */
+    async createFile(name: string, options?: CreateFileOptions): Promise<ContainerFileSystemItemHandle> {
+        const contents = options?.contents;
+        const sourcePath = options?.sourcePath;
+        const owner = options?.owner;
+        const group = options?.group;
+        const mode = options?.mode;
+        const continueOnError = options?.continueOnError;
+        const rpcArgs: Record<string, unknown> = { context: this._handle, name };
+        if (contents !== undefined) rpcArgs.contents = contents;
+        if (sourcePath !== undefined) rpcArgs.sourcePath = sourcePath;
+        if (owner !== undefined) rpcArgs.owner = owner;
+        if (group !== undefined) rpcArgs.group = group;
+        if (mode !== undefined) rpcArgs.mode = mode;
+        if (continueOnError !== undefined) rpcArgs.continueOnError = continueOnError;
+        return await this._client.invokeCapability<ContainerFileSystemItemHandle>(
+            'Aspire.Hosting/createFile',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Creates a PEM container certificate file entry with the OpenSSL subject-hash symlink.
+     * @param name The simple file name (no path separators).
+     * @param options Additional options.
+     * @returns The created certificate file entry.
+     */
+    async createCertificateFile(name: string, options?: CreateCertificateFileOptions): Promise<ContainerFileSystemItemHandle> {
+        const contents = options?.contents;
+        const sourcePath = options?.sourcePath;
+        const owner = options?.owner;
+        const group = options?.group;
+        const mode = options?.mode;
+        const continueOnError = options?.continueOnError;
+        const rpcArgs: Record<string, unknown> = { context: this._handle, name };
+        if (contents !== undefined) rpcArgs.contents = contents;
+        if (sourcePath !== undefined) rpcArgs.sourcePath = sourcePath;
+        if (owner !== undefined) rpcArgs.owner = owner;
+        if (group !== undefined) rpcArgs.group = group;
+        if (mode !== undefined) rpcArgs.mode = mode;
+        if (continueOnError !== undefined) rpcArgs.continueOnError = continueOnError;
+        return await this._client.invokeCapability<ContainerFileSystemItemHandle>(
+            'Aspire.Hosting/createCertificateFile',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Creates a container directory entry containing the specified child entries.
+     * @param name The simple directory name (no path separators).
+     * @param entries The child entries (files and/or directories) created via this context.
+     * @param options Additional options.
+     * @returns The created directory entry.
+     */
+    async createDirectory(name: string, entries: ContainerFileSystemItemHandle[], options?: CreateDirectoryOptions): Promise<ContainerFileSystemItemHandle> {
+        const owner = options?.owner;
+        const group = options?.group;
+        const mode = options?.mode;
+        const rpcArgs: Record<string, unknown> = { context: this._handle, name, entries };
+        if (owner !== undefined) rpcArgs.owner = owner;
+        if (group !== undefined) rpcArgs.group = group;
+        if (mode !== undefined) rpcArgs.mode = mode;
+        return await this._client.invokeCapability<ContainerFileSystemItemHandle>(
+            'Aspire.Hosting/createDirectory',
+            rpcArgs
+        );
+    }
+
+}
+
+/**
+ * Thenable wrapper for ContainerFileSystemCallbackContext that enables fluent chaining.
+ */
+class ContainerFileSystemCallbackContextPromiseImpl implements ContainerFileSystemCallbackContextPromise {
+    constructor(private _promise: Promise<ContainerFileSystemCallbackContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = ContainerFileSystemCallbackContext, TResult2 = never>(
+        onfulfilled?: ((value: ContainerFileSystemCallbackContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    services(): ServiceProviderPromise {
+        return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.services()), this._client, false);
+    }
+
+    model(): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.model()), this._client, false);
+    }
+
+    createFile(name: string, options?: CreateFileOptions): Promise<ContainerFileSystemItemHandle> {
+        return this._promise.then(obj => obj.createFile(name, options));
+    }
+
+    createCertificateFile(name: string, options?: CreateCertificateFileOptions): Promise<ContainerFileSystemItemHandle> {
+        return this._promise.then(obj => obj.createCertificateFile(name, options));
+    }
+
+    createDirectory(name: string, entries: ContainerFileSystemItemHandle[], options?: CreateDirectoryOptions): Promise<ContainerFileSystemItemHandle> {
+        return this._promise.then(obj => obj.createDirectory(name, entries, options));
+    }
+
+}
+
+// ============================================================================
 // ContainerImagePushOptions
 // ============================================================================
 
@@ -2801,6 +3588,8 @@ export interface DistributedApplicationExecutionContext {
     operation(): Promise<DistributedApplicationOperation>;
     /** The `IServiceProvider` for the AppHost. */
     serviceProvider(): ServiceProviderPromise;
+    /** The `IServiceProvider` for the AppHost. */
+    services(): ServiceProviderPromise;
     /** Returns true if the current operation is publishing. */
     isPublishMode(): Promise<boolean>;
     /** Returns true if the current operation is running. */
@@ -2812,6 +3601,8 @@ export interface DistributedApplicationExecutionContextPromise extends PromiseLi
     operation(): Promise<DistributedApplicationOperation>;
     /** The `IServiceProvider` for the AppHost. */
     serviceProvider(): ServiceProviderPromise;
+    /** The `IServiceProvider` for the AppHost. */
+    services(): ServiceProviderPromise;
     /** Returns true if the current operation is publishing. */
     isPublishMode(): Promise<boolean>;
     /** Returns true if the current operation is running. */
@@ -2862,6 +3653,17 @@ class DistributedApplicationExecutionContextImpl implements DistributedApplicati
         return new ServiceProviderPromiseImpl(promise, this._client, false);
     }
 
+    services(): ServiceProviderPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<IServiceProviderHandle>(
+                'Aspire.Hosting/DistributedApplicationExecutionContext.services',
+                { context: this._handle }
+            );
+            return new ServiceProviderImpl(handle, this._client);
+        })();
+        return new ServiceProviderPromiseImpl(promise, this._client, false);
+    }
+
     async isPublishMode(): Promise<boolean> {
         return await this._client.invokeCapability<boolean>(
             'Aspire.Hosting/DistributedApplicationExecutionContext.isPublishMode',
@@ -2899,6 +3701,10 @@ class DistributedApplicationExecutionContextPromiseImpl implements DistributedAp
 
     serviceProvider(): ServiceProviderPromise {
         return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.serviceProvider()), this._client, false);
+    }
+
+    services(): ServiceProviderPromise {
+        return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.services()), this._client, false);
     }
 
     isPublishMode(): Promise<boolean> {
@@ -4922,6 +5728,8 @@ class EventingSubscriberRegistrationContextPromiseImpl implements EventingSubscr
 /** Context for {@link ResourceCommandAnnotation.ExecuteCommand}. */
 export interface ExecuteCommandContext {
     toJSON(): MarshalledHandle;
+    /** The service provider. */
+    services(): ServiceProviderPromise;
     /** The resource name. */
     resourceName(): Promise<string>;
     /** The cancellation token. */
@@ -4935,10 +5743,12 @@ export interface ExecuteCommandContext {
      * submitted values populated. CLI positional arguments are mapped by declaration order. Dashboard, MCP, and other
      * named-payload clients are mapped by `Name`.
      */
-    arguments(): Promise<InteractionInputCollection>;
+    arguments(): InteractionInputCollectionPromise;
 }
 
 export interface ExecuteCommandContextPromise extends PromiseLike<ExecuteCommandContext> {
+    /** The service provider. */
+    services(): ServiceProviderPromise;
     /** The resource name. */
     resourceName(): Promise<string>;
     /** The cancellation token. */
@@ -4952,7 +5762,7 @@ export interface ExecuteCommandContextPromise extends PromiseLike<ExecuteCommand
      * submitted values populated. CLI positional arguments are mapped by declaration order. Dashboard, MCP, and other
      * named-payload clients are mapped by `Name`.
      */
-    arguments(): Promise<InteractionInputCollection>;
+    arguments(): InteractionInputCollectionPromise;
 }
 
 // ============================================================================
@@ -4965,6 +5775,17 @@ class ExecuteCommandContextImpl implements ExecuteCommandContext {
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    services(): ServiceProviderPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<IServiceProviderHandle>(
+                'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.services',
+                { context: this._handle }
+            );
+            return new ServiceProviderImpl(handle, this._client);
+        })();
+        return new ServiceProviderPromiseImpl(promise, this._client, false);
+    }
 
     async resourceName(): Promise<string> {
         return await this._client.invokeCapability<string>(
@@ -4992,11 +5813,11 @@ class ExecuteCommandContextImpl implements ExecuteCommandContext {
         return new LoggerPromiseImpl(promise, this._client, false);
     }
 
-    async arguments(): Promise<InteractionInputCollection> {
-        return await this._client.invokeCapability<InteractionInputCollection>(
+    arguments(): InteractionInputCollectionPromise {
+        return new InteractionInputCollectionPromiseImpl(this._client.invokeCapability<InteractionInputCollection>(
             'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.arguments',
             { context: this._handle }
-        );
+        ), this._client, false);
     }
 
 }
@@ -5016,6 +5837,10 @@ class ExecuteCommandContextPromiseImpl implements ExecuteCommandContextPromise {
         return this._promise.then(onfulfilled, onrejected);
     }
 
+    services(): ServiceProviderPromise {
+        return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.services()), this._client, false);
+    }
+
     resourceName(): Promise<string> {
         return this._promise.then(obj => obj.resourceName());
     }
@@ -5028,8 +5853,409 @@ class ExecuteCommandContextPromiseImpl implements ExecuteCommandContextPromise {
         return new LoggerPromiseImpl(this._promise.then(obj => obj.logger()), this._client, false);
     }
 
-    arguments(): Promise<InteractionInputCollection> {
-        return this._promise.then(obj => obj.arguments());
+    arguments(): InteractionInputCollectionPromise {
+        return new InteractionInputCollectionPromiseImpl(this._promise.then(obj => obj.arguments()), this._client, false);
+    }
+
+}
+
+// ============================================================================
+// HttpCommandPrepareRequestContext
+// ============================================================================
+
+/** Provides context for HTTP command prepare-request callbacks in polyglot app hosts. */
+export interface HttpCommandPrepareRequestContext {
+    toJSON(): MarshalledHandle;
+    /** The name of the resource the command was configured on. */
+    resourceName(): Promise<string>;
+    /** The endpoint the request is targeting. */
+    endpoint(): EndpointReferencePromise;
+    /** The cancellation token. */
+    cancellationToken(): Promise<CancellationToken>;
+    /** Gets the invocation arguments supplied by the client when the command is executed. */
+    arguments(): InteractionInputCollectionPromise;
+}
+
+export interface HttpCommandPrepareRequestContextPromise extends PromiseLike<HttpCommandPrepareRequestContext> {
+    /** The name of the resource the command was configured on. */
+    resourceName(): Promise<string>;
+    /** The endpoint the request is targeting. */
+    endpoint(): EndpointReferencePromise;
+    /** The cancellation token. */
+    cancellationToken(): Promise<CancellationToken>;
+    /** Gets the invocation arguments supplied by the client when the command is executed. */
+    arguments(): InteractionInputCollectionPromise;
+}
+
+// ============================================================================
+// HttpCommandPrepareRequestContextImpl
+// ============================================================================
+
+/** Provides context for HTTP command prepare-request callbacks in polyglot app hosts. */
+class HttpCommandPrepareRequestContextImpl implements HttpCommandPrepareRequestContext {
+    constructor(private _handle: HttpCommandPrepareRequestContextHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    async resourceName(): Promise<string> {
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.resourceName',
+            { context: this._handle }
+        );
+    }
+
+    endpoint(): EndpointReferencePromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<EndpointReferenceHandle>(
+                'Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.endpoint',
+                { context: this._handle }
+            );
+            return new EndpointReferenceImpl(handle, this._client);
+        })();
+        return new EndpointReferencePromiseImpl(promise, this._client, false);
+    }
+
+    async cancellationToken(): Promise<CancellationToken> {
+        const result = await this._client.invokeCapability<string | null>(
+            'Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.cancellationToken',
+            { context: this._handle }
+        );
+        return CancellationToken.fromValue(result);
+    }
+
+    arguments(): InteractionInputCollectionPromise {
+        return new InteractionInputCollectionPromiseImpl(this._client.invokeCapability<InteractionInputCollection>(
+            'Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.arguments',
+            { context: this._handle }
+        ), this._client, false);
+    }
+
+}
+
+/**
+ * Thenable wrapper for HttpCommandPrepareRequestContext that enables fluent chaining.
+ */
+class HttpCommandPrepareRequestContextPromiseImpl implements HttpCommandPrepareRequestContextPromise {
+    constructor(private _promise: Promise<HttpCommandPrepareRequestContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = HttpCommandPrepareRequestContext, TResult2 = never>(
+        onfulfilled?: ((value: HttpCommandPrepareRequestContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    resourceName(): Promise<string> {
+        return this._promise.then(obj => obj.resourceName());
+    }
+
+    endpoint(): EndpointReferencePromise {
+        return new EndpointReferencePromiseImpl(this._promise.then(obj => obj.endpoint()), this._client, false);
+    }
+
+    cancellationToken(): Promise<CancellationToken> {
+        return this._promise.then(obj => obj.cancellationToken());
+    }
+
+    arguments(): InteractionInputCollectionPromise {
+        return new InteractionInputCollectionPromiseImpl(this._promise.then(obj => obj.arguments()), this._client, false);
+    }
+
+}
+
+// ============================================================================
+// HttpsCertificateConfigurationCallbackAnnotationContext
+// ============================================================================
+
+/** Context provided to a `HttpsCertificateConfigurationCallbackAnnotation` callback. */
+export interface HttpsCertificateConfigurationCallbackAnnotationContext {
+    toJSON(): MarshalledHandle;
+    /** Gets the `DistributedApplicationExecutionContext` for this session. */
+    executionContext(): DistributedApplicationExecutionContextPromise;
+    /** Gets the resource to which the annotation is applied. */
+    resource(): ResourcePromise;
+    /** A value provider that will resolve to a path to the certificate file. */
+    certificatePath(): Promise<ReferenceExpression>;
+    /** A value provider that will resolve to a path to the private key for the certificate. */
+    keyPath(): Promise<ReferenceExpression>;
+    /** A value provider that will resolve to a path to a PFX file for the key pair. */
+    pfxPath(): Promise<ReferenceExpression>;
+    /** Gets the `CancellationToken` that can be used to cancel the operation. */
+    cancellationToken(): Promise<CancellationToken>;
+    /** Gets the editor used to manipulate the command-line arguments in polyglot callbacks. */
+    arguments(): CommandLineArgsEditorPromise;
+    /** Gets the editor used to set environment variables in polyglot callbacks. */
+    environment(): EnvironmentEditorPromise;
+}
+
+export interface HttpsCertificateConfigurationCallbackAnnotationContextPromise extends PromiseLike<HttpsCertificateConfigurationCallbackAnnotationContext> {
+    /** Gets the `DistributedApplicationExecutionContext` for this session. */
+    executionContext(): DistributedApplicationExecutionContextPromise;
+    /** Gets the resource to which the annotation is applied. */
+    resource(): ResourcePromise;
+    /** A value provider that will resolve to a path to the certificate file. */
+    certificatePath(): Promise<ReferenceExpression>;
+    /** A value provider that will resolve to a path to the private key for the certificate. */
+    keyPath(): Promise<ReferenceExpression>;
+    /** A value provider that will resolve to a path to a PFX file for the key pair. */
+    pfxPath(): Promise<ReferenceExpression>;
+    /** Gets the `CancellationToken` that can be used to cancel the operation. */
+    cancellationToken(): Promise<CancellationToken>;
+    /** Gets the editor used to manipulate the command-line arguments in polyglot callbacks. */
+    arguments(): CommandLineArgsEditorPromise;
+    /** Gets the editor used to set environment variables in polyglot callbacks. */
+    environment(): EnvironmentEditorPromise;
+}
+
+// ============================================================================
+// HttpsCertificateConfigurationCallbackAnnotationContextImpl
+// ============================================================================
+
+/** Context provided to a `HttpsCertificateConfigurationCallbackAnnotation` callback. */
+class HttpsCertificateConfigurationCallbackAnnotationContextImpl implements HttpsCertificateConfigurationCallbackAnnotationContext {
+    constructor(private _handle: HttpsCertificateConfigurationCallbackAnnotationContextHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    executionContext(): DistributedApplicationExecutionContextPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<DistributedApplicationExecutionContextHandle>(
+                'Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.executionContext',
+                { context: this._handle }
+            );
+            return new DistributedApplicationExecutionContextImpl(handle, this._client);
+        })();
+        return new DistributedApplicationExecutionContextPromiseImpl(promise, this._client, false);
+    }
+
+    resource(): ResourcePromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.resource',
+                { context: this._handle }
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client, false);
+    }
+
+    async certificatePath(): Promise<ReferenceExpression> {
+        return await this._client.invokeCapability<ReferenceExpression>(
+            'Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.certificatePath',
+            { context: this._handle }
+        );
+    }
+
+    async keyPath(): Promise<ReferenceExpression> {
+        return await this._client.invokeCapability<ReferenceExpression>(
+            'Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.keyPath',
+            { context: this._handle }
+        );
+    }
+
+    async pfxPath(): Promise<ReferenceExpression> {
+        return await this._client.invokeCapability<ReferenceExpression>(
+            'Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.pfxPath',
+            { context: this._handle }
+        );
+    }
+
+    async cancellationToken(): Promise<CancellationToken> {
+        const result = await this._client.invokeCapability<string | null>(
+            'Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.cancellationToken',
+            { context: this._handle }
+        );
+        return CancellationToken.fromValue(result);
+    }
+
+    arguments(): CommandLineArgsEditorPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<CommandLineArgsEditorHandle>(
+                'Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.arguments',
+                { context: this._handle }
+            );
+            return new CommandLineArgsEditorImpl(handle, this._client);
+        })();
+        return new CommandLineArgsEditorPromiseImpl(promise, this._client, false);
+    }
+
+    environment(): EnvironmentEditorPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<EnvironmentEditorHandle>(
+                'Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.environment',
+                { context: this._handle }
+            );
+            return new EnvironmentEditorImpl(handle, this._client);
+        })();
+        return new EnvironmentEditorPromiseImpl(promise, this._client, false);
+    }
+
+}
+
+/**
+ * Thenable wrapper for HttpsCertificateConfigurationCallbackAnnotationContext that enables fluent chaining.
+ */
+class HttpsCertificateConfigurationCallbackAnnotationContextPromiseImpl implements HttpsCertificateConfigurationCallbackAnnotationContextPromise {
+    constructor(private _promise: Promise<HttpsCertificateConfigurationCallbackAnnotationContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = HttpsCertificateConfigurationCallbackAnnotationContext, TResult2 = never>(
+        onfulfilled?: ((value: HttpsCertificateConfigurationCallbackAnnotationContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    executionContext(): DistributedApplicationExecutionContextPromise {
+        return new DistributedApplicationExecutionContextPromiseImpl(this._promise.then(obj => obj.executionContext()), this._client, false);
+    }
+
+    resource(): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.resource()), this._client, false);
+    }
+
+    certificatePath(): Promise<ReferenceExpression> {
+        return this._promise.then(obj => obj.certificatePath());
+    }
+
+    keyPath(): Promise<ReferenceExpression> {
+        return this._promise.then(obj => obj.keyPath());
+    }
+
+    pfxPath(): Promise<ReferenceExpression> {
+        return this._promise.then(obj => obj.pfxPath());
+    }
+
+    cancellationToken(): Promise<CancellationToken> {
+        return this._promise.then(obj => obj.cancellationToken());
+    }
+
+    arguments(): CommandLineArgsEditorPromise {
+        return new CommandLineArgsEditorPromiseImpl(this._promise.then(obj => obj.arguments()), this._client, false);
+    }
+
+    environment(): EnvironmentEditorPromise {
+        return new EnvironmentEditorPromiseImpl(this._promise.then(obj => obj.environment()), this._client, false);
+    }
+
+}
+
+// ============================================================================
+// HttpsEndpointUpdateCallbackContext
+// ============================================================================
+
+/** Context provided to the callback of `SubscribeHttpsEndpointsUpdate``1` when an HTTPS certificate is determined to be available for the resource. */
+export interface HttpsEndpointUpdateCallbackContext {
+    toJSON(): MarshalledHandle;
+    /** Gets the `IServiceProvider` instance from the application. */
+    services(): ServiceProviderPromise;
+    /** Gets the `IResource` that is being configured for HTTPS. */
+    resource(): ResourcePromise;
+    /** Gets the `DistributedApplicationModel` instance. */
+    model(): DistributedApplicationModelPromise;
+    /** Gets the `CancellationToken` for the operation. */
+    cancellationToken(): Promise<CancellationToken>;
+}
+
+export interface HttpsEndpointUpdateCallbackContextPromise extends PromiseLike<HttpsEndpointUpdateCallbackContext> {
+    /** Gets the `IServiceProvider` instance from the application. */
+    services(): ServiceProviderPromise;
+    /** Gets the `IResource` that is being configured for HTTPS. */
+    resource(): ResourcePromise;
+    /** Gets the `DistributedApplicationModel` instance. */
+    model(): DistributedApplicationModelPromise;
+    /** Gets the `CancellationToken` for the operation. */
+    cancellationToken(): Promise<CancellationToken>;
+}
+
+// ============================================================================
+// HttpsEndpointUpdateCallbackContextImpl
+// ============================================================================
+
+/** Context provided to the callback of `SubscribeHttpsEndpointsUpdate``1` when an HTTPS certificate is determined to be available for the resource. */
+class HttpsEndpointUpdateCallbackContextImpl implements HttpsEndpointUpdateCallbackContext {
+    constructor(private _handle: HttpsEndpointUpdateCallbackContextHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    services(): ServiceProviderPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<IServiceProviderHandle>(
+                'Aspire.Hosting.ApplicationModel/HttpsEndpointUpdateCallbackContext.services',
+                { context: this._handle }
+            );
+            return new ServiceProviderImpl(handle, this._client);
+        })();
+        return new ServiceProviderPromiseImpl(promise, this._client, false);
+    }
+
+    resource(): ResourcePromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting.ApplicationModel/HttpsEndpointUpdateCallbackContext.resource',
+                { context: this._handle }
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client, false);
+    }
+
+    model(): DistributedApplicationModelPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<DistributedApplicationModelHandle>(
+                'Aspire.Hosting.ApplicationModel/HttpsEndpointUpdateCallbackContext.model',
+                { context: this._handle }
+            );
+            return new DistributedApplicationModelImpl(handle, this._client);
+        })();
+        return new DistributedApplicationModelPromiseImpl(promise, this._client, false);
+    }
+
+    async cancellationToken(): Promise<CancellationToken> {
+        const result = await this._client.invokeCapability<string | null>(
+            'Aspire.Hosting.ApplicationModel/HttpsEndpointUpdateCallbackContext.cancellationToken',
+            { context: this._handle }
+        );
+        return CancellationToken.fromValue(result);
+    }
+
+}
+
+/**
+ * Thenable wrapper for HttpsEndpointUpdateCallbackContext that enables fluent chaining.
+ */
+class HttpsEndpointUpdateCallbackContextPromiseImpl implements HttpsEndpointUpdateCallbackContextPromise {
+    constructor(private _promise: Promise<HttpsEndpointUpdateCallbackContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = HttpsEndpointUpdateCallbackContext, TResult2 = never>(
+        onfulfilled?: ((value: HttpsEndpointUpdateCallbackContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    services(): ServiceProviderPromise {
+        return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.services()), this._client, false);
+    }
+
+    resource(): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.resource()), this._client, false);
+    }
+
+    model(): DistributedApplicationModelPromise {
+        return new DistributedApplicationModelPromiseImpl(this._promise.then(obj => obj.model()), this._client, false);
+    }
+
+    cancellationToken(): Promise<CancellationToken> {
+        return this._promise.then(obj => obj.cancellationToken());
     }
 
 }
@@ -5189,9 +6415,11 @@ class InitializeResourceEventPromiseImpl implements InitializeResourceEventPromi
 export interface InputsDialogValidationContext {
     toJSON(): MarshalledHandle;
     /** Gets the inputs that are being validated. */
-    inputs(): Promise<InteractionInputCollection>;
+    inputs(): InteractionInputCollectionPromise;
     /** Gets the cancellation token for the validation operation. */
     cancellationToken(): Promise<CancellationToken>;
+    /** Gets the service provider for resolving services during validation. */
+    services(): ServiceProviderPromise;
     /**
      * Adds a validation error for the input with the specified name.
      * @param inputName The name of the input to add a validation error for.
@@ -5202,9 +6430,11 @@ export interface InputsDialogValidationContext {
 
 export interface InputsDialogValidationContextPromise extends PromiseLike<InputsDialogValidationContext> {
     /** Gets the inputs that are being validated. */
-    inputs(): Promise<InteractionInputCollection>;
+    inputs(): InteractionInputCollectionPromise;
     /** Gets the cancellation token for the validation operation. */
     cancellationToken(): Promise<CancellationToken>;
+    /** Gets the service provider for resolving services during validation. */
+    services(): ServiceProviderPromise;
     /**
      * Adds a validation error for the input with the specified name.
      * @param inputName The name of the input to add a validation error for.
@@ -5224,11 +6454,11 @@ class InputsDialogValidationContextImpl implements InputsDialogValidationContext
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
-    async inputs(): Promise<InteractionInputCollection> {
-        return await this._client.invokeCapability<InteractionInputCollection>(
+    inputs(): InteractionInputCollectionPromise {
+        return new InteractionInputCollectionPromiseImpl(this._client.invokeCapability<InteractionInputCollection>(
             'Aspire.Hosting/InputsDialogValidationContext.inputs',
             { context: this._handle }
-        );
+        ), this._client, false);
     }
 
     async cancellationToken(): Promise<CancellationToken> {
@@ -5237,6 +6467,17 @@ class InputsDialogValidationContextImpl implements InputsDialogValidationContext
             { context: this._handle }
         );
         return CancellationToken.fromValue(result);
+    }
+
+    services(): ServiceProviderPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<IServiceProviderHandle>(
+                'Aspire.Hosting/InputsDialogValidationContext.services',
+                { context: this._handle }
+            );
+            return new ServiceProviderImpl(handle, this._client);
+        })();
+        return new ServiceProviderPromiseImpl(promise, this._client, false);
     }
 
     /** @internal */
@@ -5275,16 +6516,537 @@ class InputsDialogValidationContextPromiseImpl implements InputsDialogValidation
         return this._promise.then(onfulfilled, onrejected);
     }
 
-    inputs(): Promise<InteractionInputCollection> {
-        return this._promise.then(obj => obj.inputs());
+    inputs(): InteractionInputCollectionPromise {
+        return new InteractionInputCollectionPromiseImpl(this._promise.then(obj => obj.inputs()), this._client, false);
     }
 
     cancellationToken(): Promise<CancellationToken> {
         return this._promise.then(obj => obj.cancellationToken());
     }
 
+    services(): ServiceProviderPromise {
+        return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.services()), this._client, false);
+    }
+
     addValidationError(inputName: string, errorMessage: string): InputsDialogValidationContextPromise {
         return new InputsDialogValidationContextPromiseImpl(this._promise.then(obj => obj.addValidationError(inputName, errorMessage)), this._client);
+    }
+
+}
+
+// ============================================================================
+// InputsInteractionResult
+// ============================================================================
+
+/**
+ * The result of a multi-input interaction prompt.
+ *
+ * Modeled as a handle (not a by-value DTO) so the returned inputs are surfaced as the
+ * `InteractionInputCollection` handle. That lets polyglot callers reuse the same name-based
+ * accessors (for example `result.inputs().value("color")`) that the validation and command-argument
+ * collections already expose, instead of having to scan a serialized array by hand.
+ */
+export interface InputsInteractionResult {
+    toJSON(): MarshalledHandle;
+    /** Gets a value indicating whether the interaction was canceled by the user. */
+    canceled(): Promise<boolean>;
+    /** Gets the inputs returned from the interaction. Empty when `Canceled` is `true`. */
+    inputs(): InteractionInputCollectionPromise;
+}
+
+export interface InputsInteractionResultPromise extends PromiseLike<InputsInteractionResult> {
+    /** Gets a value indicating whether the interaction was canceled by the user. */
+    canceled(): Promise<boolean>;
+    /** Gets the inputs returned from the interaction. Empty when `Canceled` is `true`. */
+    inputs(): InteractionInputCollectionPromise;
+}
+
+// ============================================================================
+// InputsInteractionResultImpl
+// ============================================================================
+
+/**
+ * The result of a multi-input interaction prompt.
+ *
+ * Modeled as a handle (not a by-value DTO) so the returned inputs are surfaced as the
+ * `InteractionInputCollection` handle. That lets polyglot callers reuse the same name-based
+ * accessors (for example `result.inputs().value("color")`) that the validation and command-argument
+ * collections already expose, instead of having to scan a serialized array by hand.
+ */
+class InputsInteractionResultImpl implements InputsInteractionResult {
+    constructor(private _handle: InputsInteractionResultHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    async canceled(): Promise<boolean> {
+        return await this._client.invokeCapability<boolean>(
+            'Aspire.Hosting.Ats/InputsInteractionResult.canceled',
+            { context: this._handle }
+        );
+    }
+
+    inputs(): InteractionInputCollectionPromise {
+        return new InteractionInputCollectionPromiseImpl(this._client.invokeCapability<InteractionInputCollection>(
+            'Aspire.Hosting.Ats/InputsInteractionResult.inputs',
+            { context: this._handle }
+        ), this._client, false);
+    }
+
+}
+
+/**
+ * Thenable wrapper for InputsInteractionResult that enables fluent chaining.
+ */
+class InputsInteractionResultPromiseImpl implements InputsInteractionResultPromise {
+    constructor(private _promise: Promise<InputsInteractionResult>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = InputsInteractionResult, TResult2 = never>(
+        onfulfilled?: ((value: InputsInteractionResult) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    canceled(): Promise<boolean> {
+        return this._promise.then(obj => obj.canceled());
+    }
+
+    inputs(): InteractionInputCollectionPromise {
+        return new InteractionInputCollectionPromiseImpl(this._promise.then(obj => obj.inputs()), this._client, false);
+    }
+
+}
+
+// ============================================================================
+// InteractionInputBuilder
+// ============================================================================
+
+/**
+ * An opaque, server-side builder for an `InteractionInput` used by polyglot app hosts.
+ *
+ * The builder owns the live `InteractionInput` instance. Dynamic-loading callbacks mutate this same
+ * instance through `InteractionInputLoadContext`, which is why the input is modeled as a handle here
+ * instead of the by-value `InteractionInput` DTO.
+ */
+export interface InteractionInputBuilder {
+    toJSON(): MarshalledHandle;
+    /**
+     * Sets the choice options for the input.
+     * @param choices The available choices, in display order. Each option pairs a submitted value with a display label.
+     * @returns The same builder handle.
+     */
+    withChoiceOptions(choices: InteractionChoiceOption[]): InteractionInputBuilderPromise;
+    /**
+     * Sets the value of the input.
+     * @param value The value to assign.
+     * @returns The same builder handle.
+     */
+    withValue(value: string): InteractionInputBuilderPromise;
+    /**
+     * Attaches a callback that dynamically loads or updates the input after the prompt starts.
+     * @param callback The callback invoked to load the input. Use the supplied context to read other inputs and update this input.
+     * @param options Additional options.
+     * @returns The same builder handle.
+     */
+    withDynamicLoading(callback: (arg: InteractionInputLoadContext) => Promise<void>, options?: DynamicLoadingOptions): InteractionInputBuilderPromise;
+}
+
+export interface InteractionInputBuilderPromise extends PromiseLike<InteractionInputBuilder> {
+    /**
+     * Sets the choice options for the input.
+     * @param choices The available choices, in display order. Each option pairs a submitted value with a display label.
+     * @returns The same builder handle.
+     */
+    withChoiceOptions(choices: InteractionChoiceOption[]): InteractionInputBuilderPromise;
+    /**
+     * Sets the value of the input.
+     * @param value The value to assign.
+     * @returns The same builder handle.
+     */
+    withValue(value: string): InteractionInputBuilderPromise;
+    /**
+     * Attaches a callback that dynamically loads or updates the input after the prompt starts.
+     * @param callback The callback invoked to load the input. Use the supplied context to read other inputs and update this input.
+     * @param options Additional options.
+     * @returns The same builder handle.
+     */
+    withDynamicLoading(callback: (arg: InteractionInputLoadContext) => Promise<void>, options?: DynamicLoadingOptions): InteractionInputBuilderPromise;
+}
+
+// ============================================================================
+// InteractionInputBuilderImpl
+// ============================================================================
+
+/**
+ * An opaque, server-side builder for an `InteractionInput` used by polyglot app hosts.
+ *
+ * The builder owns the live `InteractionInput` instance. Dynamic-loading callbacks mutate this same
+ * instance through `InteractionInputLoadContext`, which is why the input is modeled as a handle here
+ * instead of the by-value `InteractionInput` DTO.
+ */
+class InteractionInputBuilderImpl implements InteractionInputBuilder {
+    constructor(private _handle: InteractionInputBuilderHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    /** @internal */
+    async _withChoiceOptionsInternal(choices: InteractionChoiceOption[]): Promise<InteractionInputBuilder> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle, choices };
+        const result = await this._client.invokeCapability<InteractionInputBuilderHandle>(
+            'Aspire.Hosting.Ats/withChoiceOptions',
+            rpcArgs
+        );
+        return new InteractionInputBuilderImpl(result, this._client);
+    }
+
+    /**
+     * Sets the choice options for the input.
+     * @param choices The available choices, in display order. Each option pairs a submitted value with a display label.
+     * @returns The same builder handle.
+     */
+    withChoiceOptions(choices: InteractionChoiceOption[]): InteractionInputBuilderPromise {
+        return new InteractionInputBuilderPromiseImpl(this._withChoiceOptionsInternal(choices), this._client);
+    }
+
+    /** @internal */
+    async _withValueInternal(value: string): Promise<InteractionInputBuilder> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle, value };
+        const result = await this._client.invokeCapability<InteractionInputBuilderHandle>(
+            'Aspire.Hosting.Ats/withValue',
+            rpcArgs
+        );
+        return new InteractionInputBuilderImpl(result, this._client);
+    }
+
+    /**
+     * Sets the value of the input.
+     * @param value The value to assign.
+     * @returns The same builder handle.
+     */
+    withValue(value: string): InteractionInputBuilderPromise {
+        return new InteractionInputBuilderPromiseImpl(this._withValueInternal(value), this._client);
+    }
+
+    /** @internal */
+    async _withDynamicLoadingInternal(callback: (arg: InteractionInputLoadContext) => Promise<void>, options?: DynamicLoadingOptions): Promise<InteractionInputBuilder> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as InteractionInputLoadContextHandle;
+            const arg = new InteractionInputLoadContextImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { context: this._handle, callback: callbackId };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<InteractionInputBuilderHandle>(
+            'Aspire.Hosting.Ats/withDynamicLoading',
+            rpcArgs
+        );
+        return new InteractionInputBuilderImpl(result, this._client);
+    }
+
+    /**
+     * Attaches a callback that dynamically loads or updates the input after the prompt starts.
+     * @param callback The callback invoked to load the input. Use the supplied context to read other inputs and update this input.
+     * @param options Additional options.
+     * @returns The same builder handle.
+     */
+    withDynamicLoading(callback: (arg: InteractionInputLoadContext) => Promise<void>, options?: DynamicLoadingOptions): InteractionInputBuilderPromise {
+        return new InteractionInputBuilderPromiseImpl(this._withDynamicLoadingInternal(callback, options), this._client);
+    }
+
+}
+
+/**
+ * Thenable wrapper for InteractionInputBuilder that enables fluent chaining.
+ */
+class InteractionInputBuilderPromiseImpl implements InteractionInputBuilderPromise {
+    constructor(private _promise: Promise<InteractionInputBuilder>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = InteractionInputBuilder, TResult2 = never>(
+        onfulfilled?: ((value: InteractionInputBuilder) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    withChoiceOptions(choices: InteractionChoiceOption[]): InteractionInputBuilderPromise {
+        return new InteractionInputBuilderPromiseImpl(this._promise.then(obj => obj.withChoiceOptions(choices)), this._client);
+    }
+
+    withValue(value: string): InteractionInputBuilderPromise {
+        return new InteractionInputBuilderPromiseImpl(this._promise.then(obj => obj.withValue(value)), this._client);
+    }
+
+    withDynamicLoading(callback: (arg: InteractionInputLoadContext) => Promise<void>, options?: DynamicLoadingOptions): InteractionInputBuilderPromise {
+        return new InteractionInputBuilderPromiseImpl(this._promise.then(obj => obj.withDynamicLoading(callback, options)), this._client);
+    }
+
+}
+
+// ============================================================================
+// InteractionInputLoadContext
+// ============================================================================
+
+/** The context passed to a polyglot dynamic-loading callback. Exposes the loading input as a handle and provides read access to the other inputs in the prompt. */
+export interface InteractionInputLoadContext {
+    toJSON(): MarshalledHandle;
+    /**
+     * Gets all inputs in the prompt, including the one currently loading.
+     *
+     * Mirrors the native `LoadInputContext.AllInputs`. Use the collection's by-name accessors (for example
+     * `value` or `requiredValue`) to read the dependency inputs declared via
+     * `DependsOnInputs`. This is the same `InteractionInputCollection`
+     * idiom used by the validation callback and prompt results, so reading inputs by name is consistent across every
+     * callback context. This is exposed as a property (rather than a method) so it routes through the generated
+     * collection accessor, matching the other contexts that surface an `InteractionInputCollection`.
+     */
+    inputs(): InteractionInputCollectionPromise;
+    /**
+     * Gets a handle to the input that is loading. Mutate the input through this handle.
+     *
+     * Mirrors the native `LoadInputContext.Input`: the callback updates the live input it is loading, rather than
+     * the context itself. The input is a handle (not a by-value DTO) so guarded setters route back to the server-side
+     * input across the ATS boundary.
+     * @returns A handle to the loading input.
+     */
+    input(): InteractionLoadingInputPromise;
+}
+
+export interface InteractionInputLoadContextPromise extends PromiseLike<InteractionInputLoadContext> {
+    /**
+     * Gets all inputs in the prompt, including the one currently loading.
+     *
+     * Mirrors the native `LoadInputContext.AllInputs`. Use the collection's by-name accessors (for example
+     * `value` or `requiredValue`) to read the dependency inputs declared via
+     * `DependsOnInputs`. This is the same `InteractionInputCollection`
+     * idiom used by the validation callback and prompt results, so reading inputs by name is consistent across every
+     * callback context. This is exposed as a property (rather than a method) so it routes through the generated
+     * collection accessor, matching the other contexts that surface an `InteractionInputCollection`.
+     */
+    inputs(): InteractionInputCollectionPromise;
+    /**
+     * Gets a handle to the input that is loading. Mutate the input through this handle.
+     *
+     * Mirrors the native `LoadInputContext.Input`: the callback updates the live input it is loading, rather than
+     * the context itself. The input is a handle (not a by-value DTO) so guarded setters route back to the server-side
+     * input across the ATS boundary.
+     * @returns A handle to the loading input.
+     */
+    input(): InteractionLoadingInputPromise;
+}
+
+// ============================================================================
+// InteractionInputLoadContextImpl
+// ============================================================================
+
+/** The context passed to a polyglot dynamic-loading callback. Exposes the loading input as a handle and provides read access to the other inputs in the prompt. */
+class InteractionInputLoadContextImpl implements InteractionInputLoadContext {
+    constructor(private _handle: InteractionInputLoadContextHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    inputs(): InteractionInputCollectionPromise {
+        return new InteractionInputCollectionPromiseImpl(this._client.invokeCapability<InteractionInputCollection>(
+            'Aspire.Hosting.Ats/InteractionInputLoadContext.inputs',
+            { context: this._handle }
+        ), this._client, false);
+    }
+
+    /** @internal */
+    async _inputInternal(): Promise<InteractionLoadingInput> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        const result = await this._client.invokeCapability<InteractionLoadingInputHandle>(
+            'Aspire.Hosting.Ats/input',
+            rpcArgs
+        );
+        return new InteractionLoadingInputImpl(result, this._client);
+    }
+
+    /**
+     * Gets a handle to the input that is loading. Mutate the input through this handle.
+     *
+     * Mirrors the native `LoadInputContext.Input`: the callback updates the live input it is loading, rather than
+     * the context itself. The input is a handle (not a by-value DTO) so guarded setters route back to the server-side
+     * input across the ATS boundary.
+     * @returns A handle to the loading input.
+     */
+    input(): InteractionLoadingInputPromise {
+        return new InteractionLoadingInputPromiseImpl(this._inputInternal(), this._client);
+    }
+
+}
+
+/**
+ * Thenable wrapper for InteractionInputLoadContext that enables fluent chaining.
+ */
+class InteractionInputLoadContextPromiseImpl implements InteractionInputLoadContextPromise {
+    constructor(private _promise: Promise<InteractionInputLoadContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = InteractionInputLoadContext, TResult2 = never>(
+        onfulfilled?: ((value: InteractionInputLoadContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    inputs(): InteractionInputCollectionPromise {
+        return new InteractionInputCollectionPromiseImpl(this._promise.then(obj => obj.inputs()), this._client, false);
+    }
+
+    input(): InteractionLoadingInputPromise {
+        return new InteractionLoadingInputPromiseImpl(this._promise.then(obj => obj.input()), this._client);
+    }
+
+}
+
+// ============================================================================
+// InteractionLoadingInput
+// ============================================================================
+
+/**
+ * A handle to the input currently being loaded by a dynamic-loading callback. Mirrors the native `LoadInputContext.Input` by letting callbacks update the live input directly.
+ *
+ * The handle owns the live `InteractionInput` for the duration of the load callback. Setters are routed
+ * back to the server-side input across the ATS boundary, which is why this is a handle rather than the by-value
+ * `InteractionInput` DTO.
+ */
+export interface InteractionLoadingInput {
+    toJSON(): MarshalledHandle;
+    /**
+     * Gets the name of the input.
+     * @returns The input name.
+     */
+    getName(): Promise<string>;
+    /**
+     * Sets the choice options for the input.
+     * @param choices The available choices, in display order. Each option pairs a submitted value with a display label.
+     */
+    setChoiceOptions(choices: InteractionChoiceOption[]): InteractionLoadingInputPromise;
+    /**
+     * Sets the value of the input.
+     * @param value The value to assign.
+     */
+    setValue(value: string): InteractionLoadingInputPromise;
+}
+
+export interface InteractionLoadingInputPromise extends PromiseLike<InteractionLoadingInput> {
+    /**
+     * Gets the name of the input.
+     * @returns The input name.
+     */
+    getName(): Promise<string>;
+    /**
+     * Sets the choice options for the input.
+     * @param choices The available choices, in display order. Each option pairs a submitted value with a display label.
+     */
+    setChoiceOptions(choices: InteractionChoiceOption[]): InteractionLoadingInputPromise;
+    /**
+     * Sets the value of the input.
+     * @param value The value to assign.
+     */
+    setValue(value: string): InteractionLoadingInputPromise;
+}
+
+// ============================================================================
+// InteractionLoadingInputImpl
+// ============================================================================
+
+/**
+ * A handle to the input currently being loaded by a dynamic-loading callback. Mirrors the native `LoadInputContext.Input` by letting callbacks update the live input directly.
+ *
+ * The handle owns the live `InteractionInput` for the duration of the load callback. Setters are routed
+ * back to the server-side input across the ATS boundary, which is why this is a handle rather than the by-value
+ * `InteractionInput` DTO.
+ */
+class InteractionLoadingInputImpl implements InteractionLoadingInput {
+    constructor(private _handle: InteractionLoadingInputHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    /**
+     * Gets the name of the input.
+     * @returns The input name.
+     */
+    async getName(): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting.Ats/getName',
+            rpcArgs
+        );
+    }
+
+    /** @internal */
+    async _setChoiceOptionsInternal(choices: InteractionChoiceOption[]): Promise<InteractionLoadingInput> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle, choices };
+        await this._client.invokeCapability<void>(
+            'Aspire.Hosting.Ats/setChoiceOptions',
+            rpcArgs
+        );
+        return this;
+    }
+
+    /**
+     * Sets the choice options for the input.
+     * @param choices The available choices, in display order. Each option pairs a submitted value with a display label.
+     */
+    setChoiceOptions(choices: InteractionChoiceOption[]): InteractionLoadingInputPromise {
+        return new InteractionLoadingInputPromiseImpl(this._setChoiceOptionsInternal(choices), this._client);
+    }
+
+    /** @internal */
+    async _setValueInternal(value: string): Promise<InteractionLoadingInput> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle, value };
+        await this._client.invokeCapability<void>(
+            'Aspire.Hosting.Ats/setValue',
+            rpcArgs
+        );
+        return this;
+    }
+
+    /**
+     * Sets the value of the input.
+     * @param value The value to assign.
+     */
+    setValue(value: string): InteractionLoadingInputPromise {
+        return new InteractionLoadingInputPromiseImpl(this._setValueInternal(value), this._client);
+    }
+
+}
+
+/**
+ * Thenable wrapper for InteractionLoadingInput that enables fluent chaining.
+ */
+class InteractionLoadingInputPromiseImpl implements InteractionLoadingInputPromise {
+    constructor(private _promise: Promise<InteractionLoadingInput>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = InteractionLoadingInput, TResult2 = never>(
+        onfulfilled?: ((value: InteractionLoadingInput) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    getName(): Promise<string> {
+        return this._promise.then(obj => obj.getName());
+    }
+
+    setChoiceOptions(choices: InteractionChoiceOption[]): InteractionLoadingInputPromise {
+        return new InteractionLoadingInputPromiseImpl(this._promise.then(obj => obj.setChoiceOptions(choices)), this._client);
+    }
+
+    setValue(value: string): InteractionLoadingInputPromise {
+        return new InteractionLoadingInputPromiseImpl(this._promise.then(obj => obj.setValue(value)), this._client);
     }
 
 }
@@ -6762,6 +8524,237 @@ class ReferenceExpressionBuilderPromiseImpl implements ReferenceExpressionBuilde
 }
 
 // ============================================================================
+// RequiredCommandValidationContext
+// ============================================================================
+
+/** Provides context for validating a required command. */
+export interface RequiredCommandValidationContext {
+    toJSON(): MarshalledHandle;
+    /** Gets the resolved full path to the command executable. */
+    resolvedPath(): Promise<string>;
+    /** Gets the service provider for accessing application services. */
+    services(): ServiceProviderPromise;
+    /** Gets a cancellation token that can be used to cancel the validation. */
+    cancellationToken(): Promise<CancellationToken>;
+    /**
+     * Creates a successful validation result.
+     * @returns A `RequiredCommandValidationResult` indicating the command is valid.
+     */
+    success(): RequiredCommandValidationResultPromise;
+    /**
+     * Creates a failed validation result with the specified message.
+     * @param validationMessage A message describing why validation failed.
+     * @returns A `RequiredCommandValidationResult` indicating the command is invalid.
+     */
+    failure(validationMessage: string): RequiredCommandValidationResultPromise;
+}
+
+export interface RequiredCommandValidationContextPromise extends PromiseLike<RequiredCommandValidationContext> {
+    /** Gets the resolved full path to the command executable. */
+    resolvedPath(): Promise<string>;
+    /** Gets the service provider for accessing application services. */
+    services(): ServiceProviderPromise;
+    /** Gets a cancellation token that can be used to cancel the validation. */
+    cancellationToken(): Promise<CancellationToken>;
+    /**
+     * Creates a successful validation result.
+     * @returns A `RequiredCommandValidationResult` indicating the command is valid.
+     */
+    success(): RequiredCommandValidationResultPromise;
+    /**
+     * Creates a failed validation result with the specified message.
+     * @param validationMessage A message describing why validation failed.
+     * @returns A `RequiredCommandValidationResult` indicating the command is invalid.
+     */
+    failure(validationMessage: string): RequiredCommandValidationResultPromise;
+}
+
+// ============================================================================
+// RequiredCommandValidationContextImpl
+// ============================================================================
+
+/** Provides context for validating a required command. */
+class RequiredCommandValidationContextImpl implements RequiredCommandValidationContext {
+    constructor(private _handle: RequiredCommandValidationContextHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    async resolvedPath(): Promise<string> {
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.resolvedPath',
+            { context: this._handle }
+        );
+    }
+
+    services(): ServiceProviderPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<IServiceProviderHandle>(
+                'Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.services',
+                { context: this._handle }
+            );
+            return new ServiceProviderImpl(handle, this._client);
+        })();
+        return new ServiceProviderPromiseImpl(promise, this._client, false);
+    }
+
+    async cancellationToken(): Promise<CancellationToken> {
+        const result = await this._client.invokeCapability<string | null>(
+            'Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.cancellationToken',
+            { context: this._handle }
+        );
+        return CancellationToken.fromValue(result);
+    }
+
+    /** @internal */
+    async _successInternal(): Promise<RequiredCommandValidationResult> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        const result = await this._client.invokeCapability<RequiredCommandValidationResultHandle>(
+            'Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.success',
+            rpcArgs
+        );
+        return new RequiredCommandValidationResultImpl(result, this._client);
+    }
+
+    /**
+     * Creates a successful validation result.
+     * @returns A `RequiredCommandValidationResult` indicating the command is valid.
+     */
+    success(): RequiredCommandValidationResultPromise {
+        return new RequiredCommandValidationResultPromiseImpl(this._successInternal(), this._client);
+    }
+
+    /** @internal */
+    async _failureInternal(validationMessage: string): Promise<RequiredCommandValidationResult> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle, validationMessage };
+        const result = await this._client.invokeCapability<RequiredCommandValidationResultHandle>(
+            'Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.failure',
+            rpcArgs
+        );
+        return new RequiredCommandValidationResultImpl(result, this._client);
+    }
+
+    /**
+     * Creates a failed validation result with the specified message.
+     * @param validationMessage A message describing why validation failed.
+     * @returns A `RequiredCommandValidationResult` indicating the command is invalid.
+     */
+    failure(validationMessage: string): RequiredCommandValidationResultPromise {
+        return new RequiredCommandValidationResultPromiseImpl(this._failureInternal(validationMessage), this._client);
+    }
+
+}
+
+/**
+ * Thenable wrapper for RequiredCommandValidationContext that enables fluent chaining.
+ */
+class RequiredCommandValidationContextPromiseImpl implements RequiredCommandValidationContextPromise {
+    constructor(private _promise: Promise<RequiredCommandValidationContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = RequiredCommandValidationContext, TResult2 = never>(
+        onfulfilled?: ((value: RequiredCommandValidationContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    resolvedPath(): Promise<string> {
+        return this._promise.then(obj => obj.resolvedPath());
+    }
+
+    services(): ServiceProviderPromise {
+        return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.services()), this._client, false);
+    }
+
+    cancellationToken(): Promise<CancellationToken> {
+        return this._promise.then(obj => obj.cancellationToken());
+    }
+
+    success(): RequiredCommandValidationResultPromise {
+        return new RequiredCommandValidationResultPromiseImpl(this._promise.then(obj => obj.success()), this._client);
+    }
+
+    failure(validationMessage: string): RequiredCommandValidationResultPromise {
+        return new RequiredCommandValidationResultPromiseImpl(this._promise.then(obj => obj.failure(validationMessage)), this._client);
+    }
+
+}
+
+// ============================================================================
+// RequiredCommandValidationResult
+// ============================================================================
+
+/** Represents the result of validating a required command. */
+export interface RequiredCommandValidationResult {
+    toJSON(): MarshalledHandle;
+    /** Gets a value indicating whether the command validation succeeded. */
+    isValid(): Promise<boolean>;
+    /** Gets an optional validation message describing why validation failed. */
+    validationMessage(): Promise<string | null>;
+}
+
+export interface RequiredCommandValidationResultPromise extends PromiseLike<RequiredCommandValidationResult> {
+    /** Gets a value indicating whether the command validation succeeded. */
+    isValid(): Promise<boolean>;
+    /** Gets an optional validation message describing why validation failed. */
+    validationMessage(): Promise<string | null>;
+}
+
+// ============================================================================
+// RequiredCommandValidationResultImpl
+// ============================================================================
+
+/** Represents the result of validating a required command. */
+class RequiredCommandValidationResultImpl implements RequiredCommandValidationResult {
+    constructor(private _handle: RequiredCommandValidationResultHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    async isValid(): Promise<boolean> {
+        return await this._client.invokeCapability<boolean>(
+            'Aspire.Hosting.ApplicationModel/RequiredCommandValidationResult.isValid',
+            { context: this._handle }
+        );
+    }
+
+    async validationMessage(): Promise<string | null> {
+        return await this._client.invokeCapability<string | null>(
+            'Aspire.Hosting.ApplicationModel/RequiredCommandValidationResult.validationMessage',
+            { context: this._handle }
+        );
+    }
+
+}
+
+/**
+ * Thenable wrapper for RequiredCommandValidationResult that enables fluent chaining.
+ */
+class RequiredCommandValidationResultPromiseImpl implements RequiredCommandValidationResultPromise {
+    constructor(private _promise: Promise<RequiredCommandValidationResult>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = RequiredCommandValidationResult, TResult2 = never>(
+        onfulfilled?: ((value: RequiredCommandValidationResult) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    isValid(): Promise<boolean> {
+        return this._promise.then(obj => obj.isValid());
+    }
+
+    validationMessage(): Promise<string | null> {
+        return this._promise.then(obj => obj.validationMessage());
+    }
+
+}
+
+// ============================================================================
 // ResourceCommandService
 // ============================================================================
 
@@ -8121,11 +10114,15 @@ export interface UpdateCommandStateContext {
     toJSON(): MarshalledHandle;
     /** Gets the resource snapshot data available to polyglot command state callbacks. */
     resourceSnapshot(): Promise<UpdateCommandStateResourceSnapshot>;
+    /** The service provider. */
+    services(): ServiceProviderPromise;
 }
 
 export interface UpdateCommandStateContextPromise extends PromiseLike<UpdateCommandStateContext> {
     /** Gets the resource snapshot data available to polyglot command state callbacks. */
     resourceSnapshot(): Promise<UpdateCommandStateResourceSnapshot>;
+    /** The service provider. */
+    services(): ServiceProviderPromise;
 }
 
 // ============================================================================
@@ -8144,6 +10141,17 @@ class UpdateCommandStateContextImpl implements UpdateCommandStateContext {
             'Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.resourceSnapshot',
             { context: this._handle }
         );
+    }
+
+    services(): ServiceProviderPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<IServiceProviderHandle>(
+                'Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.services',
+                { context: this._handle }
+            );
+            return new ServiceProviderImpl(handle, this._client);
+        })();
+        return new ServiceProviderPromiseImpl(promise, this._client, false);
     }
 
 }
@@ -8165,6 +10173,10 @@ class UpdateCommandStateContextPromiseImpl implements UpdateCommandStateContextP
 
     resourceSnapshot(): Promise<UpdateCommandStateResourceSnapshot> {
         return this._promise.then(obj => obj.resourceSnapshot());
+    }
+
+    services(): ServiceProviderPromise {
+        return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.services()), this._client, false);
     }
 
 }
@@ -8761,6 +10773,12 @@ export interface DistributedApplicationBuilder {
      */
     tryAddEventingSubscriber(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): DistributedApplicationBuilderPromise;
     /**
+     * Adds a custom health check callback to the distributed-application builder.
+     * @param name The health check registration name.
+     * @param check The callback that evaluates the health check.
+     */
+    addHealthCheck(name: string, check: () => Promise<HealthCheckResult>): DistributedApplicationBuilderPromise;
+    /**
      * Adds a test Redis resource from ATS documentation.
      * @param name The ATS resource name.
      * @param options Additional options.
@@ -8975,6 +10993,12 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
      * @param subscribe The callback that registers the event subscriptions.
      */
     tryAddEventingSubscriber(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): DistributedApplicationBuilderPromise;
+    /**
+     * Adds a custom health check callback to the distributed-application builder.
+     * @param name The health check registration name.
+     * @param check The callback that evaluates the health check.
+     */
+    addHealthCheck(name: string, check: () => Promise<HealthCheckResult>): DistributedApplicationBuilderPromise;
     /**
      * Adds a test Redis resource from ATS documentation.
      * @param name The ATS resource name.
@@ -9572,6 +11596,28 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     }
 
     /** @internal */
+    async _addHealthCheckInternal(name: string, check: () => Promise<HealthCheckResult>): Promise<DistributedApplicationBuilder> {
+        const checkId = registerCallback(async () => {
+            return await check();
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, check: checkId };
+        await this._client.invokeCapability<void>(
+            'Aspire.Hosting/addHealthCheck',
+            rpcArgs
+        );
+        return this;
+    }
+
+    /**
+     * Adds a custom health check callback to the distributed-application builder.
+     * @param name The health check registration name.
+     * @param check The callback that evaluates the health check.
+     */
+    addHealthCheck(name: string, check: () => Promise<HealthCheckResult>): DistributedApplicationBuilderPromise {
+        return new DistributedApplicationBuilderPromiseImpl(this._addHealthCheckInternal(name, check), this._client);
+    }
+
+    /** @internal */
     async _addTestRedisInternal(name: string, port?: number): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
         if (port !== undefined) rpcArgs.port = port;
@@ -9735,6 +11781,10 @@ class DistributedApplicationBuilderPromiseImpl implements DistributedApplication
 
     tryAddEventingSubscriber(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): DistributedApplicationBuilderPromise {
         return new DistributedApplicationBuilderPromiseImpl(this._promise.then(obj => obj.tryAddEventingSubscriber(subscribe)), this._client);
+    }
+
+    addHealthCheck(name: string, check: () => Promise<HealthCheckResult>): DistributedApplicationBuilderPromise {
+        return new DistributedApplicationBuilderPromiseImpl(this._promise.then(obj => obj.addHealthCheck(name, check)), this._client);
     }
 
     addTestRedis(name: string, options?: AddTestRedisOptions): TestRedisResourcePromise {
@@ -10523,6 +12573,418 @@ class HostEnvironmentPromiseImpl implements HostEnvironmentPromise {
 }
 
 // ============================================================================
+// InteractionService
+// ============================================================================
+
+/** A service to interact with the current development environment. */
+export interface InteractionService {
+    toJSON(): MarshalledHandle;
+    /**
+     * Gets a value indicating whether the interaction service is available to prompt the user.
+     * @returns `true` when the service can prompt the user; otherwise `false`.
+     */
+    isAvailable(): Promise<boolean>;
+    /**
+     * Prompts the user for confirmation with an OK/Cancel dialog.
+     * @param options Additional options.
+     */
+    promptConfirmation(title: string, message: string, options?: InteractionMessageBoxOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult>;
+    /**
+     * Prompts the user with a message box dialog.
+     * @param options Additional options.
+     */
+    promptMessageBox(title: string, message: string, options?: InteractionMessageBoxOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult>;
+    /**
+     * Prompts the user with a notification.
+     * @param options Additional options.
+     */
+    promptNotification(title: string, message: string, options?: InteractionNotificationOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult>;
+    /**
+     * Prompts the user for a single input.
+     * @param options Additional options.
+     */
+    promptInput(title: string, message: string, input: Awaitable<InteractionInputBuilder>, options?: InteractionInputsDialogOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<InputInteractionResult>;
+    /**
+     * Prompts the user for multiple inputs.
+     * @param options Additional options.
+     */
+    promptInputs(title: string, message: string, inputs: InteractionInputBuilder[], options?: InteractionInputsDialogOptions, cancellationToken?: AbortSignal | CancellationToken): InputsInteractionResultPromise;
+    /**
+     * Creates a single-line text input.
+     * @param options Additional options.
+     */
+    createTextInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise;
+    /**
+     * Creates a secret (masked) text input.
+     * @param options Additional options.
+     */
+    createSecretInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise;
+    /**
+     * Creates a boolean (checkbox) input.
+     * @param options Additional options.
+     */
+    createBooleanInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise;
+    /**
+     * Creates a numeric input.
+     * @param options Additional options.
+     */
+    createNumberInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise;
+    /**
+     * Creates a choice input that selects from a list of options.
+     * @param name The name of the input.
+     * @param options Additional options.
+     */
+    createChoiceInput(name: string, options?: CreateChoiceInputOptions): InteractionInputBuilderPromise;
+}
+
+export interface InteractionServicePromise extends PromiseLike<InteractionService> {
+    /**
+     * Gets a value indicating whether the interaction service is available to prompt the user.
+     * @returns `true` when the service can prompt the user; otherwise `false`.
+     */
+    isAvailable(): Promise<boolean>;
+    /**
+     * Prompts the user for confirmation with an OK/Cancel dialog.
+     * @param options Additional options.
+     */
+    promptConfirmation(title: string, message: string, options?: InteractionMessageBoxOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult>;
+    /**
+     * Prompts the user with a message box dialog.
+     * @param options Additional options.
+     */
+    promptMessageBox(title: string, message: string, options?: InteractionMessageBoxOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult>;
+    /**
+     * Prompts the user with a notification.
+     * @param options Additional options.
+     */
+    promptNotification(title: string, message: string, options?: InteractionNotificationOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult>;
+    /**
+     * Prompts the user for a single input.
+     * @param options Additional options.
+     */
+    promptInput(title: string, message: string, input: Awaitable<InteractionInputBuilder>, options?: InteractionInputsDialogOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<InputInteractionResult>;
+    /**
+     * Prompts the user for multiple inputs.
+     * @param options Additional options.
+     */
+    promptInputs(title: string, message: string, inputs: InteractionInputBuilder[], options?: InteractionInputsDialogOptions, cancellationToken?: AbortSignal | CancellationToken): InputsInteractionResultPromise;
+    /**
+     * Creates a single-line text input.
+     * @param options Additional options.
+     */
+    createTextInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise;
+    /**
+     * Creates a secret (masked) text input.
+     * @param options Additional options.
+     */
+    createSecretInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise;
+    /**
+     * Creates a boolean (checkbox) input.
+     * @param options Additional options.
+     */
+    createBooleanInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise;
+    /**
+     * Creates a numeric input.
+     * @param options Additional options.
+     */
+    createNumberInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise;
+    /**
+     * Creates a choice input that selects from a list of options.
+     * @param name The name of the input.
+     * @param options Additional options.
+     */
+    createChoiceInput(name: string, options?: CreateChoiceInputOptions): InteractionInputBuilderPromise;
+}
+
+// ============================================================================
+// InteractionServiceImpl
+// ============================================================================
+
+/** A service to interact with the current development environment. */
+class InteractionServiceImpl implements InteractionService {
+    constructor(private _handle: IInteractionServiceHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    /**
+     * Gets a value indicating whether the interaction service is available to prompt the user.
+     * @returns `true` when the service can prompt the user; otherwise `false`.
+     */
+    async isAvailable(): Promise<boolean> {
+        const rpcArgs: Record<string, unknown> = { interactionService: this._handle };
+        return await this._client.invokeCapability<boolean>(
+            'Aspire.Hosting/isAvailable',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Prompts the user for confirmation with an OK/Cancel dialog.
+     * @param options Additional options.
+     */
+    async promptConfirmation(title: string, message: string, options?: InteractionMessageBoxOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult> {
+        const rpcArgs: Record<string, unknown> = { interactionService: this._handle, title, message };
+        if (options !== undefined) rpcArgs.options = options;
+        if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
+        return await this._client.invokeCapability<BoolInteractionResult>(
+            'Aspire.Hosting/promptConfirmation',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Prompts the user with a message box dialog.
+     * @param options Additional options.
+     */
+    async promptMessageBox(title: string, message: string, options?: InteractionMessageBoxOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult> {
+        const rpcArgs: Record<string, unknown> = { interactionService: this._handle, title, message };
+        if (options !== undefined) rpcArgs.options = options;
+        if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
+        return await this._client.invokeCapability<BoolInteractionResult>(
+            'Aspire.Hosting/promptMessageBox',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Prompts the user with a notification.
+     * @param options Additional options.
+     */
+    async promptNotification(title: string, message: string, options?: InteractionNotificationOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult> {
+        const rpcArgs: Record<string, unknown> = { interactionService: this._handle, title, message };
+        if (options !== undefined) rpcArgs.options = options;
+        if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
+        return await this._client.invokeCapability<BoolInteractionResult>(
+            'Aspire.Hosting/promptNotification',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Prompts the user for a single input.
+     * @param options Additional options.
+     */
+    async promptInput(title: string, message: string, input: Awaitable<InteractionInputBuilder>, options?: InteractionInputsDialogOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<InputInteractionResult> {
+        input = isPromiseLike(input) ? await input : input;
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcValidationCallback = __optionsForRpc.validationCallback;
+            if (____optionsForRpcValidationCallback !== undefined) {
+                const ____optionsForRpcValidationCallbackId = ____optionsForRpcValidationCallback ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                    const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                    await ____optionsForRpcValidationCallback(arg);
+                }) : undefined;
+                __optionsForRpcData["validationCallback"] = ____optionsForRpcValidationCallbackId;
+            }
+        }
+        const rpcArgs: Record<string, unknown> = { interactionService: this._handle, title, message, input };
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
+        if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
+        return await this._client.invokeCapability<InputInteractionResult>(
+            'Aspire.Hosting/promptInput',
+            rpcArgs
+        );
+    }
+
+    /** @internal */
+    async _promptInputsInternal(title: string, message: string, inputs: InteractionInputBuilder[], options?: InteractionInputsDialogOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<InputsInteractionResult> {
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcValidationCallback = __optionsForRpc.validationCallback;
+            if (____optionsForRpcValidationCallback !== undefined) {
+                const ____optionsForRpcValidationCallbackId = ____optionsForRpcValidationCallback ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                    const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                    await ____optionsForRpcValidationCallback(arg);
+                }) : undefined;
+                __optionsForRpcData["validationCallback"] = ____optionsForRpcValidationCallbackId;
+            }
+        }
+        const rpcArgs: Record<string, unknown> = { interactionService: this._handle, title, message, inputs };
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
+        if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
+        const result = await this._client.invokeCapability<InputsInteractionResultHandle>(
+            'Aspire.Hosting/promptInputs',
+            rpcArgs
+        );
+        return new InputsInteractionResultImpl(result, this._client);
+    }
+
+    /**
+     * Prompts the user for multiple inputs.
+     * @param options Additional options.
+     */
+    promptInputs(title: string, message: string, inputs: InteractionInputBuilder[], options?: InteractionInputsDialogOptions, cancellationToken?: AbortSignal | CancellationToken): InputsInteractionResultPromise {
+        return new InputsInteractionResultPromiseImpl(this._promptInputsInternal(title, message, inputs, options, cancellationToken), this._client);
+    }
+
+    /** @internal */
+    async _createTextInputInternal(name: string, options?: CreateInteractionInputOptions): Promise<InteractionInputBuilder> {
+        const rpcArgs: Record<string, unknown> = { interactionService: this._handle, name };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<InteractionInputBuilderHandle>(
+            'Aspire.Hosting/createTextInput',
+            rpcArgs
+        );
+        return new InteractionInputBuilderImpl(result, this._client);
+    }
+
+    /**
+     * Creates a single-line text input.
+     * @param options Additional options.
+     */
+    createTextInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise {
+        return new InteractionInputBuilderPromiseImpl(this._createTextInputInternal(name, options), this._client);
+    }
+
+    /** @internal */
+    async _createSecretInputInternal(name: string, options?: CreateInteractionInputOptions): Promise<InteractionInputBuilder> {
+        const rpcArgs: Record<string, unknown> = { interactionService: this._handle, name };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<InteractionInputBuilderHandle>(
+            'Aspire.Hosting/createSecretInput',
+            rpcArgs
+        );
+        return new InteractionInputBuilderImpl(result, this._client);
+    }
+
+    /**
+     * Creates a secret (masked) text input.
+     * @param options Additional options.
+     */
+    createSecretInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise {
+        return new InteractionInputBuilderPromiseImpl(this._createSecretInputInternal(name, options), this._client);
+    }
+
+    /** @internal */
+    async _createBooleanInputInternal(name: string, options?: CreateInteractionInputOptions): Promise<InteractionInputBuilder> {
+        const rpcArgs: Record<string, unknown> = { interactionService: this._handle, name };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<InteractionInputBuilderHandle>(
+            'Aspire.Hosting/createBooleanInput',
+            rpcArgs
+        );
+        return new InteractionInputBuilderImpl(result, this._client);
+    }
+
+    /**
+     * Creates a boolean (checkbox) input.
+     * @param options Additional options.
+     */
+    createBooleanInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise {
+        return new InteractionInputBuilderPromiseImpl(this._createBooleanInputInternal(name, options), this._client);
+    }
+
+    /** @internal */
+    async _createNumberInputInternal(name: string, options?: CreateInteractionInputOptions): Promise<InteractionInputBuilder> {
+        const rpcArgs: Record<string, unknown> = { interactionService: this._handle, name };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<InteractionInputBuilderHandle>(
+            'Aspire.Hosting/createNumberInput',
+            rpcArgs
+        );
+        return new InteractionInputBuilderImpl(result, this._client);
+    }
+
+    /**
+     * Creates a numeric input.
+     * @param options Additional options.
+     */
+    createNumberInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise {
+        return new InteractionInputBuilderPromiseImpl(this._createNumberInputInternal(name, options), this._client);
+    }
+
+    /** @internal */
+    async _createChoiceInputInternal(name: string, choices?: InteractionChoiceOption[], options?: CreateInteractionInputOptions): Promise<InteractionInputBuilder> {
+        const rpcArgs: Record<string, unknown> = { interactionService: this._handle, name };
+        if (choices !== undefined) rpcArgs.choices = choices;
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<InteractionInputBuilderHandle>(
+            'Aspire.Hosting/createChoiceInput',
+            rpcArgs
+        );
+        return new InteractionInputBuilderImpl(result, this._client);
+    }
+
+    /**
+     * Creates a choice input that selects from a list of options.
+     * @param name The name of the input.
+     * @param optionsBag Additional options.
+     */
+    createChoiceInput(name: string, optionsBag?: CreateChoiceInputOptions): InteractionInputBuilderPromise {
+        const choices = optionsBag?.choices;
+        const options = optionsBag?.options;
+        return new InteractionInputBuilderPromiseImpl(this._createChoiceInputInternal(name, choices, options), this._client);
+    }
+
+}
+
+/**
+ * Thenable wrapper for InteractionService that enables fluent chaining.
+ */
+class InteractionServicePromiseImpl implements InteractionServicePromise {
+    constructor(private _promise: Promise<InteractionService>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = InteractionService, TResult2 = never>(
+        onfulfilled?: ((value: InteractionService) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    isAvailable(): Promise<boolean> {
+        return this._promise.then(obj => obj.isAvailable());
+    }
+
+    promptConfirmation(title: string, message: string, options?: InteractionMessageBoxOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult> {
+        return this._promise.then(obj => obj.promptConfirmation(title, message, options, cancellationToken));
+    }
+
+    promptMessageBox(title: string, message: string, options?: InteractionMessageBoxOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult> {
+        return this._promise.then(obj => obj.promptMessageBox(title, message, options, cancellationToken));
+    }
+
+    promptNotification(title: string, message: string, options?: InteractionNotificationOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult> {
+        return this._promise.then(obj => obj.promptNotification(title, message, options, cancellationToken));
+    }
+
+    promptInput(title: string, message: string, input: Awaitable<InteractionInputBuilder>, options?: InteractionInputsDialogOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<InputInteractionResult> {
+        return this._promise.then(obj => obj.promptInput(title, message, input, options, cancellationToken));
+    }
+
+    promptInputs(title: string, message: string, inputs: InteractionInputBuilder[], options?: InteractionInputsDialogOptions, cancellationToken?: AbortSignal | CancellationToken): InputsInteractionResultPromise {
+        return new InputsInteractionResultPromiseImpl(this._promise.then(obj => obj.promptInputs(title, message, inputs, options, cancellationToken)), this._client);
+    }
+
+    createTextInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise {
+        return new InteractionInputBuilderPromiseImpl(this._promise.then(obj => obj.createTextInput(name, options)), this._client);
+    }
+
+    createSecretInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise {
+        return new InteractionInputBuilderPromiseImpl(this._promise.then(obj => obj.createSecretInput(name, options)), this._client);
+    }
+
+    createBooleanInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise {
+        return new InteractionInputBuilderPromiseImpl(this._promise.then(obj => obj.createBooleanInput(name, options)), this._client);
+    }
+
+    createNumberInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise {
+        return new InteractionInputBuilderPromiseImpl(this._promise.then(obj => obj.createNumberInput(name, options)), this._client);
+    }
+
+    createChoiceInput(name: string, options?: CreateChoiceInputOptions): InteractionInputBuilderPromise {
+        return new InteractionInputBuilderPromiseImpl(this._promise.then(obj => obj.createChoiceInput(name, options)), this._client);
+    }
+
+}
+
+// ============================================================================
 // Logger
 // ============================================================================
 
@@ -11173,10 +13635,20 @@ class ReportingTaskPromiseImpl implements ReportingTaskPromise {
 export interface ServiceProvider {
     toJSON(): MarshalledHandle;
     /**
+     * Gets the Aspire store from the service provider.
+     * @returns The Aspire store.
+     */
+    getAspireStore(): AspireStorePromise;
+    /**
      * Gets the distributed application eventing service from the service provider.
      * @returns The distributed application eventing handle.
      */
     getEventing(): DistributedApplicationEventingPromise;
+    /**
+     * Gets the interaction service from the service provider.
+     * @returns An interaction service handle.
+     */
+    getInteractionService(): InteractionServicePromise;
     /**
      * Gets the logger factory from the service provider.
      * @returns A logger factory handle.
@@ -11202,11 +13674,6 @@ export interface ServiceProvider {
      * @returns A resource command service handle.
      */
     getResourceCommandService(): ResourceCommandServicePromise;
-    /**
-     * Gets the Aspire store from the service provider.
-     * @returns The Aspire store.
-     */
-    getAspireStore(): AspireStorePromise;
     /**
      * Gets the user secrets manager from the service provider.
      * @returns A user secrets manager handle.
@@ -11216,10 +13683,20 @@ export interface ServiceProvider {
 
 export interface ServiceProviderPromise extends PromiseLike<ServiceProvider> {
     /**
+     * Gets the Aspire store from the service provider.
+     * @returns The Aspire store.
+     */
+    getAspireStore(): AspireStorePromise;
+    /**
      * Gets the distributed application eventing service from the service provider.
      * @returns The distributed application eventing handle.
      */
     getEventing(): DistributedApplicationEventingPromise;
+    /**
+     * Gets the interaction service from the service provider.
+     * @returns An interaction service handle.
+     */
+    getInteractionService(): InteractionServicePromise;
     /**
      * Gets the logger factory from the service provider.
      * @returns A logger factory handle.
@@ -11245,11 +13722,6 @@ export interface ServiceProviderPromise extends PromiseLike<ServiceProvider> {
      * @returns A resource command service handle.
      */
     getResourceCommandService(): ResourceCommandServicePromise;
-    /**
-     * Gets the Aspire store from the service provider.
-     * @returns The Aspire store.
-     */
-    getAspireStore(): AspireStorePromise;
     /**
      * Gets the user secrets manager from the service provider.
      * @returns A user secrets manager handle.
@@ -11269,6 +13741,24 @@ class ServiceProviderImpl implements ServiceProvider {
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
     /** @internal */
+    async _getAspireStoreInternal(): Promise<AspireStore> {
+        const rpcArgs: Record<string, unknown> = { serviceProvider: this._handle };
+        const result = await this._client.invokeCapability<IAspireStoreHandle>(
+            'Aspire.Hosting/getAspireStore',
+            rpcArgs
+        );
+        return new AspireStoreImpl(result, this._client);
+    }
+
+    /**
+     * Gets the Aspire store from the service provider.
+     * @returns The Aspire store.
+     */
+    getAspireStore(): AspireStorePromise {
+        return new AspireStorePromiseImpl(this._getAspireStoreInternal(), this._client);
+    }
+
+    /** @internal */
     async _getEventingInternal(): Promise<DistributedApplicationEventing> {
         const rpcArgs: Record<string, unknown> = { serviceProvider: this._handle };
         const result = await this._client.invokeCapability<IDistributedApplicationEventingHandle>(
@@ -11284,6 +13774,24 @@ class ServiceProviderImpl implements ServiceProvider {
      */
     getEventing(): DistributedApplicationEventingPromise {
         return new DistributedApplicationEventingPromiseImpl(this._getEventingInternal(), this._client);
+    }
+
+    /** @internal */
+    async _getInteractionServiceInternal(): Promise<InteractionService> {
+        const rpcArgs: Record<string, unknown> = { serviceProvider: this._handle };
+        const result = await this._client.invokeCapability<IInteractionServiceHandle>(
+            'Aspire.Hosting/getInteractionService',
+            rpcArgs
+        );
+        return new InteractionServiceImpl(result, this._client);
+    }
+
+    /**
+     * Gets the interaction service from the service provider.
+     * @returns An interaction service handle.
+     */
+    getInteractionService(): InteractionServicePromise {
+        return new InteractionServicePromiseImpl(this._getInteractionServiceInternal(), this._client);
     }
 
     /** @internal */
@@ -11377,24 +13885,6 @@ class ServiceProviderImpl implements ServiceProvider {
     }
 
     /** @internal */
-    async _getAspireStoreInternal(): Promise<AspireStore> {
-        const rpcArgs: Record<string, unknown> = { serviceProvider: this._handle };
-        const result = await this._client.invokeCapability<IAspireStoreHandle>(
-            'Aspire.Hosting/getAspireStore',
-            rpcArgs
-        );
-        return new AspireStoreImpl(result, this._client);
-    }
-
-    /**
-     * Gets the Aspire store from the service provider.
-     * @returns The Aspire store.
-     */
-    getAspireStore(): AspireStorePromise {
-        return new AspireStorePromiseImpl(this._getAspireStoreInternal(), this._client);
-    }
-
-    /** @internal */
     async _getUserSecretsManagerInternal(): Promise<UserSecretsManager> {
         const rpcArgs: Record<string, unknown> = { serviceProvider: this._handle };
         const result = await this._client.invokeCapability<IUserSecretsManagerHandle>(
@@ -11429,8 +13919,16 @@ class ServiceProviderPromiseImpl implements ServiceProviderPromise {
         return this._promise.then(onfulfilled, onrejected);
     }
 
+    getAspireStore(): AspireStorePromise {
+        return new AspireStorePromiseImpl(this._promise.then(obj => obj.getAspireStore()), this._client);
+    }
+
     getEventing(): DistributedApplicationEventingPromise {
         return new DistributedApplicationEventingPromiseImpl(this._promise.then(obj => obj.getEventing()), this._client);
+    }
+
+    getInteractionService(): InteractionServicePromise {
+        return new InteractionServicePromiseImpl(this._promise.then(obj => obj.getInteractionService()), this._client);
     }
 
     getLoggerFactory(): LoggerFactoryPromise {
@@ -11451,10 +13949,6 @@ class ServiceProviderPromiseImpl implements ServiceProviderPromise {
 
     getResourceCommandService(): ResourceCommandServicePromise {
         return new ResourceCommandServicePromiseImpl(this._promise.then(obj => obj.getResourceCommandService()), this._client);
-    }
-
-    getAspireStore(): AspireStorePromise {
-        return new AspireStorePromiseImpl(this._promise.then(obj => obj.getAspireStore()), this._client);
     }
 
     getUserSecretsManager(): UserSecretsManagerPromise {
@@ -11732,6 +14226,19 @@ export interface ContainerRegistryResource {
      */
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ContainerRegistryResourcePromise;
     /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ContainerRegistryResourcePromise;
+    /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
      */
@@ -11808,8 +14315,26 @@ export interface ContainerRegistryResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerRegistryResourcePromise;
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ContainerRegistryResourcePromise;
     /**
      * Adds a relationship to another resource using its builder.
      * @param resourceBuilder The resource builder that the relationship is to.
@@ -11859,6 +14384,8 @@ export interface ContainerRegistryResource {
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ContainerRegistryResourcePromise;
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): ContainerRegistryResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -11911,6 +14438,12 @@ export interface ContainerRegistryResource {
      * @returns The execution configuration builder.
      */
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ContainerRegistryResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -12010,6 +14543,19 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      */
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ContainerRegistryResourcePromise;
     /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ContainerRegistryResourcePromise;
+    /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
      */
@@ -12086,8 +14632,26 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerRegistryResourcePromise;
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ContainerRegistryResourcePromise;
     /**
      * Adds a relationship to another resource using its builder.
      * @param resourceBuilder The resource builder that the relationship is to.
@@ -12137,6 +14701,8 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ContainerRegistryResourcePromise;
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): ContainerRegistryResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -12189,6 +14755,12 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * @returns The execution configuration builder.
      */
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ContainerRegistryResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -12339,6 +14911,39 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ContainerRegistryResourcePromise {
         const helpLink = options?.helpLink;
         return new ContainerRegistryResourcePromiseImpl(this._withRequiredCommandInternal(command, helpLink), this._client);
+    }
+
+    /** @internal */
+    private async _withRequiredCommandValidationInternal(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, helpLink?: string): Promise<ContainerRegistryResource> {
+        const validationCallbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as RequiredCommandValidationContextHandle;
+            const arg = new RequiredCommandValidationContextImpl(argHandle, this._client);
+            return await validationCallback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, command, validationCallback: validationCallbackId };
+        if (helpLink !== undefined) rpcArgs.helpLink = helpLink;
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting/withRequiredCommandValidation',
+            rpcArgs
+        );
+        return new ContainerRegistryResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ContainerRegistryResourcePromise {
+        const helpLink = options?.helpLink;
+        return new ContainerRegistryResourcePromiseImpl(this._withRequiredCommandValidationInternal(command, validationCallback, helpLink), this._client);
     }
 
     /** @internal */
@@ -12549,8 +15154,30 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await executeCommand(arg);
         });
+        const __commandOptionsForRpc = commandOptions === undefined || commandOptions === null ? commandOptions : { ...commandOptions };
+        if (__commandOptionsForRpc !== undefined && __commandOptionsForRpc !== null) {
+            const __commandOptionsForRpcData = __commandOptionsForRpc as Record<string, unknown>;
+            const ____commandOptionsForRpcValidateArguments = __commandOptionsForRpc.validateArguments;
+            if (____commandOptionsForRpcValidateArguments !== undefined) {
+                const ____commandOptionsForRpcValidateArgumentsId = ____commandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                    const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                    await ____commandOptionsForRpcValidateArguments(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["validateArguments"] = ____commandOptionsForRpcValidateArgumentsId;
+            }
+            const ____commandOptionsForRpcUpdateState = __commandOptionsForRpc.updateState;
+            if (____commandOptionsForRpcUpdateState !== undefined) {
+                const ____commandOptionsForRpcUpdateStateId = ____commandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                    const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                    return await ____commandOptionsForRpcUpdateState(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["updateState"] = ____commandOptionsForRpcUpdateStateId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, displayName, executeCommand: executeCommandId };
-        if (commandOptions !== undefined) rpcArgs.commandOptions = commandOptions;
+        if (commandOptions !== undefined) rpcArgs.commandOptions = __commandOptionsForRpc;
         const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
             'Aspire.Hosting/withCommand',
             rpcArgs
@@ -12577,7 +15204,44 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
 
     /** @internal */
     private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<ContainerRegistryResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const __optionsForRpc = options === null ? options : { ...options };
+        if (__optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options: __optionsForRpc };
         const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
             'Aspire.Hosting/withProcessCommand',
             rpcArgs
@@ -12597,8 +15261,36 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await createProcessSpec(arg);
         });
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
             'Aspire.Hosting/withProcessCommandFactory',
             rpcArgs
@@ -12609,9 +15301,45 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
+    }
+
+    /** @internal */
+    private async _subscribeHttpsEndpointsUpdateInternal(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): Promise<ContainerRegistryResource> {
+        const callbackId = registerCallback(async (objData: unknown) => {
+            const objHandle = wrapIfHandle(objData) as HttpsEndpointUpdateCallbackContextHandle;
+            const obj = new HttpsEndpointUpdateCallbackContextImpl(objHandle, this._client);
+            await callback(obj);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting/subscribeHttpsEndpointsUpdate',
+            rpcArgs
+        );
+        return new ContainerRegistryResourceImpl(result, this._client);
+    }
+
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._subscribeHttpsEndpointsUpdateInternal(callback), this._client);
     }
 
     /** @internal */
@@ -12761,6 +15489,21 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
         const exitCode = options?.exitCode;
         const exitCodes = options?.exitCodes;
         return new ContainerRegistryResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode, exitCodes), this._client);
+    }
+
+    /** @internal */
+    private async _withTerminalInternal(): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting/withTerminal',
+            rpcArgs
+        );
+        return new ContainerRegistryResourceImpl(result, this._client);
+    }
+
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._withTerminalInternal(), this._client);
     }
 
     /** @internal */
@@ -12947,6 +15690,30 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
             return new ExecutionConfigurationBuilderImpl(handle, this._client);
         })();
         return new ExecutionConfigurationBuilderPromiseImpl(promise, this._client);
+    }
+
+    /** @internal */
+    private async _withContainerBuildOptionsInternal(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): Promise<ContainerRegistryResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ContainerBuildOptionsCallbackContextHandle;
+            const arg = new ContainerBuildOptionsCallbackContextImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting/withContainerBuildOptions',
+            rpcArgs
+        );
+        return new ContainerRegistryResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._withContainerBuildOptionsInternal(callback), this._client);
     }
 
     /** @internal */
@@ -13353,6 +16120,10 @@ class ContainerRegistryResourcePromiseImpl implements ContainerRegistryResourceP
         return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.withRequiredCommand(command, options)), this._client);
     }
 
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.withRequiredCommandValidation(command, validationCallback, options)), this._client);
+    }
+
     withSessionLifetime(): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.withSessionLifetime()), this._client);
     }
@@ -13405,6 +16176,10 @@ class ContainerRegistryResourcePromiseImpl implements ContainerRegistryResourceP
         return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommandFactory(commandName, displayName, createProcessSpec, options)), this._client);
     }
 
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.subscribeHttpsEndpointsUpdate(callback)), this._client);
+    }
+
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)), this._client);
     }
@@ -13431,6 +16206,10 @@ class ContainerRegistryResourcePromiseImpl implements ContainerRegistryResourceP
 
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.withHiddenOnCompletion(options)), this._client);
+    }
+
+    withTerminal(): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
     }
 
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ContainerRegistryResourcePromise {
@@ -13463,6 +16242,10 @@ class ContainerRegistryResourcePromiseImpl implements ContainerRegistryResourceP
 
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
         return new ExecutionConfigurationBuilderPromiseImpl(this._promise.then(obj => obj.createExecutionConfiguration()), this._client);
+    }
+
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): ContainerRegistryResourcePromise {
@@ -13706,6 +16489,29 @@ export interface ContainerResource {
      */
     withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): ContainerResourcePromise;
     /**
+     * Creates or updates files and folders in a container by copying them from a source path on the host.
+     *
+     * In run mode, Aspire copies the files into the container and applies owner, group, and umask options.
+     * In publish mode, Aspire creates a read-only bind mount and ignores those options.
+     * To produce entries dynamically (including inline file contents and OpenSSL certificate files), polyglot app hosts
+     * use the `withContainerFilesCallback` overload and build the entries via the factory methods on
+     * `ContainerFileSystemCallbackContext`. Passing a pre-built `ContainerFileSystemItem` collection
+     * remains .NET-only.
+     * @param destinationPath The destination absolute path in the container.
+     * @param sourcePath The source path on the host to copy files from.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): ContainerResourcePromise;
+    /**
+     * Creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
+     * @param destinationPath The destination absolute path in the container.
+     * @param callback A callback that returns the file system entries to create or update. Use the factory methods on `ContainerFileSystemCallbackContext` (createFile, createDirectory, createCertificateFile) to build the entries.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFilesCallback(destinationPath: string, callback: (arg1: ContainerFileSystemCallbackContext, arg2: CancellationToken) => Promise<ContainerFileSystemItemHandle[]>, options?: ContainerFilesOptions): ContainerResourcePromise;
+    /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
      * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
@@ -13778,7 +16584,10 @@ export interface ContainerResource {
     withOtlpExporter(options?: WithOtlpExporterOptions): ContainerResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): ContainerResourcePromise;
     /**
@@ -13793,6 +16602,19 @@ export interface ContainerResource {
      * @returns The resource builder.
      */
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ContainerResourcePromise;
+    /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ContainerResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
@@ -13990,6 +16812,7 @@ export interface ContainerResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerResourcePromise;
     /**
@@ -14064,6 +16887,40 @@ export interface ContainerResource {
      * @returns The resource builder.
      */
     withoutHttpsCertificate(): ContainerResourcePromise;
+    /**
+     * Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+     *
+     * Pass the path to the PFX certificate file to the container arguments.
+     * ```
+     * builder.AddContainer("my-service", "my-image")
+     * .WithHttpsCertificateConfiguration(ctx =>
+     * {
+     * ctx.Arguments.Add("--https-certificate-path");
+     * ctx.Arguments.Add(ctx.PfxPath);
+     * return Task.CompletedTask;
+     * });
+     * ```
+     * @param callback The callback to configure the resource to use a certificate key pair.
+     * @returns The updated resource builder.
+     */
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): ContainerResourcePromise;
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ContainerResourcePromise;
     /**
      * Adds a relationship to another resource using its builder.
      * @param resourceBuilder The resource builder that the relationship is to.
@@ -14154,6 +17011,8 @@ export interface ContainerResource {
      * @returns The resource builder.
      */
     withRemoteImageTag(remoteImageTag: string): ContainerResourcePromise;
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): ContainerResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -14226,6 +17085,12 @@ export interface ContainerResource {
      * @returns The execution configuration builder.
      */
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ContainerResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -14433,6 +17298,29 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      */
     withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): ContainerResourcePromise;
     /**
+     * Creates or updates files and folders in a container by copying them from a source path on the host.
+     *
+     * In run mode, Aspire copies the files into the container and applies owner, group, and umask options.
+     * In publish mode, Aspire creates a read-only bind mount and ignores those options.
+     * To produce entries dynamically (including inline file contents and OpenSSL certificate files), polyglot app hosts
+     * use the `withContainerFilesCallback` overload and build the entries via the factory methods on
+     * `ContainerFileSystemCallbackContext`. Passing a pre-built `ContainerFileSystemItem` collection
+     * remains .NET-only.
+     * @param destinationPath The destination absolute path in the container.
+     * @param sourcePath The source path on the host to copy files from.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): ContainerResourcePromise;
+    /**
+     * Creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
+     * @param destinationPath The destination absolute path in the container.
+     * @param callback A callback that returns the file system entries to create or update. Use the factory methods on `ContainerFileSystemCallbackContext` (createFile, createDirectory, createCertificateFile) to build the entries.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFilesCallback(destinationPath: string, callback: (arg1: ContainerFileSystemCallbackContext, arg2: CancellationToken) => Promise<ContainerFileSystemItemHandle[]>, options?: ContainerFilesOptions): ContainerResourcePromise;
+    /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
      * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
@@ -14505,7 +17393,10 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
     withOtlpExporter(options?: WithOtlpExporterOptions): ContainerResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): ContainerResourcePromise;
     /**
@@ -14520,6 +17411,19 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @returns The resource builder.
      */
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ContainerResourcePromise;
+    /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ContainerResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
@@ -14717,6 +17621,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerResourcePromise;
     /**
@@ -14791,6 +17696,40 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @returns The resource builder.
      */
     withoutHttpsCertificate(): ContainerResourcePromise;
+    /**
+     * Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+     *
+     * Pass the path to the PFX certificate file to the container arguments.
+     * ```
+     * builder.AddContainer("my-service", "my-image")
+     * .WithHttpsCertificateConfiguration(ctx =>
+     * {
+     * ctx.Arguments.Add("--https-certificate-path");
+     * ctx.Arguments.Add(ctx.PfxPath);
+     * return Task.CompletedTask;
+     * });
+     * ```
+     * @param callback The callback to configure the resource to use a certificate key pair.
+     * @returns The updated resource builder.
+     */
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): ContainerResourcePromise;
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ContainerResourcePromise;
     /**
      * Adds a relationship to another resource using its builder.
      * @param resourceBuilder The resource builder that the relationship is to.
@@ -14881,6 +17820,8 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @returns The resource builder.
      */
     withRemoteImageTag(remoteImageTag: string): ContainerResourcePromise;
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): ContainerResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -14953,6 +17894,12 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @returns The execution configuration builder.
      */
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ContainerResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -15414,6 +18361,63 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
+    private async _withContainerFilesInternal(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, destinationPath, sourcePath };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withContainerFiles',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Creates or updates files and folders in a container by copying them from a source path on the host.
+     *
+     * In run mode, Aspire copies the files into the container and applies owner, group, and umask options.
+     * In publish mode, Aspire creates a read-only bind mount and ignores those options.
+     * To produce entries dynamically (including inline file contents and OpenSSL certificate files), polyglot app hosts
+     * use the `withContainerFilesCallback` overload and build the entries via the factory methods on
+     * `ContainerFileSystemCallbackContext`. Passing a pre-built `ContainerFileSystemItem` collection
+     * remains .NET-only.
+     * @param destinationPath The destination absolute path in the container.
+     * @param sourcePath The source path on the host to copy files from.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withContainerFilesInternal(destinationPath, sourcePath, options), this._client);
+    }
+
+    /** @internal */
+    private async _withContainerFilesCallbackInternal(destinationPath: string, callback: (arg1: ContainerFileSystemCallbackContext, arg2: CancellationToken) => Promise<ContainerFileSystemItemHandle[]>, options?: ContainerFilesOptions): Promise<ContainerResource> {
+        const callbackId = registerCallback(async (arg1Data: unknown, arg2Data: unknown) => {
+            const arg1Handle = wrapIfHandle(arg1Data) as ContainerFileSystemCallbackContextHandle;
+            const arg1 = new ContainerFileSystemCallbackContextImpl(arg1Handle, this._client);
+            const arg2 = CancellationToken.fromValue(arg2Data);
+            return await callback(arg1, arg2);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, destinationPath, callback: callbackId };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withContainerFilesCallback',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
+     * @param destinationPath The destination absolute path in the container.
+     * @param callback A callback that returns the file system entries to create or update. Use the factory methods on `ContainerFileSystemCallbackContext` (createFile, createDirectory, createCertificateFile) to build the entries.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFilesCallback(destinationPath: string, callback: (arg1: ContainerFileSystemCallbackContext, arg2: CancellationToken) => Promise<ContainerFileSystemItemHandle[]>, options?: ContainerFilesOptions): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withContainerFilesCallbackInternal(destinationPath, callback, options), this._client);
+    }
+
+    /** @internal */
     private async _withDockerfileBuilderInternal(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, stage?: string): Promise<ContainerResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as DockerfileBuilderCallbackContextHandle;
@@ -15578,7 +18582,10 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
 
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._publishAsConnectionStringInternal(), this._client);
@@ -15609,6 +18616,39 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ContainerResourcePromise {
         const helpLink = options?.helpLink;
         return new ContainerResourcePromiseImpl(this._withRequiredCommandInternal(command, helpLink), this._client);
+    }
+
+    /** @internal */
+    private async _withRequiredCommandValidationInternal(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, helpLink?: string): Promise<ContainerResource> {
+        const validationCallbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as RequiredCommandValidationContextHandle;
+            const arg = new RequiredCommandValidationContextImpl(argHandle, this._client);
+            return await validationCallback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, command, validationCallback: validationCallbackId };
+        if (helpLink !== undefined) rpcArgs.helpLink = helpLink;
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withRequiredCommandValidation',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ContainerResourcePromise {
+        const helpLink = options?.helpLink;
+        return new ContainerResourcePromiseImpl(this._withRequiredCommandValidationInternal(command, validationCallback, helpLink), this._client);
     }
 
     /** @internal */
@@ -16291,8 +19331,30 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await executeCommand(arg);
         });
+        const __commandOptionsForRpc = commandOptions === undefined || commandOptions === null ? commandOptions : { ...commandOptions };
+        if (__commandOptionsForRpc !== undefined && __commandOptionsForRpc !== null) {
+            const __commandOptionsForRpcData = __commandOptionsForRpc as Record<string, unknown>;
+            const ____commandOptionsForRpcValidateArguments = __commandOptionsForRpc.validateArguments;
+            if (____commandOptionsForRpcValidateArguments !== undefined) {
+                const ____commandOptionsForRpcValidateArgumentsId = ____commandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                    const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                    await ____commandOptionsForRpcValidateArguments(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["validateArguments"] = ____commandOptionsForRpcValidateArgumentsId;
+            }
+            const ____commandOptionsForRpcUpdateState = __commandOptionsForRpc.updateState;
+            if (____commandOptionsForRpcUpdateState !== undefined) {
+                const ____commandOptionsForRpcUpdateStateId = ____commandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                    const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                    return await ____commandOptionsForRpcUpdateState(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["updateState"] = ____commandOptionsForRpcUpdateStateId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, displayName, executeCommand: executeCommandId };
-        if (commandOptions !== undefined) rpcArgs.commandOptions = commandOptions;
+        if (commandOptions !== undefined) rpcArgs.commandOptions = __commandOptionsForRpc;
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
             'Aspire.Hosting/withCommand',
             rpcArgs
@@ -16319,7 +19381,44 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
 
     /** @internal */
     private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<ContainerResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const __optionsForRpc = options === null ? options : { ...options };
+        if (__optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options: __optionsForRpc };
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
             'Aspire.Hosting/withProcessCommand',
             rpcArgs
@@ -16339,8 +19438,36 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await createProcessSpec(arg);
         });
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
             'Aspire.Hosting/withProcessCommandFactory',
             rpcArgs
@@ -16351,6 +19478,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -16358,8 +19486,45 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
 
     /** @internal */
     private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions): Promise<ContainerResource> {
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+            const ____optionsForRpcPrepareRequest = __optionsForRpc.prepareRequest;
+            if (____optionsForRpcPrepareRequest !== undefined) {
+                const ____optionsForRpcPrepareRequestId = ____optionsForRpcPrepareRequest ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as HttpCommandPrepareRequestContextHandle;
+                    const arg = new HttpCommandPrepareRequestContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcPrepareRequest(arg);
+                }) : undefined;
+                __optionsForRpcData["prepareRequest"] = ____optionsForRpcPrepareRequestId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, path, displayName };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
             'Aspire.Hosting/withHttpCommand',
             rpcArgs
@@ -16495,6 +19660,76 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      */
     withoutHttpsCertificate(): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withoutHttpsCertificateInternal(), this._client);
+    }
+
+    /** @internal */
+    private async _withHttpsCertificateConfigurationInternal(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): Promise<ContainerResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as HttpsCertificateConfigurationCallbackAnnotationContextHandle;
+            const arg = new HttpsCertificateConfigurationCallbackAnnotationContextImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withHttpsCertificateConfiguration',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+     *
+     * Pass the path to the PFX certificate file to the container arguments.
+     * ```
+     * builder.AddContainer("my-service", "my-image")
+     * .WithHttpsCertificateConfiguration(ctx =>
+     * {
+     * ctx.Arguments.Add("--https-certificate-path");
+     * ctx.Arguments.Add(ctx.PfxPath);
+     * return Task.CompletedTask;
+     * });
+     * ```
+     * @param callback The callback to configure the resource to use a certificate key pair.
+     * @returns The updated resource builder.
+     */
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withHttpsCertificateConfigurationInternal(callback), this._client);
+    }
+
+    /** @internal */
+    private async _subscribeHttpsEndpointsUpdateInternal(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): Promise<ContainerResource> {
+        const callbackId = registerCallback(async (objData: unknown) => {
+            const objHandle = wrapIfHandle(objData) as HttpsEndpointUpdateCallbackContextHandle;
+            const obj = new HttpsEndpointUpdateCallbackContextImpl(objHandle, this._client);
+            await callback(obj);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/subscribeHttpsEndpointsUpdate',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._subscribeHttpsEndpointsUpdateInternal(callback), this._client);
     }
 
     /** @internal */
@@ -16773,6 +20008,21 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
+    private async _withTerminalInternal(): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withTerminal',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<ContainerResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -17011,6 +20261,30 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
             return new ExecutionConfigurationBuilderImpl(handle, this._client);
         })();
         return new ExecutionConfigurationBuilderPromiseImpl(promise, this._client);
+    }
+
+    /** @internal */
+    private async _withContainerBuildOptionsInternal(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): Promise<ContainerResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ContainerBuildOptionsCallbackContextHandle;
+            const arg = new ContainerBuildOptionsCallbackContextImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withContainerBuildOptions',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withContainerBuildOptionsInternal(callback), this._client);
     }
 
     /** @internal */
@@ -17508,6 +20782,14 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withContainerCertificatePaths(options)), this._client);
     }
 
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withContainerFiles(destinationPath, sourcePath, options)), this._client);
+    }
+
+    withContainerFilesCallback(destinationPath: string, callback: (arg1: ContainerFileSystemCallbackContext, arg2: CancellationToken) => Promise<ContainerFileSystemItemHandle[]>, options?: ContainerFilesOptions): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withContainerFilesCallback(destinationPath, callback, options)), this._client);
+    }
+
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileBuilder(contextPath, callback, options)), this._client);
     }
@@ -17534,6 +20816,10 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
 
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withRequiredCommand(command, options)), this._client);
+    }
+
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withRequiredCommandValidation(command, validationCallback, options)), this._client);
     }
 
     withSessionLifetime(): ContainerResourcePromise {
@@ -17688,6 +20974,14 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withoutHttpsCertificate()), this._client);
     }
 
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withHttpsCertificateConfiguration(callback)), this._client);
+    }
+
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.subscribeHttpsEndpointsUpdate(callback)), this._client);
+    }
+
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)), this._client);
     }
@@ -17736,6 +21030,10 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withRemoteImageTag(remoteImageTag)), this._client);
     }
 
+    withTerminal(): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
+    }
+
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)), this._client);
     }
@@ -17774,6 +21072,10 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
 
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
         return new ExecutionConfigurationBuilderPromiseImpl(this._promise.then(obj => obj.createExecutionConfiguration()), this._client);
+    }
+
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): ContainerResourcePromise {
@@ -17955,6 +21257,19 @@ export interface CSharpAppResource {
      */
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): CSharpAppResourcePromise;
     /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): CSharpAppResourcePromise;
+    /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
      */
@@ -18157,6 +21472,7 @@ export interface CSharpAppResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): CSharpAppResourcePromise;
     /**
@@ -18231,6 +21547,40 @@ export interface CSharpAppResource {
      * @returns The resource builder.
      */
     withoutHttpsCertificate(): CSharpAppResourcePromise;
+    /**
+     * Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+     *
+     * Pass the path to the PFX certificate file to the container arguments.
+     * ```
+     * builder.AddContainer("my-service", "my-image")
+     * .WithHttpsCertificateConfiguration(ctx =>
+     * {
+     * ctx.Arguments.Add("--https-certificate-path");
+     * ctx.Arguments.Add(ctx.PfxPath);
+     * return Task.CompletedTask;
+     * });
+     * ```
+     * @param callback The callback to configure the resource to use a certificate key pair.
+     * @returns The updated resource builder.
+     */
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): CSharpAppResourcePromise;
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): CSharpAppResourcePromise;
     /**
      * Adds a relationship to another resource using its builder.
      * @param resourceBuilder The resource builder that the relationship is to.
@@ -18321,6 +21671,8 @@ export interface CSharpAppResource {
      * @returns The resource builder.
      */
     withRemoteImageTag(remoteImageTag: string): CSharpAppResourcePromise;
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): CSharpAppResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -18344,6 +21696,12 @@ export interface CSharpAppResource {
      * @returns The resource name.
      */
     getResourceName(): Promise<string>;
+    /**
+     * Includes only the specified project endpoint names in environment-variable injection.
+     * @param endpointNames The endpoint names to include in environment variables.
+     * @returns The same project resource builder handle for chaining.
+     */
+    withEndpointsInEnvironment(endpointNames: string[]): CSharpAppResourcePromise;
     /**
      * Subscribes to the BeforeResourceStarted event.
      * @param callback The callback to invoke when the event fires.
@@ -18379,6 +21737,12 @@ export interface CSharpAppResource {
      * @returns The execution configuration builder.
      */
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -18517,6 +21881,19 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      */
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): CSharpAppResourcePromise;
     /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): CSharpAppResourcePromise;
+    /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
      */
@@ -18719,6 +22096,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): CSharpAppResourcePromise;
     /**
@@ -18793,6 +22171,40 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @returns The resource builder.
      */
     withoutHttpsCertificate(): CSharpAppResourcePromise;
+    /**
+     * Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+     *
+     * Pass the path to the PFX certificate file to the container arguments.
+     * ```
+     * builder.AddContainer("my-service", "my-image")
+     * .WithHttpsCertificateConfiguration(ctx =>
+     * {
+     * ctx.Arguments.Add("--https-certificate-path");
+     * ctx.Arguments.Add(ctx.PfxPath);
+     * return Task.CompletedTask;
+     * });
+     * ```
+     * @param callback The callback to configure the resource to use a certificate key pair.
+     * @returns The updated resource builder.
+     */
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): CSharpAppResourcePromise;
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): CSharpAppResourcePromise;
     /**
      * Adds a relationship to another resource using its builder.
      * @param resourceBuilder The resource builder that the relationship is to.
@@ -18883,6 +22295,8 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @returns The resource builder.
      */
     withRemoteImageTag(remoteImageTag: string): CSharpAppResourcePromise;
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): CSharpAppResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -18906,6 +22320,12 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @returns The resource name.
      */
     getResourceName(): Promise<string>;
+    /**
+     * Includes only the specified project endpoint names in environment-variable injection.
+     * @param endpointNames The endpoint names to include in environment variables.
+     * @returns The same project resource builder handle for chaining.
+     */
+    withEndpointsInEnvironment(endpointNames: string[]): CSharpAppResourcePromise;
     /**
      * Subscribes to the BeforeResourceStarted event.
      * @param callback The callback to invoke when the event fires.
@@ -18941,6 +22361,12 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @returns The execution configuration builder.
      */
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -19208,6 +22634,39 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): CSharpAppResourcePromise {
         const helpLink = options?.helpLink;
         return new CSharpAppResourcePromiseImpl(this._withRequiredCommandInternal(command, helpLink), this._client);
+    }
+
+    /** @internal */
+    private async _withRequiredCommandValidationInternal(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, helpLink?: string): Promise<CSharpAppResource> {
+        const validationCallbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as RequiredCommandValidationContextHandle;
+            const arg = new RequiredCommandValidationContextImpl(argHandle, this._client);
+            return await validationCallback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, command, validationCallback: validationCallbackId };
+        if (helpLink !== undefined) rpcArgs.helpLink = helpLink;
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withRequiredCommandValidation',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): CSharpAppResourcePromise {
+        const helpLink = options?.helpLink;
+        return new CSharpAppResourcePromiseImpl(this._withRequiredCommandValidationInternal(command, validationCallback, helpLink), this._client);
     }
 
     /** @internal */
@@ -19910,8 +23369,30 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await executeCommand(arg);
         });
+        const __commandOptionsForRpc = commandOptions === undefined || commandOptions === null ? commandOptions : { ...commandOptions };
+        if (__commandOptionsForRpc !== undefined && __commandOptionsForRpc !== null) {
+            const __commandOptionsForRpcData = __commandOptionsForRpc as Record<string, unknown>;
+            const ____commandOptionsForRpcValidateArguments = __commandOptionsForRpc.validateArguments;
+            if (____commandOptionsForRpcValidateArguments !== undefined) {
+                const ____commandOptionsForRpcValidateArgumentsId = ____commandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                    const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                    await ____commandOptionsForRpcValidateArguments(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["validateArguments"] = ____commandOptionsForRpcValidateArgumentsId;
+            }
+            const ____commandOptionsForRpcUpdateState = __commandOptionsForRpc.updateState;
+            if (____commandOptionsForRpcUpdateState !== undefined) {
+                const ____commandOptionsForRpcUpdateStateId = ____commandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                    const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                    return await ____commandOptionsForRpcUpdateState(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["updateState"] = ____commandOptionsForRpcUpdateStateId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, displayName, executeCommand: executeCommandId };
-        if (commandOptions !== undefined) rpcArgs.commandOptions = commandOptions;
+        if (commandOptions !== undefined) rpcArgs.commandOptions = __commandOptionsForRpc;
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
             'Aspire.Hosting/withCommand',
             rpcArgs
@@ -19938,7 +23419,44 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
 
     /** @internal */
     private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<CSharpAppResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const __optionsForRpc = options === null ? options : { ...options };
+        if (__optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options: __optionsForRpc };
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
             'Aspire.Hosting/withProcessCommand',
             rpcArgs
@@ -19958,8 +23476,36 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await createProcessSpec(arg);
         });
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
             'Aspire.Hosting/withProcessCommandFactory',
             rpcArgs
@@ -19970,6 +23516,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -19977,8 +23524,45 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
 
     /** @internal */
     private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions): Promise<CSharpAppResource> {
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+            const ____optionsForRpcPrepareRequest = __optionsForRpc.prepareRequest;
+            if (____optionsForRpcPrepareRequest !== undefined) {
+                const ____optionsForRpcPrepareRequestId = ____optionsForRpcPrepareRequest ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as HttpCommandPrepareRequestContextHandle;
+                    const arg = new HttpCommandPrepareRequestContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcPrepareRequest(arg);
+                }) : undefined;
+                __optionsForRpcData["prepareRequest"] = ____optionsForRpcPrepareRequestId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, path, displayName };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
             'Aspire.Hosting/withHttpCommand',
             rpcArgs
@@ -20114,6 +23698,76 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      */
     withoutHttpsCertificate(): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withoutHttpsCertificateInternal(), this._client);
+    }
+
+    /** @internal */
+    private async _withHttpsCertificateConfigurationInternal(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): Promise<CSharpAppResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as HttpsCertificateConfigurationCallbackAnnotationContextHandle;
+            const arg = new HttpsCertificateConfigurationCallbackAnnotationContextImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withHttpsCertificateConfiguration',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+     *
+     * Pass the path to the PFX certificate file to the container arguments.
+     * ```
+     * builder.AddContainer("my-service", "my-image")
+     * .WithHttpsCertificateConfiguration(ctx =>
+     * {
+     * ctx.Arguments.Add("--https-certificate-path");
+     * ctx.Arguments.Add(ctx.PfxPath);
+     * return Task.CompletedTask;
+     * });
+     * ```
+     * @param callback The callback to configure the resource to use a certificate key pair.
+     * @returns The updated resource builder.
+     */
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withHttpsCertificateConfigurationInternal(callback), this._client);
+    }
+
+    /** @internal */
+    private async _subscribeHttpsEndpointsUpdateInternal(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): Promise<CSharpAppResource> {
+        const callbackId = registerCallback(async (objData: unknown) => {
+            const objHandle = wrapIfHandle(objData) as HttpsEndpointUpdateCallbackContextHandle;
+            const obj = new HttpsEndpointUpdateCallbackContextImpl(objHandle, this._client);
+            await callback(obj);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/subscribeHttpsEndpointsUpdate',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._subscribeHttpsEndpointsUpdateInternal(callback), this._client);
     }
 
     /** @internal */
@@ -20392,6 +24046,21 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
+    private async _withTerminalInternal(): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withTerminal',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<CSharpAppResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -20463,6 +24132,25 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
             'Aspire.Hosting/getResourceName',
             rpcArgs
         );
+    }
+
+    /** @internal */
+    private async _withEndpointsInEnvironmentInternal(endpointNames: string[]): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, endpointNames };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withEndpointsInEnvironment',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Includes only the specified project endpoint names in environment-variable injection.
+     * @param endpointNames The endpoint names to include in environment variables.
+     * @returns The same project resource builder handle for chaining.
+     */
+    withEndpointsInEnvironment(endpointNames: string[]): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withEndpointsInEnvironmentInternal(endpointNames), this._client);
     }
 
     /** @internal */
@@ -20599,6 +24287,30 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
             return new ExecutionConfigurationBuilderImpl(handle, this._client);
         })();
         return new ExecutionConfigurationBuilderPromiseImpl(promise, this._client);
+    }
+
+    /** @internal */
+    private async _withContainerBuildOptionsInternal(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): Promise<CSharpAppResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ContainerBuildOptionsCallbackContextHandle;
+            const arg = new ContainerBuildOptionsCallbackContextImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withContainerBuildOptions',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withContainerBuildOptionsInternal(callback), this._client);
     }
 
     /** @internal */
@@ -21060,6 +24772,10 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withRequiredCommand(command, options)), this._client);
     }
 
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withRequiredCommandValidation(command, validationCallback, options)), this._client);
+    }
+
     withSessionLifetime(): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withSessionLifetime()), this._client);
     }
@@ -21216,6 +24932,14 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withoutHttpsCertificate()), this._client);
     }
 
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withHttpsCertificateConfiguration(callback)), this._client);
+    }
+
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.subscribeHttpsEndpointsUpdate(callback)), this._client);
+    }
+
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)), this._client);
     }
@@ -21264,6 +24988,10 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withRemoteImageTag(remoteImageTag)), this._client);
     }
 
+    withTerminal(): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
+    }
+
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)), this._client);
     }
@@ -21274,6 +25002,10 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
 
     getResourceName(): Promise<string> {
         return this._promise.then(obj => obj.getResourceName());
+    }
+
+    withEndpointsInEnvironment(endpointNames: string[]): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withEndpointsInEnvironment(endpointNames)), this._client);
     }
 
     onBeforeResourceStarted(callback: (arg: BeforeResourceStartedEvent) => Promise<void>): CSharpAppResourcePromise {
@@ -21298,6 +25030,10 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
 
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
         return new ExecutionConfigurationBuilderPromiseImpl(this._promise.then(obj => obj.createExecutionConfiguration()), this._client);
+    }
+
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): CSharpAppResourcePromise {
@@ -21513,6 +25249,19 @@ export interface DotnetToolResource {
      */
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): DotnetToolResourcePromise;
     /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): DotnetToolResourcePromise;
+    /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
      */
@@ -21709,6 +25458,7 @@ export interface DotnetToolResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): DotnetToolResourcePromise;
     /**
@@ -21783,6 +25533,40 @@ export interface DotnetToolResource {
      * @returns The resource builder.
      */
     withoutHttpsCertificate(): DotnetToolResourcePromise;
+    /**
+     * Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+     *
+     * Pass the path to the PFX certificate file to the container arguments.
+     * ```
+     * builder.AddContainer("my-service", "my-image")
+     * .WithHttpsCertificateConfiguration(ctx =>
+     * {
+     * ctx.Arguments.Add("--https-certificate-path");
+     * ctx.Arguments.Add(ctx.PfxPath);
+     * return Task.CompletedTask;
+     * });
+     * ```
+     * @param callback The callback to configure the resource to use a certificate key pair.
+     * @returns The updated resource builder.
+     */
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): DotnetToolResourcePromise;
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): DotnetToolResourcePromise;
     /**
      * Adds a relationship to another resource using its builder.
      * @param resourceBuilder The resource builder that the relationship is to.
@@ -21873,6 +25657,8 @@ export interface DotnetToolResource {
      * @returns The resource builder.
      */
     withRemoteImageTag(remoteImageTag: string): DotnetToolResourcePromise;
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): DotnetToolResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -21931,6 +25717,12 @@ export interface DotnetToolResource {
      * @returns The execution configuration builder.
      */
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -22103,6 +25895,19 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      */
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): DotnetToolResourcePromise;
     /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): DotnetToolResourcePromise;
+    /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
      */
@@ -22299,6 +26104,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): DotnetToolResourcePromise;
     /**
@@ -22373,6 +26179,40 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @returns The resource builder.
      */
     withoutHttpsCertificate(): DotnetToolResourcePromise;
+    /**
+     * Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+     *
+     * Pass the path to the PFX certificate file to the container arguments.
+     * ```
+     * builder.AddContainer("my-service", "my-image")
+     * .WithHttpsCertificateConfiguration(ctx =>
+     * {
+     * ctx.Arguments.Add("--https-certificate-path");
+     * ctx.Arguments.Add(ctx.PfxPath);
+     * return Task.CompletedTask;
+     * });
+     * ```
+     * @param callback The callback to configure the resource to use a certificate key pair.
+     * @returns The updated resource builder.
+     */
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): DotnetToolResourcePromise;
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): DotnetToolResourcePromise;
     /**
      * Adds a relationship to another resource using its builder.
      * @param resourceBuilder The resource builder that the relationship is to.
@@ -22463,6 +26303,8 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @returns The resource builder.
      */
     withRemoteImageTag(remoteImageTag: string): DotnetToolResourcePromise;
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): DotnetToolResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -22521,6 +26363,12 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @returns The execution configuration builder.
      */
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -22898,6 +26746,39 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): DotnetToolResourcePromise {
         const helpLink = options?.helpLink;
         return new DotnetToolResourcePromiseImpl(this._withRequiredCommandInternal(command, helpLink), this._client);
+    }
+
+    /** @internal */
+    private async _withRequiredCommandValidationInternal(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, helpLink?: string): Promise<DotnetToolResource> {
+        const validationCallbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as RequiredCommandValidationContextHandle;
+            const arg = new RequiredCommandValidationContextImpl(argHandle, this._client);
+            return await validationCallback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, command, validationCallback: validationCallbackId };
+        if (helpLink !== undefined) rpcArgs.helpLink = helpLink;
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withRequiredCommandValidation',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): DotnetToolResourcePromise {
+        const helpLink = options?.helpLink;
+        return new DotnetToolResourcePromiseImpl(this._withRequiredCommandValidationInternal(command, validationCallback, helpLink), this._client);
     }
 
     /** @internal */
@@ -23580,8 +27461,30 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await executeCommand(arg);
         });
+        const __commandOptionsForRpc = commandOptions === undefined || commandOptions === null ? commandOptions : { ...commandOptions };
+        if (__commandOptionsForRpc !== undefined && __commandOptionsForRpc !== null) {
+            const __commandOptionsForRpcData = __commandOptionsForRpc as Record<string, unknown>;
+            const ____commandOptionsForRpcValidateArguments = __commandOptionsForRpc.validateArguments;
+            if (____commandOptionsForRpcValidateArguments !== undefined) {
+                const ____commandOptionsForRpcValidateArgumentsId = ____commandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                    const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                    await ____commandOptionsForRpcValidateArguments(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["validateArguments"] = ____commandOptionsForRpcValidateArgumentsId;
+            }
+            const ____commandOptionsForRpcUpdateState = __commandOptionsForRpc.updateState;
+            if (____commandOptionsForRpcUpdateState !== undefined) {
+                const ____commandOptionsForRpcUpdateStateId = ____commandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                    const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                    return await ____commandOptionsForRpcUpdateState(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["updateState"] = ____commandOptionsForRpcUpdateStateId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, displayName, executeCommand: executeCommandId };
-        if (commandOptions !== undefined) rpcArgs.commandOptions = commandOptions;
+        if (commandOptions !== undefined) rpcArgs.commandOptions = __commandOptionsForRpc;
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
             'Aspire.Hosting/withCommand',
             rpcArgs
@@ -23608,7 +27511,44 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
 
     /** @internal */
     private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<DotnetToolResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const __optionsForRpc = options === null ? options : { ...options };
+        if (__optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options: __optionsForRpc };
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
             'Aspire.Hosting/withProcessCommand',
             rpcArgs
@@ -23628,8 +27568,36 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await createProcessSpec(arg);
         });
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
             'Aspire.Hosting/withProcessCommandFactory',
             rpcArgs
@@ -23640,6 +27608,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -23647,8 +27616,45 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
 
     /** @internal */
     private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions): Promise<DotnetToolResource> {
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+            const ____optionsForRpcPrepareRequest = __optionsForRpc.prepareRequest;
+            if (____optionsForRpcPrepareRequest !== undefined) {
+                const ____optionsForRpcPrepareRequestId = ____optionsForRpcPrepareRequest ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as HttpCommandPrepareRequestContextHandle;
+                    const arg = new HttpCommandPrepareRequestContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcPrepareRequest(arg);
+                }) : undefined;
+                __optionsForRpcData["prepareRequest"] = ____optionsForRpcPrepareRequestId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, path, displayName };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
             'Aspire.Hosting/withHttpCommand',
             rpcArgs
@@ -23784,6 +27790,76 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      */
     withoutHttpsCertificate(): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withoutHttpsCertificateInternal(), this._client);
+    }
+
+    /** @internal */
+    private async _withHttpsCertificateConfigurationInternal(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): Promise<DotnetToolResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as HttpsCertificateConfigurationCallbackAnnotationContextHandle;
+            const arg = new HttpsCertificateConfigurationCallbackAnnotationContextImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withHttpsCertificateConfiguration',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+     *
+     * Pass the path to the PFX certificate file to the container arguments.
+     * ```
+     * builder.AddContainer("my-service", "my-image")
+     * .WithHttpsCertificateConfiguration(ctx =>
+     * {
+     * ctx.Arguments.Add("--https-certificate-path");
+     * ctx.Arguments.Add(ctx.PfxPath);
+     * return Task.CompletedTask;
+     * });
+     * ```
+     * @param callback The callback to configure the resource to use a certificate key pair.
+     * @returns The updated resource builder.
+     */
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withHttpsCertificateConfigurationInternal(callback), this._client);
+    }
+
+    /** @internal */
+    private async _subscribeHttpsEndpointsUpdateInternal(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): Promise<DotnetToolResource> {
+        const callbackId = registerCallback(async (objData: unknown) => {
+            const objHandle = wrapIfHandle(objData) as HttpsEndpointUpdateCallbackContextHandle;
+            const obj = new HttpsEndpointUpdateCallbackContextImpl(objHandle, this._client);
+            await callback(obj);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/subscribeHttpsEndpointsUpdate',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._subscribeHttpsEndpointsUpdateInternal(callback), this._client);
     }
 
     /** @internal */
@@ -24062,6 +28138,21 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
+    private async _withTerminalInternal(): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withTerminal',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<DotnetToolResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -24269,6 +28360,30 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
             return new ExecutionConfigurationBuilderImpl(handle, this._client);
         })();
         return new ExecutionConfigurationBuilderPromiseImpl(promise, this._client);
+    }
+
+    /** @internal */
+    private async _withContainerBuildOptionsInternal(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): Promise<DotnetToolResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ContainerBuildOptionsCallbackContextHandle;
+            const arg = new ContainerBuildOptionsCallbackContextImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withContainerBuildOptions',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withContainerBuildOptionsInternal(callback), this._client);
     }
 
     /** @internal */
@@ -24754,6 +28869,10 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withRequiredCommand(command, options)), this._client);
     }
 
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withRequiredCommandValidation(command, validationCallback, options)), this._client);
+    }
+
     withSessionLifetime(): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withSessionLifetime()), this._client);
     }
@@ -24906,6 +29025,14 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withoutHttpsCertificate()), this._client);
     }
 
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withHttpsCertificateConfiguration(callback)), this._client);
+    }
+
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.subscribeHttpsEndpointsUpdate(callback)), this._client);
+    }
+
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)), this._client);
     }
@@ -24954,6 +29081,10 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withRemoteImageTag(remoteImageTag)), this._client);
     }
 
+    withTerminal(): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
+    }
+
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)), this._client);
     }
@@ -24988,6 +29119,10 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
 
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
         return new ExecutionConfigurationBuilderPromiseImpl(this._promise.then(obj => obj.createExecutionConfiguration()), this._client);
+    }
+
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): DotnetToolResourcePromise {
@@ -25177,6 +29312,19 @@ export interface ExecutableResource {
      */
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ExecutableResourcePromise;
     /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ExecutableResourcePromise;
+    /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
      */
@@ -25373,6 +29521,7 @@ export interface ExecutableResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExecutableResourcePromise;
     /**
@@ -25447,6 +29596,40 @@ export interface ExecutableResource {
      * @returns The resource builder.
      */
     withoutHttpsCertificate(): ExecutableResourcePromise;
+    /**
+     * Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+     *
+     * Pass the path to the PFX certificate file to the container arguments.
+     * ```
+     * builder.AddContainer("my-service", "my-image")
+     * .WithHttpsCertificateConfiguration(ctx =>
+     * {
+     * ctx.Arguments.Add("--https-certificate-path");
+     * ctx.Arguments.Add(ctx.PfxPath);
+     * return Task.CompletedTask;
+     * });
+     * ```
+     * @param callback The callback to configure the resource to use a certificate key pair.
+     * @returns The updated resource builder.
+     */
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): ExecutableResourcePromise;
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ExecutableResourcePromise;
     /**
      * Adds a relationship to another resource using its builder.
      * @param resourceBuilder The resource builder that the relationship is to.
@@ -25537,6 +29720,8 @@ export interface ExecutableResource {
      * @returns The resource builder.
      */
     withRemoteImageTag(remoteImageTag: string): ExecutableResourcePromise;
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): ExecutableResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -25595,6 +29780,12 @@ export interface ExecutableResource {
      * @returns The execution configuration builder.
      */
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -25734,6 +29925,19 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      */
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ExecutableResourcePromise;
     /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ExecutableResourcePromise;
+    /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
      */
@@ -25930,6 +30134,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExecutableResourcePromise;
     /**
@@ -26004,6 +30209,40 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @returns The resource builder.
      */
     withoutHttpsCertificate(): ExecutableResourcePromise;
+    /**
+     * Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+     *
+     * Pass the path to the PFX certificate file to the container arguments.
+     * ```
+     * builder.AddContainer("my-service", "my-image")
+     * .WithHttpsCertificateConfiguration(ctx =>
+     * {
+     * ctx.Arguments.Add("--https-certificate-path");
+     * ctx.Arguments.Add(ctx.PfxPath);
+     * return Task.CompletedTask;
+     * });
+     * ```
+     * @param callback The callback to configure the resource to use a certificate key pair.
+     * @returns The updated resource builder.
+     */
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): ExecutableResourcePromise;
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ExecutableResourcePromise;
     /**
      * Adds a relationship to another resource using its builder.
      * @param resourceBuilder The resource builder that the relationship is to.
@@ -26094,6 +30333,8 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @returns The resource builder.
      */
     withRemoteImageTag(remoteImageTag: string): ExecutableResourcePromise;
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): ExecutableResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -26152,6 +30393,12 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @returns The execution configuration builder.
      */
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -26425,6 +30672,39 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ExecutableResourcePromise {
         const helpLink = options?.helpLink;
         return new ExecutableResourcePromiseImpl(this._withRequiredCommandInternal(command, helpLink), this._client);
+    }
+
+    /** @internal */
+    private async _withRequiredCommandValidationInternal(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, helpLink?: string): Promise<ExecutableResource> {
+        const validationCallbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as RequiredCommandValidationContextHandle;
+            const arg = new RequiredCommandValidationContextImpl(argHandle, this._client);
+            return await validationCallback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, command, validationCallback: validationCallbackId };
+        if (helpLink !== undefined) rpcArgs.helpLink = helpLink;
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withRequiredCommandValidation',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ExecutableResourcePromise {
+        const helpLink = options?.helpLink;
+        return new ExecutableResourcePromiseImpl(this._withRequiredCommandValidationInternal(command, validationCallback, helpLink), this._client);
     }
 
     /** @internal */
@@ -27107,8 +31387,30 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await executeCommand(arg);
         });
+        const __commandOptionsForRpc = commandOptions === undefined || commandOptions === null ? commandOptions : { ...commandOptions };
+        if (__commandOptionsForRpc !== undefined && __commandOptionsForRpc !== null) {
+            const __commandOptionsForRpcData = __commandOptionsForRpc as Record<string, unknown>;
+            const ____commandOptionsForRpcValidateArguments = __commandOptionsForRpc.validateArguments;
+            if (____commandOptionsForRpcValidateArguments !== undefined) {
+                const ____commandOptionsForRpcValidateArgumentsId = ____commandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                    const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                    await ____commandOptionsForRpcValidateArguments(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["validateArguments"] = ____commandOptionsForRpcValidateArgumentsId;
+            }
+            const ____commandOptionsForRpcUpdateState = __commandOptionsForRpc.updateState;
+            if (____commandOptionsForRpcUpdateState !== undefined) {
+                const ____commandOptionsForRpcUpdateStateId = ____commandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                    const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                    return await ____commandOptionsForRpcUpdateState(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["updateState"] = ____commandOptionsForRpcUpdateStateId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, displayName, executeCommand: executeCommandId };
-        if (commandOptions !== undefined) rpcArgs.commandOptions = commandOptions;
+        if (commandOptions !== undefined) rpcArgs.commandOptions = __commandOptionsForRpc;
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
             'Aspire.Hosting/withCommand',
             rpcArgs
@@ -27135,7 +31437,44 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
 
     /** @internal */
     private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<ExecutableResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const __optionsForRpc = options === null ? options : { ...options };
+        if (__optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options: __optionsForRpc };
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
             'Aspire.Hosting/withProcessCommand',
             rpcArgs
@@ -27155,8 +31494,36 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await createProcessSpec(arg);
         });
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
             'Aspire.Hosting/withProcessCommandFactory',
             rpcArgs
@@ -27167,6 +31534,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -27174,8 +31542,45 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
 
     /** @internal */
     private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions): Promise<ExecutableResource> {
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+            const ____optionsForRpcPrepareRequest = __optionsForRpc.prepareRequest;
+            if (____optionsForRpcPrepareRequest !== undefined) {
+                const ____optionsForRpcPrepareRequestId = ____optionsForRpcPrepareRequest ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as HttpCommandPrepareRequestContextHandle;
+                    const arg = new HttpCommandPrepareRequestContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcPrepareRequest(arg);
+                }) : undefined;
+                __optionsForRpcData["prepareRequest"] = ____optionsForRpcPrepareRequestId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, path, displayName };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
             'Aspire.Hosting/withHttpCommand',
             rpcArgs
@@ -27311,6 +31716,76 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      */
     withoutHttpsCertificate(): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withoutHttpsCertificateInternal(), this._client);
+    }
+
+    /** @internal */
+    private async _withHttpsCertificateConfigurationInternal(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): Promise<ExecutableResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as HttpsCertificateConfigurationCallbackAnnotationContextHandle;
+            const arg = new HttpsCertificateConfigurationCallbackAnnotationContextImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withHttpsCertificateConfiguration',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+     *
+     * Pass the path to the PFX certificate file to the container arguments.
+     * ```
+     * builder.AddContainer("my-service", "my-image")
+     * .WithHttpsCertificateConfiguration(ctx =>
+     * {
+     * ctx.Arguments.Add("--https-certificate-path");
+     * ctx.Arguments.Add(ctx.PfxPath);
+     * return Task.CompletedTask;
+     * });
+     * ```
+     * @param callback The callback to configure the resource to use a certificate key pair.
+     * @returns The updated resource builder.
+     */
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withHttpsCertificateConfigurationInternal(callback), this._client);
+    }
+
+    /** @internal */
+    private async _subscribeHttpsEndpointsUpdateInternal(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): Promise<ExecutableResource> {
+        const callbackId = registerCallback(async (objData: unknown) => {
+            const objHandle = wrapIfHandle(objData) as HttpsEndpointUpdateCallbackContextHandle;
+            const obj = new HttpsEndpointUpdateCallbackContextImpl(objHandle, this._client);
+            await callback(obj);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/subscribeHttpsEndpointsUpdate',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._subscribeHttpsEndpointsUpdateInternal(callback), this._client);
     }
 
     /** @internal */
@@ -27589,6 +32064,21 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
+    private async _withTerminalInternal(): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withTerminal',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<ExecutableResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -27796,6 +32286,30 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
             return new ExecutionConfigurationBuilderImpl(handle, this._client);
         })();
         return new ExecutionConfigurationBuilderPromiseImpl(promise, this._client);
+    }
+
+    /** @internal */
+    private async _withContainerBuildOptionsInternal(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): Promise<ExecutableResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ContainerBuildOptionsCallbackContextHandle;
+            const arg = new ContainerBuildOptionsCallbackContextImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withContainerBuildOptions',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withContainerBuildOptionsInternal(callback), this._client);
     }
 
     /** @internal */
@@ -28257,6 +32771,10 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withRequiredCommand(command, options)), this._client);
     }
 
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withRequiredCommandValidation(command, validationCallback, options)), this._client);
+    }
+
     withSessionLifetime(): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withSessionLifetime()), this._client);
     }
@@ -28409,6 +32927,14 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withoutHttpsCertificate()), this._client);
     }
 
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withHttpsCertificateConfiguration(callback)), this._client);
+    }
+
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.subscribeHttpsEndpointsUpdate(callback)), this._client);
+    }
+
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)), this._client);
     }
@@ -28457,6 +32983,10 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withRemoteImageTag(remoteImageTag)), this._client);
     }
 
+    withTerminal(): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
+    }
+
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)), this._client);
     }
@@ -28491,6 +33021,10 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
 
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
         return new ExecutionConfigurationBuilderPromiseImpl(this._promise.then(obj => obj.createExecutionConfiguration()), this._client);
+    }
+
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): ExecutableResourcePromise {
@@ -28642,6 +33176,19 @@ export interface ExternalServiceResource {
      */
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ExternalServiceResourcePromise;
     /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ExternalServiceResourcePromise;
+    /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
      */
@@ -28718,8 +33265,26 @@ export interface ExternalServiceResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExternalServiceResourcePromise;
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ExternalServiceResourcePromise;
     /**
      * Adds a relationship to another resource using its builder.
      * @param resourceBuilder The resource builder that the relationship is to.
@@ -28769,6 +33334,8 @@ export interface ExternalServiceResource {
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ExternalServiceResourcePromise;
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): ExternalServiceResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -28821,6 +33388,12 @@ export interface ExternalServiceResource {
      * @returns The execution configuration builder.
      */
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ExternalServiceResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -28925,6 +33498,19 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      */
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ExternalServiceResourcePromise;
     /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ExternalServiceResourcePromise;
+    /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
      */
@@ -29001,8 +33587,26 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExternalServiceResourcePromise;
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ExternalServiceResourcePromise;
     /**
      * Adds a relationship to another resource using its builder.
      * @param resourceBuilder The resource builder that the relationship is to.
@@ -29052,6 +33656,8 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ExternalServiceResourcePromise;
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): ExternalServiceResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -29104,6 +33710,12 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * @returns The execution configuration builder.
      */
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ExternalServiceResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -29278,6 +33890,39 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ExternalServiceResourcePromise {
         const helpLink = options?.helpLink;
         return new ExternalServiceResourcePromiseImpl(this._withRequiredCommandInternal(command, helpLink), this._client);
+    }
+
+    /** @internal */
+    private async _withRequiredCommandValidationInternal(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, helpLink?: string): Promise<ExternalServiceResource> {
+        const validationCallbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as RequiredCommandValidationContextHandle;
+            const arg = new RequiredCommandValidationContextImpl(argHandle, this._client);
+            return await validationCallback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, command, validationCallback: validationCallbackId };
+        if (helpLink !== undefined) rpcArgs.helpLink = helpLink;
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting/withRequiredCommandValidation',
+            rpcArgs
+        );
+        return new ExternalServiceResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ExternalServiceResourcePromise {
+        const helpLink = options?.helpLink;
+        return new ExternalServiceResourcePromiseImpl(this._withRequiredCommandValidationInternal(command, validationCallback, helpLink), this._client);
     }
 
     /** @internal */
@@ -29488,8 +34133,30 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await executeCommand(arg);
         });
+        const __commandOptionsForRpc = commandOptions === undefined || commandOptions === null ? commandOptions : { ...commandOptions };
+        if (__commandOptionsForRpc !== undefined && __commandOptionsForRpc !== null) {
+            const __commandOptionsForRpcData = __commandOptionsForRpc as Record<string, unknown>;
+            const ____commandOptionsForRpcValidateArguments = __commandOptionsForRpc.validateArguments;
+            if (____commandOptionsForRpcValidateArguments !== undefined) {
+                const ____commandOptionsForRpcValidateArgumentsId = ____commandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                    const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                    await ____commandOptionsForRpcValidateArguments(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["validateArguments"] = ____commandOptionsForRpcValidateArgumentsId;
+            }
+            const ____commandOptionsForRpcUpdateState = __commandOptionsForRpc.updateState;
+            if (____commandOptionsForRpcUpdateState !== undefined) {
+                const ____commandOptionsForRpcUpdateStateId = ____commandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                    const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                    return await ____commandOptionsForRpcUpdateState(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["updateState"] = ____commandOptionsForRpcUpdateStateId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, displayName, executeCommand: executeCommandId };
-        if (commandOptions !== undefined) rpcArgs.commandOptions = commandOptions;
+        if (commandOptions !== undefined) rpcArgs.commandOptions = __commandOptionsForRpc;
         const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
             'Aspire.Hosting/withCommand',
             rpcArgs
@@ -29516,7 +34183,44 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
 
     /** @internal */
     private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<ExternalServiceResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const __optionsForRpc = options === null ? options : { ...options };
+        if (__optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options: __optionsForRpc };
         const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
             'Aspire.Hosting/withProcessCommand',
             rpcArgs
@@ -29536,8 +34240,36 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await createProcessSpec(arg);
         });
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
             'Aspire.Hosting/withProcessCommandFactory',
             rpcArgs
@@ -29548,9 +34280,45 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
+    }
+
+    /** @internal */
+    private async _subscribeHttpsEndpointsUpdateInternal(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): Promise<ExternalServiceResource> {
+        const callbackId = registerCallback(async (objData: unknown) => {
+            const objHandle = wrapIfHandle(objData) as HttpsEndpointUpdateCallbackContextHandle;
+            const obj = new HttpsEndpointUpdateCallbackContextImpl(objHandle, this._client);
+            await callback(obj);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting/subscribeHttpsEndpointsUpdate',
+            rpcArgs
+        );
+        return new ExternalServiceResourceImpl(result, this._client);
+    }
+
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._subscribeHttpsEndpointsUpdateInternal(callback), this._client);
     }
 
     /** @internal */
@@ -29700,6 +34468,21 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
         const exitCode = options?.exitCode;
         const exitCodes = options?.exitCodes;
         return new ExternalServiceResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode, exitCodes), this._client);
+    }
+
+    /** @internal */
+    private async _withTerminalInternal(): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting/withTerminal',
+            rpcArgs
+        );
+        return new ExternalServiceResourceImpl(result, this._client);
+    }
+
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._withTerminalInternal(), this._client);
     }
 
     /** @internal */
@@ -29886,6 +34669,30 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
             return new ExecutionConfigurationBuilderImpl(handle, this._client);
         })();
         return new ExecutionConfigurationBuilderPromiseImpl(promise, this._client);
+    }
+
+    /** @internal */
+    private async _withContainerBuildOptionsInternal(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): Promise<ExternalServiceResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ContainerBuildOptionsCallbackContextHandle;
+            const arg = new ContainerBuildOptionsCallbackContextImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting/withContainerBuildOptions',
+            rpcArgs
+        );
+        return new ExternalServiceResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._withContainerBuildOptionsInternal(callback), this._client);
     }
 
     /** @internal */
@@ -30296,6 +35103,10 @@ class ExternalServiceResourcePromiseImpl implements ExternalServiceResourcePromi
         return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.withRequiredCommand(command, options)), this._client);
     }
 
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.withRequiredCommandValidation(command, validationCallback, options)), this._client);
+    }
+
     withSessionLifetime(): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.withSessionLifetime()), this._client);
     }
@@ -30348,6 +35159,10 @@ class ExternalServiceResourcePromiseImpl implements ExternalServiceResourcePromi
         return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommandFactory(commandName, displayName, createProcessSpec, options)), this._client);
     }
 
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.subscribeHttpsEndpointsUpdate(callback)), this._client);
+    }
+
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)), this._client);
     }
@@ -30374,6 +35189,10 @@ class ExternalServiceResourcePromiseImpl implements ExternalServiceResourcePromi
 
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.withHiddenOnCompletion(options)), this._client);
+    }
+
+    withTerminal(): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
     }
 
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ExternalServiceResourcePromise {
@@ -30406,6 +35225,10 @@ class ExternalServiceResourcePromiseImpl implements ExternalServiceResourcePromi
 
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
         return new ExecutionConfigurationBuilderPromiseImpl(this._promise.then(obj => obj.createExecutionConfiguration()), this._client);
+    }
+
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): ExternalServiceResourcePromise {
@@ -30558,6 +35381,19 @@ export interface ParameterResource {
      */
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ParameterResourcePromise;
     /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ParameterResourcePromise;
+    /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
      */
@@ -30634,8 +35470,26 @@ export interface ParameterResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ParameterResourcePromise;
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ParameterResourcePromise;
     /**
      * Adds a relationship to another resource using its builder.
      * @param resourceBuilder The resource builder that the relationship is to.
@@ -30685,6 +35539,8 @@ export interface ParameterResource {
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ParameterResourcePromise;
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): ParameterResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -30737,6 +35593,12 @@ export interface ParameterResource {
      * @returns The execution configuration builder.
      */
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ParameterResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -30849,6 +35711,19 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      */
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ParameterResourcePromise;
     /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ParameterResourcePromise;
+    /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
      */
@@ -30925,8 +35800,26 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ParameterResourcePromise;
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ParameterResourcePromise;
     /**
      * Adds a relationship to another resource using its builder.
      * @param resourceBuilder The resource builder that the relationship is to.
@@ -30976,6 +35869,8 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ParameterResourcePromise;
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): ParameterResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -31028,6 +35923,12 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * @returns The execution configuration builder.
      */
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ParameterResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -31220,6 +36121,39 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ParameterResourcePromise {
         const helpLink = options?.helpLink;
         return new ParameterResourcePromiseImpl(this._withRequiredCommandInternal(command, helpLink), this._client);
+    }
+
+    /** @internal */
+    private async _withRequiredCommandValidationInternal(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, helpLink?: string): Promise<ParameterResource> {
+        const validationCallbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as RequiredCommandValidationContextHandle;
+            const arg = new RequiredCommandValidationContextImpl(argHandle, this._client);
+            return await validationCallback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, command, validationCallback: validationCallbackId };
+        if (helpLink !== undefined) rpcArgs.helpLink = helpLink;
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withRequiredCommandValidation',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ParameterResourcePromise {
+        const helpLink = options?.helpLink;
+        return new ParameterResourcePromiseImpl(this._withRequiredCommandValidationInternal(command, validationCallback, helpLink), this._client);
     }
 
     /** @internal */
@@ -31430,8 +36364,30 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await executeCommand(arg);
         });
+        const __commandOptionsForRpc = commandOptions === undefined || commandOptions === null ? commandOptions : { ...commandOptions };
+        if (__commandOptionsForRpc !== undefined && __commandOptionsForRpc !== null) {
+            const __commandOptionsForRpcData = __commandOptionsForRpc as Record<string, unknown>;
+            const ____commandOptionsForRpcValidateArguments = __commandOptionsForRpc.validateArguments;
+            if (____commandOptionsForRpcValidateArguments !== undefined) {
+                const ____commandOptionsForRpcValidateArgumentsId = ____commandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                    const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                    await ____commandOptionsForRpcValidateArguments(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["validateArguments"] = ____commandOptionsForRpcValidateArgumentsId;
+            }
+            const ____commandOptionsForRpcUpdateState = __commandOptionsForRpc.updateState;
+            if (____commandOptionsForRpcUpdateState !== undefined) {
+                const ____commandOptionsForRpcUpdateStateId = ____commandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                    const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                    return await ____commandOptionsForRpcUpdateState(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["updateState"] = ____commandOptionsForRpcUpdateStateId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, displayName, executeCommand: executeCommandId };
-        if (commandOptions !== undefined) rpcArgs.commandOptions = commandOptions;
+        if (commandOptions !== undefined) rpcArgs.commandOptions = __commandOptionsForRpc;
         const result = await this._client.invokeCapability<ParameterResourceHandle>(
             'Aspire.Hosting/withCommand',
             rpcArgs
@@ -31458,7 +36414,44 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
 
     /** @internal */
     private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<ParameterResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const __optionsForRpc = options === null ? options : { ...options };
+        if (__optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options: __optionsForRpc };
         const result = await this._client.invokeCapability<ParameterResourceHandle>(
             'Aspire.Hosting/withProcessCommand',
             rpcArgs
@@ -31478,8 +36471,36 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await createProcessSpec(arg);
         });
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<ParameterResourceHandle>(
             'Aspire.Hosting/withProcessCommandFactory',
             rpcArgs
@@ -31490,9 +36511,45 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
+    }
+
+    /** @internal */
+    private async _subscribeHttpsEndpointsUpdateInternal(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): Promise<ParameterResource> {
+        const callbackId = registerCallback(async (objData: unknown) => {
+            const objHandle = wrapIfHandle(objData) as HttpsEndpointUpdateCallbackContextHandle;
+            const obj = new HttpsEndpointUpdateCallbackContextImpl(objHandle, this._client);
+            await callback(obj);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/subscribeHttpsEndpointsUpdate',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._subscribeHttpsEndpointsUpdateInternal(callback), this._client);
     }
 
     /** @internal */
@@ -31642,6 +36699,21 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
         const exitCode = options?.exitCode;
         const exitCodes = options?.exitCodes;
         return new ParameterResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode, exitCodes), this._client);
+    }
+
+    /** @internal */
+    private async _withTerminalInternal(): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withTerminal',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withTerminalInternal(), this._client);
     }
 
     /** @internal */
@@ -31828,6 +36900,30 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
             return new ExecutionConfigurationBuilderImpl(handle, this._client);
         })();
         return new ExecutionConfigurationBuilderPromiseImpl(promise, this._client);
+    }
+
+    /** @internal */
+    private async _withContainerBuildOptionsInternal(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): Promise<ParameterResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ContainerBuildOptionsCallbackContextHandle;
+            const arg = new ContainerBuildOptionsCallbackContextImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withContainerBuildOptions',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withContainerBuildOptionsInternal(callback), this._client);
     }
 
     /** @internal */
@@ -32242,6 +37338,10 @@ class ParameterResourcePromiseImpl implements ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withRequiredCommand(command, options)), this._client);
     }
 
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withRequiredCommandValidation(command, validationCallback, options)), this._client);
+    }
+
     withSessionLifetime(): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withSessionLifetime()), this._client);
     }
@@ -32294,6 +37394,10 @@ class ParameterResourcePromiseImpl implements ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommandFactory(commandName, displayName, createProcessSpec, options)), this._client);
     }
 
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.subscribeHttpsEndpointsUpdate(callback)), this._client);
+    }
+
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)), this._client);
     }
@@ -32320,6 +37424,10 @@ class ParameterResourcePromiseImpl implements ParameterResourcePromise {
 
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withHiddenOnCompletion(options)), this._client);
+    }
+
+    withTerminal(): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
     }
 
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ParameterResourcePromise {
@@ -32352,6 +37460,10 @@ class ParameterResourcePromiseImpl implements ParameterResourcePromise {
 
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
         return new ExecutionConfigurationBuilderPromiseImpl(this._promise.then(obj => obj.createExecutionConfiguration()), this._client);
+    }
+
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): ParameterResourcePromise {
@@ -32526,6 +37638,19 @@ export interface ProjectResource {
      */
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ProjectResourcePromise;
     /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ProjectResourcePromise;
+    /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
      */
@@ -32728,6 +37853,7 @@ export interface ProjectResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ProjectResourcePromise;
     /**
@@ -32802,6 +37928,40 @@ export interface ProjectResource {
      * @returns The resource builder.
      */
     withoutHttpsCertificate(): ProjectResourcePromise;
+    /**
+     * Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+     *
+     * Pass the path to the PFX certificate file to the container arguments.
+     * ```
+     * builder.AddContainer("my-service", "my-image")
+     * .WithHttpsCertificateConfiguration(ctx =>
+     * {
+     * ctx.Arguments.Add("--https-certificate-path");
+     * ctx.Arguments.Add(ctx.PfxPath);
+     * return Task.CompletedTask;
+     * });
+     * ```
+     * @param callback The callback to configure the resource to use a certificate key pair.
+     * @returns The updated resource builder.
+     */
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): ProjectResourcePromise;
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ProjectResourcePromise;
     /**
      * Adds a relationship to another resource using its builder.
      * @param resourceBuilder The resource builder that the relationship is to.
@@ -32892,6 +38052,8 @@ export interface ProjectResource {
      * @returns The resource builder.
      */
     withRemoteImageTag(remoteImageTag: string): ProjectResourcePromise;
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): ProjectResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -32915,6 +38077,12 @@ export interface ProjectResource {
      * @returns The resource name.
      */
     getResourceName(): Promise<string>;
+    /**
+     * Includes only the specified project endpoint names in environment-variable injection.
+     * @param endpointNames The endpoint names to include in environment variables.
+     * @returns The same project resource builder handle for chaining.
+     */
+    withEndpointsInEnvironment(endpointNames: string[]): ProjectResourcePromise;
     /**
      * Subscribes to the BeforeResourceStarted event.
      * @param callback The callback to invoke when the event fires.
@@ -32950,6 +38118,12 @@ export interface ProjectResource {
      * @returns The execution configuration builder.
      */
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ProjectResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -33088,6 +38262,19 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      */
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ProjectResourcePromise;
     /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ProjectResourcePromise;
+    /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
      */
@@ -33290,6 +38477,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ProjectResourcePromise;
     /**
@@ -33364,6 +38552,40 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @returns The resource builder.
      */
     withoutHttpsCertificate(): ProjectResourcePromise;
+    /**
+     * Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+     *
+     * Pass the path to the PFX certificate file to the container arguments.
+     * ```
+     * builder.AddContainer("my-service", "my-image")
+     * .WithHttpsCertificateConfiguration(ctx =>
+     * {
+     * ctx.Arguments.Add("--https-certificate-path");
+     * ctx.Arguments.Add(ctx.PfxPath);
+     * return Task.CompletedTask;
+     * });
+     * ```
+     * @param callback The callback to configure the resource to use a certificate key pair.
+     * @returns The updated resource builder.
+     */
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): ProjectResourcePromise;
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ProjectResourcePromise;
     /**
      * Adds a relationship to another resource using its builder.
      * @param resourceBuilder The resource builder that the relationship is to.
@@ -33454,6 +38676,8 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @returns The resource builder.
      */
     withRemoteImageTag(remoteImageTag: string): ProjectResourcePromise;
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): ProjectResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -33477,6 +38701,12 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @returns The resource name.
      */
     getResourceName(): Promise<string>;
+    /**
+     * Includes only the specified project endpoint names in environment-variable injection.
+     * @param endpointNames The endpoint names to include in environment variables.
+     * @returns The same project resource builder handle for chaining.
+     */
+    withEndpointsInEnvironment(endpointNames: string[]): ProjectResourcePromise;
     /**
      * Subscribes to the BeforeResourceStarted event.
      * @param callback The callback to invoke when the event fires.
@@ -33512,6 +38742,12 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @returns The execution configuration builder.
      */
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ProjectResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -33780,6 +39016,39 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ProjectResourcePromise {
         const helpLink = options?.helpLink;
         return new ProjectResourcePromiseImpl(this._withRequiredCommandInternal(command, helpLink), this._client);
+    }
+
+    /** @internal */
+    private async _withRequiredCommandValidationInternal(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, helpLink?: string): Promise<ProjectResource> {
+        const validationCallbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as RequiredCommandValidationContextHandle;
+            const arg = new RequiredCommandValidationContextImpl(argHandle, this._client);
+            return await validationCallback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, command, validationCallback: validationCallbackId };
+        if (helpLink !== undefined) rpcArgs.helpLink = helpLink;
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withRequiredCommandValidation',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ProjectResourcePromise {
+        const helpLink = options?.helpLink;
+        return new ProjectResourcePromiseImpl(this._withRequiredCommandValidationInternal(command, validationCallback, helpLink), this._client);
     }
 
     /** @internal */
@@ -34482,8 +39751,30 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await executeCommand(arg);
         });
+        const __commandOptionsForRpc = commandOptions === undefined || commandOptions === null ? commandOptions : { ...commandOptions };
+        if (__commandOptionsForRpc !== undefined && __commandOptionsForRpc !== null) {
+            const __commandOptionsForRpcData = __commandOptionsForRpc as Record<string, unknown>;
+            const ____commandOptionsForRpcValidateArguments = __commandOptionsForRpc.validateArguments;
+            if (____commandOptionsForRpcValidateArguments !== undefined) {
+                const ____commandOptionsForRpcValidateArgumentsId = ____commandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                    const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                    await ____commandOptionsForRpcValidateArguments(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["validateArguments"] = ____commandOptionsForRpcValidateArgumentsId;
+            }
+            const ____commandOptionsForRpcUpdateState = __commandOptionsForRpc.updateState;
+            if (____commandOptionsForRpcUpdateState !== undefined) {
+                const ____commandOptionsForRpcUpdateStateId = ____commandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                    const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                    return await ____commandOptionsForRpcUpdateState(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["updateState"] = ____commandOptionsForRpcUpdateStateId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, displayName, executeCommand: executeCommandId };
-        if (commandOptions !== undefined) rpcArgs.commandOptions = commandOptions;
+        if (commandOptions !== undefined) rpcArgs.commandOptions = __commandOptionsForRpc;
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
             'Aspire.Hosting/withCommand',
             rpcArgs
@@ -34510,7 +39801,44 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
 
     /** @internal */
     private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<ProjectResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const __optionsForRpc = options === null ? options : { ...options };
+        if (__optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options: __optionsForRpc };
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
             'Aspire.Hosting/withProcessCommand',
             rpcArgs
@@ -34530,8 +39858,36 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await createProcessSpec(arg);
         });
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
             'Aspire.Hosting/withProcessCommandFactory',
             rpcArgs
@@ -34542,6 +39898,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -34549,8 +39906,45 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
 
     /** @internal */
     private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions): Promise<ProjectResource> {
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+            const ____optionsForRpcPrepareRequest = __optionsForRpc.prepareRequest;
+            if (____optionsForRpcPrepareRequest !== undefined) {
+                const ____optionsForRpcPrepareRequestId = ____optionsForRpcPrepareRequest ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as HttpCommandPrepareRequestContextHandle;
+                    const arg = new HttpCommandPrepareRequestContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcPrepareRequest(arg);
+                }) : undefined;
+                __optionsForRpcData["prepareRequest"] = ____optionsForRpcPrepareRequestId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, path, displayName };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
             'Aspire.Hosting/withHttpCommand',
             rpcArgs
@@ -34686,6 +40080,76 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      */
     withoutHttpsCertificate(): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withoutHttpsCertificateInternal(), this._client);
+    }
+
+    /** @internal */
+    private async _withHttpsCertificateConfigurationInternal(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): Promise<ProjectResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as HttpsCertificateConfigurationCallbackAnnotationContextHandle;
+            const arg = new HttpsCertificateConfigurationCallbackAnnotationContextImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withHttpsCertificateConfiguration',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+     *
+     * Pass the path to the PFX certificate file to the container arguments.
+     * ```
+     * builder.AddContainer("my-service", "my-image")
+     * .WithHttpsCertificateConfiguration(ctx =>
+     * {
+     * ctx.Arguments.Add("--https-certificate-path");
+     * ctx.Arguments.Add(ctx.PfxPath);
+     * return Task.CompletedTask;
+     * });
+     * ```
+     * @param callback The callback to configure the resource to use a certificate key pair.
+     * @returns The updated resource builder.
+     */
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withHttpsCertificateConfigurationInternal(callback), this._client);
+    }
+
+    /** @internal */
+    private async _subscribeHttpsEndpointsUpdateInternal(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): Promise<ProjectResource> {
+        const callbackId = registerCallback(async (objData: unknown) => {
+            const objHandle = wrapIfHandle(objData) as HttpsEndpointUpdateCallbackContextHandle;
+            const obj = new HttpsEndpointUpdateCallbackContextImpl(objHandle, this._client);
+            await callback(obj);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/subscribeHttpsEndpointsUpdate',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._subscribeHttpsEndpointsUpdateInternal(callback), this._client);
     }
 
     /** @internal */
@@ -34964,6 +40428,21 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
+    private async _withTerminalInternal(): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withTerminal',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<ProjectResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -35035,6 +40514,25 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
             'Aspire.Hosting/getResourceName',
             rpcArgs
         );
+    }
+
+    /** @internal */
+    private async _withEndpointsInEnvironmentInternal(endpointNames: string[]): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle, endpointNames };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withEndpointsInEnvironment',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Includes only the specified project endpoint names in environment-variable injection.
+     * @param endpointNames The endpoint names to include in environment variables.
+     * @returns The same project resource builder handle for chaining.
+     */
+    withEndpointsInEnvironment(endpointNames: string[]): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withEndpointsInEnvironmentInternal(endpointNames), this._client);
     }
 
     /** @internal */
@@ -35171,6 +40669,30 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
             return new ExecutionConfigurationBuilderImpl(handle, this._client);
         })();
         return new ExecutionConfigurationBuilderPromiseImpl(promise, this._client);
+    }
+
+    /** @internal */
+    private async _withContainerBuildOptionsInternal(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): Promise<ProjectResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ContainerBuildOptionsCallbackContextHandle;
+            const arg = new ContainerBuildOptionsCallbackContextImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withContainerBuildOptions',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withContainerBuildOptionsInternal(callback), this._client);
     }
 
     /** @internal */
@@ -35632,6 +41154,10 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withRequiredCommand(command, options)), this._client);
     }
 
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withRequiredCommandValidation(command, validationCallback, options)), this._client);
+    }
+
     withSessionLifetime(): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withSessionLifetime()), this._client);
     }
@@ -35788,6 +41314,14 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withoutHttpsCertificate()), this._client);
     }
 
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withHttpsCertificateConfiguration(callback)), this._client);
+    }
+
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.subscribeHttpsEndpointsUpdate(callback)), this._client);
+    }
+
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)), this._client);
     }
@@ -35836,6 +41370,10 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withRemoteImageTag(remoteImageTag)), this._client);
     }
 
+    withTerminal(): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
+    }
+
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)), this._client);
     }
@@ -35846,6 +41384,10 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
 
     getResourceName(): Promise<string> {
         return this._promise.then(obj => obj.getResourceName());
+    }
+
+    withEndpointsInEnvironment(endpointNames: string[]): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withEndpointsInEnvironment(endpointNames)), this._client);
     }
 
     onBeforeResourceStarted(callback: (arg: BeforeResourceStartedEvent) => Promise<void>): ProjectResourcePromise {
@@ -35870,6 +41412,10 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
 
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
         return new ExecutionConfigurationBuilderPromiseImpl(this._promise.then(obj => obj.createExecutionConfiguration()), this._client);
+    }
+
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): ProjectResourcePromise {
@@ -36120,6 +41666,29 @@ export interface TestDatabaseResource {
      */
     withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): TestDatabaseResourcePromise;
     /**
+     * Creates or updates files and folders in a container by copying them from a source path on the host.
+     *
+     * In run mode, Aspire copies the files into the container and applies owner, group, and umask options.
+     * In publish mode, Aspire creates a read-only bind mount and ignores those options.
+     * To produce entries dynamically (including inline file contents and OpenSSL certificate files), polyglot app hosts
+     * use the `withContainerFilesCallback` overload and build the entries via the factory methods on
+     * `ContainerFileSystemCallbackContext`. Passing a pre-built `ContainerFileSystemItem` collection
+     * remains .NET-only.
+     * @param destinationPath The destination absolute path in the container.
+     * @param sourcePath The source path on the host to copy files from.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): TestDatabaseResourcePromise;
+    /**
+     * Creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
+     * @param destinationPath The destination absolute path in the container.
+     * @param callback A callback that returns the file system entries to create or update. Use the factory methods on `ContainerFileSystemCallbackContext` (createFile, createDirectory, createCertificateFile) to build the entries.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFilesCallback(destinationPath: string, callback: (arg1: ContainerFileSystemCallbackContext, arg2: CancellationToken) => Promise<ContainerFileSystemItemHandle[]>, options?: ContainerFilesOptions): TestDatabaseResourcePromise;
+    /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
      * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
@@ -36192,7 +41761,10 @@ export interface TestDatabaseResource {
     withOtlpExporter(options?: WithOtlpExporterOptions): TestDatabaseResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestDatabaseResourcePromise;
     /**
@@ -36207,6 +41779,19 @@ export interface TestDatabaseResource {
      * @returns The resource builder.
      */
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): TestDatabaseResourcePromise;
+    /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestDatabaseResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
@@ -36404,6 +41989,7 @@ export interface TestDatabaseResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestDatabaseResourcePromise;
     /**
@@ -36478,6 +42064,40 @@ export interface TestDatabaseResource {
      * @returns The resource builder.
      */
     withoutHttpsCertificate(): TestDatabaseResourcePromise;
+    /**
+     * Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+     *
+     * Pass the path to the PFX certificate file to the container arguments.
+     * ```
+     * builder.AddContainer("my-service", "my-image")
+     * .WithHttpsCertificateConfiguration(ctx =>
+     * {
+     * ctx.Arguments.Add("--https-certificate-path");
+     * ctx.Arguments.Add(ctx.PfxPath);
+     * return Task.CompletedTask;
+     * });
+     * ```
+     * @param callback The callback to configure the resource to use a certificate key pair.
+     * @returns The updated resource builder.
+     */
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): TestDatabaseResourcePromise;
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): TestDatabaseResourcePromise;
     /**
      * Adds a relationship to another resource using its builder.
      * @param resourceBuilder The resource builder that the relationship is to.
@@ -36568,6 +42188,8 @@ export interface TestDatabaseResource {
      * @returns The resource builder.
      */
     withRemoteImageTag(remoteImageTag: string): TestDatabaseResourcePromise;
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): TestDatabaseResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -36640,6 +42262,12 @@ export interface TestDatabaseResource {
      * @returns The execution configuration builder.
      */
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -36847,6 +42475,29 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      */
     withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): TestDatabaseResourcePromise;
     /**
+     * Creates or updates files and folders in a container by copying them from a source path on the host.
+     *
+     * In run mode, Aspire copies the files into the container and applies owner, group, and umask options.
+     * In publish mode, Aspire creates a read-only bind mount and ignores those options.
+     * To produce entries dynamically (including inline file contents and OpenSSL certificate files), polyglot app hosts
+     * use the `withContainerFilesCallback` overload and build the entries via the factory methods on
+     * `ContainerFileSystemCallbackContext`. Passing a pre-built `ContainerFileSystemItem` collection
+     * remains .NET-only.
+     * @param destinationPath The destination absolute path in the container.
+     * @param sourcePath The source path on the host to copy files from.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): TestDatabaseResourcePromise;
+    /**
+     * Creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
+     * @param destinationPath The destination absolute path in the container.
+     * @param callback A callback that returns the file system entries to create or update. Use the factory methods on `ContainerFileSystemCallbackContext` (createFile, createDirectory, createCertificateFile) to build the entries.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFilesCallback(destinationPath: string, callback: (arg1: ContainerFileSystemCallbackContext, arg2: CancellationToken) => Promise<ContainerFileSystemItemHandle[]>, options?: ContainerFilesOptions): TestDatabaseResourcePromise;
+    /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
      * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
@@ -36919,7 +42570,10 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
     withOtlpExporter(options?: WithOtlpExporterOptions): TestDatabaseResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestDatabaseResourcePromise;
     /**
@@ -36934,6 +42588,19 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @returns The resource builder.
      */
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): TestDatabaseResourcePromise;
+    /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestDatabaseResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
@@ -37131,6 +42798,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestDatabaseResourcePromise;
     /**
@@ -37205,6 +42873,40 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @returns The resource builder.
      */
     withoutHttpsCertificate(): TestDatabaseResourcePromise;
+    /**
+     * Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+     *
+     * Pass the path to the PFX certificate file to the container arguments.
+     * ```
+     * builder.AddContainer("my-service", "my-image")
+     * .WithHttpsCertificateConfiguration(ctx =>
+     * {
+     * ctx.Arguments.Add("--https-certificate-path");
+     * ctx.Arguments.Add(ctx.PfxPath);
+     * return Task.CompletedTask;
+     * });
+     * ```
+     * @param callback The callback to configure the resource to use a certificate key pair.
+     * @returns The updated resource builder.
+     */
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): TestDatabaseResourcePromise;
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): TestDatabaseResourcePromise;
     /**
      * Adds a relationship to another resource using its builder.
      * @param resourceBuilder The resource builder that the relationship is to.
@@ -37295,6 +42997,8 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @returns The resource builder.
      */
     withRemoteImageTag(remoteImageTag: string): TestDatabaseResourcePromise;
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): TestDatabaseResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -37367,6 +43071,12 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @returns The execution configuration builder.
      */
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -37827,6 +43537,63 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
+    private async _withContainerFilesInternal(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, destinationPath, sourcePath };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withContainerFiles',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Creates or updates files and folders in a container by copying them from a source path on the host.
+     *
+     * In run mode, Aspire copies the files into the container and applies owner, group, and umask options.
+     * In publish mode, Aspire creates a read-only bind mount and ignores those options.
+     * To produce entries dynamically (including inline file contents and OpenSSL certificate files), polyglot app hosts
+     * use the `withContainerFilesCallback` overload and build the entries via the factory methods on
+     * `ContainerFileSystemCallbackContext`. Passing a pre-built `ContainerFileSystemItem` collection
+     * remains .NET-only.
+     * @param destinationPath The destination absolute path in the container.
+     * @param sourcePath The source path on the host to copy files from.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withContainerFilesInternal(destinationPath, sourcePath, options), this._client);
+    }
+
+    /** @internal */
+    private async _withContainerFilesCallbackInternal(destinationPath: string, callback: (arg1: ContainerFileSystemCallbackContext, arg2: CancellationToken) => Promise<ContainerFileSystemItemHandle[]>, options?: ContainerFilesOptions): Promise<TestDatabaseResource> {
+        const callbackId = registerCallback(async (arg1Data: unknown, arg2Data: unknown) => {
+            const arg1Handle = wrapIfHandle(arg1Data) as ContainerFileSystemCallbackContextHandle;
+            const arg1 = new ContainerFileSystemCallbackContextImpl(arg1Handle, this._client);
+            const arg2 = CancellationToken.fromValue(arg2Data);
+            return await callback(arg1, arg2);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, destinationPath, callback: callbackId };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withContainerFilesCallback',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
+     * @param destinationPath The destination absolute path in the container.
+     * @param callback A callback that returns the file system entries to create or update. Use the factory methods on `ContainerFileSystemCallbackContext` (createFile, createDirectory, createCertificateFile) to build the entries.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFilesCallback(destinationPath: string, callback: (arg1: ContainerFileSystemCallbackContext, arg2: CancellationToken) => Promise<ContainerFileSystemItemHandle[]>, options?: ContainerFilesOptions): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withContainerFilesCallbackInternal(destinationPath, callback, options), this._client);
+    }
+
+    /** @internal */
     private async _withDockerfileBuilderInternal(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, stage?: string): Promise<TestDatabaseResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as DockerfileBuilderCallbackContextHandle;
@@ -37991,7 +43758,10 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
 
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._publishAsConnectionStringInternal(), this._client);
@@ -38022,6 +43792,39 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): TestDatabaseResourcePromise {
         const helpLink = options?.helpLink;
         return new TestDatabaseResourcePromiseImpl(this._withRequiredCommandInternal(command, helpLink), this._client);
+    }
+
+    /** @internal */
+    private async _withRequiredCommandValidationInternal(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, helpLink?: string): Promise<TestDatabaseResource> {
+        const validationCallbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as RequiredCommandValidationContextHandle;
+            const arg = new RequiredCommandValidationContextImpl(argHandle, this._client);
+            return await validationCallback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, command, validationCallback: validationCallbackId };
+        if (helpLink !== undefined) rpcArgs.helpLink = helpLink;
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withRequiredCommandValidation',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestDatabaseResourcePromise {
+        const helpLink = options?.helpLink;
+        return new TestDatabaseResourcePromiseImpl(this._withRequiredCommandValidationInternal(command, validationCallback, helpLink), this._client);
     }
 
     /** @internal */
@@ -38704,8 +44507,30 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await executeCommand(arg);
         });
+        const __commandOptionsForRpc = commandOptions === undefined || commandOptions === null ? commandOptions : { ...commandOptions };
+        if (__commandOptionsForRpc !== undefined && __commandOptionsForRpc !== null) {
+            const __commandOptionsForRpcData = __commandOptionsForRpc as Record<string, unknown>;
+            const ____commandOptionsForRpcValidateArguments = __commandOptionsForRpc.validateArguments;
+            if (____commandOptionsForRpcValidateArguments !== undefined) {
+                const ____commandOptionsForRpcValidateArgumentsId = ____commandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                    const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                    await ____commandOptionsForRpcValidateArguments(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["validateArguments"] = ____commandOptionsForRpcValidateArgumentsId;
+            }
+            const ____commandOptionsForRpcUpdateState = __commandOptionsForRpc.updateState;
+            if (____commandOptionsForRpcUpdateState !== undefined) {
+                const ____commandOptionsForRpcUpdateStateId = ____commandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                    const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                    return await ____commandOptionsForRpcUpdateState(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["updateState"] = ____commandOptionsForRpcUpdateStateId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, displayName, executeCommand: executeCommandId };
-        if (commandOptions !== undefined) rpcArgs.commandOptions = commandOptions;
+        if (commandOptions !== undefined) rpcArgs.commandOptions = __commandOptionsForRpc;
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
             'Aspire.Hosting/withCommand',
             rpcArgs
@@ -38732,7 +44557,44 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
 
     /** @internal */
     private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<TestDatabaseResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const __optionsForRpc = options === null ? options : { ...options };
+        if (__optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options: __optionsForRpc };
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
             'Aspire.Hosting/withProcessCommand',
             rpcArgs
@@ -38752,8 +44614,36 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await createProcessSpec(arg);
         });
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
             'Aspire.Hosting/withProcessCommandFactory',
             rpcArgs
@@ -38764,6 +44654,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -38771,8 +44662,45 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
 
     /** @internal */
     private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions): Promise<TestDatabaseResource> {
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+            const ____optionsForRpcPrepareRequest = __optionsForRpc.prepareRequest;
+            if (____optionsForRpcPrepareRequest !== undefined) {
+                const ____optionsForRpcPrepareRequestId = ____optionsForRpcPrepareRequest ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as HttpCommandPrepareRequestContextHandle;
+                    const arg = new HttpCommandPrepareRequestContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcPrepareRequest(arg);
+                }) : undefined;
+                __optionsForRpcData["prepareRequest"] = ____optionsForRpcPrepareRequestId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, path, displayName };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
             'Aspire.Hosting/withHttpCommand',
             rpcArgs
@@ -38908,6 +44836,76 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      */
     withoutHttpsCertificate(): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withoutHttpsCertificateInternal(), this._client);
+    }
+
+    /** @internal */
+    private async _withHttpsCertificateConfigurationInternal(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): Promise<TestDatabaseResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as HttpsCertificateConfigurationCallbackAnnotationContextHandle;
+            const arg = new HttpsCertificateConfigurationCallbackAnnotationContextImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withHttpsCertificateConfiguration',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+     *
+     * Pass the path to the PFX certificate file to the container arguments.
+     * ```
+     * builder.AddContainer("my-service", "my-image")
+     * .WithHttpsCertificateConfiguration(ctx =>
+     * {
+     * ctx.Arguments.Add("--https-certificate-path");
+     * ctx.Arguments.Add(ctx.PfxPath);
+     * return Task.CompletedTask;
+     * });
+     * ```
+     * @param callback The callback to configure the resource to use a certificate key pair.
+     * @returns The updated resource builder.
+     */
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withHttpsCertificateConfigurationInternal(callback), this._client);
+    }
+
+    /** @internal */
+    private async _subscribeHttpsEndpointsUpdateInternal(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): Promise<TestDatabaseResource> {
+        const callbackId = registerCallback(async (objData: unknown) => {
+            const objHandle = wrapIfHandle(objData) as HttpsEndpointUpdateCallbackContextHandle;
+            const obj = new HttpsEndpointUpdateCallbackContextImpl(objHandle, this._client);
+            await callback(obj);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/subscribeHttpsEndpointsUpdate',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._subscribeHttpsEndpointsUpdateInternal(callback), this._client);
     }
 
     /** @internal */
@@ -39186,6 +45184,21 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
+    private async _withTerminalInternal(): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withTerminal',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<TestDatabaseResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -39424,6 +45437,30 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
             return new ExecutionConfigurationBuilderImpl(handle, this._client);
         })();
         return new ExecutionConfigurationBuilderPromiseImpl(promise, this._client);
+    }
+
+    /** @internal */
+    private async _withContainerBuildOptionsInternal(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): Promise<TestDatabaseResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ContainerBuildOptionsCallbackContextHandle;
+            const arg = new ContainerBuildOptionsCallbackContextImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withContainerBuildOptions',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withContainerBuildOptionsInternal(callback), this._client);
     }
 
     /** @internal */
@@ -39921,6 +45958,14 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withContainerCertificatePaths(options)), this._client);
     }
 
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withContainerFiles(destinationPath, sourcePath, options)), this._client);
+    }
+
+    withContainerFilesCallback(destinationPath: string, callback: (arg1: ContainerFileSystemCallbackContext, arg2: CancellationToken) => Promise<ContainerFileSystemItemHandle[]>, options?: ContainerFilesOptions): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withContainerFilesCallback(destinationPath, callback, options)), this._client);
+    }
+
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileBuilder(contextPath, callback, options)), this._client);
     }
@@ -39947,6 +45992,10 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
 
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withRequiredCommand(command, options)), this._client);
+    }
+
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withRequiredCommandValidation(command, validationCallback, options)), this._client);
     }
 
     withSessionLifetime(): TestDatabaseResourcePromise {
@@ -40101,6 +46150,14 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withoutHttpsCertificate()), this._client);
     }
 
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withHttpsCertificateConfiguration(callback)), this._client);
+    }
+
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.subscribeHttpsEndpointsUpdate(callback)), this._client);
+    }
+
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)), this._client);
     }
@@ -40149,6 +46206,10 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withRemoteImageTag(remoteImageTag)), this._client);
     }
 
+    withTerminal(): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
+    }
+
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)), this._client);
     }
@@ -40187,6 +46248,10 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
 
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
         return new ExecutionConfigurationBuilderPromiseImpl(this._promise.then(obj => obj.createExecutionConfiguration()), this._client);
+    }
+
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): TestDatabaseResourcePromise {
@@ -40437,6 +46502,29 @@ export interface TestRedisResource {
      */
     withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): TestRedisResourcePromise;
     /**
+     * Creates or updates files and folders in a container by copying them from a source path on the host.
+     *
+     * In run mode, Aspire copies the files into the container and applies owner, group, and umask options.
+     * In publish mode, Aspire creates a read-only bind mount and ignores those options.
+     * To produce entries dynamically (including inline file contents and OpenSSL certificate files), polyglot app hosts
+     * use the `withContainerFilesCallback` overload and build the entries via the factory methods on
+     * `ContainerFileSystemCallbackContext`. Passing a pre-built `ContainerFileSystemItem` collection
+     * remains .NET-only.
+     * @param destinationPath The destination absolute path in the container.
+     * @param sourcePath The source path on the host to copy files from.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): TestRedisResourcePromise;
+    /**
+     * Creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
+     * @param destinationPath The destination absolute path in the container.
+     * @param callback A callback that returns the file system entries to create or update. Use the factory methods on `ContainerFileSystemCallbackContext` (createFile, createDirectory, createCertificateFile) to build the entries.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFilesCallback(destinationPath: string, callback: (arg1: ContainerFileSystemCallbackContext, arg2: CancellationToken) => Promise<ContainerFileSystemItemHandle[]>, options?: ContainerFilesOptions): TestRedisResourcePromise;
+    /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
      * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
@@ -40509,7 +46597,10 @@ export interface TestRedisResource {
     withOtlpExporter(options?: WithOtlpExporterOptions): TestRedisResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestRedisResourcePromise;
     /**
@@ -40524,6 +46615,19 @@ export interface TestRedisResource {
      * @returns The resource builder.
      */
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): TestRedisResourcePromise;
+    /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestRedisResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
@@ -40737,6 +46841,7 @@ export interface TestRedisResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestRedisResourcePromise;
     /**
@@ -40811,6 +46916,40 @@ export interface TestRedisResource {
      * @returns The resource builder.
      */
     withoutHttpsCertificate(): TestRedisResourcePromise;
+    /**
+     * Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+     *
+     * Pass the path to the PFX certificate file to the container arguments.
+     * ```
+     * builder.AddContainer("my-service", "my-image")
+     * .WithHttpsCertificateConfiguration(ctx =>
+     * {
+     * ctx.Arguments.Add("--https-certificate-path");
+     * ctx.Arguments.Add(ctx.PfxPath);
+     * return Task.CompletedTask;
+     * });
+     * ```
+     * @param callback The callback to configure the resource to use a certificate key pair.
+     * @returns The updated resource builder.
+     */
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): TestRedisResourcePromise;
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): TestRedisResourcePromise;
     /**
      * Adds a relationship to another resource using its builder.
      * @param resourceBuilder The resource builder that the relationship is to.
@@ -40901,6 +47040,8 @@ export interface TestRedisResource {
      * @returns The resource builder.
      */
     withRemoteImageTag(remoteImageTag: string): TestRedisResourcePromise;
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): TestRedisResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -40979,6 +47120,12 @@ export interface TestRedisResource {
      * @returns The execution configuration builder.
      */
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise;
     /**
      * Adds a child database to a test Redis resource
      *
@@ -41228,6 +47375,29 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      */
     withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): TestRedisResourcePromise;
     /**
+     * Creates or updates files and folders in a container by copying them from a source path on the host.
+     *
+     * In run mode, Aspire copies the files into the container and applies owner, group, and umask options.
+     * In publish mode, Aspire creates a read-only bind mount and ignores those options.
+     * To produce entries dynamically (including inline file contents and OpenSSL certificate files), polyglot app hosts
+     * use the `withContainerFilesCallback` overload and build the entries via the factory methods on
+     * `ContainerFileSystemCallbackContext`. Passing a pre-built `ContainerFileSystemItem` collection
+     * remains .NET-only.
+     * @param destinationPath The destination absolute path in the container.
+     * @param sourcePath The source path on the host to copy files from.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): TestRedisResourcePromise;
+    /**
+     * Creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
+     * @param destinationPath The destination absolute path in the container.
+     * @param callback A callback that returns the file system entries to create or update. Use the factory methods on `ContainerFileSystemCallbackContext` (createFile, createDirectory, createCertificateFile) to build the entries.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFilesCallback(destinationPath: string, callback: (arg1: ContainerFileSystemCallbackContext, arg2: CancellationToken) => Promise<ContainerFileSystemItemHandle[]>, options?: ContainerFilesOptions): TestRedisResourcePromise;
+    /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
      * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
@@ -41300,7 +47470,10 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
     withOtlpExporter(options?: WithOtlpExporterOptions): TestRedisResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestRedisResourcePromise;
     /**
@@ -41315,6 +47488,19 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @returns The resource builder.
      */
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): TestRedisResourcePromise;
+    /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestRedisResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
@@ -41528,6 +47714,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestRedisResourcePromise;
     /**
@@ -41602,6 +47789,40 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @returns The resource builder.
      */
     withoutHttpsCertificate(): TestRedisResourcePromise;
+    /**
+     * Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+     *
+     * Pass the path to the PFX certificate file to the container arguments.
+     * ```
+     * builder.AddContainer("my-service", "my-image")
+     * .WithHttpsCertificateConfiguration(ctx =>
+     * {
+     * ctx.Arguments.Add("--https-certificate-path");
+     * ctx.Arguments.Add(ctx.PfxPath);
+     * return Task.CompletedTask;
+     * });
+     * ```
+     * @param callback The callback to configure the resource to use a certificate key pair.
+     * @returns The updated resource builder.
+     */
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): TestRedisResourcePromise;
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): TestRedisResourcePromise;
     /**
      * Adds a relationship to another resource using its builder.
      * @param resourceBuilder The resource builder that the relationship is to.
@@ -41692,6 +47913,8 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @returns The resource builder.
      */
     withRemoteImageTag(remoteImageTag: string): TestRedisResourcePromise;
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): TestRedisResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -41770,6 +47993,12 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @returns The execution configuration builder.
      */
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise;
     /**
      * Adds a child database to a test Redis resource
      *
@@ -42272,6 +48501,63 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
+    private async _withContainerFilesInternal(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, destinationPath, sourcePath };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withContainerFiles',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Creates or updates files and folders in a container by copying them from a source path on the host.
+     *
+     * In run mode, Aspire copies the files into the container and applies owner, group, and umask options.
+     * In publish mode, Aspire creates a read-only bind mount and ignores those options.
+     * To produce entries dynamically (including inline file contents and OpenSSL certificate files), polyglot app hosts
+     * use the `withContainerFilesCallback` overload and build the entries via the factory methods on
+     * `ContainerFileSystemCallbackContext`. Passing a pre-built `ContainerFileSystemItem` collection
+     * remains .NET-only.
+     * @param destinationPath The destination absolute path in the container.
+     * @param sourcePath The source path on the host to copy files from.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withContainerFilesInternal(destinationPath, sourcePath, options), this._client);
+    }
+
+    /** @internal */
+    private async _withContainerFilesCallbackInternal(destinationPath: string, callback: (arg1: ContainerFileSystemCallbackContext, arg2: CancellationToken) => Promise<ContainerFileSystemItemHandle[]>, options?: ContainerFilesOptions): Promise<TestRedisResource> {
+        const callbackId = registerCallback(async (arg1Data: unknown, arg2Data: unknown) => {
+            const arg1Handle = wrapIfHandle(arg1Data) as ContainerFileSystemCallbackContextHandle;
+            const arg1 = new ContainerFileSystemCallbackContextImpl(arg1Handle, this._client);
+            const arg2 = CancellationToken.fromValue(arg2Data);
+            return await callback(arg1, arg2);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, destinationPath, callback: callbackId };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withContainerFilesCallback',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
+     * @param destinationPath The destination absolute path in the container.
+     * @param callback A callback that returns the file system entries to create or update. Use the factory methods on `ContainerFileSystemCallbackContext` (createFile, createDirectory, createCertificateFile) to build the entries.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFilesCallback(destinationPath: string, callback: (arg1: ContainerFileSystemCallbackContext, arg2: CancellationToken) => Promise<ContainerFileSystemItemHandle[]>, options?: ContainerFilesOptions): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withContainerFilesCallbackInternal(destinationPath, callback, options), this._client);
+    }
+
+    /** @internal */
     private async _withDockerfileBuilderInternal(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, stage?: string): Promise<TestRedisResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as DockerfileBuilderCallbackContextHandle;
@@ -42436,7 +48722,10 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
 
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._publishAsConnectionStringInternal(), this._client);
@@ -42467,6 +48756,39 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): TestRedisResourcePromise {
         const helpLink = options?.helpLink;
         return new TestRedisResourcePromiseImpl(this._withRequiredCommandInternal(command, helpLink), this._client);
+    }
+
+    /** @internal */
+    private async _withRequiredCommandValidationInternal(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, helpLink?: string): Promise<TestRedisResource> {
+        const validationCallbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as RequiredCommandValidationContextHandle;
+            const arg = new RequiredCommandValidationContextImpl(argHandle, this._client);
+            return await validationCallback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, command, validationCallback: validationCallbackId };
+        if (helpLink !== undefined) rpcArgs.helpLink = helpLink;
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withRequiredCommandValidation',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestRedisResourcePromise {
+        const helpLink = options?.helpLink;
+        return new TestRedisResourcePromiseImpl(this._withRequiredCommandValidationInternal(command, validationCallback, helpLink), this._client);
     }
 
     /** @internal */
@@ -43185,8 +49507,30 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await executeCommand(arg);
         });
+        const __commandOptionsForRpc = commandOptions === undefined || commandOptions === null ? commandOptions : { ...commandOptions };
+        if (__commandOptionsForRpc !== undefined && __commandOptionsForRpc !== null) {
+            const __commandOptionsForRpcData = __commandOptionsForRpc as Record<string, unknown>;
+            const ____commandOptionsForRpcValidateArguments = __commandOptionsForRpc.validateArguments;
+            if (____commandOptionsForRpcValidateArguments !== undefined) {
+                const ____commandOptionsForRpcValidateArgumentsId = ____commandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                    const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                    await ____commandOptionsForRpcValidateArguments(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["validateArguments"] = ____commandOptionsForRpcValidateArgumentsId;
+            }
+            const ____commandOptionsForRpcUpdateState = __commandOptionsForRpc.updateState;
+            if (____commandOptionsForRpcUpdateState !== undefined) {
+                const ____commandOptionsForRpcUpdateStateId = ____commandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                    const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                    return await ____commandOptionsForRpcUpdateState(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["updateState"] = ____commandOptionsForRpcUpdateStateId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, displayName, executeCommand: executeCommandId };
-        if (commandOptions !== undefined) rpcArgs.commandOptions = commandOptions;
+        if (commandOptions !== undefined) rpcArgs.commandOptions = __commandOptionsForRpc;
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
             'Aspire.Hosting/withCommand',
             rpcArgs
@@ -43213,7 +49557,44 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
 
     /** @internal */
     private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<TestRedisResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const __optionsForRpc = options === null ? options : { ...options };
+        if (__optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options: __optionsForRpc };
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
             'Aspire.Hosting/withProcessCommand',
             rpcArgs
@@ -43233,8 +49614,36 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await createProcessSpec(arg);
         });
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
             'Aspire.Hosting/withProcessCommandFactory',
             rpcArgs
@@ -43245,6 +49654,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -43252,8 +49662,45 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
 
     /** @internal */
     private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions): Promise<TestRedisResource> {
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+            const ____optionsForRpcPrepareRequest = __optionsForRpc.prepareRequest;
+            if (____optionsForRpcPrepareRequest !== undefined) {
+                const ____optionsForRpcPrepareRequestId = ____optionsForRpcPrepareRequest ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as HttpCommandPrepareRequestContextHandle;
+                    const arg = new HttpCommandPrepareRequestContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcPrepareRequest(arg);
+                }) : undefined;
+                __optionsForRpcData["prepareRequest"] = ____optionsForRpcPrepareRequestId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, path, displayName };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
             'Aspire.Hosting/withHttpCommand',
             rpcArgs
@@ -43389,6 +49836,76 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      */
     withoutHttpsCertificate(): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withoutHttpsCertificateInternal(), this._client);
+    }
+
+    /** @internal */
+    private async _withHttpsCertificateConfigurationInternal(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): Promise<TestRedisResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as HttpsCertificateConfigurationCallbackAnnotationContextHandle;
+            const arg = new HttpsCertificateConfigurationCallbackAnnotationContextImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withHttpsCertificateConfiguration',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+     *
+     * Pass the path to the PFX certificate file to the container arguments.
+     * ```
+     * builder.AddContainer("my-service", "my-image")
+     * .WithHttpsCertificateConfiguration(ctx =>
+     * {
+     * ctx.Arguments.Add("--https-certificate-path");
+     * ctx.Arguments.Add(ctx.PfxPath);
+     * return Task.CompletedTask;
+     * });
+     * ```
+     * @param callback The callback to configure the resource to use a certificate key pair.
+     * @returns The updated resource builder.
+     */
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withHttpsCertificateConfigurationInternal(callback), this._client);
+    }
+
+    /** @internal */
+    private async _subscribeHttpsEndpointsUpdateInternal(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): Promise<TestRedisResource> {
+        const callbackId = registerCallback(async (objData: unknown) => {
+            const objHandle = wrapIfHandle(objData) as HttpsEndpointUpdateCallbackContextHandle;
+            const obj = new HttpsEndpointUpdateCallbackContextImpl(objHandle, this._client);
+            await callback(obj);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/subscribeHttpsEndpointsUpdate',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._subscribeHttpsEndpointsUpdateInternal(callback), this._client);
     }
 
     /** @internal */
@@ -43667,6 +50184,21 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
+    private async _withTerminalInternal(): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withTerminal',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<TestRedisResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -43929,6 +50461,30 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
             return new ExecutionConfigurationBuilderImpl(handle, this._client);
         })();
         return new ExecutionConfigurationBuilderPromiseImpl(promise, this._client);
+    }
+
+    /** @internal */
+    private async _withContainerBuildOptionsInternal(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): Promise<TestRedisResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ContainerBuildOptionsCallbackContextHandle;
+            const arg = new ContainerBuildOptionsCallbackContextImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withContainerBuildOptions',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withContainerBuildOptionsInternal(callback), this._client);
     }
 
     /** @internal */
@@ -44613,6 +51169,14 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withContainerCertificatePaths(options)), this._client);
     }
 
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withContainerFiles(destinationPath, sourcePath, options)), this._client);
+    }
+
+    withContainerFilesCallback(destinationPath: string, callback: (arg1: ContainerFileSystemCallbackContext, arg2: CancellationToken) => Promise<ContainerFileSystemItemHandle[]>, options?: ContainerFilesOptions): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withContainerFilesCallback(destinationPath, callback, options)), this._client);
+    }
+
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileBuilder(contextPath, callback, options)), this._client);
     }
@@ -44639,6 +51203,10 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
 
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withRequiredCommand(command, options)), this._client);
+    }
+
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withRequiredCommandValidation(command, validationCallback, options)), this._client);
     }
 
     withSessionLifetime(): TestRedisResourcePromise {
@@ -44801,6 +51369,14 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withoutHttpsCertificate()), this._client);
     }
 
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withHttpsCertificateConfiguration(callback)), this._client);
+    }
+
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.subscribeHttpsEndpointsUpdate(callback)), this._client);
+    }
+
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)), this._client);
     }
@@ -44849,6 +51425,10 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withRemoteImageTag(remoteImageTag)), this._client);
     }
 
+    withTerminal(): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
+    }
+
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)), this._client);
     }
@@ -44891,6 +51471,10 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
 
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
         return new ExecutionConfigurationBuilderPromiseImpl(this._promise.then(obj => obj.createExecutionConfiguration()), this._client);
+    }
+
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
     addTestChildDatabase(name: string, options?: AddTestChildDatabaseOptions): TestDatabaseResourcePromise {
@@ -45189,6 +51773,29 @@ export interface TestVaultResource {
      */
     withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): TestVaultResourcePromise;
     /**
+     * Creates or updates files and folders in a container by copying them from a source path on the host.
+     *
+     * In run mode, Aspire copies the files into the container and applies owner, group, and umask options.
+     * In publish mode, Aspire creates a read-only bind mount and ignores those options.
+     * To produce entries dynamically (including inline file contents and OpenSSL certificate files), polyglot app hosts
+     * use the `withContainerFilesCallback` overload and build the entries via the factory methods on
+     * `ContainerFileSystemCallbackContext`. Passing a pre-built `ContainerFileSystemItem` collection
+     * remains .NET-only.
+     * @param destinationPath The destination absolute path in the container.
+     * @param sourcePath The source path on the host to copy files from.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): TestVaultResourcePromise;
+    /**
+     * Creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
+     * @param destinationPath The destination absolute path in the container.
+     * @param callback A callback that returns the file system entries to create or update. Use the factory methods on `ContainerFileSystemCallbackContext` (createFile, createDirectory, createCertificateFile) to build the entries.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFilesCallback(destinationPath: string, callback: (arg1: ContainerFileSystemCallbackContext, arg2: CancellationToken) => Promise<ContainerFileSystemItemHandle[]>, options?: ContainerFilesOptions): TestVaultResourcePromise;
+    /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
      * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
@@ -45261,7 +51868,10 @@ export interface TestVaultResource {
     withOtlpExporter(options?: WithOtlpExporterOptions): TestVaultResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestVaultResourcePromise;
     /**
@@ -45276,6 +51886,19 @@ export interface TestVaultResource {
      * @returns The resource builder.
      */
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): TestVaultResourcePromise;
+    /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestVaultResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
@@ -45473,6 +52096,7 @@ export interface TestVaultResource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestVaultResourcePromise;
     /**
@@ -45547,6 +52171,40 @@ export interface TestVaultResource {
      * @returns The resource builder.
      */
     withoutHttpsCertificate(): TestVaultResourcePromise;
+    /**
+     * Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+     *
+     * Pass the path to the PFX certificate file to the container arguments.
+     * ```
+     * builder.AddContainer("my-service", "my-image")
+     * .WithHttpsCertificateConfiguration(ctx =>
+     * {
+     * ctx.Arguments.Add("--https-certificate-path");
+     * ctx.Arguments.Add(ctx.PfxPath);
+     * return Task.CompletedTask;
+     * });
+     * ```
+     * @param callback The callback to configure the resource to use a certificate key pair.
+     * @returns The updated resource builder.
+     */
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): TestVaultResourcePromise;
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): TestVaultResourcePromise;
     /**
      * Adds a relationship to another resource using its builder.
      * @param resourceBuilder The resource builder that the relationship is to.
@@ -45637,6 +52295,8 @@ export interface TestVaultResource {
      * @returns The resource builder.
      */
     withRemoteImageTag(remoteImageTag: string): TestVaultResourcePromise;
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): TestVaultResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -45709,6 +52369,12 @@ export interface TestVaultResource {
      * @returns The execution configuration builder.
      */
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -45918,6 +52584,29 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      */
     withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): TestVaultResourcePromise;
     /**
+     * Creates or updates files and folders in a container by copying them from a source path on the host.
+     *
+     * In run mode, Aspire copies the files into the container and applies owner, group, and umask options.
+     * In publish mode, Aspire creates a read-only bind mount and ignores those options.
+     * To produce entries dynamically (including inline file contents and OpenSSL certificate files), polyglot app hosts
+     * use the `withContainerFilesCallback` overload and build the entries via the factory methods on
+     * `ContainerFileSystemCallbackContext`. Passing a pre-built `ContainerFileSystemItem` collection
+     * remains .NET-only.
+     * @param destinationPath The destination absolute path in the container.
+     * @param sourcePath The source path on the host to copy files from.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): TestVaultResourcePromise;
+    /**
+     * Creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
+     * @param destinationPath The destination absolute path in the container.
+     * @param callback A callback that returns the file system entries to create or update. Use the factory methods on `ContainerFileSystemCallbackContext` (createFile, createDirectory, createCertificateFile) to build the entries.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFilesCallback(destinationPath: string, callback: (arg1: ContainerFileSystemCallbackContext, arg2: CancellationToken) => Promise<ContainerFileSystemItemHandle[]>, options?: ContainerFilesOptions): TestVaultResourcePromise;
+    /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
      * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
@@ -45990,7 +52679,10 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
     withOtlpExporter(options?: WithOtlpExporterOptions): TestVaultResourcePromise;
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestVaultResourcePromise;
     /**
@@ -46005,6 +52697,19 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @returns The resource builder.
      */
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): TestVaultResourcePromise;
+    /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestVaultResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
@@ -46202,6 +52907,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestVaultResourcePromise;
     /**
@@ -46276,6 +52982,40 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @returns The resource builder.
      */
     withoutHttpsCertificate(): TestVaultResourcePromise;
+    /**
+     * Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+     *
+     * Pass the path to the PFX certificate file to the container arguments.
+     * ```
+     * builder.AddContainer("my-service", "my-image")
+     * .WithHttpsCertificateConfiguration(ctx =>
+     * {
+     * ctx.Arguments.Add("--https-certificate-path");
+     * ctx.Arguments.Add(ctx.PfxPath);
+     * return Task.CompletedTask;
+     * });
+     * ```
+     * @param callback The callback to configure the resource to use a certificate key pair.
+     * @returns The updated resource builder.
+     */
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): TestVaultResourcePromise;
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): TestVaultResourcePromise;
     /**
      * Adds a relationship to another resource using its builder.
      * @param resourceBuilder The resource builder that the relationship is to.
@@ -46366,6 +53106,8 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @returns The resource builder.
      */
     withRemoteImageTag(remoteImageTag: string): TestVaultResourcePromise;
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): TestVaultResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -46438,6 +53180,12 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @returns The execution configuration builder.
      */
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -46900,6 +53648,63 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
+    private async _withContainerFilesInternal(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, destinationPath, sourcePath };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withContainerFiles',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Creates or updates files and folders in a container by copying them from a source path on the host.
+     *
+     * In run mode, Aspire copies the files into the container and applies owner, group, and umask options.
+     * In publish mode, Aspire creates a read-only bind mount and ignores those options.
+     * To produce entries dynamically (including inline file contents and OpenSSL certificate files), polyglot app hosts
+     * use the `withContainerFilesCallback` overload and build the entries via the factory methods on
+     * `ContainerFileSystemCallbackContext`. Passing a pre-built `ContainerFileSystemItem` collection
+     * remains .NET-only.
+     * @param destinationPath The destination absolute path in the container.
+     * @param sourcePath The source path on the host to copy files from.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withContainerFilesInternal(destinationPath, sourcePath, options), this._client);
+    }
+
+    /** @internal */
+    private async _withContainerFilesCallbackInternal(destinationPath: string, callback: (arg1: ContainerFileSystemCallbackContext, arg2: CancellationToken) => Promise<ContainerFileSystemItemHandle[]>, options?: ContainerFilesOptions): Promise<TestVaultResource> {
+        const callbackId = registerCallback(async (arg1Data: unknown, arg2Data: unknown) => {
+            const arg1Handle = wrapIfHandle(arg1Data) as ContainerFileSystemCallbackContextHandle;
+            const arg1 = new ContainerFileSystemCallbackContextImpl(arg1Handle, this._client);
+            const arg2 = CancellationToken.fromValue(arg2Data);
+            return await callback(arg1, arg2);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, destinationPath, callback: callbackId };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withContainerFilesCallback',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
+     * @param destinationPath The destination absolute path in the container.
+     * @param callback A callback that returns the file system entries to create or update. Use the factory methods on `ContainerFileSystemCallbackContext` (createFile, createDirectory, createCertificateFile) to build the entries.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withContainerFilesCallback(destinationPath: string, callback: (arg1: ContainerFileSystemCallbackContext, arg2: CancellationToken) => Promise<ContainerFileSystemItemHandle[]>, options?: ContainerFilesOptions): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withContainerFilesCallbackInternal(destinationPath, callback, options), this._client);
+    }
+
+    /** @internal */
     private async _withDockerfileBuilderInternal(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, stage?: string): Promise<TestVaultResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as DockerfileBuilderCallbackContextHandle;
@@ -47064,7 +53869,10 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
 
     /**
      * Changes the resource to be published as a connection string reference in the manifest.
+     *
+     * This API only changes the manifest representation; it does not change the resource model used by other publishers.
      * @returns The resource builder.
+     * @deprecated PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.
      */
     publishAsConnectionString(): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._publishAsConnectionStringInternal(), this._client);
@@ -47095,6 +53903,39 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): TestVaultResourcePromise {
         const helpLink = options?.helpLink;
         return new TestVaultResourcePromiseImpl(this._withRequiredCommandInternal(command, helpLink), this._client);
+    }
+
+    /** @internal */
+    private async _withRequiredCommandValidationInternal(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, helpLink?: string): Promise<TestVaultResource> {
+        const validationCallbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as RequiredCommandValidationContextHandle;
+            const arg = new RequiredCommandValidationContextImpl(argHandle, this._client);
+            return await validationCallback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, command, validationCallback: validationCallbackId };
+        if (helpLink !== undefined) rpcArgs.helpLink = helpLink;
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withRequiredCommandValidation',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestVaultResourcePromise {
+        const helpLink = options?.helpLink;
+        return new TestVaultResourcePromiseImpl(this._withRequiredCommandValidationInternal(command, validationCallback, helpLink), this._client);
     }
 
     /** @internal */
@@ -47777,8 +54618,30 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await executeCommand(arg);
         });
+        const __commandOptionsForRpc = commandOptions === undefined || commandOptions === null ? commandOptions : { ...commandOptions };
+        if (__commandOptionsForRpc !== undefined && __commandOptionsForRpc !== null) {
+            const __commandOptionsForRpcData = __commandOptionsForRpc as Record<string, unknown>;
+            const ____commandOptionsForRpcValidateArguments = __commandOptionsForRpc.validateArguments;
+            if (____commandOptionsForRpcValidateArguments !== undefined) {
+                const ____commandOptionsForRpcValidateArgumentsId = ____commandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                    const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                    await ____commandOptionsForRpcValidateArguments(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["validateArguments"] = ____commandOptionsForRpcValidateArgumentsId;
+            }
+            const ____commandOptionsForRpcUpdateState = __commandOptionsForRpc.updateState;
+            if (____commandOptionsForRpcUpdateState !== undefined) {
+                const ____commandOptionsForRpcUpdateStateId = ____commandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                    const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                    return await ____commandOptionsForRpcUpdateState(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["updateState"] = ____commandOptionsForRpcUpdateStateId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, displayName, executeCommand: executeCommandId };
-        if (commandOptions !== undefined) rpcArgs.commandOptions = commandOptions;
+        if (commandOptions !== undefined) rpcArgs.commandOptions = __commandOptionsForRpc;
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
             'Aspire.Hosting/withCommand',
             rpcArgs
@@ -47805,7 +54668,44 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
 
     /** @internal */
     private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<TestVaultResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const __optionsForRpc = options === null ? options : { ...options };
+        if (__optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options: __optionsForRpc };
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
             'Aspire.Hosting/withProcessCommand',
             rpcArgs
@@ -47825,8 +54725,36 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await createProcessSpec(arg);
         });
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
             'Aspire.Hosting/withProcessCommandFactory',
             rpcArgs
@@ -47837,6 +54765,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
@@ -47844,8 +54773,45 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
 
     /** @internal */
     private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions): Promise<TestVaultResource> {
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+            const ____optionsForRpcPrepareRequest = __optionsForRpc.prepareRequest;
+            if (____optionsForRpcPrepareRequest !== undefined) {
+                const ____optionsForRpcPrepareRequestId = ____optionsForRpcPrepareRequest ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as HttpCommandPrepareRequestContextHandle;
+                    const arg = new HttpCommandPrepareRequestContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcPrepareRequest(arg);
+                }) : undefined;
+                __optionsForRpcData["prepareRequest"] = ____optionsForRpcPrepareRequestId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, path, displayName };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
             'Aspire.Hosting/withHttpCommand',
             rpcArgs
@@ -47981,6 +54947,76 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      */
     withoutHttpsCertificate(): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withoutHttpsCertificateInternal(), this._client);
+    }
+
+    /** @internal */
+    private async _withHttpsCertificateConfigurationInternal(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): Promise<TestVaultResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as HttpsCertificateConfigurationCallbackAnnotationContextHandle;
+            const arg = new HttpsCertificateConfigurationCallbackAnnotationContextImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withHttpsCertificateConfiguration',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+     *
+     * Pass the path to the PFX certificate file to the container arguments.
+     * ```
+     * builder.AddContainer("my-service", "my-image")
+     * .WithHttpsCertificateConfiguration(ctx =>
+     * {
+     * ctx.Arguments.Add("--https-certificate-path");
+     * ctx.Arguments.Add(ctx.PfxPath);
+     * return Task.CompletedTask;
+     * });
+     * ```
+     * @param callback The callback to configure the resource to use a certificate key pair.
+     * @returns The updated resource builder.
+     */
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withHttpsCertificateConfigurationInternal(callback), this._client);
+    }
+
+    /** @internal */
+    private async _subscribeHttpsEndpointsUpdateInternal(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): Promise<TestVaultResource> {
+        const callbackId = registerCallback(async (objData: unknown) => {
+            const objHandle = wrapIfHandle(objData) as HttpsEndpointUpdateCallbackContextHandle;
+            const obj = new HttpsEndpointUpdateCallbackContextImpl(objHandle, this._client);
+            await callback(obj);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/subscribeHttpsEndpointsUpdate',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._subscribeHttpsEndpointsUpdateInternal(callback), this._client);
     }
 
     /** @internal */
@@ -48259,6 +55295,21 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
+    private async _withTerminalInternal(): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withTerminal',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withTerminalInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<TestVaultResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -48497,6 +55548,30 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
             return new ExecutionConfigurationBuilderImpl(handle, this._client);
         })();
         return new ExecutionConfigurationBuilderPromiseImpl(promise, this._client);
+    }
+
+    /** @internal */
+    private async _withContainerBuildOptionsInternal(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): Promise<TestVaultResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ContainerBuildOptionsCallbackContextHandle;
+            const arg = new ContainerBuildOptionsCallbackContextImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withContainerBuildOptions',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withContainerBuildOptionsInternal(callback), this._client);
     }
 
     /** @internal */
@@ -49009,6 +56084,14 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withContainerCertificatePaths(options)), this._client);
     }
 
+    withContainerFiles(destinationPath: string, sourcePath: string, options?: ContainerFilesOptions): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withContainerFiles(destinationPath, sourcePath, options)), this._client);
+    }
+
+    withContainerFilesCallback(destinationPath: string, callback: (arg1: ContainerFileSystemCallbackContext, arg2: CancellationToken) => Promise<ContainerFileSystemItemHandle[]>, options?: ContainerFilesOptions): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withContainerFilesCallback(destinationPath, callback, options)), this._client);
+    }
+
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileBuilder(contextPath, callback, options)), this._client);
     }
@@ -49035,6 +56118,10 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
 
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withRequiredCommand(command, options)), this._client);
+    }
+
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withRequiredCommandValidation(command, validationCallback, options)), this._client);
     }
 
     withSessionLifetime(): TestVaultResourcePromise {
@@ -49189,6 +56276,14 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withoutHttpsCertificate()), this._client);
     }
 
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withHttpsCertificateConfiguration(callback)), this._client);
+    }
+
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.subscribeHttpsEndpointsUpdate(callback)), this._client);
+    }
+
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)), this._client);
     }
@@ -49237,6 +56332,10 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withRemoteImageTag(remoteImageTag)), this._client);
     }
 
+    withTerminal(): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
+    }
+
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)), this._client);
     }
@@ -49275,6 +56374,10 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
 
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
         return new ExecutionConfigurationBuilderPromiseImpl(this._promise.then(obj => obj.createExecutionConfiguration()), this._client);
+    }
+
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): TestVaultResourcePromise {
@@ -49745,6 +56848,19 @@ export interface Resource {
      */
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ResourcePromise;
     /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ResourcePromise;
+    /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
      */
@@ -49821,8 +56937,26 @@ export interface Resource {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ResourcePromise;
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ResourcePromise;
     /**
      * Adds a relationship to another resource using its builder.
      * @param resourceBuilder The resource builder that the relationship is to.
@@ -49872,6 +57006,8 @@ export interface Resource {
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ResourcePromise;
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): ResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -49924,6 +57060,12 @@ export interface Resource {
      * @returns The execution configuration builder.
      */
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -50023,6 +57165,19 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      */
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ResourcePromise;
     /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ResourcePromise;
+    /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
      */
@@ -50099,8 +57254,26 @@ export interface ResourcePromise extends PromiseLike<Resource> {
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ResourcePromise;
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ResourcePromise;
     /**
      * Adds a relationship to another resource using its builder.
      * @param resourceBuilder The resource builder that the relationship is to.
@@ -50150,6 +57323,8 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ResourcePromise;
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): ResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -50202,6 +57377,12 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * @returns The execution configuration builder.
      */
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -50353,6 +57534,39 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ResourcePromise {
         const helpLink = options?.helpLink;
         return new ResourcePromiseImpl(this._withRequiredCommandInternal(command, helpLink), this._client);
+    }
+
+    /** @internal */
+    private async _withRequiredCommandValidationInternal(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, helpLink?: string): Promise<Resource> {
+        const validationCallbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as RequiredCommandValidationContextHandle;
+            const arg = new RequiredCommandValidationContextImpl(argHandle, this._client);
+            return await validationCallback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, command, validationCallback: validationCallbackId };
+        if (helpLink !== undefined) rpcArgs.helpLink = helpLink;
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting/withRequiredCommandValidation',
+            rpcArgs
+        );
+        return new ResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic.
+     *
+     * The command is first resolved to a full path. If found, the validation callback is invoked with the context containing the resolved path and service provider.
+     * The callback should return a `RequiredCommandValidationResult` indicating whether the command is valid,
+     * which can be created via `Success` or `Failure`.
+     * If the command is not found or fails validation, a warning message will be logged but the resource will be allowed to attempt to start.
+     * @param command The command string (file name or path) that should be validated.
+     * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ResourcePromise {
+        const helpLink = options?.helpLink;
+        return new ResourcePromiseImpl(this._withRequiredCommandValidationInternal(command, validationCallback, helpLink), this._client);
     }
 
     /** @internal */
@@ -50563,8 +57777,30 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await executeCommand(arg);
         });
+        const __commandOptionsForRpc = commandOptions === undefined || commandOptions === null ? commandOptions : { ...commandOptions };
+        if (__commandOptionsForRpc !== undefined && __commandOptionsForRpc !== null) {
+            const __commandOptionsForRpcData = __commandOptionsForRpc as Record<string, unknown>;
+            const ____commandOptionsForRpcValidateArguments = __commandOptionsForRpc.validateArguments;
+            if (____commandOptionsForRpcValidateArguments !== undefined) {
+                const ____commandOptionsForRpcValidateArgumentsId = ____commandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                    const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                    await ____commandOptionsForRpcValidateArguments(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["validateArguments"] = ____commandOptionsForRpcValidateArgumentsId;
+            }
+            const ____commandOptionsForRpcUpdateState = __commandOptionsForRpc.updateState;
+            if (____commandOptionsForRpcUpdateState !== undefined) {
+                const ____commandOptionsForRpcUpdateStateId = ____commandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                    const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                    return await ____commandOptionsForRpcUpdateState(arg);
+                }) : undefined;
+                __commandOptionsForRpcData["updateState"] = ____commandOptionsForRpcUpdateStateId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, displayName, executeCommand: executeCommandId };
-        if (commandOptions !== undefined) rpcArgs.commandOptions = commandOptions;
+        if (commandOptions !== undefined) rpcArgs.commandOptions = __commandOptionsForRpc;
         const result = await this._client.invokeCapability<IResourceHandle>(
             'Aspire.Hosting/withCommand',
             rpcArgs
@@ -50591,7 +57827,44 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
 
     /** @internal */
     private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<Resource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const __optionsForRpc = options === null ? options : { ...options };
+        if (__optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCreateProcessSpec = __optionsForRpc.createProcessSpec;
+            if (____optionsForRpcCreateProcessSpec !== undefined) {
+                const ____optionsForRpcCreateProcessSpecId = ____optionsForRpcCreateProcessSpec ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+                    const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcCreateProcessSpec(arg);
+                }) : undefined;
+                __optionsForRpcData["createProcessSpec"] = ____optionsForRpcCreateProcessSpecId;
+            }
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options: __optionsForRpc };
         const result = await this._client.invokeCapability<IResourceHandle>(
             'Aspire.Hosting/withProcessCommand',
             rpcArgs
@@ -50611,8 +57884,36 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
             return await createProcessSpec(arg);
         });
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<IResourceHandle>(
             'Aspire.Hosting/withProcessCommandFactory',
             rpcArgs
@@ -50623,9 +57924,45 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ResourcePromise {
         return new ResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
+    }
+
+    /** @internal */
+    private async _subscribeHttpsEndpointsUpdateInternal(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): Promise<Resource> {
+        const callbackId = registerCallback(async (objData: unknown) => {
+            const objHandle = wrapIfHandle(objData) as HttpsEndpointUpdateCallbackContextHandle;
+            const obj = new HttpsEndpointUpdateCallbackContextImpl(objHandle, this._client);
+            await callback(obj);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting/subscribeHttpsEndpointsUpdate',
+            rpcArgs
+        );
+        return new ResourceImpl(result, this._client);
+    }
+
+    /**
+     * Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup.
+     *
+     * The callback is invoked when either:
+     * -
+     * -
+     * Switch an endpoint to HTTPS when a certificate is available:
+     * ```
+     * builder.SubscribeHttpsEndpointsUpdate(ctx =>
+     * {
+     * builder.WithEndpoint("http", ep => ep.UriScheme = "https");
+     * });
+     * ```
+     * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
+     * @returns The updated resource builder.
+     */
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ResourcePromise {
+        return new ResourcePromiseImpl(this._subscribeHttpsEndpointsUpdateInternal(callback), this._client);
     }
 
     /** @internal */
@@ -50775,6 +58112,21 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         const exitCode = options?.exitCode;
         const exitCodes = options?.exitCodes;
         return new ResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode, exitCodes), this._client);
+    }
+
+    /** @internal */
+    private async _withTerminalInternal(): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting/withTerminal',
+            rpcArgs
+        );
+        return new ResourceImpl(result, this._client);
+    }
+
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    withTerminal(): ResourcePromise {
+        return new ResourcePromiseImpl(this._withTerminalInternal(), this._client);
     }
 
     /** @internal */
@@ -50961,6 +58313,30 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
             return new ExecutionConfigurationBuilderImpl(handle, this._client);
         })();
         return new ExecutionConfigurationBuilderPromiseImpl(promise, this._client);
+    }
+
+    /** @internal */
+    private async _withContainerBuildOptionsInternal(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): Promise<Resource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ContainerBuildOptionsCallbackContextHandle;
+            const arg = new ContainerBuildOptionsCallbackContextImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting/withContainerBuildOptions',
+            rpcArgs
+        );
+        return new ResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures container build options for a compute resource using an async callback.
+     * @param callback An async callback to configure container build options.
+     * @returns A reference to the `IResourceBuilder`1`.
+     */
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ResourcePromise {
+        return new ResourcePromiseImpl(this._withContainerBuildOptionsInternal(callback), this._client);
     }
 
     /** @internal */
@@ -51367,6 +58743,10 @@ class ResourcePromiseImpl implements ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withRequiredCommand(command, options)), this._client);
     }
 
+    withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.withRequiredCommandValidation(command, validationCallback, options)), this._client);
+    }
+
     withSessionLifetime(): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withSessionLifetime()), this._client);
     }
@@ -51419,6 +58799,10 @@ class ResourcePromiseImpl implements ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommandFactory(commandName, displayName, createProcessSpec, options)), this._client);
     }
 
+    subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.subscribeHttpsEndpointsUpdate(callback)), this._client);
+    }
+
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)), this._client);
     }
@@ -51445,6 +58829,10 @@ class ResourcePromiseImpl implements ResourcePromise {
 
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withHiddenOnCompletion(options)), this._client);
+    }
+
+    withTerminal(): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
     }
 
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ResourcePromise {
@@ -51477,6 +58865,10 @@ class ResourcePromiseImpl implements ResourcePromise {
 
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
         return new ExecutionConfigurationBuilderPromiseImpl(this._promise.then(obj => obj.createExecutionConfiguration()), this._client);
+    }
+
+    withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): ResourcePromise {
@@ -52524,8 +59916,45 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
 
     /** @internal */
     private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions): Promise<ResourceWithEndpoints> {
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcCommandOptions = __optionsForRpc.commandOptions;
+            if (____optionsForRpcCommandOptions !== undefined && ____optionsForRpcCommandOptions !== null) {
+                const ____optionsForRpcCommandOptionsForRpc = { ...____optionsForRpcCommandOptions };
+                const ____optionsForRpcCommandOptionsForRpcData = ____optionsForRpcCommandOptionsForRpc as Record<string, unknown>;
+                const ______optionsForRpcCommandOptionsForRpcValidateArguments = ____optionsForRpcCommandOptionsForRpc.validateArguments;
+                if (______optionsForRpcCommandOptionsForRpcValidateArguments !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcValidateArgumentsId = ______optionsForRpcCommandOptionsForRpcValidateArguments ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as InputsDialogValidationContextHandle;
+                        const arg = new InputsDialogValidationContextImpl(argHandle, this._client);
+                        await ______optionsForRpcCommandOptionsForRpcValidateArguments(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["validateArguments"] = ______optionsForRpcCommandOptionsForRpcValidateArgumentsId;
+                }
+                const ______optionsForRpcCommandOptionsForRpcUpdateState = ____optionsForRpcCommandOptionsForRpc.updateState;
+                if (______optionsForRpcCommandOptionsForRpcUpdateState !== undefined) {
+                    const ______optionsForRpcCommandOptionsForRpcUpdateStateId = ______optionsForRpcCommandOptionsForRpcUpdateState ? registerCallback(async (argData: unknown) => {
+                        const argHandle = wrapIfHandle(argData) as UpdateCommandStateContextHandle;
+                        const arg = new UpdateCommandStateContextImpl(argHandle, this._client);
+                        return await ______optionsForRpcCommandOptionsForRpcUpdateState(arg);
+                    }) : undefined;
+                    ____optionsForRpcCommandOptionsForRpcData["updateState"] = ______optionsForRpcCommandOptionsForRpcUpdateStateId;
+                }
+                __optionsForRpcData["commandOptions"] = ____optionsForRpcCommandOptionsForRpc;
+            }
+            const ____optionsForRpcPrepareRequest = __optionsForRpc.prepareRequest;
+            if (____optionsForRpcPrepareRequest !== undefined) {
+                const ____optionsForRpcPrepareRequestId = ____optionsForRpcPrepareRequest ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as HttpCommandPrepareRequestContextHandle;
+                    const arg = new HttpCommandPrepareRequestContextImpl(argHandle, this._client);
+                    return await ____optionsForRpcPrepareRequest(arg);
+                }) : undefined;
+                __optionsForRpcData["prepareRequest"] = ____optionsForRpcPrepareRequestId;
+            }
+        }
         const rpcArgs: Record<string, unknown> = { builder: this._handle, path, displayName };
-        if (options !== undefined) rpcArgs.options = options;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
         const result = await this._client.invokeCapability<IResourceWithEndpointsHandle>(
             'Aspire.Hosting/withHttpCommand',
             rpcArgs
@@ -52776,6 +60205,23 @@ export interface ResourceWithEnvironment {
      * @returns The resource builder.
      */
     withoutHttpsCertificate(): ResourceWithEnvironmentPromise;
+    /**
+     * Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+     *
+     * Pass the path to the PFX certificate file to the container arguments.
+     * ```
+     * builder.AddContainer("my-service", "my-image")
+     * .WithHttpsCertificateConfiguration(ctx =>
+     * {
+     * ctx.Arguments.Add("--https-certificate-path");
+     * ctx.Arguments.Add(ctx.PfxPath);
+     * return Task.CompletedTask;
+     * });
+     * ```
+     * @param callback The callback to configure the resource to use a certificate key pair.
+     * @returns The updated resource builder.
+     */
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): ResourceWithEnvironmentPromise;
     /** Configures environment with callback (test version) */
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): ResourceWithEnvironmentPromise;
     /** Sets environment variables */
@@ -52874,6 +60320,23 @@ export interface ResourceWithEnvironmentPromise extends PromiseLike<ResourceWith
      * @returns The resource builder.
      */
     withoutHttpsCertificate(): ResourceWithEnvironmentPromise;
+    /**
+     * Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+     *
+     * Pass the path to the PFX certificate file to the container arguments.
+     * ```
+     * builder.AddContainer("my-service", "my-image")
+     * .WithHttpsCertificateConfiguration(ctx =>
+     * {
+     * ctx.Arguments.Add("--https-certificate-path");
+     * ctx.Arguments.Add(ctx.PfxPath);
+     * return Task.CompletedTask;
+     * });
+     * ```
+     * @param callback The callback to configure the resource to use a certificate key pair.
+     * @returns The updated resource builder.
+     */
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): ResourceWithEnvironmentPromise;
     /** Configures environment with callback (test version) */
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): ResourceWithEnvironmentPromise;
     /** Sets environment variables */
@@ -53117,6 +60580,41 @@ class ResourceWithEnvironmentImpl extends ResourceBuilderBase<IResourceWithEnvir
     }
 
     /** @internal */
+    private async _withHttpsCertificateConfigurationInternal(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): Promise<ResourceWithEnvironment> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as HttpsCertificateConfigurationCallbackAnnotationContextHandle;
+            const arg = new HttpsCertificateConfigurationCallbackAnnotationContextImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        const result = await this._client.invokeCapability<IResourceWithEnvironmentHandle>(
+            'Aspire.Hosting/withHttpsCertificateConfiguration',
+            rpcArgs
+        );
+        return new ResourceWithEnvironmentImpl(result, this._client);
+    }
+
+    /**
+     * Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
+     *
+     * Pass the path to the PFX certificate file to the container arguments.
+     * ```
+     * builder.AddContainer("my-service", "my-image")
+     * .WithHttpsCertificateConfiguration(ctx =>
+     * {
+     * ctx.Arguments.Add("--https-certificate-path");
+     * ctx.Arguments.Add(ctx.PfxPath);
+     * return Task.CompletedTask;
+     * });
+     * ```
+     * @param callback The callback to configure the resource to use a certificate key pair.
+     * @returns The updated resource builder.
+     */
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): ResourceWithEnvironmentPromise {
+        return new ResourceWithEnvironmentPromiseImpl(this._withHttpsCertificateConfigurationInternal(callback), this._client);
+    }
+
+    /** @internal */
     private async _testWithEnvironmentCallbackInternal(callback: (arg: TestEnvironmentContext) => Promise<void>): Promise<ResourceWithEnvironment> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as TestEnvironmentContextHandle;
@@ -53204,6 +60702,10 @@ class ResourceWithEnvironmentPromiseImpl implements ResourceWithEnvironmentPromi
 
     withoutHttpsCertificate(): ResourceWithEnvironmentPromise {
         return new ResourceWithEnvironmentPromiseImpl(this._promise.then(obj => obj.withoutHttpsCertificate()), this._client);
+    }
+
+    withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): ResourceWithEnvironmentPromise {
+        return new ResourceWithEnvironmentPromiseImpl(this._promise.then(obj => obj.withHttpsCertificateConfiguration(callback)), this._client);
     }
 
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): ResourceWithEnvironmentPromise {
@@ -53507,6 +61009,8 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeStar
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext', (handle, client) => new CommandLineArgsCallbackContextImpl(handle as CommandLineArgsCallbackContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsEditor', (handle, client) => new CommandLineArgsEditorImpl(handle as CommandLineArgsEditorHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ConnectionStringAvailableEvent', (handle, client) => new ConnectionStringAvailableEventImpl(handle as ConnectionStringAvailableEventHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext', (handle, client) => new ContainerBuildOptionsCallbackContextImpl(handle as ContainerBuildOptionsCallbackContextHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerFileSystemCallbackContext', (handle, client) => new ContainerFileSystemCallbackContextImpl(handle as ContainerFileSystemCallbackContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptions', (handle, client) => new ContainerImagePushOptionsImpl(handle as ContainerImagePushOptionsHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptionsCallbackContext', (handle, client) => new ContainerImagePushOptionsCallbackContextImpl(handle as ContainerImagePushOptionsCallbackContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImageReference', (handle, client) => new ContainerImageReferenceImpl(handle as ContainerImageReferenceHandle, client));
@@ -53526,8 +61030,15 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.Environmen
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentEditor', (handle, client) => new EnvironmentEditorImpl(handle as EnvironmentEditorHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext', (handle, client) => new EventingSubscriberRegistrationContextImpl(handle as EventingSubscriberRegistrationContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext', (handle, client) => new ExecuteCommandContextImpl(handle as ExecuteCommandContextHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpCommandPrepareRequestContext', (handle, client) => new HttpCommandPrepareRequestContextImpl(handle as HttpCommandPrepareRequestContextHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext', (handle, client) => new HttpsCertificateConfigurationCallbackAnnotationContextImpl(handle as HttpsCertificateConfigurationCallbackAnnotationContextHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsEndpointUpdateCallbackContext', (handle, client) => new HttpsEndpointUpdateCallbackContextImpl(handle as HttpsEndpointUpdateCallbackContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent', (handle, client) => new InitializeResourceEventImpl(handle as InitializeResourceEventHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext', (handle, client) => new InputsDialogValidationContextImpl(handle as InputsDialogValidationContextHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Ats.InputsInteractionResult', (handle, client) => new InputsInteractionResultImpl(handle as InputsInteractionResultHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder', (handle, client) => new InteractionInputBuilderImpl(handle as InteractionInputBuilderHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputLoadContext', (handle, client) => new InteractionInputLoadContextImpl(handle as InteractionInputLoadContextHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Ats.InteractionLoadingInput', (handle, client) => new InteractionLoadingInputImpl(handle as InteractionLoadingInputHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.LogFacade', (handle, client) => new LogFacadeImpl(handle as LogFacadeHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineConfigurationContext', (handle, client) => new PipelineConfigurationContextImpl(handle as PipelineConfigurationContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineContext', (handle, client) => new PipelineContextImpl(handle as PipelineContextHandle, client));
@@ -53538,6 +61049,8 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepFacto
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineSummary', (handle, client) => new PipelineSummaryImpl(handle as PipelineSummaryHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions', (handle, client) => new ProjectResourceOptionsImpl(handle as ProjectResourceOptionsHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpressionBuilder', (handle, client) => new ReferenceExpressionBuilderImpl(handle as ReferenceExpressionBuilderHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationContext', (handle, client) => new RequiredCommandValidationContextImpl(handle as RequiredCommandValidationContextHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationResult', (handle, client) => new RequiredCommandValidationResultImpl(handle as RequiredCommandValidationResultHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceCommandService', (handle, client) => new ResourceCommandServiceImpl(handle as ResourceCommandServiceHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceEndpointsAllocatedEvent', (handle, client) => new ResourceEndpointsAllocatedEventImpl(handle as ResourceEndpointsAllocatedEventHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceLoggerService', (handle, client) => new ResourceLoggerServiceImpl(handle as ResourceLoggerServiceHandle, client));
@@ -53561,6 +61074,7 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.IDistributedAppli
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationBuilder', (handle, client) => new ExecutionConfigurationBuilderImpl(handle as IExecutionConfigurationBuilderHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationResult', (handle, client) => new ExecutionConfigurationResultImpl(handle as IExecutionConfigurationResultHandle, client));
 registerHandleWrapper('Microsoft.Extensions.Hosting.Abstractions/Microsoft.Extensions.Hosting.IHostEnvironment', (handle, client) => new HostEnvironmentImpl(handle as IHostEnvironmentHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.IInteractionService', (handle, client) => new InteractionServiceImpl(handle as IInteractionServiceHandle, client));
 registerHandleWrapper('Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILogger', (handle, client) => new LoggerImpl(handle as ILoggerHandle, client));
 registerHandleWrapper('Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILoggerFactory', (handle, client) => new LoggerFactoryImpl(handle as ILoggerFactoryHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.IReportingStep', (handle, client) => new ReportingStepImpl(handle as IReportingStepHandle, client));
