@@ -953,6 +953,10 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         var notificationService = serviceProvider.GetRequiredService<ResourceNotificationService>();
         var results = new List<ResourceSnapshot>();
 
+        // This is a point-in-time batch, so the set of resolved secret values is identical for
+        // every resource. Compute it once here rather than once per resource.
+        var secretParameterValues = GetResolvedSecretParameterValues();
+
         // Get current state for each resource directly using TryGetCurrentState
         foreach (var resource in appModel.Resources)
         {
@@ -968,7 +972,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         {
             if (notificationService.TryGetCurrentState(resourceName, out var resourceEvent))
             {
-                var snapshot = await CreateResourceSnapshotFromEventAsync(resourceEvent, resourcePropertiesAsJson, cancellationToken).ConfigureAwait(false);
+                var snapshot = await CreateResourceSnapshotFromEventAsync(resourceEvent, resourcePropertiesAsJson, secretParameterValues, cancellationToken).ConfigureAwait(false);
                 if (snapshot is not null)
                 {
                     results.Add(snapshot);
@@ -1000,7 +1004,11 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         await foreach (var resourceEvent in resourceEvents.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
-            var snapshot = await CreateResourceSnapshotFromEventAsync(resourceEvent, resourcePropertiesAsJson, cancellationToken).ConfigureAwait(false);
+            // Recompute the resolved secret values for every event. Secrets can be resolved between
+            // events (e.g. interactive parameter entry after the watch starts), so caching the set
+            // once outside the loop would let a value that becomes secret later bypass redaction.
+            var secretParameterValues = GetResolvedSecretParameterValues();
+            var snapshot = await CreateResourceSnapshotFromEventAsync(resourceEvent, resourcePropertiesAsJson, secretParameterValues, cancellationToken).ConfigureAwait(false);
             if (snapshot is not null)
             {
                 yield return snapshot;
@@ -1011,6 +1019,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     private async Task<ResourceSnapshot?> CreateResourceSnapshotFromEventAsync(
         ResourceEvent resourceEvent,
         bool resourcePropertiesAsJson,
+        HashSet<string> secretParameterValues,
         CancellationToken cancellationToken)
     {
         var resource = resourceEvent.Resource;
@@ -1085,7 +1094,9 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         // Build environment variables. Values that match a secret parameter's value are
         // redacted so secrets don't leak through clients (e.g. aspire describe --format json).
-        var secretParameterValues = GetResolvedSecretParameterValues();
+        // The secret values are computed by the caller: once per batch for the one-shot
+        // GetResourceSnapshotsAsync, but per event for the streaming WatchResourceSnapshotsAsync
+        // so that secrets resolved mid-stream are still redacted.
         var environmentVariables = snapshot.EnvironmentVariables
             .Select(e => new ResourceSnapshotEnvironmentVariable
             {
@@ -1160,13 +1171,22 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// Redacts an environment variable value when it matches a secret parameter's resolved value
     /// so secrets don't leak through clients (e.g. <c>aspire describe --format json</c>).
     /// </summary>
+    /// <remarks>
+    /// Matching is value-based: a value is redacted only when it is exactly equal to a resolved secret
+    /// parameter value. This has two known limitations:
+    /// <list type="bullet">
+    /// <item>A non-secret value that coincidentally equals a secret value is also redacted (false positive).</item>
+    /// <item>A secret embedded as a substring of a larger composed value (e.g. a connection string) is not
+    /// detected, because only exact-equality matches are redacted.</item>
+    /// </list>
+    /// </remarks>
     private static string? RedactIfSecretValue(string? value, HashSet<string> secretParameterValues)
         => value is not null && secretParameterValues.Contains(value) ? null : value;
 
     /// <summary>
     /// Collects the resolved values of secret parameters in the application model so they can
     /// be redacted from data sent to clients. Only values that have already been resolved are
-    /// returned; this never triggers parameter value resolution.
+    /// returned; this never blocks waiting for interactive parameter resolution.
     /// </summary>
     private HashSet<string> GetResolvedSecretParameterValues()
     {

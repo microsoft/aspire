@@ -376,6 +376,179 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetResourceSnapshotsAsync_DoesNotBlockOnUnresolvedSecretParameter()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var secret = builder.AddParameter("dbpassword", "s3cr3t-value", secret: true);
+        var custom = builder.AddResource(new CustomResource("myresource"));
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        // Simulate a secret parameter whose value has not been resolved yet by replacing its completion
+        // source with one that never completes. GetResolvedSecretParameterValues must peek (not await) the
+        // task, so an unresolved secret cannot block the snapshot call.
+        secret.Resource.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(custom.Resource, s => s with
+        {
+            State = new ResourceStateSnapshot("Running", KnownResourceStateStyles.Success),
+            EnvironmentVariables =
+            [
+                new EnvironmentVariableSnapshot("DB_PASSWORD", "s3cr3t-value", true)
+            ]
+        }).DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        // The call must complete promptly even though a secret parameter is unresolved. DefaultTimeout
+        // fails the test if GetResolvedSecretParameterValues ever blocks waiting for resolution.
+        var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
+
+        var snapshot = Assert.Single(result, r => r.Name == "myresource");
+        var dbPassword = Assert.Single(snapshot.EnvironmentVariables, e => e.Name == "DB_PASSWORD");
+
+        // Because the secret value was not resolved, it is not part of the redaction set: the unresolved
+        // secret is skipped rather than awaited. Once resolved it is redacted (see the streaming test).
+        Assert.Equal("s3cr3t-value", dbPassword.Value);
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task WatchResourceSnapshotsAsync_RedactsSecretResolvedAfterWatchStarted()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var secret = builder.AddParameter("dbpassword", "s3cr3t-value", secret: true);
+        var custom = builder.AddResource(new CustomResource("myresource"));
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        // Begin with the secret unresolved so the watch starts before the value is known.
+        var waitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        secret.Resource.WaitForValueTcs = waitForValueTcs;
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        using var cts = new CancellationTokenSource();
+        var enumerator = target.WatchResourceSnapshotsAsync(cts.Token).GetAsyncEnumerator(cts.Token);
+        try
+        {
+            // Phase 1: secret unresolved. The env var value is not redacted because the secret value is unknown.
+            await notificationService.PublishUpdateAsync(custom.Resource, s => s with
+            {
+                State = new ResourceStateSnapshot("Running", KnownResourceStateStyles.Success),
+                EnvironmentVariables =
+                [
+                    new EnvironmentVariableSnapshot("PHASE", "before", false),
+                    new EnvironmentVariableSnapshot("DB_PASSWORD", "s3cr3t-value", true)
+                ]
+            }).DefaultTimeout();
+
+            var before = await ReadSnapshotAsync(enumerator, s => s.Name == "myresource" && HasEnvironmentVariable(s, "PHASE", "before")).DefaultTimeout();
+            Assert.Equal("s3cr3t-value", GetEnvironmentVariableValue(before, "DB_PASSWORD"));
+
+            // Resolve the secret mid-stream, then push a new event whose env var now matches the secret value.
+            waitForValueTcs.SetResult("s3cr3t-value");
+
+            await notificationService.PublishUpdateAsync(custom.Resource, s => s with
+            {
+                State = new ResourceStateSnapshot("Running", KnownResourceStateStyles.Success),
+                EnvironmentVariables =
+                [
+                    new EnvironmentVariableSnapshot("PHASE", "after", false),
+                    new EnvironmentVariableSnapshot("DB_PASSWORD", "s3cr3t-value", true)
+                ]
+            }).DefaultTimeout();
+
+            var after = await ReadSnapshotAsync(enumerator, s => s.Name == "myresource" && HasEnvironmentVariable(s, "PHASE", "after")).DefaultTimeout();
+
+            // The streaming path recomputes the secret set per event, so a secret resolved after the watch
+            // started is still redacted on later events and does not bypass the filter.
+            Assert.Null(GetEnvironmentVariableValue(after, "DB_PASSWORD"));
+        }
+        finally
+        {
+            cts.Cancel();
+            await enumerator.DisposeAsync();
+        }
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task GetResourceSnapshotsAsync_RedactsNonSecretEnvVarThatCoincidentallyMatchesSecretValue()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        builder.AddParameter("dbpassword", "shared-value", secret: true);
+        var custom = builder.AddResource(new CustomResource("myresource"));
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(custom.Resource, s => s with
+        {
+            State = new ResourceStateSnapshot("Running", KnownResourceStateStyles.Success),
+            EnvironmentVariables =
+            [
+                new EnvironmentVariableSnapshot("COINCIDENCE", "shared-value", true)
+            ]
+        }).DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
+
+        var snapshot = Assert.Single(result, r => r.Name == "myresource");
+        var coincidence = Assert.Single(snapshot.EnvironmentVariables, e => e.Name == "COINCIDENCE");
+
+        // Redaction is value-based: any value equal to a secret value is redacted, even when the env var is
+        // not itself sourced from the secret parameter. This is the documented, expected behavior.
+        Assert.Null(coincidence.Value);
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    private static async Task<ResourceSnapshot> ReadSnapshotAsync(IAsyncEnumerator<ResourceSnapshot> enumerator, Func<ResourceSnapshot, bool> predicate)
+    {
+        while (await enumerator.MoveNextAsync().ConfigureAwait(false))
+        {
+            if (predicate(enumerator.Current))
+            {
+                return enumerator.Current;
+            }
+        }
+
+        throw new InvalidOperationException("Watch stream ended before a matching snapshot was observed.");
+    }
+
+    private static bool HasEnvironmentVariable(ResourceSnapshot snapshot, string name, string value)
+        => snapshot.EnvironmentVariables.Any(e => e.Name == name && e.Value == value);
+
+    private static string? GetEnvironmentVariableValue(ResourceSnapshot snapshot, string name)
+        => snapshot.EnvironmentVariables.Single(e => e.Name == name).Value;
+
+    [Fact]
     public async Task WaitForResourceAsync_ReturnsFailureWhenResourceHasErrorStateStyle()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
