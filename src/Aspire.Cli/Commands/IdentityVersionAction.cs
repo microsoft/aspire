@@ -22,7 +22,10 @@ internal sealed class IdentityVersionAction(CliExecutionContext executionContext
 
     public override int Invoke(ParseResult parseResult)
     {
-        parseResult.InvocationConfiguration.Output.WriteLine(executionContext.IdentityVersion);
+        var version = executionContext.IdentityVersion;
+        var commit = executionContext.IdentityCommit;
+        var output = string.IsNullOrEmpty(commit) ? version : $"{version}+{commit}";
+        parseResult.InvocationConfiguration.Output.WriteLine(output);
         return CliExitCodes.Success;
     }
 }
