@@ -810,6 +810,15 @@ namespace Aspire.Hosting.Azure.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Failed Azure resources.
+        /// </summary>
+        internal static string FailurePropertyFailedResourcesDisplayName {
+            get {
+                return ResourceManager.GetString("FailurePropertyFailedResourcesDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Azure HTTP status.
         /// </summary>
         internal static string FailurePropertyHttpStatusDisplayName {

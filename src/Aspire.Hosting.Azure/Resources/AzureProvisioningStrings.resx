@@ -369,6 +369,9 @@ To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/pro
   <data name="FailurePropertyCurrentLocationDisplayName" xml:space="preserve">
     <value>Azure current location</value>
   </data>
+  <data name="FailurePropertyFailedResourcesDisplayName" xml:space="preserve">
+    <value>Failed Azure resources</value>
+  </data>
   <data name="FailurePropertyHttpStatusDisplayName" xml:space="preserve">
     <value>Azure HTTP status</value>
   </data>

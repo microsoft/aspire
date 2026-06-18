@@ -1041,6 +1041,7 @@ internal sealed class AzureProvisioningController(
             hasFailures
                 ? new ResourceStateSnapshot(AzureProvisioningStrings.ResourceStateFailedToProvision, KnownResourceStateStyles.Error)
                 : new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+            hasFailures ? CreateAzureEnvironmentFailureProperties(azureResources) : [],
             cancellationToken).ConfigureAwait(false);
 
         if (hasFailures && HasMissingAzureContextFailure(azureResources))
@@ -1054,6 +1055,19 @@ internal sealed class AzureProvisioningController(
     private static bool HasMissingAzureContextFailure(IReadOnlyList<(IResource Resource, IAzureResource AzureResource)> azureResources)
         => azureResources.Any(static resource =>
             resource.AzureResource.ProvisioningTaskCompletionSource?.Task.Exception?.InnerExceptions.Any(IsMissingAzureContextFailure) == true);
+
+    private static ImmutableArray<ResourcePropertySnapshot> CreateAzureEnvironmentFailureProperties(IReadOnlyList<(IResource Resource, IAzureResource AzureResource)> azureResources)
+    {
+        var failedResourceNames = azureResources
+            .Where(static resource => resource.AzureResource.ProvisioningTaskCompletionSource?.Task is { IsFaulted: true } or { IsCanceled: true })
+            .Select(static resource => resource.Resource.Name)
+            .Distinct(StringComparers.ResourceName)
+            .ToArray();
+
+        return failedResourceNames.Length == 0
+            ? []
+            : [AzureProvisioningFailureDetails.CreateHighlightedFailureProperty("failed.resources", failedResourceNames, AzureProvisioningStrings.FailurePropertyFailedResourcesDisplayName)];
+    }
 
     private static Exception? GetProvisioningFailureException(IReadOnlyList<(IResource Resource, IAzureResource AzureResource)> azureResources)
         => azureResources
@@ -3811,6 +3825,19 @@ internal sealed class AzureProvisioningController(
         ResourceStateSnapshot state,
         CancellationToken cancellationToken)
     {
+        await PublishAzureEnvironmentStateAsync(
+            model,
+            state,
+            [],
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task PublishAzureEnvironmentStateAsync(
+        DistributedApplicationModel model,
+        ResourceStateSnapshot state,
+        ImmutableArray<ResourcePropertySnapshot> additionalProperties,
+        CancellationToken cancellationToken)
+    {
         if (model.Resources.OfType<AzureEnvironmentResource>().SingleOrDefault() is not { } azureEnvironmentResource)
         {
             return;
@@ -3819,6 +3846,10 @@ internal sealed class AzureProvisioningController(
         var azureEnvironmentProperties = state.Text == KnownResourceStates.NotStarted
             ? ImmutableArray<ResourcePropertySnapshot>.Empty
             : BuildAzureEnvironmentProperties(await GetCurrentAzureContextAsync(cancellationToken).ConfigureAwait(false));
+        if (!additionalProperties.IsDefaultOrEmpty)
+        {
+            azureEnvironmentProperties = azureEnvironmentProperties.SetResourcePropertyRange(additionalProperties);
+        }
 
         // NotStarted represents "no active Azure context for this run" after reset/delete/forget.
         // Strip Azure-specific properties and URLs so the dashboard does not show stale subscription,

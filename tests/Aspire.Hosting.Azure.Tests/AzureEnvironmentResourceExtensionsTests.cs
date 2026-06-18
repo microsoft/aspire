@@ -4320,6 +4320,34 @@ public class AzureEnvironmentResourceExtensionsTests
     }
 
     [Fact]
+    public async Task EnsureProvisioned_AddsFailedResourceBreadcrumbsToAzureEnvironment()
+    {
+        var builder = CreateBuilder(isRunMode: true);
+
+        AddTestAzureProvisioning(builder, bicepProvisioner: new ThrowingTestBicepProvisioner());
+
+        var storage = builder.AddBicepTemplateString("storage", "resource storage 'Microsoft.Storage/storageAccounts@2024-01-01' = {}");
+        var storage2 = builder.AddBicepTemplateString("storage2", "resource storage2 'Microsoft.Storage/storageAccounts@2024-01-01' = {}");
+
+        using var app = builder.Build();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
+        var controller = app.Services.GetRequiredService<AzureProvisioningController>();
+
+        await controller.EnsureProvisionedAsync(model);
+
+        var azureEnvironment = Assert.Single(model.Resources.OfType<AzureEnvironmentResource>());
+        Assert.True(notifications.TryGetCurrentState(azureEnvironment.Name, out var environmentEvent));
+        Assert.Equal("Failed to Provision", environmentEvent.Snapshot.State?.Text);
+
+        var failedResourcesProperty = Assert.Single(environmentEvent.Snapshot.Properties, property => property.Name == "azure.provisioning.error.failed.resources");
+        Assert.Equal(AzureProvisioningStrings.FailurePropertyFailedResourcesDisplayName, failedResourcesProperty.DisplayName);
+        Assert.True(failedResourcesProperty.IsHighlighted);
+        Assert.Equal([storage.Resource.Name, storage2.Resource.Name], Assert.IsType<string[]>(failedResourcesProperty.Value));
+    }
+
+    [Fact]
     public void AddAzureEnvironment_InPublishMode_CreatesStableDeploymentName()
     {
         // Arrange

@@ -152,6 +152,11 @@
         <target state="new">Azure current location</target>
         <note />
       </trans-unit>
+      <trans-unit id="FailurePropertyFailedResourcesDisplayName">
+        <source>Failed Azure resources</source>
+        <target state="new">Failed Azure resources</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FailurePropertyHttpStatusDisplayName">
         <source>Azure HTTP status</source>
         <target state="new">Azure HTTP status</target>
