@@ -107,7 +107,7 @@ public sealed class ResourceMenuBuilder
 
         menuItems.Add(new MenuButtonItem
         {
-            Text = _controlLoc[nameof(ControlsStrings.ExportJson)],
+            Text = _controlLoc[nameof(ControlsStrings.ViewJson)],
             Icon = s_bracesIcon,
             OnClick = async () =>
             {

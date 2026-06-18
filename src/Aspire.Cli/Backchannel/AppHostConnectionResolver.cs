@@ -135,9 +135,8 @@ internal sealed class AppHostConnectionResolver(
                 };
             }
 
-            var targetPath = projectFile.FullName;
             var matchingSockets = AppHostHelper.FindMatchingNonOrphanedSockets(
-                targetPath,
+                projectFile.FullName,
                 executionContext.HomeDirectory.FullName,
                 Environment.ProcessId,
                 logger);
@@ -162,7 +161,9 @@ internal sealed class AppHostConnectionResolver(
                 }
             }
 
-            var displayPath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, targetPath);
+            // Display the path the user supplied (not the symlink-resolved lookup path) so the
+            // error message stays relative to the working directory and matches what they typed.
+            var displayPath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, projectFile.FullName);
 
             return new AppHostConnectionResult
             {

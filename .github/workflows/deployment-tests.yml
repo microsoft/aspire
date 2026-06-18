@@ -333,12 +333,31 @@ jobs:
 
             **Workflow Run:** ${runUrl}
 
+            ### Investigation Checklist
+
+            - [ ] Review workflow logs for error details
+            - [ ] Check if failures are timeout-related or deployment failures
+            - [ ] Download test artifacts (logs, asciinema recordings)
+            - [ ] Identify common failure patterns across tests
+            - [ ] Check Azure authentication and resource provisioning status
+
+            ### Resources
+
+            - **Workflow Logs:** See link above for detailed test output
+            - **Test Artifacts:** Download recordings and logs from the workflow run (testresults/recordings, testresults/logs)
+            - **Deployment E2E Tests:** \`tests/Aspire.Deployment.EndToEnd.Tests/\`
+            - **Test Helpers:** \`tests/Shared/Hex1bAutomatorTestHelpers.cs\`
+
             ### Next Steps
+
             1. Check the workflow run for detailed error logs
-            2. Download test artifacts for asciinema recordings
-            3. Investigate and fix the failing tests
+            2. Download test artifacts for asciinema recordings and error logs
+            3. Investigate which specific tests are failing
+            4. Determine if this is a timeout, deployment, or test automation issue
+            5. Implement fix and verify with local test run
 
             ### Labels
+
             This issue was automatically created by the deployment E2E test workflow.
 
             /cc @microsoft/aspire-team
@@ -373,7 +392,8 @@ jobs:
                 repo: context.repo.repo,
                 title: issueTitle,
                 body: issueBody,
-                labels: ['area-testing', 'deployment-e2e']
+                labels: ['area-testing', 'area-deployment', 'deployment-e2e'],
+                assignees: ['mitchdenny']
               });
               console.log(`Created issue: ${issue.data.html_url}`);
             }
