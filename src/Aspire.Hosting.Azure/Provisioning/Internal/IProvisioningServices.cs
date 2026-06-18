@@ -78,6 +78,13 @@ internal interface IAzureProvisioningOptionsManager
     Task<bool> EnsureProvisioningOptionsAsync(bool forcePrompt, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Gets the current in-memory provisioning options.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The current provisioning options.</returns>
+    Task<AzureProvisioningOptionsState> GetProvisioningOptionsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Persists the current provisioning options to deployment state without creating a provisioning context.
     /// </summary>
     /// <param name="cancellationToken">The cancellation token.</param>
@@ -108,6 +115,8 @@ internal sealed record AzureProvisioningOptionsState(string? SubscriptionId, str
 internal sealed class NoOpAzureProvisioningOptionsManager : IAzureProvisioningOptionsManager
 {
     public Task<bool> EnsureProvisioningOptionsAsync(bool forcePrompt, CancellationToken cancellationToken = default) => Task.FromResult(false);
+    public Task<AzureProvisioningOptionsState> GetProvisioningOptionsAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult(new AzureProvisioningOptionsState(null, null, null, null));
     public Task PersistProvisioningOptionsAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     public Task<AzureProvisioningOptionsState> ApplyProvisioningOptionsAsync(AzureProvisioningOptionsUpdate options, CancellationToken cancellationToken = default)
         => Task.FromResult(new AzureProvisioningOptionsState(options.SubscriptionId, options.ResourceGroup, options.Location, options.TenantId));

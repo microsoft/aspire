@@ -1276,6 +1276,18 @@ internal sealed class AzureProvisioningController(
         }
     }
 
+    private static void ThrowIfKeyVaultEnvironmentLocationChange(DistributedApplicationModel model, string? currentLocation, string? requestedLocation)
+    {
+        if (string.IsNullOrWhiteSpace(currentLocation) ||
+            string.IsNullOrWhiteSpace(requestedLocation) ||
+            string.Equals(currentLocation, requestedLocation, StringComparisons.AzureLocation))
+        {
+            return;
+        }
+
+        ThrowIfKeyVaultLocationChangeTarget(GetProvisionableAzureResources(model));
+    }
+
     private static bool TryGetAzureResource(
         IReadOnlyList<(IResource Resource, IAzureResource AzureResource)> azureResources,
         IResource target,
@@ -1663,6 +1675,7 @@ internal sealed class AzureProvisioningController(
     private async Task<bool> ExecuteChangeAzureContextAsync(DistributedApplicationModel model, ChangeAzureContextIntent intent, CancellationToken cancellationToken)
     {
         UpdateActiveOperationPhase(intent, AzureProvisioningStrings.OperationPhaseChangingAzureContext);
+        var currentContext = await GetCurrentAzureContextAsync(cancellationToken).ConfigureAwait(false);
         if (intent.Options is null)
         {
             // This is the legacy/non-dashboard path. The options manager owns prompting and
@@ -1673,10 +1686,13 @@ internal sealed class AzureProvisioningController(
                 return false;
             }
 
+            var provisioningOptions = await provisioningOptionsManager.GetProvisioningOptionsAsync(cancellationToken).ConfigureAwait(false);
+            ThrowIfKeyVaultEnvironmentLocationChange(model, currentContext.Location, provisioningOptions.Location);
             await provisioningOptionsManager.PersistProvisioningOptionsAsync(cancellationToken).ConfigureAwait(false);
         }
         else
         {
+            ThrowIfKeyVaultEnvironmentLocationChange(model, currentContext.Location, intent.Options.Location);
             await provisioningOptionsManager.ApplyProvisioningOptionsAsync(intent.Options, cancellationToken).ConfigureAwait(false);
         }
 

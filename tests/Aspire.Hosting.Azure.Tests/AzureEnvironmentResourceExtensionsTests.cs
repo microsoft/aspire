@@ -3309,6 +3309,51 @@ public class AzureEnvironmentResourceExtensionsTests
     }
 
     [Fact]
+    public async Task ChangeAzureContextCommand_FailsWhenLocationChangeWouldReprovisionKeyVault()
+    {
+        var builder = CreateBuilder(isRunMode: true);
+        var deploymentStateManager = new TestDeploymentStateManager();
+        var testBicepProvisioner = new TestBicepProvisioner();
+
+        AddTestAzureProvisioning(builder, bicepProvisioner: testBicepProvisioner, deploymentStateManager: deploymentStateManager);
+
+        builder.AddAzureKeyVault("kv");
+
+        using var app = builder.Build();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var environmentResource = Assert.Single(model.Resources.OfType<AzureEnvironmentResource>());
+
+        var azureSection = await deploymentStateManager.AcquireSectionAsync("Azure");
+        azureSection.Data["SubscriptionId"] = "12345678-1234-1234-1234-123456789012";
+        azureSection.Data["Location"] = "westus2";
+        azureSection.Data["ResourceGroup"] = "test-rg";
+        await deploymentStateManager.SaveSectionAsync(azureSection);
+
+        var changeContextCommand = Assert.Single(environmentResource.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == AzureProvisioningController.ChangeAzureContextCommandName);
+
+        var result = await changeContextCommand.ExecuteCommand(new ExecuteCommandContext
+        {
+            Services = app.Services,
+            ResourceName = environmentResource.Name,
+            CancellationToken = CancellationToken.None,
+            Logger = NullLogger.Instance,
+            Arguments = CreateArguments(
+                ("subscriptionId", "12345678-1234-1234-1234-123456789012"),
+                ("resourceGroup", "test-rg"),
+                (AzureBicepResource.KnownParameters.Location, "West US 3"))
+        });
+
+        Assert.False(result.Success);
+        Assert.False(result.Canceled);
+        Assert.Equal(AzureProvisioningStrings.ChangeResourceLocationKeyVaultUnsupported, result.Message);
+        Assert.Empty(testBicepProvisioner.ProvisionedResources);
+
+        azureSection = await deploymentStateManager.AcquireSectionAsync("Azure");
+        Assert.Equal("westus2", azureSection.Data["Location"]?.GetValue<string>());
+    }
+
+    [Fact]
     public async Task ChangeAzureContextCommand_DoesNotInferResourceLocationOverrides()
     {
         var builder = CreateBuilder(isRunMode: true);
@@ -5025,6 +5070,16 @@ public class AzureEnvironmentResourceExtensionsTests
     private sealed class TestAzureProvisioningOptionsManager(IDeploymentStateManager deploymentStateManager) : IAzureProvisioningOptionsManager
     {
         public Task<bool> EnsureProvisioningOptionsAsync(bool forcePrompt, CancellationToken cancellationToken = default) => Task.FromResult(true);
+
+        public async Task<AzureProvisioningOptionsState> GetProvisioningOptionsAsync(CancellationToken cancellationToken = default)
+        {
+            var azureSection = await deploymentStateManager.AcquireSectionAsync("Azure", cancellationToken);
+            return new AzureProvisioningOptionsState(
+                azureSection.Data["SubscriptionId"]?.GetValue<string>(),
+                azureSection.Data["ResourceGroup"]?.GetValue<string>(),
+                azureSection.Data["Location"]?.GetValue<string>(),
+                azureSection.Data["TenantId"]?.GetValue<string>());
+        }
 
         public Task PersistProvisioningOptionsAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 
