@@ -293,12 +293,12 @@ export async function stopAppHostIfRunning(appHostPath: string): Promise<void> {
     const stopError = await tryStopAppHost(appHostPath);
 
     if (!stopError) {
-        await waitForNoRunningAppHostPath(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid, 'after stopping');
+        await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid, 'after stopping');
         return;
     }
 
     if (/not running|No running AppHost|No AppHost/i.test(stopError.message)) {
-        await waitForNoRunningAppHostPath(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid, 'after stopping');
+        await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid, 'after stopping');
         return;
     }
 
