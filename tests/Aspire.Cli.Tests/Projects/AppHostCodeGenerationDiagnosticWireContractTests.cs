@@ -8,9 +8,9 @@ using Aspire.Cli.Projects;
 namespace Aspire.Cli.Tests.Projects;
 
 /// <summary>
-/// Guards the wire contract between the AppHost server's reflection-based
-/// <c>SystemTextJsonFormatter</c> (default <see cref="JsonSerializerOptions"/>, no naming policy,
-/// PascalCase on the wire) and the CLI source-generated
+/// Guards the wire contract between the AppHost server's reflection-based serializer
+/// (default <see cref="JsonSerializerOptions"/>, no naming policy, PascalCase on the wire)
+/// and the CLI source-generated
 /// <see cref="BackchannelJsonSerializerContext"/>. If either side adopts a naming policy or
 /// renames a property, this test must catch it before the diagnostic silently degrades to
 /// "all null" on the CLI as in issue #16709.
