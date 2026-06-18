@@ -291,6 +291,71 @@ Para saber mais, veja a [documentação de provisionamento do Azure](https://aka
         <target state="translated">Provisionamento do Azure</target>
         <note />
       </trans-unit>
+      <trans-unit id="OperationPhaseApplyingAzureContext">
+        <source>Applying Azure context</source>
+        <target state="new">Applying Azure context</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPhaseChangingAzureContext">
+        <source>Changing Azure context</source>
+        <target state="new">Changing Azure context</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPhaseChangingLocationToFormat">
+        <source>Changing location to {0}</source>
+        <target state="new">Changing location to {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPhaseDeletingAzureResource">
+        <source>Deleting Azure resource</source>
+        <target state="new">Deleting Azure resource</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPhaseDeletingAzureResources">
+        <source>Deleting Azure resources</source>
+        <target state="new">Deleting Azure resources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPhaseDeletingExistingAzureResourceBeforeChangingLocationFormat">
+        <source>Deleting existing Azure resource before changing location to {0}</source>
+        <target state="new">Deleting existing Azure resource before changing location to {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPhaseProvisioningAzureResources">
+        <source>Provisioning Azure resources</source>
+        <target state="new">Provisioning Azure resources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPhasePurgingDeletedKeyVault">
+        <source>Purging deleted Key Vault</source>
+        <target state="new">Purging deleted Key Vault</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPhasePurgingRecoverableKeyVaultFormat">
+        <source>Purging recoverable Key Vault {0}</source>
+        <target state="new">Purging recoverable Key Vault {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPhaseReprovisioning">
+        <source>Reprovisioning</source>
+        <target state="new">Reprovisioning</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPhaseReprovisioningAzureResources">
+        <source>Reprovisioning Azure resources</source>
+        <target state="new">Reprovisioning Azure resources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPhaseReprovisioningInLocationFormat">
+        <source>Reprovisioning in {0}</source>
+        <target state="new">Reprovisioning in {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationPhaseResettingProvisioningState">
+        <source>Resetting provisioning state</source>
+        <target state="new">Resetting provisioning state</target>
+        <note />
+      </trans-unit>
       <trans-unit id="OperationPropertyNameDisplayName">
         <source>Azure operation</source>
         <target state="new">Azure operation</target>
@@ -394,6 +459,106 @@ Para saber mais, veja a [documentação de provisionamento do Azure](https://aka
       <trans-unit id="ResourceGroupSelectionMessage">
         <source>Select your Azure resource group or enter a new name:</source>
         <target state="translated">Selecione o grupo de recursos do Azure ou insira um novo nome:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateAzureDeploymentCanceled">
+        <source>Azure deployment canceled</source>
+        <target state="new">Azure deployment canceled</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateAzureDeploymentFailed">
+        <source>Azure deployment failed</source>
+        <target state="new">Azure deployment failed</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateCanceled">
+        <source>Canceled</source>
+        <target state="new">Canceled</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateCanceling">
+        <source>Canceling</source>
+        <target state="new">Canceling</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateChangingLocation">
+        <source>Changing location</source>
+        <target state="new">Changing location</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateCompilingArmTemplate">
+        <source>Compiling ARM template</source>
+        <target state="new">Compiling ARM template</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateCreatingArmDeployment">
+        <source>Creating ARM Deployment</source>
+        <target state="new">Creating ARM Deployment</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateDeleting">
+        <source>Deleting</source>
+        <target state="new">Deleting</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateDrifted">
+        <source>Drifted</source>
+        <target state="new">Drifted</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateFailedToDelete">
+        <source>Failed to Delete</source>
+        <target state="new">Failed to Delete</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateFailedToProvision">
+        <source>Failed to Provision</source>
+        <target state="new">Failed to Provision</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateMissingInAzure">
+        <source>Missing in Azure</source>
+        <target state="new">Missing in Azure</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateMissingSubscriptionConfiguration">
+        <source>Missing subscription configuration</source>
+        <target state="new">Missing subscription configuration</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateProvisioned">
+        <source>Provisioned</source>
+        <target state="new">Provisioned</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateProvisionedMultipleAzureResourcesFormat">
+        <source>Provisioned {0} Azure resources</source>
+        <target state="new">Provisioned {0} Azure resources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateProvisioningMultipleAzureResourcesFormat">
+        <source>Provisioning {0} Azure resources</source>
+        <target state="new">Provisioning {0} Azure resources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateProvisioningPrefix">
+        <source>Provisioning </source>
+        <target state="new">Provisioning </target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateProvisioningResourceFormat">
+        <source>Provisioning {0}</source>
+        <target state="new">Provisioning {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateStarting">
+        <source>Starting</source>
+        <target state="new">Starting</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStateWaitingForDeployment">
+        <source>Waiting for Deployment</source>
+        <target state="new">Waiting for Deployment</target>
         <note />
       </trans-unit>
       <trans-unit id="SubscriptionDialogTitle">

@@ -6,9 +6,11 @@
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Provisioning.Internal;
+using Aspire.Hosting.Azure.Resources;
 using Aspire.Hosting.Pipelines;
 using Azure;
 using Azure.Core;
@@ -418,7 +420,7 @@ internal sealed class BicepProvisioner(
             // Preserve ARM's terminal cancellation so the dashboard explains why this
             // resource stopped instead of silently retrying.
             await PersistReconciledProvisioningStateAsync(stateSection, DeploymentStateProvisioningStateCanceled, cancellationToken).ConfigureAwait(false);
-            await PublishReconciledTerminalStateAsync(resource, "Azure deployment canceled").ConfigureAwait(false);
+            await PublishReconciledTerminalStateAsync(resource, AzureProvisioningStrings.ResourceStateAzureDeploymentCanceled).ConfigureAwait(false);
             throw new InvalidOperationException($"Azure deployment for {resource.Name} was canceled.");
         }
 
@@ -427,7 +429,7 @@ internal sealed class BicepProvisioner(
             // Preserve ARM's terminal failure for the same reason as cancellation:
             // this is the outcome of the adopted deployment.
             await PersistReconciledProvisioningStateAsync(stateSection, DeploymentStateProvisioningStateFailed, cancellationToken).ConfigureAwait(false);
-            await PublishReconciledTerminalStateAsync(resource, "Azure deployment failed").ConfigureAwait(false);
+            await PublishReconciledTerminalStateAsync(resource, AzureProvisioningStrings.ResourceStateAzureDeploymentFailed).ConfigureAwait(false);
             throw new InvalidOperationException($"Azure deployment for {resource.Name} failed.");
         }
 
@@ -653,7 +655,7 @@ internal sealed class BicepProvisioner(
             {
                 await notificationService.PublishUpdateAsync(resource, state => state with
                 {
-                    State = new("Azure deployment failed", KnownResourceStateStyles.Error),
+                    State = new(AzureProvisioningStrings.ResourceStateAzureDeploymentFailed, KnownResourceStateStyles.Error),
                     Properties = failureDetails.SetResourceProperties(WithoutDeploymentOperationProperties(state.Properties), AzureProvisioningFailureDetails.ProvisionOperation)
                 }).ConfigureAwait(false);
             }
@@ -1178,22 +1180,24 @@ internal sealed class BicepProvisioner(
     {
         if (summary.FailedOperations.Length > 0)
         {
-            return new("Azure deployment failed", KnownResourceStateStyles.Error);
+            return new(AzureProvisioningStrings.ResourceStateAzureDeploymentFailed, KnownResourceStateStyles.Error);
         }
 
         var runningLabels = CreateOperationResourceLabels(summary.RunningOperations);
         if (runningLabels.Length > 0)
         {
             var runningText = runningLabels.Length == 1
-                ? $"Provisioning {runningLabels[0]}"
-                : $"Provisioning {runningLabels.Length} Azure resources";
+                ? string.Format(CultureInfo.CurrentCulture, AzureProvisioningStrings.ResourceStateProvisioningResourceFormat, runningLabels[0])
+                : string.Format(CultureInfo.CurrentCulture, AzureProvisioningStrings.ResourceStateProvisioningMultipleAzureResourcesFormat, runningLabels.Length);
 
             return new(runningText, KnownResourceStateStyles.Info);
         }
 
         if (summary.SucceededOperations.Length > 0)
         {
-            return new($"Provisioned {summary.SucceededOperations.Length} Azure resources", KnownResourceStateStyles.Info);
+            return new(
+                string.Format(CultureInfo.CurrentCulture, AzureProvisioningStrings.ResourceStateProvisionedMultipleAzureResourcesFormat, summary.SucceededOperations.Length),
+                KnownResourceStateStyles.Info);
         }
 
         return new(AzureProvisioningController.WaitingForDeploymentState, KnownResourceStateStyles.Info);

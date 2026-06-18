@@ -393,4 +393,103 @@ To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/pro
   <data name="FailurePropertyTargetResourceIdDisplayName" xml:space="preserve">
     <value>Azure target resource ID</value>
   </data>
+  <data name="ResourceStateMissingInAzure" xml:space="preserve">
+    <value>Missing in Azure</value>
+  </data>
+  <data name="ResourceStateMissingSubscriptionConfiguration" xml:space="preserve">
+    <value>Missing subscription configuration</value>
+  </data>
+  <data name="ResourceStateDrifted" xml:space="preserve">
+    <value>Drifted</value>
+  </data>
+  <data name="ResourceStateStarting" xml:space="preserve">
+    <value>Starting</value>
+  </data>
+  <data name="ResourceStateCompilingArmTemplate" xml:space="preserve">
+    <value>Compiling ARM template</value>
+  </data>
+  <data name="ResourceStateCreatingArmDeployment" xml:space="preserve">
+    <value>Creating ARM Deployment</value>
+  </data>
+  <data name="ResourceStateWaitingForDeployment" xml:space="preserve">
+    <value>Waiting for Deployment</value>
+  </data>
+  <data name="ResourceStateChangingLocation" xml:space="preserve">
+    <value>Changing location</value>
+  </data>
+  <data name="ResourceStateDeleting" xml:space="preserve">
+    <value>Deleting</value>
+  </data>
+  <data name="ResourceStateCanceling" xml:space="preserve">
+    <value>Canceling</value>
+  </data>
+  <data name="ResourceStateCanceled" xml:space="preserve">
+    <value>Canceled</value>
+  </data>
+  <data name="ResourceStateProvisioned" xml:space="preserve">
+    <value>Provisioned</value>
+  </data>
+  <data name="ResourceStateFailedToProvision" xml:space="preserve">
+    <value>Failed to Provision</value>
+  </data>
+  <data name="ResourceStateFailedToDelete" xml:space="preserve">
+    <value>Failed to Delete</value>
+  </data>
+  <data name="ResourceStateAzureDeploymentFailed" xml:space="preserve">
+    <value>Azure deployment failed</value>
+  </data>
+  <data name="ResourceStateAzureDeploymentCanceled" xml:space="preserve">
+    <value>Azure deployment canceled</value>
+  </data>
+  <data name="ResourceStateProvisioningPrefix" xml:space="preserve">
+    <value>Provisioning </value>
+  </data>
+  <data name="ResourceStateProvisioningResourceFormat" xml:space="preserve">
+    <value>Provisioning {0}</value>
+  </data>
+  <data name="ResourceStateProvisioningMultipleAzureResourcesFormat" xml:space="preserve">
+    <value>Provisioning {0} Azure resources</value>
+  </data>
+  <data name="ResourceStateProvisionedMultipleAzureResourcesFormat" xml:space="preserve">
+    <value>Provisioned {0} Azure resources</value>
+  </data>
+  <data name="OperationPhaseResettingProvisioningState" xml:space="preserve">
+    <value>Resetting provisioning state</value>
+  </data>
+  <data name="OperationPhaseChangingAzureContext" xml:space="preserve">
+    <value>Changing Azure context</value>
+  </data>
+  <data name="OperationPhaseApplyingAzureContext" xml:space="preserve">
+    <value>Applying Azure context</value>
+  </data>
+  <data name="OperationPhaseProvisioningAzureResources" xml:space="preserve">
+    <value>Provisioning Azure resources</value>
+  </data>
+  <data name="OperationPhaseReprovisioningAzureResources" xml:space="preserve">
+    <value>Reprovisioning Azure resources</value>
+  </data>
+  <data name="OperationPhaseDeletingAzureResources" xml:space="preserve">
+    <value>Deleting Azure resources</value>
+  </data>
+  <data name="OperationPhaseDeletingAzureResource" xml:space="preserve">
+    <value>Deleting Azure resource</value>
+  </data>
+  <data name="OperationPhaseChangingLocationToFormat" xml:space="preserve">
+    <value>Changing location to {0}</value>
+  </data>
+  <data name="OperationPhaseDeletingExistingAzureResourceBeforeChangingLocationFormat" xml:space="preserve">
+    <value>Deleting existing Azure resource before changing location to {0}</value>
+  </data>
+  <data name="OperationPhaseReprovisioning" xml:space="preserve">
+    <value>Reprovisioning</value>
+  </data>
+  <data name="OperationPhaseReprovisioningInLocationFormat" xml:space="preserve">
+    <value>Reprovisioning in {0}</value>
+  </data>
+  <data name="OperationPhasePurgingDeletedKeyVault" xml:space="preserve">
+    <value>Purging deleted Key Vault</value>
+  </data>
+  <data name="OperationPhasePurgingRecoverableKeyVaultFormat" xml:space="preserve">
+    <value>Purging recoverable Key Vault {0}</value>
+  </data>
 </root>

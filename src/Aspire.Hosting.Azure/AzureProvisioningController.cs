@@ -58,7 +58,7 @@ namespace Aspire.Hosting.Azure;
 /// </para>
 /// <para>
 /// Drift detection runs periodically. It probes ARM to verify each running resource still exists and
-/// marks missing resources as "Missing in Azure" / the environment as "Drifted". The drift monitor queues at
+/// marks missing resources and the environment with drift states. The drift monitor queues at
 /// most one check at a time through the same serialized channel.
 /// </para>
 /// <para>
@@ -91,18 +91,18 @@ internal sealed class AzureProvisioningController(
     internal const string ReprovisionAllCommandName = "reprovision-all";
     internal const string DeleteAzureResourcesCommandName = "delete-azure-resources";
     internal const string LocationOverrideKey = "LocationOverride";
-    internal const string MissingInAzureState = "Missing in Azure";
-    internal const string DriftedState = "Drifted";
-    internal const string StartingState = "Starting";
-    internal const string CompilingArmTemplateState = "Compiling ARM template";
-    internal const string CreatingArmDeploymentState = "Creating ARM Deployment";
-    internal const string WaitingForDeploymentState = "Waiting for Deployment";
-    internal const string ChangingLocationState = "Changing location";
-    internal const string DeletingState = "Deleting";
-    internal const string CancelingState = "Canceling";
-    internal const string ProvisionedState = "Provisioned";
+    internal static string MissingInAzureState => AzureProvisioningStrings.ResourceStateMissingInAzure;
+    internal static string DriftedState => AzureProvisioningStrings.ResourceStateDrifted;
+    internal static string StartingState => AzureProvisioningStrings.ResourceStateStarting;
+    internal static string CompilingArmTemplateState => AzureProvisioningStrings.ResourceStateCompilingArmTemplate;
+    internal static string CreatingArmDeploymentState => AzureProvisioningStrings.ResourceStateCreatingArmDeployment;
+    internal static string WaitingForDeploymentState => AzureProvisioningStrings.ResourceStateWaitingForDeployment;
+    internal static string ChangingLocationState => AzureProvisioningStrings.ResourceStateChangingLocation;
+    internal static string DeletingState => AzureProvisioningStrings.ResourceStateDeleting;
+    internal static string CancelingState => AzureProvisioningStrings.ResourceStateCanceling;
+    internal static string ProvisionedState => AzureProvisioningStrings.ResourceStateProvisioned;
     private const string KeyVaultVaultResourceType = "Microsoft.KeyVault/vaults";
-    private const string ProvisioningStatePrefix = "Provisioning ";
+    private static string ProvisioningStatePrefix => AzureProvisioningStrings.ResourceStateProvisioningPrefix;
     private const string SubscriptionIdArgumentName = "subscriptionId";
     private const string ResourceGroupArgumentName = "resourceGroup";
     private const string LocationArgumentName = "location";
@@ -938,22 +938,24 @@ internal sealed class AzureProvisioningController(
     }
 
     private static bool IsCancelableDeploymentState(CustomResourceSnapshot snapshot)
-        => snapshot.State?.Text is CreatingArmDeploymentState or WaitingForDeploymentState;
+    {
+        var state = snapshot.State?.Text;
+        return state == CreatingArmDeploymentState || state == WaitingForDeploymentState;
+    }
 
     private static bool IsActiveOperationCancelableResourceState(CustomResourceSnapshot snapshot)
-        => snapshot.State?.Text switch
-        {
-            StartingState or
-            CompilingArmTemplateState or
-            CreatingArmDeploymentState or
-            WaitingForDeploymentState or
-            ChangingLocationState or
-            DeletingState or
-            CancelingState or
-            ProvisionedState => true,
-            { } state when state.StartsWith(ProvisioningStatePrefix, StringComparison.Ordinal) => true,
-            _ => false
-        };
+    {
+        var state = snapshot.State?.Text;
+        return state == StartingState ||
+            state == CompilingArmTemplateState ||
+            state == CreatingArmDeploymentState ||
+            state == WaitingForDeploymentState ||
+            state == ChangingLocationState ||
+            state == DeletingState ||
+            state == CancelingState ||
+            state == ProvisionedState ||
+            state?.StartsWith(ProvisioningStatePrefix, StringComparison.Ordinal) == true;
+    }
 
     private async Task RunOperationAsync(DistributedApplicationModel model, AzureIntent intent, CancellationToken cancellationToken)
     {
@@ -1026,8 +1028,8 @@ internal sealed class AzureProvisioningController(
         await PublishAzureEnvironmentStateAsync(
             model,
             hasFailures
-                ? new ResourceStateSnapshot("Failed to Provision", KnownResourceStateStyles.Error)
-                : new ResourceStateSnapshot("Running", KnownResourceStateStyles.Success),
+                ? new ResourceStateSnapshot(AzureProvisioningStrings.ResourceStateFailedToProvision, KnownResourceStateStyles.Error)
+                : new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
             cancellationToken).ConfigureAwait(false);
 
         if (hasFailures && HasMissingAzureContextFailure(azureResources))
@@ -1547,7 +1549,7 @@ internal sealed class AzureProvisioningController(
 
     private async Task<bool> ExecuteResetStateAsync(DistributedApplicationModel model, ResetStateIntent intent, CancellationToken cancellationToken)
     {
-        UpdateActiveOperationPhase(intent, "Resetting provisioning state");
+        UpdateActiveOperationPhase(intent, AzureProvisioningStrings.OperationPhaseResettingProvisioningState);
         // Resetting the environment removes the top-level provisioning context first, then clears
         // each deployment section. This makes future prompts fall back to configuration/defaults and
         // prevents resources from showing old Azure identity properties.
@@ -1580,7 +1582,7 @@ internal sealed class AzureProvisioningController(
 
     private async Task<bool> ExecuteChangeAzureContextAsync(DistributedApplicationModel model, ChangeAzureContextIntent intent, CancellationToken cancellationToken)
     {
-        UpdateActiveOperationPhase(intent, "Changing Azure context");
+        UpdateActiveOperationPhase(intent, AzureProvisioningStrings.OperationPhaseChangingAzureContext);
         if (intent.Options is null)
         {
             // This is the legacy/non-dashboard path. The options manager owns prompting and
@@ -1608,7 +1610,7 @@ internal sealed class AzureProvisioningController(
 
     private async Task<bool> ExecuteApplyAzureContextAsync(DistributedApplicationModel model, CancellationToken cancellationToken)
     {
-        UpdateCurrentActiveOperationPhase("Applying Azure context");
+        UpdateCurrentActiveOperationPhase(AzureProvisioningStrings.OperationPhaseApplyingAzureContext);
         // The notification prompt runs outside the operation queue so dashboard commands stay responsive
         // while the dialog is open. This queued operation only applies the saved context and reprovisions.
         await ResetResourcesAsync(model, GetProvisionableAzureResources(model), preserveOverrides: true, cancellationToken, preserveInferredLocationOverrides: false).ConfigureAwait(false);
@@ -1618,7 +1620,7 @@ internal sealed class AzureProvisioningController(
 
     private async Task<object?> ExecuteEnsureProvisionedAsync(DistributedApplicationModel model, CancellationToken cancellationToken)
     {
-        UpdateCurrentActiveOperationPhase("Provisioning Azure resources");
+        UpdateCurrentActiveOperationPhase(AzureProvisioningStrings.OperationPhaseProvisioningAzureResources);
         var azureResources = GetProvisionableAzureResources(model);
         await EnsureProvisionedCoreAsync(model, azureResources, cancellationToken).ConfigureAwait(false);
         return null;
@@ -1626,7 +1628,7 @@ internal sealed class AzureProvisioningController(
 
     private async Task<bool> ExecuteReprovisionAllAsync(DistributedApplicationModel model, CancellationToken cancellationToken)
     {
-        UpdateCurrentActiveOperationPhase("Reprovisioning Azure resources");
+        UpdateCurrentActiveOperationPhase(AzureProvisioningStrings.OperationPhaseReprovisioningAzureResources);
         await ResetResourcesAsync(model, GetProvisionableAzureResources(model), preserveOverrides: true, cancellationToken).ConfigureAwait(false);
         await PublishAzureEnvironmentStateAsync(model, KnownResourceStates.NotStarted, cancellationToken).ConfigureAwait(false);
         return await EnsureProvisionedOrThrowAsync(model, GetProvisionableAzureResources(model), cancellationToken).ConfigureAwait(false);
@@ -1634,7 +1636,7 @@ internal sealed class AzureProvisioningController(
 
     private async Task<object?> ExecuteDeleteAzureResourcesAsync(DistributedApplicationModel model, CancellationToken cancellationToken)
     {
-        UpdateCurrentActiveOperationPhase("Deleting Azure resources");
+        UpdateCurrentActiveOperationPhase(AzureProvisioningStrings.OperationPhaseDeletingAzureResources);
         // Delete-all operates at the resource-group boundary because run-mode provisioning creates a
         // single environment resource group. Per-resource deletion uses cached deployment outputs
         // instead, since individual Azure resources may not map one-to-one to a resource group.
@@ -1655,7 +1657,7 @@ internal sealed class AzureProvisioningController(
         {
             await PublishAzureEnvironmentStateAsync(
                 model,
-                new ResourceStateSnapshot("Failed to Delete", KnownResourceStateStyles.Error),
+                new ResourceStateSnapshot(AzureProvisioningStrings.ResourceStateFailedToDelete, KnownResourceStateStyles.Error),
                 cancellationToken).ConfigureAwait(false);
             throw;
         }
@@ -1707,7 +1709,10 @@ internal sealed class AzureProvisioningController(
     {
         var targetResources = GetTargetAzureResources(model, intent.ResourceName);
         var parentChildLookup = model.Resources.OfType<IResourceWithParent>().ToLookup(r => r.Parent);
-        UpdateActiveOperationPhase(intent, ChangingLocationState, $"Changing location to {intent.Location}");
+        UpdateActiveOperationPhase(
+            intent,
+            ChangingLocationState,
+            FormatUserString(AzureProvisioningStrings.OperationPhaseChangingLocationToFormat, intent.Location));
         foreach (var resource in targetResources)
         {
             await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
@@ -1721,19 +1726,25 @@ internal sealed class AzureProvisioningController(
             // ARM rejects redeploying many resource types to a different location while the old
             // resource still exists. Delete the cached live resource first, then save the override
             // that the next provisioning pass will apply.
-            UpdateActiveOperationPhase(intent, "Deleting Azure resource", $"Deleting existing Azure resource before changing location to {intent.Location}");
+            UpdateActiveOperationPhase(
+                intent,
+                AzureProvisioningStrings.OperationPhaseDeletingAzureResource,
+                FormatUserString(AzureProvisioningStrings.OperationPhaseDeletingExistingAzureResourceBeforeChangingLocationFormat, intent.Location));
             await DeleteCachedResourceForLocationChangeAsync(targetBicepResource, intent.Location, cancellationToken).ConfigureAwait(false);
             await SetResourceLocationOverrideAsync(targetBicepResource.Name, intent.Location, cancellationToken).ConfigureAwait(false);
         }
 
-        UpdateActiveOperationPhase(intent, "Reprovisioning", $"Reprovisioning in {intent.Location}");
+        UpdateActiveOperationPhase(
+            intent,
+            AzureProvisioningStrings.OperationPhaseReprovisioning,
+            FormatUserString(AzureProvisioningStrings.OperationPhaseReprovisioningInLocationFormat, intent.Location));
         await ResetResourcesAsync(model, targetResources, preserveOverrides: true, cancellationToken).ConfigureAwait(false);
         return await EnsureProvisionedOrThrowAsync(model, targetResources, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<bool> ExecuteReprovisionResourceAsync(DistributedApplicationModel model, ReprovisionResourceIntent intent, CancellationToken cancellationToken)
     {
-        UpdateActiveOperationPhase(intent, "Reprovisioning");
+        UpdateActiveOperationPhase(intent, AzureProvisioningStrings.OperationPhaseReprovisioning);
         var targetResources = GetTargetAzureResources(model, intent.ResourceName);
         var effectiveLocation = await GetEffectiveResourceLocationAsync(GetDeploymentStateResourceName(targetResources[0]), cancellationToken).ConfigureAwait(false);
         var currentContext = await GetCurrentAzureContextAsync(cancellationToken).ConfigureAwait(false);
@@ -1747,7 +1758,10 @@ internal sealed class AzureProvisioningController(
             // If a delete command is canceled after the live vault is deleted but before purge finishes,
             // the next reprovision sees ARM's soft-delete conflict. At that point the user explicitly
             // asked to recreate this resource, so purge the tombstone for the same target ID and retry once.
-            UpdateActiveOperationPhase(intent, "Purging deleted Key Vault", $"Purging recoverable Key Vault {new ResourceIdentifier(keyVaultResourceId).Name}");
+            UpdateActiveOperationPhase(
+                intent,
+                AzureProvisioningStrings.OperationPhasePurgingDeletedKeyVault,
+                FormatUserString(AzureProvisioningStrings.OperationPhasePurgingRecoverableKeyVaultFormat, new ResourceIdentifier(keyVaultResourceId).Name));
             await DeleteAzureResourceIdsAsync([keyVaultResourceId], intent.ResourceName, effectiveLocation, currentContext.Location, cancellationToken).ConfigureAwait(false);
             await ResetResourcesAsync(model, targetResources, preserveOverrides: true, cancellationToken).ConfigureAwait(false);
             return await EnsureProvisionedOrThrowAsync(model, targetResources, cancellationToken).ConfigureAwait(false);
@@ -1840,7 +1854,7 @@ internal sealed class AzureProvisioningController(
             {
                 await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
                 {
-                    State = new("Canceled", KnownResourceStateStyles.Info)
+                    State = new(AzureProvisioningStrings.ResourceStateCanceled, KnownResourceStateStyles.Info)
                 }).ConfigureAwait(false);
             }
         }
@@ -1854,7 +1868,7 @@ internal sealed class AzureProvisioningController(
 
     private async Task<DeleteAzureResourceResult> ExecuteDeleteAzureResourceAsync(DistributedApplicationModel model, DeleteAzureResourceIntent intent, CancellationToken cancellationToken)
     {
-        UpdateActiveOperationPhase(intent, "Deleting Azure resource");
+        UpdateActiveOperationPhase(intent, AzureProvisioningStrings.OperationPhaseDeletingAzureResource);
         var targetResources = GetTargetAzureResources(model, intent.ResourceName);
         var parentChildLookup = model.Resources.OfType<IResourceWithParent>().ToLookup(r => r.Parent);
 
@@ -1896,7 +1910,7 @@ internal sealed class AzureProvisioningController(
             {
                 await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
                 {
-                    State = new("Canceled", KnownResourceStateStyles.Info)
+                    State = new(AzureProvisioningStrings.ResourceStateCanceled, KnownResourceStateStyles.Info)
                 }).ConfigureAwait(false);
             }
 
@@ -1908,7 +1922,7 @@ internal sealed class AzureProvisioningController(
             {
                 await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
                 {
-                    State = new("Failed to Delete", KnownResourceStateStyles.Error)
+                    State = new(AzureProvisioningStrings.ResourceStateFailedToDelete, KnownResourceStateStyles.Error)
                 }).ConfigureAwait(false);
             }
 
@@ -2038,6 +2052,9 @@ internal sealed class AzureProvisioningController(
             _state.Status.ActiveOperation?.SetPhase(phase, status);
         }
     }
+
+    private static string FormatUserString(string format, params object?[] args)
+        => string.Format(CultureInfo.CurrentCulture, format, args);
 
     private static AzureOperationState CreateActiveOperationState(DistributedApplicationModel model, AzureIntent intent)
     {
@@ -3313,7 +3330,7 @@ internal sealed class AzureProvisioningController(
             {
                 await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
                 {
-                    State = new("Running", KnownResourceStateStyles.Success)
+                    State = new(KnownResourceStates.Running, KnownResourceStateStyles.Success)
                 }).ConfigureAwait(false);
             }
         }
@@ -3321,14 +3338,14 @@ internal sealed class AzureProvisioningController(
         {
             await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
             {
-                State = new("Missing subscription configuration", KnownResourceStateStyles.Error)
+                State = new(AzureProvisioningStrings.ResourceStateMissingSubscriptionConfiguration, KnownResourceStateStyles.Error)
             }).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
             await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
             {
-                State = new("Canceled", KnownResourceStateStyles.Info)
+                State = new(AzureProvisioningStrings.ResourceStateCanceled, KnownResourceStateStyles.Info)
             }).ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -3336,7 +3353,7 @@ internal sealed class AzureProvisioningController(
             var failureDetails = AzureProvisioningFailureDetails.TryCreate(ex, AzureProvisioningFailureDetails.ProvisionOperation);
             await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
             {
-                State = new("Failed to Provision", KnownResourceStateStyles.Error),
+                State = new(AzureProvisioningStrings.ResourceStateFailedToProvision, KnownResourceStateStyles.Error),
                 Properties = failureDetails is null
                     ? state.Properties
                     : failureDetails.SetResourceProperties(state.Properties, AzureProvisioningFailureDetails.ProvisionOperation)
@@ -3708,7 +3725,7 @@ internal sealed class AzureProvisioningController(
             Operation = operation;
             _cancellationTokenSource = cancellationTokenSource;
             _phase = operation.DisplayName;
-            _status = "Running";
+            _status = KnownResourceStates.Running;
         }
 
         public AzureIntent Intent { get; }
@@ -3758,7 +3775,7 @@ internal sealed class AzureProvisioningController(
         {
             lock (_lock)
             {
-                _status = "Canceling";
+                _status = AzureProvisioningStrings.ResourceStateCanceling;
             }
 
             _cancellationTokenSource.Cancel();
