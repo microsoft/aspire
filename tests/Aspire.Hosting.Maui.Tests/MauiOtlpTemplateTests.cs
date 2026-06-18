@@ -35,11 +35,11 @@ public class MauiOtlpTemplateTests
                 DistributedApplicationOperation.Run,
                 TestServiceProvider.Instance);
 
-            if (envVars.TryGetValue("OTEL_SERVICE_NAME", out var serviceName))
-            {
-                Assert.DoesNotContain("{{", serviceName);
-                Assert.DoesNotContain("}}", serviceName);
-            }
+            Assert.True(envVars.ContainsKey("OTEL_SERVICE_NAME"),
+                "Expected OTEL_SERVICE_NAME to be set on MAUI platform resource");
+            var serviceName = envVars["OTEL_SERVICE_NAME"];
+            Assert.DoesNotContain("{{", serviceName);
+            Assert.DoesNotContain("}}", serviceName);
         }
         finally
         {
@@ -68,11 +68,11 @@ public class MauiOtlpTemplateTests
                 DistributedApplicationOperation.Run,
                 TestServiceProvider.Instance);
 
-            if (envVars.TryGetValue("OTEL_RESOURCE_ATTRIBUTES", out var resourceAttrs))
-            {
-                Assert.DoesNotContain("{{", resourceAttrs);
-                Assert.DoesNotContain("}}", resourceAttrs);
-            }
+            Assert.True(envVars.ContainsKey("OTEL_RESOURCE_ATTRIBUTES"),
+                "Expected OTEL_RESOURCE_ATTRIBUTES to be set on MAUI platform resource");
+            var resourceAttrs = envVars["OTEL_RESOURCE_ATTRIBUTES"];
+            Assert.DoesNotContain("{{", resourceAttrs);
+            Assert.DoesNotContain("}}", resourceAttrs);
         }
         finally
         {
