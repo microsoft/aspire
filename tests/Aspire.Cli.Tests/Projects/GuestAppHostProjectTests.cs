@@ -1171,12 +1171,12 @@ public class GuestAppHostProjectTests : IDisposable
             logFilePath: logFilePath,
             identityOverridden: identityOverridden);
 
-        // Construct real graceful-shutdown collaborators so the contract matches production:
-        // GuestAppHostProject requires these services even when a test exits the Run path early
-        // (e.g. via FailedToBuildArtifacts) without exercising them. A no-op signaler stands in
-        // for ProcessTreeGracefulShutdownService because none of the tests in this fixture drive the
-        // launcher or AppHostServerSession code paths that would actually invoke it.
-        var gracefulShutdownService = new GracefulShutdownService();
+        // Construct a real graceful-shutdown window so the contract matches production:
+        // GuestAppHostProject requires it even when a test exits the Run path early
+        // (e.g. via FailedToBuildArtifacts) without exercising shutdown. The test fake stands in for
+        // ConsoleCancellationManager so the fixture doesn't register process-global OS signal handlers;
+        // none of the tests here drive the launcher or AppHostServerSession paths that would fire it.
+        var shutdownWindow = new TestGracefulShutdownWindow();
 
         return new GuestAppHostProject(
             language: language,
@@ -1194,7 +1194,7 @@ public class GuestAppHostProjectTests : IDisposable
             fileLoggerProvider: new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()),
             profilingTelemetry: _profilingTelemetry,
             gracefulShutdownSignaler: new NoOpGracefulSignaler(),
-            shutdownService: gracefulShutdownService,
+            shutdownService: shutdownWindow,
             codegenSessionFactory: codegenSessionFactory);
     }
 

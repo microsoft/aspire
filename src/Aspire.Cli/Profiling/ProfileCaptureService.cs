@@ -377,7 +377,7 @@ internal sealed class ProfileCaptureService(
             }
             finally
             {
-                _dashboardProcess.Dispose();
+                await _dashboardProcess.DisposeAsync().ConfigureAwait(false);
                 _layoutLease?.Dispose();
             }
         }

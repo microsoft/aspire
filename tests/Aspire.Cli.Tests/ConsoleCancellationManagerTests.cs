@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests;
@@ -8,16 +9,9 @@ namespace Aspire.Cli.Tests;
 public class ConsoleCancellationManagerTests
 {
     [Fact]
-    public void Constructor_NullGracefulService_Throws()
-    {
-        Assert.Throws<ArgumentNullException>(() => new ConsoleCancellationManager(null!, TimeSpan.FromSeconds(5)));
-    }
-
-    [Fact]
     public void ConfigureForCommand_NegativeBudget_Throws()
     {
-        using var graceful = new GracefulShutdownService();
-        using var manager = new ConsoleCancellationManager(graceful, TimeSpan.FromSeconds(5));
+        using var manager = new ConsoleCancellationManager(TimeSpan.FromSeconds(5));
 
         Assert.Throws<ArgumentOutOfRangeException>(() => manager.ConfigureForCommand(TimeSpan.FromMilliseconds(-1)));
     }
@@ -25,8 +19,7 @@ public class ConsoleCancellationManagerTests
     [Fact]
     public void FirstSignal_RequestsCancellation()
     {
-        using var graceful = new GracefulShutdownService();
-        using var manager = new ConsoleCancellationManager(graceful, TimeSpan.FromSeconds(5));
+        using var manager = new ConsoleCancellationManager(TimeSpan.FromSeconds(5));
 
         Assert.False(manager.IsCancellationRequested);
 
@@ -38,8 +31,7 @@ public class ConsoleCancellationManagerTests
     [Fact]
     public void FirstSignal_TokenIsCancelled()
     {
-        using var graceful = new GracefulShutdownService();
-        using var manager = new ConsoleCancellationManager(graceful, TimeSpan.FromSeconds(5));
+        using var manager = new ConsoleCancellationManager(TimeSpan.FromSeconds(5));
         var token = manager.Token;
 
         Assert.False(token.IsCancellationRequested);
@@ -52,8 +44,7 @@ public class ConsoleCancellationManagerTests
     [Fact]
     public async Task FirstSignal_DefaultZeroBudget_ExpiresGracefulImmediately()
     {
-        using var graceful = new GracefulShutdownService();
-        using var manager = new ConsoleCancellationManager(graceful, TimeSpan.FromSeconds(30));
+        using var manager = new ConsoleCancellationManager(TimeSpan.FromSeconds(30));
 
         // No ConfigureForCommand — graceful budget defaults to zero.
         // Set a handler that never completes so the drain budget governs forced termination.
@@ -62,25 +53,31 @@ public class ConsoleCancellationManagerTests
         manager.Cancel(130);
 
         // The graceful token must fire essentially immediately (no Phase 1 delay to wait through).
-        await graceful.Token.WaitUntilCancelledAsync().DefaultTimeout();
+        await manager.GracefulShutdownToken.WaitUntilCancelledAsync().DefaultTimeout();
         Assert.True(manager.GracefulShutdownToken.IsCancellationRequested);
     }
 
     [Fact]
     public async Task FirstSignal_NonZeroBudget_DelaysExpireUntilBudgetElapses()
     {
-        using var graceful = new GracefulShutdownService();
-        using var manager = new ConsoleCancellationManager(graceful, TimeSpan.FromSeconds(30));
+        // The graceful clock is armed via CancelAfter, which is a no-op while a debugger is
+        // attached (developers need unlimited stepping time).
+        if (Debugger.IsAttached)
+        {
+            return;
+        }
+
+        using var manager = new ConsoleCancellationManager(TimeSpan.FromSeconds(30));
         manager.ConfigureForCommand(TimeSpan.FromMilliseconds(200));
 
         // Set a handler that never completes so we observe the graceful → drain timing.
         manager.SetStartedHandler(new TaskCompletionSource<int>().Task);
 
-        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var sw = Stopwatch.StartNew();
         manager.Cancel(130);
 
         // Wait for the budget to elapse.
-        await graceful.Token.WaitUntilCancelledAsync().DefaultTimeout();
+        await manager.GracefulShutdownToken.WaitUntilCancelledAsync().DefaultTimeout();
         sw.Stop();
 
         // We allowed 200ms of grace; allow generous slack for CI scheduling but assert we waited at least most of it.
@@ -90,8 +87,7 @@ public class ConsoleCancellationManagerTests
     [Fact]
     public async Task SecondSignal_ExpiresGracefulImmediately()
     {
-        using var graceful = new GracefulShutdownService();
-        using var manager = new ConsoleCancellationManager(graceful, TimeSpan.FromSeconds(30));
+        using var manager = new ConsoleCancellationManager(TimeSpan.FromSeconds(30));
         // Large graceful budget — without a 2nd signal the token would not fire for 30s.
         manager.ConfigureForCommand(TimeSpan.FromSeconds(30));
 
@@ -99,12 +95,17 @@ public class ConsoleCancellationManagerTests
         manager.SetStartedHandler(new TaskCompletionSource<int>().Task);
 
         manager.Cancel(130);
-        Assert.False(graceful.Token.IsCancellationRequested);
+
+        // Under a debugger the window is never armed, so the token stays unfired until the 2nd signal.
+        if (!Debugger.IsAttached)
+        {
+            Assert.False(manager.GracefulShutdownToken.IsCancellationRequested);
+        }
 
         manager.Cancel(130);
 
         // 2nd signal expires graceful synchronously.
-        Assert.True(graceful.Token.IsCancellationRequested);
+        Assert.True(manager.GracefulShutdownToken.IsCancellationRequested);
 
         // But the completion source should NOT have fired — that's Phase 3, requires a 3rd signal or drain timeout.
         await Task.Delay(100);
@@ -114,8 +115,7 @@ public class ConsoleCancellationManagerTests
     [Fact]
     public async Task ThirdSignal_FiresProcessTerminationImmediately()
     {
-        using var graceful = new GracefulShutdownService();
-        using var manager = new ConsoleCancellationManager(graceful, TimeSpan.FromSeconds(30));
+        using var manager = new ConsoleCancellationManager(TimeSpan.FromSeconds(30));
         // Long graceful budget so the watcher would not naturally complete in the test window.
         manager.ConfigureForCommand(TimeSpan.FromSeconds(30));
 
@@ -133,8 +133,7 @@ public class ConsoleCancellationManagerTests
     [Fact]
     public async Task FirstSignal_HandlerCompletesWithinDrainBudget_DoesNotForceTermination()
     {
-        using var graceful = new GracefulShutdownService();
-        using var manager = new ConsoleCancellationManager(graceful, TimeSpan.FromSeconds(5));
+        using var manager = new ConsoleCancellationManager(TimeSpan.FromSeconds(5));
 
         // Set a handler that completes immediately.
         manager.SetStartedHandler(Task.FromResult(0));
@@ -151,8 +150,7 @@ public class ConsoleCancellationManagerTests
     [Fact]
     public async Task FirstSignal_HandlerExceedsDrainBudget_ForcesTermination()
     {
-        using var graceful = new GracefulShutdownService();
-        using var manager = new ConsoleCancellationManager(graceful, TimeSpan.FromMilliseconds(50));
+        using var manager = new ConsoleCancellationManager(TimeSpan.FromMilliseconds(50));
 
         // Set a handler that never completes.
         manager.SetStartedHandler(new TaskCompletionSource<int>().Task);
@@ -166,8 +164,7 @@ public class ConsoleCancellationManagerTests
     [Fact]
     public async Task FirstSignal_WithNoHandler_ForcesTerminationAfterDrainBudget()
     {
-        using var graceful = new GracefulShutdownService();
-        using var manager = new ConsoleCancellationManager(graceful, TimeSpan.FromMilliseconds(50));
+        using var manager = new ConsoleCancellationManager(TimeSpan.FromMilliseconds(50));
 
         // No handler set, watcher still has to wait out the drain budget before forcing termination.
         manager.Cancel(143);
@@ -179,8 +176,7 @@ public class ConsoleCancellationManagerTests
     [Fact]
     public async Task GracefulBudgetElapses_ThenDrainBudgetElapses_FiresProcessTermination()
     {
-        using var graceful = new GracefulShutdownService();
-        using var manager = new ConsoleCancellationManager(graceful, TimeSpan.FromMilliseconds(50));
+        using var manager = new ConsoleCancellationManager(TimeSpan.FromMilliseconds(50));
         manager.ConfigureForCommand(TimeSpan.FromMilliseconds(50));
 
         manager.SetStartedHandler(new TaskCompletionSource<int>().Task);
@@ -188,19 +184,18 @@ public class ConsoleCancellationManagerTests
 
         var exitCode = await manager.ProcessTerminationCompletionSource.Task.DefaultTimeout();
         Assert.Equal(130, exitCode);
-        Assert.True(graceful.Token.IsCancellationRequested);
+        Assert.True(manager.GracefulShutdownToken.IsCancellationRequested);
     }
 
     [Fact]
     public void Cancel_IsNonBlocking()
     {
-        using var graceful = new GracefulShutdownService();
-        using var manager = new ConsoleCancellationManager(graceful, TimeSpan.FromSeconds(30));
+        using var manager = new ConsoleCancellationManager(TimeSpan.FromSeconds(30));
         manager.ConfigureForCommand(TimeSpan.FromSeconds(30));
 
         manager.SetStartedHandler(new TaskCompletionSource<int>().Task);
 
-        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var sw = Stopwatch.StartNew();
         manager.Cancel(130);
         sw.Stop();
 
@@ -211,15 +206,15 @@ public class ConsoleCancellationManagerTests
     [Fact]
     public async Task ProcessTermination_FiresGracefulExpiration_LaddersUnblock()
     {
-        using var graceful = new GracefulShutdownService();
-        using var manager = new ConsoleCancellationManager(graceful, TimeSpan.FromSeconds(30));
+        using var manager = new ConsoleCancellationManager(TimeSpan.FromSeconds(30));
 
         // A ladder observing only the graceful token, awaiting a long delay.
+        var gracefulToken = manager.GracefulShutdownToken;
         var ladderTask = Task.Run(async () =>
         {
             try
             {
-                await Task.Delay(TimeSpan.FromMinutes(5), graceful.Token);
+                await Task.Delay(TimeSpan.FromMinutes(5), gracefulToken);
                 return false;
             }
             catch (OperationCanceledException)
@@ -240,8 +235,7 @@ public class ConsoleCancellationManagerTests
     [Fact]
     public void Dispose_AllowsSubsequentCancelWithoutException()
     {
-        using var graceful = new GracefulShutdownService();
-        var manager = new ConsoleCancellationManager(graceful, TimeSpan.FromSeconds(5));
+        var manager = new ConsoleCancellationManager(TimeSpan.FromSeconds(5));
         manager.Dispose();
 
         // Cancel after dispose should not throw (signal can race with shutdown).
@@ -251,12 +245,143 @@ public class ConsoleCancellationManagerTests
     [Fact]
     public void Token_RemainsAccessibleAfterDispose()
     {
-        using var graceful = new GracefulShutdownService();
-        var manager = new ConsoleCancellationManager(graceful, TimeSpan.FromSeconds(5));
+        var manager = new ConsoleCancellationManager(TimeSpan.FromSeconds(5));
         var token = manager.Token;
         manager.Dispose();
 
         // Token should still be accessible (stored in field before dispose).
         Assert.False(token.IsCancellationRequested);
+    }
+
+    [Fact]
+    public void GracefulShutdownToken_BeforeExpire_NotCancelled()
+    {
+        using var manager = new ConsoleCancellationManager(TimeSpan.FromSeconds(5));
+
+        Assert.False(manager.GracefulShutdownToken.IsCancellationRequested);
+    }
+
+    [Fact]
+    public void Expire_FiresGracefulToken()
+    {
+        using var manager = new ConsoleCancellationManager(TimeSpan.FromSeconds(5));
+
+        manager.Expire();
+
+        Assert.True(manager.GracefulShutdownToken.IsCancellationRequested);
+    }
+
+    [Fact]
+    public void Expire_Idempotent()
+    {
+        using var manager = new ConsoleCancellationManager(TimeSpan.FromSeconds(5));
+
+        manager.Expire();
+        manager.Expire();
+        manager.Expire();
+
+        Assert.True(manager.GracefulShutdownToken.IsCancellationRequested);
+    }
+
+    [Fact]
+    public void Expire_AfterDispose_DoesNotThrow()
+    {
+        var manager = new ConsoleCancellationManager(TimeSpan.FromSeconds(5));
+        manager.Dispose();
+
+        // Expire racing with dispose must not propagate to callers (signal handler /
+        // watcher continuation contexts have nowhere meaningful to surface this).
+        manager.Expire();
+    }
+
+    [Fact]
+    public void GracefulShutdownToken_RemainsAccessibleAfterDispose()
+    {
+        var manager = new ConsoleCancellationManager(TimeSpan.FromSeconds(5));
+        var token = manager.GracefulShutdownToken;
+        manager.Dispose();
+
+        // Token was captured up front; reading state after dispose must not throw.
+        Assert.False(token.IsCancellationRequested);
+    }
+
+    [Fact]
+    public void IsEnabled_DefaultsToFalse()
+    {
+        using var manager = new ConsoleCancellationManager(TimeSpan.FromSeconds(5));
+
+        Assert.False(manager.IsEnabled);
+    }
+
+    [Fact]
+    public void IsEnabled_TrueAfterPositiveConfigure()
+    {
+        using var manager = new ConsoleCancellationManager(TimeSpan.FromSeconds(5));
+
+        manager.ConfigureForCommand(TimeSpan.FromSeconds(5));
+
+        Assert.True(manager.IsEnabled);
+    }
+
+    [Fact]
+    public void IsEnabled_FalseAfterZeroConfigure()
+    {
+        using var manager = new ConsoleCancellationManager(TimeSpan.FromSeconds(5));
+
+        manager.ConfigureForCommand(TimeSpan.Zero);
+
+        Assert.False(manager.IsEnabled);
+    }
+
+    [Fact]
+    public void BeginGracefulWindow_ZeroBudget_ExpiresImmediately()
+    {
+        using var manager = new ConsoleCancellationManager(TimeSpan.FromSeconds(5));
+
+        // No ConfigureForCommand → zero budget → window is "over" the moment it begins.
+        manager.BeginGracefulWindow();
+
+        Assert.True(manager.GracefulShutdownToken.IsCancellationRequested);
+    }
+
+    [Fact]
+    public async Task BeginGracefulWindow_PositiveBudget_FiresTokenAfterBudget()
+    {
+        // BeginGracefulWindow arms CancelAfter, which is a no-op while a debugger is attached
+        // (developers need unlimited stepping time). Skip the timing assertion in that case.
+        if (Debugger.IsAttached)
+        {
+            return;
+        }
+
+        using var manager = new ConsoleCancellationManager(TimeSpan.FromSeconds(5));
+        manager.ConfigureForCommand(TimeSpan.FromMilliseconds(50));
+
+        manager.BeginGracefulWindow();
+        Assert.False(manager.GracefulShutdownToken.IsCancellationRequested);
+
+        await manager.GracefulShutdownToken.WaitUntilCancelledAsync().DefaultTimeout();
+
+        Assert.True(manager.GracefulShutdownToken.IsCancellationRequested);
+    }
+
+    [Fact]
+    public async Task BeginGracefulWindow_SecondCall_DoesNotResetTimer()
+    {
+        if (Debugger.IsAttached)
+        {
+            return;
+        }
+
+        using var manager = new ConsoleCancellationManager(TimeSpan.FromSeconds(5));
+        manager.ConfigureForCommand(TimeSpan.FromMilliseconds(50));
+
+        manager.BeginGracefulWindow();
+        // A second call must be idempotent and must not re-arm (which would extend the window).
+        manager.BeginGracefulWindow();
+
+        await manager.GracefulShutdownToken.WaitUntilCancelledAsync().DefaultTimeout();
+
+        Assert.True(manager.GracefulShutdownToken.IsCancellationRequested);
     }
 }

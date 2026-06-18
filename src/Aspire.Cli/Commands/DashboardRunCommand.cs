@@ -380,7 +380,7 @@ internal sealed class DashboardRunCommand : BaseCommand
             return CommandResult.Failure(CliExitCodes.DashboardFailure);
         }
 
-        using var _ = process;
+        await using var _ = process;
 
         // Wait for the dashboard to become ready, the process to exit, or a timeout.
         var processExitTask = process.WaitForExitAsync(cancellationToken);

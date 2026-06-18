@@ -19,9 +19,9 @@ namespace Aspire.Cli.Processes;
 /// semantics — can only be defined once.
 ///
 /// The graceful-vs-force decision is command-level and all-or-nothing: it keys off
-/// <see cref="GracefulShutdownService.IsEnabled"/> (true when the running command configured a
+/// <see cref="IGracefulShutdownWindow.IsEnabled"/> (true when the running command configured a
 /// positive budget). No per-child or per-call flag. When the ladder is selected this also starts
-/// the central clock via <see cref="GracefulShutdownService.BeginGracefulWindow"/>, so the ladder's
+/// the central clock via <see cref="IGracefulShutdownWindow.BeginGracefulWindow"/>, so the ladder's
 /// wait is always bounded regardless of whether teardown was initiated by a user signal or by
 /// disposal of the child owner.
 /// </remarks>
@@ -40,8 +40,8 @@ internal static class ProcessShutdownCoordinator
     /// </summary>
     /// <param name="process">The child process to shut down.</param>
     /// <param name="signaler">Graceful signaler, or <see langword="null"/> for non-Run callers.</param>
-    /// <param name="gracefulShutdownService">
-    /// Owns the central graceful budget + token, or <see langword="null"/> for non-Run callers.
+    /// <param name="gracefulShutdownWindow">
+    /// The command-level graceful window (budget + token), or <see langword="null"/> for non-Run callers.
     /// </param>
     /// <param name="fallbackRequestGracefulShutdown">
     /// Whether the force-kill fallback should dispatch a best-effort graceful signal (SIGTERM) before
@@ -53,7 +53,7 @@ internal static class ProcessShutdownCoordinator
     public static Task ShutdownAsync(
         Process process,
         IProcessTreeGracefulShutdownSignaler? signaler,
-        GracefulShutdownService? gracefulShutdownService,
+        IGracefulShutdownWindow? gracefulShutdownWindow,
         bool fallbackRequestGracefulShutdown,
         bool fallbackKillEntireProcessTree,
         ILogger logger,
@@ -63,17 +63,17 @@ internal static class ProcessShutdownCoordinator
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(processDescription);
 
-        if (signaler is not null && gracefulShutdownService is { IsEnabled: true })
+        if (signaler is not null && gracefulShutdownWindow is { IsEnabled: true })
         {
             // Start the central clock so the ladder's wait is bounded even when teardown was triggered
             // by disposal (e.g. normal aspire run completion) rather than a user signal. Idempotent —
             // if a user Ctrl+C already armed the window this is a no-op.
-            gracefulShutdownService.BeginGracefulWindow();
+            gracefulShutdownWindow.BeginGracefulWindow();
 
             return ProcessGracefulShutdownLadder.ExecuteAsync(
                 process,
                 signaler,
-                gracefulShutdownService.Token,
+                gracefulShutdownWindow.GracefulShutdownToken,
                 logger,
                 processDescription);
         }

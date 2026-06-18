@@ -103,6 +103,14 @@ internal sealed class ProcessExecution : IProcessExecution
                 _logger,
                 _fileName).ConfigureAwait(false);
 
+            // The child has now been signalled/killed by the coordinator. Drain trailing stdout/stderr
+            // before propagating the cancellation so callers that observe output — or that swallow the
+            // OCE and read ExitCode (e.g. the guest launcher distinguishing user-cancel from internal
+            // teardown) — still get the full tail. Use a detached token + reset idle window so the drain
+            // gets its whole budget even though the caller's token is already cancelled.
+            RecordActivity();
+            await DrainOutputAsync(process, CancellationToken.None).ConfigureAwait(false);
+
             throw;
         }
 
@@ -122,18 +130,18 @@ internal sealed class ProcessExecution : IProcessExecution
     public void Kill(bool entireProcessTree) => Process.Kill(entireProcessTree);
 
     /// <inheritdoc />
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
         {
             return;
         }
 
-        // IProcessExecution is a sync IDisposable but IsolatedProcess only exposes DisposeAsync
-        // (it drains the pumps then tears the pipes/handles down). DotNetCliRunner does not dispose
-        // the execution (StartBackchannelAsync runs fire-and-forget and reads HasExited/ExitCode
-        // after the await — see DotNetCliRunner.cs), so this sync-blocking path is reached only by
-        // explicit `using` consumers and tests.
+        // IsolatedProcess exposes only DisposeAsync — it drains the pumps then tears the
+        // pipes/handles down. DotNetCliRunner does not dispose the execution (StartBackchannelAsync
+        // runs fire-and-forget and reads HasExited/ExitCode after the await — see DotNetCliRunner.cs),
+        // so this path is reached only by explicit `await using` consumers (the session, guest
+        // launcher) and tests.
         var process = _process;
         if (process is null)
         {
@@ -142,7 +150,7 @@ internal sealed class ProcessExecution : IProcessExecution
 
         try
         {
-            process.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            await process.DisposeAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {

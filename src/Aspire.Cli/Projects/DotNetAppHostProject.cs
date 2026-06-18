@@ -43,7 +43,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     private readonly Program.CliLoggingOptions _loggingOptions;
     private readonly IAppHostInfoResolver _appHostInfoResolver;
     private readonly IConfigurationService _configurationService;
-    private readonly GracefulShutdownService _shutdownService;
+    private readonly IGracefulShutdownWindow _shutdownService;
     private readonly IProcessTreeGracefulShutdownSignaler _gracefulShutdownSignaler;
     private readonly CliExecutionContext _executionContext;
 
@@ -75,7 +75,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         Program.CliLoggingOptions loggingOptions,
         IAppHostInfoResolver appHostInfoResolver,
         IConfigurationService configurationService,
-        GracefulShutdownService shutdownService,
+        IGracefulShutdownWindow shutdownService,
         IProcessTreeGracefulShutdownSignaler gracefulShutdownSignaler,
         CliExecutionContext executionContext,
         TimeProvider? timeProvider = null)

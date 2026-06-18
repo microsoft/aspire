@@ -28,15 +28,15 @@ namespace Aspire.Cli.Projects;
 /// cancellation path issues this signal before escalating to <c>Process.Kill</c>.
 /// </param>
 /// <param name="ShutdownService">
-/// The central graceful-shutdown budget. Its <see cref="GracefulShutdownService.Token"/>
+/// The central graceful-shutdown window. Its <see cref="ConsoleCancellationManager.GracefulShutdownToken"/>
 /// bounds both the graceful-signal call and the post-signal wait-for-exit, so a 2nd Ctrl+C
-/// (which calls <see cref="GracefulShutdownService.Expire"/> via the cancellation manager)
+/// (which calls <see cref="ConsoleCancellationManager.Expire"/>)
 /// interrupts both immediately and the ladder escalates to <c>Kill(entireProcessTree: true)</c>.
 /// </param>
 internal sealed record GuestLaunchOptions(
     bool IsolateConsoleForGracefulShutdown = false,
     IProcessTreeGracefulShutdownSignaler? GracefulShutdownSignaler = null,
-    GracefulShutdownService? ShutdownService = null);
+    IGracefulShutdownWindow? ShutdownService = null);
 
 /// <summary>
 /// Strategy for launching a guest language process.

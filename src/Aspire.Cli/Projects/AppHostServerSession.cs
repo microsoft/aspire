@@ -35,7 +35,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     private readonly string _authenticationToken;
     private readonly CancellationTokenSource _stopCts;
     private readonly IProcessTreeGracefulShutdownSignaler? _gracefulShutdownSignaler;
-    private readonly GracefulShutdownService? _shutdownService;
+    private readonly IGracefulShutdownWindow? _shutdownService;
     private readonly bool _isolateConsole;
 
     private readonly object _startGate = new();
@@ -68,7 +68,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         CancellationToken stopRequested,
         ProfilingTelemetry? profilingTelemetry = null,
         IProcessTreeGracefulShutdownSignaler? gracefulShutdownSignaler = null,
-        GracefulShutdownService? shutdownService = null,
+        IGracefulShutdownWindow? shutdownService = null,
         bool isolateConsole = false)
     {
         _project = project ?? throw new ArgumentNullException(nameof(project));
@@ -84,7 +84,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         // Linked CTS so caller-initiated cancellation AND DisposeAsync both flow through the
         // same stop trigger. The registered callback on _stopCts.Token (wired in StartAsync) is
         // the single kill site for the process. The graceful-vs-force decision is made centrally by
-        // the coordinator off GracefulShutdownService.IsEnabled — there is no per-stop distinction
+        // the coordinator off IGracefulShutdownWindow.IsEnabled — there is no per-stop distinction
         // here, and the coordinator bounds the graceful wait by starting the central clock itself.
         _stopCts = CancellationTokenSource.CreateLinkedTokenSource(stopRequested);
     }
@@ -509,7 +509,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         // CT registration callbacks must be synchronous. We stash the started ShutdownAsync task
         // in _shutdownTask so DisposeAsync can await it instead of leaving it dangling. The kill
         // path inside ShutdownAsync is bounded (either an immediate force-kill on the no-graceful
-        // path, or by the central GracefulShutdownService.Token on the graceful path), so the
+        // path, or by the central graceful-shutdown token on the graceful path), so the
         // task cannot hang past the central budget.
         //
         // Intentionally no `_disposed` check: DisposeAsync sets `_disposed = true` before calling
@@ -536,7 +536,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     private Task ShutdownAsync(Process process)
     {
         // The graceful-vs-force decision is owned centrally by the coordinator, keyed off
-        // GracefulShutdownService.IsEnabled. When graceful is enabled for the command (aspire run),
+        // IGracefulShutdownWindow.IsEnabled. When graceful is enabled for the command (aspire run),
         // the coordinator starts the central clock and runs the bounded ladder regardless of whether
         // this stop came from a user signal or from DisposeAsync. When graceful is not wired/enabled
         // (non-Run callers: SDK gen, scaffolding, publish, dump), it force-kills.

@@ -10,7 +10,7 @@ namespace Aspire.Cli.Processes;
 /// Shared "graceful signal → bounded wait → force tree-kill → bounded drain" ladder used by
 /// every long-running child process the CLI owns during <c>aspire run</c>
 /// (AppHost server, guest, direct-launch AppHost executable). Each call site provides a
-/// graceful signaler and the central <see cref="GracefulShutdownService.Token"/>; this helper
+/// graceful signaler and the central <see cref="ConsoleCancellationManager.GracefulShutdownToken"/>; this helper
 /// runs the same four-phase escalation against them so the user-visible shutdown shape is
 /// uniform across spawn sites.
 /// </summary>
@@ -26,7 +26,7 @@ internal static class ProcessGracefulShutdownLadder
     /// </summary>
     /// <param name="process">The child process to shut down.</param>
     /// <param name="signaler">Issues the graceful signal (DCP <c>stop-process-tree</c> on Windows, SIGTERM on Unix).</param>
-    /// <param name="gracefulToken">The central <see cref="GracefulShutdownService.Token"/>.</param>
+    /// <param name="gracefulToken">The central <see cref="ConsoleCancellationManager.GracefulShutdownToken"/>.</param>
     /// <param name="logger">Logger for diagnostics.</param>
     /// <param name="processDescription">Short human description used in log messages (e.g. <c>"AppHost server"</c>).</param>
     public static async Task ExecuteAsync(

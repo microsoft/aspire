@@ -32,7 +32,7 @@ internal sealed class LayoutProcessRunner(IProcessExecutionFactory executionFact
         var args = arguments.ToArray();
         var workDir = new DirectoryInfo(workingDirectory ?? Directory.GetCurrentDirectory());
 
-        using var execution = executionFactory.CreateExecution(toolPath, args, environmentVariables, workDir, options);
+        await using var execution = executionFactory.CreateExecution(toolPath, args, environmentVariables, workDir, options);
 
         if (!execution.Start())
         {
@@ -59,7 +59,10 @@ internal sealed class LayoutProcessRunner(IProcessExecutionFactory executionFact
 
         if (!execution.Start())
         {
-            execution.Dispose();
+            // Start() returning false means nothing was spawned, so disposal is a synchronous
+            // no-op (ProcessExecution has no child to tear down). Drive it to completion here so
+            // the sync Start contract is preserved without a sync-over-async hazard on the real path.
+            execution.DisposeAsync().AsTask().GetAwaiter().GetResult();
             throw new InvalidOperationException($"Failed to start process: {toolPath}");
         }
 

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -8,41 +9,53 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Aspire.Cli;
 
 /// <summary>
-/// Manages Ctrl+C, SIGINT, and SIGTERM signal handling with a shared <see cref="CancellationTokenSource"/>.
-/// On the first termination signal it requests cooperative cancellation; after an optional graceful
-/// window elapses it expires <see cref="GracefulShutdownService"/> so long-running ladders escalate to
-/// forceful termination; after a final drain budget it signals
-/// <see cref="ProcessTerminationCompletionSource"/> so <c>Program.Main</c> abandons the handler task and
-/// returns the captured exit code.
+/// The CLI's single shutdown service. Manages Ctrl+C, SIGINT, and SIGTERM signal handling with a
+/// shared <see cref="CancellationTokenSource"/>, and owns the command-level graceful-shutdown policy:
+/// the graceful budget (<see cref="IsEnabled"/>), the clock that bounds it, and the
+/// <see cref="GracefulShutdownToken"/> the per-child shutdown ladders consume via
+/// <see cref="IGracefulShutdownWindow"/>.
 /// </summary>
 /// <remarks>
+/// <para>
+/// On the first termination signal it requests cooperative cancellation; after the graceful window
+/// elapses it expires <see cref="GracefulShutdownToken"/> so long-running ladders escalate to forceful
+/// termination; after a final drain budget it signals <see cref="ProcessTerminationCompletionSource"/>
+/// so <c>Program.Main</c> abandons the handler task and returns the captured exit code.
+/// </para>
 /// <para>
 /// The three-stage signal counter mirrors the same ladder:
 /// </para>
 /// <list type="number">
 ///   <item>First signal — primary <see cref="Token"/> cancels and the graceful watcher starts.</item>
-///   <item>Second signal — graceful window is collapsed via <see cref="GracefulShutdownService.Expire"/>;
-///         ladders see the graceful token fire immediately and escalate.</item>
+///   <item>Second signal — the graceful window is collapsed via <see cref="Expire"/>; ladders see
+///         <see cref="GracefulShutdownToken"/> fire immediately and escalate.</item>
 ///   <item>Third (or later) signal — <see cref="ProcessTerminationCompletionSource"/> fires; Main exits NOW.</item>
 /// </list>
 /// <para>
-/// Internal teardown paths (guest failures, normal completion) do NOT drive this counter. They rely on
-/// disposable-driven cleanup — <c>await using</c> of the server session and guest launcher — to run each
+/// Graceful shutdown is all-or-nothing per command: <see cref="IsEnabled"/> reflects whether a positive
+/// budget was configured via <see cref="ConfigureForCommand"/>. <c>aspire run</c> configures a budget;
+/// every other command leaves it at zero so its children force-kill immediately (preserving today's
+/// behavior). The service self-bounds the window: <see cref="BeginGracefulWindow"/> arms a
+/// <c>CancelAfter(budget)</c> so the token is guaranteed to fire once shutdown begins — regardless of
+/// whether shutdown was initiated by a user signal or by disposal of a child owner. This is what lets
+/// ladders consume the token without risking a hang.
+/// </para>
+/// <para>
+/// Internal teardown paths (guest failures, normal completion) do NOT drive the signal counter. They rely
+/// on disposable-driven cleanup — <c>await using</c> of the server session and guest launcher — to run each
 /// child process's own per-process shutdown ladder when the run scope unwinds.
 /// </para>
 /// <para>
-/// The completion source completing is treated as a strict superset of graceful expiration:
-/// when the source completes for any reason (drain timeout, third signal, future external triggers),
-/// <see cref="GracefulShutdownService.Expire"/> is invoked synchronously so ladders observing only
-/// the graceful token unblock in time to issue a kill before Main abandons them.
+/// The completion source completing is treated as a strict superset of graceful expiration: when the source
+/// completes for any reason (drain timeout, third signal, future external triggers), <see cref="Expire"/> is
+/// invoked synchronously so ladders observing only the graceful token unblock in time to issue a kill before
+/// Main abandons them.
 /// </para>
 /// <para>
-/// Disposing this instance unregisters all signal handlers and disposes the internal token source.
-/// The <see cref="GracefulShutdownService"/> is owned by the caller (typically <c>Program.Main</c>)
-/// and is not disposed here.
+/// Disposing this instance unregisters all signal handlers and disposes the internal token sources.
 /// </para>
 /// </remarks>
-internal sealed class ConsoleCancellationManager : IDisposable
+internal sealed class ConsoleCancellationManager : IDisposable, IGracefulShutdownWindow
 {
     // Standard Unix exit codes: 128 + signal number (SIGINT=2, SIGTERM=15).
     // SigIntExitCode (130): used when the user presses Ctrl+C (SIGINT) or Ctrl+Break/SIGQUIT.
@@ -51,12 +64,18 @@ internal sealed class ConsoleCancellationManager : IDisposable
     private const int SigTermExitCode = 143;
 
     private readonly CancellationTokenSource _cts = new();
-    private readonly GracefulShutdownService _gracefulService;
+    private readonly CancellationTokenSource _gracefulCts = new();
     private readonly TimeSpan _finalDrainBudget;
     private readonly PosixSignalRegistration? _sigIntRegistration;
     private readonly PosixSignalRegistration? _sigTermRegistration;
     private readonly PosixSignalRegistration? _sigQuitRegistration;
     private readonly CancellationToken _token;
+    private readonly CancellationToken _gracefulToken;
+    // Graceful-shutdown budget for the running command. Zero (the default) means graceful shutdown is
+    // disabled, so per-child ladders escalate to forceful termination immediately.
+    private TimeSpan _gracefulBudget = TimeSpan.Zero;
+    // Idempotency guard so the graceful clock (CancelAfter) is armed at most once.
+    private int _gracefulWindowStarted;
     private ILogger _logger;
     private Task? _startedHandler;
     // Number of termination signals (Ctrl+C, SIGINT, SIGTERM, SIGQUIT, ProcessExit) received.
@@ -87,26 +106,24 @@ internal sealed class ConsoleCancellationManager : IDisposable
     /// </summary>
     internal void SetLogger(ILogger logger) => Volatile.Write(ref _logger, logger);
 
-    public ConsoleCancellationManager(GracefulShutdownService gracefulService, TimeSpan finalDrainBudget)
+    public ConsoleCancellationManager(TimeSpan finalDrainBudget)
     {
-        ArgumentNullException.ThrowIfNull(gracefulService);
-
-        _gracefulService = gracefulService;
         _finalDrainBudget = finalDrainBudget;
         _logger = NullLogger.Instance;
 
-        // Set to a field so getting the token doesn't error after dispose.
+        // Capture tokens to fields so getting them doesn't error after dispose.
         _token = _cts.Token;
+        _gracefulToken = _gracefulCts.Token;
 
         // Phase 3 → Phase 2 fallthrough. When the termination completion source completes for any reason
         // (drain timeout, third Ctrl+C, future external triggers), any ladder still observing only the
-        // graceful token would otherwise sit on a Task.Delay(budget, gracefulService.Token) and miss its
+        // graceful token would otherwise sit on a Task.Delay(budget, GracefulShutdownToken) and miss its
         // last chance to issue a kill before Main abandons it. Cancel synchronously so this fires before
         // continuations of the completion source observe completion. Expire() is idempotent — multiple
         // calls across the watcher (Phase 1 end), the 2nd-signal branch, and this continuation are safe.
         _processTerminationCompletionSource.Task.ContinueWith(
-            static (_, state) => ((GracefulShutdownService)state!).Expire(),
-            _gracefulService,
+            static (_, state) => ((ConsoleCancellationManager)state!).Expire(),
+            this,
             CancellationToken.None,
             TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);
@@ -145,24 +162,91 @@ internal sealed class ConsoleCancellationManager : IDisposable
 
     /// <summary>
     /// Token that fires when the graceful-shutdown window has been exhausted (graceful budget elapsed,
-    /// second termination signal, or process-termination completion). Convenience accessor — callers
-    /// that already have a reference to <see cref="GracefulShutdownService"/> can read its
-    /// <see cref="GracefulShutdownService.Token"/> directly.
+    /// second termination signal, or process-termination completion). Consumed by the per-child shutdown
+    /// ladders through <see cref="IGracefulShutdownWindow"/>.
     /// </summary>
-    public CancellationToken GracefulShutdownToken => _gracefulService.Token;
+    public CancellationToken GracefulShutdownToken => _gracefulToken;
+
+    /// <summary>
+    /// Whether graceful shutdown is enabled for the running command — i.e. a positive budget was
+    /// configured via <see cref="ConfigureForCommand"/>. When <see langword="false"/>, shutdown ladders
+    /// escalate straight to forceful termination.
+    /// </summary>
+    public bool IsEnabled => _gracefulBudget > TimeSpan.Zero;
 
     public bool IsCancellationRequested => _cts.IsCancellationRequested;
 
     /// <summary>
-    /// Sets the graceful-shutdown budget for the currently-executing command by forwarding it to
-    /// <see cref="GracefulShutdownService.Configure"/>. Default is zero, meaning ladders that consume
-    /// <see cref="GracefulShutdownToken"/> fall through to escalation immediately (preserving today's
-    /// behavior for every command that doesn't opt in). The <c>aspire run</c> handler calls this with
-    /// five seconds so DCP and the AppHost get a real cooperative-shutdown window before escalation.
+    /// Sets the graceful-shutdown budget for the currently-executing command. Default is zero, meaning
+    /// ladders that consume <see cref="GracefulShutdownToken"/> fall through to escalation immediately
+    /// (preserving today's behavior for every command that doesn't opt in). The <c>aspire run</c> handler
+    /// calls this so DCP and the AppHost get a real cooperative-shutdown window before escalation.
     /// </summary>
     public void ConfigureForCommand(TimeSpan gracefulBudget)
     {
-        _gracefulService.Configure(gracefulBudget);
+        if (gracefulBudget < TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(gracefulBudget), "Graceful budget cannot be negative.");
+        }
+
+        _gracefulBudget = gracefulBudget;
+    }
+
+    /// <summary>
+    /// Starts the graceful-shutdown clock. Idempotent — the first caller arms a <c>CancelAfter(budget)</c>
+    /// so <see cref="GracefulShutdownToken"/> is guaranteed to fire within the budget; subsequent calls are
+    /// no-ops. Called by whoever initiates teardown (a user signal via <see cref="Cancel"/>, or a child
+    /// owner's disposal-driven ladder) so the token is always bounded.
+    /// </summary>
+    public void BeginGracefulWindow()
+    {
+        // When a debugger is attached, never arm the clock — the developer needs unlimited time to step
+        // through cancellation/cleanup logic. The token therefore never auto-fires; ladders that observe it
+        // sit indefinitely (the right behavior for stepping). A manual second Ctrl+C still escalates because
+        // it calls Expire() directly, bypassing this method.
+        if (Debugger.IsAttached)
+        {
+            return;
+        }
+
+        // A non-positive budget means graceful shutdown isn't configured for this command; the window is
+        // "over" the moment it begins, so escalate immediately.
+        if (_gracefulBudget <= TimeSpan.Zero)
+        {
+            Expire();
+            return;
+        }
+
+        if (Interlocked.Exchange(ref _gracefulWindowStarted, 1) != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            _gracefulCts.CancelAfter(_gracefulBudget);
+        }
+        catch (ObjectDisposedException)
+        {
+            // Racing process shutdown after dispose; the token's final state is already observable.
+        }
+    }
+
+    /// <summary>
+    /// Collapses the graceful-shutdown window immediately, regardless of the remaining budget. Safe to call
+    /// multiple times from any thread; <see cref="GracefulShutdownToken"/> transitions to cancelled at most once.
+    /// </summary>
+    public void Expire()
+    {
+        try
+        {
+            _gracefulCts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Expire can race with process shutdown after dispose; swallow rather than propagating so
+            // callers (signal handlers, watcher continuations) never have to guard against it.
+        }
     }
 
     private void OnPosixSignal(PosixSignalContext context)
@@ -214,7 +298,7 @@ internal sealed class ConsoleCancellationManager : IDisposable
             // unblock and escalate to forceful termination; the watcher's Task.Delay(graceful) gets
             // cancelled and moves on to Phase 2 (final drain).
             _logger.LogWarning("Second termination signal received, expiring graceful shutdown window.");
-            _gracefulService.Expire();
+            Expire();
         }
         else
         {
@@ -228,20 +312,20 @@ internal sealed class ConsoleCancellationManager : IDisposable
     {
         try
         {
-            // Phase 1: graceful window. Start the central clock on the service, then wait for the
-            // graceful token to fire. BeginGracefulWindow arms a CancelAfter(budget) (or, for a
-            // zero-budget command, expires immediately), so the token is guaranteed to fire without us
-            // owning a timer here. A 2nd Ctrl+C calls _gracefulService.Expire() from the signal counter,
-            // which fires the token early and drops us straight into Phase 2.
+            // Phase 1: graceful window. Start the central clock, then wait for the graceful token to
+            // fire. BeginGracefulWindow arms a CancelAfter(budget) (or, for a zero-budget command,
+            // expires immediately), so the token is guaranteed to fire without us owning a timer here.
+            // A 2nd Ctrl+C calls Expire() from the signal counter, which fires the token early and drops
+            // us straight into Phase 2.
             //
             // Under a debugger BeginGracefulWindow is a no-op (the developer needs unlimited time to
             // step), so the token never auto-fires and this await sits indefinitely — the right behavior
             // for stepping. A manual second Ctrl+C still escalates via Expire().
-            _gracefulService.BeginGracefulWindow();
+            BeginGracefulWindow();
 
             try
             {
-                await Task.Delay(Timeout.InfiniteTimeSpan, _gracefulService.Token).ConfigureAwait(false);
+                await Task.Delay(Timeout.InfiniteTimeSpan, _gracefulToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -284,6 +368,40 @@ internal sealed class ConsoleCancellationManager : IDisposable
         AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
 
         _cts.Dispose();
+        _gracefulCts.Dispose();
     }
+}
+
+/// <summary>
+/// The command-level graceful-shutdown window consumed by every per-child shutdown path
+/// (<see cref="Processes.ProcessShutdownCoordinator"/> and the ladders it drives). Implemented by
+/// <see cref="ConsoleCancellationManager"/>, which owns the budget, the clock, and the token as part
+/// of the single CLI shutdown service. This narrow contract is what the process-spawn sites depend on
+/// so they don't take a dependency on the console signal manager in full. It lives in this file rather
+/// than its own because it exists only to subdivide <see cref="ConsoleCancellationManager"/> when
+/// referenced by the spawn sites.
+/// </summary>
+internal interface IGracefulShutdownWindow
+{
+    /// <summary>
+    /// Whether graceful shutdown is enabled for the running command — i.e. a positive budget was
+    /// configured. When <see langword="false"/>, shutdown ladders escalate straight to forceful
+    /// termination.
+    /// </summary>
+    bool IsEnabled { get; }
+
+    /// <summary>
+    /// Fires when the graceful-shutdown window has been exhausted (graceful budget elapsed, a second
+    /// termination signal, or process-termination completion).
+    /// </summary>
+    CancellationToken GracefulShutdownToken { get; }
+
+    /// <summary>
+    /// Starts the graceful-shutdown clock. Idempotent — the first caller arms the budget so
+    /// <see cref="GracefulShutdownToken"/> is guaranteed to fire within it; later calls are no-ops.
+    /// Called by whoever initiates teardown (a user signal, or a child owner's disposal-driven ladder)
+    /// so the token is always bounded.
+    /// </summary>
+    void BeginGracefulWindow();
 }
 

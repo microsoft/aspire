@@ -210,10 +210,11 @@ internal sealed class TestProcessExecution : IProcessExecution
         KillCallback?.Invoke(entireProcessTree);
     }
 
-    public void Dispose()
+    public ValueTask DisposeAsync()
     {
         DisposeCount++;
         DisposeCallback?.Invoke();
+        return ValueTask.CompletedTask;
     }
 }
 

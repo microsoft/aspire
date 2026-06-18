@@ -59,9 +59,8 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper)
         var (command, args) = GetLongRunningCommand();
 
         using var cts = new CancellationTokenSource();
-        using var shutdownService = new GracefulShutdownService();
+        using var shutdownService = new TestGracefulShutdownWindow();
         // Model the run path: graceful shutdown is enabled so the launcher routes through the ladder.
-        shutdownService.Configure(TimeSpan.FromSeconds(30));
         var signaler = new RecordingGracefulSignaler(onSignal: pid =>
         {
             try
@@ -98,7 +97,7 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper)
 
         Assert.NotEqual(0, exitCode);
         Assert.Single(signaler.Pids);
-        Assert.False(shutdownService.Token.IsCancellationRequested);
+        Assert.False(shutdownService.GracefulShutdownToken.IsCancellationRequested);
     }
 
     [Fact]
@@ -111,9 +110,8 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper)
         var (command, args) = GetLongRunningCommand();
 
         using var cts = new CancellationTokenSource();
-        using var shutdownService = new GracefulShutdownService();
+        using var shutdownService = new TestGracefulShutdownWindow();
         // Model the run path: graceful shutdown is enabled so the launcher routes through the ladder.
-        shutdownService.Configure(TimeSpan.FromSeconds(30));
         var signalerNeverCompletes = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var signaler = new RecordingGracefulSignaler(onSignal: pid =>
         {
@@ -153,7 +151,7 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper)
 
         Assert.NotEqual(0, exitCode);
         Assert.Single(signaler.Pids);
-        Assert.False(shutdownService.Token.IsCancellationRequested);
+        Assert.False(shutdownService.GracefulShutdownToken.IsCancellationRequested);
         Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5),
             $"Expected process exit to win over the still-blocked signaler but it took {stopwatch.Elapsed}.");
     }
@@ -171,11 +169,10 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper)
         var (command, args) = await GetProcessTreeCommandAsync(workspace.WorkspaceRoot, descendantPidFile);
 
         using var cts = new CancellationTokenSource();
-        using var shutdownService = new GracefulShutdownService();
+        using var shutdownService = new TestGracefulShutdownWindow();
 
         // Model the run path: graceful shutdown is enabled so the launcher routes through the ladder.
         // Escalation is driven by the explicit Expire() below, not by the budget elapsing.
-        shutdownService.Configure(TimeSpan.FromSeconds(30));
 
         var signaled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var signaler = new RecordingGracefulSignaler(onSignal: _ =>
@@ -238,10 +235,9 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper)
         var (command, args) = GetLongRunningCommand();
 
         using var cts = new CancellationTokenSource();
-        using var shutdownService = new GracefulShutdownService();
+        using var shutdownService = new TestGracefulShutdownWindow();
 
         // Model the run path: graceful shutdown is enabled so the launcher routes through the ladder.
-        shutdownService.Configure(TimeSpan.FromSeconds(30));
 
         var signaler = new RecordingGracefulSignaler(onSignal: _ =>
             throw new InvalidOperationException("simulated DCP failure"));

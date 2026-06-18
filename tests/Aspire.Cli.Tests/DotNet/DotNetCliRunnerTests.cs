@@ -2480,8 +2480,6 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         {
         }
 
-        public void Dispose()
-        {
-        }
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }

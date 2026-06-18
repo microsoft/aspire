@@ -89,12 +89,12 @@ internal sealed class ProcessInvocationOptions
     public Processes.IProcessTreeGracefulShutdownSignaler? GracefulShutdownSignaler { get; set; }
 
     /// <summary>
-    /// The central graceful-shutdown timing service whose
-    /// <see cref="GracefulShutdownService.Token"/> bounds the shared ladder. When
+    /// The central graceful-shutdown window whose
+    /// <see cref="ConsoleCancellationManager.GracefulShutdownToken"/> bounds the shared ladder. When
     /// <c>null</c>, the cancellation path uses today's <see cref="Processes.ProcessTerminator"/>
     /// force-kill behavior.
     /// </summary>
-    public GracefulShutdownService? ShutdownService { get; set; }
+    public IGracefulShutdownWindow? ShutdownService { get; set; }
 }
 
 internal sealed class DotNetCliRunner(

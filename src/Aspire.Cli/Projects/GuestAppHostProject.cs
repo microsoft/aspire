@@ -49,7 +49,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     private readonly RunningInstanceManager _runningInstanceManager;
     private readonly ProfilingTelemetry _profilingTelemetry;
     private readonly IProcessTreeGracefulShutdownSignaler _gracefulShutdownSignaler;
-    private readonly GracefulShutdownService _shutdownService;
+    private readonly IGracefulShutdownWindow _shutdownService;
     private readonly AppHostServerCodegenSessionFactory _codegenSessionFactory;
 
     // Language is always resolved via constructor
@@ -72,7 +72,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         FileLoggerProvider fileLoggerProvider,
         ProfilingTelemetry profilingTelemetry,
         IProcessTreeGracefulShutdownSignaler gracefulShutdownSignaler,
-        GracefulShutdownService shutdownService,
+        IGracefulShutdownWindow shutdownService,
         TimeProvider? timeProvider = null,
         AppHostServerCodegenSessionFactory? codegenSessionFactory = null)
     {

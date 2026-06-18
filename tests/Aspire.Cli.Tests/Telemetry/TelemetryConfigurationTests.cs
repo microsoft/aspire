@@ -42,7 +42,7 @@ public class TelemetryConfigurationTests
         var logBufferContext = new ConsoleLogBufferContext();
         var (loggerFactory, fileLoggerProvider) = Program.CreateLoggerFactory([], loggingOptions, errorWriter, logBufferContext);
         var identityChannelReader = new IdentityChannelReader(typeof(Program).Assembly);
-        var startupContext = new Program.CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, logBufferContext, loggerFactory.CreateLogger(Program.RootLoggerName), new ConsoleCancellationManager(new GracefulShutdownService(), finalDrainBudget: Timeout.InfiniteTimeSpan), identityChannelReader);
+        var startupContext = new Program.CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, logBufferContext, loggerFactory.CreateLogger(Program.RootLoggerName), new ConsoleCancellationManager(finalDrainBudget: Timeout.InfiniteTimeSpan), identityChannelReader);
         return await Program.BuildApplicationAsync([], startupContext, config);
     }
 

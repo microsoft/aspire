@@ -279,7 +279,7 @@ public class Program
         return (factory, fileLoggerProvider);
     }
 
-    internal static async Task<IHost> BuildApplicationAsync(string[] args, CliStartupContext startupContext, Dictionary<string, string?>? configurationValues = null, ConsoleCancellationManager? cancellationManager = null, GracefulShutdownService? gracefulShutdownService = null)
+    internal static async Task<IHost> BuildApplicationAsync(string[] args, CliStartupContext startupContext, Dictionary<string, string?>? configurationValues = null, ConsoleCancellationManager? cancellationManager = null)
     {
         // Check for --non-interactive flag early
         var nonInteractive = args?.Any(a => a == CommonOptionNames.NonInteractive) ?? false;
@@ -336,19 +336,20 @@ public class Program
         // Register logging options so components can read the user's chosen log level
         builder.Services.AddSingleton(startupContext.LoggingOptions);
 
-        // Register CCM and the graceful shutdown service as instance singletons so the DI container
-        // does not take disposal ownership — Program.Main owns the lifetime via `using` statements.
-        // Tests that drive BuildApplicationAsync directly without passing them in still work because
-        // the registrations are gated on non-null arguments.
+        // Register CCM as an instance singleton so the DI container does not take disposal ownership —
+        // Program.Main owns the lifetime via a `using` statement. Tests that drive BuildApplicationAsync
+        // directly without passing it in still work because startupContext.CancellationManager is
+        // registered unconditionally above.
         if (cancellationManager is not null)
         {
             builder.Services.AddSingleton(cancellationManager);
         }
 
-        if (gracefulShutdownService is not null)
-        {
-            builder.Services.AddSingleton(gracefulShutdownService);
-        }
+        // The graceful-shutdown window is the same object as the CCM (CCM owns the OS-signal
+        // registration AND the graceful budget/clock/token). Map the consumer-facing interface to
+        // whichever CCM singleton was registered so per-child shutdown ladders depend on the narrow
+        // contract rather than the whole signal manager.
+        builder.Services.AddSingleton<IGracefulShutdownWindow>(sp => sp.GetRequiredService<ConsoleCancellationManager>());
 
         // Configure OpenTelemetry tracing. TelemetryManager reads configuration and creates
         // separate TracerProvider instances:
@@ -946,13 +947,11 @@ public class Program
 
         // Setup handling of CTRL-C and SIGTERM as early as possible so that if
         // we get a signal anywhere that is not handled by Spectre Console
-        // already that we know to trigger cancellation. The graceful service is
-        // constructed first and handed to CCM so the two share the same lifetime
-        // and CCM can drive timing from the signal handler. Both are registered
-        // as DI singletons below via AddSingleton(instance) so the container does
-        // not take disposal ownership.
-        using var gracefulShutdownService = new GracefulShutdownService();
-        using var cancellationManager = new ConsoleCancellationManager(gracefulShutdownService, finalDrainBudget: TimeSpan.FromSeconds(5));
+        // already that we know to trigger cancellation. The cancellation manager
+        // owns both the OS-signal registration and the graceful-shutdown budget,
+        // clock, and token. It is registered as a DI singleton below via
+        // AddSingleton(instance) so the container does not take disposal ownership.
+        using var cancellationManager = new ConsoleCancellationManager(finalDrainBudget: TimeSpan.FromSeconds(5));
 
         Console.OutputEncoding = Encoding.UTF8;
 
@@ -993,7 +992,7 @@ public class Program
         IHost? app = null;
         try
         {
-            app = await BuildApplicationAsync(args, startupContext, cancellationManager: cancellationManager, gracefulShutdownService: gracefulShutdownService);
+            app = await BuildApplicationAsync(args, startupContext, cancellationManager: cancellationManager);
             await app.StartAsync().ConfigureAwait(false);
         }
         catch (Exception ex)

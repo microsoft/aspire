@@ -41,7 +41,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         });
 
         var isFirstLine = true;
-        using var execution = CreateExecution(
+        await using var execution = CreateExecution(
             scriptFile,
             new ProcessInvocationOptions
             {
@@ -100,7 +100,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
             releaseCallback.SetResult();
         });
 
-        using var execution = CreateExecution(
+        await using var execution = CreateExecution(
             scriptFile,
             new ProcessInvocationOptions
             {
@@ -146,7 +146,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
 
         var scriptFile = await CreateLongRunningScriptAsync(workspace.WorkspaceRoot);
 
-        using var execution = CreateExecution(
+        await using var execution = CreateExecution(
             scriptFile,
             new ProcessInvocationOptions());
 
@@ -167,17 +167,16 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var scriptFile = await CreateLongRunningScriptAsync(workspace.WorkspaceRoot);
-        using var shutdownService = new GracefulShutdownService();
+        using var shutdownService = new TestGracefulShutdownWindow();
         // Model the run path: graceful shutdown is enabled (positive budget) so the coordinator runs
         // the ladder. Escalation in this test is driven explicitly (signaler kill), not by the budget.
-        shutdownService.Configure(TimeSpan.FromSeconds(30));
         var signaler = new RecordingGracefulSignaler(onSignal: pid =>
         {
             TryKillProcess(pid);
             return Task.FromResult(true);
         });
 
-        using var execution = CreateExecution(scriptFile, isolateConsole, signaler, shutdownService);
+        await using var execution = CreateExecution(scriptFile, isolateConsole, signaler, shutdownService);
 
         Assert.True(execution.Start());
 
@@ -187,7 +186,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         await Assert.ThrowsAsync<OperationCanceledException>(() => execution.WaitForExitAsync(cts.Token));
 
         Assert.Single(signaler.Pids);
-        Assert.False(shutdownService.Token.IsCancellationRequested);
+        Assert.False(shutdownService.GracefulShutdownToken.IsCancellationRequested);
         Assert.True(WaitForProcessExit(execution.ProcessId, TimeSpan.FromSeconds(10)), $"Expected process {execution.ProcessId} to exit after graceful signal.");
     }
 
@@ -198,10 +197,9 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var scriptFile = await CreateLongRunningScriptAsync(workspace.WorkspaceRoot);
-        using var shutdownService = new GracefulShutdownService();
+        using var shutdownService = new TestGracefulShutdownWindow();
         // Model the run path: graceful shutdown is enabled so the coordinator runs the ladder.
         // Escalation is driven by the explicit Expire() below, not by the budget elapsing.
-        shutdownService.Configure(TimeSpan.FromSeconds(30));
         var signaled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var signaler = new RecordingGracefulSignaler(onSignal: _ =>
         {
@@ -209,7 +207,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
             return Task.FromResult(true);
         });
 
-        using var execution = CreateExecution(scriptFile, isolateConsole, signaler, shutdownService);
+        await using var execution = CreateExecution(scriptFile, isolateConsole, signaler, shutdownService);
 
         Assert.True(execution.Start());
 
@@ -234,13 +232,12 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var scriptFile = await CreateLongRunningScriptAsync(workspace.WorkspaceRoot);
-        using var shutdownService = new GracefulShutdownService();
+        using var shutdownService = new TestGracefulShutdownWindow();
         // Model the run path: graceful shutdown is enabled so the coordinator runs the ladder.
-        shutdownService.Configure(TimeSpan.FromSeconds(30));
         var signaler = new RecordingGracefulSignaler(onSignal: _ =>
             throw new InvalidOperationException("simulated DCP failure"));
 
-        using var execution = CreateExecution(scriptFile, isolateConsole, signaler, shutdownService);
+        await using var execution = CreateExecution(scriptFile, isolateConsole, signaler, shutdownService);
 
         Assert.True(execution.Start());
 
@@ -411,7 +408,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         FileInfo scriptFile,
         bool isolateConsole,
         IProcessTreeGracefulShutdownSignaler signaler,
-        GracefulShutdownService shutdownService)
+        IGracefulShutdownWindow shutdownService)
     {
         // The Windows kill-on-close job is now resolved on-demand inside the factory via
         // WindowsConsoleProcessJob.Shared, so the test no longer creates or disposes one.
