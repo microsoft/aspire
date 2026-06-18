@@ -402,13 +402,20 @@ async function waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath: string
         await waitForNoRunningAppHostPath(appHostPath, timeoutMs, knownAppHostPid, actionDescription);
     }
     catch (error) {
-        const runningAppHostPid = getRunningAppHostFromState(appHostPath)?.appHostPid;
-        if (runningAppHostPid === undefined || !isProcessRunning(runningAppHostPid)) {
+        const runningAppHost = await getRunningAppHostAccordingToCli(appHostPath);
+        // The extension state file can lag behind the CLI registry after stopDebugging:
+        // it may still contain an AppHost PID even though aspire ps has already dropped
+        // the AppHost. At that point the PID may be stale/reused, so don't SIGTERM it.
+        if (!runningAppHost) {
+            return;
+        }
+
+        if (!isProcessRunning(runningAppHost.appHostPid)) {
             throw error;
         }
 
-        await stopProcess(runningAppHostPid, 30000);
-        await waitForNoRunningAppHostPath(appHostPath, 5000, runningAppHostPid, actionDescription);
+        await stopProcess(runningAppHost.appHostPid, 30000);
+        await waitForNoRunningAppHostPath(appHostPath, 5000, runningAppHost.appHostPid, actionDescription);
     }
 }
 

@@ -341,9 +341,14 @@ suite('E2E launch profile', () => {
         const zeroToRunning = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'zeroToRunning.e2e.test.ts'), 'utf8');
         const stopAppHostStart = fixtures.indexOf('export async function stopAppHostIfRunning');
         const stopAppHostEnd = fixtures.indexOf('interface PsAppHost');
+        const stopKnownProcessStart = fixtures.indexOf('async function waitForNoRunningAppHostPathOrStopKnownProcess');
+        const stopKnownProcessEnd = fixtures.indexOf('function getRunningAppHostFromState');
         assert.ok(stopAppHostStart >= 0);
         assert.ok(stopAppHostEnd > stopAppHostStart);
+        assert.ok(stopKnownProcessStart >= 0);
+        assert.ok(stopKnownProcessEnd > stopKnownProcessStart);
         const stopAppHost = fixtures.slice(stopAppHostStart, stopAppHostEnd);
+        const stopKnownProcess = fixtures.slice(stopKnownProcessStart, stopKnownProcessEnd);
         const waitForCapturedPidCalls = stopAppHost.match(/await waitForNoRunningAppHostPathOrStopKnownProcess\(appHostPath, 30000, runningAppHostBeforeStop\?\.appHostPid, 'after stopping'\);/g) ?? [];
 
         assert.ok(stopAppHost.includes('const stopError = await tryStopAppHost(appHostPath);'));
@@ -372,6 +377,8 @@ suite('E2E launch profile', () => {
         assert.ok(fixtures.includes("process.kill(pid, 'SIGTERM');"));
         assert.ok(fixtures.includes('async function waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath: string, timeoutMs: number, knownAppHostPid: number | undefined, actionDescription: string): Promise<void>'));
         assert.ok(fixtures.includes('formatE2eTeardownFailureMessage(failureMessage, failures)'));
+        assert.ok(stopKnownProcess.indexOf('const runningAppHost = await getRunningAppHostAccordingToCli(appHostPath);') < stopKnownProcess.indexOf('await stopProcess(runningAppHost.appHostPid, 30000);'));
+        assert.ok(stopKnownProcess.includes('stale/reused'));
         assert.ok(fixtures.includes("error.code === 'EPERM'"));
         assert.ok(fixtures.includes("const maxAttempts = process.platform === 'win32' ? 40 : 1;"));
     });
