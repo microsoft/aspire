@@ -29,6 +29,7 @@ namespace Aspire.Dashboard.Components.Pages;
 public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncDisposable, IPageWithSessionAndUrlState<Resources.ResourcesViewModel, Resources.ResourcesPageState>
 {
     private const string ScrollContainerId = "resourcesScrollContainer";
+    private const string GraphContainerId = "resourcesGraphContainer";
     private const string TypeColumn = nameof(TypeColumn);
     private const string NameColumn = nameof(NameColumn);
     private const string StateColumn = nameof(StateColumn);
@@ -119,6 +120,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private bool _isFilterPopupVisible;
     private Task? _resourceSubscriptionTask;
     private string? _elementIdBeforeDetailsViewOpened;
+    private string? _pendingFocusElementId;
     private FluentDataGrid<ResourceGridViewModel> _dataGrid = null!;
     private GridColumnManager _manager = null!;
     private int _maxHighlightedCount;
@@ -387,9 +389,14 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
         if (firstRender)
         {
-            // Focus the scroll container without showing the focus ring. The container is a large
-            // content area where a visible focus indicator would be visually noisy on initial load.
-            await JS.InvokeVoidAsync("focusElement", ScrollContainerId, true);
+            var initialFocusElementId = PageViewModel.SelectedViewKind == ResourceViewKind.Graph ? GraphContainerId : ScrollContainerId;
+            await JS.InvokeVoidAsync("focusElement", initialFocusElementId, true);
+        }
+
+        if (_pendingFocusElementId is { } pendingFocusElementId)
+        {
+            _pendingFocusElementId = null;
+            await JS.InvokeVoidAsync("focusElement", pendingFocusElementId);
         }
 
         if (PageViewModel.SelectedViewKind == ResourceViewKind.Graph && !_graphInitialized)
@@ -712,6 +719,12 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         Logger.LogDebug("Clearing selected resource.");
 
         PageViewModel.SelectedResource = null;
+        if (_elementIdBeforeDetailsViewOpened is not null && causedByUserAction)
+        {
+            _pendingFocusElementId = _elementIdBeforeDetailsViewOpened;
+        }
+
+        _elementIdBeforeDetailsViewOpened = null;
 
         await InvokeAsync(StateHasChanged);
 
@@ -719,13 +732,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         {
             await UpdateResourceGraphSelectedAsync();
         }
-
-        if (_elementIdBeforeDetailsViewOpened is not null && causedByUserAction)
-        {
-            await JS.InvokeVoidAsync("focusElement", _elementIdBeforeDetailsViewOpened);
-        }
-
-        _elementIdBeforeDetailsViewOpened = null;
     }
 
     private string GetResourceName(ResourceViewModel resource) => ResourceViewModel.GetResourceName(resource, _resourceByName);

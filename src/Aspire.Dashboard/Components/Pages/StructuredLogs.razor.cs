@@ -47,6 +47,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     private Subscription? _logsSubscription;
     private bool _resourceChanged;
     private string? _elementIdBeforeDetailsViewOpened;
+    private string? _pendingFocusElementId;
     private AspirePageContentLayout? _contentLayout;
     private string _filter = string.Empty;
     private FluentDataGrid<OtlpLogEntry>? _dataGrid;
@@ -338,7 +339,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
         if (_elementIdBeforeDetailsViewOpened is not null && causedByUserAction)
         {
-            await JS.InvokeVoidAsync("focusElement", _elementIdBeforeDetailsViewOpened);
+            _pendingFocusElementId = _elementIdBeforeDetailsViewOpened;
         }
 
         _elementIdBeforeDetailsViewOpened = null;
@@ -457,6 +458,12 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             // content area where a visible focus indicator would be visually noisy on initial load.
             await JS.InvokeVoidAsync("focusElement", ScrollContainerId, true);
             DimensionManager.OnViewportInformationChanged += OnBrowserResize;
+        }
+
+        if (_pendingFocusElementId is { } pendingFocusElementId)
+        {
+            _pendingFocusElementId = null;
+            await JS.InvokeVoidAsync("focusElement", pendingFocusElementId);
         }
     }
 

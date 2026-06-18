@@ -42,6 +42,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     private List<OtlpResource> _resources = default!;
     private readonly List<string> _collapsedSpanIds = [];
     private string? _elementIdBeforeDetailsViewOpened;
+    private string? _pendingFocusElementId;
     private FluentDataGrid<SpanWaterfallViewModel> _dataGrid = null!;
     private GridColumnManager _manager = null!;
     private AIContext? _aiContext;
@@ -270,6 +271,12 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
             // content area where a visible focus indicator would be visually noisy on initial load.
             await JS.InvokeVoidAsync("focusElement", ScrollContainerId, true);
         }
+
+        if (_pendingFocusElementId is { } pendingFocusElementId)
+        {
+            _pendingFocusElementId = null;
+            await JS.InvokeVoidAsync("focusElement", pendingFocusElementId);
+        }
     }
 
     private void UpdateDetailViewData()
@@ -441,7 +448,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
         if (_elementIdBeforeDetailsViewOpened is not null && causedByUserAction)
         {
-            await JS.InvokeVoidAsync("focusElement", _elementIdBeforeDetailsViewOpened);
+            _pendingFocusElementId = _elementIdBeforeDetailsViewOpened;
         }
 
         _elementIdBeforeDetailsViewOpened = null;

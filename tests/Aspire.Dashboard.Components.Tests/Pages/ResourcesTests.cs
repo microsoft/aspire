@@ -208,6 +208,9 @@ public partial class ResourcesTests : DashboardTestContext
 
         // Assert
         Assert.Single(initializeGraphInvocationHandler.Invocations);
+        var focusInvocation = JSInterop.Invocations.Single(i => i.Identifier == "focusElement");
+        Assert.Equal("resourcesGraphContainer", focusInvocation.Arguments[0]);
+        Assert.Equal(true, focusInvocation.Arguments[1]);
     }
 
     [Fact]

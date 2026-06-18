@@ -223,7 +223,7 @@
                             </div>
                             @if (!_hideResourceGraph)
                             {
-                                <div class="resource-graph-container" hidden="@(PageViewModel.SelectedViewKind != ResourceViewKind.Graph)">
+                                <div id="@GraphContainerId" class="resource-graph-container" tabindex="0" role="region" aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ChartContainerGraphAccessibleLabel)]" hidden="@(PageViewModel.SelectedViewKind != ResourceViewKind.Graph)">
                                     <svg class="resource-graph">
                                     </svg>
                                     <div class="resource-graph-controls">
