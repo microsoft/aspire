@@ -80,13 +80,13 @@ internal sealed class RunCommand : BaseCommand
 
     // Graceful shutdown budget for `aspire run`. DCP gets a cooperative window to drain
     // resources before the central drain budget arms and ladders escalate to forceful kill.
-    // 10s gives the AppHost process enough time to actually shut down cleanly: a default
-    // starter template (apphost + 2 services + dashboard) consistently takes ~6s to drain
-    // all hosted services and exit, with built-in margin for slower hardware and AppHosts
-    // that own additional resources. Pre-bump (5s) was too tight — the budget consistently
-    // expired ~1s before clean exit, forcing a tree-kill in the final stretch of graceful
-    // shutdown and producing zombie-shaped exits with no SIGINT handler observation.
-    internal static readonly TimeSpan s_gracefulShutdownBudget = TimeSpan.FromSeconds(10);
+    // 5s is comfortably enough for a default starter template (apphost + 2 services +
+    // dashboard) once CTRL+C actually reaches the AppHost — measured graceful exits run
+    // ~700ms end-to-end. Earlier observations of ~6s drains were an artifact of the
+    // inherited "ignore CTRL+C" attribute (cleared in Program.cs Main on Windows) which
+    // caused DCP to fall back to its internal 6s SIGKILL deadline because the kernel was
+    // silently dropping the CTRL_C_EVENT.
+    internal static readonly TimeSpan s_gracefulShutdownBudget = TimeSpan.FromSeconds(5);
 
     // Guest AppHosts can bring up the temporary server/backchannel and then fail immediately
     // afterward when the guest startup process hits a syntax, pre-execute, or model validation
