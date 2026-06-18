@@ -3,6 +3,27 @@ import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { AspireExtendedDebugConfiguration } from '../dcp/types';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
+import { __resetCommonPropertiesForTests, __setReporterForTests } from '../utils/telemetry';
+
+interface RecordedEvent {
+    name: string;
+    properties?: Record<string, string>;
+    measurements?: Record<string, number>;
+}
+
+class FakeTelemetryReporter {
+    public events: RecordedEvent[] = [];
+
+    sendTelemetryEvent(name: string, properties?: Record<string, string>, measurements?: Record<string, number>): void {
+        this.events.push({ name, properties, measurements });
+    }
+
+    sendTelemetryErrorEvent(): void { /* not used here */ }
+    sendDangerousTelemetryEvent(): void { /* not used here */ }
+    sendDangerousTelemetryErrorEvent(): void { /* not used here */ }
+    sendRawTelemetryEvent(): void { /* not used here */ }
+    dispose(): Promise<void> { return Promise.resolve(); }
+}
 
 suite('AppHostLaunchService', () => {
     let service: AppHostLaunchService;
@@ -135,5 +156,27 @@ suite('AppHostLaunchService', () => {
         await assert.rejects(service.launch('/repo/AppHost.csproj', 'run', true), /boom/);
 
         assert.strictEqual(service.isLaunching('/repo/AppHost.csproj'), false);
+    });
+
+    test('launch emits one bounded result telemetry event', async () => {
+        const fake = new FakeTelemetryReporter();
+        const restore = __setReporterForTests(fake as unknown as Parameters<typeof __setReporterForTests>[0]);
+        try {
+            await service.launch('/repo/AppHost.csproj', 'custom' as Parameters<AppHostLaunchService['launch']>[1], true);
+
+            assert.strictEqual(fake.events.length, 1);
+            const event = fake.events[0];
+            assert.strictEqual(event.name, 'apphost/launch/result');
+            assert.strictEqual(event.properties?.command, 'other');
+            assert.strictEqual(event.properties?.outcome, 'success');
+            assert.strictEqual(event.properties?.mode, 'run');
+            assert.strictEqual(event.properties?.apphost_language, 'csharp');
+            assert.strictEqual(event.properties?.execution_suppressed, 'false');
+            assert.ok(typeof event.measurements?.duration_ms === 'number');
+        }
+        finally {
+            restore();
+            __resetCommonPropertiesForTests();
+        }
     });
 });

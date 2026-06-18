@@ -79,11 +79,21 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             // The cached discovery promise is shared across extension features. Keep caller
             // cancellation outside the cached operation so one cancelled refresh doesn't reject
             // unrelated callers that are awaiting the same workspace discovery.
-            const discoveryPromise = this._discoverCore(workspaceFolder, startTime)
+            const discoveryPromise = this._discoverCore(workspaceFolder)
                 .then(async discovery => {
-                    const candidates = await this._includeConfiguredAppHostCandidate(workspaceFolder, discovery.candidates);
-                    emitAppHostDiscoveryTelemetry(discovery.source, 'success', candidates, startTime);
+                    let candidates = discovery.candidates;
+                    try {
+                        candidates = await this._includeConfiguredAppHostCandidate(workspaceFolder, candidates);
+                        emitAppHostDiscoveryTelemetry(discovery.source, 'success', candidates, startTime);
+                    }
+                    catch (error) {
+                        emitAppHostDiscoveryTelemetry(discovery.source, 'error', candidates, startTime);
+                        throw error;
+                    }
                     return candidates;
+                }, error => {
+                    emitAppHostDiscoveryTelemetry('all', 'error', [], startTime);
+                    throw error;
                 });
             let cachedPromise: Promise<CandidateAppHostDisplayInfo[]>;
             cachedPromise = discoveryPromise.catch(error => {
@@ -141,7 +151,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         this._onDidChangeCandidates.dispose();
     }
 
-    private async _discoverCore(workspaceFolder: vscode.WorkspaceFolder, startTime: number): Promise<AppHostDiscoveryResult> {
+    private async _discoverCore(workspaceFolder: vscode.WorkspaceFolder): Promise<AppHostDiscoveryResult> {
         try {
             const appHosts = await this._discoverWithLs(workspaceFolder);
             extensionLogOutputChannel.info(`Discovered ${appHosts.length} AppHost candidate(s) via aspire ls`);
@@ -172,7 +182,6 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                 const fileFallbackMessage = fileFallbackError
                     ? `\nworkspace file fallback failed: ${formatErrorMessage(fileFallbackError)}`
                     : '';
-                emitAppHostDiscoveryTelemetry('all', 'error', [], startTime);
                 throw new Error(`aspire ls discovery failed: ${formatErrorMessage(error)}\naspire extension get-apphosts fallback failed: ${formatErrorMessage(fallbackError)}${fileFallbackMessage}`);
             }
         }

@@ -9,7 +9,28 @@ import * as vscode from 'vscode';
 import * as cliModule from '../debugger/languages/cli';
 import { AppHostDiscoveryService, findCandidateForEditorFile, findConfiguredAppHostPaths, getDebugTargetForCandidate, selectWorkspaceAppHostPath } from '../utils/appHostDiscovery';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
+import { __resetCommonPropertiesForTests, __setReporterForTests } from '../utils/telemetry';
 import { appHostDiscoveryFindFilesMaxResults } from '../utils/workspaceFileSearch';
+
+interface RecordedEvent {
+    name: string;
+    properties?: Record<string, string>;
+    measurements?: Record<string, number>;
+}
+
+class FakeTelemetryReporter {
+    public events: RecordedEvent[] = [];
+
+    sendTelemetryEvent(name: string, properties?: Record<string, string>, measurements?: Record<string, number>): void {
+        this.events.push({ name, properties, measurements });
+    }
+
+    sendTelemetryErrorEvent(): void { /* not used here */ }
+    sendDangerousTelemetryEvent(): void { /* not used here */ }
+    sendDangerousTelemetryErrorEvent(): void { /* not used here */ }
+    sendRawTelemetryEvent(): void { /* not used here */ }
+    dispose(): Promise<void> { return Promise.resolve(); }
+}
 
 suite('AppHost discovery', () => {
     test('resolves SDK-style C# AppHost source file to discovered project candidate', () => {
@@ -137,6 +158,76 @@ suite('AppHost discovery', () => {
             }
             finally {
                 service.dispose();
+            }
+        });
+
+        test('emits discovery result telemetry after successful discovery', async () => {
+            stubFileSystemWatchers(sandbox);
+            const fake = new FakeTelemetryReporter();
+            const restore = __setReporterForTests(fake as unknown as Parameters<typeof __setReporterForTests>[0]);
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                options?.stdoutCallback?.(JSON.stringify([{
+                    path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
+                    language: 'csharp',
+                    status: 'buildable',
+                }]));
+                options?.exitCallback?.(0);
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+            try {
+                await service.discover(makeWorkspaceFolder(buildPath('workspace')));
+
+                assert.strictEqual(fake.events.length, 1);
+                const event = fake.events[0];
+                assert.strictEqual(event.name, 'apphost/discovery/result');
+                assert.deepStrictEqual(event.properties, {
+                    outcome: 'success',
+                    source: 'ls',
+                    apphost_languages: 'csharp',
+                });
+                assert.strictEqual(event.measurements?.candidate_count, 1);
+                assert.strictEqual(event.measurements?.buildable_candidate_count, 1);
+                assert.ok(typeof event.measurements?.duration_ms === 'number');
+            }
+            finally {
+                service.dispose();
+                restore();
+                __resetCommonPropertiesForTests();
+            }
+        });
+
+        test('emits discovery result telemetry after failed discovery', async () => {
+            stubFileSystemWatchers(sandbox);
+            const fake = new FakeTelemetryReporter();
+            const restore = __setReporterForTests(fake as unknown as Parameters<typeof __setReporterForTests>[0]);
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                options?.stderrCallback?.('nope');
+                options?.exitCallback?.(1);
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+            try {
+                await assert.rejects(service.discover(makeWorkspaceFolder(buildPath('workspace'))), /aspire ls discovery failed/);
+
+                assert.strictEqual(fake.events.length, 1);
+                const event = fake.events[0];
+                assert.strictEqual(event.name, 'apphost/discovery/result');
+                assert.deepStrictEqual(event.properties, {
+                    outcome: 'error',
+                    source: 'all',
+                    apphost_languages: 'none',
+                });
+                assert.strictEqual(event.measurements?.candidate_count, 0);
+                assert.strictEqual(event.measurements?.buildable_candidate_count, 0);
+                assert.ok(typeof event.measurements?.duration_ms === 'number');
+            }
+            finally {
+                service.dispose();
+                restore();
+                __resetCommonPropertiesForTests();
             }
         });
 

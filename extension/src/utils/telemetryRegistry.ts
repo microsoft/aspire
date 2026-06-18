@@ -65,10 +65,6 @@ export interface TelemetryEventSchema {
         properties: 'outcome' | 'source' | 'apphost_languages';
         measurements: 'duration_ms' | 'candidate_count' | 'buildable_candidate_count';
     };
-    'apphost/launch/requested': {
-        properties: 'mode' | 'command' | 'apphost_language' | 'execution_suppressed';
-        measurements: never;
-    };
     'apphost/launch/result': {
         properties: 'mode' | 'command' | 'apphost_language' | 'outcome' | 'execution_suppressed' | 'error_kind';
         measurements: 'duration_ms';

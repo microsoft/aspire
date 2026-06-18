@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 import { AspireCommandType, AspireExtendedDebugConfiguration } from '../dcp/types';
 import { classifyAppHostDirectory, classifyAppHostPath } from '../utils/appHostLanguage';
 import { sendTelemetryEvent } from '../utils/telemetry';
+import { bucketAspireCommand } from '../utils/telemetryBuckets';
 
 function getComparisonKey(value: string): string {
     return process.platform === 'win32' ? value.toLowerCase() : value;
@@ -143,8 +144,6 @@ export class AppHostLaunchService implements vscode.Disposable {
             doStep,
             executionSuppressed,
         });
-        sendTelemetryEvent('apphost/launch/requested', telemetryProperties);
-
         if (executionSuppressed) {
             this.clearLaunching(appHostPath);
             sendTelemetryEvent('apphost/launch/result', {
@@ -185,7 +184,7 @@ function getLaunchTelemetryProperties(appHostPath: string, command: AspireComman
     const isDirectory = isDirectoryForTelemetry(appHostPath);
     return {
         mode: noDebug ? 'run' : 'debug',
-        command: getTelemetryCommand(command),
+        command: bucketAspireCommand(command),
         apphost_language: isDirectory ? classifyAppHostDirectory(appHostPath) : classifyAppHostPath(appHostPath),
         execution_suppressed: executionSuppressed ? 'true' : 'false',
     };
@@ -198,12 +197,6 @@ function isDirectoryForTelemetry(appHostPath: string): boolean {
     catch {
         return false;
     }
-}
-
-function getTelemetryCommand(command: string): string {
-    return command === 'run' || command === 'deploy' || command === 'publish' || command === 'do'
-        ? command
-        : 'other';
 }
 
 function classifyLaunchError(error: unknown): string {

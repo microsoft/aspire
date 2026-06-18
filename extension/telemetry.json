@@ -98,28 +98,6 @@
         "comment": "The number of AppHost candidates marked buildable by discovery."
       }
     },
-    "microsoft-aspire.aspire-vscode/apphost/launch/requested": {
-      "mode": {
-        "classification": "SystemMetaData",
-        "purpose": "FeatureInsight",
-        "comment": "Whether the AppHost launch was requested in run or debug mode."
-      },
-      "command": {
-        "classification": "SystemMetaData",
-        "purpose": "FeatureInsight",
-        "comment": "The bounded Aspire command requested for the AppHost launch."
-      },
-      "apphost_language": {
-        "classification": "SystemMetaData",
-        "purpose": "FeatureInsight",
-        "comment": "The coarse AppHost language detected for the launch target."
-      },
-      "execution_suppressed": {
-        "classification": "SystemMetaData",
-        "purpose": "FeatureInsight",
-        "comment": "Whether test-only launch suppression skipped the actual VS Code debug launch."
-      }
-    },
     "microsoft-aspire.aspire-vscode/apphost/launch/result": {
       "mode": {
         "classification": "SystemMetaData",
@@ -129,7 +107,7 @@
       "command": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
-        "comment": "The bounded Aspire command requested for the AppHost launch."
+        "comment": "The bounded Aspire command requested for the AppHost launch: run, deploy, publish, do, or other."
       },
       "apphost_language": {
         "classification": "SystemMetaData",
@@ -230,7 +208,7 @@
       "command": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
-        "comment": "The Aspire command used to start the AppHost."
+        "comment": "The bounded Aspire command used to start the AppHost: run, deploy, publish, do, or other."
       }
     },
     "microsoft-aspire.aspire-vscode/debug/apphost/end": {
