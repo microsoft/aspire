@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components.Tests.Shared;
+using Bunit;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Controls;
@@ -35,22 +36,32 @@ public class AspirePopupFocusNavigationTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task ClosePopup_RaisesOpenChanged()
+    public async Task ClosePopup_DisposesKeyboardNavigation()
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
 
-        var isOpen = true;
         var cut = RenderComponent<AspirePopupFocusNavigation>(builder =>
         {
             builder.Add(component => component.AnchorId, "resourceFilterButton");
-            builder.Add(component => component.Open, false);
-            builder.Add(component => component.OpenChanged, value => isOpen = value);
+            builder.Add(component => component.Open, true);
             builder.AddChildContent("<button>First filter</button>");
         });
+        await Task.Yield();
+        var initializeInvocation = JSInterop.Invocations.Last(invocation => invocation.Identifier == "initializeAspirePopupKeyboardNavigation");
+        var popupId = Assert.IsType<string>(initializeInvocation.Arguments[1]);
 
-        await cut.Instance.CloseAsync();
+        cut.SetParametersAndRender(builder =>
+        {
+            builder.Add(component => component.AnchorId, "resourceFilterButton");
+            builder.Add(component => component.Open, false);
+            builder.AddChildContent("<button>First filter</button>");
+        });
+        await Task.Yield();
 
-        Assert.False(isOpen);
+        var disposeInvocation = Assert.Single(JSInterop.Invocations, invocation => invocation.Identifier == "disposeAspirePopupKeyboardNavigation");
+        Assert.Collection(disposeInvocation.Arguments,
+            argument => Assert.Equal("resourceFilterButton", Assert.IsType<string>(argument)),
+            argument => Assert.Equal(popupId, Assert.IsType<string>(argument)));
     }
 
     private static bool GetTabExitsAlways(object options)
