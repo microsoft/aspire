@@ -675,6 +675,34 @@ public class AzureEnvironmentResourceExtensionsTests
     }
 
     [Fact]
+    public async Task ChangeLocationCommand_IsHiddenForKeyVaultResources()
+    {
+        var builder = CreateBuilder(isRunMode: true);
+        AddTestAzureProvisioning(builder);
+
+        var keyVault = builder.AddAzureKeyVault("kv");
+
+        using var app = builder.Build();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
+        var preparer = new AzureResourcePreparer(
+            app.Services.GetRequiredService<IOptions<AzureProvisioningOptions>>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>());
+
+        await preparer.OnBeforeStartAsync(new BeforeStartEvent(app.Services, model), CancellationToken.None);
+        await notifications.PublishUpdateAsync(keyVault.Resource, state => state with { State = KnownResourceStates.Running });
+
+        Assert.True(notifications.TryGetCurrentState(keyVault.Resource.Name, out var keyVaultEvent));
+        AssertCommandState(keyVaultEvent.Snapshot, AzureProvisioningController.ChangeResourceLocationCommandName, ResourceCommandState.Hidden);
+        AssertCommandState(keyVaultEvent.Snapshot, AzureProvisioningController.GetAzureResourceCommandName, ResourceCommandState.Enabled);
+        AssertCommandState(keyVaultEvent.Snapshot, AzureProvisioningController.CancelCommandName, ResourceCommandState.Hidden);
+        AssertCommandState(keyVaultEvent.Snapshot, AzureProvisioningController.DeleteAzureResourceCommandName, ResourceCommandState.Enabled);
+        AssertCommandState(keyVaultEvent.Snapshot, AzureProvisioningController.ForgetStateCommandName, ResourceCommandState.Enabled);
+        AssertCommandState(keyVaultEvent.Snapshot, AzureProvisioningController.ReprovisionResourceCommandName, ResourceCommandState.Enabled);
+    }
+
+    [Fact]
     public async Task GetAzureResourceCommand_ReturnsCachedDeploymentStateAndLiveStatus()
     {
         var builder = CreateBuilder(isRunMode: true);
@@ -3675,6 +3703,50 @@ public class AzureEnvironmentResourceExtensionsTests
 
         Assert.False(result.Success);
         Assert.False(result.Canceled);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ChangeLocationCommand_FailsForKeyVaultWithoutProvisioning(bool includeLocationArgument)
+    {
+        var builder = CreateBuilder(isRunMode: true);
+        var testBicepProvisioner = new TestBicepProvisioner();
+
+        builder.Configuration["Azure:SubscriptionId"] = "12345678-1234-1234-1234-123456789012";
+        builder.Configuration["Azure:Location"] = "eastus";
+        AddTestAzureProvisioning(builder, bicepProvisioner: testBicepProvisioner);
+
+        var keyVault = builder.AddAzureKeyVault("kv");
+
+        using var app = builder.Build();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
+        var preparer = new AzureResourcePreparer(
+            app.Services.GetRequiredService<IOptions<AzureProvisioningOptions>>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>());
+
+        await preparer.OnBeforeStartAsync(new BeforeStartEvent(app.Services, model), CancellationToken.None);
+        await notifications.PublishUpdateAsync(keyVault.Resource, state => state with { State = KnownResourceStates.Running });
+
+        var changeLocationCommand = Assert.Single(keyVault.Resource.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == AzureProvisioningController.ChangeResourceLocationCommandName);
+
+        var result = await changeLocationCommand.ExecuteCommand(new ExecuteCommandContext
+        {
+            Services = app.Services,
+            ResourceName = keyVault.Resource.Name,
+            CancellationToken = CancellationToken.None,
+            Logger = NullLogger.Instance,
+            Arguments = includeLocationArgument
+                ? CreateArguments((AzureBicepResource.KnownParameters.Location, "westus2"))
+                : new InteractionInputCollection([])
+        });
+
+        Assert.False(result.Success);
+        Assert.False(result.Canceled);
+        Assert.Equal(AzureProvisioningStrings.ChangeResourceLocationKeyVaultUnsupported, result.Message);
+        Assert.Empty(testBicepProvisioner.ProvisionedResources);
     }
 
     [Fact]

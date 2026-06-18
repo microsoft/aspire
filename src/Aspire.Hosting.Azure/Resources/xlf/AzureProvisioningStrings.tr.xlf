@@ -57,6 +57,11 @@
         <target state="new">Azure resource location updated and reprovisioning completed.</target>
         <note />
       </trans-unit>
+      <trans-unit id="ChangeResourceLocationKeyVaultUnsupported">
+        <source>Azure Key Vault resources cannot change location because soft-deleted vault names remain reserved globally. Use delete, reprovision, or forget state to recover this resource.</source>
+        <target state="new">Azure Key Vault resources cannot change location because soft-deleted vault names remain reserved globally. Use delete, reprovision, or forget state to recover this resource.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ChangeResourceLocationPromptMessage">
         <source>Select or enter a new Azure location for '{0}'. The resource will then be reprovisioned using that location.</source>
         <target state="new">Select or enter a new Azure location for '{0}'. The resource will then be reprovisioned using that location.</target>

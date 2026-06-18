@@ -450,6 +450,15 @@ namespace Aspire.Hosting.Azure.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Azure Key Vault resources cannot change location because soft-deleted vault names remain reserved globally. Use delete, reprovision, or forget state to recover this resource..
+        /// </summary>
+        internal static string ChangeResourceLocationKeyVaultUnsupported {
+            get {
+                return ResourceManager.GetString("ChangeResourceLocationKeyVaultUnsupported", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Returns cached deployment state and live Azure existence information for this resource..
         /// </summary>
         internal static string GetAzureResourceCommandDescription {

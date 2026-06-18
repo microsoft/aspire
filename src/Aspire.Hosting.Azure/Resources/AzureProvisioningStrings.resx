@@ -249,6 +249,9 @@ To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/pro
   <data name="ChangeResourceLocationCommandSuccess" xml:space="preserve">
     <value>Azure resource location updated and reprovisioning completed.</value>
   </data>
+  <data name="ChangeResourceLocationKeyVaultUnsupported" xml:space="preserve">
+    <value>Azure Key Vault resources cannot change location because soft-deleted vault names remain reserved globally. Use delete, reprovision, or forget state to recover this resource.</value>
+  </data>
   <data name="GetAzureResourceCommandName" xml:space="preserve">
     <value>Get Azure resource</value>
   </data>

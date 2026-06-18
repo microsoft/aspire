@@ -643,6 +643,8 @@ internal sealed class AzureProvisioningController(
         ArgumentNullException.ThrowIfNull(model);
         ArgumentException.ThrowIfNullOrEmpty(resourceName);
 
+        ThrowIfKeyVaultLocationChangeTarget(model, resourceName);
+
         var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
         if (!interactionService.IsAvailable)
         {
@@ -691,6 +693,8 @@ internal sealed class AzureProvisioningController(
         ArgumentNullException.ThrowIfNull(model);
         ArgumentException.ThrowIfNullOrEmpty(resourceName);
         ArgumentException.ThrowIfNullOrWhiteSpace(location);
+
+        ThrowIfKeyVaultLocationChangeTarget(model, resourceName);
 
         location = NormalizeLocation(location, await GetLocationOptionsAsync(cancellationToken).ConfigureAwait(false));
 
@@ -892,6 +896,12 @@ internal sealed class AzureProvisioningController(
     {
         ArgumentException.ThrowIfNullOrEmpty(resourceName);
         ArgumentNullException.ThrowIfNull(context);
+
+        if (command == AzureResourceCommand.ChangeLocation &&
+            IsKeyVaultTarget(context.Services.GetRequiredService<DistributedApplicationModel>(), resourceName))
+        {
+            return ResourceCommandState.Hidden;
+        }
 
         lock (_operationStateLock)
         {
@@ -1232,6 +1242,23 @@ internal sealed class AzureProvisioningController(
             {
                 queue.Enqueue(resource);
             }
+        }
+    }
+
+    private static bool IsKeyVaultTarget(DistributedApplicationModel model, string resourceName)
+    {
+        return GetTargetAzureResources(model, resourceName)
+            .Any(static resource => resource.AzureResource is IAzureKeyVaultResource);
+    }
+
+    private static void ThrowIfKeyVaultLocationChangeTarget(DistributedApplicationModel model, string resourceName)
+        => ThrowIfKeyVaultLocationChangeTarget(GetTargetAzureResources(model, resourceName));
+
+    private static void ThrowIfKeyVaultLocationChangeTarget(IReadOnlyList<(IResource Resource, IAzureResource AzureResource)> targetResources)
+    {
+        if (targetResources.Any(static resource => resource.AzureResource is IAzureKeyVaultResource))
+        {
+            throw new InvalidOperationException(AzureProvisioningStrings.ChangeResourceLocationKeyVaultUnsupported);
         }
     }
 
@@ -1747,6 +1774,8 @@ internal sealed class AzureProvisioningController(
     private async Task<bool> ExecuteChangeResourceLocationAsync(DistributedApplicationModel model, ChangeResourceLocationIntent intent, CancellationToken cancellationToken)
     {
         var targetResources = GetTargetAzureResources(model, intent.ResourceName);
+        ThrowIfKeyVaultLocationChangeTarget(targetResources);
+
         var parentChildLookup = model.Resources.OfType<IResourceWithParent>().ToLookup(r => r.Parent);
         UpdateActiveOperationPhase(
             intent,
