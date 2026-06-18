@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.RemoteHost.Diagnostics;
+using Aspire.Tests;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 
@@ -14,7 +15,7 @@ public class RemoteHostProfilingTelemetryTests
     [Fact]
     public void StartRemoteHostRun_RestoresConfiguredParentAndSession()
     {
-        using var parentListener = CreateActivityListener("test-remotehost-parent", _ => { });
+        using var parentListener = ActivityListenerHelper.Create("test-remotehost-parent", _ => { });
         using var parentSource = new ActivitySource("test-remotehost-parent");
         ActivityTraceId parentTraceId;
         ActivitySpanId parentSpanId;
@@ -36,7 +37,7 @@ public class RemoteHostProfilingTelemetryTests
             (RemoteHostProfilingTelemetry.EnvironmentVariables.TraceParent, traceParent),
             (RemoteHostProfilingTelemetry.EnvironmentVariables.TraceState, traceState)));
         var activities = new List<Activity>();
-        using var listener = CreateActivityListener(telemetry.ActivitySource, activities.Add);
+        using var listener = ActivityListenerHelper.Create(telemetry.ActivitySource, activities.Add);
 
         using (telemetry.StartRemoteHostRun())
         {
@@ -55,7 +56,7 @@ public class RemoteHostProfilingTelemetryTests
     {
         var telemetry = new RemoteHostProfilingTelemetry(CreateConfiguration());
         var activities = new List<Activity>();
-        using var listener = CreateActivityListener(telemetry.ActivitySource, activities.Add);
+        using var listener = ActivityListenerHelper.Create(telemetry.ActivitySource, activities.Add);
 
         using (telemetry.StartRemoteHostRun())
         {
@@ -70,7 +71,7 @@ public class RemoteHostProfilingTelemetryTests
         var telemetry = new RemoteHostProfilingTelemetry(CreateConfiguration(
             (RemoteHostProfilingTelemetry.EnvironmentVariables.Enabled, "true")));
         var activities = new List<Activity>();
-        using var listener = CreateActivityListener(telemetry.ActivitySource, activities.Add);
+        using var listener = ActivityListenerHelper.Create(telemetry.ActivitySource, activities.Add);
 
         using (var scope = telemetry.StartCapabilityScan(assemblyCount: 3, firstScan: true))
         {
@@ -97,7 +98,7 @@ public class RemoteHostProfilingTelemetryTests
         var telemetry = new RemoteHostProfilingTelemetry(CreateConfiguration(
             (RemoteHostProfilingTelemetry.EnvironmentVariables.Enabled, "true")));
         var activities = new List<Activity>();
-        using var listener = CreateActivityListener(telemetry.ActivitySource, activities.Add);
+        using var listener = ActivityListenerHelper.Create(telemetry.ActivitySource, activities.Add);
 
         using (var scope = telemetry.StartAssemblyLoad(cacheHit: false))
         {
@@ -119,7 +120,7 @@ public class RemoteHostProfilingTelemetryTests
         var telemetry = new RemoteHostProfilingTelemetry(CreateConfiguration(
             (RemoteHostProfilingTelemetry.EnvironmentVariables.Enabled, "true")));
         var activities = new List<Activity>();
-        using var listener = CreateActivityListener(telemetry.ActivitySource, activities.Add);
+        using var listener = ActivityListenerHelper.Create(telemetry.ActivitySource, activities.Add);
 
         using (telemetry.StartJsonRpcInvokeCapability(
             "aspire.redis/addRedis@1",
@@ -192,32 +193,6 @@ public class RemoteHostProfilingTelemetryTests
         Assert.False(RemoteHostProfilingTelemetry.ShouldConfigureExporter(CreateConfiguration(
             (RemoteHostProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             ("ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL", "http://localhost:18889"))));
-    }
-
-    private static ActivityListener CreateActivityListener(string sourceName, Action<Activity> activityStopped)
-    {
-        var listener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == sourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStopped = activityStopped
-        };
-
-        ActivitySource.AddActivityListener(listener);
-        return listener;
-    }
-
-    private static ActivityListener CreateActivityListener(ActivitySource targetSource, Action<Activity> activityStopped)
-    {
-        var listener = new ActivityListener
-        {
-            ShouldListenTo = source => ReferenceEquals(source, targetSource),
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStopped = activityStopped
-        };
-
-        ActivitySource.AddActivityListener(listener);
-        return listener;
     }
 
     private static IConfiguration CreateConfiguration(params (string Key, string? Value)[] values)

@@ -10,6 +10,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Tests;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
@@ -755,12 +756,8 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     public async Task LsCommand_EmitsProfilingActivities()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        // ActivitySource listeners are process-wide, so this test can observe profiling spans
-        // from other tests running in parallel. Use a unique session id and filter by it instead
-        // of assuming every observed activity belongs to this command invocation.
         var sessionId = $"ls-{Guid.NewGuid():N}";
         var startedActivities = new ConcurrentBag<Activity>();
-        using var listener = CreateProfilingActivityListener(startedActivities.Add);
 
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App", "App.AppHost.csproj");
         var projectLocator = new TestProjectLocator
@@ -781,6 +778,8 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
             };
         });
         using var provider = services.BuildServiceProvider();
+        var profilingTelemetry = provider.GetRequiredService<ProfilingTelemetry>();
+        using var listener = ActivityListenerHelper.CreateWithStarted(profilingTelemetry.ActivitySource, startedActivities.Add);
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("ls --format json --all");
@@ -804,18 +803,6 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     {
         return activity.OperationName == operationName &&
             Equals(sessionId, activity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId));
-    }
-
-    private static ActivityListener CreateProfilingActivityListener(Action<Activity> activityStarted)
-    {
-        var listener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == ProfilingTelemetry.ActivitySourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStarted = activityStarted
-        };
-        ActivitySource.AddActivityListener(listener);
-        return listener;
     }
 
     private static string RenderToPlainConsole(IRenderable renderable)

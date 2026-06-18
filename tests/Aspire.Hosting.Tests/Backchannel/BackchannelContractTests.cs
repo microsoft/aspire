@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.Diagnostics;
+using Aspire.Tests;
 using Microsoft.Extensions.Configuration;
 using StreamJsonRpc;
 
@@ -245,8 +246,8 @@ public class BackchannelContractTests
     [Fact]
     public void ActivityTracingStrategy_PropagatesW3CTraceContextOnJsonRpcRequest()
     {
-        using var listener = CreateActivityListener("test-json-rpc-trace");
         using var source = new ActivitySource("test-json-rpc-trace");
+        using var listener = ActivityListenerHelper.Create(source);
         using var clientActivity = source.StartActivity("client", ActivityKind.Client);
         Assert.NotNull(clientActivity);
 
@@ -271,9 +272,9 @@ public class BackchannelContractTests
     public void JsonRpcServerCall_RestoresTraceContextBaggage()
     {
         Activity? startedActivity = null;
-        using var listener = CreateActivityListener(ProfilingTelemetry.ActivitySourceName, activity => startedActivity = activity);
         var telemetry = new ProfilingTelemetry(CreateConfiguration(
             (KnownConfigNames.ProfilingEnabled, "true")));
+        using var listener = ActivityListenerHelper.CreateWithStarted(ProfilingTelemetry.ActivitySource, activity => startedActivity = activity);
 
         using var activity = telemetry.StartJsonRpcServerCall(
             "GetCapabilitiesAsync",
@@ -297,9 +298,9 @@ public class BackchannelContractTests
     public void DcpRunApplication_UsesConfiguredProfilingParentWhenAmbientActivityIsNotProfiling()
     {
         var activities = new List<Activity>();
-        using var profilingListener = CreateActivityListener(ProfilingTelemetry.ActivitySourceName, activities.Add);
+        using var profilingListener = ActivityListenerHelper.CreateWithStarted(ProfilingTelemetry.ActivitySource, activities.Add);
         using var processSource = new ActivitySource("test.process");
-        using var processListener = CreateActivityListener("test.process");
+        using var processListener = ActivityListenerHelper.Create(processSource);
         using var processActivity = processSource.StartActivity("process npx.CMD", ActivityKind.Internal);
         Assert.NotNull(processActivity);
         var traceParent = processActivity.Id;
@@ -308,7 +309,7 @@ public class BackchannelContractTests
         processActivity.Stop();
 
         using var ambientSource = new ActivitySource("test.ambient");
-        using var ambientListener = CreateActivityListener("test.ambient");
+        using var ambientListener = ActivityListenerHelper.Create(ambientSource);
         using var ambientActivity = ambientSource.StartActivity("hidden ambient", ActivityKind.Internal);
         Assert.NotNull(ambientActivity);
 
@@ -413,18 +414,6 @@ public class BackchannelContractTests
             BackchannelTraceContext context => $"{nameof(BackchannelTraceContext)}({context.Baggage.Count} baggage items)",
             _ => value.ToString() ?? string.Empty
         };
-
-    private static ActivityListener CreateActivityListener(string sourceName, Action<Activity>? activityStarted = null)
-    {
-        var listener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == sourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStarted = activityStarted
-        };
-        ActivitySource.AddActivityListener(listener);
-        return listener;
-    }
 
     private static IConfiguration CreateConfiguration(params (string Key, string? Value)[] values)
     {

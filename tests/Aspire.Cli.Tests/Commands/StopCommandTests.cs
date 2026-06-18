@@ -12,6 +12,7 @@ using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Hosting;
+using Aspire.Tests;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.InternalTesting;
 
@@ -246,7 +247,6 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var stoppedActivities = new ConcurrentQueue<Activity>();
-        using var listener = CreateProfilingActivityListener(stoppedActivities.Enqueue);
 
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var appHostPath1 = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost.csproj");
@@ -265,6 +265,8 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
             };
         });
         using var provider = services.BuildServiceProvider();
+        var profilingTelemetry = provider.GetRequiredService<ProfilingTelemetry>();
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, stoppedActivities.Enqueue);
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("stop --all");
@@ -339,17 +341,5 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
             .Concat(interactionService.DisplayedErrors)
             .Concat(statusMessages)
             .ToArray();
-    }
-
-    private static ActivityListener CreateProfilingActivityListener(Action<Activity> activityStopped)
-    {
-        var listener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == ProfilingTelemetry.ActivitySourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStopped = activityStopped
-        };
-        ActivitySource.AddActivityListener(listener);
-        return listener;
     }
 }

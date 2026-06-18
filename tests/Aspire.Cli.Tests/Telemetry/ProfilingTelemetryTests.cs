@@ -5,19 +5,19 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Telemetry;
+using Aspire.Tests;
 using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Cli.Tests.Telemetry;
 
-[Collection(ProfilingTelemetryTestCollection.Name)]
 public class ProfilingTelemetryTests
 {
     [Fact]
     public void StartRunCommand_ReturnsInactiveScopeWhenProfilingIsDisabled()
     {
         Activity? startedActivity = null;
-        using var listener = CreateProfilingActivityListener(activity => startedActivity = activity);
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration());
+        using var listener = ActivityListenerHelper.CreateWithStarted(profilingTelemetry.ActivitySource, activity => startedActivity = activity);
 
         using var activity = profilingTelemetry.StartRunCommand();
 
@@ -29,10 +29,10 @@ public class ProfilingTelemetryTests
     public void StartRunCommand_UsesDedicatedProfilingActivitySource()
     {
         Activity? startedActivity = null;
-        using var listener = CreateProfilingActivityListener(activity => startedActivity = activity);
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1")));
+        using var listener = ActivityListenerHelper.CreateWithStarted(profilingTelemetry.ActivitySource, activity => startedActivity = activity);
 
         using var activity = profilingTelemetry.StartRunCommand();
 
@@ -48,10 +48,10 @@ public class ProfilingTelemetryTests
     public void ProcessSpansUseConsistentExecutableAndArgumentTags()
     {
         var startedActivities = new ConcurrentQueue<Activity>();
-        using var listener = CreateProfilingActivityListener(startedActivities.Enqueue);
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1")));
+        using var listener = ActivityListenerHelper.CreateWithStarted(profilingTelemetry.ActivitySource, startedActivities.Enqueue);
         var aspirePath = Path.Combine("tools", "aspire");
         var npmPath = Path.Combine("node", "npm");
         var workingDirectory = Directory.GetCurrentDirectory();
@@ -118,10 +118,10 @@ public class ProfilingTelemetryTests
     public void StartAddCommand_CreatesAddSpecificSpans()
     {
         var startedActivities = new ConcurrentQueue<Activity>();
-        using var listener = CreateProfilingActivityListener(startedActivities.Enqueue);
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1")));
+        using var listener = ActivityListenerHelper.CreateWithStarted(profilingTelemetry.ActivitySource, startedActivities.Enqueue);
         var appHostProjectFile = new FileInfo(Path.Combine("AppHost", "AppHost.csproj"));
 
         using (var addActivity = profilingTelemetry.StartAddCommand("redis", "13.4.0", "nuget-source", appHostProjectFile))
@@ -241,12 +241,12 @@ public class ProfilingTelemetryTests
     public void ProfilingSpansReuseSessionFromAmbientActivityBaggage()
     {
         var startedActivities = new ConcurrentQueue<Activity>();
-        using var parentListener = CreateActivityListener("test-parent", _ => { });
-        using var listener = CreateProfilingActivityListener(startedActivities.Enqueue);
-        using var parentSource = new ActivitySource("test-parent");
-        using var parentActivity = parentSource.StartActivity("parent");
+        using var parentListener = ActivityListenerHelper.Create("test-parent");
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true")));
+        using var listener = ActivityListenerHelper.CreateWithStarted(profilingTelemetry.ActivitySource, startedActivities.Enqueue);
+        using var parentSource = new ActivitySource("test-parent");
+        using var parentActivity = parentSource.StartActivity("parent");
         Assert.NotNull(parentActivity);
 
         parentActivity.SetBaggage(ProfilingTelemetry.Baggage.SessionId, "session-1");
@@ -272,14 +272,14 @@ public class ProfilingTelemetryTests
     public void ProfilingSpansStoreGeneratedSessionOnAmbientAncestorsForSiblings()
     {
         var startedActivities = new ConcurrentQueue<Activity>();
-        using var parentListener = CreateActivityListener("test-parent", _ => { });
-        using var diagnosticListener = CreateActivityListener("test-diagnostic", _ => { });
-        using var listener = CreateProfilingActivityListener(startedActivities.Enqueue);
+        using var parentListener = ActivityListenerHelper.Create("test-parent");
+        using var diagnosticListener = ActivityListenerHelper.Create("test-diagnostic");
+        using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
+            (ProfilingTelemetry.EnvironmentVariables.Enabled, "true")));
+        using var listener = ActivityListenerHelper.CreateWithStarted(profilingTelemetry.ActivitySource, startedActivities.Enqueue);
         using var parentSource = new ActivitySource("test-parent");
         using var diagnosticSource = new ActivitySource("test-diagnostic");
         using var parentActivity = parentSource.StartActivity("parent");
-        using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
-            (ProfilingTelemetry.EnvironmentVariables.Enabled, "true")));
         Assert.NotNull(parentActivity);
 
         using (diagnosticSource.StartActivity("diagnostic"))
@@ -307,10 +307,10 @@ public class ProfilingTelemetryTests
     [Fact]
     public void BackchannelTraceContextCarriesActivityBaggage()
     {
-        using var listener = CreateProfilingActivityListener(_ => { });
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1")));
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource);
 
         using var activity = profilingTelemetry.StartJsonRpcClientCall("aux", "GetCapabilitiesAsync", streaming: false);
         var traceContext = activity.CreateBackchannelTraceContext();
@@ -319,26 +319,9 @@ public class ProfilingTelemetryTests
         Assert.Equal("session-1", traceContext.Baggage[ProfilingTelemetry.Baggage.SessionId]);
     }
 
-    private static ActivityListener CreateProfilingActivityListener(Action<Activity> activityStarted)
-    {
-        return CreateActivityListener(ProfilingTelemetry.ActivitySourceName, activityStarted);
-    }
-
     private static Activity[] GetSessionActivities(IEnumerable<Activity> activities, string sessionId)
     {
         return [.. activities.Where(activity => Equals(sessionId, activity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId)))];
-    }
-
-    private static ActivityListener CreateActivityListener(string sourceName, Action<Activity> activityStarted)
-    {
-        var listener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == sourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStarted = activityStarted
-        };
-        ActivitySource.AddActivityListener(listener);
-        return listener;
     }
 
     private static IConfiguration CreateConfiguration(params (string Key, string? Value)[] values)
@@ -347,13 +330,4 @@ public class ProfilingTelemetryTests
             .AddInMemoryCollection(values.Select(value => new KeyValuePair<string, string?>(value.Key, value.Value)))
             .Build();
     }
-}
-
-/// <summary>
-/// Disables parallel execution for tests that install process-wide activity listeners.
-/// </summary>
-[CollectionDefinition(Name, DisableParallelization = true)]
-public sealed class ProfilingTelemetryTestCollection
-{
-    public const string Name = "ProfilingTelemetryTests";
 }

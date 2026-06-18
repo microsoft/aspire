@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Aspire.Hosting.RemoteHost.Diagnostics;
+using Aspire.Tests;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -181,7 +182,7 @@ public class AssemblyLoaderTests
 
         var telemetry = new RemoteHostProfilingTelemetry(configuration);
         var activities = new List<Activity>();
-        using var listener = CreateActivityListener(telemetry.ActivitySource, activities.Add);
+        using var listener = ActivityListenerHelper.Create(telemetry.ActivitySource, activities.Add);
         var loader = new AssemblyLoader(configuration, NullLogger<AssemblyLoader>.Instance, telemetry);
 
         var assemblies = loader.GetAssemblies();
@@ -239,18 +240,5 @@ public class AssemblyLoaderTests
     private static RemoteHostProfilingTelemetry CreateProfilingTelemetry()
     {
         return new RemoteHostProfilingTelemetry(new ConfigurationBuilder().Build());
-    }
-
-    private static ActivityListener CreateActivityListener(ActivitySource targetSource, Action<Activity> activityStopped)
-    {
-        var listener = new ActivityListener
-        {
-            ShouldListenTo = source => ReferenceEquals(source, targetSource),
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStopped = activityStopped
-        };
-
-        ActivitySource.AddActivityListener(listener);
-        return listener;
     }
 }
