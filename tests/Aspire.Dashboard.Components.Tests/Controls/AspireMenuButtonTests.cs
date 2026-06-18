@@ -47,9 +47,7 @@ public class AspireMenuButtonTests : DashboardTestContext
             Assert.Equal("true", cut.Find("#view-options-button").GetAttribute("aria-expanded"));
         });
 
-        cut.FindComponent<Microsoft.FluentUI.AspNetCore.Components.FluentMenuItem>()
-            .Find("fluent-menu-item")
-            .Click();
+        button.Click();
 
         cut.WaitForAssertion(() =>
         {
