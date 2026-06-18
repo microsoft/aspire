@@ -18,7 +18,7 @@ internal static class AzureResourceProperties
     public const string OperationPhase = "azure.operation.phase";
     public const string OperationStatus = "azure.operation.status";
     public const string OperationTargetLocation = "azure.operation.target.location";
-    public const string OperationStartedAt = "azure.operation.started_at";
+    public const string OperationStartedAt = "azure.operation.started.at";
 
     private static readonly string[] s_activeOperationProperties =
     [
