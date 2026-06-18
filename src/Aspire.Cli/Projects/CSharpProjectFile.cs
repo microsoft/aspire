@@ -56,17 +56,6 @@ internal sealed class CSharpProjectFile(string sdk = "Microsoft.NET.Sdk")
     }
 
     /// <summary>
-    /// Adds an import only when the target project file already exists.
-    /// </summary>
-    public void AddImportIfExists(string projectPath)
-    {
-        if (File.Exists(projectPath))
-        {
-            Imports.Add(new CSharpProjectImport(projectPath));
-        }
-    }
-
-    /// <summary>
     /// Adds integration references as package references or project references.
     /// </summary>
     public void AddIntegrationReferences(
