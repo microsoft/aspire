@@ -4,9 +4,7 @@ import { getCommandInvocationCount, getTerminalCommandCount, waitForCommandOutco
 import { addIntegrationPackageToAppHost, clearBreakpoints, createEmptyAppHostProject, executeE2eControlCommand, getGeneratedAppHostPath, removeGeneratedProject, removePrimaryAppHostFixture, restoreWorkspaceAppHostConfig, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, stopAppHostIfRunning, writeWorkspaceAppHostConfigForPath } from './helpers/fixtures';
 import { openAspireView, waitForEditorTitle, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
 
-// Temporarily disabled until the CI-only reliability failures are understood:
-// https://github.com/microsoft/aspire/issues/18098.
-suite.skip('Aspire zero-to-running E2E', function () {
+suite('Aspire zero-to-running E2E', function () {
     this.timeout(2100000);
 
     const projectName = 'ExtensionZeroToRunningApp';

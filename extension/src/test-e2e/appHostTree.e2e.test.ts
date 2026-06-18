@@ -4,9 +4,7 @@ import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setC
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { cancelActiveInput, clickTreeItem, openAspireView, waitForTreeItem } from './helpers/vscode';
 
-// Temporarily disabled until the Aspire view stale-state/refresh path is resilient enough for CI:
-// https://github.com/microsoft/aspire/issues/18054.
-suite.skip('Aspire AppHost tree E2E', function () {
+suite('Aspire AppHost tree E2E', function () {
     this.timeout(240000);
 
     teardown(async () => {

@@ -135,7 +135,8 @@ export async function clearBreakpoints(): Promise<void> {
     await executeE2eControlCommand({ name: 'clearBreakpoints' });
 }
 
-export function removeGeneratedProject(projectName: string): void {
+export async function removeGeneratedProject(projectName: string): Promise<void> {
+    await waitForNoRunningAppHostPath(getGeneratedAppHostPath(projectName), 30000);
     removePath(getGeneratedProjectRoot(projectName), { recursive: true, force: true });
 }
 
@@ -347,6 +348,21 @@ async function waitForRunningAppHostProcessExitFromState(appHostPath: string, ti
     }
 
     throw new Error(`Unable to find running AppHost state for ${appHostPath}.`);
+}
+
+async function waitForNoRunningAppHostPath(appHostPath: string, timeoutMs: number): Promise<void> {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+        const runningAppHost = getRunningAppHostFromState(appHostPath);
+        if (!runningAppHost || !isProcessRunning(runningAppHost.appHostPid)) {
+            return;
+        }
+
+        await delay(250);
+    }
+
+    const runningAppHost = getRunningAppHostFromState(appHostPath);
+    throw new Error(`Timed out after ${timeoutMs}ms waiting for AppHost process ${runningAppHost?.appHostPid ?? '<unknown>'} to exit before deleting ${path.dirname(appHostPath)}.`);
 }
 
 function getRunningAppHostFromState(appHostPath: string) {
