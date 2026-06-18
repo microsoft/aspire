@@ -11,6 +11,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
+using static Aspire.Cli.Tests.TestServices.ProcessTestHelpers;
 
 namespace Aspire.Cli.Tests.DotNet;
 
@@ -446,59 +447,6 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         if (OperatingSystem.IsWindows())
         {
             consoleProcessJob?.Dispose();
-        }
-    }
-
-    private static bool WaitForProcessExit(int pid, TimeSpan timeout)
-    {
-        var deadline = DateTime.UtcNow + timeout;
-        while (DateTime.UtcNow < deadline)
-        {
-            if (IsProcessExited(pid))
-            {
-                return true;
-            }
-
-            Thread.Sleep(25);
-        }
-
-        return false;
-    }
-
-    private static bool IsProcessExited(int pid)
-    {
-        try
-        {
-            using var probe = Process.GetProcessById(pid);
-            return probe.HasExited;
-        }
-        catch (ArgumentException)
-        {
-            return true;
-        }
-        catch (InvalidOperationException)
-        {
-            return true;
-        }
-    }
-
-    private static void TryKillProcess(int pid)
-    {
-        if (IsProcessExited(pid))
-        {
-            return;
-        }
-
-        try
-        {
-            using var process = Process.GetProcessById(pid);
-            process.Kill(entireProcessTree: true);
-        }
-        catch (ArgumentException)
-        {
-        }
-        catch (InvalidOperationException)
-        {
         }
     }
 

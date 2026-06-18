@@ -62,7 +62,7 @@ public class ConsoleCancellationManagerTests
         manager.Cancel(130);
 
         // The graceful token must fire essentially immediately (no Phase 1 delay to wait through).
-        await graceful.Token.WaitForCancellationAsync().DefaultTimeout();
+        await graceful.Token.WaitUntilCancelledAsync().DefaultTimeout();
         Assert.True(manager.GracefulShutdownToken.IsCancellationRequested);
     }
 
@@ -80,7 +80,7 @@ public class ConsoleCancellationManagerTests
         manager.Cancel(130);
 
         // Wait for the budget to elapse.
-        await graceful.Token.WaitForCancellationAsync().DefaultTimeout();
+        await graceful.Token.WaitUntilCancelledAsync().DefaultTimeout();
         sw.Stop();
 
         // We allowed 200ms of grace; allow generous slack for CI scheduling but assert we waited at least most of it.
@@ -258,21 +258,5 @@ public class ConsoleCancellationManagerTests
 
         // Token should still be accessible (stored in field before dispose).
         Assert.False(token.IsCancellationRequested);
-    }
-}
-
-internal static class CancellationTokenTestExtensions
-{
-    public static Task WaitForCancellationAsync(this CancellationToken token)
-    {
-        if (token.IsCancellationRequested)
-        {
-            return Task.CompletedTask;
-        }
-
-        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var registration = token.Register(static state => ((TaskCompletionSource)state!).TrySetResult(), tcs);
-        tcs.Task.ContinueWith(static (_, state) => ((CancellationTokenRegistration)state!).Dispose(), registration, TaskScheduler.Default);
-        return tcs.Task;
     }
 }
