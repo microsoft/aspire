@@ -377,7 +377,12 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         Directory.CreateDirectory(backchannelsDir);
 
         var appHostPath = "/path/to/MyApp.AppHost.csproj";
-        var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(appHostPath, workspace.WorkspaceRoot.FullName);
+        // FindMatchingNonOrphanedSockets resolves symlinks (which canonicalizes via Path.GetFullPath)
+        // before hashing, so the socket files must be keyed off the same resolved path. On Windows
+        // Path.GetFullPath roots the drive-less "/path/to/..." to "C:\path\to\...", giving a different
+        // hash than the raw string; resolving here keeps both sides consistent across all platforms.
+        var resolvedAppHostPath = PathNormalizer.ResolveSymlinks(appHostPath);
+        var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(resolvedAppHostPath, workspace.WorkspaceRoot.FullName);
         var appHostId = Path.GetFileName(prefix);
         var deadPid = int.MaxValue - 1;
         var currentPid = Environment.ProcessId;
