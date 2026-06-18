@@ -15,6 +15,8 @@ $repoRoot = Split-Path -Parent $scriptDir
 # containing an entry point named 'apphost.mts' (or the legacy 'apphost.ts'). This replaced
 # the old 'playground/polyglot/TypeScript/<app>/ValidationAppHost/apphost.ts' layout.
 $playgroundRoots = @(
+    Join-Path -Path $repoRoot -ChildPath 'playground/AspireWithBun'
+    Join-Path -Path $repoRoot -ChildPath 'playground/TerminalsJs'
     Join-Path -Path $repoRoot -ChildPath 'playground/TypeScriptAppHost'
     Join-Path -Path $repoRoot -ChildPath 'playground/TypeScriptApps'
 )
@@ -43,8 +45,15 @@ function Get-ValidationAppHosts {
         foreach ($entryPoint in Get-ChildItem -Path $root -Recurse -File -Include 'apphost.mts', 'apphost.ts' | Sort-Object FullName) {
             $appHostDir = $entryPoint.Directory
             $relativeName = [System.IO.Path]::GetRelativePath($repoRoot, $appHostDir.FullName).Replace('\', '/')
+            $matchNames = @(
+                $relativeName
+                $appHostDir.Name
+            )
+            if ($appHostDir.Parent -ne $null) {
+                $matchNames += $appHostDir.Parent.Name
+            }
 
-            if ($relativeName -notlike $AppPattern -and $appHostDir.Name -notlike $AppPattern) {
+            if (@($matchNames | Where-Object { $_ -like $AppPattern }).Count -eq 0) {
                 continue
             }
 
