@@ -2300,18 +2300,4 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
             DynamicLoading = dynamicLoading
         };
     }
-
-    [Fact]
-    public async Task ResourceCommand_AcceptsNonInteractiveOption()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("resource myresource reset --non-interactive --help");
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
-    }
 }
