@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as vscode from 'vscode';
 import { AspireCommandType, AspireExtendedDebugConfiguration } from '../dcp/types';
 import { classifyAppHostDirectory, classifyAppHostPath } from '../utils/appHostLanguage';
-import { sendTelemetryEvent } from '../utils/telemetry';
+import { isCommandCancellation, sendTelemetryEvent, type EventProperties } from '../utils/telemetry';
 import { bucketAspireCommand } from '../utils/telemetryBuckets';
 
 function getComparisonKey(value: string): string {
@@ -158,7 +158,10 @@ export class AppHostLaunchService implements vscode.Disposable {
         try {
             const started = await vscode.debug.startDebugging(undefined, config);
             if (!started) {
-                throw new Error(`VS Code did not start the Aspire ${command} session for ${vscode.workspace.asRelativePath(appHostPath)}.`);
+                // A false result means VS Code declined the launch before the
+                // debug session started (for example, a provider gate canceled).
+                // Report it separately from real launch errors.
+                throw new vscode.CancellationError();
             }
             sendTelemetryEvent('apphost/launch/result', {
                 ...telemetryProperties,
@@ -168,11 +171,15 @@ export class AppHostLaunchService implements vscode.Disposable {
             });
         } catch (err) {
             this.clearLaunching(appHostPath);
-            sendTelemetryEvent('apphost/launch/result', {
+            const canceled = isCommandCancellation(err);
+            const properties: EventProperties<'apphost/launch/result'> = {
                 ...telemetryProperties,
-                outcome: 'error',
-                error_kind: classifyLaunchError(err),
-            }, {
+                outcome: canceled ? 'canceled' : 'error',
+            };
+            if (!canceled) {
+                properties.error_kind = classifyLaunchError(err);
+            }
+            sendTelemetryEvent('apphost/launch/result', properties, {
                 duration_ms: Date.now() - startTime,
             });
             throw err;

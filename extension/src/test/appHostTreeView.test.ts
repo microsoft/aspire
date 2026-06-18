@@ -690,6 +690,23 @@ suite('AspireAppHostTreeProvider', () => {
         assert.strictEqual(showErrorStub.callCount, 1);
     });
 
+    test('runAppHost rethrows cancellations without showing the error', async () => {
+        const launchService = {
+            launch: sandbox.stub().rejects(new vscode.CancellationError()),
+            isLaunching: () => false,
+            launchingPaths: [],
+            onDidChangeLaunchingState: () => ({ dispose: () => { } }),
+        } as unknown as AppHostLaunchService;
+        const showErrorStub = sandbox.stub(vscode.window, 'showErrorMessage').resolves(undefined);
+        const provider = makeTreeProviderWithLaunchService([
+            makeAppHost({ appHostPath: '/workspace/AppHost/AppHost.csproj', appHostPid: 1 }),
+        ], launchService);
+
+        await assert.rejects(provider.runAppHost({ appHostPath: '/workspace/AppHost/AppHost.csproj' } as any, true), vscode.CancellationError);
+
+        assert.strictEqual(showErrorStub.callCount, 0);
+    });
+
     test('dashboard quick pick labels add enough parent folders to disambiguate duplicate filenames', async () => {
         const appHosts = [
             makeAppHost({

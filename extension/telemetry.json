@@ -117,7 +117,7 @@
       "outcome": {
         "classification": "SystemMetaData",
         "purpose": "PerformanceAndHealth",
-        "comment": "Whether the AppHost launch succeeded, failed, or was suppressed by test configuration."
+        "comment": "Whether the AppHost launch succeeded, was canceled, failed, or was suppressed by test configuration."
       },
       "execution_suppressed": {
         "classification": "SystemMetaData",

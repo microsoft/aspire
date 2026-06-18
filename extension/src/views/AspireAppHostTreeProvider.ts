@@ -54,6 +54,7 @@ import {
 import { collectResourceCommandArguments, ResourceCommandArgumentValue } from './ResourceCommandArguments';
 import { createResourceCommandArgumentLoader } from './ResourceCommandArgumentsLoader';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
+import { isCommandCancellation } from '../utils/telemetry';
 
 type TreeElement = AppHostItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | WorkspaceAppHostItem | WorkspaceAppHostsGroupItem | RunningAppHostsGroupItem | WorkspaceAppHostActionItem | WorkspaceAppHostPathItem | HealthChecksGroupItem | HealthCheckItem | LogFileItem | CommandsGroupItem | ResourceCommandItem;
 
@@ -1295,7 +1296,9 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         try {
             await this._launchService.launch(appHostPath, 'run', noDebug);
         } catch (err) {
-            vscode.window.showErrorMessage(errorMessage(err));
+            if (!isCommandCancellation(err)) {
+                vscode.window.showErrorMessage(errorMessage(err));
+            }
             throw err;
         }
     }
