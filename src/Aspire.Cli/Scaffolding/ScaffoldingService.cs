@@ -38,20 +38,26 @@ internal sealed class ScaffoldingService : IScaffoldingService
     };
 
     private readonly IAppHostServerProjectFactory _appHostServerProjectFactory;
+    private readonly IAppHostServerSessionFactory _appHostServerSessionFactory;
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly IInteractionService _interactionService;
     private readonly ILogger<ScaffoldingService> _logger;
+    private readonly CliExecutionContext _executionContext;
 
     public ScaffoldingService(
         IAppHostServerProjectFactory appHostServerProjectFactory,
+        IAppHostServerSessionFactory appHostServerSessionFactory,
         ILanguageDiscovery languageDiscovery,
         IInteractionService interactionService,
-        ILogger<ScaffoldingService> logger)
+        ILogger<ScaffoldingService> logger,
+        CliExecutionContext executionContext)
     {
         _appHostServerProjectFactory = appHostServerProjectFactory;
+        _appHostServerSessionFactory = appHostServerSessionFactory;
         _languageDiscovery = languageDiscovery;
         _interactionService = interactionService;
         _logger = logger;
+        _executionContext = executionContext;
     }
 
     /// <inheritdoc />
@@ -73,7 +79,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
 
         // Step 1: Resolve SDK and package strategy
         var sdkVersion = string.IsNullOrWhiteSpace(context.SdkVersion)
-            ? VersionHelper.GetDefaultSdkVersion()
+            ? _executionContext.IdentitySdkVersion
             : context.SdkVersion;
         var config = AspireConfigFile.LoadOrCreate(directory.FullName, sdkVersion);
         if (!string.IsNullOrWhiteSpace(context.SdkVersion))
@@ -136,11 +142,10 @@ internal sealed class ScaffoldingService : IScaffoldingService
         }
 
         // Step 2: Start the server temporarily for scaffolding and code generation
-        await using var serverSession = AppHostServerSession.Start(
+        await using var serverSession = _appHostServerSessionFactory.Start(
             appHostServerProject,
             environmentVariables: null,
-            debug: false,
-            _logger);
+            debug: false);
 
         // Step 3: Connect to server and get scaffold templates via RPC
         var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);

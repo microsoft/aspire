@@ -92,6 +92,10 @@
   <data name="CheckingPrerequisites" xml:space="preserve">
     <value>Checking Aspire environment...</value>
   </data>
+  <data name="OperatingSystemMessageFormat" xml:space="preserve">
+    <value>Operating system: {0}</value>
+    <comment>{0} is the operating system display name and version, for example "Windows 10.0.22631", "macOS 26.0", or "Linux Ubuntu 24.04".</comment>
+  </data>
   <data name="VersionUnknown" xml:space="preserve">
     <value>unknown</value>
   </data>
@@ -175,6 +179,83 @@
   <data name="DevCertsOldVersionDetailsFormat" xml:space="preserve">
     <value>Older certificate versions (&lt; v{0}) may not support all certificate trust scenarios.</value>
   </data>
+  <data name="DcpBundleNotFoundMessage" xml:space="preserve">
+    <value>Developer Control Plane (DCP) bundle not found; skipping connection health checks</value>
+  </data>
+  <data name="DcpBundleNotFoundDetails" xml:space="preserve">
+    <value>The running Aspire CLI is not associated with a bundle layout that contains the Developer Control Plane (DCP).</value>
+  </data>
+  <data name="DcpExecutableNotFoundMessage" xml:space="preserve">
+    <value>Developer Control Plane (DCP) executable not found</value>
+  </data>
+  <data name="DcpExecutableNotFoundDetailsFormat" xml:space="preserve">
+    <value>Expected Developer Control Plane (DCP) executable at '{0}'.</value>
+    <comment>{0} is the expected DCP executable path.</comment>
+  </data>
+  <data name="DcpConnectionCheckFailedMessage" xml:space="preserve">
+    <value>Failed to check Developer Control Plane (DCP) connection health</value>
+  </data>
+  <data name="DcpApiServerReturnedHttpStatusMessageFormat" xml:space="preserve">
+    <value>Developer Control Plane (DCP) API server returned HTTP {0} ({1}).</value>
+    <comment>{0} is the numeric HTTP status code. {1} is the HTTP status code name.</comment>
+  </data>
+  <data name="DcpEphemeralCertificateConnectionSucceededMessage" xml:space="preserve">
+    <value>Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate succeeded</value>
+  </data>
+  <data name="DcpDeveloperCertificateConnectionSucceededMessage" xml:space="preserve">
+    <value>Developer Control Plane (DCP) connection using the developer certificate succeeded</value>
+  </data>
+  <data name="DcpConnectionSucceededMessage" xml:space="preserve">
+    <value>Developer Control Plane (DCP) connection health checks succeeded</value>
+  </data>
+  <data name="DcpConnectionTimedOutMessageFormat" xml:space="preserve">
+    <value>Timed out after {0} seconds while checking Developer Control Plane (DCP) connection health.</value>
+    <comment>{0} is the timeout in seconds.</comment>
+  </data>
+  <data name="DcpDeveloperCertificateUnavailableMessage" xml:space="preserve">
+    <value>No trusted developer certificate was available for the Developer Control Plane (DCP) developer certificate connection check</value>
+  </data>
+  <data name="DcpDeveloperCertificateTrustFix" xml:space="preserve">
+    <value>Run `aspire certs trust` to create and trust a developer certificate.</value>
+  </data>
+  <data name="DcpDeveloperCertificateRepairTrustFix" xml:space="preserve">
+    <value>Run `aspire certs trust` to repair developer certificate trust.</value>
+  </data>
+  <data name="DcpTlsAuthenticationFailedDetailsFormat" xml:space="preserve">
+    <value>TLS authentication failed: {0}</value>
+    <comment>{0} is the TLS authentication error message.</comment>
+  </data>
+  <data name="DcpEphemeralCertificateConnectionFailedMessage" xml:space="preserve">
+    <value>Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate failed</value>
+  </data>
+  <data name="DcpDeveloperCertificateConnectionFailedMessage" xml:space="preserve">
+    <value>Developer Control Plane (DCP) connection using the developer certificate failed</value>
+  </data>
+  <data name="DcpStartFailedMessage" xml:space="preserve">
+    <value>Failed to start Developer Control Plane (DCP).</value>
+  </data>
+  <data name="DcpExitedBeforeKubeconfigDetailsFormat" xml:space="preserve">
+    <value>Developer Control Plane (DCP) exited before writing kubeconfig. Exit code: {0}.{1}{2}</value>
+    <comment>{0} is the DCP process exit code. {1} is a newline. {2} is recent DCP process output.</comment>
+  </data>
+  <data name="DcpNoOutputDetails" xml:space="preserve">
+    <value>Developer Control Plane (DCP) did not write any output.</value>
+  </data>
+  <data name="DcpKubeconfigMissingServerDetails" xml:space="preserve">
+    <value>Developer Control Plane (DCP) kubeconfig did not contain a valid server URI.</value>
+  </data>
+  <data name="DcpDeveloperCertificateInvalidForCacheDetails" xml:space="preserve">
+    <value>The developer certificate could not be cached because it was not valid.</value>
+  </data>
+  <data name="DcpDeveloperCertificateUserProfileMissingDetails" xml:space="preserve">
+    <value>The developer certificate could not be cached because the user profile directory could not be determined.</value>
+  </data>
+  <data name="DcpDeveloperCertificateNoTrustedExportableDetails" xml:space="preserve">
+    <value>No fully trusted exportable developer certificate with a private key was found.</value>
+  </data>
+  <data name="DcpDeveloperCertificateMissingThumbprintDetails" xml:space="preserve">
+    <value>The developer certificate did not have a thumbprint.</value>
+  </data>
   <data name="DevCertsTrustLabelFull" xml:space="preserve">
     <value>[trusted]</value>
   </data>
@@ -229,5 +310,13 @@
   </data>
   <data name="InstallationDiscoveryFailedReason" xml:space="preserve">
     <value>Install discovery failed. See the Aspire CLI logs for details.</value>
+  </data>
+  <data name="LegacySettingsDetectedMessageFormat" xml:space="preserve">
+    <value>Legacy .aspire/settings.json detected at {0}</value>
+    <comment>{0} is the full path to the legacy settings file.</comment>
+  </data>
+  <data name="LegacySettingsDetectedFix" xml:space="preserve">
+    <value>Run 'aspire init' (or any aspire run/add/update/pipeline command) to migrate to aspire.config.json.
+The legacy file continues to work — this is a non-blocking warning.</value>
   </data>
 </root>

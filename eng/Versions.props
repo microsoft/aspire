@@ -36,9 +36,9 @@
     <MicrosoftDeveloperControlPlanewindowsamd64Version>0.25.1</MicrosoftDeveloperControlPlanewindowsamd64Version>
     <MicrosoftDeveloperControlPlanewindowsarm64Version>0.25.1</MicrosoftDeveloperControlPlanewindowsarm64Version>
     <!-- Other -->
-    <MicrosoftDotNetRemoteExecutorVersion>10.0.0-beta.26208.4</MicrosoftDotNetRemoteExecutorVersion>
-    <MicrosoftDotNetXUnitV3ExtensionsVersion>10.0.0-beta.26208.4</MicrosoftDotNetXUnitV3ExtensionsVersion>
-    <MicrosoftDotNetBuildTasksArchivesVersion>10.0.0-beta.26208.4</MicrosoftDotNetBuildTasksArchivesVersion>
+    <MicrosoftDotNetRemoteExecutorVersion>10.0.0-beta.26304.4</MicrosoftDotNetRemoteExecutorVersion>
+    <MicrosoftDotNetXUnitV3ExtensionsVersion>10.0.0-beta.26304.4</MicrosoftDotNetXUnitV3ExtensionsVersion>
+    <MicrosoftDotNetBuildTasksArchivesVersion>10.0.0-beta.26304.4</MicrosoftDotNetBuildTasksArchivesVersion>
     <!-- dotnet/extensions -->
     <MicrosoftExtensionsAIVersion>10.6.0</MicrosoftExtensionsAIVersion>
     <MicrosoftExtensionsAIOpenAIVersion>10.6.0</MicrosoftExtensionsAIOpenAIVersion>
@@ -92,6 +92,7 @@
     <MicrosoftExtensionsCachingMemoryPreviewVersion>10.0.9</MicrosoftExtensionsCachingMemoryPreviewVersion>
     <MicrosoftExtensionsConfigurationAbstractionsPreviewVersion>10.0.9</MicrosoftExtensionsConfigurationAbstractionsPreviewVersion>
     <MicrosoftExtensionsConfigurationBinderPreviewVersion>10.0.9</MicrosoftExtensionsConfigurationBinderPreviewVersion>
+    <MicrosoftExtensionsConfigurationEnvironmentVariablesPreviewVersion>10.0.9</MicrosoftExtensionsConfigurationEnvironmentVariablesPreviewVersion>
     <MicrosoftExtensionsDependencyInjectionAbstractionsPreviewVersion>10.0.9</MicrosoftExtensionsDependencyInjectionAbstractionsPreviewVersion>
     <MicrosoftExtensionsFileSystemGlobbingPreviewVersion>10.0.9</MicrosoftExtensionsFileSystemGlobbingPreviewVersion>
     <MicrosoftExtensionsLoggingAbstractionsPreviewVersion>10.0.9</MicrosoftExtensionsLoggingAbstractionsPreviewVersion>

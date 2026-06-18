@@ -111,7 +111,7 @@ internal sealed class DescribeCommand : BaseCommand
     {
         Aliases.Add("resources");
         _resourceColorMap = resourceColorMap;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, services.ExecutionContext, logger);
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, services.ExecutionContext, services.HostEnvironment, logger);
 
         Arguments.Add(s_resourceArgument);
         Options.Add(s_appHostOption);

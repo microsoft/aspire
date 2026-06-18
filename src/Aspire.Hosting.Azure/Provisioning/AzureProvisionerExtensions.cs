@@ -60,13 +60,13 @@ public static class AzureProvisionerExtensions
 
         if (builder.ExecutionContext.IsPublishMode)
         {
-            builder.Services.AddSingleton<IProvisioningContextProvider, PublishModeProvisioningContextProvider>();
+            builder.Services.TryAddSingleton<IProvisioningContextProvider, PublishModeProvisioningContextProvider>();
         }
         else
         {
-            builder.Services.AddSingleton<RunModeProvisioningContextProvider>();
-            builder.Services.AddSingleton<IProvisioningContextProvider>(sp => sp.GetRequiredService<RunModeProvisioningContextProvider>());
-            builder.Services.AddSingleton<IAzureProvisioningOptionsManager>(sp => sp.GetRequiredService<RunModeProvisioningContextProvider>());
+            builder.Services.TryAddSingleton<RunModeProvisioningContextProvider>();
+            builder.Services.TryAddSingleton<IProvisioningContextProvider>(sp => sp.GetRequiredService<RunModeProvisioningContextProvider>());
+            builder.Services.TryAddSingleton<IAzureProvisioningOptionsManager>(sp => sp.GetRequiredService<RunModeProvisioningContextProvider>());
         }
 
         // The controller is registered unconditionally because AzureProvisioner is resolved by the run-mode

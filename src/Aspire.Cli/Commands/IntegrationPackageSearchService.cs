@@ -41,7 +41,12 @@ internal sealed class IntegrationPackageSearchService(
         // prerelease-only packages (e.g. Aspire.Hosting.Foundry) became invisible. The implicit
         // channel (Quality.Both) must always participate so prerelease packages are reachable
         // even when the explicit pin is Stable-quality.
-        var hasHives = executionContext.GetHiveCount() > 0;
+        // An ASPIRE_CLI_PACKAGES / sidecar `packages` override deliberately points Aspire.*
+        // resolution at a local directory (used to emulate a released/staging build from locally
+        // built packages). Treat it like a hive so the synthesized local channel — named after the
+        // emulated identity (stable/daily/staging), not a local-build name — participates in the
+        // search instead of being filtered out, which would silently fall back to nuget.org.
+        var hasHives = executionContext.GetHiveCount() > 0 || executionContext.IdentityPackagesDirectory is not null;
         var channels = hasHives || !string.IsNullOrEmpty(configuredChannel)
             ? allChannels
             : allChannels.Where(c => c.Type is PackageChannelType.Implicit);

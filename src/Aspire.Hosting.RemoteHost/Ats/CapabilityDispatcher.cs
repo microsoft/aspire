@@ -574,6 +574,14 @@ internal sealed class CapabilityDispatcher
                 registration.Capability?.TargetParameterName,
                 errorCode: AtsErrorCodes.TypeMismatch).ToCapabilityException();
         }
+        catch (ArgumentException ex)
+        {
+            activity.SetError(ex);
+            throw CapabilityException.InvalidArgument(
+                capabilityId,
+                ex.ParamName ?? registration.Capability?.TargetParameterName ?? "unknown",
+                ex.Message);
+        }
         catch (InvalidCastException ex)
         {
             activity.SetError(ex);
@@ -679,14 +687,7 @@ internal sealed class CapabilityDispatcher
 
     private static object? InvokeMethodCore(MethodInfo method, object? target, object?[] methodArgs)
     {
-        try
-        {
-            return method.Invoke(target, methodArgs);
-        }
-        catch (TargetInvocationException tie) when (tie.InnerException is not null)
-        {
-            throw tie.InnerException;
-        }
+        return method.Invoke(target, methodArgs);
     }
 
     /// <summary>

@@ -82,6 +82,11 @@
         <target state="new">The --stream option requires --format json.</target>
         <note />
       </trans-unit>
+      <trans-unit id="MultipleAppHostsNonInteractive">
+        <source>Multiple running AppHosts were found, but the CLI is running in non-interactive mode. Pass --apphost to specify which AppHost to use.</source>
+        <target state="new">Multiple running AppHosts were found, but the CLI is running in non-interactive mode. Pass --apphost to specify which AppHost to use.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MultipleInScopeAppHosts">
         <source>Multiple running AppHosts found in the current directory. Select from running AppHosts.</source>
         <target state="new">Multiple running AppHosts found in the current directory. Select from running AppHosts.</target>

@@ -154,6 +154,22 @@ public class CapabilityDispatcherTests
     }
 
     [Fact]
+    public void Invoke_ConvertsArgumentExceptionToInvalidArgument()
+    {
+        var dispatcher = CreateDispatcher();
+        dispatcher.Register("test/capability@1", (_, _) =>
+            Task.FromException<JsonNode?>(
+                new ArgumentException("A parameter value is required when publishValueAsDefault is true.", "publishValueAsDefault")));
+
+        var ex = Assert.Throws<CapabilityException>(() =>
+            dispatcher.Invoke("test/capability@1", null));
+
+        Assert.Equal(AtsErrorCodes.InvalidArgument, ex.Error.Code);
+        Assert.Equal("publishValueAsDefault", ex.Error.Details?.Parameter);
+        Assert.Contains("A parameter value is required", ex.Message);
+    }
+
+    [Fact]
     public void Constructor_ScansAssemblyForAspireExportAttributes()
     {
         var dispatcher = CreateDispatcher(typeof(TestCapabilities).Assembly);
@@ -195,6 +211,20 @@ public class CapabilityDispatcherTests
 
         Assert.NotNull(result);
         Assert.Equal("test:custom", result.GetValue<string>());
+    }
+
+    [Fact]
+    public void Invoke_ArgumentExceptionInImplementation_BecomesInvalidArgument()
+    {
+        var dispatcher = CreateDispatcher(typeof(TestCapabilities).Assembly);
+        var args = new JsonObject { ["value"] = "test" };
+
+        var ex = Assert.Throws<CapabilityException>(() =>
+            dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/throwsArgumentException", args));
+
+        Assert.Equal(AtsErrorCodes.InvalidArgument, ex.Error.Code);
+        Assert.Equal("value", ex.Error.Details?.Parameter);
+        Assert.Contains("The value is invalid", ex.Message);
     }
 
     // Context type tests
@@ -2123,6 +2153,12 @@ internal static class TestCapabilities
     public static string WithOptional(string required, string optional = "default")
     {
         return $"{required}:{optional}";
+    }
+
+    [AspireExport]
+    public static string ThrowsArgumentException(string value)
+    {
+        throw new ArgumentException("The value is invalid", nameof(value));
     }
 
     /// <ats-summary>Async method returning Task</ats-summary>

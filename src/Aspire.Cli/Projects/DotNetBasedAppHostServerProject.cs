@@ -30,11 +30,6 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     public const string BuildFolder = "build";
     private const string AssemblyName = "AppHostServer";
 
-    /// <summary>
-    /// Gets the default Aspire SDK version based on the CLI version.
-    /// </summary>
-    public static string DefaultSdkVersion => VersionHelper.GetDefaultSdkVersion();
-
     private readonly string _projectModelPath;
     private readonly string _appPath;
     private readonly string _socketPath;

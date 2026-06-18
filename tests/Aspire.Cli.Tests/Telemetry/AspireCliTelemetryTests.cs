@@ -316,7 +316,7 @@ public class AspireCliTelemetryTests
         var provider = new TelemetryFixture.TestMachineInformationProvider();
         var ciDetector = new TelemetryFixture.TestCIEnvironmentDetector();
         var codingAgentDetector = new TelemetryFixture.TestCodingAgentDetector();
-        var telemetry = new AspireCliTelemetry(NullLogger<AspireCliTelemetry>.Instance, provider, ciDetector, codingAgentDetector);
+        var telemetry = new AspireCliTelemetry(NullLogger<AspireCliTelemetry>.Instance, provider, ciDetector, codingAgentDetector, Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)));
 
         var exception = Assert.Throws<InvalidOperationException>(() => telemetry.StartReportedActivity("test"));
         Assert.Contains("not been initialized", exception.Message);
@@ -328,7 +328,7 @@ public class AspireCliTelemetryTests
         var provider = new TelemetryFixture.TestMachineInformationProvider();
         var ciDetector = new TelemetryFixture.TestCIEnvironmentDetector();
         var codingAgentDetector = new TelemetryFixture.TestCodingAgentDetector();
-        var telemetry = new AspireCliTelemetry(NullLogger<AspireCliTelemetry>.Instance, provider, ciDetector, codingAgentDetector);
+        var telemetry = new AspireCliTelemetry(NullLogger<AspireCliTelemetry>.Instance, provider, ciDetector, codingAgentDetector, Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)));
 
         await telemetry.InitializeAsync().DefaultTimeout();
         var tagsAfterFirstInit = telemetry.GetDefaultTags().Count;
@@ -336,6 +336,50 @@ public class AspireCliTelemetryTests
 
         var tags = telemetry.GetDefaultTags();
         Assert.Equal(tagsAfterFirstInit, tags.Count); // Should have the same number of tags after second init
+    }
+
+    [Fact]
+    public void InitializeAsync_AddsIdentityTags_WhenExecutionContextProvided()
+    {
+        // The execution context only needs a valid root for path composition; telemetry init
+        // does not touch the filesystem for identity, so reuse the test base directory.
+        var executionContext = Utils.TestExecutionContextHelper.CreateExecutionContext(
+            new DirectoryInfo(AppContext.BaseDirectory),
+            identityChannel: "daily",
+            identityVersion: "13.5.0-preview.1.26310.9",
+            identityCommit: "95f0d2968",
+            identityOverridden: true);
+
+        using var fixture = new TelemetryFixture(executionContext: executionContext);
+
+        var tags = fixture.Telemetry.GetDefaultTags();
+
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.IdentityVersion && (string?)t.Value == "13.5.0-preview.1.26310.9");
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.IdentityChannel && (string?)t.Value == "daily");
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.IdentityCommit && (string?)t.Value == "95f0d2968");
+
+        // The binary tags must remain distinct from the identity tags so an emulated run is
+        // distinguishable from the physical binary that produced the telemetry.
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.CliVersion);
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.CliBuildId);
+    }
+
+    [Fact]
+    public void InitializeAsync_OmitsIdentityCommitTag_WhenCommitIsEmpty()
+    {
+        var executionContext = Utils.TestExecutionContextHelper.CreateExecutionContext(
+            new DirectoryInfo(AppContext.BaseDirectory),
+            identityChannel: "stable",
+            identityVersion: "13.5.0",
+            identityCommit: null,
+            identityOverridden: true);
+
+        using var fixture = new TelemetryFixture(executionContext: executionContext);
+
+        var tags = fixture.Telemetry.GetDefaultTags();
+
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.IdentityVersion && (string?)t.Value == "13.5.0");
+        Assert.DoesNotContain(tags, t => t.Key == TelemetryConstants.Tags.IdentityCommit);
     }
 
     public static TheoryData<(string, string?)[], string?> CodingAgentTelemetryTestCases => new()

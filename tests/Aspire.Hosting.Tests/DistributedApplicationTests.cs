@@ -1809,7 +1809,6 @@ public class DistributedApplicationTests
         await clientA.GetStringAsync("/").DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
 
         var s = app.Services.GetRequiredService<IKubernetesService>();
-        var serviceList = await s.ListAsync<Service>().DefaultTimeout();
         var exeList = await s.ListAsync<Executable>().DefaultTimeout();
 
         var service = Assert.Single(exeList, c => $"{testName}-servicea".Equals(c.AppModelResourceName));
@@ -1831,7 +1830,8 @@ public class DistributedApplicationTests
             Assert.Equal(port, Assert.Single(redisContainer.Spec.Ports!).HostPort);
         }
 
-        var otherRedisService = GetEndpointService(serviceList, redisNoPort.Resource, redisNoPort.Resource.PrimaryEndpoint);
+        var otherRedisService = await WaitForAllocatedProxylessServiceAsync(s, redisNoPort.Resource, redisNoPort.Resource.PrimaryEndpoint)
+            .DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
         var otherRedisPort = AssertAllocatedProxylessPort(otherRedisService);
         var otherRedisEnv = Assert.Single(service.Spec.Env!, e => e.Name == $"ConnectionStrings__{testName}-redisNoPort");
         sslVal = redisNoPort.Resource.TlsEnabled ? ",ssl=true" : string.Empty;
@@ -1908,7 +1908,8 @@ public class DistributedApplicationTests
             Assert.Equal(port, Assert.Single(redisContainer.Spec.Ports!).HostPort);
         }
 
-        var otherRedisService = GetEndpointService(serviceList, redisNoPort.Resource, redisNoPort.Resource.PrimaryEndpoint);
+        var otherRedisService = await WaitForAllocatedProxylessServiceAsync(s, redisNoPort.Resource, redisNoPort.Resource.PrimaryEndpoint)
+            .DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
         var otherRedisPort = AssertAllocatedProxylessPort(otherRedisService);
         var otherRedisEnv = Assert.Single(service.Spec.Env!, e => e.Name == $"ConnectionStrings__{testName}-redisNoPort");
         sslVal = redisNoPort.Resource.TlsEnabled ? ",ssl=true" : string.Empty;
@@ -2304,11 +2305,25 @@ public class DistributedApplicationTests
             .WithImageRegistry(AspireTestContainerRegistry);
     }
 
-    private static Service GetEndpointService(IEnumerable<Service> services, RedisResource redis, EndpointReference endpoint)
+    private static Task<Service> WaitForAllocatedProxylessServiceAsync(IKubernetesService kubernetesService, RedisResource redis, EndpointReference endpoint, CancellationToken cancellationToken = default)
     {
         var hasMultipleEndpoints = redis.Annotations.OfType<EndpointAnnotation>().Count() > 1;
         var expectedServiceName = hasMultipleEndpoints ? $"{redis.Name}-{endpoint.EndpointName}" : redis.Name;
-        return Assert.Single(services, s => string.Equals(s.Metadata.Name, expectedServiceName, StringComparison.Ordinal));
+
+        // A proxyless endpoint's host port is assigned synchronously by Aspire (Service.Spec.Port),
+        // but DCP reports the actually-bound port back asynchronously via Service.Status.EffectivePort.
+        // Orchestrator startup intentionally does NOT wait for DCP to echo the effective address of
+        // proxyless services (they are excluded from the startup address-wait in DcpExecutor) because
+        // connection strings are built from the Aspire-assigned Spec.Port and are usable immediately.
+        // As a result, a fast agent can observe the Service before DCP has populated EffectivePort, so
+        // wait until it appears before asserting on it (otherwise the EffectivePort assertion in
+        // AssertAllocatedProxylessPort races and is null on fast Linux CI agents while passing on Windows).
+        return KubernetesHelper.GetResourceByNameAsync<Service>(
+            kubernetesService,
+            expectedServiceName,
+            string.Empty,
+            service => service.Status?.EffectivePort is not null,
+            cancellationToken);
     }
 
     private static int AssertAllocatedProxylessPort(Service service)
