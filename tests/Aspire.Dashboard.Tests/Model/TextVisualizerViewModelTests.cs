@@ -88,4 +88,19 @@ public sealed class TextVisualizerViewModelTests
                 : """{"key":"value"}""",
             vm.FormattedText);
     }
+
+    [Fact]
+    public void Create_KnownJsonFormat_PreservesNumberTextWhenFormatting()
+    {
+        var vm = new TextVisualizerViewModel("""{"large":9223372036854775807,"precise":0.1234567890123456789012345}""", indentText: true, knownFormat: DashboardUIHelpers.JsonFormat);
+
+        Assert.Equal(
+            """
+            {
+              "large": 9223372036854775807,
+              "precise": 0.1234567890123456789012345
+            }
+            """,
+            vm.FormattedText);
+    }
 }

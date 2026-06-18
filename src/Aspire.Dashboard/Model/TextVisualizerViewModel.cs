@@ -170,14 +170,7 @@ public class TextVisualizerViewModel
                     writer.WriteStringValue(reader.GetString());
                     break;
                 case JsonTokenType.Number:
-                    if (reader.TryGetInt32(out var intValue))
-                    {
-                        writer.WriteNumberValue(intValue);
-                    }
-                    else if (reader.TryGetDouble(out var doubleValue))
-                    {
-                        writer.WriteNumberValue(doubleValue);
-                    }
+                    writer.WriteRawValue(reader.ValueSpan, skipInputValidation: true);
                     break;
                 case JsonTokenType.True:
                     writer.WriteBooleanValue(true);
