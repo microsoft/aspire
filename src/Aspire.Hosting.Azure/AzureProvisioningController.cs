@@ -1298,6 +1298,35 @@ internal sealed class AzureProvisioningController(
         }
     }
 
+    internal static QueuedOperationForTesting CreateEnsureProvisionedQueuedOperationForTesting(DistributedApplicationModel model, TaskCompletionSource<object?> completion, CancellationToken cancellationToken)
+    {
+        return new(new QueuedOperation(model, new EnsureProvisionedIntent(), completion, cancellationToken));
+    }
+
+    internal Task ProcessQueuedOperationForTesting(QueuedOperationForTesting queuedOperation)
+    {
+        ArgumentNullException.ThrowIfNull(queuedOperation);
+
+        return ProcessQueuedOperationAsync((QueuedOperation)queuedOperation.Operation);
+    }
+
+    internal IDisposable RegisterReprovisionResourceQueuedOperationForTesting(DistributedApplicationModel model, string resourceName)
+    {
+        return RegisterQueuedOperationForTesting(model, new ReprovisionResourceIntent(resourceName));
+    }
+
+    internal IDisposable RegisterDeleteAzureResourceQueuedOperationForTesting(DistributedApplicationModel model, string resourceName)
+    {
+        return RegisterQueuedOperationForTesting(model, new DeleteAzureResourceIntent(resourceName));
+    }
+
+    private IDisposable RegisterQueuedOperationForTesting(DistributedApplicationModel model, AzureIntent intent)
+    {
+        var queuedOperationState = CreateQueuedOperationState(model, intent);
+        RegisterQueuedOperation(intent, queuedOperationState);
+        return new QueuedOperationRegistration(this, queuedOperationState);
+    }
+
     private void EnsureDriftMonitorStarted(DistributedApplicationModel model)
     {
         if (Interlocked.CompareExchange(ref _driftMonitorStarted, 1, 0) != 0)
@@ -3985,6 +4014,29 @@ internal sealed class AzureProvisioningController(
         AzureIntent Intent,
         TaskCompletionSource<object?> Completion,
         CancellationToken CancellationToken);
+
+    internal sealed class QueuedOperationForTesting
+    {
+        internal object Operation { get; }
+
+        internal QueuedOperationForTesting(object operation)
+        {
+            Operation = operation;
+        }
+    }
+
+    private sealed class QueuedOperationRegistration(AzureProvisioningController controller, AzureOperationState queuedOperationState) : IDisposable
+    {
+        private int _disposed;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) == 0)
+            {
+                controller.UnregisterQueuedOperation(queuedOperationState);
+            }
+        }
+    }
 
     private sealed record AzureContextState(string? SubscriptionId, string? ResourceGroup, string? Location, string? TenantId, string? TenantDomain);
 }

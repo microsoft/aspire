@@ -6,7 +6,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Immutable;
-using System.Reflection;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
@@ -1491,6 +1490,34 @@ public class AzureEnvironmentResourceExtensionsTests
     }
 
     [Fact]
+    public async Task MutatingResourceCommands_FailFastDuringConflictingQueuedOperation()
+    {
+        var builder = CreateBuilder(isRunMode: true);
+
+        AddTestAzureProvisioning(builder);
+
+        var storage = builder.AddBicepTemplateString("storage", "resource storage 'Microsoft.Storage/storageAccounts@2024-01-01' = {}");
+
+        using var app = builder.Build();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var preparer = new AzureResourcePreparer(
+            app.Services.GetRequiredService<IOptions<AzureProvisioningOptions>>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>());
+        var controller = app.Services.GetRequiredService<AzureProvisioningController>();
+
+        await preparer.OnBeforeStartAsync(new BeforeStartEvent(app.Services, model), CancellationToken.None);
+
+        using var queuedRegistration = controller.RegisterReprovisionResourceQueuedOperationForTesting(model, storage.Resource.Name);
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+        {
+            using var conflictingRegistration = controller.RegisterDeleteAzureResourceQueuedOperationForTesting(model, storage.Resource.Name);
+        });
+        Assert.Contains("already running or queued", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task CancelCommand_IsHiddenWhenResourceIsNotWaitingForDeployment()
     {
         var builder = CreateBuilder(isRunMode: true);
@@ -2187,9 +2214,9 @@ public class AzureEnvironmentResourceExtensionsTests
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
         var completion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var queuedOperation = CreateQueuedOperationForTest(model, "EnsureProvisionedIntent", completion, cts.Token);
+        var queuedOperation = AzureProvisioningController.CreateEnsureProvisionedQueuedOperationForTesting(model, completion, cts.Token);
 
-        await InvokeProcessQueuedOperationAsync(controller, queuedOperation);
+        await controller.ProcessQueuedOperationForTesting(queuedOperation);
 
         await Assert.ThrowsAsync<TaskCanceledException>(() => completion.Task.WaitAsync(s_testSynchronizationTimeout));
         Assert.Equal(ResourceCommandState.Enabled, controller.GetEnvironmentCommandState());
@@ -4381,44 +4408,6 @@ public class AzureEnvironmentResourceExtensionsTests
             Input = input,
             Services = services
         });
-    }
-
-    private static object CreateQueuedOperationForTest(
-        DistributedApplicationModel model,
-        string intentTypeName,
-        TaskCompletionSource<object?> completion,
-        CancellationToken cancellationToken)
-    {
-        // This targets the private queue boundary directly because the regression window is between
-        // ProcessOperationLoopAsync's pre-dispatch cancellation check and ProcessQueuedOperationAsync's
-        // initial command-state refresh. Command-level tests cannot deterministically cancel in that
-        // narrow synchronous window without relying on timing.
-        var controllerType = typeof(AzureProvisioningController);
-        var intentType = controllerType.GetNestedType(intentTypeName, BindingFlags.NonPublic);
-        Assert.NotNull(intentType);
-        var intent = Activator.CreateInstance(intentType, nonPublic: true);
-        Assert.NotNull(intent);
-
-        var queuedOperationType = controllerType.GetNestedType("QueuedOperation", BindingFlags.NonPublic);
-        Assert.NotNull(queuedOperationType);
-        var queuedOperation = Activator.CreateInstance(
-            queuedOperationType,
-            BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public,
-            binder: null,
-            args: [model, intent, completion, cancellationToken],
-            culture: null);
-        Assert.NotNull(queuedOperation);
-
-        return queuedOperation;
-    }
-
-    private static async Task InvokeProcessQueuedOperationAsync(AzureProvisioningController controller, object queuedOperation)
-    {
-        var method = typeof(AzureProvisioningController).GetMethod("ProcessQueuedOperationAsync", BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.NotNull(method);
-
-        var task = Assert.IsAssignableFrom<Task>(method.Invoke(controller, [queuedOperation]));
-        await task.WaitAsync(s_testSynchronizationTimeout).ConfigureAwait(false);
     }
 
     private static JsonObject AssertCommandJsonData(ExecuteCommandResult result)
