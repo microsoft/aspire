@@ -7,12 +7,30 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.Cli.Processes;
 
 /// <summary>
-/// Shared "graceful signal → bounded wait → force tree-kill → bounded drain" ladder used by
-/// every long-running child process the CLI owns during <c>aspire run</c>
-/// (AppHost server, guest, direct-launch AppHost executable). Each call site provides a
-/// graceful signaler and the central <see cref="ConsoleCancellationManager.GracefulShutdownToken"/>; this helper
-/// runs the same four-phase escalation against them so the user-visible shutdown shape is
-/// uniform across spawn sites.
+/// The single child-process shutdown helper for every long-running process the CLI owns. It has two
+/// modes selected by whether a graceful signaler is supplied:
+/// <list type="bullet">
+///   <item>
+///     <description>
+///       <b>Graceful</b> (signaler supplied — the <c>aspire run</c> path): runs the
+///       "graceful signal → bounded wait → force tree-kill → bounded drain" four-phase escalation
+///       against the central <see cref="ConsoleCancellationManager.GracefulShutdownToken"/>, so the
+///       user-visible shutdown shape is uniform across spawn sites (AppHost server, guest,
+///       direct-launch AppHost executable).
+///     </description>
+///   </item>
+///   <item>
+///     <description>
+///       <b>Force</b> (no signaler — every non-Run caller: build, restore, package add, layout, the
+///       <c>aspire stop</c> force-kill tail, etc.): best-effort courtesy SIGTERM on Unix (a no-op on
+///       Windows, where Ctrl+C delivery needs the signaler-backed DCP console dance) followed by an
+///       immediate force-kill. There is no graceful budget on this path.
+///     </description>
+///   </item>
+/// </list>
+/// Both modes use the same primitives the previous <c>ProcessTerminator</c> / ladder split used —
+/// DCP <c>stop-process-tree</c> on Windows and SIGTERM on Unix — they only differ in whether a
+/// graceful budget is honored before the kill.
 /// </summary>
 /// <remarks>
 /// Whoever triggers shutdown (<see cref="ConsoleCancellationManager.Cancel"/>) is responsible
@@ -22,24 +40,43 @@ namespace Aspire.Cli.Processes;
 internal static class ProcessGracefulShutdownLadder
 {
     /// <summary>
-    /// Runs the four-phase shutdown ladder against <paramref name="process"/>.
+    /// Shuts down <paramref name="process"/>, choosing the graceful ladder or the force-kill fallback
+    /// based on whether <paramref name="signaler"/> is supplied.
     /// </summary>
     /// <param name="process">The child process to shut down.</param>
-    /// <param name="signaler">Issues the graceful signal (DCP <c>stop-process-tree</c> on Windows, SIGTERM on Unix).</param>
-    /// <param name="gracefulToken">The central <see cref="ConsoleCancellationManager.GracefulShutdownToken"/>.</param>
+    /// <param name="signaler">
+    /// Issues the graceful signal (DCP <c>stop-process-tree</c> on Windows, SIGTERM on Unix). When
+    /// <c>null</c>, the force-kill fallback runs instead and <paramref name="gracefulToken"/> is ignored.
+    /// </param>
+    /// <param name="gracefulToken">
+    /// The central <see cref="ConsoleCancellationManager.GracefulShutdownToken"/> bounding the graceful
+    /// wait. Only consulted when <paramref name="signaler"/> is non-null.
+    /// </param>
+    /// <param name="entireProcessTreeOnForceKill">
+    /// Kill scope for the <em>force-kill fallback</em> (used only when <paramref name="signaler"/> is
+    /// <c>null</c>). The graceful escalation always tree-kills regardless of this value, because a child
+    /// like tsx can swallow Ctrl+C and leave descendants running even after a clean graceful signal.
+    /// </param>
     /// <param name="logger">Logger for diagnostics.</param>
     /// <param name="processDescription">Short human description used in log messages (e.g. <c>"AppHost server"</c>).</param>
-    public static async Task ExecuteAsync(
+    public static async Task ShutdownAsync(
         Process process,
-        IProcessTreeGracefulShutdownSignaler signaler,
+        IProcessTreeGracefulShutdownSignaler? signaler,
         CancellationToken gracefulToken,
+        bool entireProcessTreeOnForceKill,
         ILogger logger,
         string processDescription)
     {
         ArgumentNullException.ThrowIfNull(process);
-        ArgumentNullException.ThrowIfNull(signaler);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(processDescription);
+
+        if (signaler is null)
+        {
+            // Force mode: no graceful budget. Best-effort courtesy SIGTERM (Unix) then hard-kill.
+            ForceKill(process, entireProcessTreeOnForceKill, logger, processDescription);
+            return;
+        }
 
         // Phase 1: fire-and-forget the graceful signal so its wait does not consume the
         // graceful budget. On Windows, DCP's `stop-process-tree` delivers the Ctrl+C signal
@@ -156,6 +193,56 @@ internal static class ProcessGracefulShutdownLadder
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Failed to issue graceful shutdown to {ProcessDescription} (pid {Pid}); escalating to kill.", processDescription, pid);
+        }
+    }
+
+    private static void ForceKill(Process process, bool entireProcessTree, ILogger logger, string processDescription)
+    {
+        // Mirrors the previous ProcessTerminator force path: resolve "already gone?", issue a
+        // best-effort courtesy SIGTERM on Unix (so a SIGTERM-aware child can flush), then hard-kill.
+        // On Windows ProcessSignaler.RequestGracefulShutdown is a no-op — Ctrl+C delivery to a child
+        // requires DCP's stop-process-tree console dance, which only the signaler-backed graceful
+        // ladder performs — so we skip straight to the kill.
+        try
+        {
+            if (process.HasExited)
+            {
+                logger.LogDebug("{ProcessDescription} process {ProcessId} already exited.", processDescription, process.Id);
+                return;
+            }
+
+            if (!OperatingSystem.IsWindows())
+            {
+                ProcessSignaler.RequestGracefulShutdown(process.Id, expectedStartTime: null, logger);
+
+                if (process.HasExited)
+                {
+                    return;
+                }
+            }
+
+            logger.LogDebug(
+                "Sending kill to {ProcessDescription} process {ProcessId} (entireProcessTree={EntireProcessTree}).",
+                processDescription,
+                process.Id,
+                entireProcessTree);
+            process.Kill(entireProcessTree);
+        }
+        catch (InvalidOperationException ex)
+        {
+            logger.LogDebug(
+                ex,
+                "{ProcessDescription} process exited before termination could complete (entireProcessTree={EntireProcessTree}).",
+                processDescription,
+                entireProcessTree);
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(
+                ex,
+                "Failed to terminate {ProcessDescription} process (entireProcessTree={EntireProcessTree}).",
+                processDescription,
+                entireProcessTree);
         }
     }
 

@@ -348,7 +348,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             // same graceful-then-tree-kill semantics as TypeScript AppHosts (which already
             // route through AppHostServerSession/ProcessGuestLauncher). Build, restore,
             // package add, layout, and other short-lived invocations leave these unset so
-            // they continue to use today's ProcessTerminator force-kill behavior.
+            // they continue to use the shared ladder's force-kill mode.
             IsolateConsole = true,
             GracefulShutdownSignaler = _gracefulShutdownSignaler,
             ShutdownService = _shutdownService,

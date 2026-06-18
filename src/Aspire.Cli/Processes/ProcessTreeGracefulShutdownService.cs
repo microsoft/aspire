@@ -85,16 +85,16 @@ internal sealed class ProcessTreeGracefulShutdownService(
         var gracefulShutdownRequested = await TryRequestGracefulShutdownAsync(requestGracefulShutdownAsync, cancellationToken).ConfigureAwait(false);
         if (gracefulShutdownRequested && await MonitorProcessesForTerminationAsync(processesToMonitor, cancellationToken).ConfigureAwait(false))
         {
-            await ForceKillRemainingProcessesAsync(processesToForceKill.Except(processesToMonitor), afterTimeout: false).ConfigureAwait(false);
+            ForceKillRemainingProcesses(processesToForceKill.Except(processesToMonitor), afterTimeout: false);
             return true;
         }
 
-        await ForceKillRemainingProcessesAsync(processesToForceKill, afterTimeout: true).ConfigureAwait(false);
+        ForceKillRemainingProcesses(processesToForceKill, afterTimeout: true);
 
         return await MonitorProcessesForTerminationAsync(processesToMonitor, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task ForceKillRemainingProcessesAsync(IEnumerable<ProcessTarget> processes, bool afterTimeout)
+    private void ForceKillRemainingProcesses(IEnumerable<ProcessTarget> processes, bool afterTimeout)
     {
         var killEntireProcessTree = !OperatingSystem.IsWindows();
 
@@ -109,14 +109,10 @@ internal sealed class ProcessTreeGracefulShutdownService(
                 logger.LogDebug("Forcing remaining shutdown handle process {Pid} to terminate.", process.Pid);
             }
 
-            await ProcessTerminator.ShutdownAsync(
-                process.Pid,
-                process.StartTime,
-                requestGracefulShutdown: false,
-                killEntireProcessTree,
-                logger,
-                "shutdown target",
-                gracefulShutdownCancellationToken: CancellationToken.None).ConfigureAwait(false);
+            // Resolve the pid against its expected start time and hard-kill. This path never requests
+            // graceful shutdown — the graceful attempt already happened (or was intentionally skipped),
+            // so we go straight to the kill that the shared shutdown helper's force mode also performs.
+            ProcessSignaler.ForceKill(process.Pid, process.StartTime, logger, killEntireProcessTree);
         }
     }
 
