@@ -196,15 +196,6 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Parameters.
-        /// </summary>
-        public static string ChartContainerParametersTab {
-            get {
-                return ResourceManager.GetString("ChartContainerParametersTab", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Table.
         /// </summary>
         public static string ChartContainerTableTab {
