@@ -261,12 +261,14 @@ export async function stopPrimaryAppHostIfRunning(): Promise<void> {
 }
 
 export async function stopAppHostIfRunning(appHostPath: string): Promise<void> {
+    const runningAppHostBeforeStop = getRunningAppHostFromState(appHostPath);
+
     try {
         await runProcess(getCliPath(), ['stop', '--non-interactive', '--apphost', appHostPath], {
             cwd: getWorkspaceRoot(),
             timeoutMs: 60000,
         });
-        await waitForRunningAppHostProcessExitFromState(appHostPath, 5000).catch(() => undefined);
+        await waitForNoRunningAppHostPath(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid);
     }
     catch (error) {
         if (!(error instanceof Error)) {
@@ -274,7 +276,7 @@ export async function stopAppHostIfRunning(appHostPath: string): Promise<void> {
         }
 
         if (/not running|No running AppHost|No AppHost/i.test(error.message)) {
-            await waitForRunningAppHostProcessExitFromState(appHostPath, 5000).catch(() => undefined);
+            await waitForNoRunningAppHostPath(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid);
             return;
         }
 
@@ -340,21 +342,17 @@ function isPsAppHost(value: unknown): value is PsAppHost {
         && (candidate.status === undefined || typeof candidate.status === 'string');
 }
 
-async function waitForRunningAppHostProcessExitFromState(appHostPath: string, timeoutMs: number): Promise<void> {
-    const runningAppHost = getRunningAppHostFromState(appHostPath);
-    if (runningAppHost) {
-        await waitForProcessExit(runningAppHost.appHostPid, timeoutMs);
-        return;
-    }
-
-    throw new Error(`Unable to find running AppHost state for ${appHostPath}.`);
-}
-
-async function waitForNoRunningAppHostPath(appHostPath: string, timeoutMs: number): Promise<void> {
+async function waitForNoRunningAppHostPath(appHostPath: string, timeoutMs: number, knownAppHostPid?: number): Promise<void> {
     const started = Date.now();
+    let lastKnownAppHostPid = knownAppHostPid;
+
     while (Date.now() - started < timeoutMs) {
         const runningAppHost = getRunningAppHostFromState(appHostPath);
-        if (!runningAppHost || !isProcessRunning(runningAppHost.appHostPid)) {
+        if (runningAppHost) {
+            lastKnownAppHostPid = runningAppHost.appHostPid;
+        }
+
+        if (lastKnownAppHostPid === undefined || !isProcessRunning(lastKnownAppHostPid)) {
             return;
         }
 
@@ -362,7 +360,7 @@ async function waitForNoRunningAppHostPath(appHostPath: string, timeoutMs: numbe
     }
 
     const runningAppHost = getRunningAppHostFromState(appHostPath);
-    throw new Error(`Timed out after ${timeoutMs}ms waiting for AppHost process ${runningAppHost?.appHostPid ?? '<unknown>'} to exit before deleting ${path.dirname(appHostPath)}.`);
+    throw new Error(`Timed out after ${timeoutMs}ms waiting for AppHost process ${runningAppHost?.appHostPid ?? lastKnownAppHostPid ?? '<unknown>'} to exit before deleting ${path.dirname(appHostPath)}.`);
 }
 
 function getRunningAppHostFromState(appHostPath: string) {
