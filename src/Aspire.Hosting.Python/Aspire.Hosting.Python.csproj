@@ -4,7 +4,6 @@
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
     <PackageTags>aspire integration hosting python framework runtime</PackageTags>
-    <IsAspirePolyglotCompatible>true</IsAspirePolyglotCompatible>
     <Description>Python support for Aspire.</Description>
   </PropertyGroup>
 

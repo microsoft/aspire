@@ -7,7 +7,6 @@
     <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
     <EnablePackageValidation>false</EnablePackageValidation>
     <PackageTags>aspire integration hosting azure kubernetes aks</PackageTags>
-    <IsAspirePolyglotCompatible>true</IsAspirePolyglotCompatible>
     <Description>Azure Kubernetes Service (AKS) resource types for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)Azure_256x.png</PackageIconFullPath>
   </PropertyGroup>

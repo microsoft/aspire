@@ -4,7 +4,6 @@
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
     <PackageTags>aspire integration hosting go golang framework runtime</PackageTags>
-    <IsAspirePolyglotCompatible>true</IsAspirePolyglotCompatible>
     <Description>Go support for Aspire.</Description>
     <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
   </PropertyGroup>

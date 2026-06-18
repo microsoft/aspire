@@ -4,7 +4,6 @@
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
     <PackageTags>aspire integration hosting azure storage blob queue table cloud</PackageTags>
-    <IsAspirePolyglotCompatible>true</IsAspirePolyglotCompatible>
     <Description>Azure Storage resource types for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)AzureStorageContainer_256x.png</PackageIconFullPath>
   </PropertyGroup>

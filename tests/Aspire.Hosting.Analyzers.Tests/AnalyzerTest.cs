@@ -15,7 +15,7 @@ internal static class AnalyzerTest
         where TAnalyzer : DiagnosticAnalyzer, new()
         => Create<TAnalyzer>(source, expectedDiagnostics, includeAspireHostingReference: true);
 
-    public static CSharpAnalyzerTest<TAnalyzer, DefaultVerifier> Create<TAnalyzer>(string source, IEnumerable<DiagnosticResult> expectedDiagnostics, bool includeAspireHostingReference, string? isAspirePolyglotCompatible = "true")
+    public static CSharpAnalyzerTest<TAnalyzer, DefaultVerifier> Create<TAnalyzer>(string source, IEnumerable<DiagnosticResult> expectedDiagnostics, bool includeAspireHostingReference, string? isAspirePolyglotCompatible = "false")
         where TAnalyzer : DiagnosticAnalyzer, new()
     {
         var test = new CSharpAnalyzerTest<TAnalyzer, DefaultVerifier>
@@ -30,9 +30,10 @@ internal static class AnalyzerTest
         };
 
         // Surface the <IsAspirePolyglotCompatible> build property to the analyzer the same way MSBuild
-        // does (via a CompilerVisibleProperty -> build_property.* global analyzer config option). Tests
-        // default to "true" so existing [AspireExport] cases don't trip ASPIREEXPORT017; pass null to omit
-        // the marker entirely (simulating an integration that forgot to opt in).
+        // does (via a CompilerVisibleProperty -> build_property.* global analyzer config option). The
+        // marker is opt-out, so tests default to "false" (opted out) to keep ASPIREEXPORT017 from firing
+        // for sources that target an unrelated rule and may have no [AspireExport] coverage; the dedicated
+        // ASPIREEXPORT017 tests pass an explicit value, and pass null to omit the property entirely.
         if (isAspirePolyglotCompatible is not null)
         {
             test.TestState.AnalyzerConfigFiles.Add(("/.globalconfig", $"""

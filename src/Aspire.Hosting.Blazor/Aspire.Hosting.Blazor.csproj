@@ -4,7 +4,6 @@
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
     <PackageTags>aspire integration hosting blazor webassembly gateway</PackageTags>
-    <IsAspirePolyglotCompatible>true</IsAspirePolyglotCompatible>
     <Description>Blazor WebAssembly hosting support for Aspire.</Description>
     <NoWarn>$(NoWarn);ASPIREBLAZOR001</NoWarn>
     <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>

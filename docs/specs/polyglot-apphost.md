@@ -1278,7 +1278,7 @@ The CLI is **not** responsible for language-specific logic. A single `GuestAppHo
 
 ### Polyglot-Compatible Integration Discovery
 
-A guest (non-C#) AppHost can only consume integrations that expose their API surface through `[AspireExport]` (ATS) coverage. Integrations opt in by setting `<IsAspirePolyglotCompatible>true</IsAspirePolyglotCompatible>` in their project file, which appends the `polyglot` NuGet tag at pack time. The `ASPIREEXPORT017` analyzer rule fails the build if a project has `[AspireExport]` coverage but is missing the property, keeping the tag and the export surface in sync.
+A guest (non-C#) AppHost can only consume integrations that expose their API surface through `[AspireExport]` (ATS) coverage. Integrations are polyglot-compatible by default: any project that runs the export analyzer automatically gets the `polyglot` NuGet tag appended at pack time. A project acknowledges that it is not a polyglot integration by setting `<IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible>` in its project file, which omits the tag. The `ASPIREEXPORT017` analyzer rule fails the build if a project has no `[AspireExport]` coverage and has not opted out, keeping the tag and the export surface in sync.
 
 When the active AppHost is not C#, `aspire add`, `aspire integration list`, and `aspire integration search` filter discovery down to integrations carrying the `polyglot` tag (resolved via a `tags:polyglot` search on remote feeds or by reading the nuspec `<tags>` for local package sources). Pass `--all` to bypass the filter — useful when an integration has not yet been marked. Naming an integration that exists but lacks the tag yields a clear "not available for this language" error.
 

@@ -177,8 +177,9 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
         context.RegisterCompilationEndAction(c => ReportDuplicateCapabilityIds(c, capabilityIds));
         context.RegisterCompilationEndAction(c => ReportDuplicateGeneratedMethodNames(c, generatedMethodNames));
 
-        // ASPIREEXPORT017: an integration with [AspireExport] coverage must opt in to polyglot
-        // compatibility so the 'polyglot' NuGet tag is emitted and discovery can surface it.
+        // ASPIREEXPORT017: a project that runs the export analyzer is treated as a polyglot integration
+        // by default. If it has no [AspireExport] coverage it must either add some or acknowledge it is not
+        // a polyglot integration via <IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible>.
         context.RegisterCompilationEndAction(c => ReportMissingPolyglotCompatibleMarker(c, assemblyHasAspireExport));
 
         // Warn when exported builder methods invoke synchronous callback delegates inline. Deferred callbacks
@@ -487,18 +488,19 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
         }
     }
 
-    // ASPIREEXPORT017: integrations that expose any [AspireExport] surface must opt in to polyglot
-    // compatibility via <IsAspirePolyglotCompatible>true</IsAspirePolyglotCompatible>. The opt-in adds the
-    // 'polyglot' NuGet tag so `aspire add` can surface the integration to non-C# AppHosts, and the build
-    // fails here when an author adds export coverage but forgets the marker.
+    // ASPIREEXPORT017: a project that runs the export analyzer is a polyglot integration by default and
+    // gets the 'polyglot' NuGet tag so `aspire add` can surface it to non-C# AppHosts. When such a project
+    // has no [AspireExport] surface at all it is almost certainly either missing its exports or is really
+    // infrastructure that should not be discovered, so the build fails unless the author acknowledges that
+    // with <IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible> (which also omits the tag).
     private static void ReportMissingPolyglotCompatibleMarker(CompilationAnalysisContext context, StrongBox<bool> assemblyHasAspireExport)
     {
-        if (!assemblyHasAspireExport.Value)
+        if (assemblyHasAspireExport.Value)
         {
             return;
         }
 
-        if (IsPolyglotCompatibleMarkerSet(context.Options.AnalyzerConfigOptionsProvider.GlobalOptions))
+        if (IsPolyglotCompatibilityOptedOut(context.Options.AnalyzerConfigOptionsProvider.GlobalOptions))
         {
             return;
         }
@@ -509,13 +511,14 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
             context.Compilation.Assembly.Identity.Name));
     }
 
-    private static bool IsPolyglotCompatibleMarkerSet(Microsoft.CodeAnalysis.Diagnostics.AnalyzerConfigOptions options)
+    private static bool IsPolyglotCompatibilityOptedOut(Microsoft.CodeAnalysis.Diagnostics.AnalyzerConfigOptions options)
     {
         // Exposed via <CompilerVisibleProperty Include="IsAspirePolyglotCompatible" /> in the build, surfaced
-        // to analyzers as the 'build_property.<name>' key.
+        // to analyzers as the 'build_property.<name>' key. Only an explicit 'false' opts out; any other value
+        // (or the property being absent) leaves the project polyglot-compatible by default.
         return options.TryGetValue("build_property.IsAspirePolyglotCompatible", out var value)
             && bool.TryParse(value, out var enabled)
-            && enabled;
+            && !enabled;
     }
 
     private static bool HasAnyAspireExportAttribute(IAssemblySymbol assembly, INamedTypeSymbol aspireExportAttribute)

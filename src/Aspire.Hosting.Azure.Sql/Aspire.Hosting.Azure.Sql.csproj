@@ -5,7 +5,6 @@
     <TargetFrameworks>$(AllTargetFrameworks)</TargetFrameworks>
     <IsPackable>true</IsPackable>
     <PackageTags>aspire integration hosting azure sql database data cloud</PackageTags>
-    <IsAspirePolyglotCompatible>true</IsAspirePolyglotCompatible>
     <Description>Azure SQL Database resource types for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)AzureSqlServer_256x.png</PackageIconFullPath>
   </PropertyGroup>

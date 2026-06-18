@@ -177,8 +177,8 @@ internal partial class AspireExportAnalyzer
         private const string MissingPolyglotCompatibleMarkerId = "ASPIREEXPORT017";
         internal static readonly DiagnosticDescriptor s_missingPolyglotCompatibleMarker = new(
             id: MissingPolyglotCompatibleMarkerId,
-            title: "Integration with AspireExport coverage must opt in to polyglot compatibility",
-            messageFormat: "Assembly '{0}' has [AspireExport] coverage but is not marked polyglot-compatible. Set <IsAspirePolyglotCompatible>true</IsAspirePolyglotCompatible> in the project so the 'polyglot' NuGet tag is added and `aspire add` surfaces the integration to non-C# AppHosts.",
+            title: "Polyglot integration must have AspireExport coverage or opt out",
+            messageFormat: "Assembly '{0}' is treated as a polyglot-compatible integration but has no [AspireExport] coverage. Add [AspireExport] members, or set <IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible> in the project to acknowledge it is not a polyglot integration (which also omits the 'polyglot' NuGet tag so `aspire add` does not surface it to non-C# AppHosts).",
             category: "Design",
             DiagnosticSeverity.Error,
             isEnabledByDefault: true,
