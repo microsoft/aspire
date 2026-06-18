@@ -931,6 +931,21 @@ public class Program
 
     public static async Task<int> Main(string[] args)
     {
+        // Re-enable CTRL+C delivery for ourselves and any process we subsequently spawn.
+        // Per https://learn.microsoft.com/windows/console/setconsolectrlhandler, the "ignore
+        // CTRL+C" state is process-level and inherited across CreateProcess. If our parent was
+        // started with CREATE_NEW_PROCESS_GROUP (or otherwise called SetConsoleCtrlHandler(NULL,
+        // TRUE)), we inherit "CTRL+C disabled" and the kernel will silently drop CTRL_C_EVENT
+        // for both us and our descendants — including the AppHost and DCP-launched services.
+        // Calling SetConsoleCtrlHandler(NULL, FALSE) once at startup clears that inherited
+        // state so the rest of the PR's signal ladder (CCM → AppHost SIGINT → DCP stop-process-tree)
+        // can actually deliver. The runtime/Spectre still own the actual CTRL+C handler chain;
+        // we only flip the inherited "ignored" attribute.
+        if (OperatingSystem.IsWindows())
+        {
+            WindowsProcessInterop.SetConsoleCtrlHandler(nint.Zero, false);
+        }
+
         // Setup handling of CTRL-C and SIGTERM as early as possible so that if
         // we get a signal anywhere that is not handled by Spectre Console
         // already that we know to trigger cancellation. The graceful service is
