@@ -28,7 +28,7 @@ public class TextVisualizerViewModel
 
         if (knownFormat != null)
         {
-            ChangeFormattedText(knownFormat, Text);
+            ChangeFormattedText(knownFormat, indentText ? FormatKnownText(Text, knownFormat) : Text);
         }
         else if (TryFormatJson(Text, out var formattedJson))
         {
@@ -42,6 +42,21 @@ public class TextVisualizerViewModel
         {
             ChangeFormattedText(fallbackFormat ?? DashboardUIHelpers.PlaintextFormat, Text);
         }
+    }
+
+    private static string FormatKnownText(string text, string knownFormat)
+    {
+        if (knownFormat == DashboardUIHelpers.JsonFormat && TryFormatJson(text, out var formattedJson))
+        {
+            return formattedJson;
+        }
+
+        if (knownFormat == DashboardUIHelpers.XmlFormat && TryFormatXml(text, out var formattedXml))
+        {
+            return formattedXml;
+        }
+
+        return text;
     }
 
     private static bool TryFormatXml(string text, [NotNullWhen(true)] out string? formattedText)

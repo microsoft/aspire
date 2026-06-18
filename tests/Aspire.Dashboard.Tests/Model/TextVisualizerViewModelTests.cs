@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Utils;
 using Xunit;
 
 namespace Aspire.Dashboard.Tests.Model;
@@ -66,5 +67,25 @@ public sealed class TextVisualizerViewModelTests
               true
             ]
             """, vm.FormattedText);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Create_KnownJsonFormat_RespectsIndentText(bool indentText)
+    {
+        var vm = new TextVisualizerViewModel("""{"key":"value"}""", indentText, knownFormat: DashboardUIHelpers.JsonFormat);
+
+        Assert.Equal("""{"key":"value"}""", vm.Text);
+        Assert.Equal(DashboardUIHelpers.JsonFormat, vm.FormatKind);
+        Assert.Equal(
+            indentText
+                ? """
+                  {
+                    "key": "value"
+                  }
+                  """
+                : """{"key":"value"}""",
+            vm.FormattedText);
     }
 }
