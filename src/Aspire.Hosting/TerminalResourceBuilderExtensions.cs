@@ -97,7 +97,7 @@ public static class TerminalResourceBuilderExtensions
         //
         // This is a temporary workaround: DCP cannot yet run a process under the debugger and a
         // PTY at the same time. Remove this once that support ships. Tracked by:
-        // https://github.com/microsoft/dcp/issues/__DCP_ISSUE_PLACEHOLDER__
+        // https://github.com/microsoft/dcp/issues/189
 #pragma warning disable ASPIREEXTENSION001 // SupportsDebuggingAnnotation is experimental.
         builder.WithAnnotation(SupportsDebuggingAnnotation.Disabled());
 #pragma warning restore ASPIREEXTENSION001
