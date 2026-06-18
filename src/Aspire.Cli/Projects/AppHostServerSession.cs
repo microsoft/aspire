@@ -541,41 +541,21 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         _shutdownTask = ShutdownAsync(process, externalStopFired: _externalStopToken.IsCancellationRequested);
     }
 
-    private async Task ShutdownAsync(Process process, bool externalStopFired)
+    private Task ShutdownAsync(Process process, bool externalStopFired)
     {
-        // Force-kill path: take this when graceful infra isn't wired (non-Run callers — SDK gen,
-        // scaffolding, publish, dump) OR when the dispose-only path was taken (external token
-        // never fired). The dispose-only case is the critical reason for the externalStopFired
-        // check: if we observed _shutdownService.Token in that case, the ladder would hang
-        // indefinitely because nothing started the central timer.
-        if (_gracefulShutdownSignaler is null || _shutdownService is null || !externalStopFired)
-        {
-            try
-            {
-                await ProcessTerminator.ShutdownAsync(
-                    process,
-                    requestGracefulShutdown: false,
-                    entireProcessTree: !OperatingSystem.IsWindows(),
-                    _logger,
-                    ProcessDescription,
-                    CancellationToken.None).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                // Process.Id can throw if the handle was disposed mid-shutdown — surface as -1
-                // rather than masking the original failure with a secondary log exception.
-                var pid = TryGetPid(process);
-                _logger.LogWarning(ex, "Failed to shut down {ProcessDescription} (pid {Pid}).", ProcessDescription, pid);
-            }
-            return;
-        }
-
-        await ProcessGracefulShutdownLadder.ExecuteAsync(
+        // externalStopFired distinguishes "caller cancelled the external token" (the central
+        // graceful budget is live, so run the ladder) from "DisposeAsync cancelled the internal
+        // linked CTS" (the external token never fired, so nothing started the central timer and
+        // we must force-kill). See OnStopRequested for the full rationale.
+        return ProcessShutdownCoordinator.ShutdownAsync(
             process,
             _gracefulShutdownSignaler,
-            _shutdownService.Token,
+            _shutdownService,
+            gracefulBudgetActive: externalStopFired,
+            fallbackRequestGracefulShutdown: false,
+            fallbackKillEntireProcessTree: !OperatingSystem.IsWindows(),
             _logger,
-            ProcessDescription).ConfigureAwait(false);
+            ProcessDescription);
     }
 
     private static void ObserveFaultedTask(Task task)
@@ -589,10 +569,4 @@ internal sealed class AppHostServerSession : IAppHostServerSession
 
     private static InvalidOperationException NotStarted() =>
         new($"{nameof(AppHostServerSession)} has not been started. Call {nameof(StartAsync)} first.");
-
-    private static int TryGetPid(Process process)
-    {
-        try { return process.Id; }
-        catch { return -1; }
-    }
 }

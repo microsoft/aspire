@@ -237,7 +237,7 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
                 // (e.g. surfacing captured output when the guest was killed because the AppHost system
                 // failed). Wait without honoring cancellation so the OS reports the final exit code and
                 // the redirected output streams have time to drain.
-                await ShutdownGuestProcessAsync(process, options, cancellationToken).ConfigureAwait(false);
+                await ShutdownGuestProcessAsync(process, options).ConfigureAwait(false);
             }
 
             _logger.LogDebug("{Language} guest process {ProcessId} exited with code {ExitCode}", _language, process.Id, readExitCode());
@@ -273,58 +273,23 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
         }
     }
 
-    private async Task ShutdownGuestProcessAsync(
+    private Task ShutdownGuestProcessAsync(
         Process process,
-        GuestLaunchOptions? options,
-        CancellationToken cancellationToken)
+        GuestLaunchOptions? options)
     {
-        // Force-kill path: take this when graceful infra isn't wired (non-Run callers — publish,
-        // extension adapter, anyone not opting into the central shutdown budget). We don't have
-        // a central token to bound a graceful wait against, so kill the tree and let
-        // WaitForDrainAsync surface any trailing output. This preserves the previous tactical
-        // behavior (graceful on Unix, force-kill on Windows) for callers that pass no options.
-        if (options?.GracefulShutdownSignaler is null || options.ShutdownService is null)
-        {
-            _logger.LogInformation("Stopping {Language} guest process tree {ProcessId}", _language, process.Id);
-            try
-            {
-                await ProcessTerminator.ShutdownAsync(
-                    process,
-                    requestGracefulShutdown: !OperatingSystem.IsWindows(),
-                    entireProcessTree: true,
-                    _logger,
-                    $"{_language} guest",
-                    gracefulShutdownCancellationToken: cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to shut down {Language} guest process {ProcessId}.", _language, SafePid(process));
-            }
-
-            return;
-        }
-
-        // Run-path graceful ladder shared with AppHostServerSession and ProcessExecution.
-        // Whoever initiated shutdown (user Ctrl+C via CCM.Cancel) already started the
-        // central graceful clock; the helper just consumes the token.
-        await ProcessGracefulShutdownLadder.ExecuteAsync(
+        // Run-path graceful ladder shared with AppHostServerSession and ProcessExecution when the
+        // central budget is wired; otherwise a best-effort force-kill for non-Run callers (publish,
+        // extension adapter) that didn't opt into the central shutdown budget. Whoever initiated
+        // shutdown (user Ctrl+C via CCM.Cancel) already started the central graceful clock.
+        return ProcessShutdownCoordinator.ShutdownAsync(
             process,
-            options.GracefulShutdownSignaler,
-            options.ShutdownService.Token,
+            options?.GracefulShutdownSignaler,
+            options?.ShutdownService,
+            gracefulBudgetActive: true,
+            fallbackRequestGracefulShutdown: !OperatingSystem.IsWindows(),
+            fallbackKillEntireProcessTree: true,
             _logger,
-            $"{_language} guest").ConfigureAwait(false);
-    }
-
-    private static int SafePid(Process process)
-    {
-        try
-        {
-            return process.Id;
-        }
-        catch (Exception)
-        {
-            return -1;
-        }
+            $"{_language} guest");
     }
 
     private static Activity? GetCurrentProfilingActivity()

@@ -81,32 +81,15 @@ internal sealed class IsolatedProcessExecution : IProcessExecution
         {
             _logger.LogDebug("{FileName}({ProcessId}) wait was canceled, escalating shutdown", _fileName, _isolated.Id);
 
-            if (_options.GracefulShutdownSignaler is not null && _options.ShutdownService is not null)
-            {
-                // Run-path: drive the same shared ladder used by AppHostServerSession and
-                // ProcessGuestLauncher. The central token is what bounds graceful — by the
-                // time we observe OCE here CCM has already started its clock.
-                await ProcessGracefulShutdownLadder.ExecuteAsync(
-                    _isolated.Process,
-                    _options.GracefulShutdownSignaler,
-                    _options.ShutdownService.Token,
-                    _logger,
-                    _fileName).ConfigureAwait(false);
-            }
-            else
-            {
-                // No central infra wired — preserve today's tactical fallback. This branch
-                // is reachable only for non-Run callers that opted into IsolateConsole but
-                // not into the central graceful budget. Today no such caller exists, but the
-                // fallback keeps the option independent and easy to test.
-                await ProcessTerminator.ShutdownAsync(
-                    _isolated.Process,
-                    requestGracefulShutdown: !OperatingSystem.IsWindows(),
-                    _options.KillEntireProcessTreeOnCancel,
-                    _logger,
-                    _fileName,
-                    gracefulShutdownCancellationToken: CancellationToken.None).ConfigureAwait(false);
-            }
+            await ProcessShutdownCoordinator.ShutdownAsync(
+                _isolated.Process,
+                _options.GracefulShutdownSignaler,
+                _options.ShutdownService,
+                gracefulBudgetActive: true,
+                fallbackRequestGracefulShutdown: !OperatingSystem.IsWindows(),
+                fallbackKillEntireProcessTree: _options.KillEntireProcessTreeOnCancel,
+                _logger,
+                _fileName).ConfigureAwait(false);
 
             throw;
         }
