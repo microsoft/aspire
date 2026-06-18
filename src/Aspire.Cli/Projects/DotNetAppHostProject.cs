@@ -91,7 +91,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         _configurationService = configurationService;
         _executionContext = executionContext;
         _timeProvider = timeProvider ?? TimeProvider.System;
-        _runningInstanceManager = new RunningInstanceManager(_logger, _interactionService, _timeProvider);
+        _runningInstanceManager = new RunningInstanceManager(_logger, _interactionService, _timeProvider, _profilingTelemetry);
     }
 
     // ═══════════════════════════════════════════════════════════════

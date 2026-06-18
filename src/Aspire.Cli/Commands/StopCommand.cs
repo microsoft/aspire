@@ -6,7 +6,6 @@ using System.Globalization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Processes;
-using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
@@ -34,9 +33,7 @@ internal sealed class StopCommand : BaseCommand
     };
 
     public StopCommand(
-        IInteractionService interactionService,
-        IAuxiliaryBackchannelMonitor backchannelMonitor,
-        IProjectLocator projectLocator,
+        AppHostConnectionResolver connectionResolver,
         ICliHostEnvironment hostEnvironment,
         ProcessShutdownService processShutdownService,
         ILogger<StopCommand> logger,
@@ -44,7 +41,7 @@ internal sealed class StopCommand : BaseCommand
         CommonCommandServices services)
         : base("stop", StopCommandStrings.Description, services)
     {
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, services.ExecutionContext, services.HostEnvironment, logger, profilingTelemetry);
+        _connectionResolver = connectionResolver;
         _hostEnvironment = hostEnvironment;
         _processShutdownService = processShutdownService;
         _logger = logger;

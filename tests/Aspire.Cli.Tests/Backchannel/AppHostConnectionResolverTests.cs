@@ -5,10 +5,12 @@ using System.Globalization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Backchannel;
@@ -37,7 +39,8 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
             projectLocator,
             executionContext,
             TestHelpers.CreateInteractiveHostEnvironment(),
-            NullLogger.Instance);
+            NullLogger<AppHostConnectionResolver>.Instance,
+            new ProfilingTelemetry(new ConfigurationBuilder().Build()));
 
         var result = await resolver.ResolveConnectionAsync(
             projectFile,
@@ -72,7 +75,8 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
             new TestProjectLocator(),
             executionContext,
             TestHelpers.CreateInteractiveHostEnvironment(),
-            NullLogger.Instance);
+            NullLogger<AppHostConnectionResolver>.Instance,
+            new ProfilingTelemetry(new ConfigurationBuilder().Build()));
 
         var result = await resolver.ResolveConnectionAsync(
             projectFile,
@@ -118,7 +122,8 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
             projectLocator,
             executionContext,
             TestHelpers.CreateInteractiveHostEnvironment(),
-            NullLogger.Instance);
+            NullLogger<AppHostConnectionResolver>.Instance,
+            new ProfilingTelemetry(new ConfigurationBuilder().Build()));
 
         var result = await resolver.ResolveConnectionAsync(
             new FileInfo(appHostDirectory.FullName),
@@ -151,7 +156,8 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
             projectLocator,
             executionContext,
             TestHelpers.CreateInteractiveHostEnvironment(),
-            NullLogger.Instance);
+            NullLogger<AppHostConnectionResolver>.Instance,
+            new ProfilingTelemetry(new ConfigurationBuilder().Build()));
 
         var result = await resolver.ResolveConnectionAsync(
             new FileInfo(appHostDirectory.FullName),
@@ -180,7 +186,8 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
             new TestProjectLocator(),
             executionContext,
             TestHelpers.CreateNonInteractiveHostEnvironment(),
-            NullLogger.Instance);
+            NullLogger<AppHostConnectionResolver>.Instance,
+            new ProfilingTelemetry(new ConfigurationBuilder().Build()));
 
         var result = await resolver.ResolveConnectionAsync(
             projectFile: null,
@@ -210,7 +217,8 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
             new TestProjectLocator(),
             executionContext,
             TestHelpers.CreateNonInteractiveHostEnvironment(),
-            NullLogger.Instance);
+            NullLogger<AppHostConnectionResolver>.Instance,
+            new ProfilingTelemetry(new ConfigurationBuilder().Build()));
 
         var result = await resolver.ResolveConnectionAsync(
             projectFile: null,
