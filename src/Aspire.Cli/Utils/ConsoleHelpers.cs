@@ -3,6 +3,7 @@
 
 using Aspire.Cli.Interaction;
 using Spectre.Console;
+using Spectre.Console.Rendering;
 
 namespace Aspire.Cli.Utils;
 
@@ -36,6 +37,27 @@ internal static class ConsoleHelpers
         }
 
         return spectreEmojiText + new string(' ', padding);
+    }
+
+    /// <summary>
+    /// Creates a two-column grid with an emoji icon in the first column and content in the second.
+    /// The first column is fixed-width so wrapped text in the second column stays aligned
+    /// without pushing under the icon.
+    /// </summary>
+    public static Grid CreateEmojiGrid(KnownEmoji emoji, IAnsiConsole console, IRenderable content)
+    {
+        var grid = new Grid();
+        grid.AddColumn();
+        grid.AddColumn();
+        grid.Columns[0].NoWrap = true;
+        grid.Columns[0].Padding = new Padding(0);
+        grid.Columns[1].Padding = new Padding(0);
+
+        grid.AddRow(
+            new Markup(FormatEmojiPrefix(emoji, console)),
+            content);
+
+        return grid;
     }
 }
 

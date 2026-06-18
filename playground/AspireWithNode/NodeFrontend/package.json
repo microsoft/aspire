@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@godaddy/terminus": "^4.12.1",
-    "@grpc/grpc-js": "^1.14.3",
+    "@grpc/grpc-js": "^1.14.4",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/auto-instrumentations-node": "^0.76.0",
     "@opentelemetry/exporter-logs-otlp-grpc": "^0.218.0",

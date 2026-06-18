@@ -7,6 +7,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Backchannel;
@@ -34,6 +35,7 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
             interactionService,
             projectLocator,
             executionContext,
+            TestHelpers.CreateInteractiveHostEnvironment(),
             NullLogger.Instance);
 
         var result = await resolver.ResolveConnectionAsync(
@@ -49,6 +51,35 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.AppHostNotRunningAtPath, Path.Combine("TestAppHost", "TestAppHost.csproj")),
             result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task ResolveConnectionAsync_WithExplicitProjectFile_DeletesDeadPidSocketAndReturnsNotRunning()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectFile = CreateProjectFile(workspace.WorkspaceRoot, "TestAppHost", "TestAppHost.csproj");
+        var socketPath = CreateMatchingSocketFile(projectFile.FullName, workspace.WorkspaceRoot, int.MaxValue - 1);
+        var resolver = new AppHostConnectionResolver(
+            new TestAuxiliaryBackchannelMonitor(),
+            new TestInteractionService(),
+            new TestProjectLocator(),
+            executionContext,
+            TestHelpers.CreateInteractiveHostEnvironment(),
+            NullLogger.Instance);
+
+        var result = await resolver.ResolveConnectionAsync(
+            projectFile,
+            "Scanning",
+            "Select",
+            SharedCommandStrings.AppHostNotRunning,
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(
+            string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.AppHostNotRunningAtPath, Path.Combine("TestAppHost", "TestAppHost.csproj")),
+            result.ErrorMessage);
+        Assert.False(File.Exists(socketPath));
     }
 
     [Fact]
@@ -80,6 +111,7 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
             interactionService,
             projectLocator,
             executionContext,
+            TestHelpers.CreateInteractiveHostEnvironment(),
             NullLogger.Instance);
 
         var result = await resolver.ResolveConnectionAsync(
@@ -112,6 +144,7 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
             interactionService,
             projectLocator,
             executionContext,
+            TestHelpers.CreateInteractiveHostEnvironment(),
             NullLogger.Instance);
 
         var result = await resolver.ResolveConnectionAsync(
@@ -127,6 +160,65 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
         Assert.Equal(InteractionServiceStrings.ProjectOptionSpecifiedDirectoryContainsNoAppHosts, result.ErrorMessage);
     }
 
+    [Fact]
+    public async Task ResolveConnectionAsync_NonInteractiveWithOnlyOutOfScopeAppHosts_ReturnsNotFoundError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("hash1", "socket-other", new TestAppHostAuxiliaryBackchannel { IsInScope = false });
+
+        var resolver = new AppHostConnectionResolver(
+            monitor,
+            new TestInteractionService(),
+            new TestProjectLocator(),
+            executionContext,
+            TestHelpers.CreateNonInteractiveHostEnvironment(),
+            NullLogger.Instance);
+
+        var result = await resolver.ResolveConnectionAsync(
+            projectFile: null,
+            "Scanning",
+            "Select",
+            SharedCommandStrings.AppHostNotRunning,
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.True(result.IsProjectResolutionError);
+        Assert.Equal(SharedCommandStrings.AppHostNotRunning, result.ErrorMessage);
+        Assert.Equal(CliExitCodes.FailedToFindProject, result.ExitCode);
+    }
+
+    [Fact]
+    public async Task ResolveConnectionAsync_NonInteractiveWithMultipleInScopeAppHosts_ReturnsActionableError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("hash1", "socket-one", new TestAppHostAuxiliaryBackchannel { IsInScope = true });
+        monitor.AddConnection("hash2", "socket-two", new TestAppHostAuxiliaryBackchannel { IsInScope = true });
+
+        var resolver = new AppHostConnectionResolver(
+            monitor,
+            new TestInteractionService(),
+            new TestProjectLocator(),
+            executionContext,
+            TestHelpers.CreateNonInteractiveHostEnvironment(),
+            NullLogger.Instance);
+
+        var result = await resolver.ResolveConnectionAsync(
+            projectFile: null,
+            "Scanning",
+            "Select",
+            SharedCommandStrings.AppHostNotRunning,
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.True(result.IsProjectResolutionError);
+        Assert.Equal(SharedCommandStrings.MultipleAppHostsNonInteractive, result.ErrorMessage);
+        Assert.Equal(CliExitCodes.FailedToFindProject, result.ExitCode);
+    }
+
     private static CliExecutionContext CreateExecutionContext(DirectoryInfo workingDirectory)
     {
         return TestExecutionContextHelper.CreateExecutionContext(
@@ -140,5 +232,19 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
         var projectFile = new FileInfo(Path.Combine(directory.FullName, fileName));
         File.WriteAllText(projectFile.FullName, "<Project />");
         return projectFile;
+    }
+
+    private static string CreateMatchingSocketFile(string appHostPath, DirectoryInfo homeDirectory, int pid)
+    {
+        var backchannelsDir = Path.Combine(homeDirectory.FullName, ".aspire", "cli", "bch");
+        Directory.CreateDirectory(backchannelsDir);
+
+        var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(appHostPath, homeDirectory.FullName);
+        var appHostId = Path.GetFileName(prefix);
+        var socketPath = Path.Combine(
+            backchannelsDir,
+            $"{appHostId}a1b2C3d4.{pid.ToString(CultureInfo.InvariantCulture)}");
+        File.WriteAllText(socketPath, "");
+        return socketPath;
     }
 }

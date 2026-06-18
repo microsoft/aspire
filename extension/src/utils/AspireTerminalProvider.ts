@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { aspireTerminalName, dcpServerNotInitialized, rpcServerNotInitialized } from '../loc/strings';
+import * as childProcess from 'child_process';
+import { aspireTerminalName, dcpServerNotInitialized, rpcServerNotInitialized, terminalCommandArgumentControlCharacters, terminalCommandUnsafeLiteral } from '../loc/strings';
 import { extensionLogOutputChannel } from './logging';
 import { RpcServerConnectionInfo } from '../server/AspireRpcServer';
 import { DcpServerConnectionInfo } from '../dcp/types';
@@ -23,6 +24,16 @@ export interface SendAspireCommandOptions {
     redactAdditionalArgs?: boolean;
 }
 
+// String parts are fixed CLI syntax and are validated before interpolation.
+// ShellArg parts are workspace/user data that must be shell-quoted at the
+// terminal boundary.
+export interface ShellArg {
+    readonly quote: true;
+    readonly value: string;
+}
+
+export type AspireSubcommand = string | readonly (string | ShellArg)[];
+
 export interface AspireTerminalCommandEvent {
     subcommand: string;
     commandLine: string;
@@ -36,13 +47,13 @@ export interface AspireTerminalCommandEvent {
 /**
  * Quotes a single argument for safe interpolation into a shell command line.
  *
- * Windows: The output targets PowerShell (powershell.exe / pwsh.exe), which is
- * VS Code's default integrated terminal on Windows. The argument is wrapped in
- * double quotes and the interpolation-significant characters (backtick, double
- * quote, dollar sign) are backtick-escaped. This form is NOT safe for cmd.exe;
- * users who have configured cmd.exe as their default terminal may see
- * unexpected behavior. End-to-end coverage through a real child process is
- * out of scope for this helper.
+ * Windows: The output targets the PowerShell terminal created by getAspireTerminal().
+ * The terminal prefers PowerShell 7 (pwsh.exe) and falls back to Windows PowerShell
+ * (powershell.exe). The argument is wrapped in double quotes and the
+ * interpolation-significant characters (backtick, PowerShell quote delimiters,
+ * dollar sign) are backtick-escaped, which both shells use for expandable
+ * strings. PowerShell treats smart quotes as quote delimiters too:
+ * https://learn.microsoft.com/powershell/module/microsoft.powershell.core/about/about_quoting_rules
  *
  * Unix: The output uses POSIX single-quote quoting, which is interpreted the
  * same way by bash, zsh, dash, sh, and fish. Embedded single quotes are split
@@ -54,24 +65,33 @@ export interface AspireTerminalCommandEvent {
  * branches regardless of the host OS.
  */
 export function quoteShellArg(arg: string, platform: NodeJS.Platform = process.platform): string {
+    assertNoTerminalControlCharacters(arg);
+
     if (platform === 'win32') {
-        // Order matters: escape backticks first so that the backticks we
-        // introduce when escaping " and $ are not themselves re-escaped.
-        return `"${arg.replace(/`/g, '``').replace(/"/g, '`"').replace(/\$/g, '`$')}"`;
+        const escaped = arg.replace(/[`"$\u2018\u2019\u201C\u201D]/g, value => value === '`' ? '``' : '`' + value);
+        return `"${escaped}"`;
     }
 
     return `'${arg.replace(/'/g, "'\"'\"'")}'`;
+}
+
+export function shellArg(value: string): ShellArg {
+    return { quote: true, value };
 }
 
 export class AspireTerminalProvider implements vscode.Disposable {
     private _terminalByDebugSessionId: Map<string | null, AspireTerminal> = new Map();
     private _rpcServerConnectionInfo?: RpcServerConnectionInfo;
     private _dcpServerConnectionInfo?: DcpServerConnectionInfo;
+    private _windowsPowerShellPath?: string;
 
     private readonly _onDidSendAspireCommand = new vscode.EventEmitter<AspireTerminalCommandEvent>();
     readonly onDidSendAspireCommand = this._onDidSendAspireCommand.event;
 
-    constructor(subscriptions: vscode.Disposable[]) {
+    constructor(
+        subscriptions: vscode.Disposable[],
+        private readonly _isPowerShell7Available = isPowerShell7Available,
+    ) {
         subscriptions.push(vscode.window.onDidCloseTerminal(closedTerminal => {
             for (const [debugSessionId, terminal] of this._terminalByDebugSessionId.entries()) {
                 if (terminal.terminal === closedTerminal) {
@@ -106,18 +126,20 @@ export class AspireTerminalProvider implements vscode.Disposable {
         this._dcpServerConnectionInfo = value;
     }
 
-    async sendAspireCommandToAspireTerminal(subcommand: string, showTerminal: boolean = true, additionalArgs?: string[], options?: SendAspireCommandOptions) {
+    async sendAspireCommandToAspireTerminal(subcommand: AspireSubcommand, showTerminal: boolean = true, additionalArgs?: string[], options?: SendAspireCommandOptions) {
         const cliPath = await this.getAspireCliExecutablePath();
+        const subcommandLine = formatSubcommand(subcommand);
+        assertNoTerminalControlCharacters(cliPath);
 
         // On Windows, use & to execute paths, especially those with special characters
         // On Unix, just use the path directly
         let command: string;
         if (process.platform === 'win32') {
-            command = `& ${quoteShellArg(cliPath)} ${subcommand}`;
+            command = `& ${quoteShellArg(cliPath)} ${subcommandLine}`;
         } else {
             // For Unix-like systems, quote only if needed
             const quotedPath = /[\s"'`$!*?()&|<>;]/.test(cliPath) ? `'${cliPath.replace(/'/g, `'\"'\"'`)}'` : cliPath;
-            command = `${quotedPath} ${subcommand}`;
+            command = `${quotedPath} ${subcommandLine}`;
         }
         const baseCommand = command;
 
@@ -138,8 +160,8 @@ export class AspireTerminalProvider implements vscode.Disposable {
             const quotedArgs = cliArgs.map(arg => quoteShellArg(arg));
             command += ' ' + quotedArgs.join(' ');
         }
+        assertNoTerminalControlCharacters(command);
 
-        const aspireTerminal = this.getAspireTerminal();
         let logCommand = command;
         if (options?.redactAdditionalArgs && additionalArgs && additionalArgs.length > 0) {
             const logArgs = extensionArgs.map(arg => quoteShellArg(arg));
@@ -147,13 +169,17 @@ export class AspireTerminalProvider implements vscode.Disposable {
             logCommand = `${baseCommand} ${logArgs.join(' ')}`;
         }
         const executionSuppressed = isE2eTerminalCommandExecutionSuppressed();
-        const executionMode = executionSuppressed
-            ? 'suppressed'
-            : aspireTerminal.terminal.shellIntegration
-                ? 'shellIntegration'
-                : 'sendText';
+        let aspireTerminal: AspireTerminal | undefined;
+        let executionMode: AspireTerminalCommandEvent['executionMode'];
+        if (executionSuppressed) {
+            executionMode = 'suppressed';
+        }
+        else {
+            aspireTerminal = this.getAspireTerminal();
+            executionMode = aspireTerminal.terminal.shellIntegration ? 'shellIntegration' : 'sendText';
+        }
         this._onDidSendAspireCommand.fire({
-            subcommand,
+            subcommand: subcommandLine,
             commandLine: logCommand,
             showTerminal,
             additionalArgs: options?.redactAdditionalArgs ? undefined : cliArgs,
@@ -163,12 +189,16 @@ export class AspireTerminalProvider implements vscode.Disposable {
         });
         extensionLogOutputChannel.info(`Sending command to Aspire terminal: ${logCommand}`);
 
-        if (showTerminal) {
-            aspireTerminal.terminal.show();
-        }
-
         if (executionSuppressed) {
             return;
+        }
+
+        if (!aspireTerminal) {
+            throw new Error('Aspire terminal was not created for an unsuppressed command.');
+        }
+
+        if (showTerminal) {
+            aspireTerminal.terminal.show();
         }
 
         if (executionMode === 'shellIntegration' && aspireTerminal.terminal.shellIntegration) {
@@ -197,10 +227,18 @@ export class AspireTerminalProvider implements vscode.Disposable {
         }
 
         extensionLogOutputChannel.info(`Creating new Aspire terminal`);
-        const terminal = vscode.window.createTerminal({
+        const terminalOptions: vscode.TerminalOptions = {
             name: terminalName,
             env: this.createEnvironment(),
-        });
+        };
+        if (process.platform === 'win32') {
+            // quoteShellArg uses PowerShell escaping on Windows. Do not rely on the
+            // user's default terminal profile because cmd.exe treats backticks as
+            // ordinary characters and would make quoted values containing " shell-sensitive again.
+            terminalOptions.shellPath = this.getWindowsPowerShellPath();
+        }
+
+        const terminal = vscode.window.createTerminal(terminalOptions);
 
         const aspireTerminal: AspireTerminal = {
             terminal,
@@ -313,6 +351,27 @@ export class AspireTerminalProvider implements vscode.Disposable {
     isDebugConfigEnvironmentLoggingEnabled(): boolean {
         return vscode.workspace.getConfiguration('aspire').get<boolean>('enableDebugConfigEnvironmentLogging', false);
     }
+
+    private getWindowsPowerShellPath(): string {
+        if (this._windowsPowerShellPath !== undefined) {
+            return this._windowsPowerShellPath;
+        }
+
+        this._windowsPowerShellPath = this._isPowerShell7Available()
+            ? 'pwsh.exe'
+            : 'powershell.exe';
+
+        return this._windowsPowerShellPath;
+    }
+}
+
+function isPowerShell7Available(): boolean {
+    const result = childProcess.spawnSync('pwsh.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', '$PSVersionTable.PSVersion.Major'], {
+        stdio: 'ignore',
+        windowsHide: true,
+    });
+
+    return result.status === 0 && result.error === undefined;
 }
 
 function isE2eTerminalCommandExecutionSuppressed(): boolean {
@@ -320,4 +379,31 @@ function isE2eTerminalCommandExecutionSuppressed(): boolean {
         !!process.env.ASPIRE_EXTENSION_E2E_STATE_FILE &&
         !!process.env.ASPIRE_EXTENSION_E2E_CONTROL_FILE &&
         process.env.ASPIRE_EXTENSION_E2E_SUPPRESS_TERMINAL_COMMAND_EXECUTION === 'true';
+}
+
+function assertNoTerminalControlCharacters(value: string): void {
+    // Shell quoting protects shell metacharacters after the command reaches the
+    // shell. C0 controls are terminal input first: in sendText fallback, ETX can
+    // abort the current line and CR/LF can submit following text as another
+    // command before shell parsing can make those bytes inert. Tab is allowed
+    // because shells treat it as ordinary whitespace inside quotes.
+    if (/[\x00-\x08\x0A-\x1F\x7F]/.test(value)) {
+        throw new Error(terminalCommandArgumentControlCharacters);
+    }
+}
+
+function validateLiteralSubcommandPart(value: string): string {
+    if (!/^-{0,2}[A-Za-z0-9][-A-Za-z0-9]*$/.test(value)) {
+        throw new Error(terminalCommandUnsafeLiteral);
+    }
+
+    return value;
+}
+
+function formatSubcommand(subcommand: AspireSubcommand): string {
+    if (typeof subcommand === 'string') {
+        return subcommand;
+    }
+
+    return subcommand.map(part => typeof part === 'string' ? validateLiteralSubcommandPart(part) : quoteShellArg(part.value)).join(' ');
 }

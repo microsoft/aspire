@@ -93,6 +93,11 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
             // non-empty when resolution fails on a malformed input.
             Path = canonicalPath ?? processPath ?? string.Empty,
             CanonicalPath = canonicalPath,
+            // physical-binary-version-by-design (see docs/specs/cli-identity-sidecar.md):
+            // `aspire doctor --self` reports the REAL build installed on disk, so this must read
+            // the assembly's stamped version even when ASPIRE_CLI_VERSION / the sidecar override
+            // the CLI's runtime identity. Routing this through CliExecutionContext.IdentityVersion
+            // would make doctor lie about what is physically installed.
             Version = VersionHelper.GetDefaultTemplateVersion(),
             Channel = TryReadChannel(),
             Route = route,
@@ -396,18 +401,16 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
 
     private string? TryReadChannel()
     {
-        try
+        if (_channelReader.TryReadChannel(out var channel, out var error))
         {
-            return _channelReader.ReadChannel();
+            return channel;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            // Same defensive posture as doctor: a misconfigured dev build
-            // with no AspireCliChannel assembly metadata must not break
-            // aspire doctor.
-            _logger.LogDebug(ex, "Could not read identity channel for InstallationDiscovery.");
-            return null;
-        }
+
+        // Same defensive posture as doctor: a misconfigured dev build
+        // with no AspireCliChannel assembly metadata must not break
+        // aspire doctor.
+        _logger.LogDebug("Could not read identity channel for InstallationDiscovery: {Error}", error);
+        return null;
     }
 
     private static string GetNotProbedReason(InstallSidecarReadResult result)

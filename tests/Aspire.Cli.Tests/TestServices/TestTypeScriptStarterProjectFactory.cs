@@ -47,6 +47,8 @@ internal sealed class TestTypeScriptStarterProject(Func<DirectoryInfo, Cancellat
 
     public string? LastPackageSourceOverride { get; private set; }
 
+    public Func<AddPackageContext, CancellationToken, Task<bool>>? AddPackageAsyncCallback { get; set; }
+
     public string LanguageId => KnownLanguageId.TypeScript;
 
     public string DisplayName => "TypeScript (Node.js)";
@@ -90,7 +92,9 @@ internal sealed class TestTypeScriptStarterProject(Func<DirectoryInfo, Cancellat
 
     public Task<bool> AddPackageAsync(AddPackageContext context, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        return AddPackageAsyncCallback is { } callback
+            ? callback(context, cancellationToken)
+            : throw new NotImplementedException();
     }
 
     public Task<UpdatePackagesResult> UpdatePackagesAsync(UpdatePackagesContext context, CancellationToken cancellationToken)

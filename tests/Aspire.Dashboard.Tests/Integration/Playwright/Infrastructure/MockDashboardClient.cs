@@ -25,7 +25,9 @@ public sealed class MockDashboardClient : IDashboardClient
                     },
                     isValueSensitive: false,
                     knownProperty: new(KnownProperties.Project.Path, loc => "Path"),
-                    priority: 0))
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false))
         }.ToDictionary(),
         state: KnownResourceState.Running);
 
@@ -39,6 +41,11 @@ public sealed class MockDashboardClient : IDashboardClient
     public bool IsEnabled => true;
     public Task WhenConnected => Task.CompletedTask;
     public string ApplicationName => "IntegrationTestApplication";
+    public DashboardConnectionState ConnectionState => DashboardConnectionState.Connected;
+#pragma warning disable CS0067 // Event is never used - required by interface
+    public event Action<DashboardConnectionState>? ConnectionStateChanged;
+#pragma warning restore CS0067
+    public Task ReconnectAsync() => Task.CompletedTask;
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     public Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, ExecuteResourceCommandOptions options, CancellationToken cancellationToken) => throw new NotImplementedException();
     public IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> SubscribeConsoleLogs(string resourceName, CancellationToken cancellationToken) => throw new NotImplementedException();

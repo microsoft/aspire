@@ -45,7 +45,7 @@ internal sealed class McpCallCommand : BaseCommand
         CommonCommandServices services)
         : base("call", McpCommandStrings.CallCommand_Description, services)
     {
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, services.ExecutionContext, logger);
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, services.ExecutionContext, services.HostEnvironment, logger);
 
         Arguments.Add(s_resourceArgument);
         Arguments.Add(s_toolArgument);

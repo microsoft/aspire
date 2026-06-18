@@ -243,6 +243,12 @@ internal sealed class ResourceCommandJson
     public string? State { get; set; }
 
     /// <summary>
+    /// The sort order of the command for display purposes.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? SortOrder { get; set; }
+
+    /// <summary>
     /// The ordered inputs that describe the invocation arguments accepted by the command.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

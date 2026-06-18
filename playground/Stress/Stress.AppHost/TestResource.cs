@@ -80,6 +80,51 @@ static class TestResourceExtensions
 
         return rb;
     }
+
+    [AspireExportIgnore(Reason = "Stress playground helper; not part of the supported ATS surface.")]
+    public static IResourceBuilder<PropertyStressResource> AddPropertyStressResource(this IDistributedApplicationBuilder builder, string name)
+    {
+        var rb = builder.AddResource(new PropertyStressResource(name))
+                      .WithInitialState(new()
+                      {
+                          ResourceType = "Executable",
+                          State = "Running",
+                          Properties = [
+                              new(KnownProperties.Executable.Path, "/stress/known/path")
+                              {
+                                  DisplayName = "Known non-sensitive path"
+                              },
+                              new(KnownProperties.Executable.Args, "--api-key stress-secret-value")
+                              {
+                                  DisplayName = "Known sensitive arguments",
+                                  IsSensitive = true
+                              },
+                              new("stress.property.highlighted", "Visible highlighted value")
+                              {
+                                  DisplayName = "Unknown highlighted property",
+                                  IsHighlighted = true
+                              },
+                              new("stress.property.highlightedSecret", "Visible highlighted sensitive value")
+                              {
+                                  DisplayName = "Unknown highlighted sensitive property",
+                                  IsSensitive = true,
+                                  IsHighlighted = true
+                              },
+                              new("stress.property.hidden", "Hidden until Show all is selected")
+                              {
+                                  DisplayName = "Unknown non-highlighted property"
+                              },
+                              new("stress.property.hiddenSecret", "Hidden sensitive value until Show all is selected")
+                              {
+                                  DisplayName = "Unknown non-highlighted sensitive property",
+                                  IsSensitive = true
+                              }
+                          ]
+                      })
+                      .ExcludeFromManifest();
+
+        return rb;
+    }
 }
 
 internal sealed class TestResourceLifecycle(
@@ -157,5 +202,9 @@ sealed class CommandGroupResource(string name, IResource parent) : Resource(name
 }
 
 sealed class NoStatusResource(string name) : Resource(name)
+{
+}
+
+sealed class PropertyStressResource(string name) : Resource(name)
 {
 }

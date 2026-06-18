@@ -87,6 +87,126 @@
         <target state="translated">Modul runtime kontejneru</target>
         <note />
       </trans-unit>
+      <trans-unit id="DcpApiServerReturnedHttpStatusMessageFormat">
+        <source>Developer Control Plane (DCP) API server returned HTTP {0} ({1}).</source>
+        <target state="new">Developer Control Plane (DCP) API server returned HTTP {0} ({1}).</target>
+        <note>{0} is the numeric HTTP status code. {1} is the HTTP status code name.</note>
+      </trans-unit>
+      <trans-unit id="DcpBundleNotFoundDetails">
+        <source>The running Aspire CLI is not associated with a bundle layout that contains the Developer Control Plane (DCP).</source>
+        <target state="new">The running Aspire CLI is not associated with a bundle layout that contains the Developer Control Plane (DCP).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpBundleNotFoundMessage">
+        <source>Developer Control Plane (DCP) bundle not found; skipping connection health checks</source>
+        <target state="new">Developer Control Plane (DCP) bundle not found; skipping connection health checks</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpConnectionCheckFailedMessage">
+        <source>Failed to check Developer Control Plane (DCP) connection health</source>
+        <target state="new">Failed to check Developer Control Plane (DCP) connection health</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpConnectionSucceededMessage">
+        <source>Developer Control Plane (DCP) connection health checks succeeded</source>
+        <target state="new">Developer Control Plane (DCP) connection health checks succeeded</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpConnectionTimedOutMessageFormat">
+        <source>Timed out after {0} seconds while checking Developer Control Plane (DCP) connection health.</source>
+        <target state="new">Timed out after {0} seconds while checking Developer Control Plane (DCP) connection health.</target>
+        <note>{0} is the timeout in seconds.</note>
+      </trans-unit>
+      <trans-unit id="DcpDeveloperCertificateConnectionFailedMessage">
+        <source>Developer Control Plane (DCP) connection using the developer certificate failed</source>
+        <target state="new">Developer Control Plane (DCP) connection using the developer certificate failed</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpDeveloperCertificateConnectionSucceededMessage">
+        <source>Developer Control Plane (DCP) connection using the developer certificate succeeded</source>
+        <target state="new">Developer Control Plane (DCP) connection using the developer certificate succeeded</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpDeveloperCertificateInvalidForCacheDetails">
+        <source>The developer certificate could not be cached because it was not valid.</source>
+        <target state="new">The developer certificate could not be cached because it was not valid.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpDeveloperCertificateMissingThumbprintDetails">
+        <source>The developer certificate did not have a thumbprint.</source>
+        <target state="new">The developer certificate did not have a thumbprint.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpDeveloperCertificateNoTrustedExportableDetails">
+        <source>No fully trusted exportable developer certificate with a private key was found.</source>
+        <target state="new">No fully trusted exportable developer certificate with a private key was found.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpDeveloperCertificateRepairTrustFix">
+        <source>Run `aspire certs trust` to repair developer certificate trust.</source>
+        <target state="new">Run `aspire certs trust` to repair developer certificate trust.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpDeveloperCertificateTrustFix">
+        <source>Run `aspire certs trust` to create and trust a developer certificate.</source>
+        <target state="new">Run `aspire certs trust` to create and trust a developer certificate.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpDeveloperCertificateUnavailableMessage">
+        <source>No trusted developer certificate was available for the Developer Control Plane (DCP) developer certificate connection check</source>
+        <target state="new">No trusted developer certificate was available for the Developer Control Plane (DCP) developer certificate connection check</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpDeveloperCertificateUserProfileMissingDetails">
+        <source>The developer certificate could not be cached because the user profile directory could not be determined.</source>
+        <target state="new">The developer certificate could not be cached because the user profile directory could not be determined.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpEphemeralCertificateConnectionFailedMessage">
+        <source>Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate failed</source>
+        <target state="new">Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate failed</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpEphemeralCertificateConnectionSucceededMessage">
+        <source>Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate succeeded</source>
+        <target state="new">Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate succeeded</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpExecutableNotFoundDetailsFormat">
+        <source>Expected Developer Control Plane (DCP) executable at '{0}'.</source>
+        <target state="new">Expected Developer Control Plane (DCP) executable at '{0}'.</target>
+        <note>{0} is the expected DCP executable path.</note>
+      </trans-unit>
+      <trans-unit id="DcpExecutableNotFoundMessage">
+        <source>Developer Control Plane (DCP) executable not found</source>
+        <target state="new">Developer Control Plane (DCP) executable not found</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpExitedBeforeKubeconfigDetailsFormat">
+        <source>Developer Control Plane (DCP) exited before writing kubeconfig. Exit code: {0}.{1}{2}</source>
+        <target state="new">Developer Control Plane (DCP) exited before writing kubeconfig. Exit code: {0}.{1}{2}</target>
+        <note>{0} is the DCP process exit code. {1} is a newline. {2} is recent DCP process output.</note>
+      </trans-unit>
+      <trans-unit id="DcpKubeconfigMissingServerDetails">
+        <source>Developer Control Plane (DCP) kubeconfig did not contain a valid server URI.</source>
+        <target state="new">Developer Control Plane (DCP) kubeconfig did not contain a valid server URI.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpNoOutputDetails">
+        <source>Developer Control Plane (DCP) did not write any output.</source>
+        <target state="new">Developer Control Plane (DCP) did not write any output.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpStartFailedMessage">
+        <source>Failed to start Developer Control Plane (DCP).</source>
+        <target state="new">Failed to start Developer Control Plane (DCP).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpTlsAuthenticationFailedDetailsFormat">
+        <source>TLS authentication failed: {0}</source>
+        <target state="new">TLS authentication failed: {0}</target>
+        <note>{0} is the TLS authentication error message.</note>
+      </trans-unit>
       <trans-unit id="Description">
         <source>Diagnose Aspire environment issues and verify setup</source>
         <target state="needs-review-translation">Diagnostikovat problémy s prostředím Aspire a ověřit nastavení</target>
@@ -211,6 +331,23 @@
         <source>Output format (Table or Json)</source>
         <target state="needs-review-translation">Výstup výsledků ve formátu JSON pro integraci nástrojů</target>
         <note />
+      </trans-unit>
+      <trans-unit id="LegacySettingsDetectedFix">
+        <source>Run 'aspire init' (or any aspire run/add/update/pipeline command) to migrate to aspire.config.json.
+The legacy file continues to work — this is a non-blocking warning.</source>
+        <target state="new">Run 'aspire init' (or any aspire run/add/update/pipeline command) to migrate to aspire.config.json.
+The legacy file continues to work — this is a non-blocking warning.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LegacySettingsDetectedMessageFormat">
+        <source>Legacy .aspire/settings.json detected at {0}</source>
+        <target state="new">Legacy .aspire/settings.json detected at {0}</target>
+        <note>{0} is the full path to the legacy settings file.</note>
+      </trans-unit>
+      <trans-unit id="OperatingSystemMessageFormat">
+        <source>Operating system: {0}</source>
+        <target state="new">Operating system: {0}</target>
+        <note>{0} is the operating system display name and version, for example "Windows 10.0.22631", "macOS 26.0", or "Linux Ubuntu 24.04".</note>
       </trans-unit>
       <trans-unit id="SdkCategoryHeader">
         <source>.NET SDK</source>

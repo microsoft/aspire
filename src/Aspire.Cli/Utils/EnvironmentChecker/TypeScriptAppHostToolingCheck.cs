@@ -9,6 +9,9 @@ namespace Aspire.Cli.Utils.EnvironmentChecker;
 
 internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
 {
+    internal const string YarnClassicCheckName = "typescript-apphost-yarn-classic";
+    internal const string ToolsCheckName = "typescript-apphost-tools";
+
     private readonly IProjectLocator _projectLocator;
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly CliExecutionContext _executionContext;
@@ -59,8 +62,8 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
             [
                 new EnvironmentCheckResult
                 {
-                    Category = "environment",
-                    Name = "typescript-apphost-yarn-classic",
+                    Category = EnvironmentCheckCategories.Environment,
+                    Name = YarnClassicCheckName,
                     Status = EnvironmentCheckStatus.Fail,
                     Message = "TypeScript AppHost does not support Yarn Classic.",
                     Details = ex.Message,
@@ -86,8 +89,8 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
 
             missingResults.Add(new EnvironmentCheckResult
             {
-                Category = "environment",
-                Name = $"typescript-apphost-{command}",
+                Category = EnvironmentCheckCategories.Environment,
+                Name = GetMissingCommandCheckName(command),
                 Status = EnvironmentCheckStatus.Fail,
                 Message = $"TypeScript AppHost requires '{command}'.",
                 Details = errorMessage,
@@ -111,8 +114,8 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
         [
             new EnvironmentCheckResult
             {
-                Category = "environment",
-                Name = "typescript-apphost-tools",
+                Category = EnvironmentCheckCategories.Environment,
+                Name = ToolsCheckName,
                 Status = EnvironmentCheckStatus.Pass,
                 Message = $"TypeScript AppHost tooling found ({string.Join(", ", TypeScriptAppHostToolchainResolver.GetRequiredCommands(toolchain))}).",
                 Metadata = new JsonObject
@@ -161,4 +164,6 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
             return null;
         }
     }
+
+    internal static string GetMissingCommandCheckName(string command) => $"typescript-apphost-{command}";
 }

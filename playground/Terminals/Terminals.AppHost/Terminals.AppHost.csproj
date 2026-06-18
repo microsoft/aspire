@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsAspireHost>true</IsAspireHost>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\KnownResourceNames.cs" Link="KnownResourceNames.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Terminals.Repl\Terminals.Repl.csproj" IsAspireProjectResource="true" />
+  </ItemGroup>
+
+  <!--
+    Inner-loop dev: build Aspire.TerminalHost alongside the AppHost and stamp
+    AspireTerminalHostPath as an assembly metadata attribute so DcpOptions'
+    runtime resolver finds the binary without requiring ASPIRE_TERMINAL_HOST_PATH
+    or DcpPublisher:TerminalHostPath to be set by hand. Mirrors how
+    SkipDashboardProjectReference works for Aspire.Dashboard. The reference is
+    output-only (ReferenceOutputAssembly=false) because the AppHost does not
+    link against the terminal host - DCP spawns it as a separate process.
+    Skipped on CI / out-of-repo for the same reasons the dashboard reference is.
+  -->
+  <PropertyGroup>
+    <SkipTerminalHostProjectReference Condition=" '$(SkipTerminalHostProjectReference)' == '' and ('$(RepoRoot)' == '' or '$(ContinuousIntegrationBuild)' == 'true') ">true</SkipTerminalHostProjectReference>
+    <_TerminalHostOutputDir Condition=" '$(SkipTerminalHostProjectReference)' != 'true' ">$(ArtifactsBinDir)Aspire.TerminalHost\$(Configuration)\$(DefaultTargetFramework)\</_TerminalHostOutputDir>
+    <AspireTerminalHostPath Condition=" '$(SkipTerminalHostProjectReference)' != 'true' and '$(OS)' == 'Windows_NT' ">$(_TerminalHostOutputDir)Aspire.TerminalHost.exe</AspireTerminalHostPath>
+    <AspireTerminalHostPath Condition=" '$(SkipTerminalHostProjectReference)' != 'true' and '$(OS)' != 'Windows_NT' ">$(_TerminalHostOutputDir)Aspire.TerminalHost</AspireTerminalHostPath>
+  </PropertyGroup>
+
+  <ItemGroup Condition=" '$(SkipTerminalHostProjectReference)' != 'true' ">
+    <ProjectReference Include="$(RepoRoot)src\Aspire.TerminalHost\Aspire.TerminalHost.csproj"
+                      ReferenceOutputAssembly="false"
+                      Private="false"
+                      SkipGetTargetFrameworkProperties="true"
+                      UndefineProperties="TargetFramework;RuntimeIdentifier;PlatformTarget;SelfContained" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
+  </ItemGroup>
+
+</Project>

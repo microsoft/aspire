@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Globalization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Diagnostics;
@@ -149,6 +150,35 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
         Assert.Contains(RunCommandStrings.StartingAppHostInBackground, harness.InteractionService.DynamicStatusTexts);
         Assert.Empty(harness.InteractionService.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task LaunchDetachedAsync_DeletesDeadPidSocketBeforeStartingChildProcess()
+    {
+        using var harness = AppHostLauncherHarness.Create(outputHelper);
+        var socketPath = harness.CreateMatchingSocketFile(int.MaxValue - 1);
+        harness.AddConnection(new TestAppHostAuxiliaryBackchannel
+        {
+            SupportsV3 = true,
+            DashboardUrlsState = new DashboardUrlsState { BaseUrlWithLoginToken = "https://localhost:18888/login?t=test" },
+            WaitForAppHostReadyHandler = _ => Task.FromResult<WaitForAppHostReadyResponse?>(new WaitForAppHostReadyResponse { IsReady = true })
+        });
+        harness.ProcessLauncher.Mode = TestDetachedProcessLauncher.ChildProcessMode.StayAlive;
+
+        var result = await harness.Launcher.LaunchDetachedAsync(
+            harness.AppHostFile,
+            format: null,
+            isolated: false,
+            isExtensionHost: false,
+            waitForDebugger: false,
+            timeoutSeconds: 120,
+            globalArgs: [],
+            additionalArgs: [],
+            stopAfterLaunchDelay: null,
+            CancellationToken.None);
+
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
+        Assert.False(File.Exists(socketPath));
     }
 
     [Fact]
@@ -692,6 +722,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 sdkDirectory,
                 logsDirectory,
                 Path.Combine(logsDirectory.FullName, "parent.log"),
+                identityChannel: "local",
                 homeDirectory: homeDirectory);
             var interactionService = new TestInteractionService();
             var monitor = new TestAuxiliaryBackchannelMonitor();
@@ -742,6 +773,20 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             };
 
             Monitor.AddConnection(hash, $"{socketPrefix}.sock", connection);
+        }
+
+        public string CreateMatchingSocketFile(int pid)
+        {
+            var backchannelsDir = Path.Combine(_homeDirectory.FullName, ".aspire", "cli", "bch");
+            Directory.CreateDirectory(backchannelsDir);
+
+            var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(AppHostFile.FullName, _homeDirectory.FullName);
+            var appHostId = Path.GetFileName(prefix);
+            var socketPath = Path.Combine(
+                backchannelsDir,
+                $"{appHostId}a1b2C3d4.{pid.ToString(CultureInfo.InvariantCulture)}");
+            File.WriteAllText(socketPath, "");
+            return socketPath;
         }
 
         public void Dispose()

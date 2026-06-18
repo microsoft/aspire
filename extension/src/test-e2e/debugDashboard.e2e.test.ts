@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getCommandInvocationCount, getTreeAppHostLabel, waitForAppHostLaunching, waitForCommandOutcome, waitForDebugConsoleOutput, waitForDebugDashboardUrl, waitForDebugSessionStartup, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForWorkspaceAppHost } from './helpers/assertions';
-import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setShowStatusDelayForE2E, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
+import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setShowStatusDelayForE2E, stopPrimaryAppHostIfRunning, writeFileWithRetry } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { openAspireView, waitForEditorTitle, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
 
@@ -59,7 +59,7 @@ suite('Aspire debug dashboard E2E', function () {
         await waitForNoDebugSessions();
     });
 
-    test('keeps AppHost build diagnostics in the debug console when the CLI exits after a build failure', async function () {
+    test('surfaces AppHost build failure logs in the debug console when the CLI exits after a build failure', async function () {
         if (process.env.ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS === 'true') {
             return;
         }
@@ -76,21 +76,24 @@ suite('Aspire debug dashboard E2E', function () {
                 'builder.Build().Run();',
                 '__AspireE2EFlushRegressionMissingSymbol__();\n\nbuilder.Build().Run();');
             assert.notStrictEqual(brokenSource, originalSource, 'Expected AppHost fixture to contain builder.Build().Run().');
-            fs.writeFileSync(appHostSourcePath, brokenSource);
+            writeFileWithRetry(appHostSourcePath, brokenSource);
             await setShowStatusDelayForE2E(2500);
 
             const before = getCommandInvocationCount('aspire-vscode.debugAppHost');
             await executeE2eControlCommand({ name: 'debugAppHost', appHostPath }, { waitFor: 'started' });
             await waitForCommandOutcome('aspire-vscode.debugAppHost', 'success', 60000, before);
-            await waitForDebugConsoleOutput('__AspireE2EFlushRegressionMissingSymbol__', appHostPath, 120000);
+            await waitForDebugConsoleOutput("__AspireE2EFlushRegressionMissingSymbol__' does not exist", appHostPath, 120000);
+            await waitForDebugConsoleOutput('The project could not be built', appHostPath, 120000);
             const logOutput = await waitForDebugConsoleOutput('See logs at', appHostPath, 120000);
             assert.ok(!logOutput.output.includes('\u001b]8;'), `Expected debug console log output to omit terminal hyperlinks: ${JSON.stringify(logOutput.output)}`);
         }
         finally {
-            await setShowStatusDelayForE2E(undefined);
-            fs.writeFileSync(appHostSourcePath, originalSource);
-            await executeE2eControlCommand({ name: 'stopDebugging' });
-            await waitForNoDebugSessions().catch(() => undefined);
+            await runE2eTeardown([
+                () => setShowStatusDelayForE2E(undefined),
+                () => writeFileWithRetry(appHostSourcePath, originalSource),
+                () => executeE2eControlCommand({ name: 'stopDebugging' }),
+                () => waitForNoDebugSessions().catch(() => undefined),
+            ], 'Debug dashboard build failure cleanup failed.');
         }
     });
 });

@@ -130,4 +130,17 @@ public class AspireSqlServerSqlClientExtensionsTests
         Assert.Contains("fake2", connection2.ConnectionString);
         Assert.Contains("fake3", connection3.ConnectionString);
     }
+
+    // Regression guard: SqlClient 7.0 moved the Entra ID (Active Directory) auth providers into
+    // Microsoft.Data.SqlClient.Extensions.Azure. This integration references that package, so they must resolve here;
+    // otherwise the Authentication="Active Directory Default" connection strings Aspire emits fail at runtime.
+    [Theory]
+    [InlineData(SqlAuthenticationMethod.ActiveDirectoryDefault)]
+    [InlineData(SqlAuthenticationMethod.ActiveDirectoryManagedIdentity)]
+    public void EntraIdAuthenticationProviderIsRegistered(SqlAuthenticationMethod method)
+    {
+        var provider = SqlAuthenticationProvider.GetProvider(method);
+
+        Assert.NotNull(provider);
+    }
 }
