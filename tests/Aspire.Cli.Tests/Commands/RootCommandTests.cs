@@ -98,7 +98,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     [InlineData("daily", "13.5.0-preview.1.26318.1", null, "13.5.0-preview.1.26318.1")]
     [InlineData("staging", "13.4.0-preview.1.26280.6", "abcdef01", "13.4.0-preview.1.26280.6+abcdef01")]
     [InlineData("staging", "13.4.0", "abcdef01", "13.4.0+abcdef01")]
-    [InlineData("stable", "13.4.3", null, "13.4.3")]
+    [InlineData("stable", "13.4.5", "73114e86c64aeb9f3f3c7da8e37df1ae4281b27e", "13.4.5+73114e86c64aeb9f3f3c7da8e37df1ae4281b27e")]
     [InlineData("local", "13.5.0-dev", "localcommit123", "13.5.0-dev+localcommit123")]
     [InlineData("local", "13.5.0-dev", null, "13.5.0-dev")]
     public async Task RootCommandVersion_ProducesCorrectOutput_AcrossBuildStages(
