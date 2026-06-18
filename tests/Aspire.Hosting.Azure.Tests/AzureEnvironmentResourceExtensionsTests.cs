@@ -18,7 +18,10 @@ using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Tests;
 using Azure;
 using Azure.Core;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -505,7 +508,7 @@ public class AzureEnvironmentResourceExtensionsTests
         AddTestAzureProvisioning(builder, bicepProvisioner: cachedStateProvisioner);
 
         var storage = builder.AddAzureStorage("storage");
-        var blobs = storage.AddBlobs("blobs");
+        storage.AddBlobs("blobs");
 
         using var app = builder.Build();
 
