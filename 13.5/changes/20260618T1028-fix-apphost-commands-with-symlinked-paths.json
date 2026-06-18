@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "aspire describe --apphost and other commands that accept --apphost now correctly resolve symlinked paths when locating the running AppHost backchannel socket, preventing spurious \"No AppHost is currently running\" errors on macOS (/tmp → /private/tmp) and other systems with symlinked workspaces.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔗",
+  "firstMergedAt": "2026-06-18T10:28:57Z",
+  "lastMergedAt": "2026-06-18T10:28:57Z",
+  "name": "Fix --apphost commands with symlinked paths",
+  "owner": "mitchdenny",
+  "prs": [
+    18298
+  ]
+}

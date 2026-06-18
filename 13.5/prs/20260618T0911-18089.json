@@ -1,0 +1,9 @@
+{
+  "author": "shauryalowkeygotaura",
+  "comment": "Security/bug fix: secret parameter values exposed in plaintext via backchannel. Community contribution.",
+  "mergedAt": "2026-06-18T09:11:00Z",
+  "number": 18089,
+  "runDate": "2026-06-18T13:05:24Z",
+  "status": "included",
+  "title": "Redact secret parameter values from environment variables sent over the backchannel"
+}

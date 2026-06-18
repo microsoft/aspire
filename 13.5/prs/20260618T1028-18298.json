@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Bug fix: --apphost commands fail to locate socket when path traverses symlinks (e.g. /tmp on macOS).",
+  "mergedAt": "2026-06-18T10:28:57Z",
+  "number": 18298,
+  "runDate": "2026-06-18T13:05:24Z",
+  "status": "included",
+  "title": "Resolve symlinks when matching AppHost socket for --apphost (#17618)"
+}
