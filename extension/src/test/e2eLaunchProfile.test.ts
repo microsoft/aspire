@@ -339,17 +339,20 @@ suite('E2E launch profile', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
         const stopAppHostStart = fixtures.indexOf('export async function stopAppHostIfRunning');
-        const stopAppHostEnd = fixtures.indexOf('async function waitForRunningAppHostProcessExitFromState');
+        const stopAppHostEnd = fixtures.indexOf('interface PsAppHost');
         assert.ok(stopAppHostStart >= 0);
         assert.ok(stopAppHostEnd > stopAppHostStart);
         const stopAppHost = fixtures.slice(stopAppHostStart, stopAppHostEnd);
 
-        assert.ok(stopAppHost.includes('await waitForRunningAppHostProcessExitFromState(appHostPath, 5000).catch(() => undefined);'));
+        assert.ok(stopAppHost.includes('const runningAppHostBeforeStop = getRunningAppHostFromState(appHostPath);'));
+        assert.ok(stopAppHost.includes('await waitForNoRunningAppHostPath(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid);'));
         assert.ok(stopAppHost.includes('const runningAppHost = await getRunningAppHostAccordingToCli(appHostPath);'));
         assert.ok(stopAppHost.includes('await waitForProcessExit(runningAppHost.appHostPid, 30000);'));
         assert.ok(stopAppHost.includes('if (!await getRunningAppHostAccordingToCli(appHostPath))'));
         assert.ok(fixtures.includes("['ps', '--format', 'json']"));
         assert.ok(fixtures.includes('Number.isInteger(candidate.appHostPid)'));
+        assert.ok(fixtures.includes('let lastKnownAppHostPid = knownAppHostPid;'));
+        assert.ok(fixtures.includes('lastKnownAppHostPid = runningAppHost.appHostPid;'));
         assert.ok(!fixtures.includes('terminateProcessTree(runningAppHost.appHostPid'));
         assert.ok(fixtures.includes('async function waitForProcessExit(pid: number, timeoutMs: number): Promise<void>'));
         assert.ok(fixtures.includes('process.kill(pid, 0);'));
