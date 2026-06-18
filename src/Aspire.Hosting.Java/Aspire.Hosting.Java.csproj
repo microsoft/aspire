@@ -15,5 +15,9 @@
   <ItemGroup>
     <PackageReference Include="System.Security.Cryptography.Pkcs" />
   </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.Hosting.Java.Tests" />
+  </ItemGroup>
   
 </Project>

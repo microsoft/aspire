@@ -519,6 +519,7 @@
     <Project Path="tests/Aspire.Hosting.MySql.Tests/Aspire.Hosting.MySql.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Nats.Tests/Aspire.Hosting.Nats.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Go.Tests/Aspire.Hosting.Go.Tests.csproj" />
+    <Project Path="tests/Aspire.Hosting.Java.Tests/Aspire.Hosting.Java.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.JavaScript.Tests/Aspire.Hosting.JavaScript.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.OpenAI.Tests/Aspire.Hosting.OpenAI.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Oracle.Tests/Aspire.Hosting.Oracle.Tests.csproj" />

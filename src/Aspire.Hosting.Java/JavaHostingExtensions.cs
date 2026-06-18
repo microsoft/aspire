@@ -22,8 +22,8 @@ namespace Aspire.Hosting;
 public static class JavaHostingExtensions
 {
     private const string JavaToolOptions = "JAVA_TOOL_OPTIONS";
-    private static readonly string DefaultMavenWrapper = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "mvnw.cmd" : "mvnw";
-    private static readonly string DefaultGradleWrapper = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "gradlew.bat" : "gradlew";
+    internal static readonly string DefaultMavenWrapper = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "mvnw.cmd" : "mvnw";
+    internal static readonly string DefaultGradleWrapper = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "gradlew.bat" : "gradlew";
 
     /// <summary>
     /// Adds a Java application to the application model. Executes the executable Java app.
