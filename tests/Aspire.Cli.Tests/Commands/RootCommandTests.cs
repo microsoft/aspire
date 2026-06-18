@@ -101,6 +101,10 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     [InlineData("stable", "13.4.5", "73114e86c64aeb9f3f3c7da8e37df1ae4281b27e", "13.4.5+73114e86c64aeb9f3f3c7da8e37df1ae4281b27e")]
     [InlineData("local", "13.5.0-dev", "localcommit123", "13.5.0-dev+localcommit123")]
     [InlineData("local", "13.5.0-dev", null, "13.5.0-dev")]
+    // IdentityVersion may already carry a "+<sha>" build-metadata suffix (e.g. ASPIRE_CLI_VERSION
+    // set to a full informational version). The output must keep a single "+" and never double it.
+    [InlineData("stable", "13.4.5+73114e86", "73114e86", "13.4.5+73114e86")]
+    [InlineData("stable", "13.4.5+73114e86", null, "13.4.5+73114e86")]
     public async Task RootCommandVersion_ProducesCorrectOutput_AcrossBuildStages(
         string channel,
         string version,
