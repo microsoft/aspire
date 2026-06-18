@@ -15,6 +15,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Hosting;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -780,7 +781,8 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             var backchannelsDir = Path.Combine(_homeDirectory.FullName, ".aspire", "cli", "bch");
             Directory.CreateDirectory(backchannelsDir);
 
-            var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(AppHostFile.FullName, _homeDirectory.FullName);
+            var resolvedAppHostPath = PathNormalizer.ResolveSymlinks(AppHostFile.FullName);
+            var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(resolvedAppHostPath, _homeDirectory.FullName);
             var appHostId = Path.GetFileName(prefix);
             var socketPath = Path.Combine(
                 backchannelsDir,

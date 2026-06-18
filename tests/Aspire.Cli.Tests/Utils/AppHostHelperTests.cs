@@ -5,6 +5,7 @@ using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Utils;
 using Aspire.Hosting.Backchannel;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Utils;
@@ -401,6 +402,37 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         Assert.False(File.Exists(orphanedSocket));
         Assert.True(File.Exists(liveSocket));
         Assert.True(File.Exists(pidlessSocket));
+    }
+
+    [Fact]
+    public void FindMatchingNonOrphanedSockets_WithSymlinkedPath_MatchesCanonicalSocket()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
+            "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var realDirectory = workspace.WorkspaceRoot.CreateSubdirectory("real");
+        var symlinkDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "link");
+        Directory.CreateSymbolicLink(symlinkDirectory, realDirectory.FullName);
+
+        var projectFileViaSymlink = Path.Combine(symlinkDirectory, "TestAppHost.csproj");
+        File.WriteAllText(projectFileViaSymlink, "<Project />");
+
+        var canonicalProjectPath = PathNormalizer.ResolveSymlinks(projectFileViaSymlink);
+        var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(canonicalProjectPath, workspace.WorkspaceRoot.FullName);
+        var appHostId = Path.GetFileName(prefix);
+        var currentPid = Environment.ProcessId;
+        var liveSocket = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cli", "bch", $"{appHostId}a1b2C3d4.{currentPid}");
+        Directory.CreateDirectory(Path.GetDirectoryName(liveSocket)!);
+        File.WriteAllText(liveSocket, "");
+
+        var remainingSockets = AppHostHelper.FindMatchingNonOrphanedSockets(
+            projectFileViaSymlink,
+            workspace.WorkspaceRoot.FullName,
+            currentPid,
+            NullLogger.Instance);
+
+        Assert.Collection(remainingSockets, socket => Assert.Equal(liveSocket, socket));
     }
 
     [Theory]

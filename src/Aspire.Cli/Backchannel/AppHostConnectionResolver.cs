@@ -8,9 +8,9 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
-using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
+
 namespace Aspire.Cli.Backchannel;
 
 /// <summary>
@@ -135,18 +135,8 @@ internal sealed class AppHostConnectionResolver(
                 };
             }
 
-            // Resolve symlinks before computing the backchannel socket key so the lookup
-            // matches the path the running AppHost used. A running AppHost keys its socket
-            // off Path.GetFullPath(appHostPath) evaluated against its own process working
-            // directory, which the OS already reports in physical (symlink-resolved) form
-            // (getcwd canonicalizes, e.g. /tmp -> /private/tmp on macOS). The producer side
-            // therefore hashes the canonical path, so the consumer must resolve symlinks too.
-            // ResolveToFilesystemPath only fixes Windows casing and is a no-op on Linux/macOS,
-            // so it cannot bridge the /tmp -> /private/tmp gap; ResolveSymlinks does.
-            // See https://github.com/microsoft/aspire/issues/17618.
-            var socketLookupPath = PathNormalizer.ResolveSymlinks(projectFile.FullName);
             var matchingSockets = AppHostHelper.FindMatchingNonOrphanedSockets(
-                socketLookupPath,
+                projectFile.FullName,
                 executionContext.HomeDirectory.FullName,
                 Environment.ProcessId,
                 logger);
