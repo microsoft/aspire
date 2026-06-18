@@ -903,7 +903,10 @@ async function executeE2eControlCommand(
     }
     case 'stopDebugging': {
       markStarted();
-      const runningAppHostPaths = appHostTreeProvider.appHosts.map(appHost => appHost.appHostPath);
+      const runningAppHostPaths = getUniqueAppHostPaths([
+        ...appHostTreeProvider.appHosts.map(appHost => appHost.appHostPath),
+        appHostTreeProvider.workspaceAppHost?.appHostPath,
+      ]);
       await vscode.debug.stopDebugging();
       for (const appHostPath of runningAppHostPaths) {
         appHostTreeProvider.notifyAppHostStopping(appHostPath);
@@ -1288,4 +1291,15 @@ function isSamePath(left: string, right: string): boolean {
   return process.platform === 'win32'
     ? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
     : normalizedLeft === normalizedRight;
+}
+
+function getUniqueAppHostPaths(paths: readonly (string | undefined)[]): string[] {
+  const result: string[] = [];
+  for (const candidate of paths) {
+    if (candidate && !result.some(existing => isSamePath(existing, candidate))) {
+      result.push(candidate);
+    }
+  }
+
+  return result;
 }

@@ -137,7 +137,6 @@ suite('Aspire debug dashboard E2E', function () {
         await waitForDebugSessionStartup(appHostPath);
         await waitForRunningAppHost();
 
-        const beforePublishLaunch = getCommandInvocationCount('aspire-vscode.publishAppHost');
         const beforeDebugLaunch = getDebugLaunchCount();
         await setShowStatusDelayForE2E(2500);
         try {
@@ -147,7 +146,7 @@ suite('Aspire debug dashboard E2E', function () {
                 `publish launch for AppHost '${appHostPath}'`,
                 30000,
                 beforeDebugLaunch);
-            await waitForCommandOutcome('aspire-vscode.publishAppHost', 'success', 60000, beforePublishLaunch);
+            await waitForDebugConsoleOutput('publish completed successfully', appHostPath, 120000);
             await waitForExtensionState(
                 file =>
                     file.state.debugSessions.length === 1 &&
