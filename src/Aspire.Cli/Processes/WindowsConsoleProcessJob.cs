@@ -11,7 +11,8 @@ namespace Aspire.Cli.Processes;
 /// <summary>
 /// Owns a Windows job object that is used as the crash-time safety net for interactive
 /// children spawned by <see cref="IsolatedProcess"/>. The job is created
-/// once per CLI process, registered as a singleton, and held for the CLI's entire lifetime.
+/// once per CLI process — on first isolated spawn via <see cref="Shared"/> — and held for
+/// the CLI's entire lifetime.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -41,8 +42,24 @@ namespace Aspire.Cli.Processes;
 [SupportedOSPlatform("windows")]
 internal sealed class WindowsConsoleProcessJob : IDisposable
 {
+    // The job is a process-wide singleton: its configuration never varies, and the OS closes
+    // the handle on process exit (firing KILL_ON_JOB_CLOSE on any still-assigned children).
+    // Created lazily on the first isolated spawn that needs it so non-Run invocations — and
+    // every non-Windows host — never allocate the kernel object. Threading a job instance
+    // through the spawn callers was the alternative; an on-demand singleton removes that
+    // plumbing because there is only ever one correct job to use.
+    private static readonly Lazy<WindowsConsoleProcessJob> s_shared = new(static () => new WindowsConsoleProcessJob());
+
     private readonly SafeFileHandle _jobHandle;
     private int _disposed;
+
+    /// <summary>
+    /// The process-wide job, created on first access. Callers on the isolated-console spawn
+    /// path use this instead of receiving a job instance, so they cannot forget to supply one.
+    /// Intentionally never disposed in production: the OS closes the handle at process exit,
+    /// which is exactly the crash-safety net we want.
+    /// </summary>
+    public static WindowsConsoleProcessJob Shared => s_shared.Value;
 
     public WindowsConsoleProcessJob()
     {

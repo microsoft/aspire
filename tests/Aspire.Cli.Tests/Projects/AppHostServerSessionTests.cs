@@ -585,8 +585,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             IReadOnlyDictionary<string, string>? environmentVariables = null,
             string[]? additionalArgs = null,
             bool debug = false,
-            bool isolateConsole = false,
-            WindowsConsoleProcessJob? consoleProcessJob = null)
+            bool isolateConsole = false)
         {
             ReceivedEnvironmentVariables = environmentVariables is null
                 ? null
@@ -630,8 +629,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             IReadOnlyDictionary<string, string>? environmentVariables = null,
             string[]? additionalArgs = null,
             bool debug = false,
-            bool isolateConsole = false,
-            WindowsConsoleProcessJob? consoleProcessJob = null)
+            bool isolateConsole = false)
         {
             // Use a cross-platform long-running command so the test exercises the kill path
             // rather than a quickly-exiting probe like `dotnet --version`.
@@ -679,8 +677,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             IReadOnlyDictionary<string, string>? environmentVariables = null,
             string[]? additionalArgs = null,
             bool debug = false,
-            bool isolateConsole = false,
-            WindowsConsoleProcessJob? consoleProcessJob = null) =>
+            bool isolateConsole = false) =>
             throw new InvalidOperationException("simulated launch failure");
 
         public void Dispose() => Disposed = true;

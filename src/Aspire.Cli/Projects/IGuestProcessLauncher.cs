@@ -18,7 +18,7 @@ namespace Aspire.Cli.Projects;
 /// When <see langword="true"/>, spawn the guest via
 /// <see cref="IsolatedProcess"/> so it lands in its own hidden console
 /// group. Required on Windows for the AttachConsole + GenerateConsoleCtrlEvent dance
-/// (executed by <see cref="DetachedAppHostShutdownService"/>) to target the guest
+/// (executed by <see cref="ProcessTreeGracefulShutdownService"/>) to target the guest
 /// without also signalling the CLI itself. No-op on Unix where SIGTERM is sufficient.
 /// </param>
 /// <param name="GracefulShutdownSignaler">
@@ -33,21 +33,10 @@ namespace Aspire.Cli.Projects;
 /// (which calls <see cref="GracefulShutdownService.Expire"/> via the cancellation manager)
 /// interrupts both immediately and the ladder escalates to <c>Kill(entireProcessTree: true)</c>.
 /// </param>
-/// <param name="ConsoleProcessJob">
-/// Windows-only crash-time safety net. When supplied (and
-/// <paramref name="IsolateConsoleForGracefulShutdown"/> is <see langword="true"/>), the
-/// guest process is atomically assigned to this kill-on-close job at spawn time so a CLI
-/// crash takes the guest with it instead of leaving an orphaned process in its own console
-/// group. <see langword="null"/> on non-Windows hosts (Unix process-group semantics handle
-/// the equivalent case via normal signal delivery). DCP and other infrastructure that needs
-/// to outlive the CLI for its own cleanup is expected to use <c>CREATE_BREAKAWAY_FROM_JOB</c>
-/// to opt out of this kill.
-/// </param>
 internal sealed record GuestLaunchOptions(
     bool IsolateConsoleForGracefulShutdown = false,
     IProcessTreeGracefulShutdownSignaler? GracefulShutdownSignaler = null,
-    GracefulShutdownService? ShutdownService = null,
-    WindowsConsoleProcessJob? ConsoleProcessJob = null);
+    GracefulShutdownService? ShutdownService = null);
 
 /// <summary>
 /// Strategy for launching a guest language process.

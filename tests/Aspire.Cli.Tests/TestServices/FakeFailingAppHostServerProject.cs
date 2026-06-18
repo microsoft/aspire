@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Configuration;
-using Aspire.Cli.Processes;
 using Aspire.Cli.Projects;
 
 namespace Aspire.Cli.Tests.TestServices;
@@ -35,8 +34,7 @@ internal sealed class FakeFailingAppHostServerProject(string appDirectoryPath) :
         IReadOnlyDictionary<string, string>? environmentVariables = null,
         string[]? additionalArgs = null,
         bool debug = false,
-        bool isolateConsole = false,
-        WindowsConsoleProcessJob? consoleProcessJob = null) =>
+        bool isolateConsole = false) =>
         throw new NotSupportedException("Run should not be invoked when PrepareAsync fails.");
 
     public void Dispose()

@@ -128,12 +128,8 @@ internal interface IAppHostServerProject
     /// so DCP's <c>stop-process-tree</c> can <c>AttachConsole</c> + post <c>CTRL_C_EVENT</c>
     /// against the server without also signalling the CLI. On Unix the flag is observed but the
     /// resulting spawn is effectively the same as today's path (a thin <see cref="Process.Start(ProcessStartInfo)"/>
-    /// wrapper) because SIGTERM via the process group is enough. When <see langword="true"/> on
-    /// Windows, <paramref name="consoleProcessJob"/> must be non-null.
-    /// </param>
-    /// <param name="consoleProcessJob">
-    /// Windows-only kill-on-close safety net. Required when <paramref name="isolateConsole"/> is
-    /// <see langword="true"/> on Windows; ignored on Unix and on the non-isolated path.
+    /// wrapper) because SIGTERM via the process group is enough. On Windows the server is bound to
+    /// the process-wide <see cref="WindowsConsoleProcessJob"/> kill-on-close safety net.
     /// </param>
     /// <returns>The launched server process and its associated cleanup handle.</returns>
     AppHostServerRunResult Run(
@@ -141,8 +137,7 @@ internal interface IAppHostServerProject
         IReadOnlyDictionary<string, string>? environmentVariables = null,
         string[]? additionalArgs = null,
         bool debug = false,
-        bool isolateConsole = false,
-        WindowsConsoleProcessJob? consoleProcessJob = null);
+        bool isolateConsole = false);
 
     /// <summary>
     /// Gets a unique identifier path for this AppHost, used for running instance detection.

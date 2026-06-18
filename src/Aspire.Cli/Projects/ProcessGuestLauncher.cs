@@ -135,7 +135,6 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
 
                 var isolatedChild = IsolatedConsoleSpawner.StartIsolated(
                     startInfo,
-                    options.ConsoleProcessJob,
                     HandleStdoutLine,
                     HandleStderrLine);
                 process = isolatedChild.Process;

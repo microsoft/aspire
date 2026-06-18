@@ -17,17 +17,17 @@ internal static class IsolatedConsoleSpawner
     /// <summary>
     /// Spawns the process described by <paramref name="startInfo"/> into an isolated console
     /// group (new hidden console on Windows; effectively a thin <see cref="Process.Start(ProcessStartInfo)"/>
-    /// wrapper on Unix), optionally bound to the supplied Windows kill-on-close job.
+    /// wrapper on Unix), bound on Windows to the process-wide kill-on-close job.
     /// </summary>
     /// <remarks>
-    /// On Windows, throws <see cref="ArgumentNullException"/> if <paramref name="consoleProcessJob"/>
-    /// is <see langword="null"/>. Isolation without the kill-on-close job means the spawned process
-    /// can survive a CLI crash as an orphan in its new console group, defeating the entire point
-    /// of the safety net the new-console isolation is supposed to enable.
+    /// On Windows the spawned child is assigned to <see cref="WindowsConsoleProcessJob.Shared"/>
+    /// (created on first use). Without the kill-on-close job an isolated child could survive a
+    /// CLI crash as an orphan in its new console group, defeating the entire point of the safety
+    /// net the new-console isolation is supposed to enable — so the job is resolved here rather
+    /// than threaded in by callers, who cannot then forget to supply it.
     /// </remarks>
     public static IsolatedProcess StartIsolated(
         ProcessStartInfo startInfo,
-        WindowsConsoleProcessJob? consoleProcessJob,
         Action<int, string> standardOutputHandler,
         Action<int, string> standardErrorHandler)
     {
@@ -35,18 +35,11 @@ internal static class IsolatedConsoleSpawner
         ArgumentNullException.ThrowIfNull(standardOutputHandler);
         ArgumentNullException.ThrowIfNull(standardErrorHandler);
 
-        if (OperatingSystem.IsWindows() && consoleProcessJob is null)
-        {
-            throw new ArgumentNullException(
-                nameof(consoleProcessJob),
-                "consoleProcessJob is required when spawning into an isolated console on Windows so the spawned process is bound to the CLI's kill-on-close job.");
-        }
-
         var isolatedStartInfo = new IsolatedProcessStartInfo
         {
             FileName = startInfo.FileName,
             WorkingDirectory = startInfo.WorkingDirectory,
-            JobHandle = OperatingSystem.IsWindows() ? consoleProcessJob?.Handle : null,
+            JobHandle = OperatingSystem.IsWindows() ? WindowsConsoleProcessJob.Shared.Handle : null,
         };
 
         foreach (var arg in startInfo.ArgumentList)

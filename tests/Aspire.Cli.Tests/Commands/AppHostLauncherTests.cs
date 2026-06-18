@@ -718,12 +718,12 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             var monitor = new TestAuxiliaryBackchannelMonitor();
             var processLauncher = new TestDetachedProcessLauncher();
             var fileLoggerProvider = new FileLoggerProvider(executionContext.LogFilePath, new TestStartupErrorWriter());
-            var processShutdownService = new DetachedAppHostShutdownService(
+            var processShutdownService = new ProcessTreeGracefulShutdownService(
                 new FixedLayoutDiscovery(),
                 new NullBundleService(),
                 new LayoutProcessRunner(new TestProcessExecutionFactory()),
                 executionContext,
-                NullLogger<DetachedAppHostShutdownService>.Instance,
+                NullLogger<ProcessTreeGracefulShutdownService>.Instance,
                 TimeProvider.System);
             var launcher = new AppHostLauncher(
                 new TestProjectLocator(),

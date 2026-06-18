@@ -161,12 +161,12 @@ internal static class CliTestHelper
         services.AddSingleton(options.LayoutDiscoveryFactory);
         services.AddSingleton<IDetachedProcessLauncher, DefaultDetachedProcessLauncher>();
         services.AddTransient<LayoutProcessRunner>();
-        services.AddTransient<DetachedAppHostShutdownService>();
+        services.AddTransient<ProcessTreeGracefulShutdownService>();
         // Mirror Program.cs so consumers (e.g. GuestAppHostProject) that depend on the
-        // interface receive the same DetachedAppHostShutdownService instance the abstraction
+        // interface receive the same ProcessTreeGracefulShutdownService instance the abstraction
         // wraps. Without this, DI returns null and Run-path tests construct the project with
         // a missing dependency, masking wiring regressions.
-        services.AddTransient<IProcessTreeGracefulShutdownSignaler>(sp => sp.GetRequiredService<DetachedAppHostShutdownService>());
+        services.AddTransient<IProcessTreeGracefulShutdownSignaler>(sp => sp.GetRequiredService<ProcessTreeGracefulShutdownService>());
         // Match Program.Main's parameterless GracefulShutdownService + 5s finalDrainBudget for CCM
         // so tests exercise the same shutdown ladder budget as production. RunCommand and
         // GuestAppHostProject require these services in production wiring.

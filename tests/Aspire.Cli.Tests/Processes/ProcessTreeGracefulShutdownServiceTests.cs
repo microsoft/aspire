@@ -15,7 +15,7 @@ using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Cli.Tests.Processes;
 
-public class DetachedAppHostShutdownServiceTests(ITestOutputHelper outputHelper)
+public class ProcessTreeGracefulShutdownServiceTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task TryStopProcessTreeWithDcpAsync_UsesDcpStopProcessTreeArguments()
@@ -50,7 +50,7 @@ public class DetachedAppHostShutdownServiceTests(ITestOutputHelper outputHelper)
             "--pid",
             Environment.ProcessId.ToString(CultureInfo.InvariantCulture),
             "--process-start-time",
-            DetachedAppHostShutdownService.FormatDcpProcessStartTime(startTime)
+            ProcessTreeGracefulShutdownService.FormatDcpProcessStartTime(startTime)
         ], capturedArguments);
     }
 
@@ -143,7 +143,7 @@ public class DetachedAppHostShutdownServiceTests(ITestOutputHelper outputHelper)
         }
     }
 
-    private static DetachedAppHostShutdownService CreateService(
+    private static ProcessTreeGracefulShutdownService CreateService(
         TemporaryWorkspace workspace,
         string dcpDirectory,
         TestProcessExecutionFactory executionFactory,
@@ -159,12 +159,12 @@ public class DetachedAppHostShutdownServiceTests(ITestOutputHelper outputHelper)
             Path.Combine(workspace.WorkspaceRoot.FullName, "test.log"),
             identityChannel: "local");
 
-        return new DetachedAppHostShutdownService(
+        return new ProcessTreeGracefulShutdownService(
             new FixedLayoutDiscovery(dcpDirectory),
             bundleService ?? new NullBundleService(),
             new LayoutProcessRunner(executionFactory),
             executionContext,
-            NullLogger<DetachedAppHostShutdownService>.Instance,
+            NullLogger<ProcessTreeGracefulShutdownService>.Instance,
             timeProvider ?? TimeProvider.System);
     }
 

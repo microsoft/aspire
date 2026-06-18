@@ -45,7 +45,6 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     private readonly IConfigurationService _configurationService;
     private readonly GracefulShutdownService _shutdownService;
     private readonly IProcessTreeGracefulShutdownSignaler _gracefulShutdownSignaler;
-    private readonly WindowsConsoleProcessJob? _consoleProcessJob;
     private readonly CliExecutionContext _executionContext;
 
     private static readonly string[] s_detectionPatterns = ["*.csproj", "*.fsproj", "*.vbproj", "apphost.cs"];
@@ -79,7 +78,6 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         GracefulShutdownService shutdownService,
         IProcessTreeGracefulShutdownSignaler gracefulShutdownSignaler,
         CliExecutionContext executionContext,
-        WindowsConsoleProcessJob? consoleProcessJob = null,
         TimeProvider? timeProvider = null)
     {
         _runner = runner;
@@ -98,9 +96,6 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         _configurationService = configurationService;
         _shutdownService = shutdownService;
         _gracefulShutdownSignaler = gracefulShutdownSignaler;
-        // WindowsConsoleProcessJob is DI-registered Windows-only; null on non-Windows hosts.
-        // ProcessExecutionFactory enforces the Windows-requires-job invariant at spawn time.
-        _consoleProcessJob = consoleProcessJob;
         _executionContext = executionContext;
         _timeProvider = timeProvider ?? TimeProvider.System;
         _runningInstanceManager = new RunningInstanceManager(_logger, _interactionService, _timeProvider);
@@ -355,7 +350,6 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             // package add, layout, and other short-lived invocations leave these unset so
             // they continue to use today's ProcessTerminator force-kill behavior.
             IsolateConsole = true,
-            ConsoleProcessJob = _consoleProcessJob,
             GracefulShutdownSignaler = _gracefulShutdownSignaler,
             ShutdownService = _shutdownService,
         };

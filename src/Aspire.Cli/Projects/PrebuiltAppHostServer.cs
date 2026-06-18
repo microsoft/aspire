@@ -917,8 +917,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         IReadOnlyDictionary<string, string>? environmentVariables = null,
         string[]? additionalArgs = null,
         bool debug = false,
-        bool isolateConsole = false,
-        WindowsConsoleProcessJob? consoleProcessJob = null)
+        bool isolateConsole = false)
     {
         var startInfo = CreateStartInfo(hostPid, environmentVariables, additionalArgs, debug);
         var outputCollector = new OutputCollector();
@@ -952,7 +951,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
 
         if (isolateConsole)
         {
-            var isolated = IsolatedConsoleSpawner.StartIsolated(startInfo, consoleProcessJob, OnStdout, OnStderr);
+            var isolated = IsolatedConsoleSpawner.StartIsolated(startInfo, OnStdout, OnStderr);
             return new AppHostServerRunResult(
                 _socketPath,
                 isolated.Process,

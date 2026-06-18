@@ -72,20 +72,14 @@ internal sealed class ProcessInvocationOptions
     /// DCP's <c>stop-process-tree</c> CTRL+C dance.
     /// </summary>
     /// <remarks>
-    /// Pair with <see cref="ConsoleProcessJob"/> (Windows-only; pass the DI-registered
-    /// singleton), <see cref="GracefulShutdownSignaler"/> and <see cref="ShutdownService"/>.
-    /// Leaving any of those <c>null</c> means cancellation falls back to today's
+    /// Pair with <see cref="GracefulShutdownSignaler"/> and <see cref="ShutdownService"/>.
+    /// On Windows the spawned process is bound to the process-wide
+    /// <see cref="Processes.WindowsConsoleProcessJob"/> kill-on-close job automatically.
+    /// Leaving the signaler/service unset means cancellation falls back to today's
     /// <see cref="Processes.ProcessTerminator"/> force-kill behavior, preserving back-compat
     /// for the many non-Run callers (build, restore, package add, layout, etc.).
     /// </remarks>
     public bool IsolateConsole { get; set; }
-
-    /// <summary>
-    /// The CLI-lifetime Windows job object the spawned process should be assigned to when
-    /// <see cref="IsolateConsole"/> is <c>true</c> and the host OS is Windows. Required in that
-    /// configuration; ignored on non-Windows.
-    /// </summary>
-    public Processes.WindowsConsoleProcessJob? ConsoleProcessJob { get; set; }
 
     /// <summary>
     /// Issues the graceful shutdown signal during the shared shutdown ladder (DCP
@@ -320,7 +314,6 @@ internal sealed class DotNetCliRunner(
             // instead of the shared ProcessGracefulShutdownLadder. Build/restore/etc. callers
             // leave these unset and intentionally keep the legacy path.
             IsolateConsole = options.IsolateConsole,
-            ConsoleProcessJob = options.ConsoleProcessJob,
             GracefulShutdownSignaler = options.GracefulShutdownSignaler,
             ShutdownService = options.ShutdownService,
             StandardOutputCallback = line =>

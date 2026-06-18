@@ -1174,7 +1174,7 @@ public class GuestAppHostProjectTests : IDisposable
         // Construct real graceful-shutdown collaborators so the contract matches production:
         // GuestAppHostProject requires these services even when a test exits the Run path early
         // (e.g. via FailedToBuildArtifacts) without exercising them. A no-op signaler stands in
-        // for DetachedAppHostShutdownService because none of the tests in this fixture drive the
+        // for ProcessTreeGracefulShutdownService because none of the tests in this fixture drive the
         // launcher or AppHostServerSession code paths that would actually invoke it.
         var gracefulShutdownService = new GracefulShutdownService();
 

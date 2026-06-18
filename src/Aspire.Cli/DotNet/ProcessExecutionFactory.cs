@@ -86,26 +86,15 @@ internal sealed class ProcessExecutionFactory(
         ProcessInvocationOptions options,
         ILogger logger)
     {
-        // Fail fast on Windows + IsolateConsole without a job handle. Silently falling through
-        // would defeat the kill-on-close safety net that isolation is supposed to enable —
-        // exactly the same defense-in-depth check IsolatedConsoleSpawner already enforces.
-        if (OperatingSystem.IsWindows() && options.ConsoleProcessJob is null)
-        {
-            // Use a string literal instead of nameof(options.ConsoleProcessJob) so the analyzer
-            // is satisfied (CA2208 rejects a property path; the actual paramName here describes
-            // the missing option, not a method parameter).
-            throw new ArgumentNullException(
-                "options.ConsoleProcessJob",
-                "ConsoleProcessJob is required on Windows when IsolateConsole is true. Pass the DI-registered WindowsConsoleProcessJob singleton.");
-        }
-
         var startInfo = new IsolatedProcessStartInfo
         {
             FileName = fileName,
             WorkingDirectory = workingDirectory.FullName,
             // Only Windows uses the job handle — the Unix partial of IsolatedProcess ignores
-            // it because Unix process-group semantics + SIGTERM cover the orphan case.
-            JobHandle = OperatingSystem.IsWindows() ? options.ConsoleProcessJob?.Handle : null,
+            // it because Unix process-group semantics + SIGTERM cover the orphan case. The job
+            // is the process-wide kill-on-close singleton, created on demand the first time an
+            // isolated child needs it.
+            JobHandle = OperatingSystem.IsWindows() ? WindowsConsoleProcessJob.Shared.Handle : null,
         };
 
         foreach (var a in args)

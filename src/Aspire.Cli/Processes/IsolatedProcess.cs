@@ -42,9 +42,9 @@ internal sealed class IsolatedProcessStartInfo
     /// Windows-only crash-time safety net. When set, the spawned child is atomically
     /// assigned to this job object via the suspended-create / assign / resume dance in
     /// <see cref="WindowsProcessInterop.SpawnConsoleIsolatedProcess"/>. Set to
-    /// <see cref="WindowsConsoleProcessJob.Handle"/> from the DI singleton on Windows
-    /// hosts; <see langword="null"/> on non-Windows hosts (Unix process-group semantics
-    /// cover the equivalent case).
+    /// <see cref="WindowsConsoleProcessJob.Handle"/> from <see cref="WindowsConsoleProcessJob.Shared"/>
+    /// on Windows hosts; <see langword="null"/> on non-Windows hosts (Unix process-group
+    /// semantics cover the equivalent case).
     /// </summary>
     public SafeFileHandle? JobHandle { get; init; }
 

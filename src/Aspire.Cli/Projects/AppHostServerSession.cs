@@ -38,7 +38,6 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     private readonly IProcessTreeGracefulShutdownSignaler? _gracefulShutdownSignaler;
     private readonly GracefulShutdownService? _shutdownService;
     private readonly bool _isolateConsole;
-    private readonly WindowsConsoleProcessJob? _consoleProcessJob;
 
     private readonly object _startGate = new();
     private bool _startInvoked;
@@ -71,8 +70,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         ProfilingTelemetry? profilingTelemetry = null,
         IProcessTreeGracefulShutdownSignaler? gracefulShutdownSignaler = null,
         GracefulShutdownService? shutdownService = null,
-        bool isolateConsole = false,
-        WindowsConsoleProcessJob? consoleProcessJob = null)
+        bool isolateConsole = false)
     {
         _project = project ?? throw new ArgumentNullException(nameof(project));
         _callerEnvironmentVariables = environmentVariables;
@@ -84,18 +82,6 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         _gracefulShutdownSignaler = gracefulShutdownSignaler;
         _shutdownService = shutdownService;
         _isolateConsole = isolateConsole;
-        _consoleProcessJob = consoleProcessJob;
-
-        // Fail fast on misconfigured isolation: on Windows the kill-on-close job is the safety
-        // net that ensures the AppHost server doesn't outlive a CLI crash as an orphan in its
-        // new console group. Without the job the new-console isolation is a downgrade, not a
-        // safety net. Mirrored in IsolatedConsoleSpawner as defense-in-depth.
-        if (isolateConsole && OperatingSystem.IsWindows() && consoleProcessJob is null)
-        {
-            throw new ArgumentNullException(
-                nameof(consoleProcessJob),
-                "consoleProcessJob is required when isolateConsole is true on Windows.");
-        }
 
         // Linked CTS so caller-initiated cancellation AND DisposeAsync both flow through the
         // same stop trigger. The registered callback on _stopCts.Token (wired in StartAsync) is
@@ -234,8 +220,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
                     Environment.ProcessId,
                     serverEnvironmentVariables,
                     debug: _debug,
-                    isolateConsole: _isolateConsole,
-                    consoleProcessJob: _consoleProcessJob);
+                    isolateConsole: _isolateConsole);
             }
             catch (Exception ex)
             {

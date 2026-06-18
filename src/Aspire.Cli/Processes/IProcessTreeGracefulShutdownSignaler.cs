@@ -12,7 +12,7 @@ namespace Aspire.Cli.Processes;
 /// </summary>
 /// <remarks>
 /// Existence as an interface (rather than a direct dependency on
-/// <see cref="DetachedAppHostShutdownService"/>) keeps the in-process Run shutdown ladders
+/// <see cref="ProcessTreeGracefulShutdownService"/>) keeps the in-process Run shutdown ladders
 /// testable: tests can inject a fake that simulates "signal failed," "signal returned false,"
 /// or "signal was issued and observed by a fake process" without needing real DCP layout
 /// discovery or platform-specific signal plumbing.

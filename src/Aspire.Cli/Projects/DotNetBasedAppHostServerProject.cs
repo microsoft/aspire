@@ -469,8 +469,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         IReadOnlyDictionary<string, string>? environmentVariables = null,
         string[]? additionalArgs = null,
         bool debug = false,
-        bool isolateConsole = false,
-        WindowsConsoleProcessJob? consoleProcessJob = null)
+        bool isolateConsole = false)
     {
         var assemblyPath = Path.Combine(BuildPath, ProjectDllName);
         var dotnetExe = OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet";
@@ -560,7 +559,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
 
         if (isolateConsole)
         {
-            var isolated = IsolatedConsoleSpawner.StartIsolated(startInfo, consoleProcessJob, OnStdout, OnStderr);
+            var isolated = IsolatedConsoleSpawner.StartIsolated(startInfo, OnStdout, OnStderr);
             return new AppHostServerRunResult(
                 _socketPath,
                 isolated.Process,

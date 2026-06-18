@@ -50,7 +50,6 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     private readonly ProfilingTelemetry _profilingTelemetry;
     private readonly IProcessTreeGracefulShutdownSignaler _gracefulShutdownSignaler;
     private readonly GracefulShutdownService _shutdownService;
-    private readonly WindowsConsoleProcessJob? _consoleProcessJob;
     private readonly AppHostServerCodegenSessionFactory _codegenSessionFactory;
 
     // Language is always resolved via constructor
@@ -75,7 +74,6 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         IProcessTreeGracefulShutdownSignaler gracefulShutdownSignaler,
         GracefulShutdownService shutdownService,
         TimeProvider? timeProvider = null,
-        WindowsConsoleProcessJob? consoleProcessJob = null,
         AppHostServerCodegenSessionFactory? codegenSessionFactory = null)
     {
         _resolvedLanguage = language;
@@ -96,7 +94,6 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         _runningInstanceManager = new RunningInstanceManager(_logger, _interactionService, _timeProvider);
         _gracefulShutdownSignaler = gracefulShutdownSignaler;
         _shutdownService = shutdownService;
-        _consoleProcessJob = consoleProcessJob;
 
         // Default to constructing a real session for code generation. This uses the simple
         // construction (no graceful-shutdown parameters) because the codegen session is transient:
@@ -496,8 +493,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 _profilingTelemetry,
                 gracefulShutdownSignaler: _gracefulShutdownSignaler,
                 shutdownService: _shutdownService,
-                isolateConsole: true,
-                consoleProcessJob: _consoleProcessJob);
+                isolateConsole: true);
             Task<int> serverCompletion;
             IAppHostRpcClient rpcClient;
             using (_profilingTelemetry.StartRunAppHostStartAppHostServer())
@@ -686,8 +682,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 var guestLaunchOptions = new GuestLaunchOptions(
                     IsolateConsoleForGracefulShutdown: true,
                     GracefulShutdownSignaler: _gracefulShutdownSignaler,
-                    ShutdownService: _shutdownService,
-                    ConsoleProcessJob: _consoleProcessJob);
+                    ShutdownService: _shutdownService);
                 (guestExitCode, guestOutput) = await ExecuteGuestAppHostAsync(
                     appHostFile, directory, environmentVariables, enableHotReload, context.NoBuild, rpcClient, launcher, StartBackchannelConnectionAfterGuestAppHostLaunchesAsync, appHostSystemToken, guestLaunchOptions);
             }

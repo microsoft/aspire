@@ -11,14 +11,16 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.Cli.Processes;
 
 /// <summary>
-/// Coordinates graceful process shutdown requests, termination monitoring, and force-kill fallback.
+/// Coordinates graceful process-tree shutdown requests, termination monitoring, and force-kill
+/// fallback. Shared by both the detached <c>aspire stop</c> path and the in-process <c>aspire run</c>
+/// shutdown ladders, the latter reaching it through <see cref="IProcessTreeGracefulShutdownSignaler"/>.
 /// </summary>
-internal sealed class DetachedAppHostShutdownService(
+internal sealed class ProcessTreeGracefulShutdownService(
     ILayoutDiscovery layoutDiscovery,
     IBundleService bundleService,
     LayoutProcessRunner layoutProcessRunner,
     CliExecutionContext executionContext,
-    ILogger<DetachedAppHostShutdownService> logger,
+    ILogger<ProcessTreeGracefulShutdownService> logger,
     TimeProvider timeProvider) : IProcessTreeGracefulShutdownSignaler
 {
     private static readonly TimeSpan s_processTerminationTimeout = TimeSpan.FromSeconds(10);

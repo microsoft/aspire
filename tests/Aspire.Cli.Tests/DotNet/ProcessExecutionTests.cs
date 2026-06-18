@@ -410,71 +410,21 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         GracefulShutdownService shutdownService)
     {
         var factory = new ProcessExecutionFactory(NullLogger<ProcessExecutionFactory>.Instance);
-        WindowsConsoleProcessJob? consoleProcessJob = null;
+        var startInfo = CreateStartInfo(scriptFile);
 
-        if (OperatingSystem.IsWindows() && isolateConsole)
-        {
-            consoleProcessJob = new WindowsConsoleProcessJob();
-        }
-
-        try
-        {
-            var startInfo = CreateStartInfo(scriptFile);
-            return new ProcessExecutionWithJob(
-                factory.CreateExecution(
-                    startInfo.FileName,
-                    startInfo.ArgumentList.ToArray(),
-                    env: null,
-                    new DirectoryInfo(startInfo.WorkingDirectory),
-                    new ProcessInvocationOptions
-                    {
-                        IsolateConsole = isolateConsole,
-                        ConsoleProcessJob = consoleProcessJob,
-                        GracefulShutdownSignaler = signaler,
-                        ShutdownService = shutdownService
-                    }),
-                consoleProcessJob);
-        }
-        catch
-        {
-            DisposeConsoleProcessJob(consoleProcessJob);
-            throw;
-        }
-    }
-
-    private static void DisposeConsoleProcessJob(WindowsConsoleProcessJob? consoleProcessJob)
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            consoleProcessJob?.Dispose();
-        }
-    }
-
-    private sealed class ProcessExecutionWithJob(IProcessExecution inner, WindowsConsoleProcessJob? consoleProcessJob) : IProcessExecution
-    {
-        public string FileName => inner.FileName;
-
-        public IReadOnlyList<string> Arguments => inner.Arguments;
-
-        public IReadOnlyDictionary<string, string?> EnvironmentVariables => inner.EnvironmentVariables;
-
-        public bool HasExited => inner.HasExited;
-
-        public int ExitCode => inner.ExitCode;
-
-        public int ProcessId => inner.ProcessId;
-
-        public bool Start() => inner.Start();
-
-        public Task<int> WaitForExitAsync(CancellationToken cancellationToken) => inner.WaitForExitAsync(cancellationToken);
-
-        public void Kill(bool entireProcessTree) => inner.Kill(entireProcessTree);
-
-        public void Dispose()
-        {
-            inner.Dispose();
-            DisposeConsoleProcessJob(consoleProcessJob);
-        }
+        // The Windows kill-on-close job is now resolved on-demand inside the factory via
+        // WindowsConsoleProcessJob.Shared, so the test no longer creates or disposes one.
+        return factory.CreateExecution(
+            startInfo.FileName,
+            startInfo.ArgumentList.ToArray(),
+            env: null,
+            new DirectoryInfo(startInfo.WorkingDirectory),
+            new ProcessInvocationOptions
+            {
+                IsolateConsole = isolateConsole,
+                GracefulShutdownSignaler = signaler,
+                ShutdownService = shutdownService
+            });
     }
 
 }

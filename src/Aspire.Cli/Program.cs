@@ -446,20 +446,16 @@ public class Program
         builder.Services.AddTransient<IProcessExecutionFactory, ProcessExecutionFactory>();
         builder.Services.AddSingleton<IDetachedProcessLauncher, DefaultDetachedProcessLauncher>();
         // Windows-only crash-time safety net for interactive children spawned by
-        // IsolatedProcess. Holding this as a CLI-lifetime singleton means the
-        // OS closes the job handle automatically on process exit, firing KILL_ON_JOB_CLOSE on
-        // any assigned children that haven't already exited (e.g. orphaned tsx after the CLI
-        // crashes). On non-Windows, process-group reparenting + ordinary signal delivery cover
-        // the same case, so no registration is needed.
-        if (OperatingSystem.IsWindows())
-        {
-            builder.Services.AddSingleton<WindowsConsoleProcessJob>();
-        }
+        // IsolatedProcess is provided by WindowsConsoleProcessJob.Shared — a process-wide
+        // job created on first isolated spawn. The OS closes the job handle automatically on
+        // process exit, firing KILL_ON_JOB_CLOSE on any assigned children that haven't already
+        // exited (e.g. orphaned tsx after the CLI crashes). On non-Windows, process-group
+        // reparenting + ordinary signal delivery cover the same case, so nothing is needed.
         builder.Services.AddTransient<LayoutProcessRunner>();
-        builder.Services.AddTransient<DetachedAppHostShutdownService>();
+        builder.Services.AddTransient<ProcessTreeGracefulShutdownService>();
         // Forward the interface to the existing concrete service so consumers can depend on the
         // abstraction (used by AppHostServerSession + GuestLaunchOptions in the aspire run path).
-        builder.Services.AddTransient<IProcessTreeGracefulShutdownSignaler>(sp => sp.GetRequiredService<DetachedAppHostShutdownService>());
+        builder.Services.AddTransient<IProcessTreeGracefulShutdownSignaler>(sp => sp.GetRequiredService<ProcessTreeGracefulShutdownService>());
 
         // Register certificate tool runner - uses native CertificateManager directly (no subprocess needed)
         builder.Services.AddSingleton(sp => CertificateManager.Create(sp.GetRequiredService<ILogger<NativeCertificateToolRunner>>()));
