@@ -35,6 +35,8 @@ namespace Aspire.Cli.Backchannel;
 [JsonSerializable(typeof(PublishingActivity[]))]
 [JsonSerializable(typeof(List<PublishingActivity>))]
 [JsonSerializable(typeof(IAsyncEnumerable<PublishingActivity>))]
+[JsonSerializable(typeof(DisplayLineState))]
+[JsonSerializable(typeof(DisplayLineState[]))]
 [JsonSerializable(typeof(IEnumerable<DisplayLineState>))]
 [JsonSerializable(typeof(PublishingPromptInputAnswer[]))]
 [JsonSerializable(typeof(ValidationResult))]
