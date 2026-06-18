@@ -712,6 +712,12 @@ public class AzureEnvironmentResourceExtensionsTests
             {
               // Cached deployment state can be hand-edited while recovering local state.
               "location": { "value": "westus2", },
+              "administratorLoginPassword": { "value": "P@ssw0rd123456789!" },
+              "clientSecret": { "value": "client-secret-value" },
+              "storageAccountKey": { "secureValue": "storage-account-key-value" },
+              "databaseConnectionString": { "value": "Host=example;Password=secret" },
+              "secureConfig": { "type": "secureObject", "value": { "apiKey": "api-key-value" } },
+              "safeParameterWithObjectType": { "type": { "name": "custom" }, "value": "visible" },
             }
             """;
         storageSection.Data["Outputs"] = $$"""
@@ -779,6 +785,13 @@ public class AzureEnvironmentResourceExtensionsTests
         Assert.Equal("https://storage.blob.core.windows.net/", outputs["blobEndpoint"]?["value"]?.GetValue<string>());
         var parameters = Assert.IsType<JsonObject>(deployment["parameters"]);
         Assert.Equal("westus2", parameters["location"]?["value"]?.GetValue<string>());
+        Assert.False(parameters["location"]?["redacted"]?.GetValue<bool>() ?? false);
+        AssertRedactedParameter(parameters, "administratorLoginPassword", "value");
+        AssertRedactedParameter(parameters, "clientSecret", "value");
+        AssertRedactedParameter(parameters, "storageAccountKey", "secureValue");
+        AssertRedactedParameter(parameters, "databaseConnectionString", "value");
+        AssertRedactedParameter(parameters, "secureConfig", "value");
+        Assert.Equal("visible", parameters["safeParameterWithObjectType"]?["value"]?.GetValue<string>());
         var scope = Assert.IsType<JsonObject>(deployment["scope"]);
         Assert.Equal(resourceGroup, scope["resourceGroup"]?.GetValue<string>());
 
@@ -4290,6 +4303,13 @@ public class AzureEnvironmentResourceExtensionsTests
         var data = result.Data!;
         Assert.Equal(CommandResultFormat.Json, data.Format);
         return Assert.IsType<JsonObject>(JsonNode.Parse(data.Value));
+    }
+
+    private static void AssertRedactedParameter(JsonObject parameters, string parameterName, string valuePropertyName)
+    {
+        var parameter = Assert.IsType<JsonObject>(parameters[parameterName]);
+        Assert.Null(parameter[valuePropertyName]);
+        Assert.True(parameter["redacted"]?.GetValue<bool>());
     }
 
     private static void AssertAffectedResourceCommandsDuringOperation(CustomResourceSnapshot snapshot)

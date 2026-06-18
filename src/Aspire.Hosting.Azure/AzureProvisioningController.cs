@@ -2222,7 +2222,7 @@ internal sealed class AzureProvisioningController(
             ["resourcePortalUrl"] = resourceId is not null ? AzurePortalUrls.GetResourceUrl(resourceId, tenantId) : null,
             ["locationOverride"] = section.Data[LocationOverrideKey]?.GetValue<string>(),
             ["checksum"] = section.Data["CheckSum"]?.GetValue<string>(),
-            ["parameters"] = ParseDeploymentStateJson(resource.Name, "Parameters", section.Data["Parameters"]?.GetValue<string>()),
+            ["parameters"] = ParseDeploymentStateParametersJson(resource.Name, section.Data["Parameters"]?.GetValue<string>()),
             ["outputs"] = outputs,
             ["scope"] = ParseDeploymentStateJson(resource.Name, "Scope", section.Data["Scope"]?.GetValue<string>())
         };
@@ -2242,6 +2242,72 @@ internal sealed class AzureProvisioningController(
         }
 
         return json;
+    }
+
+    private JsonNode? ParseDeploymentStateParametersJson(string resourceName, string? value)
+    {
+        var parameters = ParseDeploymentStateJson(resourceName, "Parameters", value);
+        if (parameters is not JsonObject parametersObject)
+        {
+            return parameters;
+        }
+
+        RedactSensitiveDeploymentParameterValues(parametersObject);
+
+        return parameters;
+    }
+
+    private static void RedactSensitiveDeploymentParameterValues(JsonObject parameters)
+    {
+        // Deployment parameters are cached in ARM parameter-file shape:
+        //   { "administratorLoginPassword": { "value": "..." }, "location": { "value": "westus2" } }
+        // get-azure-resource is displayed directly to users and agents, so preserve useful
+        // non-secret parameters while removing values that are likely credentials.
+        foreach (var (parameterName, parameterNode) in parameters.ToArray())
+        {
+            if (parameterNode is not JsonObject parameterObject ||
+                !IsSensitiveDeploymentParameter(parameterName, parameterObject))
+            {
+                continue;
+            }
+
+            if (parameterObject.ContainsKey("value"))
+            {
+                parameterObject["value"] = null;
+            }
+
+            if (parameterObject.ContainsKey("secureValue"))
+            {
+                parameterObject["secureValue"] = null;
+            }
+
+            parameterObject["redacted"] = true;
+        }
+    }
+
+    private static bool IsSensitiveDeploymentParameter(string parameterName, JsonObject parameter)
+    {
+        if (parameter.TryGetPropertyValue("type", out var typeNode) &&
+            typeNode is JsonValue typeValue &&
+            typeValue.TryGetValue<string>(out var type) &&
+            type.Contains("secure", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var normalizedParameterName = parameterName
+            .Replace("-", string.Empty, StringComparison.Ordinal)
+            .Replace("_", string.Empty, StringComparison.Ordinal)
+            .Replace(".", string.Empty, StringComparison.Ordinal);
+
+        return normalizedParameterName.Contains("password", StringComparison.OrdinalIgnoreCase) ||
+            normalizedParameterName.Contains("secret", StringComparison.OrdinalIgnoreCase) ||
+            normalizedParameterName.Contains("token", StringComparison.OrdinalIgnoreCase) ||
+            normalizedParameterName.Contains("credential", StringComparison.OrdinalIgnoreCase) ||
+            normalizedParameterName.Contains("connectionstring", StringComparison.OrdinalIgnoreCase) ||
+            normalizedParameterName.Contains("accesskey", StringComparison.OrdinalIgnoreCase) ||
+            normalizedParameterName.Contains("accountkey", StringComparison.OrdinalIgnoreCase) ||
+            normalizedParameterName.Contains("apikey", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<JsonObject> CreateLiveResourceInfoAsync(string? resourceId, AzureContextState context, CancellationToken cancellationToken)
