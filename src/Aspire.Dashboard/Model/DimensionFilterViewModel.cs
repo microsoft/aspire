@@ -21,31 +21,23 @@ public class DimensionFilterViewModel
     {
         get
         {
-            return SelectedValues.SetEquals(Values)
+            return SelectedValues.Count == 0 || SelectedValues.SetEquals(Values)
                 ? true
-                : SelectedValues.Count == 0
-                    ? false
-                    : null;
+                : null;
         }
         set
         {
             if (value is true)
             {
-                SelectedValues.UnionWith(Values);
+                SelectedValues.Clear();
             }
             else if (value is false)
             {
-                // Only clear if all values are currently selected.
-                // FluentCheckbox's three-state handling can spuriously fire the setter with false
-                // when the state transitions from true to null (intermediate) due to individual
-                // checkbox changes. In that case, AreAllValuesSelected is already null/false,
-                // and we should not clear the remaining selections.
-                if (AreAllValuesSelected is true)
+                if (SelectedValues.SetEquals(Values))
                 {
                     SelectedValues.Clear();
                 }
             }
-            // When value is null (intermediate state), do nothing.
         }
     }
 
@@ -78,4 +70,3 @@ public class DimensionValueViewModel
     public required string? Value { get; init; }
     public required int Order { get; set; }
 }
-

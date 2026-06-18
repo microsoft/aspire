@@ -15,7 +15,7 @@
                             RowSize="DataGridRowSize.Medium">
                 <ChildContent>
                     <AspirePropertyColumn Tooltip="true" TooltipText="@(c => c.Name)" Property="@(c => c.Name)"/>
-                    <AspireTemplateColumn Tooltip="true" TooltipText="@(c => c.AreAllValuesSelected is true || c.SelectedValues.Count == 0 ? Loc[nameof(ControlsStrings.LabelNone)] : string.Join(", ", c.SelectedValues.OrderBy(v => v.Text).Select(v => v.Text)))">
+                    <AspireTemplateColumn Tooltip="true" TooltipText="@(c => c.AreAllValuesSelected is true ? Loc[nameof(ControlsStrings.LabelAll)] : string.Join(", ", c.SelectedValues.OrderBy(v => v.Text).Select(v => v.Text)))">
                         @{
                             var areAllValuesSelected = context.AreAllValuesSelected is true;
                         }
@@ -36,7 +36,13 @@
 
                                     // Always display the first item by setting a fixed value.
                                     <FluentOverflowItem Fixed="@((i == 0) ? OverflowItemFixed.Ellipsis : OverflowItemFixed.None)" AdditionalAttributes="additionalAttributes">
-                                        <span class="dimension-tag filter-value-tag @isIncludedInFiltersClass" @onclick="@(() => OnTagSelectionChangedAsync(context, item, !context.SelectedValues.Contains(item)))">@item.Text</span>
+                                        <span class="dimension-tag filter-value-tag @isIncludedInFiltersClass"
+                                              role="button"
+                                              tabindex="0"
+                                              @onclick="@(() => OnTagSelectionChangedAsync(context, item, !context.SelectedValues.Contains(item)))"
+                                              @onkeydown="@(args => OnTagKeyDownAsync(args, context, item, !context.SelectedValues.Contains(item)))">
+                                            @item.Text
+                                        </span>
                                     </FluentOverflowItem>
                                     i++;
                                 }
@@ -46,7 +52,12 @@
                                     var isIncludedInFiltersClass = !areAllValuesSelected && overflow.ItemsOverflow.Any(item => (bool)item.AdditionalAttributes!["isIncludedInFilters"]) ? "included-in-filters" : "";
                                 }
                                 @* Display must be inline block so the width is correctly calculated. *@
-                                <span class="dimension-tag filter-value-tag @isIncludedInFiltersClass" style="display:inline-block;" @onclick="@(() => context.PopupVisible = true)">
+                                <span class="dimension-tag filter-value-tag @isIncludedInFiltersClass"
+                                      role="button"
+                                      tabindex="0"
+                                      style="display:inline-block;"
+                                      @onclick="@(() => context.PopupVisible = true)"
+                                      @onkeydown="@(args => OnOverflowTagKeyDownAsync(args, context))">
                                     @($"+{overflow.ItemsOverflow.Count()}")
                                 </span>
                             </MoreButtonTemplate>
