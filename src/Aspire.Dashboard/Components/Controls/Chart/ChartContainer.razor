@@ -43,7 +43,7 @@ else
             </FluentTab>
             <FluentTab LabelClass="tab-label"
                        Id="@($"tab-{Metrics.MetricViewKind.Table}")"
-                       Label="@Loc[nameof(ControlsStrings.ChartContainerTableTab)]"
+                       Label="@Loc[nameof(ControlsStrings.MetricsTableTab)]"
                        Icon="@(new Icons.Regular.Size24.Table())">
                 <div class="metrics-chart-container metric-tab">
                     <MetricTable InstrumentViewModel="_instrumentViewModel" Duration="Duration" Resources="Resources" />

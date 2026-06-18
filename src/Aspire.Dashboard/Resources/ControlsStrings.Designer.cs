@@ -610,6 +610,15 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Table.
+        /// </summary>
+        public static string MetricsTableTab {
+            get {
+                return ResourceManager.GetString("MetricsTableTab", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Exemplars.
         /// </summary>
         public static string MetricTableExemplarsColumnHeader {

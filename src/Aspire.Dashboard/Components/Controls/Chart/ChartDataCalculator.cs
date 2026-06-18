@@ -182,17 +182,19 @@ internal sealed class ChartDataCalculator
         ulong[]? currentBucketCounts = null;
         double[]? explicitBounds = null;
 
+        start = start.Subtract(TimeSpan.FromSeconds(1));
+        end = end.Add(TimeSpan.FromSeconds(1));
+
         foreach (var dimension in dimensions)
         {
             var dimensionValues = dimension.Values;
             for (var i = dimensionValues.Count - 1; i >= 0; i--)
             {
                 var metric = dimensionValues[i];
-                // MetricValueBase.Start/End are DateTime (Kind=Utc from Unix timestamps).
+                // MetricValueBase.Start is DateTime (Kind=Utc from Unix timestamps).
                 // Use explicit DateTimeOffset conversion to avoid silent local-time assumption.
                 var metricStart = new DateTimeOffset(metric.Start, TimeSpan.Zero);
-                var metricEnd = new DateTimeOffset(metric.End, TimeSpan.Zero);
-                if (metricStart <= end && metricEnd >= start)
+                if (metricStart >= start && metricStart <= end)
                 {
                     var histogramValue = GetHistogramValue(metric);
 
@@ -246,18 +248,6 @@ internal sealed class ChartDataCalculator
         return hasValue;
     }
 
-    /// <summary>
-    /// Computes a percentile value from histogram bucket counts using linear interpolation
-    /// within the target bucket (consistent with Prometheus/OpenTelemetry conventions).
-    /// </summary>
-    /// <remarks>
-    /// Bucket layout: counts has explicitBounds.Length + 1 entries.
-    ///   Bucket 0: (-Inf, bounds[0]]
-    ///   Bucket i: (bounds[i-1], bounds[i]]
-    ///   Bucket N: (bounds[N-1], +Inf)
-    /// The overflow bucket (+Inf) is included in the total count. If the percentile
-    /// falls in the overflow bucket, the last finite bound is returned as an estimate.
-    /// </remarks>
     internal static double? CalculatePercentile(int percentile, ulong[] counts, double[] explicitBounds)
     {
         if (percentile < 0 || percentile > 100)
@@ -265,7 +255,8 @@ internal sealed class ChartDataCalculator
             throw new ArgumentOutOfRangeException(nameof(percentile), percentile, "Percentile must be between 0 and 100.");
         }
 
-        // Sum all buckets including the overflow (+Inf) bucket.
+        // counts has explicitBounds.Length + 1 entries. The last entry is the overflow
+        // bucket (+Inf) for values exceeding the last explicit bound.
         var totalCount = 0ul;
         foreach (var count in counts)
         {
@@ -280,37 +271,18 @@ internal sealed class ChartDataCalculator
         var targetCount = (percentile / 100.0) * totalCount;
         var accumulatedCount = 0ul;
 
-        for (var i = 0; i < counts.Length; i++)
+        for (var i = 0; i < explicitBounds.Length; i++)
         {
             accumulatedCount += counts[i];
 
             if (accumulatedCount >= targetCount)
             {
-                // Determine the lower and upper bounds of this bucket.
-                var bucketLower = i == 0 ? 0.0 : explicitBounds[i - 1];
-                var bucketUpper = i < explicitBounds.Length ? explicitBounds[i] : explicitBounds[explicitBounds.Length - 1];
-
-                // If we're in the overflow bucket, we can't interpolate — return the last bound.
-                if (i >= explicitBounds.Length)
-                {
-                    return explicitBounds[explicitBounds.Length - 1];
-                }
-
-                // Linear interpolation within the bucket.
-                var bucketCount = counts[i];
-                if (bucketCount == 0)
-                {
-                    return bucketUpper;
-                }
-
-                // How far into this bucket the target falls.
-                var countBelow = accumulatedCount - bucketCount;
-                var fraction = (targetCount - countBelow) / bucketCount;
-                return bucketLower + (bucketUpper - bucketLower) * fraction;
+                return explicitBounds[i];
             }
         }
 
-        // Fallback: all data in overflow bucket.
+        // The percentile falls in the overflow (+Inf) bucket. There is no upper bound
+        // for this bucket, so return the last explicit bound as the best available estimate.
         return explicitBounds[explicitBounds.Length - 1];
     }
 
