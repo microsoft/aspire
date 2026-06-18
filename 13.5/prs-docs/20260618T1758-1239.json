@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Documents npm/npx usage for the Aspire CLI (@microsoft/aspire-cli), matched to the 'Aspire CLI available via npm' changelog entry",
+  "mergedAt": "2026-06-18T17:58:19Z",
+  "number": 1239,
+  "runDate": "2026-06-18T18:45:53Z",
+  "status": "included",
+  "title": "docs: document running the Aspire CLI via npm/npx"
+}

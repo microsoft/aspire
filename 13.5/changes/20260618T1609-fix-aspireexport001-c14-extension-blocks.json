@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The ASPIREEXPORT001 analyzer no longer incorrectly flags [AspireExport]-decorated methods declared inside C# 14 extension blocks as non-static. Developers can now use C# 14 extension block syntax when defining TypeScript AppHost exports without spurious analyzer warnings.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔧",
+  "firstMergedAt": "2026-06-18T16:09:33Z",
+  "lastMergedAt": "2026-06-18T16:09:33Z",
+  "name": "Fix ASPIREEXPORT001 false positive with C# 14 extension blocks",
+  "owner": "sebastienros",
+  "prs": [
+    18292
+  ]
+}

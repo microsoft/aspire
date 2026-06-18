@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Several correctness issues in the metrics charting pipeline have been fixed: histogram traces (P50/P90/P99) now appear in a guaranteed consistent order, the metrics table tab is correctly labeled \"Table\" instead of \"Resources\", and metric values are compared correctly across timezones.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📈",
+  "firstMergedAt": "2026-06-18T14:04:13Z",
+  "lastMergedAt": "2026-06-18T14:04:13Z",
+  "name": "Metrics chart correctness improvements",
+  "owner": "JamesNK",
+  "prs": [
+    18312
+  ]
+}

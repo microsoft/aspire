@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Dashboard metrics chart bug fixes: P50/P90/P99 ordering, metrics tab label, timezone-aware comparison",
+  "mergedAt": "2026-06-18T14:04:13Z",
+  "number": 18312,
+  "runDate": "2026-06-18T18:45:53Z",
+  "status": "included",
+  "title": "Extract chart calculation logic into testable ChartDataCalculator type"
+}

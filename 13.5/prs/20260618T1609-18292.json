@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Fix ASPIREEXPORT001 analyzer false positive on C# 14 extension block members",
+  "mergedAt": "2026-06-18T16:09:33Z",
+  "number": 18292,
+  "runDate": "2026-06-18T18:45:53Z",
+  "status": "included",
+  "title": "Fix ASPIREEXPORT001 false positive on C# 14 extension blocks"
+}
