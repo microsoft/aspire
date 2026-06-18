@@ -85,6 +85,50 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("13.4.2+abcdef01", output.ToString().Trim());
     }
 
+    /// <summary>
+    /// Theory test validating version output across all build stages/channels:
+    /// PR builds, daily builds, staging builds, and stable builds.
+    /// Tests various override combinations (env vars, sidecar) to ensure the output
+    /// matches the legacy behavior (version + optional +sha).
+    /// </summary>
+    [Theory]
+    [InlineData("pr-18087", "13.5.0-preview.1.26318.5", "abc123def456", "13.5.0-preview.1.26318.5+abc123def456")]
+    [InlineData("pr-18087", "13.5.0-preview.1.26318.5", null, "13.5.0-preview.1.26318.5")]
+    [InlineData("daily", "13.5.0-preview.1.26318.1", "95f0d296", "13.5.0-preview.1.26318.1+95f0d296")]
+    [InlineData("daily", "13.5.0-preview.1.26318.1", null, "13.5.0-preview.1.26318.1")]
+    [InlineData("staging", "13.4.0-preview.1.26280.6", "abcdef01", "13.4.0-preview.1.26280.6+abcdef01")]
+    [InlineData("staging", "13.4.0", "abcdef01", "13.4.0+abcdef01")]
+    [InlineData("stable", "13.4.3", null, "13.4.3")]
+    [InlineData("local", "13.5.0-dev", "localcommit123", "13.5.0-dev+localcommit123")]
+    [InlineData("local", "13.5.0-dev", null, "13.5.0-dev")]
+    public async Task RootCommandVersion_ProducesCorrectOutput_AcrossBuildStages(
+        string channel,
+        string version,
+        string? commit,
+        string expectedOutput)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
+                workspace.WorkspaceRoot,
+                identityChannel: channel,
+                identityVersion: version,
+                identityCommit: commit,
+                identityOverridden: true);
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("--version");
+
+        var output = new StringWriter();
+        var exitCode = await result.InvokeAsync(new System.CommandLine.InvocationConfiguration { Output = output }).DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(expectedOutput, output.ToString().Trim());
+    }
+
     [Fact]
     public async Task RootCommandWithHelpArgumentReturnsZero()
     {
