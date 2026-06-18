@@ -270,7 +270,8 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
             new TestProjectLocator(),
             executionContext,
             TestHelpers.CreateInteractiveHostEnvironment(),
-            NullLogger.Instance);
+            NullLogger<AppHostConnectionResolver>.Instance,
+            new ProfilingTelemetry(new ConfigurationBuilder().Build()));
 
         var result = await resolver.ResolveConnectionAsync(
             projectFileViaSymlink,
