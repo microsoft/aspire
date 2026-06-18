@@ -219,8 +219,6 @@ export class AspireTerminalProvider implements vscode.Disposable {
     }
 
     getAspireTerminal(forceCreate?: boolean): AspireTerminal {
-        const terminalName = aspireTerminalName;
-
         const existingTerminal = this._terminalByDebugSessionId.get(null);
         if (existingTerminal) {
             if (!forceCreate) {
