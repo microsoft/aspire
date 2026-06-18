@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "CI/automation change: adds issue assignee for deployment E2E test failures; no user-visible product impact",
+  "mergedAt": "2026-06-18T06:28:30Z",
+  "number": 18310,
+  "runDate": "2026-06-18T07:37:14Z",
+  "status": "excluded",
+  "title": "Assign deployment E2E test failure issues to @mitchdenny"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "nanookclaw",
+  "comment": "Dashboard improvement: renames 'Export JSON' to 'View JSON' and clarifies sensitive value confirmation; community contribution",
+  "mergedAt": "2026-06-18T04:35:22Z",
+  "number": 18107,
+  "runDate": "2026-06-18T07:37:14Z",
+  "status": "included",
+  "title": "Rename resource 'Export JSON' action to 'View JSON' and clarify secret warning scope"
+}

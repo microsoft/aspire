@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The `aspire.exe` and `aspire-managed.exe` processes now display the Aspire application icon in Windows Task Manager, File Explorer, and other shell surfaces.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\uddbc\ufe0f",
+  "firstMergedAt": "2026-06-18T02:08:22Z",
+  "lastMergedAt": "2026-06-18T02:08:22Z",
+  "name": "Aspire CLI displays application icon on Windows",
+  "owner": "JamesNK",
+  "prs": [
+    18303
+  ]
+}

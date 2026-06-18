@@ -1,0 +1,21 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [
+    "@nanookclaw"
+  ],
+  "description": "The resource action menu item previously labeled 'Export JSON' is now called 'View JSON', accurately reflecting that it opens a text visualizer rather than downloading a file. The sensitive value confirmation message is also clarified to indicate it is scoped to the current browser.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83c\udff7\ufe0f",
+  "firstMergedAt": "2026-06-18T04:35:22Z",
+  "lastMergedAt": "2026-06-18T04:35:22Z",
+  "name": "Rename 'Export JSON' action to 'View JSON' in Dashboard",
+  "owner": "JamesNK",
+  "prs": [
+    18107
+  ]
+}

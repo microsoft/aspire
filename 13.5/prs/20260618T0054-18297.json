@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Bug fix: CLI now fails cleanly with an actionable error when AppHost selection requires interaction in non-interactive mode",
+  "mergedAt": "2026-06-18T00:54:50Z",
+  "number": 18297,
+  "runDate": "2026-06-18T07:37:14Z",
+  "status": "included",
+  "title": "Fail cleanly when AppHost selection needs a prompt in non-interactive mode (#17619)"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "CI/automation change: disables AI credits guardrail for agentic workflows; no user-visible product impact",
+  "mergedAt": "2026-06-18T02:43:47Z",
+  "number": 18307,
+  "runDate": "2026-06-18T07:37:14Z",
+  "status": "excluded",
+  "title": "Disable daily AI credits guardrail for agentic workflows"
+}

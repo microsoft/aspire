@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Improvement: Aspire CLI and managed host now display the Aspire application icon on Windows",
+  "mergedAt": "2026-06-18T02:08:22Z",
+  "number": 18303,
+  "runDate": "2026-06-18T07:37:14Z",
+  "status": "included",
+  "title": "Add application icon to Aspire CLI and managed host processes"
+}

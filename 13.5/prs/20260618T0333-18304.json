@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Test-only fix: scopes ActivityListeners to specific instances to prevent parallel test interference; no user-visible product change",
+  "mergedAt": "2026-06-18T03:33:06Z",
+  "number": 18304,
+  "runDate": "2026-06-18T07:37:14Z",
+  "status": "excluded",
+  "title": "Fix flaky profiling tests by scoping ActivityListeners to specific instances"
+}

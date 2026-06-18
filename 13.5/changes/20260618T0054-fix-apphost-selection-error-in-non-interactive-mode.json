@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Non-interactive CLI commands such as `aspire describe` now return a clear, actionable error message instead of crashing when AppHost selection is ambiguous and an interactive prompt is unavailable.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udc1b",
+  "firstMergedAt": "2026-06-18T00:54:50Z",
+  "lastMergedAt": "2026-06-18T00:54:50Z",
+  "name": "Fix AppHost selection error in non-interactive mode",
+  "owner": "mitchdenny",
+  "prs": [
+    18297
+  ]
+}
