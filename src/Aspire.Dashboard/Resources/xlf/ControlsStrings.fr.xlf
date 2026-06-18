@@ -72,11 +72,6 @@
         <target state="translated">Un plafonnement de cardinalité a été détecté</target>
         <note />
       </trans-unit>
-      <trans-unit id="ChartContainerParametersTab">
-        <source>Parameters</source>
-        <target state="translated">Paramètres</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ChartContainerShowCountLabel">
         <source>Show count</source>
         <target state="translated">Afficher le nombre</target>

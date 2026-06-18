@@ -72,11 +72,6 @@
         <target state="translated">カーディナリティ制限が検出されました</target>
         <note />
       </trans-unit>
-      <trans-unit id="ChartContainerParametersTab">
-        <source>Parameters</source>
-        <target state="translated">パラメーター</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ChartContainerShowCountLabel">
         <source>Show count</source>
         <target state="translated">カウントの表示</target>

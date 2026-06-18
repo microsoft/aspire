@@ -72,11 +72,6 @@
         <target state="translated">Es wurde eine Kardinalitätsbegrenzung festgestellt</target>
         <note />
       </trans-unit>
-      <trans-unit id="ChartContainerParametersTab">
-        <source>Parameters</source>
-        <target state="translated">Parameter</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ChartContainerShowCountLabel">
         <source>Show count</source>
         <target state="translated">Anzahl anzeigen</target>

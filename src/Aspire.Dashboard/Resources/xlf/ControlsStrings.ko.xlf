@@ -72,11 +72,6 @@
         <target state="translated">카디널리티 상한이 감지되었습니다.</target>
         <note />
       </trans-unit>
-      <trans-unit id="ChartContainerParametersTab">
-        <source>Parameters</source>
-        <target state="translated">매개 변수</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ChartContainerShowCountLabel">
         <source>Show count</source>
         <target state="translated">개수 표시</target>
