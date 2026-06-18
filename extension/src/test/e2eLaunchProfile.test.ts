@@ -344,7 +344,7 @@ suite('E2E launch profile', () => {
         assert.ok(stopAppHostStart >= 0);
         assert.ok(stopAppHostEnd > stopAppHostStart);
         const stopAppHost = fixtures.slice(stopAppHostStart, stopAppHostEnd);
-        const waitForCapturedPidCalls = stopAppHost.match(/await waitForNoRunningAppHostPath\(appHostPath, 30000, runningAppHostBeforeStop\?\.appHostPid\);/g) ?? [];
+        const waitForCapturedPidCalls = stopAppHost.match(/await waitForNoRunningAppHostPathOrStopKnownProcess\(appHostPath, 30000, runningAppHostBeforeStop\?\.appHostPid\);/g) ?? [];
 
         assert.ok(stopAppHost.includes('const runningAppHostBeforeStop = getRunningAppHostFromState(appHostPath);'));
         assert.ok(waitForCapturedPidCalls.length >= 3);
@@ -365,6 +365,8 @@ suite('E2E launch profile', () => {
         assert.ok(!fixtures.includes('terminateProcessTree(runningAppHost.appHostPid'));
         assert.ok(fixtures.includes('async function waitForProcessExit(pid: number, timeoutMs: number): Promise<void>'));
         assert.ok(fixtures.includes('process.kill(pid, 0);'));
+        assert.ok(fixtures.includes("process.kill(pid, 'SIGTERM');"));
+        assert.ok(fixtures.includes('async function waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath: string, timeoutMs: number, knownAppHostPid?: number): Promise<void>'));
         assert.ok(fixtures.includes("error.code === 'EPERM'"));
         assert.ok(fixtures.includes("const maxAttempts = process.platform === 'win32' ? 40 : 1;"));
     });

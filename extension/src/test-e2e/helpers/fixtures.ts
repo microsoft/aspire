@@ -286,7 +286,7 @@ export async function stopAppHostIfRunning(appHostPath: string): Promise<void> {
             cwd: getWorkspaceRoot(),
             timeoutMs: 60000,
         });
-        await waitForNoRunningAppHostPath(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid);
+        await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid);
     }
     catch (error) {
         if (!(error instanceof Error)) {
@@ -294,7 +294,7 @@ export async function stopAppHostIfRunning(appHostPath: string): Promise<void> {
         }
 
         if (/not running|No running AppHost|No AppHost/i.test(error.message)) {
-            await waitForNoRunningAppHostPath(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid);
+            await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid);
             return;
         }
 
@@ -302,13 +302,13 @@ export async function stopAppHostIfRunning(appHostPath: string): Promise<void> {
             try {
                 const runningAppHost = await getRunningAppHostAccordingToCli(appHostPath);
                 if (!runningAppHost) {
-                    await waitForNoRunningAppHostPath(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid);
+                    await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid);
                     return;
                 }
 
                 await waitForProcessExit(runningAppHost.appHostPid, 30000);
                 if (!await getRunningAppHostAccordingToCli(appHostPath)) {
-                    await waitForNoRunningAppHostPath(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid);
+                    await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid);
                     return;
                 }
 
@@ -383,6 +383,21 @@ async function waitForNoRunningAppHostPath(appHostPath: string, timeoutMs: numbe
     throw new Error(`Timed out after ${timeoutMs}ms waiting for AppHost process ${runningAppHost?.appHostPid ?? lastKnownAppHostPid ?? '<unknown>'} to exit before deleting ${path.dirname(appHostPath)}.`);
 }
 
+async function waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath: string, timeoutMs: number, knownAppHostPid?: number): Promise<void> {
+    try {
+        await waitForNoRunningAppHostPath(appHostPath, timeoutMs, knownAppHostPid);
+    }
+    catch (error) {
+        const runningAppHostPid = getRunningAppHostFromState(appHostPath)?.appHostPid ?? knownAppHostPid;
+        if (runningAppHostPid === undefined || !isProcessRunning(runningAppHostPid)) {
+            throw error;
+        }
+
+        await stopProcess(runningAppHostPid, 30000);
+        await waitForNoRunningAppHostPath(appHostPath, 5000, runningAppHostPid);
+    }
+}
+
 function getRunningAppHostFromState(appHostPath: string) {
     const state = readStateFile().state;
     return state.workspaceAppHost && isSamePath(state.workspaceAppHost.appHostPath, appHostPath)
@@ -401,6 +416,21 @@ async function waitForProcessExit(pid: number, timeoutMs: number): Promise<void>
     }
 
     throw new Error(`Timed out after ${timeoutMs}ms waiting for process ${pid} to exit.`);
+}
+
+async function stopProcess(pid: number, timeoutMs: number): Promise<void> {
+    try {
+        process.kill(pid, 'SIGTERM');
+    }
+    catch (error) {
+        if (error instanceof Error && 'code' in error && error.code === 'ESRCH') {
+            return;
+        }
+
+        throw error;
+    }
+
+    await waitForProcessExit(pid, timeoutMs);
 }
 
 function isProcessRunning(pid: number): boolean {
