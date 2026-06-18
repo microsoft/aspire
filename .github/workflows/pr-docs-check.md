@@ -32,10 +32,23 @@ if: >-
   && github.repository_owner == 'microsoft'
 
 checkout:
-  # Use aspire.dev as the current workspace because that is where documentation
-  # changes are authored, and keep a mirrored checkout under _repos so the
-  # safeoutputs create_pull_request tool can reliably rediscover the target repo
-  # in multi-repo mode.
+  # Check out aspire.dev EXACTLY ONCE, as the current workspace, because that is
+  # where documentation changes are authored and the docs branch is created.
+  #
+  # IMPORTANT: do NOT add a second `microsoft/aspire.dev` checkout (e.g. a mirror
+  # under `_repos/aspire.dev`) to this agent-job `checkout:` block. gh-aw builds a
+  # checkout manifest keyed by the lowercased repo slug, and the LAST entry for a
+  # slug wins (see build_checkout_manifest.cjs). A second `microsoft/aspire.dev`
+  # entry shadows this current-workspace entry, so the `create_pull_request`
+  # safe-output's `findRepoCheckout("microsoft/aspire.dev")` resolves to the
+  # mirror instead of the workspace where the agent actually created the docs
+  # branch. The handler then pins the branch with
+  # `git -C <mirror> rev-parse --verify refs/heads/<branch>^{commit}`, which fails
+  # with `fatal: Needed a single revision` because the branch only exists in the
+  # workspace (microsoft/aspire#18319, run 27765082872). The manifest already
+  # maps `microsoft/aspire.dev -> path=""` (the workspace) here, so a mirror is
+  # not needed for the handler to rediscover the target repo. The safe-outputs
+  # job keeps its own separate `_repos/aspire.dev` checkout for bundle apply.
   - repository: microsoft/aspire.dev
     github-app:
       app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
@@ -53,13 +66,6 @@ checkout:
     # using the aspire-bot installation token, so target-branch selection
     # remains correct — the local refs are just a faster, offline path.
     fetch: ["release/*"]
-  - repository: microsoft/aspire.dev
-    path: _repos/aspire.dev
-    github-app:
-      app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
-      private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
-      owner: "microsoft"
-      repositories: ["aspire.dev"]
 
 permissions:
   contents: read
@@ -863,10 +869,9 @@ needed, create a draft PR with the actual documentation changes.
 - **PR Title**: `${{ github.event.pull_request.title }}`
 
 > [!NOTE]
-> The agent runs with `microsoft/aspire.dev` as the current workspace and also
-> has a mirrored checkout at `_repos/aspire.dev`, so use GitHub tools for the
-> source `microsoft/aspire` PR details and diff instead of expecting a local
-> checkout of the merged PR contents to remain available.
+> The agent runs with `microsoft/aspire.dev` as the current workspace, so use
+> GitHub tools for the source `microsoft/aspire` PR details and diff instead of
+> expecting a local checkout of the merged PR contents to remain available.
 >
 > The target `microsoft/aspire.dev` branch (`release/X.Y[.Z]` or `main`) has
 > already been resolved deterministically by a `pre-agent-steps:` shell step
