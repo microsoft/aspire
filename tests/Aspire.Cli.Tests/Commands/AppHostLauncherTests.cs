@@ -441,9 +441,9 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     [Fact]
     public void DetachedChildEnvironment_IncludesProfilingTelemetryContextFromActiveProfilingSpan()
     {
-        using var listener = CreateActivityListener(ProfilingTelemetry.ActivitySourceName);
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true")));
+        using var listener = CreateActivityListener(profilingTelemetry.ActivitySource);
 
         using var activity = profilingTelemetry.StartDetachedSpawnChild("aspire", ["run"], childCommand: "run");
         Assert.True(activity.IsRunning);
@@ -639,6 +639,17 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         var listener = new ActivityListener
         {
             ShouldListenTo = source => source.Name == sourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded
+        };
+        ActivitySource.AddActivityListener(listener);
+        return listener;
+    }
+
+    private static ActivityListener CreateActivityListener(ActivitySource targetSource)
+    {
+        var listener = new ActivityListener
+        {
+            ShouldListenTo = source => ReferenceEquals(source, targetSource),
             Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded
         };
         ActivitySource.AddActivityListener(listener);
