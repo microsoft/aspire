@@ -86,26 +86,10 @@ public static class TerminalResourceBuilderExtensions
         var annotation = new TerminalAnnotation(options);
         builder.WithAnnotation(annotation);
 
-        // Suppress IDE/debugger execution for terminal-attached resources. DCP launches a
-        // terminal resource under a pseudo-terminal (PTY) and bridges its traffic through a
-        // per-replica TerminalHostResource. Routing the resource to ExecutionType.IDE (which
-        // AddProject's "project" debug support would do inside a debug session) bypasses that
-        // PTY/terminal-host wiring entirely, so the terminal would never attach. A disabled
-        // SupportsDebuggingAnnotation forces plain process execution. Because debug detection
-        // uses the last annotation on the resource, this must be added after the enabled
-        // annotation that AddProject applies — WithTerminal() always runs afterwards.
-        //
-        // We make this trade-off for usability: if we let the debugger attach, it breaks the PTY
-        // flow and the user is left looking at an empty terminal with no output, which is very
-        // confusing. We prefer to keep the terminal (PTY) working out of the box; a user who wants
-        // to debug can attach the debugger to the process themselves afterwards.
-        //
-        // This is a temporary workaround: DCP cannot yet run a process under the debugger and a
-        // PTY at the same time. Remove this once that support ships. Tracked by:
+        // DCP cannot currently run a process under the debugger and a PTY at the same time.
+        // Prefer a working terminal over IDE execution until both can be combined:
         // https://github.com/microsoft/dcp/issues/189
-#pragma warning disable ASPIREEXTENSION001 // SupportsDebuggingAnnotation is experimental.
-        builder.WithAnnotation(SupportsDebuggingAnnotation.Disabled());
-#pragma warning restore ASPIREEXTENSION001
+        builder.WithAnnotation(new ForceProcessExecutionAnnotation());
 
         var parent = builder.Resource;
         var appBuilder = builder.ApplicationBuilder;

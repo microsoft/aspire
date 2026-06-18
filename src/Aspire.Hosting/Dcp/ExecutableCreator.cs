@@ -158,7 +158,8 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         // available during PrepareExecutables().
         // "project" launch types configure their launch configs in PrepareProjectExecutables() directly;
         // all other types (plain executables and project subtypes like azure-functions) are handled here.
-        if (er.ModelResource.SupportsDebugging(_configuration, out var supportsDebuggingAnnotation)
+        if (!er.ModelResource.HasAnnotationOfType<ForceProcessExecutionAnnotation>()
+            && er.ModelResource.SupportsDebugging(_configuration, out var supportsDebuggingAnnotation)
             && supportsDebuggingAnnotation.LaunchConfigurationType is not "project")
         {
             var mode = _configuration[KnownConfigNames.DebugSessionRunMode] ?? ExecutableLaunchMode.NoDebug;
@@ -166,9 +167,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             {
                 // Clear any existing launch configurations (needed for restart scenarios).
                 exe.Annotate(Executable.LaunchConfigurationsAnnotation, string.Empty);
-                // SupportsDebugging only returns true for an enabled annotation, which always carries a
-                // non-null annotator (a disabled opt-out annotation never reaches here).
-                supportsDebuggingAnnotation.LaunchConfigurationAnnotator!(exe, mode);
+                supportsDebuggingAnnotation.LaunchConfigurationAnnotator(exe, mode);
             }
             catch (Exception ex)
             {
@@ -220,7 +219,8 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 }
 
                 SupportsDebuggingAnnotation? supportsDebuggingAnnotation = null;
-                if (!persistent && project.SupportsDebugging(_configuration, out supportsDebuggingAnnotation))
+                var forceProcessExecution = project.HasAnnotationOfType<ForceProcessExecutionAnnotation>();
+                if (!persistent && !forceProcessExecution && project.SupportsDebugging(_configuration, out supportsDebuggingAnnotation))
                 {
                     exe.Spec.ExecutionType = ExecutionType.IDE;
                     exe.Spec.FallbackExecutionTypes = [ExecutionType.Process];
@@ -256,7 +256,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                         }
                     }
                 }
-                else if (!persistent && ShouldFallBackToIdeExecution(isInDebugSession, supportsDebuggingAnnotation))
+                else if (!persistent && !forceProcessExecution && ShouldFallBackToIdeExecution(isInDebugSession, supportsDebuggingAnnotation))
                 {
                     // Fall back to IDE execution with a standard ProjectLaunchConfiguration when:
                     // 1. No SupportsDebuggingAnnotation exists (e.g. AddResource-based ProjectResource
@@ -364,7 +364,9 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 ApplyMonitorProcess(executable, exe.Spec);
             }
 
-            if (!persistent && executable.SupportsDebugging(_configuration, out _))
+            if (!persistent
+                && !executable.HasAnnotationOfType<ForceProcessExecutionAnnotation>()
+                && executable.SupportsDebugging(_configuration, out _))
             {
                 // Just mark as IDE execution here - the actual launch configuration callback
                 // will be invoked in CreateExecutableAsync after endpoints are allocated.
@@ -575,33 +577,12 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
     }
 
     /// <summary>
-    /// Determines whether to fall back to IDE execution for a project resource that did not
-    /// pass <see cref="ExtensionUtils.SupportsDebugging"/>. Returns <see langword="true"/> when
-    /// the app host is running inside a debug session and either the resource has no
-    /// <see cref="SupportsDebuggingAnnotation"/> (e.g. AddResource-based subclasses) or the
-    /// IDE did not send <c>DEBUG_SESSION_INFO</c> (Visual Studio scenario). Always returns
-    /// <see langword="false"/> when the resource carries an explicitly disabled
-    /// <see cref="SupportsDebuggingAnnotation"/> (added via <see cref="SupportsDebuggingAnnotation.Disabled"/>,
-    /// e.g. by <c>WithTerminal()</c>).
+    /// Determines whether to fall back to IDE execution for a project resource that did not pass
+    /// <see cref="ExtensionUtils.SupportsDebugging"/>.
     /// </summary>
     private bool ShouldFallBackToIdeExecution(bool isInDebugSession, SupportsDebuggingAnnotation? supportsDebuggingAnnotation)
     {
         if (!isInDebugSession)
-        {
-            return false;
-        }
-
-        // An explicit opt-out (a disabled SupportsDebuggingAnnotation, e.g. from WithTerminal())
-        // must beat the Visual Studio fallback below. Without this, a project resource that disabled
-        // debugging would still be routed to IDE execution whenever the IDE did not advertise a
-        // capability list via DEBUG_SESSION_INFO.
-        //
-        // The opt-out exists for usability: DCP cannot yet run a process under the debugger and a
-        // pseudo-terminal (PTY) at the same time, and attaching the debugger breaks the PTY flow,
-        // leaving the user with an empty terminal and no output. We prefer to keep the PTY working;
-        // the user can attach the debugger themselves afterwards. Remove once DCP supports both
-        // simultaneously: https://github.com/microsoft/dcp/issues/189.
-        if (supportsDebuggingAnnotation is { Enabled: false })
         {
             return false;
         }

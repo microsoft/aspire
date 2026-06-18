@@ -1004,7 +1004,7 @@ public class AddGoAppTests
         Assert.True(resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
 
         var exe = Executable.Create("test", "go");
-        supportsDebugging.LaunchConfigurationAnnotator!(exe, ExecutableLaunchMode.Debug);
+        supportsDebugging.LaunchConfigurationAnnotator(exe, ExecutableLaunchMode.Debug);
 
         Assert.True(exe.TryGetAnnotationAsObjectList<GoLaunchConfiguration>(
             Executable.LaunchConfigurationsAnnotation,

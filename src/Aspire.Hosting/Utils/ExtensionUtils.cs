@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
@@ -19,22 +19,8 @@ internal static class ExtensionUtils
         var supportedLaunchConfigurations = GetSupportedLaunchConfigurations(configuration);
 
         if (!builder.TryGetLastAnnotation(out supportsDebuggingAnnotation)
-            || string.IsNullOrEmpty(configuration[DcpExecutor.DebugSessionPortVar]))
-        {
-            return false;
-        }
-
-        // An explicitly disabled annotation (SupportsDebuggingAnnotation.Disabled(), e.g. from
-        // WithTerminal()) opts the resource out of IDE/debugger execution entirely. Return false but
-        // keep the annotation in the out parameter so callers (e.g. ShouldFallBackToIdeExecution) can
-        // distinguish an explicit opt-out from a resource that simply has no debugging annotation.
-        //
-        // Rationale is usability: DCP cannot yet run a process under the debugger and a pseudo-terminal
-        // (PTY) at the same time, and attaching the debugger breaks the PTY flow. If we let the debugger
-        // attach, the user would just see an empty terminal with no output, which is confusing. We prefer
-        // to keep the PTY working; the user can attach the debugger themselves afterwards. Remove once DCP
-        // supports both simultaneously: https://github.com/microsoft/dcp/issues/189.
-        if (!supportsDebuggingAnnotation.Enabled)
+            || string.IsNullOrEmpty(configuration[DcpExecutor.DebugSessionPortVar])
+            || builder.HasAnnotationOfType<ForceProcessExecutionAnnotation>())
         {
             return false;
         }
