@@ -101,10 +101,31 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
             connectionSetupTcs = _connectionSetupTcs;
         }
 
-        if (!shouldConnect)
+        while (!shouldConnect)
         {
-            await connectionSetupTcs.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
-            return;
+            try
+            {
+                await connectionSetupTcs.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+                return;
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                lock (_connectionSetupLock)
+                {
+                    if (ReferenceEquals(_connectionSetupTcs, connectionSetupTcs))
+                    {
+                        _connectionSetupTcs = null;
+                    }
+
+                    if (_connectionSetupTcs is null)
+                    {
+                        _connectionSetupTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                        shouldConnect = true;
+                    }
+
+                    connectionSetupTcs = _connectionSetupTcs;
+                }
+            }
         }
 
         var endpoint = _configuration[KnownConfigNames.ExtensionEndpoint];

@@ -144,6 +144,20 @@ export function getRunningAppHostPid(appHostPath: string): number | undefined {
     return getRunningAppHostFromState(appHostPath)?.appHostPid;
 }
 
+export async function waitForRunningAppHostPid(appHostPath: string, timeoutMs: number): Promise<number> {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+        const pid = getRunningAppHostPid(appHostPath);
+        if (pid !== undefined) {
+            return pid;
+        }
+
+        await delay(250);
+    }
+
+    throw new Error(`Timed out after ${timeoutMs}ms waiting for AppHost process state before stopping ${appHostPath}.`);
+}
+
 export function removePrimaryAppHostFixture(): void {
     removePath(path.join(getWorkspaceRoot(), 'AspireE2E.AppHost'), { recursive: true, force: true });
     removePath(path.join(getWorkspaceRoot(), 'AspireE2E.Worker'), { recursive: true, force: true });
