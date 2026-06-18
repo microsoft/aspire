@@ -486,7 +486,7 @@ public sealed class DcpHostNotificationTests
     public async Task CreateDcpProcessSpec_WithDcpDeveloperCertificateDefault_IncludesDeveloperCertificateArguments()
     {
         var activities = new ConcurrentBag<Activity>();
-        using var listener = ActivityListenerHelper.Create(ProfilingTelemetry.ActivitySource, activities.Add);
+        using var listener = ActivityListenerHelper.Create(ProfilingTelemetry.ActivitySource, onActivityStopped: activities.Add);
         using var certificate = CreateExportableCertificate();
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>

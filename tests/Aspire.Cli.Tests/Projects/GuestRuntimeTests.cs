@@ -248,7 +248,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         using var profilingTelemetry = CreateProfilingTelemetry(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1"));
-        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, stoppedActivities.Add);
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStopped: stoppedActivities.Add);
         using var tempDirectory = new TestTempDirectory();
 
         var spec = CreateTestSpec(
@@ -762,7 +762,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         using var profilingTelemetry = CreateProfilingTelemetry(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1"));
-        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, stoppedActivities.Add);
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStopped: stoppedActivities.Add);
         using var tempDirectory = new TestTempDirectory();
 
         var launcher = new ProcessGuestLauncher(

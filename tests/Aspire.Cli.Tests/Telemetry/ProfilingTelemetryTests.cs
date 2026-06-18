@@ -17,7 +17,7 @@ public class ProfilingTelemetryTests
     {
         Activity? startedActivity = null;
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration());
-        using var listener = ActivityListenerHelper.CreateWithStarted(profilingTelemetry.ActivitySource, activity => startedActivity = activity);
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStarted: activity => startedActivity = activity);
 
         using var activity = profilingTelemetry.StartRunCommand();
 
@@ -32,7 +32,7 @@ public class ProfilingTelemetryTests
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1")));
-        using var listener = ActivityListenerHelper.CreateWithStarted(profilingTelemetry.ActivitySource, activity => startedActivity = activity);
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStarted: activity => startedActivity = activity);
 
         using var activity = profilingTelemetry.StartRunCommand();
 
@@ -51,7 +51,7 @@ public class ProfilingTelemetryTests
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1")));
-        using var listener = ActivityListenerHelper.CreateWithStarted(profilingTelemetry.ActivitySource, startedActivities.Enqueue);
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStarted: startedActivities.Enqueue);
         var aspirePath = Path.Combine("tools", "aspire");
         var npmPath = Path.Combine("node", "npm");
         var workingDirectory = Directory.GetCurrentDirectory();
@@ -121,7 +121,7 @@ public class ProfilingTelemetryTests
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1")));
-        using var listener = ActivityListenerHelper.CreateWithStarted(profilingTelemetry.ActivitySource, startedActivities.Enqueue);
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStarted: startedActivities.Enqueue);
         var appHostProjectFile = new FileInfo(Path.Combine("AppHost", "AppHost.csproj"));
 
         using (var addActivity = profilingTelemetry.StartAddCommand("redis", "13.4.0", "nuget-source", appHostProjectFile))
@@ -241,11 +241,11 @@ public class ProfilingTelemetryTests
     public void ProfilingSpansReuseSessionFromAmbientActivityBaggage()
     {
         var startedActivities = new ConcurrentQueue<Activity>();
-        using var parentListener = ActivityListenerHelper.Create("test-parent");
+        using var parentSource = new ActivitySource("test-parent");
+        using var parentListener = ActivityListenerHelper.Create(parentSource);
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true")));
-        using var listener = ActivityListenerHelper.CreateWithStarted(profilingTelemetry.ActivitySource, startedActivities.Enqueue);
-        using var parentSource = new ActivitySource("test-parent");
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStarted: startedActivities.Enqueue);
         using var parentActivity = parentSource.StartActivity("parent");
         Assert.NotNull(parentActivity);
 
@@ -272,13 +272,13 @@ public class ProfilingTelemetryTests
     public void ProfilingSpansStoreGeneratedSessionOnAmbientAncestorsForSiblings()
     {
         var startedActivities = new ConcurrentQueue<Activity>();
-        using var parentListener = ActivityListenerHelper.Create("test-parent");
-        using var diagnosticListener = ActivityListenerHelper.Create("test-diagnostic");
+        using var parentSource = new ActivitySource("test-parent");
+        using var parentListener = ActivityListenerHelper.Create(parentSource);
+        using var diagnosticSource = new ActivitySource("test-diagnostic");
+        using var diagnosticListener = ActivityListenerHelper.Create(diagnosticSource);
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true")));
-        using var listener = ActivityListenerHelper.CreateWithStarted(profilingTelemetry.ActivitySource, startedActivities.Enqueue);
-        using var parentSource = new ActivitySource("test-parent");
-        using var diagnosticSource = new ActivitySource("test-diagnostic");
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStarted: startedActivities.Enqueue);
         using var parentActivity = parentSource.StartActivity("parent");
         Assert.NotNull(parentActivity);
 

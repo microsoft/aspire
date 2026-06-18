@@ -586,7 +586,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var profilingTelemetry = provider.GetRequiredService<ProfilingTelemetry>();
-        using var listener = ActivityListenerHelper.CreateWithStarted(profilingTelemetry.ActivitySource, startedActivities.Enqueue);
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStarted: startedActivities.Enqueue);
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var runner = DotNetCliRunnerTestHelper.Create(
             provider,

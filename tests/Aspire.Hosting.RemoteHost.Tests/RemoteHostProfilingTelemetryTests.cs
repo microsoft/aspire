@@ -15,8 +15,8 @@ public class RemoteHostProfilingTelemetryTests
     [Fact]
     public void StartRemoteHostRun_RestoresConfiguredParentAndSession()
     {
-        using var parentListener = ActivityListenerHelper.Create("test-remotehost-parent", _ => { });
         using var parentSource = new ActivitySource("test-remotehost-parent");
+        using var parentListener = ActivityListenerHelper.Create(parentSource, onActivityStopped: _ => { });
         ActivityTraceId parentTraceId;
         ActivitySpanId parentSpanId;
         string traceParent;
@@ -37,7 +37,7 @@ public class RemoteHostProfilingTelemetryTests
             (RemoteHostProfilingTelemetry.EnvironmentVariables.TraceParent, traceParent),
             (RemoteHostProfilingTelemetry.EnvironmentVariables.TraceState, traceState)));
         var activities = new List<Activity>();
-        using var listener = ActivityListenerHelper.Create(telemetry.ActivitySource, activities.Add);
+        using var listener = ActivityListenerHelper.Create(telemetry.ActivitySource, onActivityStopped: activities.Add);
 
         using (telemetry.StartRemoteHostRun())
         {
@@ -56,7 +56,7 @@ public class RemoteHostProfilingTelemetryTests
     {
         var telemetry = new RemoteHostProfilingTelemetry(CreateConfiguration());
         var activities = new List<Activity>();
-        using var listener = ActivityListenerHelper.Create(telemetry.ActivitySource, activities.Add);
+        using var listener = ActivityListenerHelper.Create(telemetry.ActivitySource, onActivityStopped: activities.Add);
 
         using (telemetry.StartRemoteHostRun())
         {
@@ -71,7 +71,7 @@ public class RemoteHostProfilingTelemetryTests
         var telemetry = new RemoteHostProfilingTelemetry(CreateConfiguration(
             (RemoteHostProfilingTelemetry.EnvironmentVariables.Enabled, "true")));
         var activities = new List<Activity>();
-        using var listener = ActivityListenerHelper.Create(telemetry.ActivitySource, activities.Add);
+        using var listener = ActivityListenerHelper.Create(telemetry.ActivitySource, onActivityStopped: activities.Add);
 
         using (var scope = telemetry.StartCapabilityScan(assemblyCount: 3, firstScan: true))
         {
@@ -98,7 +98,7 @@ public class RemoteHostProfilingTelemetryTests
         var telemetry = new RemoteHostProfilingTelemetry(CreateConfiguration(
             (RemoteHostProfilingTelemetry.EnvironmentVariables.Enabled, "true")));
         var activities = new List<Activity>();
-        using var listener = ActivityListenerHelper.Create(telemetry.ActivitySource, activities.Add);
+        using var listener = ActivityListenerHelper.Create(telemetry.ActivitySource, onActivityStopped: activities.Add);
 
         using (var scope = telemetry.StartAssemblyLoad(cacheHit: false))
         {
@@ -120,7 +120,7 @@ public class RemoteHostProfilingTelemetryTests
         var telemetry = new RemoteHostProfilingTelemetry(CreateConfiguration(
             (RemoteHostProfilingTelemetry.EnvironmentVariables.Enabled, "true")));
         var activities = new List<Activity>();
-        using var listener = ActivityListenerHelper.Create(telemetry.ActivitySource, activities.Add);
+        using var listener = ActivityListenerHelper.Create(telemetry.ActivitySource, onActivityStopped: activities.Add);
 
         using (telemetry.StartJsonRpcInvokeCapability(
             "aspire.redis/addRedis@1",

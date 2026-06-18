@@ -182,7 +182,7 @@ public class AssemblyLoaderTests
 
         var telemetry = new RemoteHostProfilingTelemetry(configuration);
         var activities = new List<Activity>();
-        using var listener = ActivityListenerHelper.Create(telemetry.ActivitySource, activities.Add);
+        using var listener = ActivityListenerHelper.Create(telemetry.ActivitySource, onActivityStopped: activities.Add);
         var loader = new AssemblyLoader(configuration, NullLogger<AssemblyLoader>.Instance, telemetry);
 
         var assemblies = loader.GetAssemblies();

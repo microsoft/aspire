@@ -779,7 +779,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
         });
         using var provider = services.BuildServiceProvider();
         var profilingTelemetry = provider.GetRequiredService<ProfilingTelemetry>();
-        using var listener = ActivityListenerHelper.CreateWithStarted(profilingTelemetry.ActivitySource, startedActivities.Add);
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStarted: startedActivities.Add);
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("ls --format json --all");

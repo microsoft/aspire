@@ -92,7 +92,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
     {
         var project = new RecordingAppHostServerProject();
         using var parentSource = new ActivitySource("test-apphost-server-parent");
-        using var parentListener = ActivityListenerHelper.Create("test-apphost-server-parent");
+        using var parentListener = ActivityListenerHelper.Create(parentSource);
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1")));

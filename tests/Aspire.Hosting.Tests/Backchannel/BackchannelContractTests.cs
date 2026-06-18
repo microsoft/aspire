@@ -274,7 +274,7 @@ public class BackchannelContractTests
         Activity? startedActivity = null;
         var telemetry = new ProfilingTelemetry(CreateConfiguration(
             (KnownConfigNames.ProfilingEnabled, "true")));
-        using var listener = ActivityListenerHelper.CreateWithStarted(ProfilingTelemetry.ActivitySource, activity => startedActivity = activity);
+        using var listener = ActivityListenerHelper.Create(ProfilingTelemetry.ActivitySource, onActivityStarted: activity => startedActivity = activity);
 
         using var activity = telemetry.StartJsonRpcServerCall(
             "GetCapabilitiesAsync",
@@ -298,7 +298,7 @@ public class BackchannelContractTests
     public void DcpRunApplication_UsesConfiguredProfilingParentWhenAmbientActivityIsNotProfiling()
     {
         var activities = new List<Activity>();
-        using var profilingListener = ActivityListenerHelper.CreateWithStarted(ProfilingTelemetry.ActivitySource, activities.Add);
+        using var profilingListener = ActivityListenerHelper.Create(ProfilingTelemetry.ActivitySource, onActivityStarted: activities.Add);
         using var processSource = new ActivitySource("test.process");
         using var processListener = ActivityListenerHelper.Create(processSource);
         using var processActivity = processSource.StartActivity("process npx.CMD", ActivityKind.Internal);

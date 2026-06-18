@@ -68,7 +68,7 @@ public class ProfilingTelemetryContextTests
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1"),
             (ProfilingTelemetry.EnvironmentVariables.TraceParent, "00-0102030405060708090a0b0c0d0e0f10-1112131415161718-01"),
             (ProfilingTelemetry.EnvironmentVariables.TraceState, "state-1")));
-        using var listener = ActivityListenerHelper.CreateWithStarted(profilingTelemetry.ActivitySource, startedActivities.Add);
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStarted: startedActivities.Add);
 
         using var activity = profilingTelemetry.StartRunCommand();
 
@@ -104,7 +104,7 @@ public class ProfilingTelemetryContextTests
             (KnownConfigNames.Legacy.StartupOperationId, "session-1"),
             (KnownConfigNames.Legacy.StartupTraceParent, "00-0102030405060708090a0b0c0d0e0f10-1112131415161718-01"),
             (KnownConfigNames.Legacy.StartupTraceState, "state-1")));
-        using var listener = ActivityListenerHelper.CreateWithStarted(profilingTelemetry.ActivitySource, startedActivities.Add);
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStarted: startedActivities.Add);
 
         using var activity = profilingTelemetry.StartRunCommand();
 

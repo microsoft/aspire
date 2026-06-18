@@ -266,7 +266,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         });
         using var provider = services.BuildServiceProvider();
         var profilingTelemetry = provider.GetRequiredService<ProfilingTelemetry>();
-        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, stoppedActivities.Enqueue);
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStopped: stoppedActivities.Enqueue);
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("stop --all");
