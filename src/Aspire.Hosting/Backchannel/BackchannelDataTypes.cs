@@ -1166,6 +1166,11 @@ internal sealed class ResourceSnapshotCommand
     public string? Description { get; init; }
 
     /// <summary>
+    /// Gets the confirmation message shown before executing the command.
+    /// </summary>
+    public string? ConfirmationMessage { get; init; }
+
+    /// <summary>
     /// Gets the ordered inputs that describe the invocation arguments accepted by the command.
     /// </summary>
     public ResourceSnapshotCommandArgument[] ArgumentInputs { get; init; } = [];
@@ -1731,4 +1736,3 @@ internal sealed class ResourceLogBatch
     /// </summary>
     public required ResourceLogLine[] Lines { get; init; }
 }
-

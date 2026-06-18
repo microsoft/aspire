@@ -231,6 +231,12 @@ internal sealed class ResourceCommandJson
     public string? Description { get; set; }
 
     /// <summary>
+    /// The confirmation message shown before executing the command.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ConfirmationMessage { get; set; }
+
+    /// <summary>
     /// Where the command is visible. Omitted when the command uses the default UI and API visibility.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

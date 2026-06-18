@@ -266,6 +266,36 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void GetCommandConfirmationMessage_ReturnsMessageForEnabledCommand()
+    {
+        var command = new ResourceSnapshotCommand
+        {
+            Name = "reset",
+            State = "Enabled",
+            ConfirmationMessage = "Reset resource?"
+        };
+
+        var confirmationMessage = ResourceCommand.GetCommandConfirmationMessage(command);
+
+        Assert.Equal("Reset resource?", confirmationMessage);
+    }
+
+    [Fact]
+    public void GetCommandConfirmationMessage_ReturnsNullForDisabledCommand()
+    {
+        var command = new ResourceSnapshotCommand
+        {
+            Name = "reset",
+            State = "Disabled",
+            ConfirmationMessage = "Reset resource?"
+        };
+
+        var confirmationMessage = ResourceCommand.GetCommandConfirmationMessage(command);
+
+        Assert.Null(confirmationMessage);
+    }
+
+    [Fact]
     public async Task ResourceCommand_RequiresResourceArgument()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
