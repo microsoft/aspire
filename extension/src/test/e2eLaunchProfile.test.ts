@@ -370,4 +370,20 @@ suite('E2E launch profile', () => {
         assert.ok(fixtures.includes("error.code === 'EPERM'"));
         assert.ok(fixtures.includes("const maxAttempts = process.platform === 'win32' ? 40 : 1;"));
     });
+
+    test('keeps tree action resource lifecycle commands as terminal routing assertions', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const treeActions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'treeActions.e2e.test.ts'), 'utf8');
+        const stopResourceStart = treeActions.indexOf("getCommandInvocationCount('aspire-vscode.stopResource')");
+        const executeResourceCommandStart = treeActions.indexOf("getCommandInvocationCount('aspire-vscode.executeResourceCommandItem')");
+        assert.ok(stopResourceStart >= 0);
+        assert.ok(executeResourceCommandStart > stopResourceStart);
+        const resourceLifecycleSuppressionStart = treeActions.lastIndexOf('await setTerminalCommandExecutionSuppressedForE2E(true);', stopResourceStart);
+        assert.ok(resourceLifecycleSuppressionStart >= 0);
+        const resourceLifecycleCommands = treeActions.slice(resourceLifecycleSuppressionStart, executeResourceCommandStart);
+
+        assert.ok(resourceLifecycleCommands.includes('await setTerminalCommandExecutionSuppressedForE2E(true);'));
+        assert.ok(resourceLifecycleCommands.includes('await setTerminalCommandExecutionSuppressedForE2E(false);'));
+        assert.ok(!resourceLifecycleCommands.includes("['Stopped', 'Finished', 'Exited']"));
+    });
 });
