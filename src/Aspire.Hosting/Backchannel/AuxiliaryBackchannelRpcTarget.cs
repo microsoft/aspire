@@ -1090,7 +1090,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             .Select(e => new ResourceSnapshotEnvironmentVariable
             {
                 Name = e.Name,
-                Value = e.Value is not null && secretParameterValues.Contains(e.Value) ? null : e.Value,
+                Value = RedactIfSecretValue(e.Value, secretParameterValues),
                 IsFromSpec = e.IsFromSpec
             })
             .ToArray();
@@ -1155,6 +1155,13 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             Commands = commands
         };
     }
+
+    /// <summary>
+    /// Redacts an environment variable value when it matches a secret parameter's resolved value
+    /// so secrets don't leak through clients (e.g. <c>aspire describe --format json</c>).
+    /// </summary>
+    private static string? RedactIfSecretValue(string? value, HashSet<string> secretParameterValues)
+        => value is not null && secretParameterValues.Contains(value) ? null : value;
 
     /// <summary>
     /// Collects the resolved values of secret parameters in the application model so they can
