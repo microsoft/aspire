@@ -940,7 +940,7 @@ public class Program
         // TRUE)), we inherit "CTRL+C disabled" and the kernel will silently drop CTRL_C_EVENT
         // for both us and our descendants — including the AppHost and DCP-launched services.
         // Calling SetConsoleCtrlHandler(NULL, FALSE) once at startup clears that inherited
-        // state so the rest of the PR's signal ladder (CCM → AppHost SIGINT → DCP stop-process-tree)
+        // state so the CLI's signal ladder (CCM → AppHost SIGINT → DCP stop-process-tree)
         // can actually deliver. The runtime/Spectre still own the actual CTRL+C handler chain;
         // we only flip the inherited "ignored" attribute.
         if (OperatingSystem.IsWindows())

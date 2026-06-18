@@ -562,46 +562,6 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             NullLoggerFactory.Instance);
     }
 
-    private sealed class RecordingGracefulSignaler : IProcessTreeGracefulShutdownSignaler
-    {
-        private readonly object _lock = new();
-        private readonly Func<int, Task<bool>>? _onSignal;
-        private readonly List<int> _pids = new();
-
-        public RecordingGracefulSignaler(Func<int, Task<bool>>? onSignal = null)
-        {
-            _onSignal = onSignal;
-        }
-
-        public IReadOnlyList<int> Pids
-        {
-            get
-            {
-                // The session invokes the signaler from a CT registration callback which can
-                // race with the test thread reading Pids; snapshot under lock to satisfy
-                // happens-before for the test assertions.
-                lock (_lock)
-                {
-                    return _pids.ToArray();
-                }
-            }
-        }
-
-        public Task<bool> RequestProcessTreeGracefulShutdownAsync(
-            int pid,
-            DateTimeOffset? startTime,
-            bool includeStartTimeForDcp,
-            CancellationToken cancellationToken)
-        {
-            lock (_lock)
-            {
-                _pids.Add(pid);
-            }
-
-            return _onSignal?.Invoke(pid) ?? Task.FromResult(true);
-        }
-    }
-
     private sealed class RecordingAppHostServerProject : IAppHostServerProject
     {
         public string AppDirectoryPath => Directory.GetCurrentDirectory();
