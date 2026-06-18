@@ -3,6 +3,7 @@
 
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Text;
 using Microsoft.Win32.SafeHandles;
 
 namespace Aspire.Cli.Processes;
@@ -47,6 +48,18 @@ internal sealed class IsolatedProcessStartInfo
     /// semantics cover the equivalent case).
     /// </summary>
     public SafeFileHandle? JobHandle { get; init; }
+
+    /// <summary>
+    /// When <see langword="true"/> (the default) the child is spawned in its own hidden console
+    /// group on Windows (CREATE_NEW_CONSOLE | SW_HIDE) so DCP's <c>stop-process-tree</c> CTRL+C
+    /// dance can target it without also signalling the CLI. When <see langword="false"/> the child
+    /// is spawned via an ordinary redirected <see cref="Process.Start(ProcessStartInfo)"/> — no new
+    /// console, no <see cref="JobHandle"/>, and stdin wired to an empty pipe — which is the shape
+    /// every non-isolated CLI subprocess (build, restore, package add, …) uses. On Unix both modes
+    /// are identical because SIGTERM via the process group covers teardown, so only Windows branches
+    /// on this flag.
+    /// </summary>
+    public bool IsolateConsole { get; init; } = true;
 
     /// <summary>
     /// Returns true when the caller has read or modified <see cref="Environment"/>. The
@@ -223,12 +236,95 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(standardOutputHandler);
         ArgumentNullException.ThrowIfNull(standardErrorHandler);
 
+        // Non-isolated mode is an ordinary redirected Process.Start on every platform: no new
+        // console, no JobHandle, stdin wired to an empty pipe. On Unix the isolated mode is the
+        // same redirected spawn (SIGTERM via the process group is enough), so only the isolated
+        // Windows path needs the dedicated new-console launcher.
+        if (!startInfo.IsolateConsole)
+        {
+            return StartRedirected(startInfo, standardOutputHandler, standardErrorHandler, redirectStandardInput: true);
+        }
+
         if (OperatingSystem.IsWindows())
         {
             return StartWindows(startInfo, standardOutputHandler, standardErrorHandler);
         }
 
-        return StartUnix(startInfo, standardOutputHandler, standardErrorHandler);
+        return StartRedirected(startInfo, standardOutputHandler, standardErrorHandler, redirectStandardInput: false);
+    }
+
+    /// <summary>
+    /// Cross-platform redirected spawn — a thin <see cref="Process.Start(ProcessStartInfo)"/>
+    /// wrapper. Used for every non-isolated child (all platforms) and for isolated children on
+    /// Unix, where SIGTERM / process groups handle cooperative shutdown so the new-console
+    /// gymnastics the Windows partial uses are unnecessary. <see cref="IsolatedProcessStartInfo.JobHandle"/>
+    /// is ignored here (Unix process-group reparenting + signal delivery cover the crash-time case
+    /// that JobHandle exists to address on Windows).
+    /// </summary>
+    /// <param name="startInfo">Process launch parameters.</param>
+    /// <param name="standardOutputHandler">Per-line callback for stdout; receives the wrapper as sender.</param>
+    /// <param name="standardErrorHandler">Per-line callback for stderr; receives the wrapper as sender.</param>
+    /// <param name="redirectStandardInput">
+    /// <see langword="true"/> wires stdin to an empty redirected pipe (the non-isolated shape every
+    /// other CLI subprocess uses). <see langword="false"/> lets the child inherit the CLI's stdin
+    /// (the isolated-Unix shape).
+    /// </param>
+    private static IsolatedProcess StartRedirected(
+        IsolatedProcessStartInfo startInfo,
+        Action<IsolatedProcess, string> standardOutputHandler,
+        Action<IsolatedProcess, string> standardErrorHandler,
+        bool redirectStandardInput)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = startInfo.FileName,
+            WorkingDirectory = startInfo.WorkingDirectory,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            RedirectStandardInput = redirectStandardInput,
+            // Pin encodings so the new pump matches the existing ProcessGuestLauncher behavior
+            // regardless of the ambient Console.OutputEncoding (e.g. on container hosts that
+            // leave it set to ASCII).
+            StandardOutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: false),
+            StandardErrorEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: false),
+        };
+
+        foreach (var arg in startInfo.ArgumentList)
+        {
+            psi.ArgumentList.Add(arg);
+        }
+
+        // Only mutate the ProcessStartInfo env block when the caller actually touched
+        // IsolatedProcessStartInfo.Environment. Otherwise leave ProcessStartInfo to inherit
+        // the parent's env verbatim — saves a snapshot-and-copy round trip for the common
+        // case where nothing was customized.
+        if (startInfo.HasCustomEnvironment)
+        {
+            psi.Environment.Clear();
+            foreach (var (key, value) in startInfo.Environment)
+            {
+                // Match ProcessStartInfo.Environment semantics: a null value means "do not
+                // set this variable in the child" — we get there by simply not adding it.
+                if (value is not null)
+                {
+                    psi.Environment[key] = value;
+                }
+            }
+        }
+
+        var process = Process.Start(psi)
+            ?? throw new InvalidOperationException($"Failed to start child process: {startInfo.FileName}");
+
+        return WrapStartedProcess(
+            startInfo,
+            process,
+            process.StandardOutput,
+            process.StandardError,
+            standardOutputHandler,
+            standardErrorHandler,
+            extraDispose: null);
     }
 
     /// <summary>

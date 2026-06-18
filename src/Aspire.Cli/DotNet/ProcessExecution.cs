@@ -8,212 +8,216 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.Cli.DotNet;
 
 /// <summary>
-/// Represents a configured process execution backed by a real OS process.
+/// The single <see cref="IProcessExecution"/> implementation. Wraps an <see cref="IsolatedProcess"/>
+/// for both the isolated-console run path (Windows AppHost graceful shutdown) and ordinary
+/// non-isolated subprocesses — the only difference is the
+/// <see cref="IsolatedProcessStartInfo.IsolateConsole"/> flag the factory sets. The child is
+/// spawned lazily on <see cref="Start"/> so callers that build an execution but never start it
+/// (e.g. the extension-host launch path, which reads <see cref="Arguments"/> /
+/// <see cref="EnvironmentVariables"/> and returns before starting) don't orphan a process.
 /// </summary>
 internal sealed class ProcessExecution : IProcessExecution
 {
-    private static readonly TimeSpan s_forwarderIdleTimeout = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan s_forwarderPollInterval = TimeSpan.FromMilliseconds(100);
+    private static readonly TimeSpan s_drainIdleTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan s_drainPollInterval = TimeSpan.FromMilliseconds(100);
 
-    private readonly Process _process;
+    private readonly IsolatedProcessStartInfo _startInfo;
+    private readonly string _fileName;
+    private readonly IReadOnlyList<string> _arguments;
+    private readonly IReadOnlyDictionary<string, string?> _environment;
     private readonly ILogger _logger;
     private readonly ProcessInvocationOptions _options;
-    private Task? _stdoutForwarder;
-    private Task? _stderrForwarder;
-    private long _lastForwarderActivityTimestamp = Stopwatch.GetTimestamp();
+    private IsolatedProcess? _process;
+    private long _lastActivityTimestamp = Stopwatch.GetTimestamp();
+    private int _disposed;
 
-    internal ProcessExecution(Process process, ILogger logger, ProcessInvocationOptions options)
+    internal ProcessExecution(
+        IsolatedProcessStartInfo startInfo,
+        string fileName,
+        IReadOnlyList<string> arguments,
+        IReadOnlyDictionary<string, string?> environment,
+        ILogger logger,
+        ProcessInvocationOptions options)
     {
-        _process = process;
+        _startInfo = startInfo;
+        _fileName = fileName;
+        _arguments = arguments;
+        _environment = environment;
         _logger = logger;
         _options = options;
     }
 
     /// <inheritdoc />
-    public string FileName => _process.StartInfo.FileName;
+    public string FileName => _fileName;
 
     /// <inheritdoc />
-    public IReadOnlyList<string> Arguments => _process.StartInfo.ArgumentList.ToArray();
+    public IReadOnlyList<string> Arguments => _arguments;
 
     /// <inheritdoc />
-    public IReadOnlyDictionary<string, string?> EnvironmentVariables =>
-        _process.StartInfo.Environment.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+    public IReadOnlyDictionary<string, string?> EnvironmentVariables => _environment;
 
     /// <inheritdoc />
-    public bool HasExited => _process.HasExited;
+    public int ProcessId => Process.Id;
 
     /// <inheritdoc />
-    public int ExitCode => _process.ExitCode;
+    public bool HasExited => Process.HasExited;
 
     /// <inheritdoc />
-    public int ProcessId => _process.Id;
+    public int ExitCode => Process.ExitCode;
+
+    private IsolatedProcess Process =>
+        _process ?? throw new InvalidOperationException($"{nameof(ProcessExecution)} has not been started. Call {nameof(Start)} first.");
 
     /// <inheritdoc />
     public bool Start()
     {
-        var started = _process.Start();
-
-        if (!started)
-        {
-            _logger.LogDebug("{FileName} failed to start with args: {Args}", FileName, string.Join(" ", Arguments));
-            return false;
-        }
-
-        _logger.LogDebug("{FileName}({ProcessId}) started in {WorkingDirectory}", FileName, _process.Id, _process.StartInfo.WorkingDirectory);
-        RecordForwarderActivity();
-
-        // Start stream forwarders
-        _stdoutForwarder = Task.Run(async () =>
-        {
-            await ForwardStreamToLoggerAsync(
-                _process.StandardOutput,
-                "stdout",
-                _options.StandardOutputCallback);
-        });
-
-        _stderrForwarder = Task.Run(async () =>
-        {
-            await ForwardStreamToLoggerAsync(
-                _process.StandardError,
-                "stderr",
-                _options.StandardErrorCallback);
-        });
-
+        // IsolatedProcess.Start spawns the child and starts the stdout/stderr pumps. It throws on
+        // spawn failure (matching the old ProcessExecution, whose Process.Start could also throw),
+        // so a successful return always means the child is running — there is no false-on-failure
+        // case to model. The old Process.Start() == false path was dead for UseShellExecute=false.
+        _process = IsolatedProcess.Start(_startInfo, OnOutputLine, OnErrorLine);
+        _logger.LogDebug("{FileName}({ProcessId}) started in {WorkingDirectory}", _fileName, _process.Id, _startInfo.WorkingDirectory);
         return true;
     }
 
     /// <inheritdoc />
     public async Task<int> WaitForExitAsync(CancellationToken cancellationToken)
     {
-        _logger.LogDebug("{FileName}({ProcessId}) waiting for exit", FileName, _process.Id);
+        var process = Process;
+        _logger.LogDebug("{FileName}({ProcessId}) waiting for exit", _fileName, process.Id);
 
         try
         {
-            await _process.WaitForExitAsync(cancellationToken);
+            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
-            _logger.LogDebug("{FileName}({ProcessId}) wait was canceled, stopping it", FileName, _process.Id);
+            _logger.LogDebug("{FileName}({ProcessId}) wait was canceled, stopping it", _fileName, process.Id);
 
             await ProcessShutdownCoordinator.ShutdownAsync(
-                _process,
+                process.Process,
                 _options.GracefulShutdownSignaler,
                 _options.ShutdownService,
                 gracefulBudgetActive: true,
                 fallbackRequestGracefulShutdown: !OperatingSystem.IsWindows(),
                 fallbackKillEntireProcessTree: _options.KillEntireProcessTreeOnCancel,
                 _logger,
-                FileName).ConfigureAwait(false);
+                _fileName).ConfigureAwait(false);
 
             throw;
         }
 
-        _logger.LogDebug("{FileName}({ProcessId}) exited with code: {ExitCode}", FileName, _process.Id, _process.ExitCode);
+        _logger.LogDebug("{FileName}({ProcessId}) exited with code: {ExitCode}", _fileName, process.Id, process.ExitCode);
 
-        // Give the forwarders a fresh idle window to consume any buffered tail output produced right before exit.
-        RecordForwarderActivity();
+        // Reset the idle window at exit so the drain budget is measured from "process gone", not
+        // from the last line read. A consumer can block in a callback right up to exit and still
+        // get the full tail — see
+        // ProcessExecutionTests.WaitForExitAsync_AllowsBufferedTailOutputAfterLongIdlePeriod.
+        RecordActivity();
+        await DrainOutputAsync(process, cancellationToken).ConfigureAwait(false);
 
-        // Wait for the stream forwarders to drain naturally first so we don't cut off the
-        // tail of the process output. In some environments the stream handles can stay open
-        // after the process exits, so we fall back to closing them only if the forwarders
-        // stop making progress for the idle timeout.
-        if (_stdoutForwarder is not null && _stderrForwarder is not null)
-        {
-            var forwardersCompleted = Task.WhenAll([_stdoutForwarder, _stderrForwarder]);
-            if (!await WaitForForwardersAsync(forwardersCompleted, cancellationToken).ConfigureAwait(false))
-            {
-                _logger.LogDebug("{FileName}({ProcessId}) closing stdout/stderr streams after forwarder idle timeout", FileName, _process.Id);
-                _process.StandardOutput.Close();
-                _process.StandardError.Close();
-
-                if (!await WaitForForwardersAsync(forwardersCompleted, cancellationToken).ConfigureAwait(false))
-                {
-                    _logger.LogWarning("{FileName}({ProcessId}) stream forwarders did not complete within idle timeout after stream close", FileName, _process.Id);
-                }
-            }
-        }
-
-        return _process.ExitCode;
+        return process.ExitCode;
     }
 
     /// <inheritdoc />
-    public void Kill(bool entireProcessTree)
-    {
-        _process.Kill(entireProcessTree);
-    }
+    public void Kill(bool entireProcessTree) => Process.Kill(entireProcessTree);
 
     /// <inheritdoc />
     public void Dispose()
     {
-        _process.Dispose();
-    }
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
 
-    private async Task ForwardStreamToLoggerAsync(StreamReader reader, string identifier, Action<string>? lineCallback)
-    {
-        _logger.LogDebug(
-            "{FileName}({ProcessId}) starting to forward {Identifier} stream",
-            FileName,
-            _process.Id,
-            identifier
-            );
+        // IProcessExecution is a sync IDisposable but IsolatedProcess only exposes DisposeAsync
+        // (it drains the pumps then tears the pipes/handles down). DotNetCliRunner does not dispose
+        // the execution (StartBackchannelAsync runs fire-and-forget and reads HasExited/ExitCode
+        // after the await — see DotNetCliRunner.cs), so this sync-blocking path is reached only by
+        // explicit `using` consumers and tests.
+        var process = _process;
+        if (process is null)
+        {
+            return;
+        }
 
         try
         {
-            string? line;
-            while ((line = await reader.ReadLineAsync()) is not null)
-            {
-                RecordForwarderActivity();
-
-                if (_logger.IsEnabled(LogLevel.Trace))
-                {
-                    _logger.LogTrace(
-                        "{FileName}({ProcessId}) {Identifier}: {Line}",
-                        FileName,
-                        _process.Id,
-                        identifier,
-                        line
-                        );
-                }
-                lineCallback?.Invoke(line);
-                RecordForwarderActivity();
-            }
+            process.DisposeAsync().AsTask().GetAwaiter().GetResult();
         }
-        catch (ObjectDisposedException)
+        catch (Exception ex)
         {
-            // Stream was closed externally (e.g., after process exit). This is expected.
-            _logger.LogDebug("{FileName}({ProcessId}) {Identifier} stream forwarder completed - stream was closed", FileName, _process.Id, identifier);
+            _logger.LogDebug(ex, "{FileName} IsolatedProcess dispose threw", _fileName);
         }
     }
 
-    private async Task<bool> WaitForForwardersAsync(Task forwardersCompleted, CancellationToken cancellationToken)
+    private void OnOutputLine(IsolatedProcess sender, string line)
     {
+        // RecordActivity brackets the callback (matching the old forwarder) so a slow consumer
+        // keeps the drain budget alive both while we hand it the line and while it processes it.
+        RecordActivity();
+        if (_logger.IsEnabled(LogLevel.Trace))
+        {
+            _logger.LogTrace("{FileName}({ProcessId}) stdout: {Line}", _fileName, sender.Id, line);
+        }
+        _options.StandardOutputCallback?.Invoke(line);
+        RecordActivity();
+    }
+
+    private void OnErrorLine(IsolatedProcess sender, string line)
+    {
+        RecordActivity();
+        if (_logger.IsEnabled(LogLevel.Trace))
+        {
+            _logger.LogTrace("{FileName}({ProcessId}) stderr: {Line}", _fileName, sender.Id, line);
+        }
+        _options.StandardErrorCallback?.Invoke(line);
+        RecordActivity();
+    }
+
+    private async Task DrainOutputAsync(IsolatedProcess process, CancellationToken cancellationToken)
+    {
+        var drained = Task.WhenAll(process.StandardOutputClosed, process.StandardErrorClosed);
+
         while (true)
         {
-            if (forwardersCompleted.IsCompleted)
+            if (drained.IsCompleted)
             {
-                await forwardersCompleted.ConfigureAwait(false);
-                _logger.LogDebug("{FileName}({ProcessId}) forwarders completed", FileName, _process.Id);
-                return true;
+                try
+                {
+                    await drained.ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    // A throwing callback faults the pump task and surfaces here. The pumps still
+                    // drained to EOF so output isn't lost; log and move on — the exit code is valid.
+                    _logger.LogWarning(ex, "{FileName}({ProcessId}) stdout/stderr pump faulted while draining after exit", _fileName, process.Id);
+                }
+
+                _logger.LogDebug("{FileName}({ProcessId}) output drained", _fileName, process.Id);
+                return;
             }
 
-            if (Stopwatch.GetElapsedTime(Interlocked.Read(ref _lastForwarderActivityTimestamp)) >= s_forwarderIdleTimeout)
+            // Idle-based budget: a slow-but-progressing consumer keeps resetting the timer via
+            // RecordActivity, so only a genuinely stalled pump (no output for the whole window)
+            // gives up. The pumps keep running in the background and are reaped by DisposeAsync —
+            // we never force the streams closed (that's the isolated path's already-accepted shape).
+            if (Stopwatch.GetElapsedTime(Interlocked.Read(ref _lastActivityTimestamp)) >= s_drainIdleTimeout)
             {
-                return false;
+                _logger.LogWarning("{FileName}({ProcessId}) stdout/stderr pumps did not drain within idle timeout after exit", _fileName, process.Id);
+                return;
             }
 
             try
             {
-                await Task.Delay(s_forwarderPollInterval, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(s_drainPollInterval, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                return false;
+                return;
             }
         }
     }
 
-    private void RecordForwarderActivity()
-    {
-        Interlocked.Exchange(ref _lastForwarderActivityTimestamp, Stopwatch.GetTimestamp());
-    }
+    private void RecordActivity() => Interlocked.Exchange(ref _lastActivityTimestamp, Stopwatch.GetTimestamp());
 }

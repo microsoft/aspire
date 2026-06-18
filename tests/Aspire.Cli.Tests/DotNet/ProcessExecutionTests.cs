@@ -26,11 +26,6 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(outputFile.FullName, CreateJsonPayload(lineCount: 400));
 
         var scriptFile = await CreateOutputScriptAsync(workspace.WorkspaceRoot, outputFile);
-        var startInfo = CreateStartInfo(scriptFile);
-        var process = new Process
-        {
-            StartInfo = startInfo
-        };
 
         var stdoutBuilder = new StringBuilder();
         var stderrBuilder = new StringBuilder();
@@ -46,9 +41,8 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         });
 
         var isFirstLine = true;
-        using var execution = new ProcessExecution(
-            process,
-            NullLogger.Instance,
+        using var execution = CreateExecution(
+            scriptFile,
             new ProcessInvocationOptions
             {
                 StandardOutputCallback = line =>
@@ -92,11 +86,6 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(outputFile.FullName, CreateJsonPayload(lineCount: 400));
 
         var scriptFile = await CreateDelayedOutputScriptAsync(workspace.WorkspaceRoot, outputFile);
-        var startInfo = CreateStartInfo(scriptFile);
-        var process = new Process
-        {
-            StartInfo = startInfo
-        };
 
         var stdoutBuilder = new StringBuilder();
         var stderrBuilder = new StringBuilder();
@@ -111,9 +100,8 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
             releaseCallback.SetResult();
         });
 
-        using var execution = new ProcessExecution(
-            process,
-            NullLogger.Instance,
+        using var execution = CreateExecution(
+            scriptFile,
             new ProcessInvocationOptions
             {
                 StandardOutputCallback = line =>
@@ -157,15 +145,9 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var scriptFile = await CreateLongRunningScriptAsync(workspace.WorkspaceRoot);
-        var startInfo = CreateStartInfo(scriptFile);
-        var process = new Process
-        {
-            StartInfo = startInfo
-        };
 
-        using var execution = new ProcessExecution(
-            process,
-            NullLogger.Instance,
+        using var execution = CreateExecution(
+            scriptFile,
             new ProcessInvocationOptions());
 
         Assert.True(execution.Start());
@@ -174,9 +156,8 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         await cts.CancelAsync();
 
         await Assert.ThrowsAsync<OperationCanceledException>(() => execution.WaitForExitAsync(cts.Token));
-        await process.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
 
-        Assert.True(process.HasExited);
+        Assert.True(WaitForProcessExit(execution.ProcessId, TimeSpan.FromSeconds(10)), $"Expected process {execution.ProcessId} to exit after cancellation.");
     }
 
     [Theory]
@@ -405,20 +386,29 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
 
     private static IProcessExecution CreateExecution(
         FileInfo scriptFile,
-        bool isolateConsole,
-        IProcessTreeGracefulShutdownSignaler signaler,
-        GracefulShutdownService shutdownService)
+        ProcessInvocationOptions options)
     {
         var factory = new ProcessExecutionFactory(NullLogger<ProcessExecutionFactory>.Instance);
         var startInfo = CreateStartInfo(scriptFile);
 
-        // The Windows kill-on-close job is now resolved on-demand inside the factory via
-        // WindowsConsoleProcessJob.Shared, so the test no longer creates or disposes one.
         return factory.CreateExecution(
             startInfo.FileName,
             startInfo.ArgumentList.ToArray(),
             env: null,
             new DirectoryInfo(startInfo.WorkingDirectory),
+            options);
+    }
+
+    private static IProcessExecution CreateExecution(
+        FileInfo scriptFile,
+        bool isolateConsole,
+        IProcessTreeGracefulShutdownSignaler signaler,
+        GracefulShutdownService shutdownService)
+    {
+        // The Windows kill-on-close job is now resolved on-demand inside the factory via
+        // WindowsConsoleProcessJob.Shared, so the test no longer creates or disposes one.
+        return CreateExecution(
+            scriptFile,
             new ProcessInvocationOptions
             {
                 IsolateConsole = isolateConsole,
