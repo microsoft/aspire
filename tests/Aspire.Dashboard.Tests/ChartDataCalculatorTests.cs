@@ -34,13 +34,13 @@ public class ChartDataCalculatorTests
     }
 
     [Theory]
-    [InlineData(50, 10.0)]
-    [InlineData(90, 50.0)]
-    [InlineData(99, 100.0)]
-    public void CalculatePercentile_ReturnsExpectedBucket(int percentile, double expected)
+    [InlineData(50, 10.0)]   // 50th of 100 items: boundary of bucket 0, interpolates to upper bound
+    [InlineData(90, 50.0)]   // 90th of 100 items: boundary of bucket 1, interpolates to upper bound
+    [InlineData(99, 95.0)]   // 99th of 100 items: 90% through bucket 2 → 50 + (100-50)*0.9
+    public void CalculatePercentile_ReturnsInterpolatedValue(int percentile, double expected)
     {
-        // Buckets: [0, 10) = 50 items, [10, 50) = 40 items, [50, 100) = 10 items
-        ulong[] counts = [50, 40, 10];
+        // Buckets: (-Inf,10]=50, (10,50]=40, (50,100]=10, (100,+Inf)=0
+        ulong[] counts = [50, 40, 10, 0];
         double[] bounds = [10.0, 50.0, 100.0];
 
         var result = ChartDataCalculator.CalculatePercentile(percentile, counts, bounds);
@@ -49,13 +49,37 @@ public class ChartDataCalculatorTests
     }
 
     [Fact]
-    public void CalculatePercentile_AllInOneBucket_ReturnsThatBound()
+    public void CalculatePercentile_AllInOneBucket_InterpolatesWithinBucket()
     {
-        ulong[] counts = [0, 0, 100];
+        // All 100 items in bucket 2: (50,100]
+        ulong[] counts = [0, 0, 100, 0];
         double[] bounds = [10.0, 50.0, 100.0];
 
+        // P50: 50% through bucket 2 → 50 + (100-50)*0.5 = 75
+        Assert.Equal(75.0, ChartDataCalculator.CalculatePercentile(50, counts, bounds));
+        // P99: 99% through bucket 2 → 50 + (100-50)*0.99 = 99.5
+        Assert.Equal(99.5, ChartDataCalculator.CalculatePercentile(99, counts, bounds));
+    }
+
+    [Fact]
+    public void CalculatePercentile_DataInOverflowBucket_ReturnsLastBound()
+    {
+        // All 100 items in the overflow bucket (+Inf)
+        ulong[] counts = [0, 0, 0, 100];
+        double[] bounds = [10.0, 50.0, 100.0];
+
+        // Can't interpolate in overflow bucket — returns last finite bound.
         Assert.Equal(100.0, ChartDataCalculator.CalculatePercentile(50, counts, bounds));
         Assert.Equal(100.0, ChartDataCalculator.CalculatePercentile(99, counts, bounds));
+    }
+
+    [Fact]
+    public void CalculatePercentile_EmptyCounts_ReturnsNull()
+    {
+        ulong[] counts = [0, 0, 0, 0];
+        double[] bounds = [10.0, 50.0, 100.0];
+
+        Assert.Null(ChartDataCalculator.CalculatePercentile(50, counts, bounds));
     }
 
     [Fact]
