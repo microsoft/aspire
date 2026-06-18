@@ -172,6 +172,10 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
                 }
             } while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false));
         }
+        catch (ExtensionIncompatibleException)
+        {
+            throw;
+        }
         catch (OperationCanceledException ex)
         {
             connectionSetupTcs.TrySetCanceled(ex.CancellationToken);

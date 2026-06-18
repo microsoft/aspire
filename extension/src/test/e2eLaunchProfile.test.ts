@@ -353,8 +353,10 @@ suite('E2E launch profile', () => {
         assert.ok(stopAppHost.includes('if (!await getRunningAppHostAccordingToCli(appHostPath))'));
         assert.ok(fixtures.includes('export function getRunningAppHostPid(appHostPath: string): number | undefined'));
         assert.ok(fixtures.includes('removeGeneratedProject(projectName: string, knownAppHostPid?: number)'));
-        assert.ok(zeroToRunning.includes('const appHostPidBeforeTeardown = getRunningAppHostPid(appHostPath);'));
-        assert.ok(zeroToRunning.includes('removeGeneratedProject(projectName, appHostPidBeforeTeardown)'));
+        assert.ok(zeroToRunning.includes('let appHostPidBeforeStop: number | undefined;'));
+        assert.ok(zeroToRunning.includes('appHostPidBeforeStop ??= getRunningAppHostPid(appHostPath);'));
+        assert.ok(zeroToRunning.indexOf('appHostPidBeforeStop = getRunningAppHostPid(appHostPath);') < zeroToRunning.lastIndexOf("executeE2eControlCommand({ name: 'stopDebugging' })"));
+        assert.ok(zeroToRunning.includes('removeGeneratedProject(projectName, appHostPidBeforeStop)'));
         assert.ok(fixtures.includes("['ps', '--format', 'json']"));
         assert.ok(fixtures.includes('Number.isInteger(candidate.appHostPid)'));
         assert.ok(fixtures.includes('let lastKnownAppHostPid = knownAppHostPid;'));

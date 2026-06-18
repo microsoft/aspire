@@ -9,9 +9,10 @@ suite('Aspire zero-to-running E2E', function () {
 
     const projectName = 'ExtensionZeroToRunningApp';
     const appHostPath = getGeneratedAppHostPath(projectName);
+    let appHostPidBeforeStop: number | undefined;
 
     teardown(async () => {
-        const appHostPidBeforeTeardown = getRunningAppHostPid(appHostPath);
+        appHostPidBeforeStop ??= getRunningAppHostPid(appHostPath);
 
         await runE2eTeardown([
             () => setCliUnavailableForE2E(false),
@@ -22,7 +23,7 @@ suite('Aspire zero-to-running E2E', function () {
             () => stopAppHostIfRunning(appHostPath),
             () => waitForNoDebugSessions().catch(() => undefined),
             () => restoreWorkspaceAppHostConfig(),
-            () => removeGeneratedProject(projectName, appHostPidBeforeTeardown),
+            () => removeGeneratedProject(projectName, appHostPidBeforeStop),
         ], 'Zero-to-running E2E teardown failed.');
     });
 
@@ -98,6 +99,7 @@ suite('Aspire zero-to-running E2E', function () {
             assert.ok(browserText.includes('Resources') || browserText.includes(dashboardHost));
         }
 
+        appHostPidBeforeStop = getRunningAppHostPid(appHostPath);
         await executeE2eControlCommand({ name: 'stopDebugging' });
         await waitForNoDebugSessions();
     });
