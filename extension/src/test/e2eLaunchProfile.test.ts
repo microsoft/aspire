@@ -339,6 +339,8 @@ suite('E2E launch profile', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
         const zeroToRunning = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'zeroToRunning.e2e.test.ts'), 'utf8');
+        const commandPalette = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'commandPalette.e2e.test.ts'), 'utf8');
+        const discoveryConfiguration = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'discoveryConfiguration.e2e.test.ts'), 'utf8');
         const stopAppHostStart = fixtures.indexOf('export async function stopAppHostIfRunning');
         const stopAppHostEnd = fixtures.indexOf('interface PsAppHost');
         const stopKnownProcessStart = fixtures.indexOf('async function waitForNoRunningAppHostPathOrStopKnownProcess');
@@ -350,9 +352,17 @@ suite('E2E launch profile', () => {
         const stopAppHost = fixtures.slice(stopAppHostStart, stopAppHostEnd);
         const stopKnownProcess = fixtures.slice(stopKnownProcessStart, stopKnownProcessEnd);
         const waitForCapturedPidCalls = stopAppHost.match(/await waitForNoRunningAppHostPathOrStopKnownProcess\(appHostPath, 30000, runningAppHostBeforeStop\?\.appHostPid, 'after stopping'\);/g) ?? [];
+        const stopErrorAssignmentStart = stopAppHost.indexOf('const stopError = await tryStopAppHost(appHostPath);');
+        const successfulStopStart = stopAppHost.indexOf('if (!stopError)');
+        const successfulStopEnd = stopAppHost.indexOf('if (/not running|No running AppHost|No AppHost/i.test(stopError.message))');
+        const successfulStopWait = stopAppHost.indexOf("await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid, 'after stopping');", successfulStopStart);
+        const timedOutStopStart = stopAppHost.indexOf('if (/timed out|Failed to stop/i.test(stopError.message))');
 
-        assert.ok(stopAppHost.includes('const stopError = await tryStopAppHost(appHostPath);'));
-        assert.ok(stopAppHost.indexOf('if (!stopError)') < stopAppHost.indexOf('await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid,'));
+        assert.ok(stopErrorAssignmentStart >= 0);
+        assert.ok(successfulStopStart > stopErrorAssignmentStart);
+        assert.ok(successfulStopEnd > successfulStopStart);
+        assert.ok(successfulStopWait > successfulStopStart && successfulStopWait < successfulStopEnd);
+        assert.ok(timedOutStopStart > successfulStopEnd);
         assert.ok(stopAppHost.includes('const runningAppHostBeforeStop = getRunningAppHostFromState(appHostPath);'));
         assert.ok(waitForCapturedPidCalls.length >= 3);
         assert.ok(stopAppHost.includes('const runningAppHost = await getRunningAppHostAccordingToCli(appHostPath);'));
@@ -362,9 +372,15 @@ suite('E2E launch profile', () => {
         assert.ok(fixtures.includes('export async function waitForRunningAppHostPid(appHostPath: string, timeoutMs: number): Promise<number>'));
         assert.ok(fixtures.includes('removeGeneratedProject(projectName: string, knownAppHostPid?: number)'));
         assert.ok(zeroToRunning.includes('let appHostPidBeforeStop: number | undefined;'));
+        assert.ok(zeroToRunning.includes('setup(() => {'));
+        assert.ok(zeroToRunning.includes('appHostPidBeforeStop = undefined;'));
         assert.ok(zeroToRunning.includes('appHostPidBeforeStop ??= getRunningAppHostPid(appHostPath);'));
         assert.ok(zeroToRunning.indexOf('appHostPidBeforeStop = await waitForRunningAppHostPid(appHostPath, 30000);') < zeroToRunning.lastIndexOf("executeE2eControlCommand({ name: 'stopDebugging' })"));
         assert.ok(zeroToRunning.includes('removeGeneratedProject(projectName, appHostPidBeforeStop)'));
+        assert.ok(commandPalette.includes('runE2eTeardown'));
+        assert.ok(discoveryConfiguration.includes('runE2eTeardown'));
+        assert.ok(!commandPalette.includes('throw new AggregateError'));
+        assert.ok(!discoveryConfiguration.includes('throw new AggregateError'));
         assert.ok(fixtures.includes("['ps', '--format', 'json']"));
         assert.ok(fixtures.includes('Number.isInteger(candidate.appHostPid)'));
         assert.ok(fixtures.includes('let lastKnownAppHostPid = knownAppHostPid;'));
@@ -376,9 +392,12 @@ suite('E2E launch profile', () => {
         assert.ok(fixtures.includes('process.kill(pid, 0);'));
         assert.ok(fixtures.includes("process.kill(pid, 'SIGTERM');"));
         assert.ok(fixtures.includes('async function waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath: string, timeoutMs: number, knownAppHostPid: number | undefined, actionDescription: string): Promise<void>'));
-        assert.ok(fixtures.includes('formatE2eTeardownFailureMessage(failureMessage, failures)'));
         assert.ok(stopKnownProcess.indexOf('const runningAppHost = await getRunningAppHostAccordingToCli(appHostPath);') < stopKnownProcess.indexOf('await stopProcess(runningAppHost.appHostPid, 30000);'));
         assert.ok(stopKnownProcess.includes('stale/reused'));
+        assert.ok(fixtures.includes('formatE2eTeardownFailureMessage(failureMessage, failures.map(redactE2eTeardownFailure))'));
+        assert.ok(fixtures.includes('function redactE2eTeardownFailure(failure: unknown): string'));
+        assert.ok(!fixtures.includes('error?.stack'));
+        assert.ok(fixtures.includes("code === 'ENOTEMPTY'"));
         assert.ok(fixtures.includes("error.code === 'EPERM'"));
         assert.ok(fixtures.includes("const maxAttempts = process.platform === 'win32' ? 40 : 1;"));
     });

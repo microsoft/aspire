@@ -181,10 +181,10 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
                         ex.RequiredCapability
                         );
 
-                    // If the extension is incompatible then there is no point
-                    // trying to reconnect, we should propagate the exception
-                    // up to the code that needs to back channel so it can display
-                    // an error message to the user.
+                    // Keep the faulted setup task in place for incompatible extensions. This is
+                    // a terminal state for the current CLI process, so future callers should see
+                    // the same compatibility error instead of electing another connector and
+                    // retrying the same unsupported protocol.
                     connectionSetupTcs.TrySetException(ex);
 
                     throw;

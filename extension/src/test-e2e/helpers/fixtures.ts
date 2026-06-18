@@ -77,18 +77,22 @@ export async function runE2eTeardown(cleanups: ReadonlyArray<() => unknown | Pro
     }
 
     if (failures.length > 0) {
-        throw new AggregateError(failures, formatE2eTeardownFailureMessage(failureMessage, failures));
+        throw new AggregateError(failures.map(redactE2eTeardownFailure), formatE2eTeardownFailureMessage(failureMessage, failures.map(redactE2eTeardownFailure)));
     }
 }
 
-function formatE2eTeardownFailureMessage(failureMessage: string, failures: ReadonlyArray<unknown>): string {
-    const formattedFailures = failures.map((failure, index) => {
-        const error = failure instanceof Error ? failure : undefined;
-        const details = error?.stack ?? error?.message ?? String(failure);
-        return `${index + 1}. ${details}`;
-    });
+function formatE2eTeardownFailureMessage(failureMessage: string, failures: ReadonlyArray<string>): string {
+    const formattedFailures = failures.map((failure, index) => `${index + 1}. ${failure}`);
 
     return `${failureMessage}\n${formattedFailures.join('\n')}`;
+}
+
+function redactE2eTeardownFailure(failure: unknown): string {
+    const details = failure instanceof Error ? `${failure.name}: ${failure.message}` : String(failure);
+
+    return details
+        .replace(/https?:\/\/\S+/g, '<redacted-url>')
+        .replace(/Last state:[\s\S]*/g, 'Last state: <redacted>');
 }
 
 export async function createEmptyAppHostProject(projectName: string): Promise<string> {
@@ -651,5 +655,5 @@ function isRetryableFileSystemError(error: unknown): boolean {
     }
 
     const code = (error as NodeJS.ErrnoException).code;
-    return code === 'EBUSY' || code === 'EPERM' || code === 'EACCES';
+    return code === 'EBUSY' || code === 'EPERM' || code === 'EACCES' || code === 'ENOTEMPTY';
 }

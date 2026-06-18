@@ -54,7 +54,47 @@ public class ExtensionBackchannelTests(ITestOutputHelper outputHelper)
             .DefaultTimeout();
         Assert.All(exceptions, exception => Assert.Same(setupException, exception));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => backchannel.ConnectAsync(CancellationToken.None)).DefaultTimeout();
+        var retryException = await Assert.ThrowsAsync<InvalidOperationException>(() => backchannel.ConnectAsync(CancellationToken.None)).DefaultTimeout();
+        Assert.Same(setupException, retryException);
+    }
+
+    [Fact]
+    public async Task ConnectAsync_WhenExtensionIsIncompatible_PropagatesFailureToConcurrentWaitersWithoutRetrying()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var setupEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseSetup = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var setupException = new ExtensionIncompatibleException("Simulated incompatible extension.", "test-capability");
+        var connectAttempts = 0;
+        var backchannel = CreateBackchannel(
+            "127.0.0.1:1",
+            workspace.CreateExecutionContext(),
+            async _ =>
+            {
+                Interlocked.Increment(ref connectAttempts);
+                setupEntered.TrySetResult();
+                await releaseSetup.Task;
+                throw setupException;
+            });
+
+        var firstConnectTask = backchannel.ConnectAsync(CancellationToken.None);
+        await setupEntered.Task.DefaultTimeout();
+
+        var waiterTasks = Enumerable.Range(0, 4)
+            .Select(_ => backchannel.ConnectAsync(CancellationToken.None))
+            .ToArray();
+        await Task.Delay(100).DefaultTimeout();
+
+        releaseSetup.SetResult();
+
+        var exceptions = await Task.WhenAll(
+            waiterTasks.Prepend(firstConnectTask).Select(async task => await Record.ExceptionAsync(() => task)))
+            .DefaultTimeout();
+        Assert.All(exceptions, exception => Assert.Same(setupException, exception));
+
+        var retryException = await Assert.ThrowsAsync<ExtensionIncompatibleException>(() => backchannel.ConnectAsync(CancellationToken.None)).DefaultTimeout();
+        Assert.Same(setupException, retryException);
+        Assert.Equal(1, connectAttempts);
     }
 
     private static ExtensionBackchannel CreateBackchannel(

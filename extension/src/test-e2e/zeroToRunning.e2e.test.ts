@@ -11,6 +11,10 @@ suite('Aspire zero-to-running E2E', function () {
     const appHostPath = getGeneratedAppHostPath(projectName);
     let appHostPidBeforeStop: number | undefined;
 
+    setup(() => {
+        appHostPidBeforeStop = undefined;
+    });
+
     teardown(async () => {
         appHostPidBeforeStop ??= getRunningAppHostPid(appHostPath);
 
