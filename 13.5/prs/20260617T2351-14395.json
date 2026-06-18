@@ -1,0 +1,9 @@
+{
+  "author": "copilot-swe-agent",
+  "comment": "Repository maintenance (issue-labeler GitHub Actions workflow); no user-visible effect in released product",
+  "mergedAt": "2026-06-17T23:51:55Z",
+  "number": 14395,
+  "runDate": "2026-06-18T00:34:46Z",
+  "status": "excluded",
+  "title": "Run the issue-labeler over pull requests using polling"
+}

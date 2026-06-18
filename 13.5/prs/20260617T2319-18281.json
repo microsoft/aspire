@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Agentic workflow configuration change; no user-visible effect in released product",
+  "mergedAt": "2026-06-17T23:19:16Z",
+  "number": 18281,
+  "runDate": "2026-06-18T00:34:46Z",
+  "status": "excluded",
+  "title": "Move agentic workflows off the Copilot PAT (bill inference to the org)"
+}

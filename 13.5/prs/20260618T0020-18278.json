@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Internal refactoring; changes AddSingleton to TryAddSingleton to improve testability but no meaningful user-visible behavior change",
+  "mergedAt": "2026-06-18T00:20:03Z",
+  "number": 18278,
+  "runDate": "2026-06-18T00:34:46Z",
+  "status": "excluded",
+  "title": "Use TryAddSingleton in AddAzureProvisioning and simplify tests"
+}

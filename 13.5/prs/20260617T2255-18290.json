@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Engineering automation fix for the update-ai-foundry-models workflow; no user-visible impact in released product",
+  "mergedAt": "2026-06-17T22:55:42Z",
+  "number": 18290,
+  "runDate": "2026-06-18T00:34:46Z",
+  "status": "excluded",
+  "title": "fix(foundry): retry transient partial/throttled catalog responses in update-ai-foundry-models"
+}

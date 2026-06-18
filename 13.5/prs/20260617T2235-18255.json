@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "New DCP connection health check in aspire doctor for HTTPS trust validation",
+  "mergedAt": "2026-06-17T22:35:38Z",
+  "number": 18255,
+  "runDate": "2026-06-18T00:34:46Z",
+  "status": "included",
+  "title": "Add DCP connection checks to aspire doctor"
+}

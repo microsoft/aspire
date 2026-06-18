@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI maintenance; no user-visible product impact",
+  "mergedAt": "2026-06-17T23:38:02Z",
+  "number": 18291,
+  "runDate": "2026-06-18T00:34:46Z",
+  "status": "excluded",
+  "title": "ci: Reduce max wall clock time for internal build"
+}
