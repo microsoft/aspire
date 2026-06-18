@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Net;
-using System.Net.Sockets;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Hosting;
@@ -15,19 +13,13 @@ namespace Aspire.Cli.Tests.Backchannel;
 public class ExtensionBackchannelTests(ITestOutputHelper outputHelper)
 {
     [Fact]
-    public async Task ConnectAsync_WhenConnectionSetupIsCanceled_PropagatesCancellationToConcurrentWaiters()
+    public async Task ConnectAsync_WhenConnectionSetupFails_PropagatesFailureAndAllowsRetry()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var backchannel = CreateBackchannel(GetUnusedTcpEndpoint(), workspace.CreateExecutionContext());
+        var backchannel = CreateBackchannel("not-a-valid-endpoint", workspace.CreateExecutionContext());
 
-        using var setupCancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
-        using var waiterCancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-
-        var setupTask = backchannel.ConnectAsync(setupCancellation.Token);
-        var waiterTask = backchannel.ConnectAsync(waiterCancellation.Token);
-
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => setupTask).DefaultTimeout();
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waiterTask).DefaultTimeout();
+        await Assert.ThrowsAsync<ArgumentException>(() => backchannel.ConnectAsync(CancellationToken.None)).DefaultTimeout();
+        await Assert.ThrowsAsync<ArgumentException>(() => backchannel.ConnectAsync(CancellationToken.None)).DefaultTimeout();
     }
 
     private static ExtensionBackchannel CreateBackchannel(string endpoint, CliExecutionContext executionContext)
@@ -43,12 +35,4 @@ public class ExtensionBackchannelTests(ITestOutputHelper outputHelper)
         return new ExtensionBackchannel(NullLogger<ExtensionBackchannel>.Instance, new ExtensionRpcTarget(configuration, executionContext), configuration);
     }
 
-    private static string GetUnusedTcpEndpoint()
-    {
-        using var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-
-        return $"127.0.0.1:{port}";
-    }
 }

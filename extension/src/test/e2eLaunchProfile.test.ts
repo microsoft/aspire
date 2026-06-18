@@ -338,17 +338,23 @@ suite('E2E launch profile', () => {
     test('waits for running AppHost processes to exit before deleting E2E fixture directories', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const zeroToRunning = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'zeroToRunning.e2e.test.ts'), 'utf8');
         const stopAppHostStart = fixtures.indexOf('export async function stopAppHostIfRunning');
         const stopAppHostEnd = fixtures.indexOf('interface PsAppHost');
         assert.ok(stopAppHostStart >= 0);
         assert.ok(stopAppHostEnd > stopAppHostStart);
         const stopAppHost = fixtures.slice(stopAppHostStart, stopAppHostEnd);
+        const waitForCapturedPidCalls = stopAppHost.match(/await waitForNoRunningAppHostPath\(appHostPath, 30000, runningAppHostBeforeStop\?\.appHostPid\);/g) ?? [];
 
         assert.ok(stopAppHost.includes('const runningAppHostBeforeStop = getRunningAppHostFromState(appHostPath);'));
-        assert.ok(stopAppHost.includes('await waitForNoRunningAppHostPath(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid);'));
+        assert.ok(waitForCapturedPidCalls.length >= 3);
         assert.ok(stopAppHost.includes('const runningAppHost = await getRunningAppHostAccordingToCli(appHostPath);'));
         assert.ok(stopAppHost.includes('await waitForProcessExit(runningAppHost.appHostPid, 30000);'));
         assert.ok(stopAppHost.includes('if (!await getRunningAppHostAccordingToCli(appHostPath))'));
+        assert.ok(fixtures.includes('export function getRunningAppHostPid(appHostPath: string): number | undefined'));
+        assert.ok(fixtures.includes('removeGeneratedProject(projectName: string, knownAppHostPid?: number)'));
+        assert.ok(zeroToRunning.includes('const appHostPidBeforeTeardown = getRunningAppHostPid(appHostPath);'));
+        assert.ok(zeroToRunning.includes('removeGeneratedProject(projectName, appHostPidBeforeTeardown)'));
         assert.ok(fixtures.includes("['ps', '--format', 'json']"));
         assert.ok(fixtures.includes('Number.isInteger(candidate.appHostPid)'));
         assert.ok(fixtures.includes('let lastKnownAppHostPid = knownAppHostPid;'));

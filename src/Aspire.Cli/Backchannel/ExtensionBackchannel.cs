@@ -157,17 +157,31 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
                     throw;
                 }
+                catch (OperationCanceledException ex)
+                {
+                    connectionSetupTcs.TrySetCanceled(ex.CancellationToken);
+                    ClearConnectionSetupIfCurrent(connectionSetupTcs);
+                    throw;
+                }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "An unexpected error occurred while trying to connect to the backchannel.");
                     connectionSetupTcs.TrySetException(ex);
+                    ClearConnectionSetupIfCurrent(connectionSetupTcs);
                     throw;
                 }
             } while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false));
         }
+        catch (OperationCanceledException ex)
+        {
+            connectionSetupTcs.TrySetCanceled(ex.CancellationToken);
+            ClearConnectionSetupIfCurrent(connectionSetupTcs);
+            throw;
+        }
         catch (Exception ex)
         {
             connectionSetupTcs.TrySetException(ex);
+            ClearConnectionSetupIfCurrent(connectionSetupTcs);
             throw;
         }
 
@@ -262,6 +276,17 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
                         KnownCapabilities.Baseline),
                     KnownCapabilities.Baseline
                 );
+            }
+        }
+    }
+
+    private void ClearConnectionSetupIfCurrent(TaskCompletionSource connectionSetupTcs)
+    {
+        lock (_connectionSetupLock)
+        {
+            if (ReferenceEquals(_connectionSetupTcs, connectionSetupTcs))
+            {
+                _connectionSetupTcs = null;
             }
         }
     }

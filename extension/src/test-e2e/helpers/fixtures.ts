@@ -135,9 +135,13 @@ export async function clearBreakpoints(): Promise<void> {
     await executeE2eControlCommand({ name: 'clearBreakpoints' });
 }
 
-export async function removeGeneratedProject(projectName: string): Promise<void> {
-    await waitForNoRunningAppHostPath(getGeneratedAppHostPath(projectName), 30000);
+export async function removeGeneratedProject(projectName: string, knownAppHostPid?: number): Promise<void> {
+    await waitForNoRunningAppHostPath(getGeneratedAppHostPath(projectName), 30000, knownAppHostPid);
     removePath(getGeneratedProjectRoot(projectName), { recursive: true, force: true });
+}
+
+export function getRunningAppHostPid(appHostPath: string): number | undefined {
+    return getRunningAppHostFromState(appHostPath)?.appHostPid;
 }
 
 export function removePrimaryAppHostFixture(): void {
@@ -284,11 +288,13 @@ export async function stopAppHostIfRunning(appHostPath: string): Promise<void> {
             try {
                 const runningAppHost = await getRunningAppHostAccordingToCli(appHostPath);
                 if (!runningAppHost) {
+                    await waitForNoRunningAppHostPath(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid);
                     return;
                 }
 
                 await waitForProcessExit(runningAppHost.appHostPid, 30000);
                 if (!await getRunningAppHostAccordingToCli(appHostPath)) {
+                    await waitForNoRunningAppHostPath(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid);
                     return;
                 }
 
