@@ -442,7 +442,6 @@ public partial class ResourcesTests : DashboardTestContext
         Assert.Equal(2, filteredResources.Count);
         Assert.Contains(filteredResources, r => r.Name == "myapp");
         Assert.Contains(filteredResources, r => r.Name == "mycontainer");
-        Assert.DoesNotContain(filteredResources, r => r.Name == "myparameter");
     }
 
     [Fact]
@@ -474,8 +473,6 @@ public partial class ResourcesTests : DashboardTestContext
         Assert.Equal(2, filteredResources.Count);
         Assert.Contains(filteredResources, r => r.Name == "myparameter1");
         Assert.Contains(filteredResources, r => r.Name == "myparameter2");
-        Assert.DoesNotContain(filteredResources, r => r.Name == "myapp");
-        Assert.DoesNotContain(filteredResources, r => r.Name == "mycontainer");
     }
 
     [Fact]
@@ -509,7 +506,6 @@ public partial class ResourcesTests : DashboardTestContext
         Assert.Equal(2, filteredResources.Count);
         Assert.Contains(filteredResources, r => r.Name == "myparameter1");
         Assert.Contains(filteredResources, r => r.Name == "myparameter2");
-        Assert.DoesNotContain(filteredResources, r => r.Name == "myapp");
     }
 
     [Fact]
@@ -543,7 +539,6 @@ public partial class ResourcesTests : DashboardTestContext
         var filteredResources = cut.Instance.GetFilteredResources().ToList();
         Assert.Single(filteredResources);
         Assert.Contains(filteredResources, r => r.Name == "myapp");
-        Assert.DoesNotContain(filteredResources, r => r.Name == "myparameter");
     }
 
     [Fact]
