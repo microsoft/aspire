@@ -31,7 +31,8 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
     private const string GuestAppHostSdkPackageId = "Aspire.Hosting";
 
-    // The NuGet tag emitted from <IsAspirePolyglotCompatible>true</IsAspirePolyglotCompatible> (see
+    // The NuGet 'polyglot' tag added by default to Aspire.Hosting integrations that run the export
+    // analyzer; authors opt out with <IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible> (see
     // src/Directory.Build.targets and Aspire.Hosting/buildTransitive/Aspire.Hosting.targets). Its presence
     // identifies an integration whose API surface is projected to non-C# AppHosts via [AspireExport] (ATS)
     // coverage, so `aspire add` can hide integrations that a polyglot AppHost cannot consume.
@@ -269,8 +270,9 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
     /// <summary>
     /// Returns the set of integration package IDs in this channel that are marked polyglot-compatible,
-    /// i.e. carry the <c>polyglot</c> NuGet tag emitted from
-    /// <c>&lt;IsAspirePolyglotCompatible&gt;true&lt;/IsAspirePolyglotCompatible&gt;</c>.
+    /// i.e. carry the <c>polyglot</c> NuGet tag. That tag is added by default to Aspire.Hosting
+    /// integrations that run the export analyzer; authors opt out with
+    /// <c>&lt;IsAspirePolyglotCompatible&gt;false&lt;/IsAspirePolyglotCompatible&gt;</c>.
     /// </summary>
     /// <remarks>
     /// Used by <c>aspire add</c> to hide integrations that have no ATS export coverage from non-C#
