@@ -30,16 +30,16 @@ internal static class LaunchProfileExtensions
         return projectMetadata.GetLaunchSettings(projectResource.Name);
     }
 
-    internal static NamedLaunchProfile? GetEffectiveLaunchProfile(this ProjectResource projectResource, bool throwIfNotFound = false)
+    internal static NamedLaunchProfile? GetEffectiveLaunchProfile(this IResource resource, bool throwIfNotFound = false)
     {
-        string? launchProfileName = projectResource.SelectLaunchProfileName();
+        string? launchProfileName = resource.SelectLaunchProfileName();
         if (string.IsNullOrEmpty(launchProfileName))
         {
             return null;
         }
 
-        var launchProfile = projectResource.GetLaunchProfile(launchProfileName, throwIfNotFound);
-        if (launchProfile == null)
+        var launchProfile = resource.GetLaunchProfile(launchProfileName, throwIfNotFound);
+        if (launchProfile is null)
         {
             return null;
         }
@@ -47,9 +47,14 @@ internal static class LaunchProfileExtensions
         return new NamedLaunchProfile(launchProfileName, launchProfile);
     }
 
-    internal static LaunchProfile? GetLaunchProfile(this ProjectResource projectResource, string launchProfileName, bool throwIfNotFound = false)
+    internal static LaunchProfile? GetLaunchProfile(this IResource resource, string launchProfileName, bool throwIfNotFound = false)
     {
-        var profiles = projectResource.GetLaunchSettings()?.Profiles;
+        if (!resource.TryGetLastAnnotation<IProjectMetadata>(out var projectMetadata))
+        {
+            return null;
+        }
+
+        var profiles = projectMetadata.GetLaunchSettings(resource.Name)?.Profiles;
         if (profiles is null)
         {
             return null;
@@ -118,9 +123,9 @@ internal static class LaunchProfileExtensions
         TrySelectLaunchProfileByOrder
     ];
 
-    private static bool TrySelectLaunchProfileByOrder(ProjectResource projectResource, [NotNullWhen(true)] out string? launchProfileName)
+    private static bool TrySelectLaunchProfileByOrder(IResource resource, IProjectMetadata projectMetadata, [NotNullWhen(true)] out string? launchProfileName)
     {
-        var launchSettings = GetLaunchSettings(projectResource);
+        var launchSettings = projectMetadata.GetLaunchSettings(resource.Name);
 
         if (launchSettings == null || launchSettings.Profiles.Count == 0)
         {
@@ -142,16 +147,16 @@ internal static class LaunchProfileExtensions
         return false;
     }
 
-    private static bool TrySelectLaunchProfileFromDefaultAnnotation(ProjectResource projectResource, [NotNullWhen(true)] out string? launchProfileName)
+    private static bool TrySelectLaunchProfileFromDefaultAnnotation(IResource resource, IProjectMetadata projectMetadata, [NotNullWhen(true)] out string? launchProfileName)
     {
-        if (!projectResource.TryGetLastAnnotation<DefaultLaunchProfileAnnotation>(out var launchProfileAnnotation))
+        if (!resource.TryGetLastAnnotation<DefaultLaunchProfileAnnotation>(out var launchProfileAnnotation))
         {
             launchProfileName = null;
             return false;
         }
 
         var appHostDefaultLaunchProfileName = launchProfileAnnotation.LaunchProfileName;
-        var launchSettings = GetLaunchSettings(projectResource);
+        var launchSettings = projectMetadata.GetLaunchSettings(resource.Name);
         if (launchSettings == null)
         {
             launchProfileName = null;
@@ -168,9 +173,9 @@ internal static class LaunchProfileExtensions
         return true;
     }
 
-    private static bool TrySelectLaunchProfileFromAnnotation(ProjectResource projectResource, [NotNullWhen(true)] out string? launchProfileName)
+    private static bool TrySelectLaunchProfileFromAnnotation(IResource resource, IProjectMetadata projectMetadata, [NotNullWhen(true)] out string? launchProfileName)
     {
-        if (projectResource.TryGetLastAnnotation<LaunchProfileAnnotation>(out var launchProfileAnnotation))
+        if (resource.TryGetLastAnnotation<LaunchProfileAnnotation>(out var launchProfileAnnotation))
         {
             launchProfileName = launchProfileAnnotation.LaunchProfileName;
             return true;
@@ -182,17 +187,26 @@ internal static class LaunchProfileExtensions
         }
     }
 
-    internal static string? SelectLaunchProfileName(this ProjectResource projectResource)
+    internal static string? SelectLaunchProfileName(this IResource resource)
+    {
+        if (!resource.TryGetLastAnnotation<IProjectMetadata>(out var projectMetadata))
+        {
+            return null;
+        }
+        return SelectLaunchProfileName(resource, projectMetadata);
+    }
+
+    private static string? SelectLaunchProfileName(IResource resource, IProjectMetadata projectMetadata)
     {
         // ExcludeLaunchProfileAnnotation takes precedence over all other launch profile selectors.
-        if (projectResource.TryGetLastAnnotation<ExcludeLaunchProfileAnnotation>(out _))
+        if (resource.TryGetLastAnnotation<ExcludeLaunchProfileAnnotation>(out _))
         {
             return null;
         }
 
         foreach (var launchProfileSelector in s_launchProfileSelectors)
         {
-            if (launchProfileSelector(projectResource, out var launchProfile))
+            if (launchProfileSelector(resource, projectMetadata, out var launchProfile))
             {
                 return launchProfile;
             }
@@ -204,4 +218,4 @@ internal static class LaunchProfileExtensions
 
 internal sealed record class NamedLaunchProfile(string Name, LaunchProfile LaunchProfile);
 
-internal delegate bool LaunchProfileSelector(ProjectResource project, out string? launchProfile);
+internal delegate bool LaunchProfileSelector(IResource resource, IProjectMetadata projectMetadata, out string? launchProfile);

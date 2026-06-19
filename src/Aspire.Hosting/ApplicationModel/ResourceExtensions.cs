@@ -818,7 +818,7 @@ public static class ResourceExtensions
             };
 
             // Track HTTP schemes encountered for ProjectResources
-            if (resource is ProjectResource && IsHttpScheme(endpoint.UriScheme))
+            if (resource.TryGetProjectAnnotation(out _) && IsHttpScheme(endpoint.UriScheme))
             {
                 httpSchemesEncountered.Add(endpoint.UriScheme);
             }
@@ -955,7 +955,7 @@ public static class ResourceExtensions
             return false;
         }
 
-        return resource is ProjectResource || resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _);
+        return resource.TryGetProjectAnnotation(out _) || resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _);
     }
 
     /// <summary>
@@ -1753,17 +1753,37 @@ public static class ResourceExtensions
     /// <summary>
     /// Gets the resource type string for the specified resource.
     /// </summary>
-    internal static string GetResourceType(this IResource resource) => resource switch
+    internal static string GetResourceType(this IResource resource)
     {
-        ProjectResource => KnownResourceTypes.Project,
-        ContainerResource => KnownResourceTypes.Container,
-        ContainerExecutableResource => KnownResourceTypes.ContainerExec,
-        DotnetToolResource => KnownResourceTypes.Tool,
-        ExecutableResource => KnownResourceTypes.Executable,
-        ParameterResource => KnownResourceTypes.Parameter,
-        ConnectionStringResource => KnownResourceTypes.ConnectionString,
-        ExternalServiceResource => KnownResourceTypes.ExternalService,
-        _ => resource.GetType().Name
-    };
+        if (resource.TryGetProjectAnnotation(out _))
+        {
+            return KnownResourceTypes.Project;
+        }
+
+        if (resource.TryGetLastAnnotation<ContainerImageAnnotation>(out _))
+        {
+            return KnownResourceTypes.Container;
+        }
+
+        if (resource.TryGetAnnotationsOfType<DotnetToolAnnotation>(out _))
+        {
+            return KnownResourceTypes.Tool;
+        }
+
+        if (resource.TryGetExecutableAnnotation(out _))
+        {
+            return resource is ContainerExecutableResource
+                ? KnownResourceTypes.ContainerExec
+                : KnownResourceTypes.Executable;
+        }
+
+        return resource switch
+        {
+            ParameterResource => KnownResourceTypes.Parameter,
+            ConnectionStringResource => KnownResourceTypes.ConnectionString,
+            ExternalServiceResource => KnownResourceTypes.ExternalService,
+            _ => resource.GetType().Name
+        };
+    }
 #pragma warning restore ASPIREDOTNETTOOL
 }

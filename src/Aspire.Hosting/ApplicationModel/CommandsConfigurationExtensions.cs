@@ -88,7 +88,7 @@ internal static class CommandsConfigurationExtensions
 
         // Use a more detailed description for .NET projects to help AI understand
         // that source code changes won't take effect until rebuilding the project.
-        var restartDescription = resource is ProjectResource
+        var restartDescription = resource.TryGetProjectAnnotation(out _)
             ? CommandStrings.RestartProjectDescription
             : CommandStrings.RestartDescription;
 
@@ -122,13 +122,9 @@ internal static class CommandsConfigurationExtensions
             iconVariant: IconVariant.Regular,
             isHighlighted: false));
 
-        if (resource is ProjectResource projectResource)
+        if (resource.TryGetProjectAnnotation(out var projectMetadata) && !projectMetadata.IsFileBasedApp)
         {
-            var projectMetadata = projectResource.Annotations.OfType<IProjectMetadata>().SingleOrDefault();
-            if (projectMetadata is null || !projectMetadata.IsFileBasedApp)
-            {
-                AddRebuildCommand(projectResource);
-            }
+            AddRebuildCommand(resource);
         }
 
         // Treat "Unknown" as stopped so the command to start the resource is available when "Unknown".
@@ -142,7 +138,7 @@ internal static class CommandsConfigurationExtensions
         static bool HasNoState(string? state) => string.IsNullOrEmpty(state);
     }
 
-    private static void AddRebuildCommand(ProjectResource projectResource)
+    private static void AddRebuildCommand(IResource projectResource)
     {
         // When a resource has replicas, the command framework invokes the handler
         // once per replica in parallel. We use a shared task so only a single build
@@ -191,7 +187,7 @@ internal static class CommandsConfigurationExtensions
         }
     }
 
-    private static async Task<ExecuteCommandResult> ExecuteRebuildAsync(ExecuteCommandContext context, ProjectResource projectResource)
+    private static async Task<ExecuteCommandResult> ExecuteRebuildAsync(ExecuteCommandContext context, IResource projectResource)
     {
         var orchestrator = context.Services.GetRequiredService<ApplicationOrchestrator>();
         var resourceNotificationService = context.Services.GetRequiredService<ResourceNotificationService>();

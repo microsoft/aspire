@@ -374,7 +374,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         return resource switch
         {
             Container => KnownResourceTypes.Container,
-            Executable => appModelResource is ProjectResource ? KnownResourceTypes.Project : KnownResourceTypes.Executable,
+            Executable => appModelResource.TryGetProjectAnnotation(out _) ? KnownResourceTypes.Project : KnownResourceTypes.Executable,
             ContainerExec => KnownResourceTypes.ContainerExec,
             _ => throw new InvalidOperationException($"Unknown resource type {resource.GetType().Name}")
         };

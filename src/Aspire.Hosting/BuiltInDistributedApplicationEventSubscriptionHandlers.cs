@@ -24,7 +24,7 @@ internal static class BuiltInDistributedApplicationEventSubscriptionHandlers
             nameGenerator.EnsureDcpInstancesPopulated(container);
         }
 
-        foreach (var executable in beforeStartEvent.Model.GetExecutableResources())
+        foreach (var executable in beforeStartEvent.Model.GetExecutableAnnotatedResources())
         {
             nameGenerator.EnsureDcpInstancesPopulated(executable);
         }
@@ -34,7 +34,7 @@ internal static class BuiltInDistributedApplicationEventSubscriptionHandlers
             nameGenerator.EnsureDcpInstancesPopulated(containerExec);
         }
 
-        foreach (var project in beforeStartEvent.Model.GetProjectResources())
+        foreach (var project in beforeStartEvent.Model.GetProjectAnnotatedResources())
         {
             nameGenerator.EnsureDcpInstancesPopulated(project);
         }

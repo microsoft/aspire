@@ -358,6 +358,10 @@
     <Project Path="playground/Redis/Redis.ApiService/Redis.ApiService.csproj" />
     <Project Path="playground/Redis/Redis.AppHost/Redis.AppHost.csproj" />
   </Folder>
+  <Folder Name="/playground/ResourceSubstitution/">
+    <Project Path="playground/ResourceSubstitution/ResourceSubstitution.Api/ResourceSubstitution.Api.csproj" />
+    <Project Path="playground/ResourceSubstitution/ResourceSubstitution.AppHost/ResourceSubstitution.AppHost.csproj" />
+  </Folder>
   <Folder Name="/playground/seq/">
     <Project Path="playground/seq/Seq.ApiService/Seq.ApiService.csproj" />
     <Project Path="playground/seq/Seq.AppHost/Seq.AppHost.csproj" />

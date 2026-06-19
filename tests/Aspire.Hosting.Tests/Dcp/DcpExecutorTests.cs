@@ -3499,6 +3499,111 @@ public class DcpExecutorTests
     }
 
     [Fact]
+    public async Task AnnotatedExecutableResource_IsCreatedFromExecutableAnnotation()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddResource(new PlainResource("annotatedExecutable"))
+            .WithAnnotation(new ExecutableAnnotation
+            {
+                Command = "annotated-command",
+                WorkingDirectory = "annotated-working-directory"
+            });
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "annotatedExecutable");
+        Assert.Equal("annotated-command", exe.Spec.ExecutablePath);
+        Assert.Equal("annotated-working-directory", exe.Spec.WorkingDirectory);
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+    }
+
+    [Fact]
+    public async Task AnnotatedProjectResource_IsCreatedFromProjectMetadataAndNotAsPlainExecutable()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddResource(new PlainResource("annotatedProject"))
+            .WithAnnotation(new TestProject())
+            .WithAnnotation(new ExecutableAnnotation
+            {
+                Command = "should-not-be-used",
+                WorkingDirectory = "ignored-working-directory"
+            });
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = Assert.Single(GetCreatedExecutablesForResource(kubernetesService, "annotatedProject"));
+        Assert.Equal("dotnet", exe.Spec.ExecutablePath);
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+        Assert.NotNull(exe.Spec.Args);
+        Assert.Contains("run", exe.Spec.Args!);
+        Assert.Contains("--project", exe.Spec.Args!);
+        Assert.Contains("TestProject", exe.Spec.Args!);
+        Assert.Contains("--no-launch-profile", exe.Spec.Args!);
+    }
+
+    [Fact]
+    public async Task ContainerResource_WithContainerAnnotationRemovedAndExecutableAnnotationAdded_CreatesExecutableNotContainer()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var resource = builder.AddContainer("mutated-container", "image");
+        resource.Resource.Annotations.Remove(resource.Resource.Annotations.OfType<ContainerImageAnnotation>().Single());
+        resource.WithAnnotation(new ExecutableAnnotation
+        {
+            Command = "mutated-command",
+            WorkingDirectory = "mutated-working-directory"
+        });
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+
+        await appExecutor.RunApplicationAsync();
+
+        var executable = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>(), e => e.AppModelResourceName == "mutated-container");
+        Assert.Equal("mutated-command", executable.Spec.ExecutablePath);
+        Assert.Equal("mutated-working-directory", executable.Spec.WorkingDirectory);
+        Assert.DoesNotContain(kubernetesService.CreatedResources.OfType<Container>(), c => c.AppModelResourceName == "mutated-container");
+    }
+
+    [Fact]
+    public async Task ExecutableResource_WithExecutableAnnotationRemovedAndContainerAnnotationAdded_CreatesContainerNotExecutable()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var resource = builder.AddExecutable("mutated-executable", "old-command", "old-working-directory");
+        resource.Resource.Annotations.Remove(resource.Resource.Annotations.OfType<ExecutableAnnotation>().Single());
+        resource.WithAnnotation(new ContainerImageAnnotation
+        {
+            Image = "mutated-image",
+            Tag = "latest"
+        });
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+
+        await appExecutor.RunApplicationAsync();
+
+        Assert.Single(kubernetesService.CreatedResources.OfType<Container>(), c => c.AppModelResourceName == "mutated-executable");
+        Assert.DoesNotContain(kubernetesService.CreatedResources.OfType<Executable>(), e => e.AppModelResourceName == "mutated-executable");
+    }
+
+    [Fact]
     public async Task ProjectExecutable_NoDebugSessionInfo_DefaultsToProjectSupport()
     {
         // Arrange
@@ -5591,6 +5696,8 @@ public class DcpExecutorTests
             DateTimeOffset.Now.AddYears(1),
             serialNumber);
     }
+
+    private sealed class PlainResource(string name) : Resource(name), IComputeResource;
 
     private sealed class TestExecutableResource(string directory) : ExecutableResource("TestExecutable", "test", directory);
     private sealed class TestOtherExecutableResource(string directory) : ExecutableResource("TestOtherExecutable", "test-other", directory);

@@ -731,8 +731,8 @@ internal sealed class ApplicationOrchestrator
     // resources that may want to have their own lifetime, that this code will be unaware of.
     private static bool ResourceHasOwnLifetime(IResource resource) =>
         resource.IsContainer() ||
-        resource is ProjectResource ||
-        resource is ExecutableResource ||
+        resource.TryGetProjectAnnotation(out _) ||
+        resource.TryGetExecutableAnnotation(out _) ||
         resource is ParameterResource ||
         resource is ConnectionStringResource ||
         resource is ExternalServiceResource;

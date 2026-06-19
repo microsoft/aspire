@@ -259,7 +259,7 @@ internal sealed class ResourceContainerImageManager(
             logger.LogDebug("{ContainerRuntimeName} is healthy", containerRuntime.Name);
         }
 
-        if (resource is ProjectResource)
+        if (resource.TryGetProjectAnnotation(out _))
         {
             // If it is a project resource we need to build the container image
             // using the .NET SDK.
@@ -327,7 +327,7 @@ internal sealed class ResourceContainerImageManager(
     private async Task ExecuteDotnetPublishAsync(IResource resource, ResolvedContainerBuildOptions options, CancellationToken cancellationToken)
     {
         // This is a resource project so we'll use the .NET SDK to build the container image.
-        if (!resource.TryGetLastAnnotation<IProjectMetadata>(out var projectMetadata))
+        if (!resource.TryGetProjectAnnotation(out var projectMetadata))
         {
             throw new DistributedApplicationException($"The resource '{resource.Name}' does not have a project metadata annotation.");
         }

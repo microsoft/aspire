@@ -154,10 +154,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
         var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var executableResources = appModel.GetExecutableResources();
-
-        // Filter to get only the PythonAppResource (pip installer may also be present if requirements.txt exists)
-        var pythonProjectResource = executableResources.OfType<PythonAppResource>().Single();
+        var pythonProjectResource = Assert.Single(appModel.Resources.OfType<PythonAppResource>());
 
         Assert.Equal("pythonProject", pythonProjectResource.Name);
         Assert.Equal(projectDirectory, pythonProjectResource.WorkingDirectory);
@@ -193,10 +190,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
         var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var executableResources = appModel.GetExecutableResources();
-
-        // Filter to get only the PythonAppResource (pip installer may also be present if requirements.txt exists)
-        var pythonProjectResource = executableResources.OfType<PythonAppResource>().Single();
+        var pythonProjectResource = Assert.Single(appModel.Resources.OfType<PythonAppResource>());
 
         Assert.Equal("pythonProject", pythonProjectResource.Name);
         Assert.Equal(projectDirectory, pythonProjectResource.WorkingDirectory);
@@ -236,10 +230,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
         var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var executableResources = appModel.GetExecutableResources();
-
-        // Filter to get only the PythonAppResource (pip installer may also be present if requirements.txt exists)
-        var pythonProjectResource = executableResources.OfType<PythonAppResource>().Single();
+        var pythonProjectResource = Assert.Single(appModel.Resources.OfType<PythonAppResource>());
 
         Assert.Equal("pythonProject", pythonProjectResource.Name);
         Assert.Equal(projectDirectory, pythonProjectResource.WorkingDirectory);
@@ -412,9 +403,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
         var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var executableResources = appModel.GetExecutableResources();
-
-        var pythonProjectResource = Assert.Single(executableResources.OfType<PythonAppResource>());
+        var pythonProjectResource = Assert.Single(appModel.Resources.OfType<PythonAppResource>());
 
         var expectedProjectDirectory = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, tempDir.Path));
 
@@ -445,9 +434,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
         var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var executableResources = appModel.GetExecutableResources();
-
-        var pythonProjectResource = Assert.Single(executableResources.OfType<PythonAppResource>());
+        var pythonProjectResource = Assert.Single(appModel.Resources.OfType<PythonAppResource>());
 
         if (OperatingSystem.IsWindows())
         {
@@ -506,9 +493,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
         var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var executableResources = appModel.GetExecutableResources();
-
-        var pythonProjectResource = Assert.Single(executableResources.OfType<PythonAppResource>());
+        var pythonProjectResource = Assert.Single(appModel.Resources.OfType<PythonAppResource>());
 
         var commandArguments = await ArgumentEvaluator.GetArgumentListAsync(pythonProjectResource, TestServiceProvider.Instance);
         Assert.Equal(3, commandArguments.Count);
@@ -536,9 +521,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
         var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var executableResources = appModel.GetExecutableResources();
-
-        var pythonProjectResource = Assert.Single(executableResources.OfType<PythonAppResource>());
+        var pythonProjectResource = Assert.Single(appModel.Resources.OfType<PythonAppResource>());
 
         // Should use the app directory .venv since it exists there
         var expectedProjectDirectory = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, tempAppDir.Path));
@@ -572,9 +555,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
             var app = builder.Build();
             var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-            var executableResources = appModel.GetExecutableResources();
-
-            var pythonProjectResource = Assert.Single(executableResources.OfType<PythonAppResource>());
+            var pythonProjectResource = Assert.Single(appModel.Resources.OfType<PythonAppResource>());
 
             // Should use the AppHost directory .venv since it only exists there
             AssertPythonCommandPath(appHostVenvPath, pythonProjectResource.Command);
@@ -621,9 +602,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
             var app = builder.Build();
             var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-            var executableResources = appModel.GetExecutableResources();
-
-            var pythonProjectResource = Assert.Single(executableResources.OfType<PythonAppResource>());
+            var pythonProjectResource = Assert.Single(appModel.Resources.OfType<PythonAppResource>());
 
             // Should prefer the app directory .venv when it exists in both locations
             AssertPythonCommandPath(appVenvPath, pythonProjectResource.Command);
@@ -655,9 +634,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
         var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var executableResources = appModel.GetExecutableResources();
-
-        var pythonProjectResource = Assert.Single(executableResources.OfType<PythonAppResource>());
+        var pythonProjectResource = Assert.Single(appModel.Resources.OfType<PythonAppResource>());
 
         // Should default to app directory when it doesn't exist in either location
         var expectedProjectDirectory = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, tempAppDir.Path));
@@ -698,9 +675,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
             var app = builder.Build();
             var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-            var executableResources = appModel.GetExecutableResources();
-
-            var pythonProjectResource = Assert.Single(executableResources.OfType<PythonAppResource>());
+            var pythonProjectResource = Assert.Single(appModel.Resources.OfType<PythonAppResource>());
 
             // Should use the explicitly specified path, NOT the AppHost .venv
             AssertPythonCommandPath(customVenvPath, pythonProjectResource.Command);
@@ -981,9 +956,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
         var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var executableResources = appModel.GetExecutableResources();
-
-        var pythonProjectResource = Assert.Single(executableResources.OfType<PythonAppResource>());
+        var pythonProjectResource = Assert.Single(appModel.Resources.OfType<PythonAppResource>());
 
         Assert.Equal("pythonProject", pythonProjectResource.Name);
 
@@ -1017,9 +990,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
         var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var executableResources = appModel.GetExecutableResources();
-
-        var pythonProjectResource = Assert.Single(executableResources.OfType<PythonAppResource>());
+        var pythonProjectResource = Assert.Single(appModel.Resources.OfType<PythonAppResource>());
 
         var expectedProjectDirectory = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, tempDir.Path));
 
@@ -1051,9 +1022,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
         var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var executableResources = appModel.GetExecutableResources();
-
-        var pythonProjectResource = Assert.Single(executableResources.OfType<PythonAppResource>());
+        var pythonProjectResource = Assert.Single(appModel.Resources.OfType<PythonAppResource>());
 
         var expectedProjectDirectory = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, tempDir.Path));
 
