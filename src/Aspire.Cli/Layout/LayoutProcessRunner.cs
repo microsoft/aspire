@@ -45,7 +45,7 @@ internal sealed class LayoutProcessRunner(IProcessExecutionFactory executionFact
     }
 
     /// <inheritdoc />
-    public IProcessExecution Start(
+    public async Task<IProcessExecution> StartAsync(
         string toolPath,
         IEnumerable<string> arguments,
         string? workingDirectory = null,
@@ -59,10 +59,7 @@ internal sealed class LayoutProcessRunner(IProcessExecutionFactory executionFact
 
         if (!execution.Start())
         {
-            // Start() returning false means nothing was spawned, so disposal is a synchronous
-            // no-op (ProcessExecution has no child to tear down). Drive it to completion here so
-            // the sync Start contract is preserved without a sync-over-async hazard on the real path.
-            execution.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            await execution.DisposeAsync().ConfigureAwait(false);
             throw new InvalidOperationException($"Failed to start process: {toolPath}");
         }
 

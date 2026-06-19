@@ -371,7 +371,7 @@ internal sealed class DashboardRunCommand : BaseCommand
         IProcessExecution process;
         try
         {
-            process = _layoutProcessRunner.Start(managedPath, dashboardArgs, environmentVariables: environmentVariables, options: options);
+            process = await _layoutProcessRunner.StartAsync(managedPath, dashboardArgs, environmentVariables: environmentVariables, options: options).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
