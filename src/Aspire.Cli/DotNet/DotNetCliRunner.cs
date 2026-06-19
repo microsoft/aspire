@@ -68,30 +68,30 @@ internal sealed class ProcessInvocationOptions
     /// <summary>
     /// When <c>true</c>, the spawned process is given its own hidden console group (Windows)
     /// and, on Windows, is assigned to the CLI's kill-on-close job object. Required so the
-    /// shared <see cref="Processes.ProcessGracefulShutdownLadder"/> can target the child with
+    /// shutdown ladder in <see cref="ProcessExecution"/> can target the child with
     /// DCP's <c>stop-process-tree</c> CTRL+C dance.
     /// </summary>
     /// <remarks>
     /// Pair with <see cref="GracefulShutdownSignaler"/> and <see cref="ShutdownService"/>.
     /// On Windows the spawned process is bound to the process-wide
     /// <see cref="Processes.WindowsConsoleProcessJob"/> kill-on-close job automatically.
-    /// Leaving the signaler/service unset means cancellation falls back to the shared
-    /// <see cref="Processes.ProcessGracefulShutdownLadder"/> force-kill mode, preserving back-compat
+    /// Leaving the signaler/service unset means cancellation falls back to
+    /// <see cref="ProcessExecution"/>'s force-kill mode, preserving back-compat
     /// for the many non-Run callers (build, restore, package add, layout, etc.).
     /// </remarks>
     public bool IsolateConsole { get; set; }
 
     /// <summary>
-    /// Issues the graceful shutdown signal during the shared shutdown ladder (DCP
+    /// Issues the graceful shutdown signal during the shutdown ladder (DCP
     /// <c>stop-process-tree</c> on Windows, SIGTERM on Unix). When <c>null</c>, the cancellation
-    /// path uses the shared <see cref="Processes.ProcessGracefulShutdownLadder"/> force-kill mode.
+    /// path uses <see cref="ProcessExecution"/>'s force-kill mode.
     /// </summary>
     public Processes.IProcessTreeGracefulShutdownSignaler? GracefulShutdownSignaler { get; set; }
 
     /// <summary>
     /// The central graceful-shutdown window whose
-    /// <see cref="ConsoleCancellationManager.GracefulShutdownToken"/> bounds the shared ladder. When
-    /// <c>null</c>, the cancellation path uses the shared <see cref="Processes.ProcessGracefulShutdownLadder"/>
+    /// <see cref="ConsoleCancellationManager.GracefulShutdownToken"/> bounds the shutdown ladder. When
+    /// <c>null</c>, the cancellation path uses <see cref="ProcessExecution"/>'s
     /// force-kill mode.
     /// </summary>
     public IGracefulShutdownWindow? ShutdownService { get; set; }
@@ -310,9 +310,9 @@ internal sealed class DotNetCliRunner(
             // Forward the Run-path shutdown ladder opt-ins. Forgetting any of these silently
             // demotes the run to the force-kill fallback: IsolateConsole=false skips console
             // isolation, and the null signaler/service pair causes ProcessExecution's OCE catch
-            // (DotNet/ProcessExecution.cs) to route through ProcessGracefulShutdownLadder's force
-            // mode (best-effort SIGTERM then kill) instead of its graceful ladder. Build/restore/etc.
-            // callers leave these unset and intentionally keep the force-kill path.
+            // (DotNet/ProcessExecution.cs) to route through its force-kill mode (best-effort SIGTERM
+            // then kill) instead of its graceful ladder. Build/restore/etc. callers leave these unset
+            // and intentionally keep the force-kill path.
             IsolateConsole = options.IsolateConsole,
             GracefulShutdownSignaler = options.GracefulShutdownSignaler,
             ShutdownService = options.ShutdownService,
