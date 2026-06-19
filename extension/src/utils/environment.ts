@@ -18,5 +18,6 @@ export function getEnvironmentWithoutE2EBridgeVariables(): NodeJS.ProcessEnv {
 
 export const enum EnvironmentVariables {
     ASPIRE_CLI_STOP_ON_ENTRY = "ASPIRE_CLI_STOP_ON_ENTRY",
-    ASPIRE_APPHOST_STOP_ON_ENTRY = "ASPIRE_APPHOST_STOP_ON_ENTRY"
+    ASPIRE_APPHOST_STOP_ON_ENTRY = "ASPIRE_APPHOST_STOP_ON_ENTRY",
+    ASPIRE_CLI_START_TIMEOUT = "ASPIRE_CLI_START_TIMEOUT"
 }

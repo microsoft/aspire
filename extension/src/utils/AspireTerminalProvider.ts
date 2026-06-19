@@ -289,6 +289,10 @@ export class AspireTerminalProvider implements vscode.Disposable {
             // such as the first-run banner and spinners.
             env.ASPIRE_NON_INTERACTIVE = 'true';
 
+            if (noDebug === false && !env[EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT]) {
+                env[EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT] = '86400';
+            }
+
             // if DCP debug logging is enabled, set DCP-specific logging environment variables
             const dcpDebugLoggingEnabled = vscode.workspace.getConfiguration('aspire').get<boolean>('enableAspireDcpDebugLogging', false);
             const workspaceRoot = vscode.workspace.workspaceFolders?.[0];

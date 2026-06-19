@@ -541,7 +541,12 @@ suite('AspireTerminalProvider tests', () => {
     });
 
     suite('createEnvironment', () => {
+        let originalStartupTimeout: string | undefined;
+
         setup(() => {
+            originalStartupTimeout = process.env[EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT];
+            delete process.env[EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT];
+
             terminalProvider.rpcServerConnectionInfo = {
                 address: 'http://localhost:1234',
                 token: 'rpc-token',
@@ -554,12 +559,42 @@ suite('AspireTerminalProvider tests', () => {
             };
         });
 
+        teardown(() => {
+            restoreEnvironmentVariable(EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT, originalStartupTimeout);
+        });
+
         test('marks extension-managed debug sessions as non-interactive without disabling extension prompts', () => {
             const env = terminalProvider.createEnvironment('debug-session-id', false);
 
             assert.strictEqual(env.ASPIRE_EXTENSION_DEBUG_SESSION_ID, 'debug-session-id');
             assert.strictEqual(env.ASPIRE_EXTENSION_PROMPT_ENABLED, 'true');
             assert.strictEqual(env.ASPIRE_NON_INTERACTIVE, 'true');
+        });
+
+        test('uses a longer AppHost startup timeout for extension-managed debug sessions', () => {
+            const env = terminalProvider.createEnvironment('debug-session-id', false);
+
+            assert.strictEqual(env.ASPIRE_CLI_START_TIMEOUT, '86400');
+        });
+
+        test('does not change the AppHost startup timeout for extension-managed run sessions', () => {
+            const env = terminalProvider.createEnvironment('debug-session-id', true);
+
+            assert.strictEqual(env.ASPIRE_CLI_START_TIMEOUT, undefined);
+        });
+
+        test('keeps an explicitly configured AppHost startup timeout for extension-managed debug sessions', () => {
+            const originalStartupTimeout = process.env[EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT];
+            process.env[EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT] = '300';
+
+            try {
+                const env = terminalProvider.createEnvironment('debug-session-id', false);
+
+                assert.strictEqual(env.ASPIRE_CLI_START_TIMEOUT, '300');
+            }
+            finally {
+                restoreEnvironmentVariable(EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT, originalStartupTimeout);
+            }
         });
 
         test('does not mark user terminal commands as non-interactive', () => {
