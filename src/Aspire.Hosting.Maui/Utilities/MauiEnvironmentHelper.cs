@@ -38,25 +38,19 @@ internal static class MauiEnvironmentHelper
         CancellationToken cancellationToken)
     {
         var environmentVariables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var encodedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         var executionConfiguration = await ExecutionConfigurationBuilder.Create(resource)
             .WithEnvironmentVariablesConfig()
             .BuildAsync(executionContext, logger, cancellationToken)
             .ConfigureAwait(false);
 
-        // Normalize all the environment variables for the resource
+        // Normalize all the environment variables for the resource. Semicolon encoding is applied
+        // later in GenerateAndroidTargetsFileContent so it stays close to where the values are
+        // emitted into MSBuild items (mirroring the iOS targets file generation).
         foreach (var envVar in executionConfiguration.EnvironmentVariables)
         {
             var normalizedKey = envVar.Key.ToUpperInvariant();
-            var encodedValue = EncodeSemicolons(envVar.Value, out var wasEncoded);
-
-            environmentVariables[normalizedKey] = encodedValue;
-
-            if (wasEncoded)
-            {
-                encodedKeys.Add(normalizedKey);
-            }
+            environmentVariables[normalizedKey] = envVar.Value;
         }
 
         // If no environment variables, return null
@@ -102,7 +96,9 @@ internal static class MauiEnvironmentHelper
         var itemGroup = new XElement("ItemGroup");
         foreach (var (key, value) in environmentVariables.OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase))
         {
-            itemGroup.Add(new XElement("_GeneratedAndroidEnvironment", new XAttribute("Include", $"{key}={value}")));
+            // Encode semicolons as %3B to prevent MSBuild from treating them as item separators.
+            var encodedValue = EncodeSemicolons(value, out _);
+            itemGroup.Add(new XElement("_GeneratedAndroidEnvironment", new XAttribute("Include", $"{key}={encodedValue}")));
         }
         projectElement.Add(itemGroup);
 

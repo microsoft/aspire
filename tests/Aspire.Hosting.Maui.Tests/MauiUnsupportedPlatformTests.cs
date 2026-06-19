@@ -11,114 +11,98 @@ namespace Aspire.Hosting.Tests;
 public class MauiUnsupportedPlatformTests
 {
     [Fact]
-    public void WindowsDevice_OnNonWindows_HasUnsupportedPlatformAnnotation()
+    public void WindowsDevice_HasUnsupportedPlatformAnnotation_OnlyWhenNotOnWindows()
     {
+        using var dir = new TestTempDirectory();
+        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-windows10.0.19041.0"));
+
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var windows = maui.AddWindowsDevice();
+
+        var annotation = windows.Resource.Annotations.OfType<UnsupportedPlatformAnnotation>().FirstOrDefault();
         if (OperatingSystem.IsWindows())
         {
-            Assert.Skip("On Windows, the UnsupportedPlatformAnnotation should not be added");
-            return;
+            // Windows is supported on a Windows host, so no annotation should be added.
+            Assert.Null(annotation);
         }
-
-        var projectContent = MauiTestHelper.CreateProjectContent("net10.0-windows10.0.19041.0");
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
-
-        try
+        else
         {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
-            var windows = maui.AddWindowsDevice();
-
-            var annotation = windows.Resource.Annotations.OfType<UnsupportedPlatformAnnotation>().FirstOrDefault();
             Assert.NotNull(annotation);
             Assert.Contains("Windows", annotation.Reason);
         }
-        finally
-        {
-            MauiTestHelper.CleanupTempFile(tempFile);
-        }
     }
 
     [Fact]
-    public void MacCatalystDevice_OnNonMac_HasUnsupportedPlatformAnnotation()
+    public void MacCatalystDevice_HasUnsupportedPlatformAnnotation_OnlyWhenNotOnMac()
     {
+        using var dir = new TestTempDirectory();
+        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-maccatalyst"));
+
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var macCatalyst = maui.AddMacCatalystDevice();
+
+        var annotation = macCatalyst.Resource.Annotations.OfType<UnsupportedPlatformAnnotation>().FirstOrDefault();
         if (OperatingSystem.IsMacOS())
         {
-            Assert.Skip("On macOS, the UnsupportedPlatformAnnotation should not be added");
-            return;
+            // Mac Catalyst is supported on a macOS host, so no annotation should be added.
+            Assert.Null(annotation);
         }
-
-        var projectContent = MauiTestHelper.CreateProjectContent("net10.0-maccatalyst");
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
-
-        try
+        else
         {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
-            var macCatalyst = maui.AddMacCatalystDevice();
-
-            var annotation = macCatalyst.Resource.Annotations.OfType<UnsupportedPlatformAnnotation>().FirstOrDefault();
             Assert.NotNull(annotation);
             Assert.Contains("Mac Catalyst", annotation.Reason);
         }
-        finally
+    }
+
+    [Fact]
+    public void iOSDevice_HasUnsupportedPlatformAnnotation_OnlyWhenNotOnMac()
+    {
+        using var dir = new TestTempDirectory();
+        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
+
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var iosDevice = maui.AddiOSDevice();
+
+        var annotation = iosDevice.Resource.Annotations.OfType<UnsupportedPlatformAnnotation>().FirstOrDefault();
+        if (OperatingSystem.IsMacOS())
         {
-            MauiTestHelper.CleanupTempFile(tempFile);
+            // iOS development is supported on a macOS host, so no annotation should be added.
+            Assert.Null(annotation);
+        }
+        else
+        {
+            Assert.NotNull(annotation);
+            Assert.Contains("iOS", annotation.Reason);
         }
     }
 
     [Fact]
-    public void iOSDevice_OnNonMac_HasUnsupportedPlatformAnnotation()
+    public void iOSSimulator_HasUnsupportedPlatformAnnotation_OnlyWhenNotOnMac()
     {
+        using var dir = new TestTempDirectory();
+        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
+
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var iosSimulator = maui.AddiOSSimulator();
+
+        var annotation = iosSimulator.Resource.Annotations.OfType<UnsupportedPlatformAnnotation>().FirstOrDefault();
         if (OperatingSystem.IsMacOS())
         {
-            Assert.Skip("On macOS, the UnsupportedPlatformAnnotation should not be added");
-            return;
+            // iOS development is supported on a macOS host, so no annotation should be added.
+            Assert.Null(annotation);
         }
-
-        var projectContent = MauiTestHelper.CreateProjectContent("net10.0-ios");
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
-
-        try
+        else
         {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
-            var iosDevice = maui.AddiOSDevice();
-
-            var annotation = iosDevice.Resource.Annotations.OfType<UnsupportedPlatformAnnotation>().FirstOrDefault();
             Assert.NotNull(annotation);
             Assert.Contains("iOS", annotation.Reason);
-        }
-        finally
-        {
-            MauiTestHelper.CleanupTempFile(tempFile);
-        }
-    }
-
-    [Fact]
-    public void iOSSimulator_OnNonMac_HasUnsupportedPlatformAnnotation()
-    {
-        if (OperatingSystem.IsMacOS())
-        {
-            Assert.Skip("On macOS, the UnsupportedPlatformAnnotation should not be added");
-            return;
-        }
-
-        var projectContent = MauiTestHelper.CreateProjectContent("net10.0-ios");
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
-
-        try
-        {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
-            var iosSimulator = maui.AddiOSSimulator();
-
-            var annotation = iosSimulator.Resource.Annotations.OfType<UnsupportedPlatformAnnotation>().FirstOrDefault();
-            Assert.NotNull(annotation);
-            Assert.Contains("iOS", annotation.Reason);
-        }
-        finally
-        {
-            MauiTestHelper.CleanupTempFile(tempFile);
         }
     }
 
@@ -126,43 +110,31 @@ public class MauiUnsupportedPlatformTests
     public void AndroidDevice_AlwaysSupported_NoUnsupportedAnnotation()
     {
         // Android is always allowed on all platforms (validation happens at dotnet run time)
-        var projectContent = MauiTestHelper.CreateProjectContent("net10.0-android");
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
+        using var dir = new TestTempDirectory();
+        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
-        try
-        {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
-            var androidDevice = maui.AddAndroidDevice();
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var androidDevice = maui.AddAndroidDevice();
 
-            var annotation = androidDevice.Resource.Annotations.OfType<UnsupportedPlatformAnnotation>().FirstOrDefault();
-            Assert.Null(annotation);
-        }
-        finally
-        {
-            MauiTestHelper.CleanupTempFile(tempFile);
-        }
+        var annotation = androidDevice.Resource.Annotations.OfType<UnsupportedPlatformAnnotation>().FirstOrDefault();
+        Assert.Null(annotation);
     }
 
     [Fact]
     public void AndroidEmulator_AlwaysSupported_NoUnsupportedAnnotation()
     {
-        var projectContent = MauiTestHelper.CreateProjectContent("net10.0-android");
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
+        using var dir = new TestTempDirectory();
+        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
-        try
-        {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
-            var androidEmulator = maui.AddAndroidEmulator();
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var androidEmulator = maui.AddAndroidEmulator();
 
-            var annotation = androidEmulator.Resource.Annotations.OfType<UnsupportedPlatformAnnotation>().FirstOrDefault();
-            Assert.Null(annotation);
-        }
-        finally
-        {
-            MauiTestHelper.CleanupTempFile(tempFile);
-        }
+        var annotation = androidEmulator.Resource.Annotations.OfType<UnsupportedPlatformAnnotation>().FirstOrDefault();
+        Assert.Null(annotation);
     }
 
     [Fact]

@@ -83,6 +83,22 @@ public class MauiEnvironmentHelperTests
     }
 
     [Fact]
+    public void GenerateAndroidTargetsFileContent_EncodesSemicolonsInValues()
+    {
+        var envVars = new Dictionary<string, string>
+        {
+            ["PATH"] = "/usr/bin;/usr/local/bin"
+        };
+
+        var content = MauiEnvironmentHelper.GenerateAndroidTargetsFileContent(envVars);
+        var doc = XDocument.Parse(content);
+
+        var item = doc.Descendants("_GeneratedAndroidEnvironment").Single();
+        // Semicolons should be encoded as %3B to prevent MSBuild item separation
+        Assert.Equal("PATH=/usr/bin%3B/usr/local/bin", item.Attribute("Include")?.Value);
+    }
+
+    [Fact]
     public void GenerateiOSTargetsFileContent_ProducesValidXml()
     {
         var envVars = new Dictionary<string, string>
