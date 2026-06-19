@@ -441,7 +441,7 @@ internal class ConsoleInteractionService : IInteractionService
 
     public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion)
     {
-        var cliInformationalVersion = VersionHelper.GetDefaultTemplateVersion();
+        var cliInformationalVersion = _executionContext.IdentityVersion;
 
         // When both versions parse, tell the user which side is older and how to
         // update it rather than the ambiguous "upgrade the AppHost or Aspire CLI".
@@ -517,19 +517,7 @@ internal class ConsoleInteractionService : IInteractionService
 
         var displayMessage = allowMarkup ? message : message.EscapeMarkup();
 
-        // Use a grid to keep the icon in a fixed first column so long text wraps
-        // without pushing under the emoji prefix.
-        var grid = new Grid();
-        grid.AddColumn();
-        grid.AddColumn();
-        grid.Columns[0].NoWrap = true;
-        grid.Columns[0].Padding = new Padding(0);
-        grid.Columns[1].Padding = new Padding(0);
-
-        grid.AddRow(
-            new Markup(ConsoleHelpers.FormatEmojiPrefix(emoji, target)),
-            new Markup(displayMessage));
-
+        var grid = ConsoleHelpers.CreateEmojiGrid(emoji, target, new Markup(displayMessage));
         target.Write(grid);
     }
 

@@ -120,7 +120,11 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
     /// channel. Prerelease identities (daily/staging) further pin the template version to the
     /// current CLI/SDK so the bundled server and restored Aspire packages stay on the same
     /// version; the stable identity falls through to the highest shipped stable package because
-    /// the stable feed doesn't filter the running CLI's version out of search.
+    /// the stable feed doesn't filter the running CLI's version out of search. The stable
+    /// identity still resolves its template <em>version</em> from the stable channel (proved by
+    /// the 13.5.0 pickup), but its channel name is NOT pinned into the project
+    /// (<c>ShouldPersistChannelName</c> excludes <c>stable</c>) so the new project keeps the
+    /// ambient nuget.org configuration; daily/staging/pr do pin so restores hit their feed.
     /// </summary>
     [Theory]
     [InlineData(PackageChannelNames.Daily, "13.4.0-preview.1.99999.1", null)]
@@ -133,7 +137,15 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
             identityChannelVersion: identityChannelVersion);
 
         Assert.Equal(expectedVersion ?? VersionHelper.GetDefaultSdkVersion(), captured.Version);
-        Assert.Equal(identityChannel, captured.Channel);
+
+        if (string.Equals(identityChannel, PackageChannelNames.Stable, StringComparison.OrdinalIgnoreCase))
+        {
+            Assert.Null(captured.Channel);
+        }
+        else
+        {
+            Assert.Equal(identityChannel, captured.Channel);
+        }
     }
 
     [Fact]
@@ -289,16 +301,17 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
     /// value is already forwarded into <c>inputs.Channel</c>.
     /// </para>
     /// <para>
-    /// All four shipping identity shapes are exercised — PR (developer dogfood build
-    /// against a hive), daily (nightly dnceng feed), staging (release-branch dnceng feed),
-    /// and stable (nuget.org via the explicit Stable channel registration).
+    /// The three feed-backed identity shapes are exercised — PR (developer dogfood build
+    /// against a hive), daily (nightly dnceng feed), and staging (release-branch dnceng feed).
+    /// The <c>stable</c> identity is deliberately NOT forwarded (its packages are on nuget.org,
+    /// the ambient default), which is covered separately by
+    /// <see cref="NewCommand_DotNetRuntimeTemplate_NoChannelArg_StableIdentity_DoesNotForwardChannel"/>.
     /// </para>
     /// </summary>
     [Theory]
     [InlineData("pr-99999", "13.4.0-pr.99999.gabc123")]
     [InlineData(PackageChannelNames.Daily, "13.4.0-preview.1.99999.1")]
     [InlineData(PackageChannelNames.Staging, "13.4.0-rc.1.99999.1")]
-    [InlineData(PackageChannelNames.Stable, "13.5.0")]
     public async Task NewCommand_DotNetRuntimeTemplate_NoChannelArg_ForwardsIdentityChannelToInputs(string identityChannel, string identityChannelVersion)
     {
         var captured = await CaptureTemplateInputsAsync(
@@ -311,6 +324,27 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
         // DotNetTemplateFactory.ApplyTemplateAsync — NewCommand does not populate inputs.Version
         // for this runtime — so only inputs.Channel is asserted here.
         Assert.Equal(identityChannel, captured.Channel);
+    }
+
+    /// <summary>
+    /// Counterpart to <see cref="NewCommand_DotNetRuntimeTemplate_NoChannelArg_ForwardsIdentityChannelToInputs"/>
+    /// for the <c>stable</c> identity: a stable-identity DotNet-runtime <c>aspire new</c> must
+    /// leave <c>inputs.Channel</c> as <c>null</c>. The stable channel maps everything to
+    /// nuget.org (the ambient default source), so pinning it into the project — and dropping a
+    /// <c>&lt;clear/&gt;</c>-based NuGet.config for it — would be redundant and would wipe the
+    /// user's other feeds. The stable channel is still registered, proving the skip is driven by
+    /// the channel name (<c>ShouldPersistChannelName</c>) rather than an absence of mappings.
+    /// </summary>
+    [Fact]
+    public async Task NewCommand_DotNetRuntimeTemplate_NoChannelArg_StableIdentity_DoesNotForwardChannel()
+    {
+        var captured = await CaptureTemplateInputsAsync(
+            identityChannel: PackageChannelNames.Stable,
+            channelOptionArg: null,
+            identityChannelVersion: "13.5.0",
+            runtime: TemplateRuntime.DotNet);
+
+        Assert.Null(captured.Channel);
     }
 
     /// <summary>

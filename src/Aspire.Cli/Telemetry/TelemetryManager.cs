@@ -88,6 +88,10 @@ internal sealed class TelemetryManager : IDisposable
 
         var resource = ResourceBuilder.CreateDefault().AddService(
             serviceName: "aspire-cli",
+            // physical-binary-version-by-design (see docs/specs/cli-identity-sidecar.md):
+            // the OTel service version identifies the actual running binary that produced the
+            // telemetry, so it must NOT be replaced by an emulated ASPIRE_CLI_VERSION identity.
+            // The emulated identity is emitted separately as identity.* tags (AspireCliTelemetry).
             serviceVersion: VersionHelper.GetDefaultTemplateVersion());
 
         // Create Azure Monitor provider if connection string is provided.

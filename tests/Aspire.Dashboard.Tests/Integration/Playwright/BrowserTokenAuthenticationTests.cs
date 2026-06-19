@@ -28,7 +28,11 @@ public class BrowserTokenAuthenticationTests : PlaywrightTestsBase<BrowserTokenA
     {
         public BrowserTokenDashboardServerWithHttpAndHttpsFixture()
         {
-            Configuration[DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = "https://localhost:0;http://localhost:0";
+            // Bind to 127.0.0.1 rather than the "localhost" hostname: Kestrel rejects dynamic-port
+            // binding (":0") on "localhost" with "Dynamic port binding is not supported when binding
+            // to localhost. You must either bind to 127.0.0.1:0 or [::1]:0, or both." The WebKit test
+            // navigates to the resolved address with IgnoreHTTPSErrors, so the loopback IP is fine.
+            Configuration[DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = "https://127.0.0.1:0;http://127.0.0.1:0";
             Configuration[DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = nameof(FrontendAuthMode.BrowserToken);
             Configuration[DashboardConfigNames.DashboardFrontendBrowserTokenName.ConfigKey] = "VALID_TOKEN";
         }

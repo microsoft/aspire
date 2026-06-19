@@ -687,21 +687,24 @@ suite('AppHost discovery', () => {
             const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-apphost-discovery-'));
             try {
                 stubFileSystemWatchers(sandbox);
-                const projectPaths = Array.from({ length: appHostDiscoveryFindFilesMaxResults + 1 }, (_, index) => path.join(tempDir, 'Project' + index, 'Project' + index + '.csproj'));
+                const projectPaths = Array.from({ length: appHostDiscoveryFindFilesMaxResults + 1 }, (_, index) => '/Project' + index + '/Project' + index + '.csproj');
                 const appHostProjectPath = projectPaths[projectPaths.length - 1];
+                const projectContentsByPath = new Map<string, string>();
                 for (const projectPath of projectPaths) {
-                    fs.mkdirSync(path.dirname(projectPath), { recursive: true });
-                    fs.writeFileSync(projectPath, projectPath === appHostProjectPath
+                    const projectContents = projectPath === appHostProjectPath
                         ? '<Project Sdk="Aspire.AppHost.Sdk/13.5.0" />'
-                        : '<Project Sdk="Microsoft.NET.Sdk" />');
+                        : '<Project Sdk="Microsoft.NET.Sdk" />';
+                    projectContentsByPath.set(projectPath, projectContents);
                 }
+                const fileSystemProvider = new InMemoryProjectFileSystemProvider(projectContentsByPath);
+                const fileSystemRegistration = vscode.workspace.registerFileSystemProvider('aspire-discovery-test', fileSystemProvider, { isCaseSensitive: true });
                 findFilesStub.callsFake(async (include: vscode.GlobPattern, _exclude?: vscode.GlobPattern | null, maxResults?: number) => {
                     const pattern = typeof include === 'string' ? include : include.pattern;
                     if (!pattern.endsWith('*.csproj')) {
                         return [];
                     }
 
-                    const uris = projectPaths.map(vscode.Uri.file);
+                    const uris = projectPaths.map(projectPath => vscode.Uri.from({ scheme: 'aspire-discovery-test', path: projectPath }));
                     return typeof maxResults === 'number' ? uris.slice(0, maxResults) : uris;
                 });
                 sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
@@ -715,12 +718,13 @@ suite('AppHost discovery', () => {
                     const result = await service.discover(makeWorkspaceFolder(tempDir));
 
                     assert.deepStrictEqual(result, [{
-                        path: vscode.Uri.file(appHostProjectPath).fsPath,
+                        path: vscode.Uri.from({ scheme: 'aspire-discovery-test', path: appHostProjectPath }).fsPath,
                         language: 'csharp',
                         status: 'buildable',
                     }]);
                 }
                 finally {
+                    fileSystemRegistration.dispose();
                     service.dispose();
                 }
             }
@@ -974,4 +978,59 @@ function stubFileSystemWatchers(sandbox: sinon.SinonSandbox): Array<(uri?: vscod
     } as vscode.FileSystemWatcher));
 
     return callbacks;
+}
+
+class InMemoryProjectFileSystemProvider implements vscode.FileSystemProvider {
+    private readonly _onDidChangeFile = new vscode.EventEmitter<vscode.FileChangeEvent[]>();
+    readonly onDidChangeFile = this._onDidChangeFile.event;
+
+    public constructor(private readonly _files: Map<string, string>) {
+    }
+
+    public watch(): vscode.Disposable {
+        return { dispose: () => { } };
+    }
+
+    public stat(uri: vscode.Uri): vscode.FileStat {
+        const contents = this._files.get(uri.path);
+        if (contents === undefined) {
+            throw vscode.FileSystemError.FileNotFound(uri);
+        }
+
+        return {
+            type: vscode.FileType.File,
+            ctime: 0,
+            mtime: 0,
+            size: Buffer.byteLength(contents, 'utf8'),
+        };
+    }
+
+    public readDirectory(): [string, vscode.FileType][] {
+        return [];
+    }
+
+    public createDirectory(uri: vscode.Uri): void {
+        throw vscode.FileSystemError.NoPermissions(uri);
+    }
+
+    public readFile(uri: vscode.Uri): Uint8Array {
+        const contents = this._files.get(uri.path);
+        if (contents === undefined) {
+            throw vscode.FileSystemError.FileNotFound(uri);
+        }
+
+        return Buffer.from(contents, 'utf8');
+    }
+
+    public writeFile(uri: vscode.Uri): void {
+        throw vscode.FileSystemError.NoPermissions(uri);
+    }
+
+    public delete(uri: vscode.Uri): void {
+        throw vscode.FileSystemError.NoPermissions(uri);
+    }
+
+    public rename(_oldUri: vscode.Uri, newUri: vscode.Uri): void {
+        throw vscode.FileSystemError.NoPermissions(newUri);
+    }
 }

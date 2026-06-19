@@ -113,7 +113,8 @@ public class ApiDocsCacheTests(ITestOutputHelper outputHelper)
             new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cache")),
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")),
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")),
-            "test.log");
+            "test.log",
+            identityChannel: "local");
 
     private static string[] GetCacheFiles(TemporaryWorkspace workspace, string subdirectory)
         => Directory.GetFiles(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cache", subdirectory))
