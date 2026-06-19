@@ -119,6 +119,21 @@ function getProjectFile(launchConfig: ExecutableLaunchConfiguration): string {
     throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
 }
 
+function getDisplayName(launchConfig: ExecutableLaunchConfiguration): string {
+    const projectName = `MAUI: ${vscode.workspace.asRelativePath(getProjectFile(launchConfig))}`;
+    if (!isMauiLaunchConfiguration(launchConfig)) {
+        return projectName;
+    }
+
+    const targetParts = [
+        launchConfig.platform,
+        launchConfig.target_kind,
+        launchConfig.device
+    ].filter(part => part?.trim());
+
+    return targetParts.length > 0 ? `${projectName} (${targetParts.join(' ')})` : projectName;
+}
+
 function isAspireDebuggerInfrastructureEnvironmentVariable(name: string): boolean {
     return aspireDebuggerInfrastructureEnvironmentVariables.has(name) ||
         aspireDebuggerInfrastructureEnvironmentPrefixes.some(prefix => name.startsWith(prefix));
@@ -727,7 +742,7 @@ export const mauiDebuggerExtension: ResourceDebuggerExtension = {
     resourceType: 'maui',
     debugAdapter: 'maui',
     extensionId: 'ms-dotnettools.dotnet-maui',
-    getDisplayName: (launchConfiguration: ExecutableLaunchConfiguration) => `MAUI: ${vscode.workspace.asRelativePath(getProjectFile(launchConfiguration))}`,
+    getDisplayName,
     getSupportedFileTypes: () => ['.csproj'],
     getProjectFile: (launchConfig) => getProjectFile(launchConfig),
     createDebugSessionConfigurationCallback: async (launchConfig, args, env, launchOptions, debugConfiguration: AspireResourceExtendedDebugConfiguration): Promise<void> => {

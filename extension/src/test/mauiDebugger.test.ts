@@ -265,6 +265,43 @@ suite('MAUI Debugger Extension Tests', () => {
         }
     });
 
+    test('includes the MAUI target in the debug session name when available', async () => {
+        installMauiExtensionStub();
+        useMauiDeviceListProviderForTests(async () => [
+            {
+                identifier: 'Pixel_9a',
+                platform: 'android',
+                platforms: ['android'],
+                isEmulator: true,
+                isRunning: false,
+                name: 'Pixel 9a'
+            }
+        ]);
+
+        const debuggerExtension = getResourceDebuggerExtensions().find(extension => extension.resourceType === 'maui');
+        assert.ok(debuggerExtension);
+
+        const debugConfig = await createDebugSessionConfiguration(
+            { type: 'aspire', request: 'launch', name: 'Aspire', program: '' },
+            {
+                type: 'maui',
+                project_path: '/workspace/MauiApp/MauiApp.csproj',
+                target_framework: 'net10.0-android',
+                platform: 'android',
+                target_kind: 'emulator',
+                device: 'Pixel_9a',
+                msbuild_properties: {
+                    AdbTarget: '-s Pixel_9a'
+                }
+            } as ExecutableLaunchConfiguration,
+            ['run', '-f', 'net10.0-android'],
+            [],
+            { debug: true, runId: 'maui-session-name', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession },
+            debuggerExtension);
+
+        assert.strictEqual(debugConfig.name, 'Debug MAUI: /workspace/MauiApp/MauiApp.csproj (android emulator Pixel_9a)');
+    });
+
     test('temporarily enables MAUI launch-json configurations while starting a run', async () => {
         installMauiExtensionStub();
 
