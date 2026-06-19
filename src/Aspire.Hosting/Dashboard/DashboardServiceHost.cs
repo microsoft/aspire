@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Net;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Dcp;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -40,6 +41,7 @@ internal sealed class DashboardServiceHost : IHostedService
         DistributedApplicationModel applicationModel,
         IConfiguration configuration,
         DistributedApplicationExecutionContext executionContext,
+        IOptions<DcpOptions> dcpOptions,
         ILoggerFactory loggerFactory,
         IConfigureOptions<LoggerFilterOptions> loggerOptions,
         ResourceNotificationService resourceNotificationService,
@@ -129,8 +131,14 @@ internal sealed class DashboardServiceHost : IHostedService
             var uri = configuration.GetUri(KnownConfigNames.ResourceServiceEndpointUrl)
                 ?? configuration.GetUri(KnownConfigNames.Legacy.ResourceServiceEndpointUrl);
             var allowUnsecuredTransport = configuration.GetBool(KnownConfigNames.AllowUnsecuredTransport) ?? false;
+            var randomizePorts = dcpOptions.Value.RandomizePorts;
 
             var scheme = ResolveScheme(uri, allowUnsecuredTransport);
+
+            // When randomizePorts is true (e.g. --isolated mode), override a fixed configured
+            // port to 0 so multiple instances don't collide. A configured port of 0 is already
+            // dynamic, so no override is needed.
+            var effectivePort = (randomizePorts && uri is not null && uri.Port != 0) ? 0 : uri?.Port ?? 0;
 
             if (uri is null)
             {
@@ -141,14 +149,23 @@ internal sealed class DashboardServiceHost : IHostedService
             else if (IPAddress.TryParse(uri.Host, out var ip) && IPAddress.IsLoopback(ip))
             {
                 // Bind to the exact loopback address specified (e.g. 127.0.0.1 or [::1]).
-                kestrelOptions.Listen(ip, uri.Port, ConfigureListen);
-                _logger.LogDebug("Resource service endpoint configured: {Uri}", uri);
+                kestrelOptions.Listen(ip, effectivePort, ConfigureListen);
+                _logger.LogDebug("Resource service endpoint: {Uri} (effective port: {Port})", uri, effectivePort);
             }
             else if (uri.IsLoopback || IsLocalhostOrLocalhostTld(uri))
             {
                 // For "localhost" or *.localhost hosts, bind to both IPv4 and IPv6 loopback.
-                kestrelOptions.ListenLocalhost(uri.Port, ConfigureListen);
-                _logger.LogDebug("Resource service endpoint configured: {Uri}", uri);
+                // Kestrel does not support ListenLocalhost with port 0, so fall back to
+                // binding on IPv4 loopback when a dynamic port is needed.
+                if (effectivePort == 0)
+                {
+                    kestrelOptions.Listen(IPAddress.Loopback, port: 0, ConfigureListen);
+                }
+                else
+                {
+                    kestrelOptions.ListenLocalhost(effectivePort, ConfigureListen);
+                }
+                _logger.LogDebug("Resource service endpoint: {Uri} (effective port: {Port})", uri, effectivePort);
             }
             else
             {
