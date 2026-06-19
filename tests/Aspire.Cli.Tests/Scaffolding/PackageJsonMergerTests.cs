@@ -1491,4 +1491,80 @@ public class PackageJsonMergerTests
         // Engines set
         Assert.Contains(">=24", doc["engines"]?["node"]?.GetValue<string>());
     }
+
+    [Fact]
+    public void ApplyToolchainToScripts_WhenBun_RewritesNpmRunPrefixes()
+    {
+        var scaffold = """
+            {
+              "name": "aspire-apphost",
+              "scripts": {
+                "aspire:lint": "eslint apphost.mts",
+                "aspire:start": "aspire run",
+                "lint": "npm run aspire:lint",
+                "dev": "npm run aspire:start",
+                "build": "npm run aspire:build"
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.ApplyToolchainToScripts(scaffold, "bun");
+
+        var scripts = GetScripts(result);
+        Assert.Equal("bun run aspire:lint", scripts["lint"]?.GetValue<string>());
+        Assert.Equal("bun run aspire:start", scripts["dev"]?.GetValue<string>());
+        Assert.Equal("bun run aspire:build", scripts["build"]?.GetValue<string>());
+        // aspire: scripts are not npm-run delegates and must be left untouched.
+        Assert.Equal("eslint apphost.mts", scripts["aspire:lint"]?.GetValue<string>());
+        Assert.Equal("aspire run", scripts["aspire:start"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void ApplyToolchainToScripts_WhenPnpm_RewritesNpmRunPrefixes()
+    {
+        var scaffold = """
+            {
+              "scripts": {
+                "watch": "npm run aspire:dev"
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.ApplyToolchainToScripts(scaffold, "pnpm");
+
+        Assert.Equal("pnpm run aspire:dev", GetScript(result, "watch"));
+    }
+
+    [Fact]
+    public void ApplyToolchainToScripts_WhenNpm_ReturnsContentUnchanged()
+    {
+        var scaffold = """
+            {
+              "scripts": {
+                "dev": "npm run aspire:start"
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.ApplyToolchainToScripts(scaffold, "npm");
+
+        Assert.Same(scaffold, result);
+    }
+
+    [Fact]
+    public void ApplyToolchainToScripts_WhenNoNpmRunScripts_ReturnsContentUnchanged()
+    {
+        var scaffold = """
+            {
+              "scripts": {
+                "aspire:start": "aspire run",
+                "test": "vitest"
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.ApplyToolchainToScripts(scaffold, "bun");
+
+        Assert.Same(scaffold, result);
+    }
 }

@@ -180,6 +180,23 @@ public class ScaffoldingServiceTests
     }
 
     [Fact]
+    public void GetLanguageDisplayName_ForTypeScript_NamesResolvedToolchain()
+    {
+        Assert.Equal("TypeScript (Node.js)", ScaffoldingService.GetLanguageDisplayName(s_typeScriptLanguage, TypeScriptAppHostToolchain.Npm));
+        Assert.Equal("TypeScript (Bun)", ScaffoldingService.GetLanguageDisplayName(s_typeScriptLanguage, TypeScriptAppHostToolchain.Bun));
+        Assert.Equal("TypeScript (pnpm)", ScaffoldingService.GetLanguageDisplayName(s_typeScriptLanguage, TypeScriptAppHostToolchain.Pnpm));
+        Assert.Equal("TypeScript (Yarn)", ScaffoldingService.GetLanguageDisplayName(s_typeScriptLanguage, TypeScriptAppHostToolchain.Yarn));
+    }
+
+    [Fact]
+    public void GetLanguageDisplayName_ForNonTypeScript_UsesLanguageDisplayName()
+    {
+        var displayName = ScaffoldingService.GetLanguageDisplayName(s_pythonLanguage, toolchain: null);
+
+        Assert.Equal("Python", displayName);
+    }
+
+    [Fact]
     public void GetScaffoldedAppHostRelativePath_UsesActualScaffoldedFile_WhenDefaultFileNameDiffers()
     {
         var rootDirectory = Directory.CreateTempSubdirectory();

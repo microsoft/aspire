@@ -209,6 +209,68 @@ internal static class PackageJsonMerger
     }
 
     /// <summary>
+    /// Rewrites the leading package-manager token of convenience scripts in scaffold-generated
+    /// package.json content so they invoke the selected <paramref name="toolchainCommand"/>.
+    /// </summary>
+    /// <remarks>
+    /// The scaffold codegen emits these scripts with an <c>npm run</c> prefix because it runs
+    /// server-side without knowledge of the detected toolchain. This is only needed on the
+    /// greenfield write path (no existing package.json to merge into); the brownfield merge path
+    /// produces toolchain-aware aliases directly via <see cref="AddConvenienceAliases"/>. Returns
+    /// the content unchanged when the toolchain is npm, when there are no matching scripts, or when
+    /// the content cannot be parsed.
+    /// </remarks>
+    internal static string ApplyToolchainToScripts(string packageJsonContent, string toolchainCommand)
+    {
+        const string npmRunPrefix = "npm run ";
+
+        if (string.IsNullOrWhiteSpace(toolchainCommand) ||
+            string.Equals(toolchainCommand, "npm", StringComparison.Ordinal))
+        {
+            return packageJsonContent;
+        }
+
+        JsonObject? packageJson;
+        try
+        {
+            packageJson = JsonNode.Parse(packageJsonContent, documentOptions: s_jsonDocumentOptions) as JsonObject;
+        }
+        catch (JsonException)
+        {
+            return packageJsonContent;
+        }
+
+        if (packageJson?[ScriptsKey] is not JsonObject scripts)
+        {
+            return packageJsonContent;
+        }
+
+        // Collect first to avoid mutating the JsonObject while enumerating it.
+        var updates = new List<(string Name, string Command)>();
+        foreach (var (name, value) in scripts)
+        {
+            if (value is JsonValue scriptValue &&
+                scriptValue.TryGetValue<string>(out var command) &&
+                command.StartsWith(npmRunPrefix, StringComparison.Ordinal))
+            {
+                updates.Add((name, $"{toolchainCommand} run {command[npmRunPrefix.Length..]}"));
+            }
+        }
+
+        if (updates.Count == 0)
+        {
+            return packageJsonContent;
+        }
+
+        foreach (var (name, command) in updates)
+        {
+            scripts[name] = command;
+        }
+
+        return packageJson.ToJsonString(s_jsonOptions);
+    }
+
+    /// <summary>
     /// Merges a dependency section (e.g., "dependencies", "devDependencies") from scaffold into existing
     /// using semver-aware comparison. New packages are added; existing packages are upgraded only when
     /// the scaffold specifies a newer version. Unparseable version ranges (union ranges, workspace

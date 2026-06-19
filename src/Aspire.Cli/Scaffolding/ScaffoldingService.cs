@@ -169,6 +169,17 @@ internal sealed class ScaffoldingService : IScaffoldingService
         }
 
         // Step 4: Write scaffold files to disk, merging package.json and .gitignore when they already exist.
+        // Resolve the JS toolchain once up front so the package.json script rewrite, the install status
+        // message, and dependency installation all agree on the same toolchain and we avoid repeatedly
+        // walking the directory tree (Resolve performs filesystem I/O). Resolution reflects the on-disk
+        // state before any package.json is written, which is the state the package managers themselves see.
+        var toolchain = IsTypeScriptLanguage(language)
+            ? TypeScriptAppHostToolchainResolver.Resolve(scaffoldDirectory, _logger)
+            : (TypeScriptAppHostToolchain?)null;
+        var packageManagerCommand = toolchain is { } resolvedToolchain
+            ? TypeScriptAppHostToolchainResolver.GetCommandName(resolvedToolchain)
+            : "npm";
+
         foreach (var (fileName, content) in scaffoldFiles)
         {
             var filePath = Path.Combine(scaffoldDirectory.FullName, fileName);
@@ -186,12 +197,21 @@ internal sealed class ScaffoldingService : IScaffoldingService
                     existingContent,
                     content,
                     _logger,
-                    toolchainCommand: GetPackageManagerCommand(scaffoldDirectory, language));
+                    toolchainCommand: packageManagerCommand);
             }
             else if (IsGitIgnoreFile(fileName) && File.Exists(filePath))
             {
                 var existingContent = await File.ReadAllTextAsync(filePath, cancellationToken);
                 contentToWrite = MergeGitIgnoreContent(existingContent, content);
+            }
+            else if (fileName.Equals(PackageJsonFileName, StringComparison.OrdinalIgnoreCase))
+            {
+                // Fresh package.json (no existing file to merge into): the scaffold codegen emits the
+                // convenience scripts with an "npm run" prefix because it runs server-side without
+                // knowledge of the detected toolchain. Rewrite them to the selected toolchain so a
+                // Bun/pnpm/Yarn AppHost does not shell out to npm. The brownfield merge path above
+                // already produces toolchain-aware aliases (see PackageJsonMerger.AddConvenienceAliases).
+                contentToWrite = PackageJsonMerger.ApplyToolchainToScripts(content, packageManagerCommand);
             }
 
             await File.WriteAllTextAsync(filePath, contentToWrite, cancellationToken);
@@ -214,8 +234,8 @@ internal sealed class ScaffoldingService : IScaffoldingService
 
         // Step 6: Install dependencies using GuestRuntime
         var installResult = await _interactionService.ShowStatusAsync(
-            $"Installing {language.DisplayName} dependencies...",
-            () => InstallDependenciesAsync(scaffoldDirectory, language, rpcClient, cancellationToken),
+            $"Installing {GetLanguageDisplayName(language, toolchain)} dependencies...",
+            () => InstallDependenciesAsync(scaffoldDirectory, language, toolchain, rpcClient, cancellationToken),
             emoji: KnownEmojis.Package);
         if (installResult != 0)
         {
@@ -401,14 +421,14 @@ internal sealed class ScaffoldingService : IScaffoldingService
     private async Task<int> InstallDependenciesAsync(
         DirectoryInfo directory,
         LanguageInfo language,
+        TypeScriptAppHostToolchain? toolchain,
         IAppHostRpcClient rpcClient,
         CancellationToken cancellationToken)
     {
         var runtimeSpec = await rpcClient.GetRuntimeSpecAsync(language.LanguageId.Value, cancellationToken);
-        if (TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(language))
+        if (toolchain is { } resolvedToolchain)
         {
-            var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory, _logger);
-            runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(runtimeSpec, toolchain);
+            runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(runtimeSpec, resolvedToolchain);
         }
 
         var runtime = new GuestRuntime(runtimeSpec, _logger);
@@ -423,7 +443,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
             }
             else
             {
-                _interactionService.DisplayError($"Failed to initialize {language.DisplayName} environment.");
+                _interactionService.DisplayError($"Failed to initialize {GetLanguageDisplayName(language, toolchain)} environment.");
             }
             return initResult;
         }
@@ -451,7 +471,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
             }
             else
             {
-                _interactionService.DisplayError($"Failed to install {language.DisplayName} dependencies.");
+                _interactionService.DisplayError($"Failed to install {GetLanguageDisplayName(language, toolchain)} dependencies.");
             }
         }
 
@@ -506,15 +526,15 @@ internal sealed class ScaffoldingService : IScaffoldingService
             language.LanguageId.Value.Equals(KnownLanguageId.TypeScriptAlias, StringComparison.OrdinalIgnoreCase);
     }
 
-    private string GetPackageManagerCommand(DirectoryInfo directory, LanguageInfo language)
+    // The static LanguageInfo.DisplayName is "TypeScript (Node.js)" because the toolchain is only
+    // known once the project directory is inspected. Use the resolved toolchain so status and error
+    // messages name the package manager that will actually run (e.g. "TypeScript (Bun)"). A null
+    // toolchain means the language is not TypeScript, so the language's own display name is used.
+    internal static string GetLanguageDisplayName(LanguageInfo language, TypeScriptAppHostToolchain? toolchain)
     {
-        if (!TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(language))
-        {
-            return "npm";
-        }
-
-        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory, _logger);
-        return TypeScriptAppHostToolchainResolver.GetCommandName(toolchain);
+        return toolchain is { } resolvedToolchain
+            ? $"TypeScript ({TypeScriptAppHostToolchainResolver.GetDisplayName(resolvedToolchain)})"
+            : language.DisplayName;
     }
 
     internal static IReadOnlyList<string> GetConflictingScaffoldFiles(string rootDirectory, IEnumerable<string> scaffoldFileNames)
