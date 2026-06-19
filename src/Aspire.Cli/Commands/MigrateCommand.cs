@@ -45,6 +45,12 @@ internal sealed class MigrateCommand : BaseCommand
         _logger = logger;
 
         Options.Add(s_yesOption);
+
+        // Mirrors DestroyCommand/UpdateCommand: without --yes in a non-interactive context the
+        // confirmation prompt would throw InteractiveInputNotSupported and surface as a generic
+        // error. The validator produces the actionable "requires --yes in non-interactive mode"
+        // message instead.
+        AddNonInteractiveRequiresYesValidator(this, s_yesOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)

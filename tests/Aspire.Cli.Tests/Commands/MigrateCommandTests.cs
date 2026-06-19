@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Nodes;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -192,5 +193,32 @@ public class MigrateCommandTests(ITestOutputHelper outputHelper)
         Assert.False(File.Exists(Path.Combine(root.FullName, "apphost.ts")));
         var modernContent = await File.ReadAllTextAsync(Path.Combine(root.FullName, "apphost.mts"));
         Assert.Equal(ExpectedModernAppHostContent, modernContent);
+    }
+
+    [Theory]
+    [InlineData("migrate --non-interactive")]
+    [InlineData("--non-interactive migrate")]
+    public async Task MigrateCommand_FailsFastWhenNonInteractiveWithoutYes(string commandLine)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.WorkspaceRoot;
+        await WriteLegacyLayoutAsync(root);
+
+        var services = CreateServices(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(commandLine);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(Aspire.Cli.CliExitCodes.InvalidCommand, exitCode);
+        var error = Assert.Single(result.Errors);
+        Assert.Equal(
+            string.Format(System.Globalization.CultureInfo.CurrentCulture, SharedCommandStrings.NonInteractiveRequiresYesFormat, "migrate"),
+            error.Message);
+
+        // The legacy layout must be untouched when the command fails fast.
+        Assert.True(File.Exists(Path.Combine(root.FullName, "apphost.ts")));
+        Assert.False(File.Exists(Path.Combine(root.FullName, "apphost.mts")));
     }
 }
