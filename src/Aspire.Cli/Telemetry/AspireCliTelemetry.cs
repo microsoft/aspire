@@ -48,7 +48,7 @@ internal sealed class AspireCliTelemetry : IHostedService
     private readonly ICIEnvironmentDetector _ciEnvironmentDetector;
     private readonly ICodingAgentDetector _codingAgentDetector;
     private readonly IInternalMicrosoftDetector _internalMicrosoftDetector;
-    private readonly Func<bool> _isReportedTelemetryEnabled;
+    private readonly TelemetryConfiguration _telemetryConfiguration;
     private readonly ILogger<AspireCliTelemetry> _logger;
     private readonly CliExecutionContext _executionContext;
     private readonly List<KeyValuePair<string, object?>> _tagsList = [];
@@ -63,14 +63,14 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// <param name="ciEnvironmentDetector">The CI environment detector.</param>
     /// <param name="codingAgentDetector">The coding agent detector.</param>
     /// <param name="internalMicrosoftDetector">The internal Microsoft detector.</param>
-    /// <param name="telemetryManager">The telemetry manager.</param>
+    /// <param name="telemetryConfiguration">The telemetry configuration.</param>
     /// <param name="executionContext">
     /// The CLI execution context carrying the effective identity. Required: the DI
     /// container injects the registered singleton, so identity telemetry tags are
     /// always emitted from it.
     /// </param>
-    public AspireCliTelemetry(ILogger<AspireCliTelemetry> logger, IMachineInformationProvider machineInformationProvider, ICIEnvironmentDetector ciEnvironmentDetector, ICodingAgentDetector codingAgentDetector, IInternalMicrosoftDetector internalMicrosoftDetector, TelemetryManager telemetryManager, CliExecutionContext executionContext)
-        : this(logger, machineInformationProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector, () => telemetryManager.HasAzureMonitor, ReportedActivitySourceName, DiagnosticsActivitySourceName, executionContext)
+    public AspireCliTelemetry(ILogger<AspireCliTelemetry> logger, IMachineInformationProvider machineInformationProvider, ICIEnvironmentDetector ciEnvironmentDetector, ICodingAgentDetector codingAgentDetector, IInternalMicrosoftDetector internalMicrosoftDetector, TelemetryConfiguration telemetryConfiguration, CliExecutionContext executionContext)
+        : this(logger, machineInformationProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector, telemetryConfiguration, ReportedActivitySourceName, DiagnosticsActivitySourceName, executionContext)
     {
     }
 
@@ -87,7 +87,7 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// <param name="diagnosticsSourceName">The name for the diagnostics activity source.</param>
     /// <param name="executionContext">The CLI execution context carrying the effective identity.</param>
     internal AspireCliTelemetry(ILogger<AspireCliTelemetry> logger, IMachineInformationProvider machineInformationProvider, ICIEnvironmentDetector ciEnvironmentDetector, ICodingAgentDetector codingAgentDetector, IInternalMicrosoftDetector internalMicrosoftDetector, string reportedSourceName, string diagnosticsSourceName, CliExecutionContext executionContext)
-        : this(logger, machineInformationProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector, static () => true, reportedSourceName, diagnosticsSourceName, executionContext)
+        : this(logger, machineInformationProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector, new TelemetryConfiguration { ReportedTelemetryEnabled = true }, reportedSourceName, diagnosticsSourceName, executionContext)
     {
     }
 
@@ -99,18 +99,18 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// <param name="ciEnvironmentDetector">The CI environment detector.</param>
     /// <param name="codingAgentDetector">The coding agent detector.</param>
     /// <param name="internalMicrosoftDetector">The internal Microsoft detector.</param>
-    /// <param name="isReportedTelemetryEnabled">A delegate that indicates whether reported telemetry is enabled.</param>
+    /// <param name="telemetryConfiguration">The telemetry configuration.</param>
     /// <param name="reportedSourceName">The name for the reported activity source.</param>
     /// <param name="diagnosticsSourceName">The name for the diagnostics activity source.</param>
     /// <param name="executionContext">The CLI execution context carrying the effective identity.</param>
-    internal AspireCliTelemetry(ILogger<AspireCliTelemetry> logger, IMachineInformationProvider machineInformationProvider, ICIEnvironmentDetector ciEnvironmentDetector, ICodingAgentDetector codingAgentDetector, IInternalMicrosoftDetector internalMicrosoftDetector, Func<bool> isReportedTelemetryEnabled, string reportedSourceName, string diagnosticsSourceName, CliExecutionContext executionContext)
+    internal AspireCliTelemetry(ILogger<AspireCliTelemetry> logger, IMachineInformationProvider machineInformationProvider, ICIEnvironmentDetector ciEnvironmentDetector, ICodingAgentDetector codingAgentDetector, IInternalMicrosoftDetector internalMicrosoftDetector, TelemetryConfiguration telemetryConfiguration, string reportedSourceName, string diagnosticsSourceName, CliExecutionContext executionContext)
     {
         _logger = logger;
         _machineInformationProvider = machineInformationProvider;
         _ciEnvironmentDetector = ciEnvironmentDetector;
         _codingAgentDetector = codingAgentDetector;
         _internalMicrosoftDetector = internalMicrosoftDetector;
-        _isReportedTelemetryEnabled = isReportedTelemetryEnabled;
+        _telemetryConfiguration = telemetryConfiguration;
         _executionContext = executionContext;
         _reportedActivitySource = new ActivitySource(reportedSourceName);
         _diagnosticsActivitySource = new ActivitySource(diagnosticsSourceName);
@@ -253,33 +253,53 @@ internal sealed class AspireCliTelemetry : IHostedService
             var deviceIdTask = _machineInformationProvider.GetOrCreateDeviceId();
 
             Task<InternalMicrosoftDetectionResult>? internalMicrosoftTask = null;
-            if (_isReportedTelemetryEnabled())
+            if (_telemetryConfiguration.ReportedTelemetryEnabled)
             {
                 // The internal Microsoft check can be slow and can perform multiple async operations in parallel, so only run it if reported
                 // telemetry is enabled and make sure we flow the cancellation token so it can be canceled if the application is shutting down.
                 internalMicrosoftTask = _internalMicrosoftDetector.IsInternalMicrosoftMachineAsync(cancellationToken);
             }
 
-            await Task.WhenAll(macAddressHashTask, deviceIdTask, internalMicrosoftTask ?? Task.CompletedTask).WaitAsync(cancellationToken).ConfigureAwait(false);
+            await Task.WhenAll((Task)macAddressHashTask, deviceIdTask).WaitAsync(cancellationToken).ConfigureAwait(false);
+
+            InternalMicrosoftDetectionResult? internalMicrosoftResult = null;
+            if (internalMicrosoftTask is not null)
+            {
+                try
+                {
+                    internalMicrosoftResult = await internalMicrosoftTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    if (_logger.IsEnabled(LogLevel.Debug))
+                    {
+                        _logger.LogDebug(ex, "Internal Microsoft detection failed.");
+                    }
+                }
+            }
 
             _tagsList.Add(new(TelemetryConstants.Tags.MacAddressHash, macAddressHashTask.Result));
             _tagsList.Add(new(TelemetryConstants.Tags.DeviceId, deviceIdTask.Result));
-            if (internalMicrosoftTask is not null && internalMicrosoftTask.Result.IsInternalMicrosoft)
+            if (internalMicrosoftResult is { IsInternalMicrosoft: true })
             {
-                _tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoft, internalMicrosoftTask.Result.IsInternalMicrosoft));
-                if (!string.IsNullOrEmpty(internalMicrosoftTask.Result.Source))
+                _tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoft, internalMicrosoftResult.IsInternalMicrosoft));
+                if (!string.IsNullOrEmpty(internalMicrosoftResult.Source))
                 {
-                    _tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoftSource, internalMicrosoftTask.Result.Source));
+                    _tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoftSource, internalMicrosoftResult.Source));
                 }
 
-                if (!string.IsNullOrEmpty(internalMicrosoftTask.Result.Alias))
+                if (!string.IsNullOrEmpty(internalMicrosoftResult.Alias))
                 {
-                    _tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoftAlias, internalMicrosoftTask.Result.Alias));
+                    _tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoftAlias, internalMicrosoftResult.Alias));
                 }
 
-                if (!string.IsNullOrEmpty(internalMicrosoftTask.Result.Domain))
+                if (!string.IsNullOrEmpty(internalMicrosoftResult.Domain))
                 {
-                    _tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoftDomain, internalMicrosoftTask.Result.Domain));
+                    _tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoftDomain, internalMicrosoftResult.Domain));
                 }
             }
 

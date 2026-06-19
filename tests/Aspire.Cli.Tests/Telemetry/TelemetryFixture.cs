@@ -123,11 +123,17 @@ internal sealed class TelemetryFixture : IDisposable
         public string? Source { get; set; }
         public string? Alias { get; set; }
         public string? Domain { get; set; }
+        public Exception? ExceptionToThrow { get; set; }
         public int InvocationCount { get; private set; }
 
         public Task<InternalMicrosoftDetectionResult> IsInternalMicrosoftMachineAsync(CancellationToken cancellationToken = default)
         {
             InvocationCount++;
+            if (ExceptionToThrow is not null)
+            {
+                return Task.FromException<InternalMicrosoftDetectionResult>(ExceptionToThrow);
+            }
+
             return Task.FromResult(new InternalMicrosoftDetectionResult(IsInternalMicrosoft, Source, Alias, Domain));
         }
     }

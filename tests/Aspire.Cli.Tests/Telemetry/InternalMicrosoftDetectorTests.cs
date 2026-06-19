@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Telemetry;
+using Aspire.Cli.Tests.TestServices;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Telemetry;
@@ -158,7 +160,7 @@ public sealed class InternalMicrosoftDetectorTests
         Assert.Equal("positive", result.Source);
         Assert.Equal("positive.alias", result.Alias);
         Assert.Equal("POSITIVE", result.Domain);
-        await slowProbeCancelled.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await slowProbeCancelled.Task.DefaultTimeout();
     }
 
     [Fact]
@@ -202,9 +204,102 @@ public sealed class InternalMicrosoftDetectorTests
         Assert.Equal("FAULT", result.Domain);
     }
 
-    private static InternalMicrosoftDetector CreateDetector(string cacheFilePath, DateTimeOffset now, IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>> probeStages)
+    [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_RunsLaterStagesWhenProbeThrowsUnexpectedException()
     {
-        return new InternalMicrosoftDetector(cacheFilePath, new FixedTimeProvider(now), NullLogger<InternalMicrosoftDetector>.Instance, probeStages);
+        using var tempDirectory = new TestTempDirectory();
+        var detector = CreateDetector(
+            Path.Combine(tempDirectory.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            [
+                [new InternalMicrosoftProbe("faulting", _ => throw new NotSupportedException("Unexpected probe failure."))],
+                [new InternalMicrosoftProbe("positive", _ => Task.FromResult(new InternalMicrosoftProbeResult(IsInternalMicrosoft: true, Alias: "later.alias", Domain: "LATER")))]
+            ]);
+
+        var result = await detector.IsInternalMicrosoftMachineAsync();
+
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Equal("positive", result.Source);
+        Assert.Equal("later.alias", result.Alias);
+        Assert.Equal("LATER", result.Domain);
+    }
+
+    [Fact]
+    public async Task CheckWindowsUserDnsDomainAsync_UsesExecutionContextEnvironment()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var detector = CreateDetector(
+            Path.Combine(tempDirectory.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: [],
+            environmentVariables: new Dictionary<string, string?>
+            {
+                ["USERDNSDOMAIN"] = "redmond.corp.microsoft.com",
+                ["USERNAME"] = "test.alias"
+            });
+
+        var result = await detector.CheckWindowsUserDnsDomainAsync(CancellationToken.None);
+
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Equal("test.alias", result.Alias);
+        Assert.Equal("REDMOND", result.Domain);
+    }
+
+    [Fact]
+    public async Task CheckWindowsWorkplaceJoinAsync_UsesExecutionContextEnvironmentAndProcessFactory()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        await File.WriteAllTextAsync(Path.Combine(tempDirectory.Path, "dsregcmd"), string.Empty);
+        await File.WriteAllTextAsync(Path.Combine(tempDirectory.Path, "dsregcmd.EXE"), string.Empty);
+        var processFactory = new TestProcessExecutionFactory
+        {
+            AttemptCallback = (_, _) => (0, """
+                AzureAdJoined : YES
+                WorkplaceJoined : NO
+                TenantId : 72f988bf-86f1-41af-91ab-2d7cd011db47
+                """)
+        };
+        var detector = CreateDetector(
+            Path.Combine(tempDirectory.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: [],
+            processFactory: processFactory,
+            environmentVariables: new Dictionary<string, string?>
+            {
+                ["PATH"] = tempDirectory.Path,
+                ["PATHEXT"] = ".EXE",
+                ["USERDNSDOMAIN"] = "redmond.corp.microsoft.com",
+                ["USERNAME"] = "test.alias"
+            });
+
+        var result = await detector.CheckWindowsWorkplaceJoinAsync(CancellationToken.None);
+
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Equal("test.alias", result.Alias);
+        Assert.Equal("REDMOND", result.Domain);
+        Assert.Equal("dsregcmd", processFactory.LastFileName);
+        var arguments = Assert.IsType<string[]>(processFactory.LastArguments);
+        Assert.Equal(["/status"], arguments);
+    }
+
+    private static InternalMicrosoftDetector CreateDetector(
+        string cacheFilePath,
+        DateTimeOffset now,
+        IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>> probeStages,
+        TestProcessExecutionFactory? processFactory = null,
+        IReadOnlyDictionary<string, string?>? environmentVariables = null)
+    {
+        var executionContext = Utils.TestExecutionContextHelper.CreateExecutionContext(
+            new DirectoryInfo(Path.GetDirectoryName(cacheFilePath) ?? AppContext.BaseDirectory),
+            environmentVariables: environmentVariables);
+
+        return new InternalMicrosoftDetector(
+            executionContext,
+            cacheFilePath,
+            new FixedTimeProvider(now),
+            NullLogger<InternalMicrosoftDetector>.Instance,
+            processFactory ?? new TestProcessExecutionFactory(),
+            probeStages);
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider

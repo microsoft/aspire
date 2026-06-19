@@ -26,7 +26,7 @@ internal static class TestTelemetryHelper
             ciDetector,
             codingAgentDetector,
             internalMicrosoftDetector,
-            static () => true,
+            new TelemetryConfiguration { ReportedTelemetryEnabled = true },
             AspireCliTelemetry.ReportedActivitySourceName,
             AspireCliTelemetry.DiagnosticsActivitySourceName,
             CreateExecutionContext());

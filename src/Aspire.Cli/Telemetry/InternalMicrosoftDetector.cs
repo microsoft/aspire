@@ -1,13 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Runtime.Versioning;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 
@@ -41,26 +42,34 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     private static readonly TimeSpan s_gitHubHttpTimeout = TimeSpan.FromSeconds(3);
 
     private readonly string _cacheFilePath;
+    private readonly CliExecutionContext _executionContext;
+    private readonly IProcessExecutionFactory _processExecutionFactory;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<InternalMicrosoftDetector> _logger;
     private readonly IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>> _probeStages;
 
-    public InternalMicrosoftDetector(CliExecutionContext executionContext, TimeProvider timeProvider, ILogger<InternalMicrosoftDetector> logger)
+    public InternalMicrosoftDetector(CliExecutionContext executionContext, TimeProvider timeProvider, ILogger<InternalMicrosoftDetector> logger, IProcessExecutionFactory processExecutionFactory)
         : this(
+            executionContext,
             Path.Combine(executionContext.CacheDirectory.FullName, CacheSubdirectoryName, CacheFileName),
             timeProvider,
             logger,
+            processExecutionFactory,
             probeStages: null)
     {
     }
 
     internal InternalMicrosoftDetector(
+        CliExecutionContext executionContext,
         string cacheFilePath,
         TimeProvider timeProvider,
         ILogger<InternalMicrosoftDetector> logger,
+        IProcessExecutionFactory processExecutionFactory,
         IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>>? probeStages)
     {
         _cacheFilePath = cacheFilePath;
+        _executionContext = executionContext;
+        _processExecutionFactory = processExecutionFactory;
         _timeProvider = timeProvider;
         _logger = logger;
         _probeStages = probeStages ?? CreateDefaultProbeStages();
@@ -68,21 +77,46 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
     public async Task<InternalMicrosoftDetectionResult> IsInternalMicrosoftMachineAsync(CancellationToken cancellationToken = default)
     {
-        var cached = await TryReadFreshCacheAsync(cancellationToken).ConfigureAwait(false);
-        if (cached is not null)
+        try
         {
-            return new InternalMicrosoftDetectionResult(cached.IsInternalMicrosoft, cached.Source, cached.Alias, cached.Domain);
+            var cached = await TryReadFreshCacheAsync(cancellationToken).ConfigureAwait(false);
+            if (cached is not null)
+            {
+                return new InternalMicrosoftDetectionResult(cached.IsInternalMicrosoft, cached.Source, cached.Alias, cached.Domain);
+            }
+
+            var result = await RunProbeStagesAsync(cancellationToken).ConfigureAwait(false) ??
+                new InternalMicrosoftDetectionResult(IsInternalMicrosoft: false, Source: null, Alias: null, Domain: null);
+            await TryWriteCacheAsync(result, cancellationToken).ConfigureAwait(false);
+
+            return result;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug(ex, "Internal Microsoft detection failed.");
+            }
 
-        var result = await RunProbeStagesAsync(cancellationToken).ConfigureAwait(false) ??
-            new InternalMicrosoftDetectionResult(IsInternalMicrosoft: false, Source: null, Alias: null, Domain: null);
-        await TryWriteCacheAsync(result, cancellationToken).ConfigureAwait(false);
-
-        return result;
+            return new InternalMicrosoftDetectionResult(IsInternalMicrosoft: false, Source: null, Alias: null, Domain: null);
+        }
     }
 
     private IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>> CreateDefaultProbeStages()
     {
+        // Probes are ordered by cost and signal quality. Local account stores and OS enrollment
+        // state come from standard developer-machine tooling: Windows dsregcmd, Visual Studio
+        // IdentityService, VS Code global state, macOS Platform SSO, gh/Copilot CLI auth, and
+        // GitHub's organization membership API.
+        // See:
+        // - https://learn.microsoft.com/entra/identity/devices/troubleshoot-device-dsregcmd
+        // - https://learn.microsoft.com/entra/identity/devices/macos-platform-single-sign-on
+        // - https://docs.github.com/rest/orgs/members
+
         // Fastest/strongest signal probes
         var stage1 = new List<InternalMicrosoftProbe>();
         if (OperatingSystem.IsMacOS())
@@ -214,7 +248,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             {
                 return null;
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or InvalidOperationException or JsonException or HttpRequestException or TaskCanceledException)
+            catch (Exception ex)
             {
                 if (_logger.IsEnabled(LogLevel.Debug))
                 {
@@ -312,17 +346,17 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
         finally
         {
-            TryDelete(tempPath);
+            FileDeleteHelper.TryDeleteFile(tempPath);
         }
     }
 
-    private static Task<InternalMicrosoftProbeResult> CheckWindowsUserDnsDomainAsync(CancellationToken cancellationToken)
+    internal Task<InternalMicrosoftProbeResult> CheckWindowsUserDnsDomainAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var userDnsDomain = Environment.GetEnvironmentVariable("USERDNSDOMAIN");
+        var userDnsDomain = _executionContext.GetEnvironmentVariable("USERDNSDOMAIN");
         var domain = ExtractAdDomainNameFromCorpDnsName(userDnsDomain);
         return Task.FromResult(domain is not null
-            ? Detected(Environment.GetEnvironmentVariable("USERNAME"), domain)
+            ? Detected(_executionContext.GetEnvironmentVariable("USERNAME"), domain)
             : InternalMicrosoftProbeResult.NotDetected);
     }
 
@@ -333,7 +367,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             return InternalMicrosoftProbeResult.NotDetected;
         }
 
-        var result = await RunProcessAsync("cmd.exe", "/c \"echo %USERDNSDOMAIN%&echo %USERNAME%\"", cancellationToken).ConfigureAwait(false);
+        var result = await RunProcessAsync("cmd.exe", ["/c", "echo %USERDNSDOMAIN%&echo %USERNAME%"], cancellationToken).ConfigureAwait(false);
         var outputLines = result.Stdout.Split('\n', StringSplitOptions.TrimEntries);
         var userDnsDomain = outputLines.FirstOrDefault() ?? string.Empty;
         var userName = outputLines.Skip(1).FirstOrDefault() ?? string.Empty;
@@ -346,7 +380,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     [SupportedOSPlatform("windows")]
     private async Task<InternalMicrosoftProbeResult> CheckVisualStudioMicrosoftTenantAsync(CancellationToken cancellationToken)
     {
-        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var localAppData = GetSpecialFolderPath(Environment.SpecialFolder.LocalApplicationData, "LOCALAPPDATA");
         if (string.IsNullOrWhiteSpace(localAppData))
         {
             return InternalMicrosoftProbeResult.NotDetected;
@@ -358,7 +392,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             return InternalMicrosoftProbeResult.NotDetected;
         }
 
-        var text = await TryReadAllTextAsync(accountStore, cancellationToken).ConfigureAwait(false);
+        var text = await FileSystemHelper.TryReadAllTextAsync(accountStore, cancellationToken).ConfigureAwait(false);
         return DetectMicrosoftTenant(text, cancellationToken);
     }
 
@@ -371,7 +405,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
         var result = await RunProcessAsync(
             "cmd.exe",
-            "/c if exist \"%LOCALAPPDATA%\\.IdentityService\\V3AccountStore.json\" type \"%LOCALAPPDATA%\\.IdentityService\\V3AccountStore.json\"",
+            ["/c", "if exist \"%LOCALAPPDATA%\\.IdentityService\\V3AccountStore.json\" type \"%LOCALAPPDATA%\\.IdentityService\\V3AccountStore.json\""],
             cancellationToken).ConfigureAwait(false);
 
         return result.ExitCode == 0
@@ -387,24 +421,36 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             return InternalMicrosoftProbeResult.NotDetected;
         }
 
-        var result = await RunProcessAsync("app-sso", "platform -s", cancellationToken).ConfigureAwait(false);
+        var result = await RunProcessAsync("app-sso", ["platform", "-s"], cancellationToken).ConfigureAwait(false);
         if (result.ExitCode != 0)
         {
             return InternalMicrosoftProbeResult.NotDetected;
         }
 
-        var output = $"{result.Stdout}{Environment.NewLine}{result.Stderr}";
+        // app-sso emits a JSON document similar to:
+        //   {"realm":"REDMOND.CORP.MICROSOFT.COM","upn":"alias@REDMOND.CORP.MICROSOFT.COM",
+        //    "issuer":"https://login.microsoftonline.com/<tenant>/v2.0", ...}
+        // Use JSON APIs for the fixed fields so formatting changes don't affect detection.
+        var json = TryParseJsonObject($"{result.Stdout}{Environment.NewLine}{result.Stderr}");
+        if (json is null)
+        {
+            return InternalMicrosoftProbeResult.NotDetected;
+        }
+
         var expectedIssuer = $"https://login.microsoftonline.com/{MicrosoftTenantId}/v2.0";
         var expectedKeyEndpoint = $"https://login.microsoftonline.com/{MicrosoftTenantId}/getkeydata";
         var expectedTokenEndpoint = $"https://login.microsoftonline.com/{MicrosoftTenantId}/oauth2/v2.0/token";
+        var upn = TryGetString(json, "upn");
+        var realmDomain = ExtractAdDomainNameFromCorpDnsName(TryGetString(json, "realm"));
+        var upnDomain = ExtractAdDomainNameFromAccountIdentifier(upn);
+        var domain = realmDomain ?? upnDomain;
 
-        var upnMatch = PlatformSsoUpnRegex().Match(output);
-        return ContainsJsonStringProperty(output, "issuer", expectedIssuer) &&
-            ContainsJsonStringProperty(output, "keyEndpointURL", expectedKeyEndpoint) &&
-            ContainsJsonStringProperty(output, "tokenEndpointURL", expectedTokenEndpoint) &&
-            PlatformSsoRealmRegex().IsMatch(output) &&
-            upnMatch.Success
-                ? Detected(upnMatch.Groups["username"].Value, upnMatch.Groups["domain"].Value)
+        return HasJsonStringProperty(json, "issuer", expectedIssuer) &&
+            HasJsonStringProperty(json, "keyEndpointURL", expectedKeyEndpoint) &&
+            HasJsonStringProperty(json, "tokenEndpointURL", expectedTokenEndpoint) &&
+            domain is not null &&
+            ExtractAliasFromAccountIdentifier(upn) is { } alias
+                ? Detected(alias, domain)
                 : InternalMicrosoftProbeResult.NotDetected;
     }
 
@@ -419,7 +465,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 continue;
             }
 
-            var bytes = await TryReadAllBytesAsync(stateDatabasePath, cancellationToken).ConfigureAwait(false);
+            var bytes = await FileSystemHelper.TryReadAllBytesAsync(stateDatabasePath, cancellationToken).ConfigureAwait(false);
             if (bytes.Length == 0)
             {
                 continue;
@@ -436,19 +482,19 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         return InternalMicrosoftProbeResult.NotDetected;
     }
 
-    private async Task<InternalMicrosoftProbeResult> CheckWindowsWorkplaceJoinAsync(CancellationToken cancellationToken)
+    internal async Task<InternalMicrosoftProbeResult> CheckWindowsWorkplaceJoinAsync(CancellationToken cancellationToken)
     {
         if (!CommandExists("dsregcmd"))
         {
             return InternalMicrosoftProbeResult.NotDetected;
         }
 
-        var result = await RunProcessAsync("dsregcmd", "/status", cancellationToken).ConfigureAwait(false);
+        var result = await RunProcessAsync("dsregcmd", ["/status"], cancellationToken).ConfigureAwait(false);
         return result.ExitCode == 0
             ? EvaluateWindowsWorkplaceJoin(
                 result.Stdout,
-                Environment.GetEnvironmentVariable("USERNAME"),
-                Environment.GetEnvironmentVariable("USERDNSDOMAIN"))
+                _executionContext.GetEnvironmentVariable("USERNAME"),
+                _executionContext.GetEnvironmentVariable("USERDNSDOMAIN"))
             : InternalMicrosoftProbeResult.NotDetected;
     }
 
@@ -459,7 +505,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             return InternalMicrosoftProbeResult.NotDetected;
         }
 
-        var result = await RunProcessAsync("cmd.exe", "/c dsregcmd /status", cancellationToken).ConfigureAwait(false);
+        var result = await RunProcessAsync("cmd.exe", ["/c", "dsregcmd /status"], cancellationToken).ConfigureAwait(false);
         return result.ExitCode == 0
             ? EvaluateWindowsWorkplaceJoin(result.Stdout, fallbackAlias: null, fallbackDomain: null)
             : InternalMicrosoftProbeResult.NotDetected;
@@ -472,7 +518,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             return InternalMicrosoftProbeResult.NotDetected;
         }
 
-        var tokenResult = await RunProcessAsync("gh", "auth token --hostname github.com", cancellationToken).ConfigureAwait(false);
+        var tokenResult = await RunProcessAsync("gh", ["auth", "token", "--hostname", "github.com"], cancellationToken).ConfigureAwait(false);
         if (tokenResult.ExitCode != 0 || string.IsNullOrWhiteSpace(tokenResult.Stdout))
         {
             return InternalMicrosoftProbeResult.NotDetected;
@@ -491,7 +537,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             return InternalMicrosoftProbeResult.NotDetected;
         }
 
-        var tokenResult = await RunProcessAsync("gh.exe", "auth token --hostname github.com", cancellationToken).ConfigureAwait(false);
+        var tokenResult = await RunProcessAsync("gh.exe", ["auth", "token", "--hostname", "github.com"], cancellationToken).ConfigureAwait(false);
         if (tokenResult.ExitCode != 0 || string.IsNullOrWhiteSpace(tokenResult.Stdout))
         {
             return InternalMicrosoftProbeResult.NotDetected;
@@ -525,18 +571,17 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
 
         var tokenCandidates = new List<TokenCandidate>();
-        foreach (var (name, value) in Environment.GetEnvironmentVariables().Cast<System.Collections.DictionaryEntry>()
-            .Select(e => (Name: e.Key?.ToString() ?? string.Empty, Value: e.Value?.ToString() ?? string.Empty)))
+        foreach (var (name, value) in GetEnvironmentVariables())
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (name.StartsWith("COPILOT_GH_ACCOUNT_", StringComparison.OrdinalIgnoreCase) && LooksLikeGitHubToken(value))
+            if (name.StartsWith("COPILOT_GH_ACCOUNT_", StringComparison.OrdinalIgnoreCase) && value is not null && LooksLikeGitHubToken(value))
             {
                 tokenCandidates.Add(new TokenCandidate(value));
             }
         }
 
-        var copilotHome = Path.Combine(GetHomeDirectory(), ".copilot");
+        var copilotHome = Path.Combine(_executionContext.HomeDirectory.FullName, ".copilot");
         foreach (var path in EnumerateExistingFiles(copilotHome, cancellationToken, "config.json", "settings.json"))
         {
             tokenCandidates.AddRange(ExtractGitHubTokenCandidates(path, cancellationToken));
@@ -624,32 +669,40 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         return TryGetString(doc.RootElement, propertyName);
     }
 
-    private async Task<ProcessResult> RunProcessAsync(string fileName, string arguments, CancellationToken cancellationToken)
+    private async Task<ProcessResult> RunProcessAsync(string fileName, string[] arguments, CancellationToken cancellationToken)
     {
-        var startInfo = new ProcessStartInfo(fileName, arguments)
+        var stdout = new StringBuilder();
+        var stderr = new StringBuilder();
+        var options = new ProcessInvocationOptions
         {
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true
+            SuppressLogging = true,
+            StandardOutputCallback = line => stdout.AppendLine(line),
+            StandardErrorCallback = line => stderr.AppendLine(line)
         };
 
-        var result = await ProcessCaptureRunner.RunAsync(
-            startInfo,
-            s_processProbeTimeout,
-            async (process, captureCancellationToken) =>
-            {
-                // Read both streams concurrently to avoid deadlock when a pipe buffer fills.
-                var stdoutTask = process.StandardOutput.ReadToEndAsync(captureCancellationToken);
-                var stderrTask = process.StandardError.ReadToEndAsync(captureCancellationToken);
-                await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
-                return new ProcessOutput(stdoutTask.Result, stderrTask.Result);
-            },
-            static () => new ProcessOutput(string.Empty, string.Empty),
-            _logger,
-            cancellationToken).ConfigureAwait(false);
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(s_processProbeTimeout);
+        using var execution = _processExecutionFactory.CreateExecution(
+            fileName,
+            arguments,
+            env: null,
+            _executionContext.WorkingDirectory,
+            options);
 
-        return new ProcessResult(result.ExitCode, result.Capture.Stdout, result.Capture.Stderr);
+        if (!execution.Start())
+        {
+            return new ProcessResult(ExitCode: -1, stdout.ToString(), stderr.ToString());
+        }
+
+        try
+        {
+            var exitCode = await execution.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+            return new ProcessResult(exitCode, stdout.ToString(), stderr.ToString());
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return new ProcessResult(ExitCode: -1, stdout.ToString(), stderr.ToString());
+        }
     }
 
     private static InternalMicrosoftProbeResult EvaluateWindowsWorkplaceJoin(string output, string? fallbackAlias, string? fallbackDomain)
@@ -670,10 +723,20 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         return (azureAdJoined || workplaceJoined) && tenantId?.Equals(MicrosoftTenantId, StringComparison.OrdinalIgnoreCase) == true
             ? Detected(alias, domain)
             : InternalMicrosoftProbeResult.NotDetected;
+
+        static bool IsYes(string? value)
+        {
+            return value?.Equals("YES", StringComparison.OrdinalIgnoreCase) == true;
+        }
     }
 
     private static Dictionary<string, string> ParseColonSeparatedFields(string text)
     {
+        // dsregcmd /status writes colon-separated sections, e.g.:
+        //   AzureAdJoined : YES
+        //   TenantId : 72f988bf-86f1-41af-91ab-2d7cd011db47
+        //   User Email : alias@microsoft.com
+        // Values can contain additional ':' characters, so split only on the first delimiter.
         var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var line in text.Split('\n'))
         {
@@ -720,6 +783,9 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
     private static IEnumerable<TenantAliasEvidence> ExtractTenantAliasEvidenceFromJwtPayloads(string text, CancellationToken cancellationToken)
     {
+        // Account stores often embed JWTs. Decode only the payload segment:
+        //   base64url(header).base64url(payload).base64url(signature)
+        // and look for tenant/user claims such as tid, tenantId, preferred_username, and upn.
         var evidence = new List<TenantAliasEvidence>();
         foreach (Match match in JwtRegex().Matches(text))
         {
@@ -814,7 +880,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             : null;
     }
 
-    private static IEnumerable<TokenCandidate> GetGitHubTokenEnvironmentCandidates(CancellationToken cancellationToken)
+    private IEnumerable<TokenCandidate> GetGitHubTokenEnvironmentCandidates(CancellationToken cancellationToken)
     {
         var exactNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -825,12 +891,11 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             "GITHUB_ACCESS_TOKEN"
         };
 
-        foreach (var (name, value) in Environment.GetEnvironmentVariables().Cast<System.Collections.DictionaryEntry>()
-            .Select(e => (Name: e.Key?.ToString() ?? string.Empty, Value: e.Value?.ToString() ?? string.Empty)))
+        foreach (var (name, value) in GetEnvironmentVariables())
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (exactNames.Contains(name) && LooksLikeGitHubToken(value))
+            if (exactNames.Contains(name) && value is not null && LooksLikeGitHubToken(value))
             {
                 yield return new TokenCandidate(value);
             }
@@ -910,13 +975,13 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
     }
 
-    private static IEnumerable<string> GetVsCodeStateDatabasePaths()
+    private IEnumerable<string> GetVsCodeStateDatabasePaths()
     {
-        var home = GetHomeDirectory();
+        var home = _executionContext.HomeDirectory.FullName;
 
         if (OperatingSystem.IsWindows())
         {
-            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            var appData = GetSpecialFolderPath(Environment.SpecialFolder.ApplicationData, "APPDATA");
             if (string.IsNullOrWhiteSpace(appData))
             {
                 yield break;
@@ -945,7 +1010,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             yield break;
         }
 
-        var xdgConfigHome = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
+        var xdgConfigHome = _executionContext.GetEnvironmentVariable("XDG_CONFIG_HOME");
         var configHome = string.IsNullOrWhiteSpace(xdgConfigHome) ? Path.Combine(home, ".config") : xdgConfigHome;
         foreach (var product in GetVsCodeProductNames())
         {
@@ -964,15 +1029,15 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         return ["Code", "Code - Insiders", "VSCodium"];
     }
 
-    private static bool IsWsl()
+    private bool IsWsl()
     {
         if (!OperatingSystem.IsLinux())
         {
             return false;
         }
 
-        if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WSL_DISTRO_NAME")) ||
-            !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WSL_INTEROP")))
+        if (!string.IsNullOrWhiteSpace(_executionContext.GetEnvironmentVariable("WSL_DISTRO_NAME")) ||
+            !string.IsNullOrWhiteSpace(_executionContext.GetEnvironmentVariable("WSL_INTEROP")))
         {
             return true;
         }
@@ -994,16 +1059,16 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
     }
 
-    private static bool CommandExists(string command)
+    private bool CommandExists(string command)
     {
-        var path = Environment.GetEnvironmentVariable("PATH");
+        var path = _executionContext.GetEnvironmentVariable("PATH");
         if (string.IsNullOrWhiteSpace(path))
         {
             return false;
         }
 
         var extensions = OperatingSystem.IsWindows() && string.IsNullOrEmpty(Path.GetExtension(command))
-            ? (Environment.GetEnvironmentVariable("PATHEXT") ?? ".EXE;.CMD;.BAT;.COM").Split(';', StringSplitOptions.RemoveEmptyEntries)
+            ? (_executionContext.GetEnvironmentVariable("PATHEXT") ?? ".EXE;.CMD;.BAT;.COM").Split(';', StringSplitOptions.RemoveEmptyEntries)
             : [string.Empty];
 
         foreach (var directory in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
@@ -1021,27 +1086,37 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         return false;
     }
 
-    private static async Task<string> TryReadAllTextAsync(string path, CancellationToken cancellationToken)
+    private string GetSpecialFolderPath(Environment.SpecialFolder folder, string environmentVariableName)
     {
-        try
-        {
-            return await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return string.Empty;
-        }
+        return _executionContext.GetEnvironmentVariable(environmentVariableName) ??
+            Environment.GetFolderPath(folder);
     }
 
-    private static async Task<byte[]> TryReadAllBytesAsync(string path, CancellationToken cancellationToken)
+    private IEnumerable<(string Name, string? Value)> GetEnvironmentVariables()
+    {
+        if (_executionContext.EnvironmentVariables is not null)
+        {
+            return _executionContext.EnvironmentVariables.Select(pair => (pair.Key, pair.Value));
+        }
+
+        return Environment.GetEnvironmentVariables()
+            .Cast<System.Collections.DictionaryEntry>()
+            .Select(e => (Name: e.Key?.ToString() ?? string.Empty, Value: e.Value?.ToString()));
+    }
+
+    private static JsonObject? TryParseJsonObject(string text)
     {
         try
         {
-            return await File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false);
+            var start = text.IndexOf('{');
+            var end = text.LastIndexOf('}');
+            return start >= 0 && end > start
+                ? JsonNode.Parse(text[start..(end + 1)], documentOptions: new JsonDocumentOptions { AllowTrailingCommas = true }) as JsonObject
+                : null;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (JsonException)
         {
-            return [];
+            return null;
         }
     }
 
@@ -1123,6 +1198,19 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         return match.Success ? NormalizeAlias(match.Groups["alias"].Value) : null;
     }
 
+    private static string? ExtractAdDomainNameFromAccountIdentifier(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var atIndex = value.LastIndexOf('@');
+        return atIndex >= 0 && atIndex < value.Length - 1
+            ? ExtractAdDomainNameFromCorpDnsName(value[(atIndex + 1)..])
+            : null;
+    }
+
     private static string? NormalizeAlias(string? alias)
     {
         if (string.IsNullOrWhiteSpace(alias))
@@ -1134,41 +1222,23 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         return normalized.All(c => char.IsLetterOrDigit(c) || c is '.' or '_' or '-') ? normalized : null;
     }
 
-    private static bool ContainsJsonStringProperty(string text, string propertyName, string expectedValue)
+    private static bool HasJsonStringProperty(JsonObject json, string propertyName, string expectedValue)
     {
-        return Regex.IsMatch(
-            text,
-            $@"""{Regex.Escape(propertyName)}""\s*:\s*""{Regex.Escape(expectedValue)}""",
-            RegexOptions.IgnoreCase);
+        return TryGetString(json, propertyName)?.Equals(expectedValue, StringComparison.OrdinalIgnoreCase) == true;
     }
 
-    private static bool IsYes(string? value)
+    private static string? TryGetString(JsonObject json, string propertyName)
     {
-        return value?.Equals("YES", StringComparison.OrdinalIgnoreCase) == true;
+        return json.TryGetPropertyValue(propertyName, out var value) &&
+            value is JsonValue jsonValue &&
+            jsonValue.TryGetValue<string>(out var text)
+            ? text
+            : null;
     }
 
     private static bool LooksLikeGitHubToken(string token)
     {
         return GitHubTokenRegex().IsMatch(token);
-    }
-
-    private static string GetHomeDirectory()
-    {
-        return Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-    }
-
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-        }
     }
 
     [GeneratedRegex(@"(?:github_pat_[A-Za-z0-9_]{20,}|gh[opsru]_[A-Za-z0-9_]{20,})")]
@@ -1180,14 +1250,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     [GeneratedRegex(@"(?<![A-Za-z0-9._%+\-\\])(?<alias>[A-Za-z0-9._%+-]+)@(?<domain>(?:[A-Za-z0-9-]+\.)*microsoft\.com)(?![A-Za-z0-9._%+-])", RegexOptions.IgnoreCase)]
     private static partial Regex MicrosoftAccountRegex();
 
-    [GeneratedRegex(@"""realm""\s*:\s*""[A-Z0-9.-]+\.CORP\.MICROSOFT\.COM""", RegexOptions.IgnoreCase)]
-    private static partial Regex PlatformSsoRealmRegex();
-
-    [GeneratedRegex(@"""upn""\s*:\s*""(?<username>[^""@\s]+)@(?<domain>[A-Z0-9.-]+\.CORP\.MICROSOFT\.COM)""", RegexOptions.IgnoreCase)]
-    private static partial Regex PlatformSsoUpnRegex();
-
     private readonly record struct ProcessResult(int ExitCode, string Stdout, string Stderr);
-    private readonly record struct ProcessOutput(string Stdout, string Stderr);
     private readonly record struct TokenCandidate(string Token);
     private readonly record struct TenantAliasEvidence(string TenantId, string? Alias);
 }
