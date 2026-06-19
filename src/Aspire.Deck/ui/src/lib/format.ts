@@ -132,9 +132,12 @@ export function formatMetricValue(value: number | null, unit: string | null): st
     case "1":
       return `${(value * 100).toFixed(1)}%`;
     default: {
-      const rounded = Math.abs(value) >= 100 ? value.toFixed(0) : value.toFixed(2);
+      // Counts and other plain values: show integers without trailing zeros (e.g.
+      // "66", not "66.00") and keep a few decimals only for genuinely fractional
+      // values. Thousands separators match the dashboard's culture formatting.
+      const formatted = value.toLocaleString(undefined, { maximumFractionDigits: 3 });
       const u = displayUnit(unit);
-      return u ? `${rounded} ${u}` : rounded;
+      return u ? `${formatted} ${u}` : formatted;
     }
   }
 }
