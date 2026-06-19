@@ -322,10 +322,24 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper)
         {
             if (pidFile.Exists)
             {
-                var text = await File.ReadAllTextAsync(pidFile.FullName);
-                if (int.TryParse(text.Trim(), out var pid))
+                try
                 {
-                    return pid;
+                    // The writer (PowerShell Set-Content on Windows / shell redirect on Unix) may
+                    // still hold the file open when we observe it exists, so reading can race into a
+                    // Windows sharing violation. Open with FileShare.ReadWrite and treat any
+                    // IOException as "not ready yet" — the int.TryParse guard below also rejects a
+                    // partially-written value — then retry until the deadline.
+                    using var stream = new FileStream(pidFile.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                    using var reader = new StreamReader(stream);
+                    var text = await reader.ReadToEndAsync();
+                    if (int.TryParse(text.Trim(), out var pid))
+                    {
+                        return pid;
+                    }
+                }
+                catch (IOException)
+                {
+                    // File briefly locked by the writer; fall through and retry.
                 }
             }
 
