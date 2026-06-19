@@ -464,4 +464,4 @@ Risk to watch out for: env/args callbacks may need to run for build/closure even
   | Stage 1 (Aspire 13.5) scope for Project v2 (tracking issue) | https://github.com/microsoft/aspire/issues/15710 |
   | Aspire watch prototype | https://github.com/karolz-ms/aspire-watch |
   | Solution file editing library | https://github.com/microsoft/vs-solutionpersistence |
-  | Annotation-bases resource flavoring proposal | https://github.com/microsoft/aspire/issues/8984 |
+  | Annotation-based resource flavoring proposal | https://github.com/microsoft/aspire/issues/8984 |
