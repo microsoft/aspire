@@ -316,7 +316,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             _logger,
             cancellationToken,
             _profilingTelemetry);
-        // Short-lived RPC session: Start() spawns the server synchronously. We never observe the
+        // Short-lived RPC session: StartAsync() spawns the server. We never observe the
         // exit-code task because disposal flows the exit code through the activity scope and the only
         // failure mode we care about surfaces via the RPC call below.
         await serverSession.StartAsync();

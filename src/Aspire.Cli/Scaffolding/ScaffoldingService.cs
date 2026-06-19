@@ -145,7 +145,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
             debug: false,
             _logger,
             cancellationToken);
-        // Short-lived RPC session: Start() spawns the server synchronously. We never observe the
+        // Short-lived RPC session: StartAsync() spawns the server. We never observe the
         // exit-code task (WaitForExitAsync) because disposal flows the exit code through the
         // activity scope and the only failure mode we care about surfaces via the RPC call below.
         await serverSession.StartAsync();
