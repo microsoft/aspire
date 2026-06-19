@@ -462,7 +462,7 @@ function createExtensionApi(
   };
 
   const api: AspireExtensionApi & { __testOnlyRpcServerInfo?: RpcServerConnectionInfo } = {
-    apiVersion: 1,
+    apiVersion: 2,
     rpcServerInfo: { address: rpcServer.connectionInfo.address },
     dcpServerInfo: { address: dcpServer.connectionInfo.address },
     logDirectory: context.logUri.fsPath,

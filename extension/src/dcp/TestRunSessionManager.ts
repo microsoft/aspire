@@ -3,6 +3,7 @@ import { getRunSessionInfo, getSupportedCapabilities } from '../capabilities';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
+import { testRunSessionManagerNotInitialized } from '../loc/strings';
 import type AspireRpcServer from '../server/AspireRpcServer';
 import { generateToken } from '../utils/security';
 import { DcpServerConnectionInfo, RunSessionInfo } from './types';
@@ -19,16 +20,9 @@ export interface AcquiredTestRunSession {
     env: Record<string, string>;
 }
 
-export interface TestRunSessionLease {
+interface TestRunSessionLease {
     id: string;
     sessionId: string;
-    token: string;
-    expiresAt: number;
-}
-
-export interface TestRunSessionManagerOptions {
-    leaseLifetimeMs?: number;
-    now?: () => number;
 }
 
 export interface TestRunSessionDebugSessionOptions {
@@ -42,19 +36,14 @@ export interface TestRunSessionDebugSessionOptions {
 
 export class TestRunSessionManager {
     private readonly leases = new Map<string, TestRunSessionLease>();
-    private readonly leaseLifetimeMs?: number;
-    private readonly now: () => number;
     private connectionInfo?: DcpServerConnectionInfo;
-    private debugSessionStartSubscription?: vscode.Disposable;
-    private readonly leasedDebugSessionRemovers = new Map<string, () => void>();
+    private debugSessionSubscription?: vscode.Disposable;
+    private readonly leasedDebugSessionDisposers = new Map<string, () => void>();
 
     constructor(
         connectionInfo?: DcpServerConnectionInfo,
-        private readonly getSupportedLaunchConfigurations: () => string[] = getSupportedCapabilities,
-        options: TestRunSessionManagerOptions = {}) {
+        private readonly getSupportedLaunchConfigurations: () => string[] = getSupportedCapabilities) {
         this.connectionInfo = connectionInfo;
-        this.leaseLifetimeMs = options.leaseLifetimeMs;
-        this.now = options.now ?? Date.now;
     }
 
     initializeConnectionInfo(connectionInfo: DcpServerConnectionInfo): void {
@@ -62,8 +51,8 @@ export class TestRunSessionManager {
     }
 
     listenForLeasedDebugSessions(options: TestRunSessionDebugSessionOptions): vscode.Disposable {
-        this.debugSessionStartSubscription?.dispose();
-        this.debugSessionStartSubscription = vscode.debug.onDidStartDebugSession(session => {
+        this.debugSessionSubscription?.dispose();
+        const startSubscription = vscode.debug.onDidStartDebugSession(session => {
             const lease = this.tryGetLeaseForDebugSession(session);
             if (!lease || options.getAspireDebugSession(lease.sessionId)) {
                 return;
@@ -78,11 +67,18 @@ export class TestRunSessionManager {
                 lease.sessionId);
 
             options.addAspireDebugSession(aspireDebugSession);
-            this.leasedDebugSessionRemovers.set(lease.id, () => options.removeAspireDebugSession(aspireDebugSession));
+            this.leasedDebugSessionDisposers.set(lease.id, () => aspireDebugSession.dispose());
             extensionLogOutputChannel.info(`Registered leased Aspire debug session ${lease.sessionId} for VS Code debug session ${session.id}.`);
         });
+        const terminateSubscription = vscode.debug.onDidTerminateDebugSession(session => {
+            const lease = this.tryGetLeaseForDebugSession(session);
+            if (lease) {
+                this.releaseLease(lease.id);
+            }
+        });
+        this.debugSessionSubscription = vscode.Disposable.from(startSubscription, terminateSubscription);
 
-        return this.debugSessionStartSubscription;
+        return this.debugSessionSubscription;
     }
 
     private tryGetLeaseForDebugSession(session: vscode.DebugSession): TestRunSessionLease | undefined {
@@ -96,10 +92,8 @@ export class TestRunSessionManager {
 
     acquireTestRunSession(options: TestRunSessionAcquireOptions): AcquiredTestRunSession {
         if (!this.connectionInfo) {
-            throw new Error('Test run session manager has not been initialized with DCP server connection information.');
+            throw new Error(testRunSessionManagerNotInitialized);
         }
-
-        this.removeExpiredLeases();
 
         const id = generateToken();
         const sessionId = generateDcpIdPrefix();
@@ -108,7 +102,7 @@ export class TestRunSessionManager {
             supported_launch_configurations: this.getSupportedLaunchConfigurations()
         };
 
-        this.leases.set(id, { id, sessionId, token: this.connectionInfo.token, expiresAt: this.getExpiresAt() });
+        this.leases.set(id, { id, sessionId });
 
         return {
             id,
@@ -124,11 +118,10 @@ export class TestRunSessionManager {
         };
     }
 
-    async releaseTestRunSession(id: string): Promise<void> {
-        const lease = this.releaseLease(id);
-        if (!lease) {
-            return;
-        }
+    releaseTestRunSession(id: string): Promise<void> {
+        this.releaseLease(id);
+
+        return Promise.resolve();
     }
 
     private releaseLease(id: string): TestRunSessionLease | undefined {
@@ -138,74 +131,19 @@ export class TestRunSessionManager {
         return lease;
     }
 
-    removeLeasedDebugSession(id: string): void {
-        this.leasedDebugSessionRemovers.get(id)?.();
-        this.leasedDebugSessionRemovers.delete(id);
-    }
-
-    isActive(id: string): boolean {
-        const lease = this.leases.get(id);
-        if (!lease) {
-            return false;
-        }
-
-        if (this.isExpired(lease)) {
-            this.leases.delete(id);
-            return false;
-        }
-
-        return true;
-    }
-
-    tryGetLeaseForDcpId(dcpId: string): TestRunSessionLease | undefined {
-        for (const lease of this.leases.values()) {
-            if (dcpId.startsWith(`${lease.sessionId}-`)) {
-                if (this.isExpired(lease)) {
-                    this.leases.delete(lease.id);
-                    return undefined;
-                }
-
-                return lease;
-            }
-        }
-
-        return undefined;
+    private removeLeasedDebugSession(id: string): void {
+        const dispose = this.leasedDebugSessionDisposers.get(id);
+        this.leasedDebugSessionDisposers.delete(id);
+        dispose?.();
     }
 
     private tryGetLeaseForSessionId(sessionId: string): TestRunSessionLease | undefined {
         for (const lease of this.leases.values()) {
             if (lease.sessionId === sessionId) {
-                if (this.isExpired(lease)) {
-                    this.leases.delete(lease.id);
-                    return undefined;
-                }
-
                 return lease;
             }
         }
 
         return undefined;
-    }
-
-    private removeExpiredLeases(): void {
-        for (const lease of this.leases.values()) {
-            if (this.isExpired(lease)) {
-                this.leases.delete(lease.id);
-            }
-        }
-    }
-
-    private isExpired(lease: TestRunSessionLease): boolean {
-        if (this.leaseLifetimeMs === undefined) {
-            return false;
-        }
-
-        return this.now() >= lease.expiresAt;
-    }
-
-    private getExpiresAt(): number {
-        return this.leaseLifetimeMs === undefined
-            ? Number.POSITIVE_INFINITY
-            : this.now() + this.leaseLifetimeMs;
     }
 }

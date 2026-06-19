@@ -69,8 +69,7 @@ export interface WaitForStateOptions {
     timeoutMs?: number;
 }
 
-export interface AspireExtensionApi {
-    readonly apiVersion: 1;
+export interface AspireExtensionApiBase {
     readonly rpcServerInfo: AspireServerInfo;
     readonly dcpServerInfo: AspireServerInfo;
     readonly logDirectory: string;
@@ -79,12 +78,22 @@ export interface AspireExtensionApi {
     waitForState(predicate: (state: AspireExtensionStateSnapshot) => boolean, options?: WaitForStateOptions): Promise<AspireExtensionStateSnapshot>;
     waitForRepositoryIdle(options?: WaitForStateOptions): Promise<AspireExtensionStateSnapshot>;
     getDashboardUrl(appHostPath?: string): string | undefined;
+}
+
+export interface AspireExtensionApiV1 extends AspireExtensionApiBase {
+    readonly apiVersion: 1;
+}
+
+export interface AspireExtensionApiV2 extends AspireExtensionApiBase {
+    readonly apiVersion: 2;
     getRunningAppHosts(): Promise<readonly AspireAppHostState[]>;
     stopResource(resourceName: string, appHostPath: string): Promise<void>;
     startResource(resourceName: string, appHostPath: string): Promise<void>;
     acquireTestRunSession(options: TestRunSessionAcquireOptions): AcquiredTestRunSession;
     releaseTestRunSession(id: string): Promise<void>;
 }
+
+export type AspireExtensionApi = AspireExtensionApiV2;
 
 export interface AspireExtensionE2EStateFile {
     updatedAt: string;

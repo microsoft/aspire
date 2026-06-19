@@ -133,7 +133,6 @@ suite('AppHostDataRepository', () => {
     });
 
     test('fetchAppHostsOnce uses ps without resources and describes each AppHost', async () => {
-        const clock = sinon.useFakeTimers();
         const psProcess = new TestChildProcess();
         const describeProcess = new TestChildProcess();
         spawnStub.onFirstCall().returns(psProcess);
@@ -158,24 +157,26 @@ suite('AppHostDataRepository', () => {
             await waitForMicrotasks();
             await waitForMicrotasks();
 
-            assert.deepStrictEqual(spawnStub.secondCall.args[2], ['describe', '--follow', '--format', 'json', '--apphost', '/workspace/AppHost.csproj']);
+            assert.deepStrictEqual(spawnStub.secondCall.args[2], ['describe', '--format', 'json', '--apphost', '/workspace/AppHost.csproj']);
             assert.strictEqual(spawnStub.secondCall.args[3].noExtensionVariables, true);
 
-            spawnStub.secondCall.args[3].lineCallback(JSON.stringify({
-                name: 'api',
-                displayName: 'api',
-                resourceType: 'Project',
-                state: 'Running',
-                stateStyle: null,
-                healthStatus: null,
-                healthReports: null,
-                exitCode: null,
-                dashboardUrl: null,
-                urls: [],
-                commands: null,
-                properties: null,
+            spawnStub.secondCall.args[3].stdoutCallback(JSON.stringify({
+                resources: [{
+                    name: 'api',
+                    displayName: 'api',
+                    resourceType: 'Project',
+                    state: 'Running',
+                    stateStyle: null,
+                    healthStatus: null,
+                    healthReports: null,
+                    exitCode: null,
+                    dashboardUrl: null,
+                    urls: [],
+                    commands: null,
+                    properties: null,
+                }]
             }));
-            await clock.tickAsync(250);
+            spawnStub.secondCall.args[3].exitCallback(0);
 
             const appHosts = await fetchPromise;
 
@@ -184,7 +185,6 @@ suite('AppHostDataRepository', () => {
             assert.strictEqual(appHosts[0].resources?.[0].name, 'api');
         } finally {
             repository.dispose();
-            clock.restore();
         }
     });
 
@@ -278,7 +278,69 @@ suite('AppHostDataRepository', () => {
         }
     });
 
-    test('fetchAppHostsOnce rejects describe failure even after partial resource output', async () => {
+    test('fetchAppHostsOnce returns healthy AppHosts when one describe fails', async () => {
+        const psProcess = new TestChildProcess();
+        const healthyDescribeProcess = new TestChildProcess();
+        const failedDescribeProcess = new TestChildProcess();
+        spawnStub.onFirstCall().returns(psProcess);
+        spawnStub.onSecondCall().returns(healthyDescribeProcess);
+        spawnStub.onThirdCall().returns(failedDescribeProcess);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            const fetchPromise = repository.fetchAppHostsOnce();
+            await waitForMicrotasks();
+
+            spawnStub.firstCall.args[3].stdoutCallback(JSON.stringify([{
+                appHostPath: '/workspace/AppHost.csproj',
+                appHostPid: 1234,
+                dashboardUrl: 'https://localhost:1234',
+                cliPid: 5678,
+                resources: null,
+            }, {
+                appHostPath: '/workspace/DeadAppHost.csproj',
+                appHostPid: 4321,
+                dashboardUrl: 'https://localhost:4321',
+                cliPid: 8765,
+                resources: null,
+            }]));
+            spawnStub.firstCall.args[3].exitCallback(0);
+            await waitForMicrotasks();
+            await waitForMicrotasks();
+
+            spawnStub.secondCall.args[3].stdoutCallback(JSON.stringify({
+                resources: [{
+                    name: 'api',
+                    displayName: 'api',
+                    resourceType: 'Project',
+                    state: 'Running',
+                    stateStyle: null,
+                    healthStatus: null,
+                    healthReports: null,
+                    exitCode: null,
+                    dashboardUrl: null,
+                    urls: [],
+                    commands: null,
+                    properties: null,
+                }]
+            }));
+            spawnStub.secondCall.args[3].exitCallback(0);
+            spawnStub.thirdCall.args[3].stderrCallback('describe failed');
+            spawnStub.thirdCall.args[3].exitCallback(1);
+
+            const appHosts = await fetchPromise;
+
+            assert.strictEqual(appHosts.length, 2);
+            assert.strictEqual(appHosts[0].resources?.[0].name, 'api');
+            assert.deepStrictEqual(appHosts[1].resources, []);
+            assert.strictEqual(healthyDescribeProcess.killed, true);
+            assert.strictEqual(failedDescribeProcess.killed, true);
+        } finally {
+            repository.dispose();
+        }
+    });
+
+    test('fetchAppHostsOnce ignores non-JSON describe output before resource data', async () => {
         const psProcess = new TestChildProcess();
         const describeProcess = new TestChildProcess();
         spawnStub.onFirstCall().returns(psProcess);
@@ -300,34 +362,47 @@ suite('AppHostDataRepository', () => {
             await waitForMicrotasks();
             await waitForMicrotasks();
 
-            spawnStub.secondCall.args[3].lineCallback(JSON.stringify({
-                name: 'api',
-                displayName: 'api',
-                resourceType: 'Project',
-                state: 'Running',
-                stateStyle: null,
-                healthStatus: null,
-                healthReports: null,
-                exitCode: null,
-                dashboardUrl: null,
-                urls: [],
-                commands: null,
-                properties: null,
-            }));
-            spawnStub.secondCall.args[3].stderrCallback('describe failed');
-            spawnStub.secondCall.args[3].exitCallback(1);
+            spawnStub.secondCall.args[3].stdoutCallback(`Starting AppHost...\n${JSON.stringify({
+                resources: [{
+                    name: 'api',
+                    displayName: 'api',
+                    resourceType: 'Project',
+                    state: 'Running',
+                    stateStyle: null,
+                    healthStatus: null,
+                    healthReports: null,
+                    exitCode: null,
+                    dashboardUrl: null,
+                    urls: [],
+                    commands: null,
+                    properties: null,
+                }]
+            })}`);
+            spawnStub.secondCall.args[3].exitCallback(0);
 
-            await assert.rejects(fetchPromise, (error: unknown) => {
-                assert.ok(error instanceof AspireCliFailedError);
-                assert.match(error.message, /describe failed/);
-                return true;
-            });
+            const appHosts = await fetchPromise;
+
+            assert.strictEqual(appHosts.length, 1);
+            assert.strictEqual(appHosts[0].resources?.[0].name, 'api');
             assert.strictEqual(describeProcess.killed, true);
         } finally {
             repository.dispose();
         }
     });
-      
+
+    test('runResourceCommand rejects invalid AppHost paths before spawning CLI', async () => {
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            await assert.rejects(
+                () => repository.runResourceCommand('api', '   ', 'start'),
+                /appHostPath must be a non-empty absolute path/);
+            assert.strictEqual(spawnStub.called, false);
+        } finally {
+            repository.dispose();
+        }
+    });
+
     test('describe watch optimistically sends disabled command flag when capabilities cannot be read', async () => {
         // If `config info` can't be read (e.g. a CLI too old to support it) we keep the optimistic
         // default so newer-but-unprobeable CLIs still get the flag; the no-data fallback protects us.
