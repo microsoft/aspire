@@ -482,12 +482,21 @@ internal sealed class DotNetCliRunner(
 
     private static void AddAspireCliPathEnvironment(Dictionary<string, string> env, FileInfo? projectFile)
     {
-        if (projectFile is null || env.ContainsKey("AspireCliPath") || string.IsNullOrWhiteSpace(Environment.ProcessPath))
+        if (projectFile is null || env.ContainsKey("AspireCliPath"))
         {
             return;
         }
 
-        env["AspireCliPath"] = Environment.ProcessPath;
+        var aspireCliPath = Environment.GetEnvironmentVariable("AspireCliPath");
+        if (string.IsNullOrWhiteSpace(aspireCliPath))
+        {
+            aspireCliPath = Environment.ProcessPath;
+        }
+
+        if (!string.IsNullOrWhiteSpace(aspireCliPath))
+        {
+            env["AspireCliPath"] = aspireCliPath;
+        }
     }
 
     private TimeSpan GetBackchannelConnectionTimeout()

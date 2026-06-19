@@ -10,7 +10,7 @@ import * as fs from 'fs';
 import { doesFileExist } from '../../utils/io';
 import { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfiguration, isProjectLaunchConfiguration, ProjectLaunchConfiguration } from '../../dcp/types';
 import { ResourceDebuggerExtension } from '../debuggerExtensions';
-import { aspireCliPathEnvironmentVariableName, mergeEnvs } from '../../utils/environment';
+import { aspireCliPathEnvironmentVariableName, mergeEnvs, withoutAspireCliPathForMSBuild } from '../../utils/environment';
 import {
     readLaunchSettings,
     determineBaseLaunchProfile,
@@ -322,11 +322,13 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
             }
 
             // Temporarily disable GH Copilot on the dashboard before the extension implementation is approved
+            const runtimeEnv = withoutAspireCliPathForMSBuild(env);
+
             if (launchOptions.isApphost) {
-                env.push({ name: "ASPIRE_DASHBOARD_AI_DISABLED", value: "true" });
+                runtimeEnv.push({ name: "ASPIRE_DASHBOARD_AI_DISABLED", value: "true" });
             }
 
-            const dotNetHelperEnv = getDotNetHelperEnvironment(env);
+            const dotNetHelperEnv = launchOptions.msBuildEnv ?? getDotNetHelperEnvironment(env);
 
             if (baseProfile?.commandName?.toLowerCase() === LaunchProfileCommandName.executable && baseProfile.executablePath) {
                 // For Executable command profiles (e.g., class library integrations), the launch profile
@@ -347,7 +349,7 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                 debugConfiguration.env = Object.fromEntries(mergeEnvironmentVariables(
                     baseProfile?.environmentVariables,
                     debugConfiguration.env,
-                    env
+                    runtimeEnv
                 ));
             }
             else if (!isFileBasedApp(projectPath)) {
@@ -374,7 +376,7 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                 debugConfiguration.env = Object.fromEntries(mergeEnvironmentVariables(
                     baseProfile?.environmentVariables,
                     debugConfiguration.env,
-                    env
+                    runtimeEnv
                 ));
             }
             else {
@@ -391,7 +393,7 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                 debugConfiguration.env = Object.fromEntries(mergeEnvironmentVariables(
                     baseProfile?.environmentVariables,
                     debugConfiguration.env,
-                    env,
+                    runtimeEnv,
                     runApiConfig.env
                 ));
             }

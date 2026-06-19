@@ -30,8 +30,7 @@ export function getAspireCliPathForMSBuild(cliPath: string | undefined, workingD
 
 export function withAspireCliPathForMSBuild(env: EnvVar[], cliPath: string | undefined, workingDirectory?: string): EnvVar[] {
     const aspireCliPath = getAspireCliPathForMSBuild(cliPath, workingDirectory);
-    const aspireCliPathKey = aspireCliPathEnvironmentVariableName.toLowerCase();
-    const filteredEnv = env.filter(variable => variable.name.toLowerCase() !== aspireCliPathKey);
+    const filteredEnv = withoutAspireCliPathForMSBuild(env);
 
     if (!aspireCliPath) {
         return filteredEnv;
@@ -41,6 +40,11 @@ export function withAspireCliPathForMSBuild(env: EnvVar[], cliPath: string | und
         ...filteredEnv,
         { name: aspireCliPathEnvironmentVariableName, value: aspireCliPath },
     ];
+}
+
+export function withoutAspireCliPathForMSBuild(env: EnvVar[]): EnvVar[] {
+    const aspireCliPathKey = aspireCliPathEnvironmentVariableName.toLowerCase();
+    return env.filter(variable => variable.name.toLowerCase() !== aspireCliPathKey);
 }
 
 function isBareAspireCommand(value: string): boolean {

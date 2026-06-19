@@ -164,6 +164,7 @@ export interface LaunchOptions {
     debugSessionId: string;
     isApphost: boolean;
     debugSession: AspireDebugSession;
+    msBuildEnv?: EnvVar[];
 };
 
 export interface StartAppHostOptions {

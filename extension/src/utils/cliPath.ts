@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { extensionLogOutputChannel } from './logging';
+import { getWindowsCommandShimSpawnCommand, shouldUseWindowsCommandShim } from './windowsCommandShim';
 
 const execFileAsync = promisify(execFile);
 const fsAccessAsync = promisify(fs.access);
@@ -48,11 +49,9 @@ async function fileExists(filePath: string): Promise<boolean> {
  */
 export async function tryExecuteCli(cliPath: string): Promise<boolean> {
     try {
-        if (shouldUseCmdForCliPath(cliPath)) {
-            // .cmd/.bat files are interpreted by cmd.exe. Passing the wrapper path as a
-            // separate argument lets Node quote paths with spaces instead of relying on
-            // fragile hand-built cmd.exe command strings.
-            await execFileAsync(process.env.ComSpec ?? 'cmd.exe', ['/d', '/c', 'call', cliPath, '--version'], { timeout: 5000 });
+        if (shouldUseWindowsCommandShim(cliPath)) {
+            const shimCommand = getWindowsCommandShimSpawnCommand(cliPath, ['--version']);
+            await execFileAsync(shimCommand.command, shimCommand.args, { timeout: 5000, windowsVerbatimArguments: shimCommand.windowsVerbatimArguments });
         }
         else {
             await execFileAsync(cliPath, ['--version'], { timeout: 5000 });
@@ -63,10 +62,6 @@ export async function tryExecuteCli(cliPath: string): Promise<boolean> {
     catch {
         return false;
     }
-}
-
-function shouldUseCmdForCliPath(cliPath: string): boolean {
-    return process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(cliPath);
 }
 
 /**

@@ -45,6 +45,7 @@ import { AppHostDiscoveryService } from './utils/appHostDiscovery';
 import { AppHostLaunchRequestedEvent, AppHostLaunchService } from './services/AppHostLaunchService';
 import type { AspireAppHostState, AspireDebugConsoleOutputEvent, AspireExtensionApi, AspireExtensionE2ECommandInvocation, AspireExtensionE2EControlCommand, AspireExtensionE2EControlPayload, AspireExtensionE2EControlStatus, AspireExtensionE2EDebugConsoleOutput, AspireExtensionE2EDebugLaunch, AspireExtensionE2ETerminalCommand, AspireExtensionStateSnapshot, AspireResourceCommandState, AspireResourceState, AspireResourceUrlState, WaitForStateOptions } from './types/extensionApi';
 import { AppHostsViewTelemetry } from './views/AppHostsViewTelemetry';
+import { getConfiguredCliPath, resolveCliPath } from './utils/cliPath';
 
 let aspireExtensionContext = new AspireExtensionContext();
 let atomicWriteSequence = 0;
@@ -910,6 +911,15 @@ async function executeE2eControlCommand(
     case 'getExtensionFileStatus': {
       markStarted();
       return getExtensionFileStatus(context, command.relativePaths);
+    }
+    case 'getResolvedCliPath': {
+      markStarted();
+      const resolved = await resolveCliPath();
+      return {
+        ...resolved,
+        configuredPath: getConfiguredCliPath(),
+        e2eCliPath: process.env.ASPIRE_EXTENSION_E2E_CLI_PATH,
+      };
     }
     case 'getDiagnostics': {
       markStarted();

@@ -15,7 +15,32 @@ suite('spawnCliProcess tests', () => {
             const result = getCliSpawnCommand('C:\\Tools\\Aspire CLI\\aspire.cmd', ['config', 'info']);
 
             assert.strictEqual(result.command, process.env.ComSpec);
-            assert.deepStrictEqual(result.args, ['/d', '/c', 'call', 'C:\\Tools\\Aspire CLI\\aspire.cmd', 'config', 'info']);
+            assert.strictEqual('windowsVerbatimArguments' in result ? result.windowsVerbatimArguments : undefined, true);
+            assert.deepStrictEqual(result.args, ['/d', '/s', '/c', 'call "C:\\Tools\\Aspire CLI\\aspire.cmd" "config" "info"']);
+        }
+        finally {
+            platformStub.restore();
+
+            if (originalComSpec === undefined) {
+                delete process.env.ComSpec;
+            }
+            else {
+                process.env.ComSpec = originalComSpec;
+            }
+        }
+    });
+
+    test('escapes Windows cmd wrapper paths and args with command metacharacters', () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const originalComSpec = process.env.ComSpec;
+        process.env.ComSpec = 'C:\\Windows\\System32\\cmd.exe';
+
+        try {
+            const result = getCliSpawnCommand('C:\\R&D\\aspire.cmd', ['config', 'set', 'features.x', 'a&b']);
+
+            assert.strictEqual(result.command, process.env.ComSpec);
+            assert.strictEqual('windowsVerbatimArguments' in result ? result.windowsVerbatimArguments : undefined, true);
+            assert.deepStrictEqual(result.args, ['/d', '/s', '/c', 'call "C:\\R&D\\aspire.cmd" "config" "set" "features.x" "a&b"']);
         }
         finally {
             platformStub.restore();

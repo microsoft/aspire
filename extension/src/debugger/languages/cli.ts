@@ -3,6 +3,7 @@ import { EnvVar } from "../../dcp/types";
 import { extensionLogOutputChannel } from "../../utils/logging";
 import { AspireTerminalProvider } from "../../utils/AspireTerminalProvider";
 import { aspireCliPathEnvironmentVariableName, getAspireCliPathForMSBuild } from "../../utils/environment";
+import { getWindowsCommandShimSpawnCommand, shouldUseWindowsCommandShim, WindowsCommandShimSpawnCommand } from "../../utils/windowsCommandShim";
 import * as readline from 'readline';
 import * as vscode from 'vscode';
 
@@ -19,12 +20,9 @@ export interface SpawnProcessOptions {
     noExtensionVariables?: boolean;
 }
 
-export function getCliSpawnCommand(command: string, args?: string[]): { command: string; args: string[] } {
-    if (process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(command)) {
-        return {
-            command: process.env.ComSpec ?? 'cmd.exe',
-            args: ['/d', '/c', 'call', command, ...args ?? []],
-        };
+export function getCliSpawnCommand(command: string, args?: string[]): WindowsCommandShimSpawnCommand {
+    if (shouldUseWindowsCommandShim(command)) {
+        return getWindowsCommandShimSpawnCommand(command, args ?? []);
     }
 
     return { command, args: args ?? [] };
@@ -53,7 +51,8 @@ export function spawnCliProcess(terminalProvider: AspireTerminalProvider, comman
     const child = spawn(spawnCommand.command, spawnCommand.args, {
         cwd: workingDirectory,
         env: env,
-        shell: false
+        shell: false,
+        windowsVerbatimArguments: spawnCommand.windowsVerbatimArguments
     });
 
     // Set UTF-8 encoding so Node reassembles multi-byte characters across chunk boundaries instead of yielding broken bytes.

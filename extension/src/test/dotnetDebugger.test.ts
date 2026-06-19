@@ -99,7 +99,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         outputSubscription.dispose();
     });
 
-    test('passes configured CLI path to AppHost debug session environment', async () => {
+    test('does not pass configured CLI path to AppHost runtime environment', async () => {
         const parentDebugSession = {
             id: 'aspire-session',
             type: 'aspire',
@@ -126,9 +126,7 @@ suite('Dotnet Debugger Extension Tests', () => {
 
         await aspireDebugSession.startAppHost('/workspace/AppHost/AppHost.csproj', ['run', '--no-build', '--project', '/workspace/AppHost/AppHost.csproj'], [], true, { forceBuild: false });
 
-        assert.deepStrictEqual(appHostEnv?.filter(variable => variable.name === 'AspireCliPath'), [
-            { name: 'AspireCliPath', value: '/repo/artifacts/bin/Aspire.Cli/Debug/net10.0/aspire' }
-        ]);
+        assert.deepStrictEqual(appHostEnv?.filter(variable => variable.name === 'AspireCliPath'), []);
     });
 
     test('passes only MSBuild helper environment to dotnet target-path and build helpers', async () => {
@@ -158,7 +156,7 @@ suite('Dotnet Debugger Extension Tests', () => {
 
         assert.deepStrictEqual(dotNetService.getDotNetTargetPathStub.firstCall.args, [projectPath, helperEnv]);
         assert.deepStrictEqual(dotNetService.buildDotNetProjectStub.firstCall.args, [projectPath, helperEnv]);
-        assert.strictEqual(debugConfig.env?.AspireCliPath, 'C:\\repo\\artifacts\\bin\\Aspire.Cli\\Debug\\net10.0\\aspire.exe');
+        assert.strictEqual(debugConfig.env?.AspireCliPath, undefined);
         assert.strictEqual(debugConfig.env?.Configuration, 'Release');
         assert.strictEqual(debugConfig.env?.PATH, 'C:\\app-runtime-tools');
     });
@@ -189,7 +187,7 @@ suite('Dotnet Debugger Extension Tests', () => {
 
         assert.deepStrictEqual(dotNetService.getDotNetRunApiOutputStub.firstCall.args, [projectPath, helperEnv]);
         assert.deepStrictEqual(dotNetService.buildDotNetProjectStub.firstCall.args, [projectPath, helperEnv]);
-        assert.strictEqual(debugConfig.env?.AspireCliPath, 'C:\\repo\\artifacts\\bin\\Aspire.Cli\\Debug\\net10.0\\aspire.exe');
+        assert.strictEqual(debugConfig.env?.AspireCliPath, undefined);
         assert.strictEqual(debugConfig.env?.TargetFramework, 'net8.0');
         assert.strictEqual(debugConfig.env?.RUN_API_ENV, 'run-api-value');
     });

@@ -1,7 +1,7 @@
 import path from "path";
 import { ExecutableLaunchConfiguration, EnvVar, LaunchOptions, AspireResourceExtendedDebugConfiguration, AspireExtendedDebugConfiguration } from "../dcp/types";
 import { debugProject, runProject } from "../loc/strings";
-import { getEnvironmentWithoutE2EBridgeVariables, mergeEnvs } from "../utils/environment";
+import { getEnvironmentWithoutE2EBridgeVariables, mergeEnvs, withoutAspireCliPathForMSBuild } from "../utils/environment";
 import { extensionLogOutputChannel } from "../utils/logging";
 import { projectDebuggerExtension } from "./languages/dotnet";
 import { isAzureFunctionsExtensionInstalled, isBunInstalled, isCsharpInstalled, isGoInstalled, isPythonInstalled } from '../capabilities';
@@ -30,6 +30,7 @@ export async function createDebugSessionConfiguration(debugSessionConfig: Aspire
     }
 
     const projectPath = debuggerExtension.getProjectFile(launchConfig);
+    const runtimeEnv = withoutAspireCliPathForMSBuild(env);
 
     const configuration: AspireResourceExtendedDebugConfiguration = {
         type: debuggerExtension.debugAdapter || launchConfig.type,
@@ -38,7 +39,7 @@ export async function createDebugSessionConfiguration(debugSessionConfig: Aspire
         program: projectPath,
         args: args,
         cwd: await isDirectory(projectPath) ? projectPath : path.dirname(projectPath),
-        env: mergeEnvs(getEnvironmentWithoutE2EBridgeVariables(), env),
+        env: mergeEnvs(getEnvironmentWithoutE2EBridgeVariables(), runtimeEnv),
         justMyCode: false,
         stopAtEntry: false,
         noDebug: !launchOptions.debug,
@@ -62,7 +63,7 @@ export async function createDebugSessionConfiguration(debugSessionConfig: Aspire
 
 
     if (debuggerExtension.createDebugSessionConfigurationCallback) {
-        await debuggerExtension.createDebugSessionConfigurationCallback(launchConfig, args, env, launchOptions, configuration);
+        await debuggerExtension.createDebugSessionConfigurationCallback(launchConfig, args, runtimeEnv, launchOptions, configuration);
     }
 
     return configuration;

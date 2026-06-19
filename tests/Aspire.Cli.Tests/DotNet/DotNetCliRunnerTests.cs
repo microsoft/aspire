@@ -216,6 +216,44 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task BuildAsyncPassesInheritedAspireCliPathToMSBuild()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
+
+        var configuredAspireCliPath = Path.Combine(workspace.WorkspaceRoot.FullName, "configured-aspire");
+        var previousAspireCliPath = Environment.GetEnvironmentVariable("AspireCliPath");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("AspireCliPath", configuredAspireCliPath);
+
+            var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+            using var provider = services.BuildServiceProvider();
+
+            var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+            var runner = DotNetCliRunnerTestHelper.Create(
+                provider,
+                executionContext,
+                (_, env, _, _) =>
+                {
+                    Assert.NotNull(env);
+                    Assert.Equal(configuredAspireCliPath, env["AspireCliPath"]);
+                },
+                0);
+
+            var exitCode = await runner.BuildAsync(projectFile, noRestore: false, new ProcessInvocationOptions(), CancellationToken.None).DefaultTimeout();
+
+            Assert.Equal(0, exitCode);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("AspireCliPath", previousAspireCliPath);
+        }
+    }
+
+    [Fact]
     public async Task RestoreAsyncRunsDotnetRestoreCommand()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
