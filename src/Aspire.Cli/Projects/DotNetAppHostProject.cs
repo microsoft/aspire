@@ -208,7 +208,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         using var cliBundleLease = await AcquireCliBundleLayoutAsync(cancellationToken);
         var information = await _appHostInfoResolver.GetAppHostInfoAsync(appHostFile, noEvaluate, cancellationToken);
 
-        if (information.IsAspireHost == null)
+        if (information.IsAspireHost is null)
         {
             return new AppHostValidationResult(IsValid: information.ExitCode == 0, IsNotEvaluated: true);
         }
