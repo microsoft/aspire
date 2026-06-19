@@ -41,12 +41,14 @@ export function App() {
     metrics: telemetry?.metrics.length ?? undefined,
   };
 
-  // When the resource service can't be reached and nothing has streamed in yet,
-  // replace the page content with an explanatory splash so the window never just
-  // sits empty (which is indistinguishable from a broken/blank app).
+  // Show the explanatory splash when there's nothing to show — either no AppHost is
+  // attached at all (an idle hub), or the active AppHost's resource service can't be
+  // reached and nothing has streamed in yet. This keeps the window from sitting empty
+  // (which is indistinguishable from a broken/blank app).
   const resourceState = connection.resourceService;
   const showNotConnected =
-    (resourceState === "disconnected" || resourceState === "error") && resources.length === 0;
+    apphosts.length === 0 ||
+    ((resourceState === "disconnected" || resourceState === "error") && resources.length === 0);
 
   return (
     <div className="app">
@@ -63,7 +65,7 @@ export function App() {
       </div>
       <main className="app__content">
         {showNotConnected ? (
-          <NotConnected config={config} state={resourceState} />
+          <NotConnected config={config} state={resourceState === "error" ? "error" : "disconnected"} />
         ) : (
           <>
             {page === "resources" ? <ResourcesPage /> : null}
