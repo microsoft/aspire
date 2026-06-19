@@ -5,9 +5,12 @@ using System.Globalization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Backchannel;
@@ -36,7 +39,8 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
             projectLocator,
             executionContext,
             TestHelpers.CreateInteractiveHostEnvironment(),
-            NullLogger.Instance);
+            NullLogger<AppHostConnectionResolver>.Instance,
+            new ProfilingTelemetry(new ConfigurationBuilder().Build()));
 
         var result = await resolver.ResolveConnectionAsync(
             projectFile,
@@ -59,14 +63,20 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var projectFile = CreateProjectFile(workspace.WorkspaceRoot, "TestAppHost", "TestAppHost.csproj");
-        var socketPath = CreateMatchingSocketFile(projectFile.FullName, workspace.WorkspaceRoot, int.MaxValue - 1);
+        // Key the socket off the symlink-resolved path, matching how a running AppHost computes
+        // its socket id (its working directory is reported physically by the OS). On macOS the
+        // temp workspace lives under /var -> /private/var, so the unresolved and resolved paths
+        // differ and the resolver must resolve symlinks to find this socket.
+        var resolvedProjectPath = PathNormalizer.ResolveSymlinks(projectFile.FullName);
+        var socketPath = CreateMatchingSocketFile(resolvedProjectPath, workspace.WorkspaceRoot, int.MaxValue - 1);
         var resolver = new AppHostConnectionResolver(
             new TestAuxiliaryBackchannelMonitor(),
             new TestInteractionService(),
             new TestProjectLocator(),
             executionContext,
             TestHelpers.CreateInteractiveHostEnvironment(),
-            NullLogger.Instance);
+            NullLogger<AppHostConnectionResolver>.Instance,
+            new ProfilingTelemetry(new ConfigurationBuilder().Build()));
 
         var result = await resolver.ResolveConnectionAsync(
             projectFile,
@@ -112,7 +122,8 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
             projectLocator,
             executionContext,
             TestHelpers.CreateInteractiveHostEnvironment(),
-            NullLogger.Instance);
+            NullLogger<AppHostConnectionResolver>.Instance,
+            new ProfilingTelemetry(new ConfigurationBuilder().Build()));
 
         var result = await resolver.ResolveConnectionAsync(
             new FileInfo(appHostDirectory.FullName),
@@ -145,7 +156,8 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
             projectLocator,
             executionContext,
             TestHelpers.CreateInteractiveHostEnvironment(),
-            NullLogger.Instance);
+            NullLogger<AppHostConnectionResolver>.Instance,
+            new ProfilingTelemetry(new ConfigurationBuilder().Build()));
 
         var result = await resolver.ResolveConnectionAsync(
             new FileInfo(appHostDirectory.FullName),
@@ -174,7 +186,8 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
             new TestProjectLocator(),
             executionContext,
             TestHelpers.CreateNonInteractiveHostEnvironment(),
-            NullLogger.Instance);
+            NullLogger<AppHostConnectionResolver>.Instance,
+            new ProfilingTelemetry(new ConfigurationBuilder().Build()));
 
         var result = await resolver.ResolveConnectionAsync(
             projectFile: null,
@@ -204,7 +217,8 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
             new TestProjectLocator(),
             executionContext,
             TestHelpers.CreateNonInteractiveHostEnvironment(),
-            NullLogger.Instance);
+            NullLogger<AppHostConnectionResolver>.Instance,
+            new ProfilingTelemetry(new ConfigurationBuilder().Build()));
 
         var result = await resolver.ResolveConnectionAsync(
             projectFile: null,
@@ -217,6 +231,60 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
         Assert.True(result.IsProjectResolutionError);
         Assert.Equal(SharedCommandStrings.MultipleAppHostsNonInteractive, result.ErrorMessage);
         Assert.Equal(CliExitCodes.FailedToFindProject, result.ExitCode);
+    }
+
+    [Fact]
+    public async Task ResolveConnectionAsync_WithSymlinkedProjectPath_ResolvesToCanonicalSocketKey()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/17618.
+        // A running AppHost keys its backchannel socket off the symlink-resolved path
+        // (its process working directory is already physical, e.g. /tmp -> /private/tmp
+        // on macOS). The explicit --apphost lookup must resolve symlinks the same way or
+        // it computes a different appHostId and reports "no running AppHost" even though
+        // one is running. We assert the orphaned socket keyed off the canonical path is
+        // found (and pruned) when the resolver is handed a symlinked project path.
+        Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
+            "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+
+        // Real project file under a "real" directory.
+        var realDirectory = workspace.WorkspaceRoot.CreateSubdirectory("real");
+        var realProjectFile = new FileInfo(Path.Combine(realDirectory.FullName, "TestAppHost.csproj"));
+        File.WriteAllText(realProjectFile.FullName, "<Project />");
+
+        // Symlink "link" -> "real"; the project is addressed through the symlink.
+        var symlinkDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "link");
+        Directory.CreateSymbolicLink(symlinkDirectory, realDirectory.FullName);
+        var projectFileViaSymlink = new FileInfo(Path.Combine(symlinkDirectory, "TestAppHost.csproj"));
+
+        // The producer keys its socket off the canonical (symlink-resolved) path, so create
+        // the orphaned socket using that same canonical path with a dead PID.
+        var canonicalPath = PathNormalizer.ResolveSymlinks(projectFileViaSymlink.FullName);
+        var socketPath = CreateMatchingSocketFile(canonicalPath, workspace.WorkspaceRoot, int.MaxValue - 1);
+
+        var resolver = new AppHostConnectionResolver(
+            new TestAuxiliaryBackchannelMonitor(),
+            new TestInteractionService(),
+            new TestProjectLocator(),
+            executionContext,
+            TestHelpers.CreateInteractiveHostEnvironment(),
+            NullLogger<AppHostConnectionResolver>.Instance,
+            new ProfilingTelemetry(new ConfigurationBuilder().Build()));
+
+        var result = await resolver.ResolveConnectionAsync(
+            projectFileViaSymlink,
+            "Scanning",
+            "Select",
+            SharedCommandStrings.AppHostNotRunning,
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        // The socket was located via the symlink-resolved key and pruned because its PID is dead.
+        // Before the fix the resolver hashed the unresolved symlink path, never matched this
+        // socket, and left it on disk.
+        Assert.False(File.Exists(socketPath));
     }
 
     private static CliExecutionContext CreateExecutionContext(DirectoryInfo workingDirectory)

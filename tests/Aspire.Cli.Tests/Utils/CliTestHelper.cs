@@ -225,6 +225,7 @@ internal static class CliTestHelper
         services.AddSingleton(options.ApiDocsIndexServiceFactory);
 
         services.AddSingleton<CommonCommandServices>();
+        services.AddTransient<AppHostConnectionResolver>();
         services.AddTransient<RootCommand>();
         services.AddTransient<NewCommand>();
         services.AddTransient<InitCommand>();

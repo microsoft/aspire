@@ -44,8 +44,8 @@ internal sealed class AppHostConnectionResolver(
     IProjectLocator projectLocator,
     CliExecutionContext executionContext,
     ICliHostEnvironment hostEnvironment,
-    ILogger logger,
-    ProfilingTelemetry? profilingTelemetry = null)
+    ILogger<AppHostConnectionResolver> logger,
+    ProfilingTelemetry profilingTelemetry)
 {
     /// <summary>
     /// Resolves all running AppHost connections using socket-first discovery.
@@ -135,9 +135,8 @@ internal sealed class AppHostConnectionResolver(
                 };
             }
 
-            var targetPath = projectFile.FullName;
             var matchingSockets = AppHostHelper.FindMatchingNonOrphanedSockets(
-                targetPath,
+                projectFile.FullName,
                 executionContext.HomeDirectory.FullName,
                 Environment.ProcessId,
                 logger);
@@ -148,7 +147,7 @@ internal sealed class AppHostConnectionResolver(
                 try
                 {
                     var connection = await AppHostAuxiliaryBackchannel.ConnectAsync(
-                        socketPath, logger, cancellationToken, profilingTelemetry).ConfigureAwait(false);
+                        socketPath, logger, profilingTelemetry, cancellationToken).ConfigureAwait(false);
                     if (connection is not null)
                     {
                         var result = new AppHostConnectionResult { Connection = connection };
@@ -162,7 +161,9 @@ internal sealed class AppHostConnectionResolver(
                 }
             }
 
-            var displayPath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, targetPath);
+            // Display the path the user supplied (not the symlink-resolved lookup path) so the
+            // error message stays relative to the working directory and matches what they typed.
+            var displayPath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, projectFile.FullName);
 
             return new AppHostConnectionResult
             {

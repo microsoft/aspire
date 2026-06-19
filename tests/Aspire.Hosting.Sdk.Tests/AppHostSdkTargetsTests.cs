@@ -25,9 +25,24 @@ public class AppHostSdkTargetsTests
     ];
 
     [Fact]
-    public async Task AddReferenceToDashboardAndDcpUsesSdkRidSelectionTask()
+    public async Task AddReferenceToDashboardAndDcpIsSkippedWhenCliBundleIsDefaulted()
     {
         var packageReferences = await RunAddReferenceToDashboardAndDcpAsync(extraProjectXml: null);
+
+        Assert.DoesNotContain(packageReferences, static packageReference => packageReference.StartsWith("Aspire.Dashboard.Sdk.", StringComparison.Ordinal));
+        Assert.DoesNotContain(packageReferences, static packageReference => packageReference.StartsWith("Aspire.Hosting.Orchestration.", StringComparison.Ordinal));
+        Assert.Contains("Aspire.Hosting.AppHost=13.4.0", packageReferences);
+    }
+
+    [Fact]
+    public async Task AddReferenceToDashboardAndDcpUsesSdkRidSelectionTask()
+    {
+        var packageReferences = await RunAddReferenceToDashboardAndDcpAsync(
+            """
+              <PropertyGroup>
+                <AspireUseCliBundle>false</AspireUseCliBundle>
+              </PropertyGroup>
+            """);
 
         Assert.Contains("UseSdkPickBestRid=true", packageReferences);
         Assert.Contains("RunRidToolFallback=false", packageReferences);
@@ -44,6 +59,7 @@ public class AppHostSdkTargetsTests
 
         var extraProjectXml = $"""
               <PropertyGroup>
+                <AspireUseCliBundle>false</AspireUseCliBundle>
                 <_AspireUseSdkPickBestRid>false</_AspireUseSdkPickBestRid>
                 <AspireRidToolExecutable>{SecurityElement.Escape(ridToolPath)}</AspireRidToolExecutable>
               </PropertyGroup>
