@@ -258,15 +258,18 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                         }
                     }
                 }
-                else if (!persistent && ShouldFallBackToIdeExecution(isInDebugSession, supportsDebuggingAnnotation))
+                else if (!persistent && ShouldFallBackToIdeExecution(isInDebugSession, supportsDebuggingAnnotation, executableAnnotation))
                 {
                     // Fall back to IDE execution with a standard ProjectLaunchConfiguration when:
                     // 1. No SupportsDebuggingAnnotation exists (e.g. AddResource-based ProjectResource
                     //    subclasses that don't call WithDebugSupport). These should get the same IDE
                     //    treatment that AddProject provides by default.
                     // 2. The annotation exists but the IDE did not send DEBUG_SESSION_INFO (Visual Studio
-                    //    scenario). VS handles all project resources natively, so non-"project" types
+                    //    scenario). VS handles project-like resources natively, so non-"project" types
                     //    like "azure-functions" still need IDE execution with ProjectLaunchConfiguration.
+                    //    Resources with explicit executable commands, such as MAUI platform resources,
+                    //    must preserve their process launch args unless an IDE explicitly advertises
+                    //    support for their custom launch type.
                     exe.Spec.ExecutionType = ExecutionType.IDE;
                     exe.Spec.FallbackExecutionTypes = [ExecutionType.Process];
 
@@ -602,6 +605,10 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             launchArgs[0].Executable &&
             string.Equals(launchArgs[0].Value, "--", StringComparison.Ordinal))
         {
+            // Process execution passes project launch-profile args before "dotnet run", separated by "--".
+            // IDE execution already owns the launch profile via ProjectLaunchConfiguration, so keep those
+            // values out of the executable argument list while we insert the AppHost configuration flags
+            // immediately after "dotnet run".
             launchProfileArgs = launchArgs.GetRange(0, runIndex);
             launchArgs.RemoveRange(0, runIndex);
             runIndex = 0;
@@ -682,9 +689,14 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
     /// <see cref="SupportsDebuggingAnnotation"/> (e.g. AddResource-based subclasses) or the
     /// IDE did not send <c>DEBUG_SESSION_INFO</c> (Visual Studio scenario).
     /// </summary>
-    private bool ShouldFallBackToIdeExecution(bool isInDebugSession, SupportsDebuggingAnnotation? supportsDebuggingAnnotation)
+    private bool ShouldFallBackToIdeExecution(bool isInDebugSession, SupportsDebuggingAnnotation? supportsDebuggingAnnotation, ExecutableAnnotation? executableAnnotation)
     {
         if (!isInDebugSession)
+        {
+            return false;
+        }
+
+        if (executableAnnotation is not null && supportsDebuggingAnnotation?.LaunchConfigurationType is not null and not "project")
         {
             return false;
         }

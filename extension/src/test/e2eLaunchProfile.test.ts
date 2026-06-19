@@ -25,8 +25,8 @@ suite('E2E launch profile', () => {
     test('clears the E2E control file before explicit workspace reloads', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const apiTypes = fs.readFileSync(path.join(extensionRoot, 'src', 'types', 'extensionApi.ts'), 'utf8');
-        const extension = fs.readFileSync(path.join(extensionRoot, 'src', 'extension.ts'), 'utf8');
-        const openWorkspaceCase = extension.slice(extension.indexOf("case 'openWorkspaceFolder'"), extension.indexOf("case 'getWorkspaceFolders'"));
+        const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
+        const openWorkspaceCase = e2eStateFileBridge.slice(e2eStateFileBridge.indexOf("case 'openWorkspaceFolder'"), e2eStateFileBridge.indexOf("case 'getWorkspaceFolders'"));
         const clearControlFileIndex = openWorkspaceCase.indexOf('clearPendingE2eControlFile();');
         const openFolderIndex = openWorkspaceCase.indexOf("vscode.commands.executeCommand('vscode.openFolder'");
 
@@ -37,8 +37,8 @@ suite('E2E launch profile', () => {
 
     test('validates explicit workspace folder before reporting bridge command start', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const extension = fs.readFileSync(path.join(extensionRoot, 'src', 'extension.ts'), 'utf8');
-        const openWorkspaceCase = extension.slice(extension.indexOf("case 'openWorkspaceFolder'"), extension.indexOf("case 'getWorkspaceFolders'"));
+        const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
+        const openWorkspaceCase = e2eStateFileBridge.slice(e2eStateFileBridge.indexOf("case 'openWorkspaceFolder'"), e2eStateFileBridge.indexOf("case 'getWorkspaceFolders'"));
 
         assert.ok(openWorkspaceCase.indexOf('getE2eWorkspaceFolderPath') < openWorkspaceCase.indexOf('markStarted();'));
     });
@@ -246,13 +246,13 @@ suite('E2E launch profile', () => {
     test('uses monotonic E2E event sequences instead of positional slices over capped buffers', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const apiTypes = fs.readFileSync(path.join(extensionRoot, 'src', 'types', 'extensionApi.ts'), 'utf8');
-        const extension = fs.readFileSync(path.join(extensionRoot, 'src', 'extension.ts'), 'utf8');
+        const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
         const assertions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'assertions.ts'), 'utf8');
 
         assert.ok(apiTypes.includes('sequence: number;'));
-        assert.ok(extension.includes('commandInvocationSequence'));
-        assert.ok(extension.includes('terminalCommandSequence'));
-        assert.ok(extension.includes('debugLaunchSequence'));
+        assert.ok(e2eStateFileBridge.includes('commandInvocationSequence'));
+        assert.ok(e2eStateFileBridge.includes('terminalCommandSequence'));
+        assert.ok(e2eStateFileBridge.includes('debugLaunchSequence'));
         assert.ok(assertions.includes('event.sequence > afterInvocationSequence'));
         assert.ok(!assertions.includes('.slice(afterInvocationCount)'));
         assert.ok(!assertions.includes('.slice(afterCommandCount)'));
