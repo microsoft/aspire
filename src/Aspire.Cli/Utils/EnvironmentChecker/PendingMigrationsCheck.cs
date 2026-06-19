@@ -32,7 +32,9 @@ internal sealed class PendingMigrationsCheck : IEnvironmentCheck
     }
 
     /// <inheritdoc />
-    public int Order => 102; // Run after the TypeScript tooling check (31) and legacy settings check (101).
+    // Run last, after the deprecated agent config (100) and legacy settings (101) checks, so the
+    // migration nudges appear together at the end of the deprecated/legacy section of the report.
+    public int Order => 102;
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<EnvironmentCheckResult>> CheckAsync(CancellationToken cancellationToken = default)
