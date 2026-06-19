@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as sinon from 'sinon';
 import { getCliSpawnCommand, spawnCliProcess } from '../debugger/languages/cli';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
-import { getAspireCliPathForMSBuild, withAspireCliPathForMSBuild } from '../utils/environment';
+import { getAspireCliPathForMSBuild, mergeEnvs, withAspireCliPathForMSBuild } from '../utils/environment';
 
 suite('spawnCliProcess tests', () => {
     test('runs Windows cmd wrappers through cmd.exe', () => {
@@ -56,6 +56,28 @@ suite('spawnCliProcess tests', () => {
         assert.deepStrictEqual(withAspireCliPathForMSBuild(env, 'aspire'), [
             { name: 'OTHER_ENV', value: '1' },
         ]);
+    });
+
+    test('removes stale MSBuild AspireCliPath from inherited environment', () => {
+        const env = mergeEnvs({
+            AspireCliPath: '/stale/from/old/session/aspire',
+            OTHER_ENV: '1',
+        });
+
+        assert.strictEqual(env.AspireCliPath, undefined);
+        assert.strictEqual(env.OTHER_ENV, '1');
+    });
+
+    test('keeps explicit MSBuild AspireCliPath when merging environment variables', () => {
+        const env = mergeEnvs({
+            AspireCliPath: '/stale/from/old/session/aspire',
+            OTHER_ENV: '1',
+        }, [
+            { name: 'AspireCliPath', value: '/repo/artifacts/bin/Aspire.Cli/Debug/net10.0/aspire' },
+        ]);
+
+        assert.strictEqual(env.AspireCliPath, '/repo/artifacts/bin/Aspire.Cli/Debug/net10.0/aspire');
+        assert.strictEqual(env.OTHER_ENV, '1');
     });
 
     test('sets MSBuild AspireCliPath when extension variables are disabled', async () => {

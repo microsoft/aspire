@@ -667,6 +667,25 @@ suite('AspireTerminalProvider tests', () => {
             assert.strictEqual(env.AspireCliPath, undefined);
         });
 
+        test('removes inherited MSBuild AspireCliPath for PATH-based aspire command', () => {
+            const originalAspireCliPath = process.env.AspireCliPath;
+            process.env.AspireCliPath = '/stale/from/old/session/aspire';
+
+            try {
+                const env = terminalProvider.createEnvironment(undefined, undefined, undefined, 'aspire');
+
+                assert.strictEqual(env.AspireCliPath, undefined);
+            }
+            finally {
+                if (originalAspireCliPath === undefined) {
+                    delete process.env.AspireCliPath;
+                }
+                else {
+                    process.env.AspireCliPath = originalAspireCliPath;
+                }
+            }
+        });
+
         test('sets MSBuild AspireCliPath for explicit command shims', () => {
             const commandShimPath = path.join(path.sep, 'repo', 'tools', 'aspire.cmd');
             const env = terminalProvider.createEnvironment(undefined, undefined, undefined, commandShimPath);

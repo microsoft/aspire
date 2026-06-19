@@ -4,7 +4,7 @@ import { EnvVar } from "../dcp/types";
 export const aspireCliPathEnvironmentVariableName = 'AspireCliPath';
 
 export function mergeEnvs(base: NodeJS.ProcessEnv, envVars?: EnvVar[]): Record<string, string | undefined> {
-    const merged: Record<string, string | undefined> = { ...base };
+    const merged = filterBaseEnvironment(base);
     if (envVars) {
         for (const e of envVars) {
             merged[e.name] = e.value;
@@ -14,9 +14,7 @@ export function mergeEnvs(base: NodeJS.ProcessEnv, envVars?: EnvVar[]): Record<s
 }
 
 export function getEnvironmentWithoutE2EBridgeVariables(): NodeJS.ProcessEnv {
-    return Object.fromEntries(
-        Object.entries(process.env).filter(([key]) => !key.startsWith('ASPIRE_EXTENSION_E2E_'))
-    );
+    return filterBaseEnvironment(process.env);
 }
 
 export function getAspireCliPathForMSBuild(cliPath: string | undefined, workingDirectory?: string): string | undefined {
@@ -51,6 +49,14 @@ function isBareAspireCommand(value: string): boolean {
     }
 
     return /^(?:aspire|aspire\.exe|aspire\.cmd|aspire\.bat)$/i.test(value);
+}
+
+function filterBaseEnvironment(env: NodeJS.ProcessEnv): Record<string, string | undefined> {
+    const aspireCliPathKey = aspireCliPathEnvironmentVariableName.toLowerCase();
+
+    return Object.fromEntries(
+        Object.entries(env).filter(([key]) => !key.startsWith('ASPIRE_EXTENSION_E2E_') && key.toLowerCase() !== aspireCliPathKey)
+    );
 }
 
 export const enum EnvironmentVariables {
