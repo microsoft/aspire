@@ -1,12 +1,15 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, isAzureFunctionsLaunchConfiguration, AzureFunctionsLaunchConfiguration } from '../../dcp/types';
+import * as net from 'node:net';
+import { AspireResourceExtendedDebugConfiguration, AzureFunctionsLaunchConfiguration, AzureFunctionsNodeLaunchConfiguration, EnvVar, ExecutableLaunchConfiguration, isAzureFunctionsLaunchConfiguration, isAzureFunctionsNodeLaunchConfiguration } from '../../dcp/types';
 import { invalidLaunchConfiguration } from '../../loc/strings';
 import { extensionLogOutputChannel } from '../../utils/logging';
 import { ResourceDebuggerExtension } from '../debuggerExtensions';
 import { registerRunCleanup } from '../runCleanupRegistry';
 
 const AF_EXTENSION_ID = 'ms-azuretools.vscode-azurefunctions';
+const NODE_WORKER_ARGUMENTS_ENV = 'languageWorkers__node__arguments';
+const NODE_INSPECTOR_HOST = '127.0.0.1';
 
 /**
  * Result from the Azure Functions extension's startFuncProcess API.
@@ -55,11 +58,64 @@ function killFuncProcess(runId: string): void {
         extensionLogOutputChannel.info(`Killing func worker process for runId ${runId} (pid: ${pid})`);
         try {
             process.kill(pid);
-        } catch {
-            // Process may already be dead
+        } catch (error) {
+            extensionLogOutputChannel.warn(`Unable to kill func worker process for runId ${runId} (pid: ${pid}): ${error}`);
         }
         workerPidsByRunId.delete(runId);
     }
+}
+
+function getDcpEnv(env: EnvVar[] | undefined): Record<string, string> {
+    return Object.fromEntries(
+        (env ?? []).filter(e => e.value !== undefined).map(e => [e.name, e.value])
+    );
+}
+
+async function startFuncHostTask(runId: string, appDirectory: string, command: string, args: string[] | undefined, env: Record<string, string>): Promise<void> {
+    const task = new vscode.Task(
+        { type: 'shell', task: 'azure-functions-node' },
+        vscode.TaskScope.Workspace,
+        `func: ${path.basename(appDirectory)}`,
+        'aspire',
+        new vscode.ShellExecution(command, args ?? [], {
+            cwd: appDirectory,
+            env
+        })
+    );
+
+    task.presentationOptions = {
+        reveal: vscode.TaskRevealKind.Always,
+        panel: vscode.TaskPanelKind.Dedicated
+    };
+
+    const execution = await vscode.tasks.executeTask(task);
+    taskExecutionsByRunId.set(runId, execution);
+}
+
+async function allocateNodeInspectorPort(): Promise<number> {
+    return await new Promise<number>((resolve, reject) => {
+        const server = net.createServer();
+
+        server.once('error', reject);
+        server.listen(0, NODE_INSPECTOR_HOST, () => {
+            const address = server.address();
+            if (typeof address !== 'object' || address === null) {
+                server.close();
+                reject(new Error('Failed to allocate a Node inspector port.'));
+                return;
+            }
+
+            const port = address.port;
+            server.close(error => {
+                if (error) {
+                    reject(error);
+                    return;
+                }
+
+                resolve(port);
+            });
+        });
+    });
 }
 
 async function getAzureFunctionsApi(): Promise<AzureFunctionsApi> {
@@ -119,9 +175,7 @@ export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
         // Only pass DCP-specific env vars to the AF extension. The VS Code Task
         // it creates already inherits the VS Code process environment, so we
         // don't need to merge process.env — that would just duplicate values.
-        const dcpEnv = Object.fromEntries(
-            (env ?? []).filter(e => e.value !== undefined).map(e => [e.name, e.value])
-        );
+        const dcpEnv = getDcpEnv(env);
 
         // Start func host via the Azure Functions extension API.
         // The API creates a VS Code Task running "func host start", polls
@@ -171,6 +225,92 @@ export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
         delete debugConfiguration.program;
         delete debugConfiguration.args;
         delete debugConfiguration.cwd;
+        delete debugConfiguration.console;
+        delete debugConfiguration.env;
+    }
+};
+
+export const azureFunctionsNodeDebuggerExtension: ResourceDebuggerExtension = {
+    resourceType: 'azure-functions-node',
+    debugAdapter: 'pwa-node',
+    extensionId: null,
+    getDisplayName: (launchConfig: ExecutableLaunchConfiguration) => {
+        if (isAzureFunctionsNodeLaunchConfiguration(launchConfig)) {
+            return `Azure Functions: ${path.basename(launchConfig.app_directory)}`;
+        }
+
+        return 'Azure Functions';
+    },
+    getSupportedFileTypes: () => ['.ts', '.js'],
+    getProjectFile: (launchConfig) => {
+        if (isAzureFunctionsNodeLaunchConfiguration(launchConfig)) {
+            return launchConfig.app_directory;
+        }
+
+        throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
+    },
+    createDebugSessionConfigurationCallback: async (launchConfig, args, env, launchOptions, debugConfiguration: AspireResourceExtendedDebugConfiguration): Promise<void> => {
+        if (!isAzureFunctionsNodeLaunchConfiguration(launchConfig)) {
+            extensionLogOutputChannel.info(`The resource type was not azure-functions-node for ${JSON.stringify(launchConfig)}`);
+            throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
+        }
+
+        if (!launchConfig.app_directory || !launchConfig.command) {
+            throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
+        }
+
+        const dcpEnv = getDcpEnv(env);
+
+        if (!launchOptions.debug) {
+            debugConfiguration.type = 'pwa-node';
+            debugConfiguration.request = 'launch';
+            debugConfiguration.runtimeExecutable = launchConfig.command;
+            debugConfiguration.runtimeArgs = args ?? [];
+            debugConfiguration.cwd = launchConfig.app_directory;
+            debugConfiguration.noDebug = true;
+
+            delete debugConfiguration.program;
+            delete debugConfiguration.args;
+            return;
+        }
+
+        const debugPort = await allocateNodeInspectorPort();
+        const debugEnv = {
+            ...dcpEnv,
+            // Microsoft Learn documents Node Functions debugging as the Functions host
+            // passing inspector arguments to the language worker with
+            // `languageWorkers__node__arguments`, and the Azure Functions VS Code
+            // extension uses the same setting for its "Attach to Node Functions" flow.
+            // Keep this scoped to the VS Code debug task instead of modeling a resource
+            // endpoint so normal `aspire start`, service discovery, and publish never
+            // expose an inspector port.
+            // See:
+            // - https://learn.microsoft.com/azure/azure-functions/functions-reference-node#debugging
+            // - https://github.com/microsoft/vscode-azurefunctions/blob/2f16b4b6ac536842ac69d06d088fdff47f7421e4/src/debug/NodeDebugProvider.ts
+            [NODE_WORKER_ARGUMENTS_ENV]: `--inspect=${NODE_INSPECTOR_HOST}:${debugPort}`
+        };
+
+        // The Azure Functions host starts the Node worker as a child process. VS Code's
+        // JavaScript debugger attaches to the worker's inspector port, so the host itself
+        // is launched as a task and cleaned up when the Aspire run session ends.
+        registerRunCleanup(debugConfiguration.runId, () => killFuncProcess(debugConfiguration.runId));
+        await startFuncHostTask(debugConfiguration.runId, launchConfig.app_directory, launchConfig.command, args, debugEnv);
+
+        debugConfiguration.type = 'pwa-node';
+        debugConfiguration.request = 'attach';
+        debugConfiguration.address = NODE_INSPECTOR_HOST;
+        debugConfiguration.port = debugPort;
+        debugConfiguration.restart = true;
+        debugConfiguration.sourceMaps = true;
+        debugConfiguration.continueOnAttach = true;
+        if (launchConfig.language === 'typescript' && debugConfiguration.outFiles === undefined) {
+            debugConfiguration.outFiles = [path.join(launchConfig.app_directory, 'dist/**/*.js')];
+        }
+        debugConfiguration.resolveSourceMapLocations = ['**', '!**/node_modules/**'];
+        debugConfiguration.cwd = launchConfig.app_directory;
+
+        delete debugConfiguration.program;
+        delete debugConfiguration.args;
         delete debugConfiguration.console;
         delete debugConfiguration.env;
     }

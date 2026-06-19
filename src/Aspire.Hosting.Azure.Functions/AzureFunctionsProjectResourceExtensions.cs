@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREDOCKERFILEBUILDER001
+
 using System.Globalization;
 using System.Text.Json.Serialization;
 using Aspire.Hosting.ApplicationModel;
@@ -15,6 +17,40 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class AzureFunctionsProjectResourceExtensions
 {
+    private const string AzureFunctionsCoreToolsHelpLink = "https://learn.microsoft.com/azure/azure-functions/functions-run-local#install-the-azure-functions-core-tools";
+    private const string NodeFunctionsLaunchConfigurationType = "azure-functions-node";
+    private const int AzureFunctionsNodeContainerPort = 80;
+    private const string AzureFunctionsScriptRoot = "/home/site/wwwroot";
+
+    // Azure Functions custom containers need the Functions host image, not a plain Node image, so
+    // trigger discovery and host startup behave like Functions on Azure Container Apps. Microsoft
+    // Learn documents custom containers at
+    // https://learn.microsoft.com/azure/azure-functions/functions-how-to-custom-container?pivots=azure-functions
+    // and the supported language/runtime page currently keeps JavaScript/TypeScript on host runtime
+    // 4.x: https://learn.microsoft.com/azure/azure-functions/functions-versions. The MCR tag list
+    // checked during this POC exposed 4-node20/22/24 and no 5-node* tag:
+    // https://mcr.microsoft.com/v2/azure-functions/node/tags/list.
+    private const string DefaultAzureFunctionsNodeImage = "mcr.microsoft.com/azure-functions/node:4-node24";
+
+    private const string DefaultAzureFunctionsNodeBuildContextIgnoreContent = """
+        local.settings.json
+        local.settings.*.json
+        node_modules
+        .git
+        .gitignore
+        .aspire
+        aspire-output
+        .env
+        .env.*
+        npm-debug.log*
+        yarn-debug.log*
+        yarn-error.log*
+        pnpm-debug.log*
+        """;
+
+    private const string DefaultAzureFunctionsNodeTypeScriptBuildContextIgnoreContent =
+        DefaultAzureFunctionsNodeBuildContextIgnoreContent + "\ndist\n";
+
     /// <remarks>
     /// The prefix used for configuring the name default Azure Storage account that is used
     /// for Azure Functions bookkeeping. Locally, the name is generated using a combination of this
@@ -56,7 +92,7 @@ public static class AzureFunctionsProjectResourceExtensions
     /// For more information, see <a href="https://learn.microsoft.com/azure/azure-functions/dotnet-aspire-integration#azure-functions-host-storage">Azure Functions host storage</a>.
     /// </para>
     /// <para>
-    /// Use <see cref="WithHostStorage"/> to specify a custom Azure Storage resource as the host storage instead of the
+    /// Use the <c>WithHostStorage</c> method to specify a custom Azure Storage resource as the host storage instead of the
     /// implicit default storage account.
     /// </para>
     /// </remarks>
@@ -103,7 +139,7 @@ public static class AzureFunctionsProjectResourceExtensions
     /// For more information, see <a href="https://learn.microsoft.com/azure/azure-functions/dotnet-aspire-integration#azure-functions-host-storage">Azure Functions host storage</a>.
     /// </para>
     /// <para>
-    /// Use <see cref="WithHostStorage"/> to specify a custom Azure Storage resource as the host storage instead of the
+    /// Use the <c>WithHostStorage</c> method to specify a custom Azure Storage resource as the host storage instead of the
     /// implicit default storage account.
     /// </para>
     /// <example>
@@ -131,71 +167,73 @@ public static class AzureFunctionsProjectResourceExtensions
         return AddAzureFunctionsProjectCore(builder, resource, new AzureFunctionsProjectMetadata(projectPath));
     }
 
+    /// <summary>
+    /// Adds an Azure Functions app from a source directory to the distributed application.
+    /// </summary>
+    /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/> to which the Azure Functions app will be added.</param>
+    /// <param name="name">The name to be associated with the Azure Functions app. This name will be used for service discovery when referenced in a dependency.</param>
+    /// <param name="appDirectory">The path to the directory containing the Azure Functions app.</param>
+    /// <param name="language">The authoring language used by the Azure Functions app.</param>
+    /// <returns>An <see cref="IResourceBuilder{AzureFunctionsAppResource}"/> for the added Azure Functions app resource.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <remarks>
+    /// <para>
+    /// This overload is intended for Azure Functions apps that do not have a .NET project file, such as
+    /// TypeScript and JavaScript apps that run on the Node language worker. TypeScript apps are launched
+    /// through <c>npm run start</c> so the standard Core Tools generated <c>prestart</c> script can build
+    /// the app before the Functions host starts. The <c>start</c> script should resolve Azure Functions
+    /// Core Tools from the app's local npm dependencies, for example by depending on the
+    /// <c>azure-functions-core-tools</c> package.
+    /// </para>
+    /// <para>
+    /// By default, an implicit Azure Storage account is provisioned to be used as host storage for the Functions runtime.
+    /// Use <see cref="WithHostStorage(IResourceBuilder{AzureFunctionsAppResource}, IResourceBuilder{AzureStorageResource})"/>
+    /// to specify a custom Azure Storage resource as the host storage instead.
+    /// </para>
+    /// <example>
+    /// Add a TypeScript Azure Functions app to the app model.
+    /// <code lang="csharp">
+    /// var builder = DistributedApplication.CreateBuilder(args);
+    ///
+    /// builder.AddAzureFunctionsApp("funcapp", "../functions", AzureFunctionsLanguage.TypeScript);
+    ///
+    /// builder.Build().Run();
+    /// </code>
+    /// </example>
+    /// </remarks>
+    [AspireExport]
+    public static IResourceBuilder<AzureFunctionsAppResource> AddAzureFunctionsApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, AzureFunctionsLanguage language)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentNullException.ThrowIfNull(appDirectory);
+
+        var normalizedAppDirectory = NormalizePathForCurrentPlatform(Path.Combine(builder.AppHostDirectory, appDirectory));
+        var resource = new AzureFunctionsAppResource(name, GetAzureFunctionsAppCommand(language), normalizedAppDirectory, language);
+
+        return AddAzureFunctionsAppCore(builder, resource);
+    }
+
     private static IResourceBuilder<AzureFunctionsProjectResource> AddAzureFunctionsProjectCore(
         IDistributedApplicationBuilder builder,
         AzureFunctionsProjectResource resource,
         IProjectMetadata projectMetadata)
     {
-        // Add the default storage resource if it doesn't already exist.
-        var storageResourceName = builder.CreateDefaultStorageName();
-        var storage = builder.Resources
-            .OfType<AzureStorageResource>()
-            .FirstOrDefault(r => r.Name == storageResourceName);
-
-        if (storage is null)
-        {
-            storage = builder.AddAzureStorage(storageResourceName)
-                // Azure Functions blob triggers require StorageAccountContributor access to the host storage
-                // account when deployed. We assign this role to the implicit host storage resource.
-                .WithDefaultRoleAssignments(StorageBuiltInRole.GetBuiltInRoleName,
-                    StorageBuiltInRole.StorageBlobDataContributor,
-                    StorageBuiltInRole.StorageTableDataContributor,
-                    StorageBuiltInRole.StorageQueueDataContributor,
-                    StorageBuiltInRole.StorageAccountContributor)
-                .RunAsEmulator()
-                .Resource;
-        }
-
-        builder.OnBeforeStart((data, token) =>
-        {
-            var removeStorage = true;
-            // Look at all of the resources and if none of them use the default storage, then we can remove it.
-            // This is because we're unable to cleanly add a resource to the builder from within a callback.
-            foreach (var item in data.Model.Resources.OfType<AzureFunctionsProjectResource>())
-            {
-                if (item.HostStorage == storage)
-                {
-                    removeStorage = false;
-                }
-
-                if (item.HostStorage is not null)
-                {
-                    // Add the relationship to the host storage resource.
-                    builder.CreateResourceBuilder(item).WithReferenceRelationship(item.HostStorage);
-                }
-            }
-
-            if (removeStorage)
-            {
-                data.Model.Resources.Remove(storage);
-            }
-
-            return Task.CompletedTask;
-        });
-
+        var storage = builder.GetOrAddDefaultHostStorage();
         resource.HostStorage = storage;
 
 #pragma warning disable ASPIREEXTENSION001 // WithDebugSupport is experimental
         var functionsBuilder = builder.AddResource(resource)
             .WithAnnotation(projectMetadata)
             .WithAnnotation(new AzureFunctionsAnnotation())
+            .WithAnnotation(new AzureFunctionsHostStorageAnnotation(storage), ResourceAnnotationMutationBehavior.Replace)
             .WithDebugSupport(mode => new AzureFunctionsLaunchConfiguration { ProjectPath = projectMetadata.ProjectPath, Mode = mode }, "azure-functions");
 #pragma warning restore ASPIREEXTENSION001
 
         // Only validate Azure Functions Core Tools in run mode (not during publish)
         if (builder.ExecutionContext.IsRunMode)
         {
-            functionsBuilder.WithRequiredCommand("func", "https://learn.microsoft.com/azure/azure-functions/functions-run-local#install-the-azure-functions-core-tools");
+            functionsBuilder.WithRequiredCommand("func", AzureFunctionsCoreToolsHelpLink);
         }
 
         // Add launch profile annotations like regular projects do.
@@ -231,6 +269,53 @@ public static class AzureFunctionsProjectResourceExtensions
             .WithFunctionsHttpEndpoint();
     }
 
+    private static IResourceBuilder<AzureFunctionsAppResource> AddAzureFunctionsAppCore(
+        IDistributedApplicationBuilder builder,
+        AzureFunctionsAppResource resource)
+    {
+        var storage = builder.GetOrAddDefaultHostStorage();
+        resource.HostStorage = storage;
+
+        var functionsBuilder = builder.AddResource(resource)
+            .WithAnnotation(new AzureFunctionsAnnotation())
+            .WithAnnotation(new AzureFunctionsHostStorageAnnotation(storage), ResourceAnnotationMutationBehavior.Replace);
+
+        if (builder.ExecutionContext.IsRunMode)
+        {
+#pragma warning disable ASPIREEXTENSION001 // WithDebugSupport is experimental
+            functionsBuilder.WithDebugSupport(mode => new AzureFunctionsNodeLaunchConfiguration
+            {
+                Mode = mode,
+                AppDirectory = resource.AppDirectory,
+                Command = resource.Command,
+                Language = GetLanguageName(resource.Language),
+                WorkerRuntime = resource.WorkerRuntime
+            }, NodeFunctionsLaunchConfigurationType);
+#pragma warning restore ASPIREEXTENSION001
+
+            if (resource.Language is AzureFunctionsLanguage.TypeScript)
+            {
+                functionsBuilder.WithRequiredCommand("npm", "https://docs.npmjs.com/downloading-and-installing-node-js-and-npm");
+            }
+            else
+            {
+                functionsBuilder.WithRequiredCommand("func", AzureFunctionsCoreToolsHelpLink);
+            }
+        }
+
+        return functionsBuilder
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables["FUNCTIONS_WORKER_RUNTIME"] = resource.WorkerRuntime;
+                // Required to enable OpenTelemetry in the Azure Functions host.
+                context.EnvironmentVariables["AzureFunctionsJobHost__telemetryMode"] = "OpenTelemetry";
+                ((IResourceWithAzureFunctionsConfig)resource.HostStorage).ApplyAzureFunctionsConfiguration(context.EnvironmentVariables, "AzureWebJobsStorage");
+            })
+            .WithOtlpExporter()
+            .WithFunctionsAppHttpEndpoint()
+            .PublishAsAzureFunctionsNodeDockerFile();
+    }
+
     /// <summary>
     /// Configures the Azure Functions project resource to use the specified port as its HTTP endpoint.
     /// This method queries the launch profile of the project to determine the port to
@@ -262,6 +347,7 @@ public static class AzureFunctionsProjectResourceExtensions
                 .WithHttpEndpoint(targetPort: 8080)
                 .WithHttpsEndpoint(targetPort: 8080);
         }
+
         var launchProfile = builder.Resource.GetEffectiveLaunchProfile();
         int? port = null;
         var useHttps = false;
@@ -312,6 +398,88 @@ public static class AzureFunctionsProjectResourceExtensions
         });
     }
 
+    private static IResourceBuilder<AzureFunctionsAppResource> WithFunctionsAppHttpEndpoint(this IResourceBuilder<AzureFunctionsAppResource> builder)
+    {
+        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            return builder.WithHttpEndpoint(targetPort: AzureFunctionsNodeContainerPort);
+        }
+
+        builder.WithHttpEndpoint();
+
+        return builder.WithArgs(context =>
+        {
+            var targetEndpoint = builder.Resource.GetEndpoint("http");
+
+            if (builder.Resource.Language is AzureFunctionsLanguage.TypeScript)
+            {
+                context.Args.Add("run");
+                context.Args.Add("start");
+                context.Args.Add("--");
+            }
+            else
+            {
+                context.Args.Add("host");
+                context.Args.Add("start");
+            }
+
+            context.Args.Add("--port");
+            context.Args.Add(targetEndpoint.Property(EndpointProperty.TargetPort));
+        });
+    }
+
+    private static IResourceBuilder<AzureFunctionsAppResource> PublishAsAzureFunctionsNodeDockerFile(this IResourceBuilder<AzureFunctionsAppResource> builder)
+    {
+        var resource = builder.Resource;
+
+        return builder.PublishAsDockerFile(containerBuilder =>
+        {
+            if (File.Exists(Path.Combine(resource.AppDirectory, "Dockerfile")))
+            {
+                return;
+            }
+
+            containerBuilder.WithDockerfileBuilder(resource.AppDirectory, dockerfileContext =>
+            {
+                // `func init --docker-only` is useful as a reference, but Core Tools 4.12.0 writes
+                // Dockerfile/.dockerignore into the source directory and its TypeScript build step
+                // varied based on exact flags. Aspire publish should be a deterministic model-to-
+                // artifacts operation, so we generate the Core Tools-compatible shape ourselves.
+                // Core Tools reference docs:
+                // https://learn.microsoft.com/azure/azure-functions/functions-run-local#generate-docker-container-files
+                var hasPackageJson = File.Exists(Path.Combine(resource.AppDirectory, "package.json"));
+                var hasPackageLock = File.Exists(Path.Combine(resource.AppDirectory, "package-lock.json"));
+
+                var dockerfile = dockerfileContext.Builder
+                    .From(DefaultAzureFunctionsNodeImage)
+                    .WorkDir(AzureFunctionsScriptRoot)
+                    .Env("AzureWebJobsScriptRoot", AzureFunctionsScriptRoot)
+                    .Env("AzureFunctionsJobHost__Logging__Console__IsEnabled", "true");
+
+                if (hasPackageJson)
+                {
+                    dockerfile
+                        .Copy("package*.json", "./")
+                        .RunWithMounts(hasPackageLock ? "npm ci" : "npm install", "type=cache,target=/root/.npm");
+                }
+
+                dockerfile.Copy(".", ".");
+
+                if (resource.Language is AzureFunctionsLanguage.TypeScript)
+                {
+                    dockerfile.Run("npm run build");
+                }
+            });
+
+            if (containerBuilder.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation))
+            {
+                dockerfileBuildAnnotation.BuildContextIgnoreContent ??= resource.Language is AzureFunctionsLanguage.TypeScript
+                    ? DefaultAzureFunctionsNodeTypeScriptBuildContextIgnoreContent
+                    : DefaultAzureFunctionsNodeBuildContextIgnoreContent;
+            }
+        });
+    }
+
     /// <summary>
     /// Configures the Azure Functions project resource to use the specified Azure Storage resource as its host storage.
     /// </summary>
@@ -324,8 +492,33 @@ public static class AzureFunctionsProjectResourceExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(storage);
 
-        builder.Resource.HostStorage = storage.Resource;
-        return builder;
+        return WithHostStorageCore(builder, storage.Resource);
+    }
+
+    /// <summary>
+    /// Configures the Azure Functions app resource to use the specified Azure Storage resource as its host storage.
+    /// </summary>
+    /// <param name="builder">The resource builder for the Azure Functions app resource.</param>
+    /// <param name="storage">The resource builder for the Azure Storage resource to be used as host storage.</param>
+    /// <returns>The resource builder for the Azure Functions app resource, configured with the specified host storage.</returns>
+    [AspireExport("withAzureFunctionsAppHostStorage", MethodName = "withHostStorage")]
+    public static IResourceBuilder<AzureFunctionsAppResource> WithHostStorage(this IResourceBuilder<AzureFunctionsAppResource> builder, IResourceBuilder<AzureStorageResource> storage)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(storage);
+
+        return WithHostStorageCore(builder, storage.Resource);
+    }
+
+    private static IResourceBuilder<TResource> WithHostStorageCore<TResource>(IResourceBuilder<TResource> builder, AzureStorageResource storage)
+        where TResource : IAzureFunctionsResource
+    {
+        builder.Resource.HostStorage = storage;
+
+        // PublishAsDockerFile converts directory-based Functions apps to a private ContainerResource
+        // that no longer implements IAzureFunctionsResource. Keep host storage as an annotation too
+        // so the before-start cleanup/relationship pass still sees it after conversion.
+        return builder.WithAnnotation(new AzureFunctionsHostStorageAnnotation(storage), ResourceAnnotationMutationBehavior.Replace);
     }
 
     /// <summary>
@@ -344,13 +537,26 @@ public static class AzureFunctionsProjectResourceExtensions
         ArgumentNullException.ThrowIfNull(destination);
         ArgumentNullException.ThrowIfNull(source);
 
-        destination.WithReferenceRelationship(source.Resource);
+        return WithReferenceCore(destination, source, connectionName);
+    }
 
-        return destination.WithEnvironment(context =>
-        {
-            connectionName ??= source.Resource.Name;
-            source.Resource.ApplyAzureFunctionsConfiguration(context.EnvironmentVariables, connectionName);
-        });
+    /// <summary>
+    /// Injects Azure Functions specific connection information into the environment variables of the Azure Functions
+    /// app resource.
+    /// </summary>
+    /// <typeparam name="TSource">The resource that implements the <see cref="IResourceWithAzureFunctionsConfig"/>.</typeparam>
+    /// <param name="destination">The resource where connection information will be injected.</param>
+    /// <param name="source">The resource from which to extract the connection string.</param>
+    /// <param name="connectionName">An override of the source resource's name for the connection name. The resulting connection name will be connectionName if this is not null.</param>
+    /// <remarks>This method is not available in polyglot app hosts. Use the standard <c>withReference</c> method from the base resource builder instead.</remarks>
+    [AspireExportIgnore(Reason = "IResourceWithAzureFunctionsConfig is an internal interface constraint not compatible with ATS.")]
+    public static IResourceBuilder<AzureFunctionsAppResource> WithReference<TSource>(this IResourceBuilder<AzureFunctionsAppResource> destination, IResourceBuilder<TSource> source, string? connectionName = null)
+        where TSource : IResourceWithConnectionString, IResourceWithAzureFunctionsConfig
+    {
+        ArgumentNullException.ThrowIfNull(destination);
+        ArgumentNullException.ThrowIfNull(source);
+
+        return WithReferenceCore(destination, source, connectionName);
     }
 
     internal static IResourceBuilder<AzureFunctionsProjectResource>? TryWithReference(
@@ -375,6 +581,57 @@ public static class AzureFunctionsProjectResourceExtensions
             throw new InvalidOperationException("Named service references are not supported for Azure Functions resources.");
         }
 
+        return TryWithReferenceCore(destination, source, connectionName, azureFunctionsConfig);
+    }
+
+    internal static IResourceBuilder<AzureFunctionsAppResource>? TryWithReference(
+        IResourceBuilder<AzureFunctionsAppResource> destination,
+        IResourceBuilder<IResource> source,
+        string? connectionName,
+        bool optional,
+        string? name)
+    {
+        if (source.Resource is not IResourceWithConnectionString || source.Resource is not IResourceWithAzureFunctionsConfig azureFunctionsConfig)
+        {
+            return null;
+        }
+
+        if (optional)
+        {
+            throw new InvalidOperationException("Optional references are not supported for Azure Functions resources.");
+        }
+
+        if (name is not null)
+        {
+            throw new InvalidOperationException("Named service references are not supported for Azure Functions resources.");
+        }
+
+        return TryWithReferenceCore(destination, source, connectionName, azureFunctionsConfig);
+    }
+
+    private static IResourceBuilder<TDestination> WithReferenceCore<TDestination, TSource>(
+        IResourceBuilder<TDestination> destination,
+        IResourceBuilder<TSource> source,
+        string? connectionName)
+        where TDestination : IResourceWithEnvironment
+        where TSource : IResourceWithConnectionString, IResourceWithAzureFunctionsConfig
+    {
+        destination.WithReferenceRelationship(source.Resource);
+
+        return destination.WithEnvironment(context =>
+        {
+            connectionName ??= source.Resource.Name;
+            source.Resource.ApplyAzureFunctionsConfiguration(context.EnvironmentVariables, connectionName);
+        });
+    }
+
+    private static IResourceBuilder<TDestination> TryWithReferenceCore<TDestination>(
+        IResourceBuilder<TDestination> destination,
+        IResourceBuilder<IResource> source,
+        string? connectionName,
+        IResourceWithAzureFunctionsConfig azureFunctionsConfig)
+        where TDestination : IResourceWithEnvironment
+    {
         destination.WithReferenceRelationship(source.Resource);
 
         return destination.WithEnvironment(context =>
@@ -383,6 +640,86 @@ public static class AzureFunctionsProjectResourceExtensions
             azureFunctionsConfig.ApplyAzureFunctionsConfiguration(context.EnvironmentVariables, connectionName);
         });
     }
+
+    private static AzureStorageResource GetOrAddDefaultHostStorage(this IDistributedApplicationBuilder builder)
+    {
+        var storageResourceName = builder.CreateDefaultStorageName();
+        var storage = builder.Resources
+            .OfType<AzureStorageResource>()
+            .FirstOrDefault(r => r.Name == storageResourceName);
+
+        if (storage is null)
+        {
+            storage = builder.AddAzureStorage(storageResourceName)
+                // Azure Functions blob triggers require StorageAccountContributor access to the host storage
+                // account when deployed. We assign this role to the implicit host storage resource.
+                .WithDefaultRoleAssignments(StorageBuiltInRole.GetBuiltInRoleName,
+                    StorageBuiltInRole.StorageBlobDataContributor,
+                    StorageBuiltInRole.StorageTableDataContributor,
+                    StorageBuiltInRole.StorageQueueDataContributor,
+                    StorageBuiltInRole.StorageAccountContributor)
+                .RunAsEmulator()
+                .Resource;
+        }
+
+        builder.OnBeforeStart((data, token) =>
+        {
+            var removeStorage = true;
+            // Look at all of the resources and if none of them use the default storage, then we can remove it.
+            // This is because we're unable to cleanly add a resource to the builder from within a callback.
+            foreach (var item in data.Model.Resources.OfType<IAzureFunctionsResource>())
+            {
+                if (item.HostStorage == storage)
+                {
+                    removeStorage = false;
+                }
+
+                if (item.HostStorage is not null)
+                {
+                    // Add the relationship to the host storage resource.
+                    builder.CreateResourceBuilder(item).WithReferenceRelationship(item.HostStorage);
+                }
+            }
+
+            foreach (var item in data.Model.Resources.Where(r => r is not IAzureFunctionsResource))
+            {
+                if (!item.TryGetLastAnnotation<AzureFunctionsHostStorageAnnotation>(out var annotation))
+                {
+                    continue;
+                }
+
+                if (annotation.HostStorage == storage)
+                {
+                    removeStorage = false;
+                }
+
+                builder.CreateResourceBuilder(item).WithReferenceRelationship(annotation.HostStorage);
+            }
+
+            if (removeStorage)
+            {
+                data.Model.Resources.Remove(storage);
+            }
+
+            return Task.CompletedTask;
+        });
+
+        return storage;
+    }
+
+    private static string GetAzureFunctionsAppCommand(AzureFunctionsLanguage language) => language switch
+    {
+        AzureFunctionsLanguage.TypeScript => "npm",
+        AzureFunctionsLanguage.JavaScript => "func",
+        _ => throw new ArgumentOutOfRangeException(nameof(language))
+    };
+
+    private static string GetLanguageName(AzureFunctionsLanguage language) => language switch
+    {
+        AzureFunctionsLanguage.TypeScript => "typescript",
+        AzureFunctionsLanguage.JavaScript => "javascript",
+        _ => throw new ArgumentOutOfRangeException(nameof(language))
+    };
 
     private static string CreateDefaultStorageName(this IDistributedApplicationBuilder builder)
     {
@@ -430,11 +767,17 @@ public static class AzureFunctionsProjectResourceExtensions
                     // just let it pass through and be handled later during resource start
                     return path;
                 }
+
                 return Path.GetFullPath(projectFiles[0]);
             }
 
             return path;
         }
+    }
+
+    private sealed class AzureFunctionsHostStorageAnnotation(AzureStorageResource hostStorage) : IResourceAnnotation
+    {
+        public AzureStorageResource HostStorage { get; } = hostStorage;
     }
 
     /// <summary>
@@ -451,5 +794,26 @@ public static class AzureFunctionsProjectResourceExtensions
 
         [JsonPropertyName("project_path")]
         public string ProjectPath { get; set; } = string.Empty;
+    }
+
+    private sealed class AzureFunctionsNodeLaunchConfiguration
+    {
+        [JsonPropertyName("type")]
+        public string Type { get; set; } = NodeFunctionsLaunchConfigurationType;
+
+        [JsonPropertyName("mode")]
+        public string Mode { get; set; } = string.Empty;
+
+        [JsonPropertyName("app_directory")]
+        public string AppDirectory { get; set; } = string.Empty;
+
+        [JsonPropertyName("command")]
+        public string Command { get; set; } = string.Empty;
+
+        [JsonPropertyName("language")]
+        public string Language { get; set; } = string.Empty;
+
+        [JsonPropertyName("worker_runtime")]
+        public string WorkerRuntime { get; set; } = string.Empty;
     }
 }

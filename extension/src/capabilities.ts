@@ -19,6 +19,7 @@ export type Capability =
     | 'bun' // Support for running Bun projects
     | 'oven.bun-vscode' // Bun debug adapter extension identifier
     | 'browser' // Support for browser debugging (built-in to VS Code via js-debug)
+    | 'azure-functions-node' // Support for running Azure Functions apps on the Node worker
     | 'azure-functions'; // Support for running Azure Functions projects
 
 export type Capabilities = Capability[];
@@ -89,6 +90,7 @@ export function getSupportedCapabilities(): Capabilities {
     if (isNodeInstalled()) {
         capabilities.push("node");
         capabilities.push("browser");
+        capabilities.push("azure-functions-node");
     }
 
     if (isBunInstalled()) {

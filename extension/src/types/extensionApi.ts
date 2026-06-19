@@ -174,6 +174,7 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'closeAllEditors' }
     | { name: 'getRegisteredAspireCommands' }
     | { name: 'getExtensionPackageJson' }
+    | { name: 'getDcpRunSessionInfo' }
     | { name: 'getExtensionFileStatus'; relativePaths: readonly string[] }
     | { name: 'getDiagnostics'; filePath: string }
     | { name: 'readClipboard' }
