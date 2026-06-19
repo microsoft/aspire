@@ -1032,3 +1032,129 @@ table.data tbody tr.selected {
   place-items: center;
   color: var(--text-muted);
 }
+
+/* --- Not-connected splash ------------------------------------------------ */
+.splash {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  overflow: auto;
+}
+
+.splash__card {
+  width: 100%;
+  max-width: 520px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-pop);
+  padding: 36px 36px 30px;
+  text-align: center;
+}
+
+.splash__glyph {
+  color: var(--accent);
+  display: inline-flex;
+  margin-bottom: 14px;
+}
+
+/* Rotating radar sweep to signal that Deck is actively listening. */
+.splash__sweep {
+  transform-origin: 28px 28px;
+  animation: splash-sweep 3.2s linear infinite;
+}
+
+@keyframes splash-sweep {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.splash__title {
+  font-size: 19px;
+  font-weight: 650;
+  margin: 0 0 8px;
+  color: var(--text);
+}
+
+.splash__lead {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  margin: 0 0 22px;
+}
+
+.splash__hint {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 20px;
+  text-align: left;
+}
+
+.splash__hint-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.splash__code {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  color: var(--accent-strong);
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 5px 9px;
+}
+
+.splash__hint-sub {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin-top: 9px;
+  line-height: 1.5;
+}
+
+.splash__hint-sub code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.splash__endpoints {
+  margin: 0;
+  text-align: left;
+  display: grid;
+  gap: 8px;
+}
+
+.splash__endpoint {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 12.5px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+}
+
+.splash__endpoint dt {
+  color: var(--text-muted);
+}
+
+.splash__endpoint dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.splash__endpoint--muted {
+  color: var(--text-muted);
+  font-style: italic;
+}

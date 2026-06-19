@@ -3,6 +3,7 @@ import type { DeckConfig } from "./api/types";
 import { getConfig } from "./api/deck";
 import { Sidebar, type PageId } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
+import { NotConnected } from "./components/NotConnected";
 import { useConnection, useResources, useTelemetry } from "./lib/useDeckEvent";
 import { useTheme } from "./lib/theme";
 import { ResourcesPage } from "./pages/ResourcesPage";
@@ -39,6 +40,13 @@ export function App() {
     metrics: telemetry?.metrics.length ?? undefined,
   };
 
+  // When the resource service can't be reached and nothing has streamed in yet,
+  // replace the page content with an explanatory splash so the window never just
+  // sits empty (which is indistinguishable from a broken/blank app).
+  const resourceState = connection.resourceService;
+  const showNotConnected =
+    (resourceState === "disconnected" || resourceState === "error") && resources.length === 0;
+
   return (
     <div className="app">
       <div className="app__sidebar">
@@ -53,12 +61,18 @@ export function App() {
         <TopBar config={config} connection={connection} theme={theme} onToggleTheme={toggleTheme} />
       </div>
       <main className="app__content">
-        {page === "resources" ? <ResourcesPage /> : null}
-        {page === "console" ? <ConsolePage /> : null}
-        {page === "logs" ? <StructuredLogsPage /> : null}
-        {page === "traces" ? <TracesPage /> : null}
-        {page === "metrics" ? <MetricsPage /> : null}
-        {page === "canvases" ? <CanvasesPage /> : null}
+        {showNotConnected ? (
+          <NotConnected config={config} state={resourceState} />
+        ) : (
+          <>
+            {page === "resources" ? <ResourcesPage /> : null}
+            {page === "console" ? <ConsolePage /> : null}
+            {page === "logs" ? <StructuredLogsPage /> : null}
+            {page === "traces" ? <TracesPage /> : null}
+            {page === "metrics" ? <MetricsPage /> : null}
+            {page === "canvases" ? <CanvasesPage /> : null}
+          </>
+        )}
       </main>
     </div>
   );
