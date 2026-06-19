@@ -3049,8 +3049,13 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     public async Task IntegrationListPolyglotAppHostWithNoCompatibleIntegrationsShowsAllHint()
     {
         // When every integration is filtered out, the user gets the polyglot-specific "use --all"
-        // error instead of a generic "no packages found".
-        var testInteractionService = new TestInteractionService();
+        // error instead of a generic "no packages found", and the hidden-count subtle message is
+        // suppressed so the user does not see a redundant pair of --all hints (matching `aspire add`).
+        string? displayedSubtleMessage = null;
+        var testInteractionService = new TestInteractionService
+        {
+            DisplaySubtleMessageCallback = message => displayedSubtleMessage = message
+        };
 
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
@@ -3083,6 +3088,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Contains(AddCommandStrings.NoPolyglotCompatibleIntegrationsFound, testInteractionService.DisplayedErrors);
+        Assert.Null(displayedSubtleMessage);
     }
 
     private static NuGetPackage CreatePackage(string id, string version)

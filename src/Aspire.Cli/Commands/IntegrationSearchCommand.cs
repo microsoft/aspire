@@ -99,8 +99,11 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
                 packagesWithShortName = compatiblePackagesWithShortName;
 
                 // Mirror `aspire add`: tell the user when the polyglot filter removed integrations and how to
-                // reveal them. Skip for JSON so the machine-readable payload on stdout stays clean.
-                if (hiddenIntegrationCount > 0 && format is not OutputFormat.Json)
+                // reveal them. Only show this when results remain; when the filter removes every integration,
+                // DisplayIntegrationResults reports NoPolyglotCompatibleIntegrationsFound (which also points at
+                // --all), so suppressing the count here avoids a redundant pair of --all hints. Skip for JSON
+                // so the machine-readable payload on stdout stays clean.
+                if (hiddenIntegrationCount > 0 && packagesWithShortName.Length > 0 && format is not OutputFormat.Json)
                 {
                     InteractionService.DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.PolyglotIntegrationsHidden, hiddenIntegrationCount));
                 }
