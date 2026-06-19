@@ -340,11 +340,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             StandardOutputCallback = runOutputCollector.AppendOutput,
             StandardErrorCallback = runOutputCollector.AppendError,
             StartDebugSession = context.StartDebugSession,
-            Debug = context.Debug,
-            // In isolated mode, suppress the launch profile for the dotnet-run fallback path
-            // so that fixed port URLs from the profile don't conflict between instances.
-            // The direct-run path handles this via env var override instead.
-            NoLaunchProfile = context.Isolated
+            Debug = context.Debug
         };
 
         // The backchannel completion source is the contract with RunCommand
@@ -1390,16 +1386,6 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     {
         // Enable port randomization for isolated mode
         env["DcpPublisher__RandomizePorts"] = "true";
-
-        // Clear port-bearing environment variables so the AppHost binds to random ports.
-        // Without this, multiple isolated instances of the same project would all try to
-        // bind to the same fixed ports from the launch profile or user secrets, causing
-        // "address already in use" failures. Setting these to empty causes the hosting
-        // infrastructure to fall back to port 0 (OS-assigned random port).
-        env[KnownConfigNames.AspNetCoreUrls] = "";
-        env[KnownConfigNames.ResourceServiceEndpointUrl] = "";
-        env[KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = "";
-        env[KnownConfigNames.DashboardOtlpHttpEndpointUrl] = "";
 
         // Get the UserSecretsId from the project and create isolated copy
         var userSecretsId = await QueryUserSecretsIdAsync(appHostFile, cancellationToken);
