@@ -60,7 +60,7 @@ suite('AspireDebugSession tests', () => {
         assert.strictEqual(loggableConfig.environmentVariables, '<redacted>');
     });
 
-    test('keeps debug configuration environment fields when logging is enabled', () => {
+    test('redacts MAUI environmentVariables even when environment logging is enabled', () => {
         const debugConfig = {
             runId: 'run-1',
             debugSessionId: 'debug-1',
@@ -76,7 +76,7 @@ suite('AspireDebugSession tests', () => {
         const loggableConfig = getLoggableDebugConfiguration(debugConfig, true);
 
         assert.deepStrictEqual(loggableConfig.env, { SECRET_TOKEN: 'env-secret' });
-        assert.strictEqual(loggableConfig.environmentVariables, 'SECRET_TOKEN=maui-secret');
+        assert.strictEqual(loggableConfig.environmentVariables, '<redacted>');
     });
 
     test('responds to breakpoint requests with a DAP breakpoint body', () => {
@@ -301,6 +301,65 @@ suite('AspireDebugSession tests', () => {
         assert.strictEqual(session?.id, 'maui-session');
         assert.strictEqual(startAttemptsWhilePending, 1);
         assert.strictEqual(startDebuggingStub.firstCall.args[2], undefined);
+    });
+
+    test('stops MAUI resource debug sessions that start after Aspire session disposal', async () => {
+        let startSessionCallback: ((session: vscode.DebugSession) => void) | undefined;
+        let resolveStart: ((value: boolean) => void) | undefined;
+        const startDebuggingPromise = new Promise<boolean>(resolve => {
+            resolveStart = resolve;
+        });
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/MauiAppHost/MauiAppHost.csproj',
+                command: 'run',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const terminalProvider = {
+            isDebugConfigEnvironmentLoggingEnabled: () => false,
+        };
+        const debugConfig = {
+            runId: 'run-1',
+            debugSessionId: 'debug-1',
+            type: 'maui',
+            name: 'MAUI',
+            request: 'launch',
+            project: '/workspace/MauiApp/MauiApp.csproj',
+            cwd: '/workspace/MauiApp',
+        } as AspireResourceExtendedDebugConfiguration;
+        const lateMauiSession = {
+            id: 'maui-session',
+            type: 'maui',
+            name: 'MAUI',
+            configuration: debugConfig as vscode.DebugConfiguration,
+        } as vscode.DebugSession;
+        sinon.stub(vscode.workspace, 'getWorkspaceFolder').returns(undefined);
+        sinon.stub(vscode.debug, 'onDidStartDebugSession').callsFake(callback => {
+            startSessionCallback = callback;
+            return { dispose: sinon.stub() };
+        });
+        sinon.stub(vscode.debug, 'startDebugging').returns(startDebuggingPromise);
+        const stopDebuggingStub = sinon.stub(vscode.debug, 'stopDebugging').resolves();
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession as unknown as vscode.DebugSession, {} as any, {} as any, terminalProvider as any, () => { });
+
+        const sessionPromise = aspireDebugSession.startAndGetDebugSession(debugConfig);
+        await Promise.resolve();
+        aspireDebugSession.dispose();
+        startSessionCallback?.(lateMauiSession);
+        resolveStart!(true);
+        const session = await sessionPromise;
+
+        assert.strictEqual(session, undefined);
+        assert.strictEqual(stopDebuggingStub.calledWith(lateMauiSession), true);
     });
 
     suite('buildAspireCommandArgs', () => {

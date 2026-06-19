@@ -27,8 +27,15 @@ import type { AspireDebugConsoleOutputEvent } from "../types/extensionApi";
 export type DashboardBrowserType = 'openExternalBrowser' | 'integratedBrowser' | 'debugChrome' | 'debugEdge' | 'debugFirefox';
 
 export function getLoggableDebugConfiguration(debugConfig: AspireResourceExtendedDebugConfiguration, includeEnvironment: boolean): vscode.DebugConfiguration {
-  if (includeEnvironment) {
+  if (includeEnvironment && debugConfig.type !== 'maui') {
     return debugConfig;
+  }
+
+  if (includeEnvironment) {
+    return {
+      ...debugConfig,
+      environmentVariables: debugConfig.environmentVariables ? '<redacted>' : undefined,
+    };
   }
 
   return {
@@ -491,6 +498,15 @@ export class AspireDebugSession implements vscode.DebugAdapter {
           extensionLogOutputChannel.info(`Debug session started: ${session.name} (run id: ${session.configuration.runId})`);
           disposable.dispose();
 
+          if (this._disposed) {
+            extensionLogOutputChannel.info(`Stopping debug session that started after Aspire session disposal: ${session.name} (run id: ${session.configuration.runId})`);
+            vscode.debug.stopDebugging(session);
+            cleanupRun(debugConfig.runId);
+            resolved = true;
+            resolve(undefined);
+            return;
+          }
+
           const disposalFunction = () => {
             extensionLogOutputChannel.info(`Stopping debug session: ${session.name} (run id: ${session.configuration.runId})`);
             vscode.debug.stopDebugging(session);
@@ -520,12 +536,16 @@ export class AspireDebugSession implements vscode.DebugAdapter {
         const workspaceFolder = this.getDebugSessionWorkspaceFolder(debugConfig);
         const maxAttempts = debugConfig.type === 'maui' ? AspireDebugSession._mauiDebugStartMaxAttempts : 1;
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+          if (this._disposed) {
+            break;
+          }
+
           started = await runWithRunStartWrappers(debugConfig.runId, () => this.startDebugging(workspaceFolder, debugConfig));
           if (started) {
             break;
           }
 
-          if (attempt < maxAttempts) {
+          if (attempt < maxAttempts && !this._disposed) {
             extensionLogOutputChannel.warn(`Debug session did not start for run ID ${debugConfig.runId}; retrying (${attempt}/${maxAttempts}).`);
             await delay(AspireDebugSession._mauiDebugStartRetryDelayMs);
           }
