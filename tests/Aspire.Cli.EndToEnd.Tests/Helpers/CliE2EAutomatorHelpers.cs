@@ -731,7 +731,7 @@ internal static class CliE2EAutomatorHelpers
             : "$ASPIRE_E2E_WORKSPACE/_aspire-start.json";
 
         var isolatedFlag = isolated ? " --isolated" : "";
-        var apphostFlag = apphost is not null ? $" --apphost {apphost}" : "";
+        var apphostFlag = apphost is not null ? $" --apphost {AspireCliShellCommandHelpers.QuoteBashArg(apphost)}" : "";
         var startupTimeoutSeconds = Math.Max(1, (int)Math.Ceiling(effectiveTimeout.TotalSeconds));
 
         // Keep aspire start as a single shell pipeline so tee captures the exact JSON emitted to the terminal while
@@ -886,7 +886,7 @@ internal static class CliE2EAutomatorHelpers
         SequenceCounter counter,
         string? apphost = null)
     {
-        var apphostFlag = apphost is not null ? $" --apphost {apphost}" : "";
+        var apphostFlag = apphost is not null ? $" --apphost {AspireCliShellCommandHelpers.QuoteBashArg(apphost)}" : "";
         await auto.TypeAsync($"aspire stop{apphostFlag}");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
