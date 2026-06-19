@@ -236,7 +236,7 @@ internal sealed class CSharpProgramBuildOrchestrator
 ### 5.6 Watch options + bundling plumbing (new) — ✅ implemented in Session 0
 - `BundleDiscovery` (final): `WatchToolPathEnvVar = "ASPIRE_WATCH_TOOL_PATH"`,
   `WatchSdkPathEnvVar = "ASPIRE_WATCH_SDK_PATH"`, `WatchDirectoryName = "watch"`,
-  `WatchToolEntryPointName = "Microsoft.DotNet.HotReload.Watch.Aspire.dll"`
+  `WatchToolDllName = "Microsoft.DotNet.HotReload.Watch.Aspire.dll"`
 - Hosting options (final): `WatchToolPath` **and** `WatchSdkPath` were added to **`DcpOptions`**, 
   bound in `ConfigureDefaultDcpOptions` with the established
   precedence `env → dcpPublisher config → assembly metadata` — same shape as `TerminalHostPath`.
