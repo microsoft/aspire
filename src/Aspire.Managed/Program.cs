@@ -3,13 +3,29 @@
 
 using Aspire.Dashboard;
 using Aspire.Managed.NuGet.Commands;
+using Aspire.TerminalHost;
+using Aspire.Shared;
 using System.CommandLine;
+
+BundleVersionLease? acquiredBundleLease;
+try
+{
+    acquiredBundleLease = BundleVersionLease.TryAcquireFromEnvironment("aspire-managed", args.FirstOrDefault());
+}
+catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException or ArgumentException or NotSupportedException)
+{
+    Console.Error.WriteLine($"Failed to acquire Aspire bundle lease: {ex.Message}");
+    return 1;
+}
+
+using var bundleLease = acquiredBundleLease;
 
 return args switch
 {
     ["dashboard", .. var rest] => RunDashboard(rest),
     ["server", .. var rest] => await RunServer(rest).ConfigureAwait(false),
     ["nuget", .. var rest] => await RunNuGet(rest).ConfigureAwait(false),
+    ["terminalhost", .. var rest] => await RunTerminalHost(rest).ConfigureAwait(false),
     _ => ShowUsage()
 };
 
@@ -41,8 +57,20 @@ static async Task<int> RunNuGet(string[] args)
     return await rootCommand.Parse(args).InvokeAsync().ConfigureAwait(false);
 }
 
+static async Task<int> RunTerminalHost(string[] args)
+{
+    using var cts = new CancellationTokenSource();
+    Console.CancelKeyPress += (_, e) =>
+    {
+        e.Cancel = true;
+        cts.Cancel();
+    };
+
+    return await TerminalHostApp.RunAsync(args, cts.Token).ConfigureAwait(false);
+}
+
 static int ShowUsage()
 {
-    Console.Error.WriteLine($"Usage: {AppDomain.CurrentDomain.FriendlyName} <dashboard|server|nuget> [args...]");
+    Console.Error.WriteLine($"Usage: {AppDomain.CurrentDomain.FriendlyName} <dashboard|server|nuget|terminalhost> [args...]");
     return 1;
 }

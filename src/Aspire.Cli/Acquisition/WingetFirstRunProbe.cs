@@ -13,8 +13,6 @@ namespace Aspire.Cli.Acquisition;
 /// </summary>
 internal sealed class WingetFirstRunProbe
 {
-    internal const string SidecarFileName = ".aspire-install.json";
-
     private static readonly byte[] s_wingetSidecarContent = Encoding.UTF8.GetBytes("{\"source\":\"winget\"}");
 
     private readonly IWindowsRegistryReader _registry;
@@ -40,7 +38,7 @@ internal sealed class WingetFirstRunProbe
             return;
         }
 
-        var sidecarPath = Path.Combine(binaryDir, SidecarFileName);
+        var sidecarPath = Path.Combine(binaryDir, InstallSidecarReader.SidecarFileName);
         if (File.Exists(sidecarPath))
         {
             return;
@@ -62,7 +60,7 @@ internal sealed class WingetFirstRunProbe
 
     private void TryWriteSidecarAtomically(string binaryDir, string sidecarPath)
     {
-        var tempPath = Path.Combine(binaryDir, $"{SidecarFileName}.{Guid.NewGuid():N}.tmp");
+        var tempPath = Path.Combine(binaryDir, $"{InstallSidecarReader.SidecarFileName}.{Guid.NewGuid():N}.tmp");
 
         try
         {

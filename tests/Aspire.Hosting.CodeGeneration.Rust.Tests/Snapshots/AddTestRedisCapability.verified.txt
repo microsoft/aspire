@@ -2,7 +2,7 @@
   CapabilityId: Aspire.Hosting.CodeGeneration.Rust.Tests/addTestRedis,
   MethodName: addTestRedis,
   QualifiedMethodName: addTestRedis,
-  Description: Adds a test Redis resource,
+  Description: Adds a test Redis resource from ATS documentation.,
   Documentation: {
     Summary: Adds a test Redis resource from ATS documentation.,
     Returns: The ATS test Redis resource builder.,

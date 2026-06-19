@@ -31,6 +31,19 @@ internal static class DashboardUrlsHelper
         ILogger logger,
         CancellationToken cancellationToken = default)
     {
+        // Check whether the dashboard resource is registered at all. If it isn't (e.g. the user
+        // called DisableDashboard()), return immediately rather than waiting forever for a resource
+        // event that will never arrive.
+        var appModel = serviceProvider.GetService<DistributedApplicationModel>();
+        var dashboardResource = appModel?.Resources.SingleOrDefault(
+            r => string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName)) as IResourceWithEndpoints;
+
+        if (dashboardResource is null)
+        {
+            logger.LogDebug("Dashboard resource is not present in the app model. Returning unavailable state.");
+            return DashboardConnectionInfo.Unhealthy;
+        }
+
         var profilingTelemetry = serviceProvider.GetRequiredService<ProfilingTelemetry>();
         using var activity = profilingTelemetry.StartDashboardGetConnectionInfo();
         var resourceNotificationService = serviceProvider.GetRequiredService<ResourceNotificationService>();
@@ -68,11 +81,6 @@ internal static class DashboardUrlsHelper
                 logger.LogWarning("Dashboard options not found.");
                 return DashboardConnectionInfo.Unhealthy;
             }
-
-            // Find the dashboard resource and get all endpoints
-            var appModel = serviceProvider.GetService<DistributedApplicationModel>();
-            var dashboardResource = appModel?.Resources.SingleOrDefault(
-                r => string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName)) as IResourceWithEndpoints;
 
             string? apiBaseUrl = null;
             var apiBaseUrlSource = ProfilingTelemetry.Values.DashboardUrlSourceNone;

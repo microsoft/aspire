@@ -65,7 +65,8 @@ public class DashboardTelemetrySenderTests
             {
                 Port = 5000,
                 ServerCertificate = Convert.ToBase64String(TelemetryTestHelpers.GenerateDummyCertificate().Export(X509ContentType.Cert)),
-                Token = "test"
+                Token = "test",
+                DcpInstanceId = "aspire-extension-run-123-dashboard"
             }
         });
 
@@ -75,6 +76,8 @@ public class DashboardTelemetrySenderTests
         telemetrySender.CreateHandler = handler => new TestHttpMessageHandler(
             (request, cancellationToken) =>
             {
+                Assert.Equal("aspire-extension-run-123-dashboard", request.Headers.GetValues("Microsoft-Developer-DCP-Instance-ID").Single());
+
                 if (request.RequestUri!.AbsolutePath == TelemetryEndpoints.TelemetryEnabled)
                 {
                     if (telemetryEnabledResponseStatusCode == null)
@@ -112,7 +115,8 @@ public class DashboardTelemetrySenderTests
             {
                 Port = 5000,
                 ServerCertificate = isHttps ? Convert.ToBase64String(TelemetryTestHelpers.GenerateDummyCertificate().Export(X509ContentType.Cert)) : null,
-                Token = "test"
+                Token = "test",
+                DcpInstanceId = "aspire-extension-run-123-dashboard"
             }
         });
 
@@ -123,6 +127,7 @@ public class DashboardTelemetrySenderTests
 
         Assert.NotNull(client);
         Assert.Equal(expectedUrl, client.BaseAddress?.ToString());
+        Assert.Equal("aspire-extension-run-123-dashboard", client.DefaultRequestHeaders.GetValues("Microsoft-Developer-DCP-Instance-ID").Single());
     }
 
     public static TheoryData<HttpStatusCode?, string?, HttpStatusCode?, bool> CreateTelemetryService_WithValidDebugSession_DifferentServerResponses_ShowsTelemetrySupported_MemberData()

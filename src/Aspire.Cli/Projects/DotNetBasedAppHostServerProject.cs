@@ -11,6 +11,7 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Projects;
@@ -28,11 +29,6 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     internal const string TargetFramework = "net10.0";
     public const string BuildFolder = "build";
     private const string AssemblyName = "AppHostServer";
-
-    /// <summary>
-    /// Gets the default Aspire SDK version based on the CLI version.
-    /// </summary>
-    public static string DefaultSdkVersion => VersionHelper.GetDefaultSdkVersion();
 
     private readonly string _projectModelPath;
     private readonly string _appPath;
@@ -146,6 +142,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
                     <RepoRoot>{_repoRoot}</RepoRoot>
                     <SkipValidateAspireHostProjectResources>true</SkipValidateAspireHostProjectResources>
                     <SkipAddAspireDefaultReferences>true</SkipAddAspireDefaultReferences>
+                    <SkipAspireIntegrationAnalyzersReference>true</SkipAspireIntegrationAnalyzersReference>
                     <AspireHostingSDKVersion>42.42.42</AspireHostingSDKVersion>
                     <!-- DCP and Dashboard paths for local development -->
                     <DcpDir>$([MSBuild]::EnsureTrailingSlash('$(NuGetPackageRoot)')){dcpPackageName}/{dcpVersion}/tools/</DcpDir>
@@ -259,8 +256,9 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     /// </summary>
     public async Task<(string ProjectPath, string? ChannelName)> CreateProjectFilesAsync(
         IEnumerable<IntegrationReference> integrations,
-        CancellationToken cancellationToken = default,
-        string? requestedChannel = null)
+        string? requestedChannel = null,
+        string? packageSourceOverride = null,
+        CancellationToken cancellationToken = default)
     {
         // Clean obj folder to ensure fresh NuGet restore
         var objPath = Path.Combine(_projectModelPath, "obj");
@@ -353,6 +351,20 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
             }
         }
 
+        // Thread an explicit `--source` override into the restore sources so the dogfood
+        // `aspire new --source <pr-hive>` flow is honored in dev mode (in-repo). Prepending
+        // makes the override the first source NuGet evaluates, which matters when the same
+        // Aspire package version exists in both the hive and a channel feed. Note: unlike
+        // PrebuiltAppHostServer this path does not emit Package Source Mappings, so NuGet
+        // may still consult other sources if the override does not satisfy a request — the
+        // override is best-effort here, sufficient for the in-repo developer scenario where
+        // most Aspire.* dependencies come from ProjectReference, not PackageReference.
+        if (!string.IsNullOrWhiteSpace(packageSourceOverride) &&
+            !channelSources.Contains(packageSourceOverride, StringComparer.OrdinalIgnoreCase))
+        {
+            channelSources.Insert(0, packageSourceOverride);
+        }
+
         // Create the project file
         var doc = CreateProjectFile(integrations);
 
@@ -424,10 +436,11 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     public async Task<AppHostServerPrepareResult> PrepareAsync(
         string sdkVersion,
         IEnumerable<IntegrationReference> integrations,
-        CancellationToken cancellationToken = default,
-        string? requestedChannel = null)
+        string? requestedChannel = null,
+        string? packageSourceOverride = null,
+        CancellationToken cancellationToken = default)
     {
-        var (_, channelName) = await CreateProjectFilesAsync(integrations, cancellationToken, requestedChannel);
+        var (_, channelName) = await CreateProjectFilesAsync(integrations, requestedChannel, packageSourceOverride, cancellationToken);
         var (buildSuccess, buildOutput) = await BuildAsync(cancellationToken);
 
         if (!buildSuccess)
@@ -486,6 +499,23 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         // Dev mode uses debug builds which require Development environment
         // for the dashboard to resolve static web assets correctly
         startInfo.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
+
+        // Wire WithTerminal() for guest/polyglot AppHosts running from the repo. The
+        // generated AppHostServer references Aspire.Hosting from the repo and DCP resolves
+        // the terminal host via ASPIRE_TERMINAL_HOST_PATH or assembly metadata. No per-RID
+        // NuGet stamps the metadata path today, so without this env var the AppHostServer
+        // would always resolve to <unresolved-aspire-terminalhost> in repo mode.
+        // Mirrors the same injection that DotNetAppHostProject performs for .NET AppHosts.
+        // Skipped when the caller pre-populates the path so a user-side override always wins.
+        if (BundleDiscovery.TryGetRepoLocalManagedPath(_repoRoot) is { } terminalHostPath
+            && !ContainsKey(environmentVariables, BundleDiscovery.TerminalHostPathEnvVar))
+        {
+            startInfo.Environment[BundleDiscovery.TerminalHostPathEnvVar] = terminalHostPath;
+            if (!ContainsKey(environmentVariables, BundleDiscovery.TerminalHostInvocationArgsEnvVar))
+            {
+                startInfo.Environment[BundleDiscovery.TerminalHostInvocationArgsEnvVar] = "terminalhost";
+            }
+        }
 
         if (environmentVariables is not null)
         {
@@ -627,5 +657,10 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         {
             return fallbackVersion;
         }
+    }
+
+    private static bool ContainsKey(IReadOnlyDictionary<string, string>? env, string key)
+    {
+        return env is not null && env.ContainsKey(key);
     }
 }

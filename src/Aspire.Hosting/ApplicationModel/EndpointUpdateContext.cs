@@ -84,10 +84,10 @@ internal sealed class EndpointUpdateContext(EndpointAnnotation endpointAnnotatio
     /// <summary>
     /// Gets or sets a value indicating whether the endpoint is proxied.
     /// </summary>
-    public bool IsProxied
+    public bool? IsProxied
     {
-        get => _endpointAnnotation.IsProxied;
-        set => _endpointAnnotation.IsProxied = value;
+        get => _endpointAnnotation.IsExplicitlyProxied;
+        set => _endpointAnnotation.IsExplicitlyProxied = value;
     }
 
     /// <summary>

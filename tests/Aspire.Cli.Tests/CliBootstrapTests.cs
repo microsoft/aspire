@@ -3,7 +3,9 @@
 
 using System.Reflection;
 using Aspire.Cli.Acquisition;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -16,7 +18,7 @@ namespace Aspire.Cli.Tests;
 /// <see cref="IIdentityChannelReader"/>, registered in DI by
 /// <see cref="Aspire.Cli.Program.BuildApplicationAsync"/>.
 /// </summary>
-public class CliBootstrapTests
+public class CliBootstrapTests(ITestOutputHelper outputHelper)
 {
     private static readonly string[] s_fixedChannels = ["stable", "staging", "daily", "local"];
 
@@ -24,8 +26,10 @@ public class CliBootstrapTests
     {
         var loggingOptions = Program.ParseLoggingOptions([]);
         var errorWriter = new TestStartupErrorWriter();
-        var (loggerFactory, fileLoggerProvider) = Program.CreateLoggerFactory([], loggingOptions, errorWriter);
-        var startupContext = new Program.CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, loggerFactory.CreateLogger(Program.RootLoggerName));
+        var logBufferContext = new ConsoleLogBufferContext();
+        var (loggerFactory, fileLoggerProvider) = Program.CreateLoggerFactory([], loggingOptions, errorWriter, logBufferContext);
+        var identityChannelReader = new IdentityChannelReader(typeof(Program).Assembly);
+        var startupContext = new Program.CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, logBufferContext, loggerFactory.CreateLogger(Program.RootLoggerName), new ConsoleCancellationManager(processTerminationTimeout: Timeout.InfiniteTimeSpan), identityChannelReader);
         return await Program.BuildApplicationAsync([], startupContext);
     }
 
@@ -46,7 +50,7 @@ public class CliBootstrapTests
     {
         var reader = new IdentityChannelReader(typeof(Aspire.Cli.Program).Assembly);
 
-        var channel = reader.ReadChannel();
+        Assert.True(reader.TryReadChannel(out var channel, out _));
 
         // Test host can be built with /p:AspireCliChannel=<anything in the accepted set>;
         // assert shape, not a single literal, so this test stops being an accidental
@@ -82,7 +86,8 @@ public class CliBootstrapTests
         var reader = host.Services.GetRequiredService<IIdentityChannelReader>();
         var context = host.Services.GetRequiredService<CliExecutionContext>();
 
-        Assert.Equal(reader.ReadChannel(), context.IdentityChannel);
+        Assert.True(reader.TryReadChannel(out var channel, out _));
+        Assert.Equal(channel, context.IdentityChannel);
     }
 
     [Fact]
@@ -103,5 +108,97 @@ public class CliBootstrapTests
 
         Assert.Equal(bakedChannel, context.IdentityChannel);
     }
-}
 
+    [Fact]
+    public void ParseLoggingOptions_PrInstall_UsesInstallPrefixForDefaultLogsDirectory()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var installPrefix = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-pr-test");
+        var binaryPath = WriteBinaryWithSidecar(Path.Combine(installPrefix, "dogfood", "pr-17159", "bin"), InstallSourceExtensions.PrWire);
+
+        var loggingOptions = Program.ParseLoggingOptions([], binaryPath);
+
+        Assert.Equal(Path.Combine(installPrefix, "logs"), loggingOptions.LogsDirectory);
+        Assert.Equal(loggingOptions.LogsDirectory, Path.GetDirectoryName(loggingOptions.LogFilePath));
+    }
+
+    [Fact]
+    public void BuildCliExecutionContext_PrInstall_UsesInstallPrefixForStateDirectoriesAndKeepsIdentityChannel()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var installPrefix = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-pr-test");
+        var binaryPath = WriteBinaryWithSidecar(Path.Combine(installPrefix, "dogfood", "pr-17159", "bin"), InstallSourceExtensions.PrWire);
+        var logsDirectory = Path.Combine(installPrefix, "logs");
+        var logFilePath = Path.Combine(logsDirectory, "aspire.log");
+
+        var context = Program.BuildCliExecutionContext(
+            debugMode: true,
+            logsDirectory: logsDirectory,
+            logFilePath: logFilePath,
+            channel: "pr-17159",
+            processPath: binaryPath);
+
+        Assert.Equal(Path.Combine(installPrefix, "hives"), context.HivesDirectory.FullName);
+        Assert.Equal(Path.Combine(installPrefix, "cache"), context.CacheDirectory.FullName);
+        Assert.Equal(Path.Combine(installPrefix, "sdks"), context.SdksDirectory.FullName);
+        Assert.Equal(Path.Combine(installPrefix, "packages"), context.PackagesDirectory?.FullName);
+        Assert.Equal(installPrefix, context.AspireHomeDirectory.FullName);
+        Assert.Equal(logsDirectory, context.LogsDirectory.FullName);
+        Assert.Equal(logFilePath, context.LogFilePath);
+        Assert.True(context.DebugMode);
+        Assert.Equal("pr-17159", context.IdentityChannel);
+    }
+
+    [Fact]
+    public void BuildCliExecutionContext_NuGetServiceIndexOverrideFromEnv_MarksIdentityOverridden()
+    {
+        // Setting only ASPIRE_CLI_NUGET_SERVICE_INDEX must still flag the run as an emulation so the
+        // startup override notice fires and tooling does not mistake a diagnostic run for a real build.
+        // Regression guard: this source was previously omitted from the identityOverridden computation.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var resolver = new IdentityResolver(
+            new InstallSidecarReader(),
+            typeof(Program).Assembly,
+            binaryDir: null,
+            envReader: name => name == IdentityResolver.NuGetServiceIndexEnvVar ? "http://localhost:5000/v3/index.json" : null);
+
+        var context = Program.BuildCliExecutionContext(
+            debugMode: false,
+            logsDirectory: Path.Combine(workspace.WorkspaceRoot.FullName, "logs"),
+            logFilePath: Path.Combine(workspace.WorkspaceRoot.FullName, "logs", "aspire.log"),
+            identityResolver: resolver);
+
+        Assert.True(context.IdentityOverridden);
+        Assert.Equal("http://localhost:5000/v3/index.json", context.NuGetServiceIndexOverride);
+    }
+
+    [Fact]
+    public void BuildCliExecutionContext_NoOverrides_DoesNotMarkIdentityOverridden()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var resolver = new IdentityResolver(
+            new InstallSidecarReader(),
+            typeof(Program).Assembly,
+            binaryDir: null,
+            envReader: _ => null);
+
+        var context = Program.BuildCliExecutionContext(
+            debugMode: false,
+            logsDirectory: Path.Combine(workspace.WorkspaceRoot.FullName, "logs"),
+            logFilePath: Path.Combine(workspace.WorkspaceRoot.FullName, "logs", "aspire.log"),
+            identityResolver: resolver);
+
+        Assert.False(context.IdentityOverridden);
+        Assert.Null(context.NuGetServiceIndexOverride);
+    }
+
+    private static string WriteBinaryWithSidecar(string binaryDir, string source)
+    {
+        Directory.CreateDirectory(binaryDir);
+        var binaryPath = Path.Combine(binaryDir, OperatingSystem.IsWindows() ? "aspire.exe" : "aspire");
+        File.WriteAllText(binaryPath, string.Empty);
+        File.WriteAllText(Path.Combine(binaryDir, InstallSidecarReader.SidecarFileName), $$"""{"source":"{{source}}"}""");
+
+        return binaryPath;
+    }
+}

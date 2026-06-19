@@ -103,12 +103,12 @@ public sealed class AcrPurgeTaskDeploymentTests(ITestOutputHelper output)
                 await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
             }
 
-            // Step 6: Modify apphost.ts to add ACA environment with purge task
-            // Python template uses TypeScript AppHost (apphost.ts in project root)
+            // Step 6: Modify apphost.mts to add ACA environment with purge task
+            // Python template uses TypeScript AppHost (apphost.mts in project root)
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
-            var appHostFilePath = Path.Combine(projectDir, "apphost.ts");
+            var appHostFilePath = Path.Combine(projectDir, "apphost.mts");
 
-            output.WriteLine($"Looking for apphost.ts at: {appHostFilePath}");
+            output.WriteLine($"Looking for apphost.mts at: {appHostFilePath}");
 
             var content = File.ReadAllText(appHostFilePath);
 
@@ -127,7 +127,7 @@ await builder.build().run();
 
             File.WriteAllText(appHostFilePath, content);
 
-            output.WriteLine($"Modified apphost.ts at: {appHostFilePath}");
+            output.WriteLine($"Modified apphost.mts at: {appHostFilePath}");
 
             // Step 7: Set environment variables for deployment
             await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");

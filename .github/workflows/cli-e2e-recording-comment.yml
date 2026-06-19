@@ -39,7 +39,7 @@ jobs:
 
       - name: Get workflow run info
         id: run-info
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             let runId, prNumber, headSha;
@@ -93,7 +93,7 @@ jobs:
 
       - name: Download CLI E2E test artifacts
         if: steps.run-info.outputs.skip != 'true'
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const fs = require('fs');
@@ -122,6 +122,30 @@ jobs:
             );
 
             console.log(`Found ${cliE2eArtifacts.length} CLI E2E recording artifacts`);
+
+            // Build metadata mapping testShortName to artifact IDs for recordings and logs.
+            // Recording artifacts: cli-e2e-recordings-{testShortName}
+            // Logs artifacts: logs-{testShortName}-{os}
+            const artifactMeta = {};
+            for (const artifact of cliE2eArtifacts) {
+              const testShortName = artifact.name.replace('cli-e2e-recordings-', '');
+              artifactMeta[testShortName] = {
+                recordingArtifactId: artifact.id,
+                logsArtifactId: null
+              };
+            }
+
+            // Find matching logs artifacts for each testShortName
+            const logsArtifacts = allArtifacts.filter(a => a.name.startsWith('logs-'));
+            for (const [testShortName, meta] of Object.entries(artifactMeta)) {
+              const match = logsArtifacts.find(a => a.name.startsWith(`logs-${testShortName}-`));
+              if (match) {
+                meta.logsArtifactId = match.id;
+              }
+            }
+
+            fs.writeFileSync('artifact_meta.json', JSON.stringify(artifactMeta, null, 2));
+            console.log('Artifact metadata:', JSON.stringify(artifactMeta, null, 2));
 
             // Create recordings directory
             const recordingsDir = 'recordings';
@@ -152,17 +176,30 @@ jobs:
           mkdir -p cast_files
           mkdir -p trx_files
 
+          # Track which .cast file came from which testShortName so we can link
+          # to the correct job and artifacts in the PR comment.
+          declare -A CAST_TO_SHORT_NAME
+
           for zipfile in recordings/*.zip; do
             if [ -f "$zipfile" ]; then
               echo "Extracting $zipfile..."
-              unzip -o "$zipfile" -d "recordings/extracted_$(basename "$zipfile" .zip)" || true
+              # Artifact zip name: cli-e2e-recordings-{testShortName}.zip
+              ARTIFACT_NAME=$(basename "$zipfile" .zip)
+              TEST_SHORT_NAME="${ARTIFACT_NAME#cli-e2e-recordings-}"
+              EXTRACT_DIR="recordings/extracted_${ARTIFACT_NAME}"
+              unzip -o "$zipfile" -d "$EXTRACT_DIR" || true
+
+              # Copy .cast files and record their source testShortName
+              find "$EXTRACT_DIR" -name "*.cast" | while read -r castfile; do
+                CAST_BASENAME=$(basename "$castfile")
+                cp "$castfile" "cast_files/$CAST_BASENAME"
+                echo "${CAST_BASENAME%.cast}=${TEST_SHORT_NAME}" >> cast_source_map.txt
+              done
+
+              # Copy .trx files
+              find "$EXTRACT_DIR" -name "*.trx" -exec cp {} trx_files/ \; 2>/dev/null || true
             fi
           done
-
-          # Find and copy all .cast files
-          find recordings -name "*.cast" -exec cp {} cast_files/ \; 2>/dev/null || true
-          # Find and copy all .trx files (test results)
-          find recordings -name "*.trx" -exec cp {} trx_files/ \; 2>/dev/null || true
 
           echo "Found recordings:"
           ls -la cast_files/ || echo "No .cast files found"
@@ -230,6 +267,71 @@ jobs:
             echo "has_outcomes=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Look up job information for CI run
+        if: steps.run-info.outputs.skip != 'true' && hashFiles('cast_files/*.cast') != ''
+        id: job-info
+        continue-on-error: true
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        with:
+          retries: 3
+          script: |
+            const fs = require('fs');
+            const runId = ${{ steps.run-info.outputs.run_id }};
+            const jobMap = {};
+
+            try {
+              // Read short names first so we can stop pagination early once all are found
+              const castSourceMap = {};
+              if (fs.existsSync('cast_source_map.txt')) {
+                const lines = fs.readFileSync('cast_source_map.txt', 'utf8').trim().split('\n');
+                for (const line of lines) {
+                  const [castName, shortName] = line.split('=');
+                  if (castName && shortName) {
+                    castSourceMap[castName] = shortName;
+                  }
+                }
+              }
+
+              const shortNames = [...new Set(Object.values(castSourceMap))];
+              console.log(`Looking up jobs for ${shortNames.length} short name(s): ${JSON.stringify(shortNames)}`);
+
+              // Use per_page=50 because the GitHub API returns 502 "Server Error"
+              // with per_page=100 when runs have many jobs (300+). The response
+              // payload exceeds an internal size limit at larger page sizes.
+              const allJobs = await github.paginate(
+                github.rest.actions.listJobsForWorkflowRun,
+                {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  run_id: runId,
+                  per_page: 50
+                }
+              );
+
+              console.log(`Fetched ${allJobs.length} jobs total`);
+
+              for (const job of allJobs) {
+                if (!job.name) continue;
+                for (const shortName of shortNames) {
+                  if (job.name.includes(shortName)) {
+                    jobMap[shortName] = { url: job.html_url, id: job.id };
+                  }
+                }
+              }
+
+              console.log(`Matched ${Object.keys(jobMap).length}/${shortNames.length} short names to jobs`);
+              const unmatched = shortNames.filter(n => !jobMap[n]);
+              if (unmatched.length > 0) {
+                console.log(`Unmatched: ${JSON.stringify(unmatched)}`);
+              }
+            } catch (error) {
+              core.error(`Failed to look up job information: ${error.message}`);
+              console.log(error.stack);
+            } finally {
+              fs.writeFileSync('job_map.json', JSON.stringify(jobMap, null, 2));
+              console.log('Job map:', JSON.stringify(jobMap, null, 2));
+            }
+
       - name: Upload recordings and post comment
         if: steps.run-info.outputs.skip != 'true'
         env:
@@ -258,6 +360,19 @@ jobs:
               echo "No test outcomes available, will show recordings without pass/fail status"
               echo '{}' > test_outcomes.json
             fi
+
+            # Load cast-to-testShortName mapping, job URLs, and artifact metadata
+            # so we can link each recording to its CI job and downloadable artifacts.
+            declare -A CAST_SOURCE_MAP
+            if [ -f "cast_source_map.txt" ]; then
+              while IFS='=' read -r cast_name short_name; do
+                CAST_SOURCE_MAP["$cast_name"]="$short_name"
+              done < cast_source_map.txt
+            fi
+
+            # Ensure job_map.json and artifact_meta.json exist (may be absent if steps were skipped)
+            [ -f "job_map.json" ] || echo '{}' > job_map.json
+            [ -f "artifact_meta.json" ] || echo '{}' > artifact_meta.json
 
             # Unique marker to identify CLI E2E recording comments
             COMMENT_MARKER="<!-- cli-e2e-recordings -->"
@@ -292,20 +407,15 @@ jobs:
                 # Look up test outcome from TRX data.
                 # .cast files are named after the test method name (via [CallerMemberName] in CreateTestTerminal),
                 # so the filename matches the method name key in the outcomes JSON.
-                # Per-link label carries the outcome too, so a recording URL copied out of
-                # the table still tells reviewers whether it represents a pass or a failure.
                 TEST_OUTCOME=$(jq -r --arg name "$filename" '.[$name] // "Unknown"' test_outcomes.json)
                 if [ "$TEST_OUTCOME" = "Passed" ]; then
                   STATUS_EMOJI="✅"
-                  LINK_LABEL="✅ ▶️ View recording"
                   TEST_PASS_COUNT=$((TEST_PASS_COUNT + 1))
                 elif [ "$TEST_OUTCOME" = "Failed" ]; then
                   STATUS_EMOJI="❌"
-                  LINK_LABEL="❌ ▶️ View failure recording"
                   TEST_FAIL_COUNT=$((TEST_FAIL_COUNT + 1))
                 else
                   STATUS_EMOJI="❔"
-                  LINK_LABEL="❔ ▶️ View recording"
                   TEST_UNKNOWN_COUNT=$((TEST_UNKNOWN_COUNT + 1))
                 fi
 
@@ -324,27 +434,49 @@ jobs:
                   fi
                 done
 
+                # Resolve job URL and artifacts URL for this recording's test run.
+                # The cast_source_map maps .cast filename -> testShortName, which keys
+                # into job_map.json (testShortName -> job HTML URL) and
+                # artifact_meta.json (testShortName -> {recordingArtifactId, logsArtifactId}).
+                TEST_SHORT_NAME="${CAST_SOURCE_MAP[$filename]:-}"
+                JOB_URL=""
+                JOB_ID=""
+                ARTIFACTS_URL=""
+                if [ -n "$TEST_SHORT_NAME" ]; then
+                  JOB_URL=$(jq -r --arg name "$TEST_SHORT_NAME" '.[$name].url // ""' job_map.json)
+                  JOB_ID=$(jq -r --arg name "$TEST_SHORT_NAME" '.[$name].id // ""' job_map.json)
+                  LOGS_ARTIFACT_ID=$(jq -r --arg name "$TEST_SHORT_NAME" '.[$name].logsArtifactId // ""' artifact_meta.json)
+                  if [ -n "$LOGS_ARTIFACT_ID" ] && [ "$LOGS_ARTIFACT_ID" != "null" ]; then
+                    ARTIFACTS_URL="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts/${LOGS_ARTIFACT_ID}"
+                  fi
+                fi
+
+                # Build the detail cell with links separated by ·
+                DETAIL_PARTS=""
                 if [ -n "$ASCIINEMA_URL" ]; then
-                  TABLE_BODY="${TABLE_BODY}
-          | ${STATUS_EMOJI} | ${safe_filename} | [${LINK_LABEL}](${ASCIINEMA_URL}) |"
+                  DETAIL_PARTS="[Recording](${ASCIINEMA_URL})"
                   echo "Uploaded: $ASCIINEMA_URL"
                   UPLOAD_COUNT=$((UPLOAD_COUNT + 1))
-
-                  # Track failed tests for the prominent section
-                  if [ "$TEST_OUTCOME" = "Failed" ]; then
-                    FAILED_TESTS_BODY="${FAILED_TESTS_BODY}
-          - ❌ **${safe_filename}** — [${LINK_LABEL}](${ASCIINEMA_URL})"
-                  fi
                 else
-                  TABLE_BODY="${TABLE_BODY}
-          | ${STATUS_EMOJI} | ${safe_filename} | ⚠️ Upload failed |"
+                  DETAIL_PARTS="⚠️ Upload failed"
                   echo "Failed to upload $castfile after $MAX_UPLOAD_RETRIES attempts"
                   FAIL_COUNT=$((FAIL_COUNT + 1))
+                fi
+                if [ -n "$JOB_URL" ]; then
+                  DETAIL_PARTS="${DETAIL_PARTS} · [Job](${JOB_URL})"
+                fi
+                if [ -n "$ARTIFACTS_URL" ]; then
+                  DETAIL_PARTS="${DETAIL_PARTS} · [CLI logs](${ARTIFACTS_URL})"
+                fi
 
-                  if [ "$TEST_OUTCOME" = "Failed" ]; then
-                    FAILED_TESTS_BODY="${FAILED_TESTS_BODY}
-          - ❌ **${safe_filename}** — ⚠️ Recording upload failed"
-                  fi
+                # Build the table row once; append to both tables as needed.
+                ROW="| ${STATUS_EMOJI} | ${safe_filename} | ${DETAIL_PARTS} |"
+
+                TABLE_BODY="${TABLE_BODY}
+          ${ROW}"
+                if [ "$TEST_OUTCOME" = "Failed" ]; then
+                  FAILED_TESTS_BODY="${FAILED_TESTS_BODY}
+          ${ROW}"
                 fi
               fi
             done
@@ -394,8 +526,10 @@ jobs:
             FAILED_SECTION=""
             if [ -n "$FAILED_TESTS_BODY" ]; then
               FAILED_SECTION="
-          ### Failed Tests
-          ${FAILED_TESTS_BODY}
+          ### ❌ Failed Tests
+
+          | - | Test | Detail |
+          |--------|------|-----------|${FAILED_TESTS_BODY}
           "
             fi
 
@@ -405,7 +539,7 @@ jobs:
           <details>
           <summary>View all recordings</summary>
 
-          | Status | Test | Recording |
+          | - | Test | Detail |
           |--------|------|-----------|${TABLE_BODY}
 
           ---

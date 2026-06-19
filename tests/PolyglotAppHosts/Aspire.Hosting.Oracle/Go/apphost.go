@@ -54,7 +54,7 @@ func main() {
 	oracle.WithReference(otherOracle)
 
 	oracle3 := builder.AddOracle("oracledb3")
-	oracle3.WithLifetime(aspire.ContainerLifetimePersistent)
+	oracle3.WithPersistentLifetime()
 	oracle3.WithDataVolume(&aspire.WithDataVolumeOptions{Name: aspire.StringPtr("oracle3-data")})
 	oracle3.AddDatabase("chaineddb")
 	if err = oracle3.Err(); err != nil {

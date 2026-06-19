@@ -75,6 +75,115 @@ public static class FakeArchiveHelper
         return archive with { ChecksumHex = "0000000000000000000000000000000000000000000000000000000000000000" };
     }
 
+    /// <summary>
+    /// Creates a per-RID CLI archive whose fake aspire binary handles the commands
+    /// verify-cli-archive.ps1 invokes (<c>aspire --version</c> and
+    /// <c>aspire new aspire-starter --name NAME --output OUTPUT ...</c>). The fake
+    /// binary is a bash script, so this is only usable on platforms where the
+    /// verifier executes the binary directly (Linux/macOS).
+    /// </summary>
+    /// <param name="includeStraySidecar">When true, adds a <c>.aspire-install.json</c>
+    /// at the archive root so the verifier's sidecar-rejection contract can be
+    /// asserted; see <c>docs/specs/install-routes.md</c>.</param>
+    /// <param name="nestAspireUnderSubdir">When true, places the <c>aspire</c> binary
+    /// under a single subdirectory inside the archive rather than at the root. This
+    /// exercises <c>Get-ArchiveRoot</c>'s single-subdirectory branch and confirms the
+    /// sidecar scan still inspects the true archive root.</param>
+    public static async Task<FakeArchive> CreateFakeVerifyArchiveAsync(
+        string outputDir,
+        string platform = "linux-x64",
+        bool includeStraySidecar = false,
+        bool nestAspireUnderSubdir = false)
+    {
+        Directory.CreateDirectory(outputDir);
+
+        var extension = "tar.gz";
+        var archivePath = Path.Combine(outputDir, $"aspire-cli-{platform}.{extension}");
+        var checksumPath = archivePath + ".sha512";
+
+        var contentDir = Path.Combine(outputDir, $"verify-content-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(contentDir);
+
+        try
+        {
+            // When nesting, the binary lives at <contentDir>/payload/aspire, mirroring
+            // archives whose producer wraps everything in a top-level directory.
+            var binaryDir = nestAspireUnderSubdir
+                ? Path.Combine(contentDir, "payload")
+                : contentDir;
+            Directory.CreateDirectory(binaryDir);
+
+            var binaryPath = Path.Combine(binaryDir, "aspire");
+            await File.WriteAllTextAsync(binaryPath, FakeVerifyAspireScript);
+            FileHelper.MakeExecutable(binaryPath);
+
+            if (includeStraySidecar)
+            {
+                // Per docs/specs/install-routes.md, per-RID archives must ship
+                // sidecar-free. The verifier rejects archives that contain a
+                // .aspire-install.json at the archive root.
+                var sidecarPath = Path.Combine(contentDir, ".aspire-install.json");
+                await File.WriteAllTextAsync(sidecarPath, "{\"source\":\"stray\"}");
+            }
+
+            await CreateTarGzAsync(contentDir, archivePath);
+
+            var hashHex = await ComputeSha512Async(archivePath);
+            await File.WriteAllTextAsync(checksumPath, hashHex);
+
+            return new FakeArchive(archivePath, checksumPath, hashHex);
+        }
+        finally
+        {
+            if (Directory.Exists(contentDir))
+            {
+                Directory.Delete(contentDir, recursive: true);
+            }
+        }
+    }
+
+    // Minimal aspire mock for verify-cli-archive.ps1. Handles:
+    //   aspire --version              -> print version, exit 0
+    //   aspire new aspire-starter --name <n> --output <dir> [--non-interactive] [--nologo]
+    //                                  -> mkdir "<dir>/<n>.AppHost", exit 0
+    // Anything else exits non-zero so unexpected verifier invocations surface as test failures.
+    private const string FakeVerifyAspireScript = """
+        #!/usr/bin/env bash
+        set -euo pipefail
+
+        if [[ "${1:-}" == "--version" ]]; then
+            echo "aspire mock v1.0"
+            exit 0
+        fi
+
+        if [[ "${1:-}" == "new" ]]; then
+            template="${2:-}"
+            shift 2 || true
+
+            name=""
+            output=""
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --name)   name="$2";   shift 2 ;;
+                    --output) output="$2"; shift 2 ;;
+                    *)        shift ;;
+                esac
+            done
+
+            if [[ "$template" != "aspire-starter" ]]; then
+                echo "Unsupported template: $template" >&2
+                exit 1
+            fi
+
+            mkdir -p "$output/$name.AppHost"
+            exit 0
+        fi
+
+        echo "Unsupported command: $*" >&2
+        exit 1
+
+        """;
+
     private static async Task CreateTarGzAsync(string contentDir, string archivePath)
     {
         // Use TarWriter manually with AttributesToSkip = 0 instead of

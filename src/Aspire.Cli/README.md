@@ -115,6 +115,7 @@ aspire docs search "redis"
 
 ## Additional documentation
 
+* [CLI output formats](../../docs/specs/cli-output-formats.md)
 * https://aspire.dev
 * https://learn.microsoft.com/microsoft/aspire
 

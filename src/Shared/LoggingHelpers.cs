@@ -37,6 +37,12 @@ internal static class LoggingHelpers
             ? $"{dashboardAuthority}/login?t={token}"
             : null;
 
+        if (loginUrl is not null)
+        {
+            // dotnet watch looks for this exact log message to launch the dashboard. Do not change it.
+            logger.LogInformation("Login to the dashboard at {LoginUrl}", loginUrl);
+        }
+
         var templateBuilder = new StringBuilder();
         var parameters = new List<object?>();
 
@@ -44,37 +50,41 @@ internal static class LoggingHelpers
             .Append("Aspire Dashboard").Append('\n')
             .Append('\n');
 
+        // The default .NET console logger indents the first line 6 characters because of the level.
+        // This prefix aligns the URLs under the dashboard title and makes them easier to read.
+        // In other logging layouts the prefix is just extra spaces, but it doesn't cause any real issues.
+        var prefix = "      ";
+
         if (dashboardAuthority is not null)
         {
-            templateBuilder.Append("Dashboard:    {DashboardUrl}").Append('\n');
+            templateBuilder.Append(prefix).Append("- Dashboard:  {DashboardUrl}").Append('\n');
             parameters.Add(dashboardAuthority);
         }
 
         if (loginUrl is not null)
         {
-            templateBuilder.Append("Login URL:    {LoginUrl}").Append('\n');
+            templateBuilder.Append(prefix).Append("- Login URL:  {LoginUrl}").Append('\n');
             parameters.Add(loginUrl);
         }
 
         if (otlpGrpcAuthority is not null)
         {
-            templateBuilder.Append("OTLP/gRPC:    {OtlpGrpcUrl}").Append('\n');
+            templateBuilder.Append(prefix).Append("- OTLP/gRPC:  {OtlpGrpcUrl}").Append('\n');
             parameters.Add(otlpGrpcAuthority);
         }
 
         if (otlpHttpAuthority is not null)
         {
-            templateBuilder.Append("OTLP/HTTP:    {OtlpHttpUrl}").Append('\n');
+            templateBuilder.Append(prefix).Append("- OTLP/HTTP:  {OtlpHttpUrl}").Append('\n');
             parameters.Add(otlpHttpAuthority);
         }
 
+        logger.LogInformation(templateBuilder.ToString(), parameters.ToArray());
+
         if (isContainer)
         {
-            templateBuilder.Append('\n');
-            templateBuilder.Append("URLs may need changes depending on how network access to the container is configured.").Append('\n');
+            logger.LogInformation("Dashboard is running in a container. Access the dashboard from the host using port forwarding.");
         }
-
-        logger.LogInformation(templateBuilder.ToString(), parameters.ToArray());
     }
 
     [Conditional("DEBUG")]

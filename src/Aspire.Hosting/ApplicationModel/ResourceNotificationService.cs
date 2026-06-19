@@ -828,6 +828,8 @@ public class ResourceNotificationService : IDisposable
 
             newState = UpdateIcons(resource, newState);
 
+            newState = UpdateDashboardVisibility(resource, newState);
+
             if (resource.TryGetAnnotationsOfType<ExcludeFromMcpAnnotation>(out _))
             {
                 newState = newState with
@@ -1064,7 +1066,7 @@ public class ResourceNotificationService : IDisposable
             else
             {
                 // Command already exists in snapshot. Update its state based on annotation callback.
-                var newState = annotation.UpdateState(new UpdateCommandStateContext { ResourceSnapshot = previousState, ServiceProvider = _serviceProvider });
+                var newState = annotation.UpdateState(new UpdateCommandStateContext { ResourceSnapshot = previousState, Services = _serviceProvider });
 
                 if (existingCommand.State != newState)
                 {
@@ -1107,16 +1109,14 @@ public class ResourceNotificationService : IDisposable
 
         static ResourceCommandSnapshot CreateCommandFromAnnotation(ResourceCommandAnnotation annotation, CustomResourceSnapshot previousState, IServiceProvider serviceProvider)
         {
-            var state = annotation.UpdateState(new UpdateCommandStateContext { ResourceSnapshot = previousState, ServiceProvider = serviceProvider });
+            var state = annotation.UpdateState(new UpdateCommandStateContext { ResourceSnapshot = previousState, Services = serviceProvider });
 
 #pragma warning disable CS0618 // Parameter is obsolete but still flowed for compatibility.
-#pragma warning disable ASPIREINTERACTION001 // Command arguments intentionally reuse the experimental interaction input model.
             return new ResourceCommandSnapshot(annotation.Name, state, annotation.DisplayName, annotation.DisplayDescription, annotation.Parameter, annotation.ConfirmationMessage, annotation.IconName, annotation.IconVariant, annotation.IsHighlighted)
             {
                 Arguments = annotation.Arguments,
                 Visibility = annotation.Visibility
             };
-#pragma warning restore ASPIREINTERACTION001
 #pragma warning restore CS0618
         }
     }
@@ -1147,6 +1147,31 @@ public class ResourceNotificationService : IDisposable
             IconName = newIconName,
             IconVariant = newIconVariant
         };
+    }
+
+    /// <summary>
+    /// Use dashboard visibility annotations to update resource snapshot.
+    /// </summary>
+    private static CustomResourceSnapshot UpdateDashboardVisibility(IResource resource, CustomResourceSnapshot previousState)
+    {
+        if (!resource.TryGetLastAnnotation<HiddenAnnotation>(out var annotation))
+        {
+            return previousState;
+        }
+
+        var isHidden = annotation.Behavior switch
+        {
+            HiddenBehavior.Always => true,
+            HiddenBehavior.OnCompletion => IsCompletionState(previousState.State?.Text)
+                && previousState.ExitCode is not null
+                && annotation.SuccessfulExitCodes.Contains(previousState.ExitCode.Value),
+            _ => previousState.IsHidden
+        };
+
+        return previousState with { IsHidden = isHidden };
+
+        static bool IsCompletionState(string? state) =>
+            state == KnownResourceStates.Finished || state == KnownResourceStates.Exited;
     }
 
     /// <summary>

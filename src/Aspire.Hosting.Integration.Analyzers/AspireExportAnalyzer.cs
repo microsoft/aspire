@@ -3,6 +3,7 @@
 
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.Analyzers.Infrastructure;
 using Microsoft.CodeAnalysis;
@@ -13,12 +14,13 @@ using Microsoft.CodeAnalysis.Operations;
 namespace Aspire.Hosting.Analyzers;
 
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
-public partial class AspireExportAnalyzer : DiagnosticAnalyzer
+internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
 {
     private const string RunSyncOnBackgroundThreadPropertyName = "RunSyncOnBackgroundThread";
     private const string ExposeMethodsPropertyName = "ExposeMethods";
     private const string ExposePropertiesPropertyName = "ExposeProperties";
     private const string MethodNamePropertyName = "MethodName";
+    private const string DescriptionPropertyName = "Description";
 
     // Matches: valid method name (camelCase identifier, may contain dots for namespacing)
     // Examples: addRedis, addContainer, Dictionary.set
@@ -154,8 +156,14 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
             SymbolKind.Method);
 
         context.RegisterSymbolAction(
-            c => AnalyzeNamedType(c, aspireExportAttribute, aspireExportIgnoreAttribute, capabilityIds, generatedMethodNames),
+            c => AnalyzeNamedType(c, wellKnownTypes, aspireExportAttribute, aspireExportIgnoreAttribute, capabilityIds, generatedMethodNames),
             SymbolKind.NamedType);
+
+        context.RegisterSymbolAction(
+            c => AnalyzeProperty(c, aspireExportAttribute),
+            SymbolKind.Property);
+
+        context.RegisterCompilationEndAction(c => ReportAssemblyExportDescriptions(c, aspireExportAttribute));
 
         // At the end of compilation, report duplicate export IDs
         context.RegisterCompilationEndAction(c => ReportDuplicateExports(c, exportsByKey));
@@ -165,6 +173,10 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         // Warn when exported builder methods invoke synchronous callback delegates inline. Deferred callbacks
         // that are stored for later execution are fine, and exports that opt into background-thread dispatch
         // are handled safely by the runtime.
+        // NOTE: This check only covers classic static `this`-parameter extension methods. C# 14 extension
+        // block instance members (method.IsExtensionMethod == false) are not analyzed here yet; missing the
+        // warning is non-blocking and never produces a false positive.
+        var inlineDelegateInvocationCache = new ConcurrentDictionary<ISymbol, ImmutableHashSet<int>>(SymbolEqualityComparer.Default);
         context.RegisterOperationBlockStartAction(c =>
         {
             if (c.OwningSymbol is not IMethodSymbol method ||
@@ -190,7 +202,13 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
 
             var reportedParameters = new ConcurrentDictionary<string, byte>(StringComparer.Ordinal);
             c.RegisterOperationAction(
-                oc => AnalyzeInlineSynchronousDelegateInvocation(oc, method, synchronousDelegateParameters, reportedParameters),
+                oc => AnalyzeInlineSynchronousDelegateInvocation(
+                    oc,
+                    context.Compilation.Assembly,
+                    method,
+                    synchronousDelegateParameters,
+                    reportedParameters,
+                    inlineDelegateInvocationCache),
                 OperationKind.Invocation);
         });
     }
@@ -255,10 +273,15 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
 
         var attributeSyntax = exportAttribute.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken);
         var location = attributeSyntax?.GetLocation() ?? method.Locations.FirstOrDefault() ?? Location.None;
+        AnalyzeExportDescription(context, exportAttribute, location);
+
         var containingTypeExportAttribute = GetContainingTypeAspireExportAttribute(method.ContainingType, aspireExportAttribute);
 
-        // Rule 1: Method must be static
-        if (!method.IsStatic && containingTypeExportAttribute is null)
+        // Rule 1: Method must be static.
+        // C# 14 extension block members (declared inside `extension(receiver) { ... }`) are surfaced
+        // by Roslyn as non-static instance members even though the compiler lowers them to static
+        // extension methods in IL. They are valid [AspireExport] targets, so they must not trip this rule.
+        if (!method.IsStatic && !IsExtensionBlockMember(method) && containingTypeExportAttribute is null)
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 Diagnostics.s_exportMethodMustBeStatic,
@@ -283,9 +306,17 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         var normalizedExportId = isExportIdFormatValid ? exportId : null;
         var effectiveExportId = normalizedExportId ?? derivedExportId;
 
+        // Build the effective parameter list used by the receiver/target-type rules below. For classic
+        // `this`-parameter extension methods (and ordinary methods) this is method.Parameters. For C# 14
+        // extension block instance members the receiver lives on the extension container rather than in
+        // Parameters, so GetEffectiveExportParameters prepends it to produce the same [receiver, ...args]
+        // shape, letting the rules treat both extension syntaxes identically.
+        var effectiveParameters = GetEffectiveExportParameters(method);
+
         // Track the runtime capability ID for static exports. Instance exports are tracked from
         // their containing type so ExposeMethods/ExposeProperties semantics match the scanner.
-        if (method.IsStatic && effectiveExportId is not null)
+        // Extension block instance members are static-equivalent exports, so they are tracked here too.
+        if (IsStaticForExport(method) && effectiveExportId is not null)
         {
             AddCapabilityExport(
                 capabilityIds,
@@ -311,7 +342,7 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         // so only the actionable ASPIREEXPORT009 should appear.
         if (isExportIdFormatValid &&
             string.Equals(exportId, derivedExportId, StringComparison.Ordinal) &&
-            !HasConcreteResourceBuilderTargetParameter(method, wellKnownTypes))
+            !HasConcreteResourceBuilderTargetParameter(method, effectiveParameters, wellKnownTypes))
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 Diagnostics.s_redundantExportId,
@@ -351,9 +382,9 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         }
 
         // Rule 6 (ASPIREEXPORT007): Track export for duplicate detection
-        if (effectiveExportId is not null && method.IsExtensionMethod && method.Parameters.Length > 0)
+        if (effectiveExportId is not null && IsExtensionLike(method) && effectiveParameters.Length > 0)
         {
-            var targetType = method.Parameters[0].Type;
+            var targetType = effectiveParameters[0].Type;
             var targetTypeName = targetType.ToDisplayString();
             var key = (effectiveExportId, targetTypeName);
             var bag = exportsByKey.GetOrAdd(key, _ => new ConcurrentBag<(IMethodSymbol, Location)>());
@@ -361,9 +392,9 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         }
 
         // Rule 7 (ASPIREEXPORT009): Warn when export name may collide across integrations
-        if (effectiveExportId is not null && method.IsExtensionMethod && method.Parameters.Length > 0)
+        if (effectiveExportId is not null && IsExtensionLike(method) && effectiveParameters.Length > 0)
         {
-            AnalyzeExportNameUniqueness(context, method, effectiveExportId, wellKnownTypes, location);
+            AnalyzeExportNameUniqueness(context, method, effectiveParameters, effectiveExportId, wellKnownTypes, location);
         }
 
         // Rule 8 (ASPIREEXPORT012): Check that callback parameter types (Action<T>/Func<T>) have [AspireExport]
@@ -372,14 +403,80 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
 
     private static void AnalyzeNamedType(
         SymbolAnalysisContext context,
+        WellKnownTypes wellKnownTypes,
         INamedTypeSymbol aspireExportAttribute,
         INamedTypeSymbol? aspireExportIgnoreAttribute,
         ConcurrentDictionary<string, ConcurrentBag<CapabilityExport>> capabilityIds,
         ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>> generatedMethodNames)
     {
         var type = (INamedTypeSymbol)context.Symbol;
+        AnalyzeDtoType(type, wellKnownTypes, aspireExportIgnoreAttribute, context);
+
         var typeExportAttribute = GetContainingTypeAspireExportAttribute(type, aspireExportAttribute);
+        if (typeExportAttribute is not null)
+        {
+            var location = GetAttributeLocation(typeExportAttribute, context.CancellationToken) ?? type.Locations.FirstOrDefault() ?? Location.None;
+            AnalyzeExportDescription(context, typeExportAttribute, location);
+        }
+
         AnalyzeContextType(type, typeExportAttribute, context.Compilation.Assembly.Identity.Name, aspireExportAttribute, aspireExportIgnoreAttribute, capabilityIds, generatedMethodNames, context.CancellationToken);
+    }
+
+    private static void AnalyzeProperty(SymbolAnalysisContext context, INamedTypeSymbol aspireExportAttribute)
+    {
+        var property = (IPropertySymbol)context.Symbol;
+        var propertyExportAttribute = GetAspireExportAttribute(property, aspireExportAttribute);
+        if (propertyExportAttribute is null)
+        {
+            return;
+        }
+
+        var location = GetAttributeLocation(propertyExportAttribute, context.CancellationToken) ?? property.Locations.FirstOrDefault() ?? Location.None;
+        AnalyzeExportDescription(context, propertyExportAttribute, location);
+    }
+
+    private static void AnalyzeDtoType(
+        INamedTypeSymbol type,
+        WellKnownTypes wellKnownTypes,
+        INamedTypeSymbol? aspireExportIgnoreAttribute,
+        SymbolAnalysisContext context)
+    {
+        if (!HasAspireDtoAttribute(type))
+        {
+            return;
+        }
+
+        foreach (var property in GetInstanceProperties(type))
+        {
+            if (IsMutableCollectionType(property.Type, wellKnownTypes) &&
+                property.SetMethod is null &&
+                !property.IsStatic &&
+                property.GetMethod?.DeclaredAccessibility == Accessibility.Public &&
+                !HasAspireExportIgnoreAttribute(property, aspireExportIgnoreAttribute))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    Diagnostics.s_dtoMutableCollectionPropertyMustBeInitSettable,
+                    property.Locations.FirstOrDefault() ?? type.Locations.FirstOrDefault() ?? Location.None,
+                    $"{type.Name}.{property.Name}"));
+            }
+        }
+    }
+
+    private static void ReportAssemblyExportDescriptions(CompilationAnalysisContext context, INamedTypeSymbol aspireExportAttribute)
+    {
+        foreach (var attribute in context.Compilation.Assembly.GetAttributes())
+        {
+            if (!SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, aspireExportAttribute))
+            {
+                continue;
+            }
+
+            var location = GetAttributeLocation(attribute, context.CancellationToken) ?? Location.None;
+            if (HasNamedArgument(attribute, DescriptionPropertyName))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(Diagnostics.s_descriptionShouldUseXmlDocs, location));
+            }
+        }
     }
 
     private static void AnalyzeAssemblyExportedTypes(
@@ -564,7 +661,12 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         INamedTypeSymbol aspireExportAttribute,
         HashSet<ITypeSymbol> currentAssemblyExportedTypes)
     {
-        // Only check public static extension methods
+        // Only check public static extension methods.
+        // C# 14 extension block instance members are intentionally not covered here yet: they surface as
+        // non-static (IsStatic == false) and IsExtensionMethod == false, so the guard below skips them.
+        // ASPIREEXPORT008 only nudges authors to add a missing [AspireExport], so the gap is non-blocking
+        // (it can cause a missing suggestion, never a false positive). This parallels the ASPIREEXPORT010
+        // limitation; expand coverage here only if extension-block authors need the same nudge.
         if (!method.IsStatic || !method.IsExtensionMethod || method.DeclaredAccessibility != Accessibility.Public)
         {
             return;
@@ -599,21 +701,21 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
     /// <c>IResourceBuilder&lt;ConcreteType&gt;</c> parameter), independently of what the export ID is.
     /// Used to suppress ASPIREEXPORT011 when ASPIREEXPORT009 would fire for the same method.
     /// </summary>
-    private static bool HasConcreteResourceBuilderTargetParameter(IMethodSymbol method, WellKnownTypes wellKnownTypes)
+    private static bool HasConcreteResourceBuilderTargetParameter(IMethodSymbol method, ImmutableArray<IParameterSymbol> effectiveParameters, WellKnownTypes wellKnownTypes)
     {
-        if (!method.IsExtensionMethod || method.Parameters.Length < 2)
+        if (!IsExtensionLike(method) || effectiveParameters.Length < 2)
         {
             return false;
         }
 
-        if (!IsOpenGenericResourceBuilder(method.Parameters[0].Type, wellKnownTypes))
+        if (!IsOpenGenericResourceBuilder(effectiveParameters[0].Type, wellKnownTypes))
         {
             return false;
         }
 
-        for (var i = 1; i < method.Parameters.Length; i++)
+        for (var i = 1; i < effectiveParameters.Length; i++)
         {
-            if (GetConcreteResourceBuilderTypeName(method.Parameters[i].Type, wellKnownTypes) is not null)
+            if (GetConcreteResourceBuilderTypeName(effectiveParameters[i].Type, wellKnownTypes) is not null)
             {
                 return true;
             }
@@ -625,13 +727,14 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
     private static void AnalyzeExportNameUniqueness(
         SymbolAnalysisContext context,
         IMethodSymbol method,
+        ImmutableArray<IParameterSymbol> effectiveParameters,
         string exportId,
         WellKnownTypes wellKnownTypes,
         Location location)
     {
         // Only applies to extension methods where the first param is IResourceBuilder<T>
         // with T being an open generic type parameter (constrained to IResource)
-        var firstParamType = method.Parameters[0].Type;
+        var firstParamType = effectiveParameters[0].Type;
         if (!IsOpenGenericResourceBuilder(firstParamType, wellKnownTypes))
         {
             return;
@@ -640,9 +743,9 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         // Look for a parameter (beyond the first) that is IResourceBuilder<ConcreteType>
         // where ConcreteType is a specific resource type (not a type parameter)
         string? concreteTargetTypeName = null;
-        for (var i = 1; i < method.Parameters.Length; i++)
+        for (var i = 1; i < effectiveParameters.Length; i++)
         {
-            concreteTargetTypeName = GetConcreteResourceBuilderTypeName(method.Parameters[i].Type, wellKnownTypes);
+            concreteTargetTypeName = GetConcreteResourceBuilderTypeName(effectiveParameters[i].Type, wellKnownTypes);
             if (concreteTargetTypeName is not null)
             {
                 break;
@@ -793,35 +896,277 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
 
     private static void AnalyzeInlineSynchronousDelegateInvocation(
         OperationAnalysisContext context,
+        IAssemblySymbol assembly,
         IMethodSymbol method,
         IReadOnlyDictionary<string, IParameterSymbol> synchronousDelegateParameters,
-        ConcurrentDictionary<string, byte> reportedParameters)
+        ConcurrentDictionary<string, byte> reportedParameters,
+        ConcurrentDictionary<ISymbol, ImmutableHashSet<int>> inlineDelegateInvocationCache)
     {
         var invocation = (IInvocationOperation)context.Operation;
 
-        if (invocation.TargetMethod.MethodKind != MethodKind.DelegateInvoke ||
-            invocation.Syntax is not InvocationExpressionSyntax invocationSyntax ||
+        if (invocation.Syntax is not InvocationExpressionSyntax invocationSyntax ||
             IsInsideNestedCallback(invocationSyntax))
         {
             return;
         }
 
-        var parameterName = GetInvokedDelegateParameterName(invocationSyntax);
-        if (parameterName is null || !synchronousDelegateParameters.TryGetValue(parameterName, out var parameter))
+        if (invocation.TargetMethod.MethodKind == MethodKind.DelegateInvoke)
         {
+            var parameterName = GetInvokedDelegateParameterName(invocationSyntax);
+            if (parameterName is null || !synchronousDelegateParameters.TryGetValue(parameterName, out var parameter))
+            {
+                return;
+            }
+
+            ReportInlineSynchronousDelegateInvocation(context, method, reportedParameters, invocationSyntax.GetLocation(), parameter);
             return;
         }
 
-        if (!reportedParameters.TryAdd(parameterName, default))
+        foreach (var argument in invocation.Arguments)
         {
-            return;
+            if (argument.Parameter is null ||
+                GetReferencedParameter(argument.Value) is not { } referencedParameter ||
+                !synchronousDelegateParameters.TryGetValue(referencedParameter.Name, out var callbackParameter))
+            {
+                continue;
+            }
+
+            var targetInvokedParameters = GetInlineInvokedDelegateParameterOrdinals(
+                invocation.TargetMethod,
+                assembly,
+                inlineDelegateInvocationCache,
+                new HashSet<ISymbol>(SymbolEqualityComparer.Default),
+                context.CancellationToken);
+
+            if (!targetInvokedParameters.Contains(argument.Parameter.Ordinal))
+            {
+                continue;
+            }
+
+            ReportInlineSynchronousDelegateInvocation(context, method, reportedParameters, invocationSyntax.GetLocation(), callbackParameter);
+        }
+    }
+
+    private static void ReportInlineSynchronousDelegateInvocation(
+        OperationAnalysisContext context,
+        IMethodSymbol method,
+        ConcurrentDictionary<string, byte> reportedParameters,
+        Location location,
+        IParameterSymbol parameter)
+    {
+        if (reportedParameters.TryAdd(parameter.Name, default))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                Diagnostics.s_exportedSyncDelegateInvokedInline,
+                location,
+                method.Name,
+                parameter.Name));
+        }
+    }
+
+    private static ImmutableHashSet<int> GetInlineInvokedDelegateParameterOrdinals(
+        IMethodSymbol method,
+        IAssemblySymbol assembly,
+        ConcurrentDictionary<ISymbol, ImmutableHashSet<int>> cache,
+        HashSet<ISymbol> visiting,
+        CancellationToken cancellationToken)
+    {
+        if (cache.TryGetValue(method, out var cached))
+        {
+            return cached;
         }
 
-        context.ReportDiagnostic(Diagnostic.Create(
-            Diagnostics.s_exportedSyncDelegateInvokedInline,
-            invocationSyntax.GetLocation(),
-            method.Name,
-            parameter.Name));
+        if (!SymbolEqualityComparer.Default.Equals(method.ContainingAssembly, assembly) ||
+            method.DeclaringSyntaxReferences.Length == 0 ||
+            !visiting.Add(method))
+        {
+            return ImmutableHashSet<int>.Empty;
+        }
+
+        try
+        {
+            var result = ComputeInlineInvokedDelegateParameterOrdinals(method, assembly, cache, visiting, cancellationToken);
+            cache.TryAdd(method, result);
+            return result;
+        }
+        finally
+        {
+            visiting.Remove(method);
+        }
+    }
+
+    private static ImmutableHashSet<int> ComputeInlineInvokedDelegateParameterOrdinals(
+        IMethodSymbol method,
+        IAssemblySymbol assembly,
+        ConcurrentDictionary<ISymbol, ImmutableHashSet<int>> cache,
+        HashSet<ISymbol> visiting,
+        CancellationToken cancellationToken)
+    {
+        var synchronousDelegateParameterOrdinals = method.Parameters
+            .Where(IsSynchronousDelegateParameter)
+            .Select(static p => p.Ordinal)
+            .ToImmutableHashSet();
+
+        if (synchronousDelegateParameterOrdinals.Count == 0)
+        {
+            return ImmutableHashSet<int>.Empty;
+        }
+
+        var syntax = method.DeclaringSyntaxReferences[0].GetSyntax(cancellationToken);
+        var result = ImmutableHashSet.CreateBuilder<int>();
+
+        foreach (var invocationSyntax in syntax.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            if (IsInsideNestedCallback(invocationSyntax))
+            {
+                continue;
+            }
+
+            var parameterName = GetInvokedDelegateParameterName(invocationSyntax);
+            var parameter = parameterName is null
+                ? null
+                : method.Parameters.FirstOrDefault(p => p.Name == parameterName);
+            if (parameter is not null && synchronousDelegateParameterOrdinals.Contains(parameter.Ordinal))
+            {
+                result.Add(parameter.Ordinal);
+                continue;
+            }
+
+            foreach (var targetMethod in ResolveSameTypeMethodInvocations(method, invocationSyntax))
+            {
+                foreach (var argument in invocationSyntax.ArgumentList.Arguments)
+                {
+                    if (GetReferencedParameterName(argument.Expression) is not { } referencedParameterName)
+                    {
+                        continue;
+                    }
+
+                    var referencedParameter = method.Parameters.FirstOrDefault(p => p.Name == referencedParameterName);
+                    var targetParameterOrdinal = GetTargetParameterOrdinal(targetMethod, argument, invocationSyntax.ArgumentList);
+
+                    if (referencedParameter is null ||
+                        targetParameterOrdinal is null ||
+                        !synchronousDelegateParameterOrdinals.Contains(referencedParameter.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    var targetInvokedParameters = GetInlineInvokedDelegateParameterOrdinals(
+                        targetMethod,
+                        assembly,
+                        cache,
+                        visiting,
+                        cancellationToken);
+
+                    if (targetInvokedParameters.Contains(targetParameterOrdinal.Value))
+                    {
+                        result.Add(referencedParameter.Ordinal);
+                    }
+                }
+            }
+        }
+
+        return result.ToImmutable();
+    }
+
+    private static IParameterSymbol? GetReferencedParameter(IOperation operation)
+    {
+        while (operation is IConversionOperation conversion)
+        {
+            operation = conversion.Operand;
+        }
+
+        return operation is IParameterReferenceOperation parameterReference
+            ? parameterReference.Parameter
+            : null;
+    }
+
+    private static IEnumerable<IMethodSymbol> ResolveSameTypeMethodInvocations(IMethodSymbol containingMethod, InvocationExpressionSyntax invocation)
+    {
+        // Analyzer rules prohibit fetching a SemanticModel for arbitrary helper syntax here, so helper
+        // summaries use the exact operation symbol at the export boundary and bounded syntax matching
+        // for subsequent calls inside the same helper type.
+        var methodName = invocation.Expression switch
+        {
+            IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+            MemberAccessExpressionSyntax memberAccess => memberAccess.Name.Identifier.ValueText,
+            _ => null
+        };
+
+        if (methodName is null || containingMethod.ContainingType is null)
+        {
+            yield break;
+        }
+
+        foreach (var member in containingMethod.ContainingType.GetMembers(methodName).OfType<IMethodSymbol>())
+        {
+            if (member.DeclaringSyntaxReferences.Length == 0 ||
+                !CouldAcceptArguments(member, invocation.ArgumentList))
+            {
+                continue;
+            }
+
+            yield return member;
+        }
+    }
+
+    private static bool CouldAcceptArguments(IMethodSymbol targetMethod, ArgumentListSyntax argumentList)
+    {
+        var positionalArgumentCount = 0;
+        foreach (var argument in argumentList.Arguments)
+        {
+            if (argument.NameColon is not null)
+            {
+                if (!targetMethod.Parameters.Any(p => p.Name == argument.NameColon.Name.Identifier.ValueText))
+                {
+                    return false;
+                }
+
+                continue;
+            }
+
+            positionalArgumentCount++;
+        }
+
+        if (positionalArgumentCount > targetMethod.Parameters.Length)
+        {
+            return false;
+        }
+
+        var suppliedNames = new HashSet<string>(argumentList.Arguments
+            .Where(static a => a.NameColon is not null)
+            .Select(static a => a.NameColon!.Name.Identifier.ValueText),
+            StringComparer.Ordinal);
+
+        return targetMethod.Parameters
+            .Where(static p => !p.IsOptional)
+            .All(p => p.Ordinal < positionalArgumentCount || suppliedNames.Contains(p.Name));
+    }
+
+    private static int? GetTargetParameterOrdinal(IMethodSymbol targetMethod, ArgumentSyntax argument, ArgumentListSyntax argumentList)
+    {
+        if (argument.NameColon is not null)
+        {
+            var parameter = targetMethod.Parameters.FirstOrDefault(p => p.Name == argument.NameColon.Name.Identifier.ValueText);
+            return parameter?.Ordinal;
+        }
+
+        var ordinal = argumentList.Arguments.IndexOf(argument);
+        return ordinal >= 0 && ordinal < targetMethod.Parameters.Length
+            ? ordinal
+            : null;
+    }
+
+    private static string? GetReferencedParameterName(ExpressionSyntax expression)
+    {
+        while (expression is ParenthesizedExpressionSyntax parenthesized)
+        {
+            expression = parenthesized.Expression;
+        }
+
+        return expression is IdentifierNameSyntax identifier
+            ? identifier.Identifier.ValueText
+            : null;
     }
 
     private static bool IsInsideNestedCallback(InvocationExpressionSyntax invocation)
@@ -952,12 +1297,13 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
 
     private static string GetGeneratedTargetTypeName(IMethodSymbol method)
     {
-        if (!method.IsExtensionMethod || method.Parameters.Length == 0)
+        var effectiveParameters = GetEffectiveExportParameters(method);
+        if (!IsExtensionLike(method) || effectiveParameters.Length == 0)
         {
             return "<global>";
         }
 
-        var targetType = method.Parameters[0].Type;
+        var targetType = effectiveParameters[0].Type;
         var targetTypeName = targetType.ToDisplayString();
         if (targetType is not INamedTypeSymbol { IsGenericType: true } namedTargetType)
         {
@@ -1451,6 +1797,27 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         return null;
     }
 
+    private static void AnalyzeExportDescription(SymbolAnalysisContext context, AttributeData exportAttribute, Location location)
+    {
+        if (HasNamedArgument(exportAttribute, DescriptionPropertyName))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(Diagnostics.s_descriptionShouldUseXmlDocs, location));
+        }
+    }
+
+    private static bool HasNamedArgument(AttributeData exportAttribute, string argumentName)
+    {
+        foreach (var namedArgument in exportAttribute.NamedArguments)
+        {
+            if (namedArgument.Key == argumentName)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static AttributeData? GetAspireExportAttribute(ISymbol symbol, INamedTypeSymbol aspireExportAttribute)
     {
         foreach (var attr in symbol.GetAttributes())
@@ -1492,6 +1859,118 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         return type.ContainingNamespace.IsGlobalNamespace
             ? assemblyName
             : type.ContainingNamespace.ToDisplayString();
+    }
+
+    // C# 14 introduced "extension blocks" (extension members). A method declared inside an
+    // `extension(receiver) { ... }` block is surfaced by Roslyn as a non-static instance member whose
+    // ContainingType has IsExtension == true and exposes the receiver via ExtensionParameter. These
+    // members are semantically equivalent to classic static `this`-parameter extension methods (the
+    // compiler lowers them to exactly that in IL), so [AspireExport] is valid on them and
+    // ASPIREEXPORT001 ("must be static") must not fire.
+    //
+    // This analyzer compiles against Roslyn 4.8, which predates extension blocks, so
+    // INamedTypeSymbol.IsExtension / INamedTypeSymbol.ExtensionParameter are not available at compile
+    // time. They DO exist at runtime when the analyzer is loaded into a newer Roslyn host
+    // (.NET 10 SDK / VS 17.14+) that is able to compile this syntax in the first place. We therefore
+    // probe for them via reflection and treat their absence as "not an extension" (older hosts can
+    // never produce extension-block members).
+    // See: https://learn.microsoft.com/dotnet/csharp/whats-new/csharp-14#extension-members
+    //
+    // The cached members are MethodInfo getters (not delegates closing over INamedTypeSymbol) so the
+    // analyzer does not store per-compilation symbol data in its fields (RS1008).
+    private static readonly MethodInfo? s_isExtensionGetter = typeof(INamedTypeSymbol).GetProperty("IsExtension")?.GetGetMethod();
+    private static readonly MethodInfo? s_extensionParameterGetter = typeof(INamedTypeSymbol).GetProperty("ExtensionParameter")?.GetGetMethod();
+
+    private static bool IsExtensionContainer(INamedTypeSymbol type)
+    {
+        if (s_isExtensionGetter is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            return s_isExtensionGetter.Invoke(type, null) is true;
+        }
+        catch (TargetInvocationException)
+        {
+            return false;
+        }
+    }
+
+    private static IParameterSymbol? GetExtensionParameter(INamedTypeSymbol type)
+    {
+        if (s_extensionParameterGetter is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return s_extensionParameterGetter.Invoke(type, null) as IParameterSymbol;
+        }
+        catch (TargetInvocationException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Returns true when the method is an instance member declared inside a C# 14 extension block
+    /// (e.g. <c>extension(IResourceBuilder&lt;T&gt; builder) { public ... Method(...) { } }</c>).
+    /// Such members are equivalent to classic static extension methods and are valid AspireExport targets.
+    /// </summary>
+    private static bool IsExtensionBlockMember(IMethodSymbol method)
+    {
+        return !method.IsStatic &&
+            method.ContainingType is { } containingType &&
+            IsExtensionContainer(containingType) &&
+            GetExtensionParameter(containingType) is not null;
+    }
+
+    /// <summary>
+    /// True when the method participates in ATS as an extension-style export: either a classic static
+    /// <c>this</c>-parameter extension method, or a C# 14 extension block instance member.
+    /// </summary>
+    private static bool IsExtensionLike(IMethodSymbol method)
+    {
+        return method.IsExtensionMethod || IsExtensionBlockMember(method);
+    }
+
+    /// <summary>
+    /// True when the method is treated as a static export for capability/generated-name tracking.
+    /// Extension block instance members are static-equivalent (lowered to static extension methods in IL).
+    /// </summary>
+    private static bool IsStaticForExport(IMethodSymbol method)
+    {
+        return method.IsStatic || IsExtensionBlockMember(method);
+    }
+
+    /// <summary>
+    /// Returns the parameter list used by the receiver/target-type export rules. For classic extension
+    /// methods and ordinary methods this is <see cref="IMethodSymbol.Parameters"/> (the receiver, if any,
+    /// is the first parameter). For C# 14 extension block instance members the receiver lives on the
+    /// extension container rather than in <c>Parameters</c>, so it is prepended to produce the same
+    /// <c>[receiver, ...declaredParameters]</c> shape as a classic extension method.
+    /// </summary>
+    private static ImmutableArray<IParameterSymbol> GetEffectiveExportParameters(IMethodSymbol method)
+    {
+        if (GetExtensionBlockReceiver(method) is { } receiver)
+        {
+            return method.Parameters.Insert(0, receiver);
+        }
+
+        return method.Parameters;
+    }
+
+    private static IParameterSymbol? GetExtensionBlockReceiver(IMethodSymbol method)
+    {
+        if (method.IsStatic || method.ContainingType is not { } containingType || !IsExtensionContainer(containingType))
+        {
+            return null;
+        }
+
+        return GetExtensionParameter(containingType);
     }
 
     private static string GetMethodDisplayString(IMethodSymbol method)
@@ -1960,6 +2439,14 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         }
 
         return false;
+    }
+
+    private static bool IsMutableCollectionType(ITypeSymbol type, WellKnownTypes wellKnownTypes)
+    {
+        return TryMatchGenericType(type, wellKnownTypes, WellKnownTypeData.WellKnownType.System_Collections_Generic_Dictionary_2) ||
+            TryMatchGenericType(type, wellKnownTypes, WellKnownTypeData.WellKnownType.System_Collections_Generic_IDictionary_2) ||
+            TryMatchGenericType(type, wellKnownTypes, WellKnownTypeData.WellKnownType.System_Collections_Generic_List_1) ||
+            TryMatchGenericType(type, wellKnownTypes, WellKnownTypeData.WellKnownType.System_Collections_Generic_IList_1);
     }
 
     private static bool IsResourceType(ITypeSymbol type, WellKnownTypes wellKnownTypes)

@@ -303,6 +303,7 @@ public sealed class TelemetryLimitOptions
     public int MaxAttributeCount { get; set; } = 128;
     public int MaxAttributeLength { get; set; } = int.MaxValue;
     public int MaxSpanEventCount { get; set; } = int.MaxValue;
+    public int MaxResourceCount { get; set; } = 10_000;
 }
 
 public sealed class UIOptions
@@ -402,6 +403,7 @@ public sealed class DebugSessionOptions
 
     public int? Port { get; set; }
     public string? Token { get; set; }
+    public string? DcpInstanceId { get; set; }
     public string? ServerCertificate { get; set; }
     public bool? TelemetryOptOut { get; set; }
 

@@ -11,6 +11,8 @@ description: |
   comments on the original PR with a link to the draft PR (or a "no docs
   needed" message).
 
+max-daily-ai-credits: -1
+
 on:
   pull_request:
     types: [closed]
@@ -63,6 +65,7 @@ permissions:
   contents: read
   pull-requests: read
   issues: read
+  copilot-requests: write
 
 network:
   allowed:
@@ -1173,7 +1176,7 @@ the single best fit:
 | `internal_refactor` | The change touches `src/` but introduces no new or changed public types, methods, options, or strings. The PR title and body confirm this is purely internal. |
 | `formatting_or_comment_only` | Pure typo fix, formatting, or code-comment-only change with no behavioral effect. |
 | `bug_fix_restores_documented_behavior` | A bug fix that brings the implementation back in line with already-documented behavior. The docs already describe the intended behavior — the bug was the discrepancy. |
-| `agent_or_skill_content` | Only files under `.agents/` or `.github/skills/` changed (agent / skill content does not ship to `microsoft/aspire.dev`). |
+| `agent_or_skill_content` | Only files under `.agents/` changed (agent / skill content does not ship to `microsoft/aspire.dev`). |
 
 If the change does not match exactly one of these categories, draft the
 docs PR.

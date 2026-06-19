@@ -135,8 +135,9 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
         FileInfo? nugetConfigFile,
         CancellationToken cancellationToken)
     {
-        // Ensure the bundle is extracted and get the layout in a single call
-        var layout = await _bundleService.EnsureExtractedAndGetLayoutAsync(cancellationToken).ConfigureAwait(false);
+        // Ensure the bundle is extracted and lease the version before launching aspire-managed.
+        using var layoutLease = await _bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "nuget-search", cancellationToken).ConfigureAwait(false);
+        var layout = layoutLease?.Layout;
         if (layout is null)
         {
             throw new InvalidOperationException("Bundle layout not found. Cannot perform NuGet search in bundle mode.");
@@ -185,10 +186,14 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
         _logger.LogDebug("NuGet search args: {Args}", string.Join(" ", args));
         _logger.LogDebug("Working directory: {WorkingDir}", workingDirectory.FullName);
 
+        var environmentVariables = new Dictionary<string, string>();
+        layoutLease?.AddEnvironment(environmentVariables);
+
         var (exitCode, output, error) = await _layoutProcessRunner.RunAsync(
             managedPath,
             args,
             workingDirectory: workingDirectory.FullName,
+            environmentVariables: environmentVariables,
             ct: cancellationToken).ConfigureAwait(false);
 
         // Log stderr output (verbose info from NuGetHelper)

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using Aspire.Cli.Bundles;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Utils;
@@ -47,19 +48,22 @@ internal sealed class BundleNuGetService : INuGetService
     private readonly IFeatures _features;
     private readonly CliExecutionContext _executionContext;
     private readonly ILogger<BundleNuGetService> _logger;
+    private readonly IBundleService? _bundleService;
 
     public BundleNuGetService(
         ILayoutDiscovery layoutDiscovery,
         LayoutProcessRunner layoutProcessRunner,
         IFeatures features,
         CliExecutionContext executionContext,
-        ILogger<BundleNuGetService> logger)
+        ILogger<BundleNuGetService> logger,
+        IBundleService? bundleService = null)
     {
         _layoutDiscovery = layoutDiscovery;
         _layoutProcessRunner = layoutProcessRunner;
         _features = features;
         _executionContext = executionContext;
         _logger = logger;
+        _bundleService = bundleService;
     }
 
     public async Task<string> RestorePackagesAsync(
@@ -73,7 +77,10 @@ internal sealed class BundleNuGetService : INuGetService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workingDirectory);
 
-        var layout = _layoutDiscovery.DiscoverLayout();
+        using var layoutLease = _bundleService is null
+            ? null
+            : await _bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "nuget-restore", ct).ConfigureAwait(false);
+        var layout = layoutLease?.Layout ?? _layoutDiscovery.DiscoverLayout();
         if (layout is null)
         {
             throw new InvalidOperationException("Bundle layout not found. Cannot perform NuGet restore in bundle mode.");
@@ -164,10 +171,18 @@ internal sealed class BundleNuGetService : INuGetService
 
         _logger.LogDebug("Restoring {Count} packages", packageList.Count);
         _logger.LogDebug("aspire-managed path: {ManagedPath}", managedPath);
-        _logger.LogDebug("NuGet restore args: {Args}", string.Join(" ", restoreArgs));
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            // Build a redacted copy of the args specifically for the log line so user-supplied
+            // credentialed feeds (e.g., `https://user:pat@host/v3/index.json`, SAS-token URLs) do
+            // not flow to the debug log alongside the rest of the restore invocation. The
+            // original `restoreArgs` list is still passed verbatim to the process below.
+            _logger.LogDebug("NuGet restore args: {Args}", string.Join(" ", BuildRedactedArgsForLog(restoreArgs)));
+        }
 
         var environmentVariables = new Dictionary<string, string>();
         NuGetSignatureVerificationEnabler.Apply(environmentVariables, _features, _executionContext);
+        layoutLease?.AddEnvironment(environmentVariables);
 
         var (exitCode, output, error) = await _layoutProcessRunner.RunAsync(
             managedPath,
@@ -251,6 +266,25 @@ internal sealed class BundleNuGetService : INuGetService
             logger.LogDebug(ex, "Cached package manifest {ManifestPath} is invalid and will be regenerated.", manifestPath);
             return false;
         }
+    }
+
+    // Returns a redacted copy of the restore args suitable for debug logging. Replaces the value
+    // immediately following each `--source` token with the credential-safe form from
+    // PackageSourceRedactor. Built defensively to handle repeated `--source` flags and a missing
+    // trailing value at the end of the args list.
+    private static IReadOnlyList<string> BuildRedactedArgsForLog(IReadOnlyList<string> args)
+    {
+        var redacted = new List<string>(args.Count);
+        for (var i = 0; i < args.Count; i++)
+        {
+            redacted.Add(args[i]);
+            if (string.Equals(args[i], "--source", StringComparison.Ordinal) && i + 1 < args.Count)
+            {
+                redacted.Add(PackageSourceRedactor.RedactForDisplay(args[++i]));
+            }
+        }
+
+        return redacted;
     }
 
     internal static string ComputePackageHash(

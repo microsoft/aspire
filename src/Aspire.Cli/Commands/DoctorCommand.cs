@@ -3,12 +3,12 @@
 
 using System.CommandLine;
 using System.Globalization;
-using Aspire.Cli.Configuration;
+using Aspire.Cli.Acquisition;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils.EnvironmentChecker;
+using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
@@ -17,45 +17,79 @@ internal sealed class DoctorCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.ToolsAndConfiguration;
 
+    // The cli-version environment check already surfaces "newer version available"
+    // information directly inside `checks[]` with structured metadata. The trailing
+    // BaseCommand-driven update banner would print a second, less-structured copy on
+    // stderr — pure duplication, plus noise for JSON consumers. Matches the convention
+    // already used by other --format json commands (ApiGet, ApiList, DocsSearch, DocsList).
+
     private readonly IEnvironmentChecker _environmentChecker;
+    private readonly IInstallationDiscovery _installationDiscovery;
+    private readonly WingetFirstRunProbe _wingetFirstRunProbe;
     private readonly IAnsiConsole _ansiConsole;
+    private readonly ILogger<DoctorCommand> _logger;
     private static readonly Option<OutputFormat> s_formatOption = new("--format")
     {
         Description = DoctorCommandStrings.JsonOptionDescription
     };
+    private static readonly Option<bool> s_selfOption = new("--self")
+    {
+        Hidden = true,
+    };
 
     public DoctorCommand(
         IEnvironmentChecker environmentChecker,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        IInteractionService interactionService,
+        IInstallationDiscovery installationDiscovery,
+        WingetFirstRunProbe wingetFirstRunProbe,
         IAnsiConsole ansiConsole,
-        AspireCliTelemetry telemetry)
-        : base("doctor", DoctorCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
+        ILogger<DoctorCommand> logger,
+        CommonCommandServices services)
+        : base("doctor", DoctorCommandStrings.Description, services)
     {
         _environmentChecker = environmentChecker;
+        _installationDiscovery = installationDiscovery;
+        _wingetFirstRunProbe = wingetFirstRunProbe;
         _ansiConsole = ansiConsole;
+        _logger = logger;
 
         Options.Add(s_formatOption);
+        Options.Add(s_selfOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var format = parseResult.GetValue(s_formatOption);
+        var selfOnly = parseResult.GetValue(s_selfOption);
+
+        if (selfOnly)
+        {
+            var self = InstallationInfoOutput.DescribeSelfSafely(_installationDiscovery, _logger);
+            if (format == OutputFormat.Json)
+            {
+                OutputJson([], self);
+            }
+            else
+            {
+                InstallationInfoOutput.OutputTable(_ansiConsole, self);
+            }
+            return CommandResult.Success();
+        }
+
+        var installationsTask = InstallationInfoOutput.DiscoverAllSafelyAsync(_installationDiscovery, _wingetFirstRunProbe, _logger, cancellationToken);
 
         // Run all prerequisite checks
         var results = await InteractionService.ShowStatusAsync(
             DoctorCommandStrings.CheckingPrerequisites,
             async () => await _environmentChecker.CheckAllAsync(cancellationToken));
+        var installations = await installationsTask;
 
         if (format == OutputFormat.Json)
         {
-            OutputJson(results);
+            OutputJson(results, installations);
         }
         else
         {
-            OutputHumanReadable(results);
+            OutputHumanReadable(results, installations);
         }
 
         // Exit code: 0 if no failures (warnings are OK), 1 (InvalidCommand) if any failures
@@ -63,7 +97,7 @@ internal sealed class DoctorCommand : BaseCommand
         return CommandResult.FromExitCode(hasFailures ? CliExitCodes.InvalidCommand : CliExitCodes.Success);
     }
 
-    private void OutputJson(IReadOnlyList<EnvironmentCheckResult> results)
+    private void OutputJson(IReadOnlyList<EnvironmentCheckResult> results, IReadOnlyList<InstallationInfo> installations)
     {
         var passed = results.Count(r => r.Status == EnvironmentCheckStatus.Pass);
         var warnings = results.Count(r => r.Status == EnvironmentCheckStatus.Warning);
@@ -77,7 +111,8 @@ internal sealed class DoctorCommand : BaseCommand
                 Passed = passed,
                 Warnings = warnings,
                 Failed = failed
-            }
+            },
+            Installations = installations.ToList()
         };
 
         var json = System.Text.Json.JsonSerializer.Serialize(response, JsonSourceGenerationContext.RelaxedEscaping.DoctorCheckResponse);
@@ -86,7 +121,7 @@ internal sealed class DoctorCommand : BaseCommand
         InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
     }
 
-    private void OutputHumanReadable(IReadOnlyList<EnvironmentCheckResult> results)
+    private void OutputHumanReadable(IReadOnlyList<EnvironmentCheckResult> results, IReadOnlyList<InstallationInfo> installations)
     {
         _ansiConsole.WriteLine();
         _ansiConsole.MarkupLine($"[bold]{DoctorCommandStrings.EnvironmentCheckHeader}[/]");
@@ -124,20 +159,20 @@ internal sealed class DoctorCommand : BaseCommand
             const string prerequisitesUrl = "https://aka.ms/aspire-prerequisites";
             _ansiConsole.MarkupLine(string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DetailedPrerequisitesLink, MarkupHelpers.SafeLink(InteractionService, prerequisitesUrl)));
         }
+
+        InstallationInfoOutput.OutputTable(_ansiConsole, installations);
     }
 
     private void OutputCheckResult(EnvironmentCheckResult result)
     {
         var (icon, color) = GetStatusIconAndColor(result.Status);
-        var iconPrefix = ConsoleHelpers.FormatEmojiPrefix(icon, _ansiConsole, suppressColor: true);
 
-        // Primary grid: icon + message (wrapped lines stay aligned with message text)
-        var messageGrid = new Grid();
-        messageGrid.AddColumn();
-        messageGrid.AddRow(
-            new Markup($"[{color}]{iconPrefix}{result.Message.EscapeMarkup()}[/]"));
+        var messageMarkup = new Markup($"[{color}]{result.Message.EscapeMarkup()}[/]");
 
-        _ansiConsole.Write(new Padder(messageGrid, new Padding(2, 0)));
+        // Use a two-column grid so wrapped message text stays aligned past the icon.
+        var grid = ConsoleHelpers.CreateEmojiGrid(icon, _ansiConsole, messageMarkup);
+
+        _ansiConsole.Write(new Padder(grid, new Padding(2, 0)));
 
         // Secondary grid: details, fix suggestions, and links (indented further than message)
         var hasDetails = !string.IsNullOrEmpty(result.Details);

@@ -19,7 +19,7 @@ public class AspireExportAnalyzerTests
 
             public static class TestExports
             {
-                [AspireExport(Description = "Test method")]
+                [AspireExport]
                 public static string TestMethod() => "test";
             }
             """, []);
@@ -37,7 +37,7 @@ public class AspireExportAnalyzerTests
 
             public static class TestExports
             {
-                [AspireExport(Description = "Add Redis")]
+                [AspireExport]
                 public static string AddRedis() => "test";
             }
             """, []);
@@ -55,10 +55,52 @@ public class AspireExportAnalyzerTests
 
             public static class TestExports
             {
-                [AspireExport("Dictionary.set", Description = "Dictionary set")]
+                [AspireExport("Dictionary.set")]
                 public static void DictionarySet() { }
             }
             """, []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task ExportWithDescription_ReportsASPIREEXPORT015()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_descriptionShouldUseXmlDocs;
+
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public static class TestExports
+            {
+                [AspireExport(Description = "Use XML docs instead.")]
+                public static string TestMethod() => "test";
+            }
+            """,
+            [CompilerError(diagnostic.Id).WithLocation(7, 6).WithMessage("AspireExport Description is compatibility metadata. Use XML documentation with ATS tags such as <ats-summary> for generated polyglot SDK documentation.")]);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task ExportedPropertyWithDescription_ReportsASPIREEXPORT015()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_descriptionShouldUseXmlDocs;
+
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public class TestExports
+            {
+                [AspireExport(Description = "Use XML docs instead.")]
+                public string TestProperty { get; set; } = "";
+            }
+            """,
+            [CompilerError(diagnostic.Id).WithLocation(7, 6).WithMessage("AspireExport Description is compatibility metadata. Use XML documentation with ATS tags such as <ats-summary> for generated polyglot SDK documentation.")]);
 
         await test.RunAsync();
     }
@@ -99,6 +141,152 @@ public class AspireExportAnalyzerTests
                 public string InstanceMethod() => "test";
             }
             """, []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task ExtensionBlockMember_NoDiagnostics()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/17604:
+        // a C# 14 extension block instance member must not be flagged as non-static (ASPIREEXPORT001).
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+            using Aspire.Hosting.ApplicationModel;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public static class TestExports
+            {
+                extension<T>(IResourceBuilder<T> builder) where T : IResourceWithEnvironment
+                {
+                    [AspireExport]
+                    public IResourceBuilder<T> WithLikeC4Reference(string value) => builder;
+                }
+            }
+            """, []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task StaticMemberInExtensionBlock_NoDiagnostics()
+    {
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+            using Aspire.Hosting.ApplicationModel;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public static class TestExports
+            {
+                extension<T>(IResourceBuilder<T> builder) where T : IResourceWithEnvironment
+                {
+                    [AspireExport]
+                    public static string Describe() => "test";
+                }
+            }
+            """, []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task DuplicateExportIdAcrossExtensionBlockMembers_ReportsASPIREEXPORT007()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_duplicateExportId;
+        var capabilityDiagnostic = AspireExportAnalyzer.Diagnostics.s_duplicatePolyglotCapabilityId;
+
+        // Two extension block members targeting the same receiver type with the same export id must still
+        // be detected as duplicates, proving the receiver is normalized from the extension container.
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+            using Aspire.Hosting.ApplicationModel;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public static class TestExports
+            {
+                extension<T>(IResourceBuilder<T> builder) where T : IResource
+                {
+                    [AspireExport]
+                    public void AddThing(string name) { }
+
+                    [AspireExport("addThing")]
+                    public void AddThingWithPort(string name, int port) { }
+                }
+            }
+            """,
+            [
+                new DiagnosticResult(diagnostic).WithLocation(10, 10).WithArguments("addThing", "Aspire.Hosting.ApplicationModel.IResourceBuilder<T>"),
+                CompilerWarning(capabilityDiagnostic.Id).WithLocation(10, 10),
+                new DiagnosticResult(diagnostic).WithLocation(13, 10).WithArguments("addThing", "Aspire.Hosting.ApplicationModel.IResourceBuilder<T>"),
+                CompilerWarning(capabilityDiagnostic.Id).WithLocation(13, 10)
+            ]);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task ExportNameMatchesMethodName_WithConcreteTarget_ExtensionBlockMember_ReportsASPIREEXPORT009()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_exportNameShouldBeUnique;
+
+        // An extension block member must surface the same name-uniqueness guidance as a classic static
+        // extension method: the receiver normalized from the extension container is the open generic
+        // IResourceBuilder<T>, and a concrete IResourceBuilder<MyResource> target makes the convention id
+        // ambiguous across resource types.
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+            using Aspire.Hosting.ApplicationModel;
+            using System.Collections.Generic;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public class MyResource : IResource
+            {
+                public string Name => "test";
+                public ResourceAnnotationCollection Annotations { get; } = new();
+            }
+
+            public static class TestExports
+            {
+                extension<T>(IResourceBuilder<T> builder) where T : IResource
+                {
+                    [AspireExport("withRoleAssignments")]
+                    public IResourceBuilder<T> WithRoleAssignments(IResourceBuilder<MyResource> target, params string[] roles) => builder;
+                }
+            }
+            """,
+            [new DiagnosticResult(diagnostic).WithLocation(17, 10).WithArguments("withRoleAssignments", "WithRoleAssignments", "MyResource", "withMyRoleAssignments")]);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task RedundantExportId_MatchesConvention_ExtensionBlockMember_ReportsASPIREEXPORT011()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_redundantExportId;
+
+        // An extension block member is treated like a classic extension method, so its convention-derived
+        // id is the camelCased method name with no type prefix. An explicit id matching that convention is
+        // redundant and must report ASPIREEXPORT011, just as it does for a static extension method.
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+            using Aspire.Hosting.ApplicationModel;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public static class TestExports
+            {
+                extension<T>(IResourceBuilder<T> builder) where T : IResource
+                {
+                    [AspireExport("addRedis")]
+                    public string AddRedis() => "test";
+                }
+            }
+            """,
+            [new DiagnosticResult(diagnostic).WithLocation(10, 10).WithArguments("addRedis", "AddRedis")]);
 
         await test.RunAsync();
     }
@@ -399,6 +587,81 @@ public class AspireExportAnalyzerTests
     }
 
     [Fact]
+    public async Task ExportedBuilderMethod_PassesActionToHelperThatInvokesInline_ReportsASPIREEXPORT010()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_exportedSyncDelegateInvokedInline;
+
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using System;
+            using Aspire.Hosting;
+            using Aspire.Hosting.ApplicationModel;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public sealed class TestResource(string name) : Resource(name);
+            public sealed class TestContext;
+
+            public static class TestExports
+            {
+                [AspireExport]
+                public static IResourceBuilder<TestResource> WithHelperCallback(this IResourceBuilder<TestResource> builder, Action<TestContext> callback)
+                {
+                    InvokeCallback(callback);
+                    return builder;
+                }
+
+                private static void InvokeCallback(Action<TestContext> callback)
+                {
+                    callback(new TestContext());
+                }
+            }
+            """,
+            [new DiagnosticResult(diagnostic).WithLocation(15, 9).WithArguments("WithHelperCallback", "callback")]);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task ExportedBuilderMethod_PassesActionToTransitiveHelperThatInvokesInline_ReportsASPIREEXPORT010()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_exportedSyncDelegateInvokedInline;
+
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using System;
+            using Aspire.Hosting;
+            using Aspire.Hosting.ApplicationModel;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public sealed class TestResource(string name) : Resource(name);
+            public sealed class TestContext;
+
+            public static class TestExports
+            {
+                [AspireExport]
+                public static IResourceBuilder<TestResource> WithTransitiveHelperCallback(this IResourceBuilder<TestResource> builder, Action<TestContext> callback)
+                {
+                    InvokeOuter(callback);
+                    return builder;
+                }
+
+                private static void InvokeOuter(Action<TestContext> callback)
+                {
+                    InvokeInner(callback);
+                }
+
+                private static void InvokeInner(Action<TestContext> callback)
+                {
+                    callback(new TestContext());
+                }
+            }
+            """,
+            [new DiagnosticResult(diagnostic).WithLocation(15, 9).WithArguments("WithTransitiveHelperCallback", "callback")]);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
     public async Task ExportedBuilderMethod_PassesActionIntoDeferredLambda_NoDiagnostics()
     {
         var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
@@ -422,6 +685,42 @@ public class AspireExportAnalyzerTests
                 public static IResourceBuilder<TestResource> WithDeferredCallback(this IResourceBuilder<TestResource> builder, Action<TestContext> callback)
                 {
                     return builder.WithAnnotation(new TestAnnotation(ctx => callback(ctx)));
+                }
+            }
+            """, []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task ExportedBuilderMethod_PassesActionToHelperThatDefersCallback_NoDiagnostics()
+    {
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using System;
+            using Aspire.Hosting;
+            using Aspire.Hosting.ApplicationModel;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public sealed class TestResource(string name) : Resource(name);
+            public sealed class TestContext;
+
+            public sealed class TestAnnotation : IResourceAnnotation
+            {
+                public TestAnnotation(Action<TestContext> callback) { }
+            }
+
+            public static class TestExports
+            {
+                [AspireExport]
+                public static IResourceBuilder<TestResource> WithDeferredHelperCallback(this IResourceBuilder<TestResource> builder, Action<TestContext> callback)
+                {
+                    return builder.WithAnnotation(CreateAnnotation(callback));
+                }
+
+                private static TestAnnotation CreateAnnotation(Action<TestContext> callback)
+                {
+                    return new TestAnnotation(ctx => callback(ctx));
                 }
             }
             """, []);
@@ -546,6 +845,38 @@ public class AspireExportAnalyzerTests
                 {
                     callback(new TestContext());
                     return builder;
+                }
+            }
+            """, []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task ExportedBuilderMethod_WithBackgroundThreadOptInAndTransitiveHelperInvocation_NoASPIREEXPORT010()
+    {
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using System;
+            using Aspire.Hosting;
+            using Aspire.Hosting.ApplicationModel;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public sealed class TestResource(string name) : Resource(name);
+            public sealed class TestContext;
+
+            public static class TestExports
+            {
+                [AspireExport(RunSyncOnBackgroundThread = true)]
+                public static IResourceBuilder<TestResource> WithHelperCallback(this IResourceBuilder<TestResource> builder, Action<TestContext> callback)
+                {
+                    InvokeCallback(callback);
+                    return builder;
+                }
+
+                private static void InvokeCallback(Action<TestContext> callback)
+                {
+                    callback(new TestContext());
                 }
             }
             """, []);
@@ -981,6 +1312,72 @@ public class AspireExportAnalyzerTests
             {
                 [AspireExport]
                 public static void DtoUnion([AspireUnion(typeof(string), typeof(MyDtoType))] object value) { }
+            }
+            """, []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task DtoWithGetOnlyMutableCollectionProperties_ReportsASPIREEXPORT015()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_dtoMutableCollectionPropertyMustBeInitSettable;
+
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+            using System.Collections.Generic;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            [AspireDto]
+            public class MyDtoType
+            {
+                public List<string> Items { get; } = new();
+                public Dictionary<string, string> Metadata { get; } = new();
+            }
+            """,
+            [
+                new DiagnosticResult(diagnostic).WithSpan(9, 25, 9, 30).WithArguments("MyDtoType.Items"),
+                new DiagnosticResult(diagnostic).WithSpan(10, 39, 10, 47).WithArguments("MyDtoType.Metadata")
+            ]);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task DtoWithInitMutableCollectionProperties_NoDiagnostics()
+    {
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+            using System.Collections.Generic;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            [AspireDto]
+            public class MyDtoType
+            {
+                public List<string> Items { get; init; } = new();
+                public Dictionary<string, string> Metadata { get; init; } = new();
+            }
+            """, []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task DtoWithIgnoredGetOnlyMutableCollectionProperties_NoDiagnostics()
+    {
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+            using System.Collections.Generic;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            [AspireDto]
+            public class MyDtoType
+            {
+                [AspireExportIgnore(Reason = "Not part of the ATS surface.")]
+                public List<string> Items { get; } = new();
             }
             """, []);
 

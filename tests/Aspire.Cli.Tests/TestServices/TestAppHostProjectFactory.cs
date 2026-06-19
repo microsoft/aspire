@@ -34,6 +34,8 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
     /// </summary>
     public Func<FileInfo, CancellationToken, Task<AppHostValidationResult>>? ValidateAppHostAsyncCallback { get; set; }
 
+    public Func<AppHostProjectContext, CancellationToken, Task<int>>? RunAsyncCallback { get; set; }
+
     public Func<UpdatePackagesContext, CancellationToken, Task<UpdatePackagesResult>>? UpdatePackagesAsyncCallback { get; set; }
 
     public string LanguageId { get; set; } = "csharp";
@@ -181,7 +183,9 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
             => throw new NotImplementedException();
 
         public Task<int> RunAsync(AppHostProjectContext context, CancellationToken cancellationToken)
-            => throw new NotImplementedException();
+            => _factory.RunAsyncCallback is not null
+                ? _factory.RunAsyncCallback(context, cancellationToken)
+                : throw new NotImplementedException();
 
         public Task<int> PublishAsync(PublishContext context, CancellationToken cancellationToken)
             => throw new NotImplementedException();

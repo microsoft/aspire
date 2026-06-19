@@ -102,6 +102,11 @@
         <target state="translated">Vašemu hledaného termínu {0} neodpovídají žádné balíčky. Zobrazují se všechny dostupné balíčky.</target>
         <note>{0} is the search term provided by the user.</note>
       </trans-unit>
+      <trans-unit id="NonInteractiveRequiresExactPackageMatch">
+        <source>No exact match was found for '{0}'. In non-interactive mode the integration name must exactly match a package id or friendly name; fuzzy fallback is disabled to prevent silently selecting the wrong package.</source>
+        <target state="new">No exact match was found for '{0}'. In non-interactive mode the integration name must exactly match a package id or friendly name; fuzzy fallback is disabled to prevent silently selecting the wrong package.</target>
+        <note>{0} is the integration name provided by the user.</note>
+      </trans-unit>
       <trans-unit id="PackageAddedSuccessfully">
         <source>The package {0}::{1} was added successfully.</source>
         <target state="translated">Balíček {0}::{1} byl úspěšně přidán.</target>

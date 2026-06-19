@@ -17,4 +17,12 @@ internal sealed class GoLaunchConfiguration() : ExecutableLaunchConfiguration("g
 
     [JsonPropertyName("working_directory")]
     public string WorkingDirectory { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Build flags passed to Delve when VS Code launches the Go debugger.
+    /// Corresponds to the <c>buildFlags</c> field in VS Code's Go launch configuration.
+    /// </summary>
+    [JsonPropertyName("build_flags")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? BuildFlags { get; set; }
 }

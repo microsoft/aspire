@@ -25,7 +25,10 @@ namespace Aspire.Hosting.Foundry;
 /// </summary>
 public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
 {
-    private const string AzureAIUserRoleDefinitionId = "53ca6127-db72-4b80-b1b0-d745d6d5456d";
+    // The "Azure AI User" built-in role (data-plane access to Foundry agents/inference). Granted to
+    // the agent's own instance identity below, and to consumers that reference the agent (see
+    // HostedAgentResourceBuilderExtensions.GrantHostedAgentConsumerRoles).
+    internal const string AzureAIUserRoleDefinitionId = "53ca6127-db72-4b80-b1b0-d745d6d5456d";
 
     /// <summary>
     /// Creates a new instance of the <see cref="AzureHostedAgentResource"/> class.
@@ -161,10 +164,64 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
             cancellationToken: context.CancellationToken
         ).ConfigureAwait(false);
 
+        await UpdateAgentEndpointProtocolsAsync(projectClient.AgentAdministrationClient, def, context.CancellationToken).ConfigureAwait(false);
+
         // Foundry should do this automatically in the future.
         await AssignFoundryRoleToAgentIdentityAsync(context, project, result.Value, provisioningContext).ConfigureAwait(false);
 
         return result.Value;
+    }
+
+    private async Task UpdateAgentEndpointProtocolsAsync(AgentAdministrationClient agentsClient, HostedAgentConfiguration configuration, CancellationToken cancellationToken)
+    {
+        var endpointProtocols = GetAgentEndpointProtocols(configuration.ContainerProtocolVersions);
+        if (endpointProtocols.Count == 0)
+        {
+            return;
+        }
+
+        var endpoint = new AgentEndpoint();
+        foreach (var protocol in endpointProtocols)
+        {
+            endpoint.Protocols.Add(protocol);
+        }
+
+        // Creating a hosted-agent version does not update the endpoint's advertised protocols;
+        // keep routing in sync so endpoint-scoped invocations can reach the selected version.
+        await agentsClient.PatchAgentObjectAsync(
+            Name,
+            new PatchAgentOptions
+            {
+                AgentEndpoint = endpoint
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    internal static IReadOnlyList<AgentEndpointProtocol> GetAgentEndpointProtocols(IEnumerable<ProtocolVersionRecord> protocolVersions)
+    {
+        var endpointProtocols = new List<AgentEndpointProtocol>();
+
+        foreach (var protocolVersion in protocolVersions)
+        {
+            var endpointProtocol = ToAgentEndpointProtocol(protocolVersion.Protocol);
+            if (!endpointProtocols.Contains(endpointProtocol))
+            {
+                endpointProtocols.Add(endpointProtocol);
+            }
+        }
+
+        return endpointProtocols;
+    }
+
+    private static AgentEndpointProtocol ToAgentEndpointProtocol(ProjectsAgentProtocol protocol)
+    {
+        return protocol.ToString() switch
+        {
+            "activity_protocol" => AgentEndpointProtocol.Activity,
+            "invocations" => AgentEndpointProtocol.Invocations,
+            "responses" => AgentEndpointProtocol.Responses,
+            var value => new AgentEndpointProtocol(value)
+        };
     }
 
     private async Task AssignFoundryRoleToAgentIdentityAsync(
@@ -253,6 +310,24 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
         var resolvedEnvVars = new Dictionary<string, string>();
         foreach (var (key, value) in collectedEnvVars)
         {
+            if (HostedAgentConfiguration.IsReservedEnvironmentVariableName(key))
+            {
+                // Foundry injects platform-owned variables such as PORT itself. Some Aspire resource
+                // types use these variables to model local/container startup, but forwarding them in
+                // the hosted-agent definition causes Foundry to reject the version payload.
+                logger.LogDebug("Environment variable '{Key}' for resource '{Name}' is reserved by Foundry Hosted Agents and will be skipped.", key, resource.Name);
+                continue;
+            }
+
+            if (IsHostedAgentTargetPortValue(value, hostedAgent))
+            {
+                // Endpoint target-port variables model how a local process or container binds. Foundry
+                // hosted agents own the container port contract during deployment, and their endpoint
+                // resolver intentionally does not support EndpointProperty.TargetPort.
+                logger.LogDebug("Environment variable '{Key}' for resource '{Name}' references the hosted agent target port and will be skipped.", key, resource.Name);
+                continue;
+            }
+
             switch (value)
             {
                 case null:
@@ -273,6 +348,26 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
             }
         }
         return resolvedEnvVars;
+    }
+
+    private static bool IsHostedAgentTargetPortValue(object? value, AzureHostedAgentResource hostedAgent)
+    {
+        return value switch
+        {
+            EndpointReferenceExpression endpointReferenceExpression => IsHostedAgentTargetPortExpression(endpointReferenceExpression, hostedAgent),
+            ReferenceExpression referenceExpression when referenceExpression.IsConditional =>
+                IsHostedAgentTargetPortValue(referenceExpression.Condition, hostedAgent) ||
+                IsHostedAgentTargetPortValue(referenceExpression.WhenTrue, hostedAgent) ||
+                IsHostedAgentTargetPortValue(referenceExpression.WhenFalse, hostedAgent),
+            ReferenceExpression referenceExpression => referenceExpression.ValueProviders.Any(valueProvider => IsHostedAgentTargetPortValue(valueProvider, hostedAgent)),
+            _ => false
+        };
+    }
+
+    private static bool IsHostedAgentTargetPortExpression(EndpointReferenceExpression endpointReferenceExpression, AzureHostedAgentResource hostedAgent)
+    {
+        return endpointReferenceExpression.Property == EndpointProperty.TargetPort &&
+            ReferenceEquals(endpointReferenceExpression.Endpoint.Resource, hostedAgent.Target);
     }
 
     private static async ValueTask<string?> ResolveValueProviderAsync(
@@ -366,8 +461,7 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
             throw CreateEndpointResolutionException(hostedAgent, resource, environmentVariableName, endpointReference, $"Endpoint '{endpoint.Name}' is internal. Foundry hosted agents can only reference externally exposed endpoints during publish.");
         }
 
-        var deploymentTarget = endpointReference.Resource.GetDeploymentTargetAnnotation();
-        if (deploymentTarget?.ComputeEnvironment is not { } computeEnvironment)
+        if (!ComputeEnvironmentEndpointResolver.TryGetEffectiveComputeEnvironment(endpointReference.Resource, out var computeEnvironment))
         {
             var reason = $"Resource '{endpointReference.Resource.Name}' does not have a compute environment deployment target.";
             throw CreateEndpointResolutionException(hostedAgent, resource, environmentVariableName, endpointReference, reason);

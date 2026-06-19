@@ -50,8 +50,8 @@ Aby uzyskać więcej informacji, zobacz https://aka.ms/dotnet/aspire/container-r
         <note />
       </trans-unit>
       <trans-unit id="StateColumnResourceWaitingFor">
-        <source>Waiting for dependencies: {0}.</source>
-        <target state="new">Waiting for dependencies: {0}.</target>
+        <source>Waiting for dependencies: {0}</source>
+        <target state="new">Waiting for dependencies: {0}</target>
         <note>{0} is a comma-separated list of dependency resource names.</note>
       </trans-unit>
       <trans-unit id="UnknownStateLabel">

@@ -214,6 +214,10 @@ Found a bug or have an idea? File it on the [microsoft/aspire](https://github.co
 - [Report a bug](https://github.com/microsoft/aspire/issues/new?template=10_bug_report.yml&labels=area-extension)
 - [Request a feature](https://github.com/microsoft/aspire/issues/new?template=20_feature-request.yml&labels=area-extension)
 
+### Contributing
+
+See [CONTRIBUTING.md](https://github.com/microsoft/aspire/blob/main/extension/CONTRIBUTING.md) for setup, project layout, the extension-only inner loop, and running tests. Good first issues are tagged [`area-extension` + `good first issue`](https://github.com/microsoft/aspire/issues?q=is%3Aissue+is%3Aopen+label%3Aarea-extension+label%3A%22good+first+issue%22).
+
 ### Learn more
 
 - [Aspire docs](https://aspire.dev/docs/)

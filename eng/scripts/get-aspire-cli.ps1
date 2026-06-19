@@ -56,6 +56,7 @@ $Script:Config = @{
         "release" = "https://aka.ms/dotnet/9/aspire/ga/daily"
         "versioned" = "https://ci.dot.net/public/aspire"
         "versioned-checksums" = "https://ci.dot.net/public-checksums/aspire"
+        "github-releases" = "https://github.com/microsoft/aspire/releases/download"
     }
 }
 
@@ -1039,6 +1040,32 @@ function Get-AspireExtensionUrl {
     }
 }
 
+function Test-StableVersion {
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Version
+    )
+
+    return $Version -match '^v?\d+\.\d+\.\d+$'
+}
+
+function ConvertTo-StableVersion {
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Version
+    )
+
+    if ($Version.StartsWith('v', [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $Version.Substring(1)
+    }
+
+    return $Version
+}
+
 # Enhanced URL construction function with configuration-based URLs
 function Get-AspireCliUrl {
     [CmdletBinding()]
@@ -1080,7 +1107,20 @@ function Get-AspireCliUrl {
         }
     }
     else {
-        # When version is set, use ci.dot.net URL
+        if (Test-StableVersion -Version $Version) {
+            $stableVersion = ConvertTo-StableVersion -Version $Version
+            $archiveFilename = "aspire-cli-$RuntimeIdentifier-$stableVersion.$Extension"
+            $checksumFilename = "$archiveFilename.sha512"
+            $baseUrl = $Script:Config.BaseUrls["github-releases"]
+
+            return [PSCustomObject]@{
+                ArchiveUrl = "$baseUrl/v$stableVersion/$archiveFilename"
+                ArchiveFilename = $archiveFilename
+                ChecksumUrl = "$baseUrl/v$stableVersion/$checksumFilename"
+                ChecksumFilename = $checksumFilename
+            }
+        }
+
         $archiveFilename = "aspire-cli-$RuntimeIdentifier-$Version.$Extension"
         $checksumFilename = "$archiveFilename.sha512"
 

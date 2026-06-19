@@ -127,12 +127,21 @@
     <value>Graph</value>
   </data>
   <data name="ChartContainerTableTab" xml:space="preserve">
+    <value>Table</value>
+  </data>
+  <data name="ResourcesContainerTableTab" xml:space="preserve">
     <value>Resources</value>
   </data>
-  <data name="ChartContainerParametersTab" xml:space="preserve">
+  <data name="ResourcesContainerParametersTab" xml:space="preserve">
     <value>Parameters</value>
   </data>
+  <data name="ResourcesContainerGraphTab" xml:space="preserve">
+    <value>Graph</value>
+  </data>
   <data name="ChartContainerGraphAccessibleLabel" xml:space="preserve">
+    <value>Graph. For an accessible view please navigate to the Table tab</value>
+  </data>
+  <data name="ResourcesContainerGraphAccessibleLabel" xml:space="preserve">
     <value>Graph. For an accessible view please navigate to the Resources tab</value>
   </data>
   <data name="EnvironmentVariablesFilterToggleShowSpecOnly" xml:space="preserve">
@@ -192,17 +201,14 @@
   <data name="StateColumnHeader" xml:space="preserve">
     <value>State</value>
   </data>
-  <data name="SpanDetailsResource" xml:space="preserve">
-    <value>Resource &lt;strong&gt;{0}&lt;/strong&gt;</value>
-    <comment>{0} is the application name. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</comment>
+  <data name="SpanDetailsResourceLabel" xml:space="preserve">
+    <value>Resource</value>
   </data>
-  <data name="SpanDetailsDuration" xml:space="preserve">
-    <value>Duration &lt;strong&gt;{0}&lt;/strong&gt;</value>
-    <comment>{0} is a duration. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</comment>
+  <data name="SpanDetailsDurationLabel" xml:space="preserve">
+    <value>Duration</value>
   </data>
-  <data name="SpanDetailsStartTime" xml:space="preserve">
-    <value>Start time &lt;strong&gt;{0}&lt;/strong&gt;</value>
-    <comment>{0} is a duration. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</comment>
+  <data name="SpanDetailsStartTimeLabel" xml:space="preserve">
+    <value>Start time</value>
   </data>
   <data name="ViewLogsLink" xml:space="preserve">
     <value>View logs</value>
@@ -286,13 +292,11 @@
   <data name="Loading" xml:space="preserve">
     <value>Loading...</value>
   </data>
-  <data name="StructuredLogsDetailsResource" xml:space="preserve">
-    <value>Resource &lt;strong&gt;{0}&lt;/strong&gt;</value>
-    <comment>{0} is the application name. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</comment>
+  <data name="StructuredLogsDetailsResourceLabel" xml:space="preserve">
+    <value>Resource</value>
   </data>
-  <data name="StructuredLogsDetailsTimestamp" xml:space="preserve">
-    <value>Timestamp &lt;strong&gt;{0}&lt;/strong&gt;</value>
-    <comment>{0} is a date. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</comment>
+  <data name="StructuredLogsDetailsTimestampLabel" xml:space="preserve">
+    <value>Timestamp</value>
   </data>
   <data name="ResourceDetailsUrlsHeader" xml:space="preserve">
     <value>URLs</value>
@@ -525,8 +529,8 @@
   <data name="SpanTypeCloud" xml:space="preserve">
     <value>Cloud</value>
   </data>
-  <data name="ExportJson" xml:space="preserve">
-    <value>Export JSON</value>
+  <data name="ViewJson" xml:space="preserve">
+    <value>View JSON</value>
   </data>
   <data name="ExportEnv" xml:space="preserve">
     <value>Export .env</value>

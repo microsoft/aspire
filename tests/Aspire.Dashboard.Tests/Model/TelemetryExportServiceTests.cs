@@ -53,7 +53,7 @@ public sealed class TelemetryExportServiceTests
         var resource = resources[0];
         var logs = repository.GetLogs(new GetLogsContext
         {
-            ResourceKey = resource.ResourceKey,
+            ResourceKeys = [resource.ResourceKey],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters = []
@@ -286,10 +286,9 @@ public sealed class TelemetryExportServiceTests
         var resource = resources[0];
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resource.ResourceKey,
+            ResourceKeys = [resource.ResourceKey],
             StartIndex = 0,
             Count = int.MaxValue,
-            FilterText = string.Empty,
             Filters = []
         });
 
@@ -1193,7 +1192,9 @@ public sealed class TelemetryExportServiceTests
                     Value.ForList(Value.ForString("dependency-resource")),
                     isValueSensitive: false,
                     knownProperty: null,
-                    priority: 0)
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false)
             },
             relationships: [new RelationshipViewModel("dependency", "Reference")]);
 
@@ -1295,5 +1296,65 @@ public sealed class TelemetryExportServiceTests
         Assert.NotNull(deserialized.Environment);
         Assert.Single(deserialized.Environment);
         Assert.Equal(japaneseEnvValue, deserialized.Environment["JAPANESE_VAR"]);
+    }
+
+    [Fact]
+    public void ConvertResourceToJson_NumberAndBoolProperties_ArePreserved()
+    {
+        // Arrange
+        var resource = ModelTestHelpers.CreateResource(
+            resourceName: "test-container",
+            displayName: "Test Container",
+            resourceType: "Container",
+            state: KnownResourceState.Running,
+            properties: new Dictionary<string, ResourcePropertyViewModel>
+            {
+                ["container.ports"] = new(
+                    "container.ports",
+                    Value.ForList(Value.ForNumber(6379), Value.ForNumber(6380)),
+                    isValueSensitive: false,
+                    knownProperty: null,
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false),
+                ["resource.exitCode"] = new(
+                    "resource.exitCode",
+                    Value.ForNumber(0),
+                    isValueSensitive: false,
+                    knownProperty: null,
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false),
+                ["resource.enabled"] = new(
+                    "resource.enabled",
+                    Value.ForBool(true),
+                    isValueSensitive: false,
+                    knownProperty: null,
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false)
+            });
+
+        // Act
+        var json = TelemetryExportService.ConvertResourceToJson(resource, [resource]);
+
+        // Assert
+        var deserialized = JsonSerializer.Deserialize(json, ResourceJsonSerializerContext.Default.ResourceJson);
+        Assert.NotNull(deserialized);
+        Assert.NotNull(deserialized.Properties);
+
+        // Number values in a list should be preserved
+        var portsArray = Assert.IsType<JsonArray>(deserialized.Properties["container.ports"]);
+        Assert.Equal(2, portsArray.Count);
+        Assert.Equal(6379, portsArray[0]!.GetValue<double>());
+        Assert.Equal(6380, portsArray[1]!.GetValue<double>());
+
+        // Scalar number value should be preserved
+        var exitCode = deserialized.Properties["resource.exitCode"]!.GetValue<double>();
+        Assert.Equal(0, exitCode);
+
+        // Bool value should be preserved
+        var enabled = deserialized.Properties["resource.enabled"]!.GetValue<bool>();
+        Assert.True(enabled);
     }
 }

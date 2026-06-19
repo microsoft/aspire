@@ -1154,10 +1154,13 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         using var app = builder.Build();
 
         var logger = app.Services.GetRequiredService<ILogger<ResourceContainerImageBuilderTests>>();
+        // Pass a publish-mode context: the AddDockerfile default only applies linux/amd64 for publish.
+        var publishContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish);
         var context = await container.Resource.ProcessContainerBuildOptionsCallbackAsync(
             app.Services,
             logger,
-            cancellationToken: CancellationToken.None);
+            publishContext,
+            CancellationToken.None);
 
         var dockerfileBuildAnnotation = container.Resource.Annotations.OfType<DockerfileBuildAnnotation>().Single();
         var expectedImageTag = dockerfileBuildAnnotation.ImageTag;
@@ -1165,6 +1168,35 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         Assert.Equal("mycontainer", context.LocalImageName);
         Assert.Equal(expectedImageTag, context.LocalImageTag);
         Assert.Equal(ContainerTargetPlatform.LinuxAmd64, context.TargetPlatform);
+    }
+
+    [Fact]
+    public async Task DockerfileResource_RunMode_DefaultLeavesPlatformUnset()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(output);
+
+        builder.Services.AddLogging(logging =>
+        {
+            logging.AddFakeLogging();
+            logging.AddXunit(output);
+        });
+
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var container = builder.AddDockerfile("mycontainer", tempDockerfileContext.ContextPath, tempDockerfileContext.DockerfilePath);
+
+        using var app = builder.Build();
+
+        var logger = app.Services.GetRequiredService<ILogger<ResourceContainerImageBuilderTests>>();
+        var runContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+        var context = await container.Resource.ProcessContainerBuildOptionsCallbackAsync(
+            app.Services,
+            logger,
+            runContext,
+            CancellationToken.None);
+
+        Assert.Equal("mycontainer", context.LocalImageName);
+        Assert.NotNull(context.LocalImageTag);
+        Assert.Null(context.TargetPlatform);
     }
 
     [Fact]

@@ -46,7 +46,9 @@ public class DefaultLanguageDiscoveryTests
         var typescript = languages.FirstOrDefault(l => l.LanguageId.Value == "typescript/nodejs");
         Assert.NotNull(typescript);
         Assert.Equal("TypeScript (Node.js)", typescript.DisplayName);
+        Assert.Contains("apphost.mts", typescript.DetectionPatterns);
         Assert.Contains("apphost.ts", typescript.DetectionPatterns);
+        Assert.Equal("apphost.mts", typescript.AppHostFileName);
     }
 
     [Fact]
@@ -101,6 +103,8 @@ public class DefaultLanguageDiscoveryTests
     [InlineData("apphost.cs", KnownLanguageId.CSharp)]
     [InlineData("AppHost.cs", KnownLanguageId.CSharp)]
     [InlineData("APPHOST.CS", KnownLanguageId.CSharp)]
+    [InlineData("apphost.mts", "typescript/nodejs")]
+    [InlineData("AppHost.mts", "typescript/nodejs")]
     [InlineData("apphost.ts", "typescript/nodejs")]
     [InlineData("AppHost.ts", "typescript/nodejs")]
     public void GetLanguageByFile_ReturnsCorrectLanguage(string fileName, string expectedLanguageId)

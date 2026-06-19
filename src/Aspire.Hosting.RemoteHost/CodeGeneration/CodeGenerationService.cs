@@ -19,6 +19,7 @@ internal sealed class CodeGenerationService
     private readonly JsonRpcAuthenticationState _authenticationState;
     private readonly AtsContextFactory _atsContextFactory;
     private readonly CodeGeneratorResolver _resolver;
+    private readonly AssemblyLoader _assemblyLoader;
     private readonly ILogger<CodeGenerationService> _logger;
     private readonly RemoteHostProfilingTelemetry _profilingTelemetry;
 
@@ -26,12 +27,14 @@ internal sealed class CodeGenerationService
         JsonRpcAuthenticationState authenticationState,
         AtsContextFactory atsContextFactory,
         CodeGeneratorResolver resolver,
+        AssemblyLoader assemblyLoader,
         ILogger<CodeGenerationService> logger,
         RemoteHostProfilingTelemetry profilingTelemetry)
     {
         _authenticationState = authenticationState;
         _atsContextFactory = atsContextFactory;
         _resolver = resolver;
+        _assemblyLoader = assemblyLoader;
         _logger = logger;
         _profilingTelemetry = profilingTelemetry;
     }
@@ -85,6 +88,11 @@ internal sealed class CodeGenerationService
         {
             activity.SetError(ex);
             _logger.LogError(ex, "<< getCapabilities() failed");
+            var wrapped = CodeGenerationDiagnosticBuilder.TryCreateRpcException(ex, _assemblyLoader, _logger);
+            if (wrapped is not null)
+            {
+                throw wrapped;
+            }
             throw;
         }
     }
@@ -232,7 +240,7 @@ internal sealed class CodeGenerationService
             var generator = _resolver.GetCodeGenerator(language);
             if (generator == null)
             {
-                throw new ArgumentException($"No code generator found for language: {language}");
+                throw new ArgumentException(BuildNoCodeGeneratorMessage(language));
             }
 
             var context = _atsContextFactory.GetContext();
@@ -251,8 +259,33 @@ internal sealed class CodeGenerationService
         {
             activity.SetError(ex);
             _logger.LogError(ex, "<< generateCode({Language}) failed", language);
+            var wrapped = CodeGenerationDiagnosticBuilder.TryCreateRpcException(ex, _assemblyLoader, _logger);
+            if (wrapped is not null)
+            {
+                throw wrapped;
+            }
             throw;
         }
+    }
+
+    private string BuildNoCodeGeneratorMessage(string language)
+    {
+        var available = _resolver.GetSupportedLanguages()
+            .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (available.Length == 0)
+        {
+            // No generators discovered at all is almost always a binary-mismatch / type-load
+            // failure (see CodeGeneratorResolver warnings). Point the user at the apphost
+            // server log so they can see the underlying LoaderExceptions.
+            return $"No code generator found for language: {language}. " +
+                   "No code generators were discovered in any loaded assembly. " +
+                   "This usually indicates a binary mismatch between the bundled apphost server and the integration assemblies on disk; " +
+                   "check the apphost server log for 'LoaderExceptions' Warnings.";
+        }
+
+        return $"No code generator found for language: {language}. Available languages: {string.Join(", ", available)}.";
     }
 }
 

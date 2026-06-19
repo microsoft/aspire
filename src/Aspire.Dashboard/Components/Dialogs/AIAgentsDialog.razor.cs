@@ -32,10 +32,11 @@ public partial class AIAgentsDialog : IDialogContentComponent
 
     private const string AppHostLearnMoreUrl = "https://aka.ms/aspire/ai-agents-apphost";
     private const string StandaloneLearnMoreUrl = "https://aka.ms/aspire/dashboard-ai-standalone";
+    private const string InstallCliUrl = "https://aka.ms/aspire/install-cli";
 
     private string Description => DashboardClient.IsEnabled
-        ? string.Format(CultureInfo.CurrentCulture, Loc[nameof(DialogsLoc.AIAgentsDialogAppHostDescription)], AppHostLearnMoreUrl)
-        : string.Format(CultureInfo.CurrentCulture, Loc[nameof(DialogsLoc.AIAgentsDialogStandaloneDescription)], GetDashboardUrl(), StandaloneLearnMoreUrl);
+        ? string.Format(CultureInfo.CurrentCulture, Loc[nameof(DialogsLoc.AIAgentsDialogAppHostDescription)], AppHostLearnMoreUrl, InstallCliUrl)
+        : string.Format(CultureInfo.CurrentCulture, Loc[nameof(DialogsLoc.AIAgentsDialogStandaloneDescription)], GetDashboardUrl(), StandaloneLearnMoreUrl, InstallCliUrl);
 
     private string GetDashboardUrl()
     {

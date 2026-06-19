@@ -111,21 +111,33 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string LsStreamOptionDescription {
+            get {
+                return ResourceManager.GetString("LsStreamOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string LsStreamRequiresJson {
+            get {
+                return ResourceManager.GetString("LsStreamRequiresJson", resourceCulture);
+            }
+        }
+
         internal static string LsNoCandidateAppHostsFound {
             get {
                 return ResourceManager.GetString("LsNoCandidateAppHostsFound", resourceCulture);
             }
         }
 
-        internal static string HeaderPath {
+        internal static string LsSearchingForAppHostsStatus {
             get {
-                return ResourceManager.GetString("HeaderPath", resourceCulture);
+                return ResourceManager.GetString("LsSearchingForAppHostsStatus", resourceCulture);
             }
         }
 
-        internal static string HeaderRelativePath {
+        internal static string HeaderPath {
             get {
-                return ResourceManager.GetString("HeaderRelativePath", resourceCulture);
+                return ResourceManager.GetString("HeaderPath", resourceCulture);
             }
         }
 
@@ -156,6 +168,15 @@ namespace Aspire.Cli.Resources {
         internal static string MultipleInScopeAppHosts {
             get {
                 return ResourceManager.GetString("MultipleInScopeAppHosts", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Multiple running AppHosts were found, but the CLI is running in non-interactive mode. Pass --apphost to specify which AppHost to use..
+        /// </summary>
+        internal static string MultipleAppHostsNonInteractive {
+            get {
+                return ResourceManager.GetString("MultipleAppHostsNonInteractive", resourceCulture);
             }
         }
 

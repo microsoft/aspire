@@ -3,10 +3,7 @@
 
 using System.CommandLine;
 using Aspire.Cli.Bundles;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.Telemetry;
-using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Commands;
 
@@ -15,6 +12,8 @@ namespace Aspire.Cli.Commands;
 /// </summary>
 internal sealed class SetupCommand : BaseCommand
 {
+    protected override bool UpdateNotificationsEnabled => true;
+
     private readonly IBundleService _bundleService;
 
     private static readonly Option<string?> s_installPathOption = new("--install-path")
@@ -29,12 +28,8 @@ internal sealed class SetupCommand : BaseCommand
 
     public SetupCommand(
         IBundleService bundleService,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        IInteractionService interactionService,
-        AspireCliTelemetry telemetry)
-        : base("setup", "Extract the embedded bundle to set up the Aspire CLI runtime", features, updateNotifier, executionContext, interactionService, telemetry)
+        CommonCommandServices services)
+        : base("setup", "Extract the embedded bundle to set up the Aspire CLI runtime", services)
     {
         // Hidden: the setup command is an implementation detail used by install scripts.
         Hidden = true;

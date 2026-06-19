@@ -14,5 +14,12 @@ void main() throws Exception {
     stringVnet.addSubnet("string-subnet", "10.1.1.0/24", "string-subnet-name");
     parameterVnet.addSubnet("parameter-subnet", subnetPrefix, "parameter-subnet-name");
 
+    var perimeter = builder.addNetworkSecurityPerimeter("data-boundary");
+    var accessRule = new AzureNspAccessRule();
+    accessRule.setName("allow-corp-network");
+    accessRule.setDirection(NetworkSecurityPerimeterAccessRuleDirection.INBOUND);
+    accessRule.setAddressPrefixes(java.util.List.of("203.0.113.0/24"));
+    perimeter.withAccessRule(accessRule);
+
     builder.build().run();
 }

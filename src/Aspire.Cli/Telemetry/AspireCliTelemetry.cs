@@ -3,9 +3,9 @@
 
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using Aspire.Hosting;
 using Aspire.Shared;
-using System.Runtime.InteropServices;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -46,7 +46,9 @@ internal sealed class AspireCliTelemetry : IHostedService
     private readonly ActivitySource _reportedActivitySource;
     private readonly IMachineInformationProvider _machineInformationProvider;
     private readonly ICIEnvironmentDetector _ciEnvironmentDetector;
+    private readonly ICodingAgentDetector _codingAgentDetector;
     private readonly ILogger<AspireCliTelemetry> _logger;
+    private readonly CliExecutionContext _executionContext;
     private readonly List<KeyValuePair<string, object?>> _tagsList = [];
 
     private bool _isInitialized;
@@ -57,8 +59,14 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// <param name="logger">The logger instance for recording errors.</param>
     /// <param name="machineInformationProvider">The machine information provider.</param>
     /// <param name="ciEnvironmentDetector">The CI environment detector.</param>
-    public AspireCliTelemetry(ILogger<AspireCliTelemetry> logger, IMachineInformationProvider machineInformationProvider, ICIEnvironmentDetector ciEnvironmentDetector)
-        : this(logger, machineInformationProvider, ciEnvironmentDetector, ReportedActivitySourceName, DiagnosticsActivitySourceName)
+    /// <param name="codingAgentDetector">The coding agent detector.</param>
+    /// <param name="executionContext">
+    /// The CLI execution context carrying the effective identity. Required: the DI
+    /// container injects the registered singleton, so identity telemetry tags are
+    /// always emitted from it.
+    /// </param>
+    public AspireCliTelemetry(ILogger<AspireCliTelemetry> logger, IMachineInformationProvider machineInformationProvider, ICIEnvironmentDetector ciEnvironmentDetector, ICodingAgentDetector codingAgentDetector, CliExecutionContext executionContext)
+        : this(logger, machineInformationProvider, ciEnvironmentDetector, codingAgentDetector, ReportedActivitySourceName, DiagnosticsActivitySourceName, executionContext)
     {
     }
 
@@ -69,13 +77,17 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// <param name="logger">The logger instance for recording errors.</param>
     /// <param name="machineInformationProvider">The machine information provider.</param>
     /// <param name="ciEnvironmentDetector">The CI environment detector.</param>
+    /// <param name="codingAgentDetector">The coding agent detector.</param>
     /// <param name="reportedSourceName">The name for the reported activity source.</param>
     /// <param name="diagnosticsSourceName">The name for the diagnostics activity source.</param>
-    internal AspireCliTelemetry(ILogger<AspireCliTelemetry> logger, IMachineInformationProvider machineInformationProvider, ICIEnvironmentDetector ciEnvironmentDetector, string reportedSourceName, string diagnosticsSourceName)
+    /// <param name="executionContext">The CLI execution context carrying the effective identity.</param>
+    internal AspireCliTelemetry(ILogger<AspireCliTelemetry> logger, IMachineInformationProvider machineInformationProvider, ICIEnvironmentDetector ciEnvironmentDetector, ICodingAgentDetector codingAgentDetector, string reportedSourceName, string diagnosticsSourceName, CliExecutionContext executionContext)
     {
         _logger = logger;
         _machineInformationProvider = machineInformationProvider;
         _ciEnvironmentDetector = ciEnvironmentDetector;
+        _codingAgentDetector = codingAgentDetector;
+        _executionContext = executionContext;
         _reportedActivitySource = new ActivitySource(reportedSourceName);
         _diagnosticsActivitySource = new ActivitySource(diagnosticsSourceName);
     }
@@ -225,6 +237,22 @@ internal sealed class AspireCliTelemetry : IHostedService
             _tagsList.Add(new(TelemetryConstants.Tags.CliVersion, GetCliVersion()));
             _tagsList.Add(new(TelemetryConstants.Tags.CliBuildId, GetCliBuildId()));
 
+            // Identity tags describe the build the CLI is *behaving* as (env / sidecar overrides),
+            // kept separate from the physical binary's cli.version/cli.build_id above so emulated
+            // runs are distinguishable in telemetry. See docs/specs/cli-identity-sidecar.md.
+            _tagsList.Add(new(TelemetryConstants.Tags.IdentityVersion, _executionContext.IdentityVersion));
+            _tagsList.Add(new(TelemetryConstants.Tags.IdentityChannel, _executionContext.IdentityChannel));
+            if (!string.IsNullOrEmpty(_executionContext.IdentityCommit))
+            {
+                _tagsList.Add(new(TelemetryConstants.Tags.IdentityCommit, _executionContext.IdentityCommit));
+            }
+
+            var codingAgent = _codingAgentDetector.GetCodingAgent();
+            if (codingAgent is not null)
+            {
+                _tagsList.Add(new(TelemetryConstants.Tags.CodingAgent, codingAgent));
+            }
+
             _tagsList.Add(new(TelemetryConstants.Tags.DeploymentEnvironmentName, _ciEnvironmentDetector.IsCIEnvironment() ? "ci" : "local"));
 
             _tagsList.Add(new(TelemetryConstants.Tags.OsName, GetOsName()));
@@ -319,6 +347,12 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// <summary>
     /// Gets the CLI version from the assembly's informational version attribute.
     /// </summary>
+    /// <remarks>
+    /// physical-binary-version-by-design (see docs/specs/cli-identity-sidecar.md): the
+    /// <c>cli.version</c> telemetry tag identifies the actual running binary, so it reads the
+    /// assembly directly and is NOT replaced by an emulated <c>ASPIRE_CLI_VERSION</c> identity.
+    /// The emulated identity is emitted separately via the <c>identity.*</c> tags.
+    /// </remarks>
     /// <returns>The CLI version string, or an empty string if not available.</returns>
     internal static string GetCliVersion()
     {

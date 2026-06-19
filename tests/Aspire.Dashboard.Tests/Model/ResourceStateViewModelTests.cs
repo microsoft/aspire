@@ -79,7 +79,7 @@ public class ResourceStateViewModelTests
         var propertiesDictionary = new Dictionary<string, ResourcePropertyViewModel>();
         if (exitCode is not null)
         {
-            propertiesDictionary.TryAdd(KnownProperties.Resource.ExitCode, new ResourcePropertyViewModel(KnownProperties.Resource.ExitCode, Value.ForNumber((double)exitCode), false, null, 0));
+            propertiesDictionary.TryAdd(KnownProperties.Resource.ExitCode, new ResourcePropertyViewModel(KnownProperties.Resource.ExitCode, Value.ForNumber((double)exitCode), false, null, 0, displayName: null, isHighlighted: false));
         }
 
         var resource = ModelTestHelpers.CreateResource(
@@ -92,7 +92,7 @@ public class ResourceStateViewModelTests
 
         if (exitCode is not null)
         {
-            resource.Properties.TryAdd(KnownProperties.Resource.ExitCode, new ResourcePropertyViewModel(KnownProperties.Resource.ExitCode, Value.ForNumber((double)exitCode), false, null, 0));
+            resource.Properties.TryAdd(KnownProperties.Resource.ExitCode, new ResourcePropertyViewModel(KnownProperties.Resource.ExitCode, Value.ForNumber((double)exitCode), false, null, 0, displayName: null, isHighlighted: false));
         }
 
         var localizer = new TestStringLocalizer<Columns>();
@@ -121,7 +121,9 @@ public class ResourceStateViewModelTests
                     Value.ForList(Value.ForString("nginx"), Value.ForString("redis")),
                     isValueSensitive: false,
                     knownProperty: null,
-                    priority: 0)
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false)
             });
 
         var localizer = new TestStringLocalizer<Columns>();
@@ -147,7 +149,9 @@ public class ResourceStateViewModelTests
                     Value.ForList(Value.ForString("messaging-abcxyz")),
                     isValueSensitive: false,
                     knownProperty: null,
-                    priority: 0)
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false)
             });
 
         var localizer = new TestStringLocalizer<Columns>();
@@ -176,7 +180,9 @@ public class ResourceStateViewModelTests
                     Value.ForList(Value.ForString("messaging-abcxyz")),
                     isValueSensitive: false,
                     knownProperty: null,
-                    priority: 0)
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false)
             });
 
         var localizer = new TestStringLocalizer<Columns>();
@@ -184,5 +190,55 @@ public class ResourceStateViewModelTests
         var tooltip = ResourceStateViewModel.GetResourceStateTooltip(resource, localizer, [resource, firstDependency, secondDependency]);
 
         Assert.Equal($"Localized:{nameof(Columns.StateColumnResourceWaitingFor)}:messaging-abcxyz", tooltip);
+    }
+
+    [Fact]
+    public void TryGetResolvedWaitingForDependenciesDoesNotMaterializeAllResources()
+    {
+        var dependency = ModelTestHelpers.CreateResource(
+            resourceName: "messaging-abcxyz",
+            displayName: "messaging");
+
+        var resource = ModelTestHelpers.CreateResource(
+            state: KnownResourceState.Waiting,
+            properties: new Dictionary<string, ResourcePropertyViewModel>
+            {
+                [KnownProperties.Resource.WaitingFor] = new(
+                    KnownProperties.Resource.WaitingFor,
+                    Value.ForList(Value.ForString("messaging-abcxyz")),
+                    isValueSensitive: false,
+                    knownProperty: null,
+                    sortOrder: 0,
+                    displayName: null,
+                    isHighlighted: false)
+            });
+
+        var resources = new CopyToThrowingResourceCollection(resource, dependency);
+
+        var result = resource.TryGetResolvedWaitingForDependencies(resources, out var dependencies);
+
+        Assert.True(result);
+        Assert.Equal(["messaging"], dependencies);
+    }
+
+    private sealed class CopyToThrowingResourceCollection(params ResourceViewModel[] resources) : ICollection<ResourceViewModel>, IReadOnlyCollection<ResourceViewModel>
+    {
+        public int Count => resources.Length;
+
+        public bool IsReadOnly => true;
+
+        public void Add(ResourceViewModel item) => throw new NotSupportedException();
+
+        public void Clear() => throw new NotSupportedException();
+
+        public bool Contains(ResourceViewModel item) => resources.Contains(item);
+
+        public void CopyTo(ResourceViewModel[] array, int arrayIndex) => throw new InvalidOperationException("The resources collection should not be copied.");
+
+        public IEnumerator<ResourceViewModel> GetEnumerator() => resources.AsEnumerable().GetEnumerator();
+
+        public bool Remove(ResourceViewModel item) => throw new NotSupportedException();
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
 }

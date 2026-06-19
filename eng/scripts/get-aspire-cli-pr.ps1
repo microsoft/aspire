@@ -39,7 +39,9 @@
 
 .PARAMETER InstallMode
     How to install the CLI: 'Archive' (default) installs from the cli-native-archives-<rid>
-    artifact, 'Tool' installs the Aspire.Cli dotnet tool from the PR's RID-specific NuGet artifact.
+    artifact, 'Tool' installs the Aspire.Cli dotnet tool from the PR's RID-specific NuGet artifact,
+    'WinGet' installs from the generated WinGet manifest artifact, and 'Homebrew' installs from
+    the generated Homebrew cask artifact.
     Alias: -m
 
 .PARAMETER Force
@@ -107,6 +109,12 @@
     .\get-aspire-cli-pr.ps1 1234 -InstallMode Tool -Force
 
 .EXAMPLE
+    .\get-aspire-cli-pr.ps1 1234 -InstallMode Homebrew
+
+.EXAMPLE
+    .\get-aspire-cli-pr.ps1 1234 -InstallMode WinGet
+
+.EXAMPLE
     .\get-aspire-cli-pr.ps1 -LocalDir "C:\path\to\artifacts" -InstallMode Tool
 
 .EXAMPLE
@@ -143,12 +151,12 @@ param(
     [Alias("i")]
     [string]$InstallPath = "",
 
-    [Parameter(HelpMessage = "How to install the CLI: 'Archive' (default) or 'Tool' (install Aspire.Cli dotnet tool from the PR package source)")]
+    [Parameter(HelpMessage = "How to install the CLI: 'Archive' (default), 'Tool', 'WinGet', or 'Homebrew'")]
     [Alias("m")]
-    [ValidateSet("Archive", "Tool")]
+    [ValidateSet("Archive", "Tool", "WinGet", "Homebrew")]
     [string]$InstallMode = "Archive",
 
-    [Parameter(HelpMessage = "Tool mode only: when Aspire.Cli is already installed globally, update it to the PR's exact package version (allows downgrades)")]
+    [Parameter(HelpMessage = "Tool mode updates an existing Aspire.Cli tool; WinGet mode allows replacing an existing Microsoft.Aspire install")]
     [switch]$Force,
 
     [Parameter(HelpMessage = "Override OS detection")]
@@ -184,6 +192,8 @@ $Script:BuiltNugetsRidArtifactName = "built-nugets-for"
 $Script:CliArchiveArtifactNamePrefix = "cli-native-archives"
 $Script:AspireCliArtifactNamePrefix = "aspire-cli"
 $Script:ExtensionArtifactName = "aspire-extension"
+$Script:WinGetManifestArtifactName = "winget-manifests-prerelease"
+$Script:HomebrewCaskArtifactName = "homebrew-cask-prerelease"
 $Script:IsModernPowerShell = $PSVersionTable.PSVersion.Major -ge 6 -and $PSVersionTable.PSEdition -eq "Core"
 $Script:HostOS = "unset"
 $Script:Repository = if ($env:ASPIRE_REPO -and $env:ASPIRE_REPO.Trim()) { $env:ASPIRE_REPO.Trim() } else { 'microsoft/aspire' }
@@ -1361,6 +1371,174 @@ function Get-AspireCliFromArtifact {
     return $downloadDir
 }
 
+function Test-InstallerMode {
+    return $InstallMode -eq 'WinGet' -or $InstallMode -eq 'Homebrew'
+}
+
+function Test-ScriptManagesCliPath {
+    return $InstallMode -eq 'Archive' -or ($InstallMode -eq 'Tool' -and $script:InstallPathExplicit)
+}
+
+function Get-InstallerArtifactName {
+    switch ($InstallMode) {
+        'WinGet' { return $Script:WinGetManifestArtifactName }
+        'Homebrew' { return $Script:HomebrewCaskArtifactName }
+        default { throw "Install mode '$InstallMode' does not use an installer artifact." }
+    }
+}
+
+function Get-InstallerArchiveRids {
+    switch ($InstallMode) {
+        'WinGet' { return @('win-x64', 'win-arm64') }
+        'Homebrew' { return @('osx-arm64', 'osx-x64') }
+        default { throw "Install mode '$InstallMode' does not use native installer archives." }
+    }
+}
+
+function Get-InstallerArtifacts {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RunId,
+
+        [Parameter(Mandatory = $true)]
+        [string]$TempDir
+    )
+
+    $installerArtifactName = Get-InstallerArtifactName
+    $installerArtifactDir = Join-Path $TempDir "installer-$($InstallMode.ToLowerInvariant())"
+    $archiveRoot = Join-Path $TempDir "installer-native-archives"
+
+    Invoke-ArtifactDownload -RunId $RunId -ArtifactName $installerArtifactName -DownloadDirectory $installerArtifactDir
+
+    foreach ($rid in Get-InstallerArchiveRids) {
+        Invoke-ArtifactDownload -RunId $RunId -ArtifactName "$($Script:CliArchiveArtifactNamePrefix)-$rid" -DownloadDirectory $archiveRoot
+    }
+
+    return [pscustomobject]@{
+        ArtifactDir = $installerArtifactDir
+        ArchiveRoot = $archiveRoot
+    }
+}
+
+function Find-InstallerDogfoodScript {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ArtifactDir
+    )
+
+    $scriptName = switch ($InstallMode) {
+        'WinGet' { 'dogfood.ps1' }
+        'Homebrew' { 'dogfood.sh' }
+        default { throw "Install mode '$InstallMode' does not use a dogfood script." }
+    }
+
+    $companionPattern = switch ($InstallMode) {
+        'WinGet' { '*.installer.yaml' }
+        'Homebrew' { 'aspire.rb' }
+        default { throw "Install mode '$InstallMode' does not use a dogfood script." }
+    }
+
+    $matchedItems = @(
+        Get-ChildItem -Path $ArtifactDir -File -Recurse -Filter $scriptName -ErrorAction SilentlyContinue |
+            Where-Object {
+                Get-ChildItem -Path $_.Directory.FullName -File -Filter $companionPattern -ErrorAction SilentlyContinue |
+                    Select-Object -First 1
+            } |
+            Sort-Object FullName
+    )
+
+    if ($matchedItems.Count -eq 0) {
+        throw "Could not find $scriptName co-located with $companionPattern under: $ArtifactDir"
+    }
+
+    if ($matchedItems.Count -gt 1) {
+        $matchList = ($matchedItems | ForEach-Object { "  $($_.FullName)" }) -join [Environment]::NewLine
+        throw "Found multiple $scriptName files co-located with $companionPattern under ${ArtifactDir}:$([Environment]::NewLine)$matchList"
+    }
+
+    return $matchedItems[0].FullName
+}
+
+function Install-AspireCliWithInstallerArtifact {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ArtifactDir,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ArchiveRoot
+    )
+
+    switch ($InstallMode) {
+        'WinGet' {
+            $dogfoodScript = if ($WhatIfPreference -and -not (Test-Path $ArtifactDir)) {
+                Join-Path $ArtifactDir 'dogfood.ps1'
+            } else {
+                Find-InstallerDogfoodScript -ArtifactDir $ArtifactDir
+            }
+            $command = @('pwsh', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $dogfoodScript, '-ArchiveRoot', $ArchiveRoot)
+            if ($Force) {
+                $command += '-Force'
+            }
+
+            if ($PSCmdlet.ShouldProcess($dogfoodScript, "Install Aspire CLI with WinGet artifact: $($command -join ' ')")) {
+                & $command[0] $command[1..($command.Length - 1)]
+                if ($LASTEXITCODE -ne 0) {
+                    throw "WinGet dogfood installer failed with exit code $LASTEXITCODE"
+                }
+            }
+            break
+        }
+        'Homebrew' {
+            $dogfoodScript = if ($WhatIfPreference -and -not (Test-Path $ArtifactDir)) {
+                Join-Path $ArtifactDir 'dogfood.sh'
+            } else {
+                Find-InstallerDogfoodScript -ArtifactDir $ArtifactDir
+            }
+            $command = @('bash', $dogfoodScript, '--archive-root', $ArchiveRoot)
+            if ($PSCmdlet.ShouldProcess($dogfoodScript, "Install Aspire CLI with Homebrew artifact: $($command -join ' ')")) {
+                & $command[0] $command[1..($command.Length - 1)]
+                if ($LASTEXITCODE -ne 0) {
+                    throw "Homebrew dogfood installer failed with exit code $LASTEXITCODE"
+                }
+            }
+            break
+        }
+        default {
+            throw "Unsupported installer mode: $InstallMode"
+        }
+    }
+}
+
+function Test-InstallerModeEnvironment {
+    if ($WhatIfPreference) {
+        return
+    }
+
+    switch ($InstallMode) {
+        'WinGet' {
+            if ($Script:HostOS -ne 'win') {
+                throw "-InstallMode WinGet can only be executed on Windows. Use -WhatIf to preview downloads from another OS."
+            }
+            if (-not (Get-Command pwsh -ErrorAction SilentlyContinue)) {
+                throw "-InstallMode WinGet requires PowerShell (pwsh) to run the WinGet dogfood installer."
+            }
+            if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+                throw "-InstallMode WinGet requires WinGet to install the generated manifest artifact."
+            }
+        }
+        'Homebrew' {
+            if ($Script:HostOS -ne 'osx') {
+                throw "-InstallMode Homebrew can only be executed on macOS. Use -WhatIf to preview downloads from another OS."
+            }
+            if (-not (Get-Command brew -ErrorAction SilentlyContinue)) {
+                throw "-InstallMode Homebrew requires Homebrew (brew) to install the generated cask artifact."
+            }
+        }
+    }
+}
+
 # Writes the PR-route install-source sidecar (.aspire-install.json) next to
 # the installed binary. Under -WhatIf, prints the target path and skips the
 # write so a real user's sidecar is never overwritten by a describe pass.
@@ -1560,6 +1738,8 @@ function Start-InstallFromLocalDir {
         Write-Message "Skipping CLI installation due to -HiveOnly flag" -Level Info
     } elseif ($InstallMode -eq 'Tool') {
         Write-Message "Skipping CLI archive lookup in local directory (install mode: Tool)" -Level Verbose
+    } elseif (Test-InstallerMode) {
+        Install-AspireCliWithInstallerArtifact -ArtifactDir $LocalDirPath -ArchiveRoot $LocalDirPath
     } else {
         $archiveMatch = Get-ChildItem -Path $LocalDirPath -File -Recurse -ErrorAction SilentlyContinue |
             Where-Object { $_.Name -match "^$Script:AspireCliArtifactNamePrefix-.*\.(tar\.gz|zip)$" } |
@@ -1616,7 +1796,7 @@ function Start-InstallFromLocalDir {
 
     # Update PATH environment variables
     if (-not $HiveOnly) {
-        if ($InstallMode -ne 'Tool' -or $script:InstallPathExplicit) {
+        if (Test-ScriptManagesCliPath) {
             if ($SkipPath) {
                 Write-Message "Skipping PATH configuration due to -SkipPath flag" -Level Info
             } else {
@@ -1686,6 +1866,8 @@ function Start-DownloadAndInstall {
         Write-Message "Skipping CLI download due to -HiveOnly flag" -Level Info
     } elseif ($InstallMode -eq 'Tool') {
         Write-Message "Skipping CLI native archive download (install mode: Tool)" -Level Verbose
+    } elseif (Test-InstallerMode) {
+        $installerArtifacts = Get-InstallerArtifacts -RunId $runId -TempDir $TempDir
     } else {
         $cliDownloadDir = Get-AspireCliFromArtifact -RunId $runId -RID $rid -TempDir $TempDir
     }
@@ -1718,6 +1900,8 @@ function Start-DownloadAndInstall {
         Write-Message "Skipping CLI installation due to -HiveOnly flag" -Level Info
     } elseif ($InstallMode -eq 'Tool') {
         Write-Message "Skipping CLI archive installation (install mode: Tool)" -Level Verbose
+    } elseif (Test-InstallerMode) {
+        Install-AspireCliWithInstallerArtifact -ArtifactDir $installerArtifacts.ArtifactDir -ArchiveRoot $installerArtifacts.ArchiveRoot
     } else {
         Install-AspireCliFromDownload -DownloadDir $cliDownloadDir -CliBinDir $cliBinDir
     }
@@ -1748,7 +1932,7 @@ function Start-DownloadAndInstall {
 
     # Update PATH environment variables
     if (-not $HiveOnly) {
-        if ($InstallMode -ne 'Tool' -or $script:InstallPathExplicit) {
+        if (Test-ScriptManagesCliPath) {
             if ($SkipPath) {
                 Write-Message "Skipping PATH configuration due to -SkipPath flag" -Level Info
             } else {
@@ -1764,7 +1948,7 @@ function Start-DownloadAndInstall {
     # The new-PATH expression is emitted with double quotes so PowerShell expands `$env:PATH`
     # when the user pastes the line into their profile — single quotes would assign the literal
     # text "$env:PATH" and clobber the existing PATH.
-    if (-not $HiveOnly -and $PRNumber -gt 0 -and ($InstallMode -eq 'Archive' -or $script:InstallPathExplicit)) {
+    if (-not $HiveOnly -and $PRNumber -gt 0 -and (Test-ScriptManagesCliPath)) {
         $pathSep = [System.IO.Path]::PathSeparator
         Write-Host "Add to your shell profile: `$env:PATH = `"$cliBinDir$pathSep`$env:PATH`";"
     }
@@ -1796,8 +1980,8 @@ OPTIONS:
     -LocalDir <string>      Use pre-downloaded artifacts from a local directory
     -HiveLabel <string>     Override the NuGet hive label
     -InstallPath <string>   Directory prefix to install
-    -InstallMode <string>   How to install the CLI: 'Archive' (default) or 'Tool'
-    -Force                  Tool mode only: run dotnet tool update for the PR's exact version
+    -InstallMode <string>   How to install the CLI: 'Archive' (default), 'Tool', 'WinGet', or 'Homebrew'
+    -Force                  Tool mode updates the existing tool; WinGet mode allows replacing an existing install
     -OS <string>            Override OS detection (win, linux, linux-musl, osx)
     -Architecture <string>  Override architecture detection (x64, arm64)
     -HiveOnly               For installs from archives only: only install NuGet packages to the hive, skip CLI download
@@ -1825,15 +2009,22 @@ OPTIONS:
     # Set host OS for PATH environment updates
     $script:HostOS = Get-OperatingSystem
 
-    if ($InstallMode -eq 'Tool' -and $HiveOnly) {
-        Write-Message "Error: -HiveOnly cannot be combined with -InstallMode Tool: -HiveOnly skips the CLI install, but -InstallMode Tool installs Aspire.Cli as a .NET tool." -Level Error
-        Write-Message "Drop one of the two flags. Both archive and tool modes populate the hive." -Level Info
+    $InstallMode = switch ($InstallMode.ToLowerInvariant()) {
+        'archive' { 'Archive' }
+        'tool' { 'Tool' }
+        'winget' { 'WinGet' }
+        'homebrew' { 'Homebrew' }
+    }
+
+    if ($HiveOnly -and $InstallMode -ne 'Archive') {
+        Write-Message "Error: -HiveOnly cannot be combined with -InstallMode ${InstallMode}: -HiveOnly skips the CLI install, but this install mode installs Aspire CLI through a package or tool manager." -Level Error
+        Write-Message "Drop one of the two flags. All install modes populate the hive." -Level Info
         if ($InvokedFromFile) { exit 1 } else { return 1 }
     }
 
-    if ($InstallMode -ne 'Tool' -and $Force) {
-        Write-Message "Error: -Force can only be combined with -InstallMode Tool: archive mode installs from downloaded binaries and does not use dotnet tool update." -Level Error
-        Write-Message "Use -InstallMode Tool with -Force, or drop -Force." -Level Info
+    if ($InstallMode -ne 'Tool' -and $InstallMode -ne 'WinGet' -and $Force) {
+        Write-Message "Error: -Force can only be combined with -InstallMode Tool or -InstallMode WinGet." -Level Error
+        Write-Message "Use -InstallMode Tool/WinGet with -Force, or drop -Force." -Level Info
         if ($InvokedFromFile) { exit 1 } else { return 1 }
     }
 
@@ -1841,6 +2032,10 @@ OPTIONS:
     if ($InstallMode -eq 'Tool') {
         Test-ToolModeRuntimeIdentifier
         Test-DotnetDependency
+    }
+
+    if (Test-InstallerMode) {
+        Test-InstallerModeEnvironment
     }
 
     # Check gh dependency (not needed for -LocalDir mode)

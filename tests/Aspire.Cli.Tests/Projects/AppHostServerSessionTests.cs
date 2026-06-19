@@ -2,17 +2,27 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using Aspire.Cli.Bundles;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Layout;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Telemetry;
+using Aspire.Cli.Tests.Mcp;
+using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Shared;
+using Aspire.Tests;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Projects;
 
-public class AppHostServerSessionTests
+public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task Start_DoesNotMutateCallerEnvironmentVariables()
@@ -23,13 +33,14 @@ public class AppHostServerSessionTests
         {
             ["EXISTING_VALUE"] = "present"
         };
+        using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration());
+        var factory = CreateSessionFactory(profilingTelemetry);
 
         // Act
-        await using var session = AppHostServerSession.Start(
+        await using var session = factory.Start(
             project,
             environmentVariables,
-            debug: false,
-            NullLogger<AppHostServerSession>.Instance);
+            debug: false);
 
         // Assert
         Assert.Equal("present", environmentVariables["EXISTING_VALUE"]);
@@ -48,17 +59,16 @@ public class AppHostServerSessionTests
         {
             ["EXISTING_VALUE"] = "present"
         };
-        using var listener = CreateActivityListener(ProfilingTelemetry.ActivitySourceName);
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1")));
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource);
+        var factory = CreateSessionFactory(profilingTelemetry);
 
-        await using var session = AppHostServerSession.Start(
+        await using var session = factory.Start(
             project,
             environmentVariables,
-            debug: false,
-            NullLogger<AppHostServerSession>.Instance,
-            profilingTelemetry);
+            debug: false);
 
         Assert.Equal("present", environmentVariables["EXISTING_VALUE"]);
         Assert.False(environmentVariables.ContainsKey(KnownConfigNames.RemoteAppHostToken));
@@ -82,21 +92,20 @@ public class AppHostServerSessionTests
     {
         var project = new RecordingAppHostServerProject();
         using var parentSource = new ActivitySource("test-apphost-server-parent");
-        using var parentListener = CreateActivityListener("test-apphost-server-parent");
-        using var listener = CreateActivityListener(ProfilingTelemetry.ActivitySourceName);
+        using var parentListener = ActivityListenerHelper.Create(parentSource);
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1")));
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource);
+        var factory = CreateSessionFactory(profilingTelemetry);
 
         using var parentActivity = parentSource.StartActivity("aspire/cli/run");
         Assert.NotNull(parentActivity);
 
-        await using var session = AppHostServerSession.Start(
+        await using var session = factory.Start(
             project,
             environmentVariables: null,
-            debug: false,
-            NullLogger<AppHostServerSession>.Instance,
-            profilingTelemetry);
+            debug: false);
 
         Assert.Same(parentActivity, Activity.Current);
 
@@ -104,15 +113,91 @@ public class AppHostServerSessionTests
         Assert.NotEqual(parentActivity.Id, receivedEnvironmentVariables[ProfilingTelemetry.EnvironmentVariables.TraceParent]);
     }
 
-    private static ActivityListener CreateActivityListener(string sourceName)
+    [Fact]
+    public async Task GetRpcClientAsync_WhenServerExitsBeforeSocketIsAvailable_FailsWithoutWaitingForConnectionTimeout()
     {
-        var listener = new ActivityListener
+        var project = new RecordingAppHostServerProject();
+
+        using var loggerFactory = LoggerFactory.Create(builder => builder.AddXunit(outputHelper));
+        using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration());
+        var factory = CreateSessionFactory(profilingTelemetry, loggerFactory.CreateLogger<AppHostServerSession>());
+
+        await using var session = factory.Start(
+            project,
+            environmentVariables: null,
+            debug: false);
+
+        // Wait for the process to exit so the stopwatch measures only the early-exit detection
+        // latency, not the variable execution time of "dotnet --version" on loaded CI machines.
+        await project.StartedProcess!.WaitForExitAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+
+        var stopwatch = Stopwatch.StartNew();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => session.GetRpcClientAsync(TestContext.Current.CancellationToken)).DefaultTimeout();
+        stopwatch.Stop();
+
+        Assert.Equal("AppHost server process exited before the RPC connection could be established. Exit code: 0.", exception.Message);
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5),
+            $"Expected RPC connection to fail promptly after the server process exited, but it took {stopwatch.Elapsed}.");
+    }
+
+    [Fact]
+    public async Task CreateAsync_DisposesProjectWhenPrepareFails()
+    {
+        var project = new FakeFailingAppHostServerProject(Directory.GetCurrentDirectory());
+        var projectFactory = new TestAppHostServerProjectFactory
         {
-            ShouldListenTo = source => source.Name == sourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded
+            CreateAsyncCallback = (_, _) => Task.FromResult<IAppHostServerProject>(project)
         };
-        ActivitySource.AddActivityListener(listener);
-        return listener;
+        using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration());
+        var sessionFactory = new AppHostServerSessionFactory(
+            projectFactory,
+            NullLogger<AppHostServerSession>.Instance,
+            profilingTelemetry);
+
+        var result = await sessionFactory.CreateAsync(
+            project.AppDirectoryPath,
+            "13.4.0",
+            [],
+            launchSettingsEnvVars: null,
+            debug: false,
+            CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.True(project.Disposed);
+    }
+
+    [Fact]
+    public void CreatePrebuiltAppHostServer_DisposesLayoutLeaseWhenConstructorFails()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appPath = workspace.CreateDirectory("apphost").FullName;
+        var integrationCachePathBlockedByFile = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "integrations");
+        File.WriteAllText(integrationCachePathBlockedByFile, string.Empty);
+
+        var versionDirectory = workspace.CreateDirectory("version");
+        var versionLease = BundleVersionLease.Acquire(versionDirectory.FullName, "test", "apphost-server");
+        var layoutLease = new BundleLayoutLease(
+            new LayoutConfiguration(),
+            versionLease);
+        var factory = CreateAppHostServerProjectFactory();
+
+        Assert.True(BundleVersionLease.HasActiveLease(versionDirectory.FullName));
+
+        try
+        {
+            Assert.ThrowsAny<IOException>(() => factory.CreatePrebuiltAppHostServer(
+                appPath,
+                "test.sock",
+                new LayoutConfiguration(),
+                layoutLease));
+
+            Assert.False(BundleVersionLease.HasActiveLease(versionDirectory.FullName));
+        }
+        finally
+        {
+            layoutLease.Dispose();
+        }
     }
 
     private static IConfiguration CreateConfiguration(params (string Key, string? Value)[] values)
@@ -122,19 +207,51 @@ public class AppHostServerSessionTests
             .Build();
     }
 
+    private static AppHostServerSessionFactory CreateSessionFactory(ProfilingTelemetry profilingTelemetry, ILogger<AppHostServerSession>? logger = null)
+    {
+        var projectFactory = CreateAppHostServerProjectFactory();
+        return new AppHostServerSessionFactory(
+            projectFactory,
+            logger ?? NullLogger<AppHostServerSession>.Instance,
+            profilingTelemetry);
+    }
+
+    private static AppHostServerProjectFactory CreateAppHostServerProjectFactory()
+    {
+        var executionContext = TestExecutionContextFactory.CreateTestContext();
+        var nugetService = new BundleNuGetService(
+            new NullLayoutDiscovery(),
+            new LayoutProcessRunner(new TestProcessExecutionFactory()),
+            new TestFeatures(),
+            executionContext,
+            NullLogger<BundleNuGetService>.Instance);
+
+        return new AppHostServerProjectFactory(
+            new TestDotNetCliRunner(),
+            MockPackagingServiceFactory.Create(),
+            new NullBundleService(),
+            nugetService,
+            new TestDotNetSdkInstaller(),
+            executionContext,
+            NullLoggerFactory.Instance);
+    }
+
     private sealed class RecordingAppHostServerProject : IAppHostServerProject
     {
         public string AppDirectoryPath => Directory.GetCurrentDirectory();
 
         public Dictionary<string, string>? ReceivedEnvironmentVariables { get; private set; }
 
+        public Process? StartedProcess { get; private set; }
+
         public string GetInstanceIdentifier() => AppDirectoryPath;
 
         public Task<AppHostServerPrepareResult> PrepareAsync(
             string sdkVersion,
             IEnumerable<IntegrationReference> integrations,
-            CancellationToken cancellationToken = default,
-            string? requestedChannel = null) =>
+            string? requestedChannel = null,
+            string? packageSourceOverride = null,
+            CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
         public (string SocketPath, Process Process, OutputCollector OutputCollector) Run(
@@ -154,6 +271,7 @@ public class AppHostServerSessionTests
                 UseShellExecute = false
             })!;
 
+            StartedProcess = process;
             return ("test.sock", process, new OutputCollector());
         }
     }

@@ -18,7 +18,12 @@ public static class AzureResourceExtensions
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <returns>The configured <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Publishes an Azure resource to the manifest as a connection string")]
+    /// <remarks>
+    /// This API only changes the manifest representation; it does not change the resource model used by other publishers.
+    /// </remarks>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [Obsolete("PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.")]
+    [AspireExport]
     public static IResourceBuilder<T> PublishAsConnectionString<T>(this IResourceBuilder<T> builder)
         where T : IAzureResource, IResourceWithConnectionString
     {
@@ -31,7 +36,7 @@ public static class AzureResourceExtensions
     /// </summary>
     /// <param name="resource">The Azure resource.</param>
     /// <returns>A valid Bicep identifier.</returns>
-    [AspireExport(Description = "Gets the normalized Bicep identifier for an Azure resource")]
+    [AspireExport]
     public static string GetBicepIdentifier(this IAzureResource resource) =>
         Infrastructure.NormalizeBicepIdentifier(resource.Name);
 
@@ -41,6 +46,7 @@ public static class AzureResourceExtensions
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <returns>The configured <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method removes all default role assignments from the Azure resource. This can be useful when 
     /// role assignments can't be created, for example on existing resources where you don't have permission
@@ -59,7 +65,7 @@ public static class AzureResourceExtensions
     ///     .WithReference(keyVault);
     /// </code>
     /// </example>
-    [AspireExport(Description = "Clears the default Azure role assignments from a resource")]
+    [AspireExport]
     public static IResourceBuilder<T> ClearDefaultRoleAssignments<T>(this IResourceBuilder<T> builder)
         where T : IAzureResource
     {

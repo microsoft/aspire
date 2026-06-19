@@ -20,7 +20,7 @@ public static class AzureProvisionerExtensions
     /// </summary>
     /// <param name="builder">The distributed application builder.</param>
     /// <returns>The distributed application builder.</returns>
-    [AspireExport(Description = "Adds Azure provisioning services to the distributed application builder")]
+    [AspireExport]
     public static IDistributedApplicationBuilder AddAzureProvisioning(this IDistributedApplicationBuilder builder)
     {
         // Always add the Azure environment, even if the user doesn't explicitly add it.
@@ -60,12 +60,21 @@ public static class AzureProvisionerExtensions
 
         if (builder.ExecutionContext.IsPublishMode)
         {
-            builder.Services.AddSingleton<IProvisioningContextProvider, PublishModeProvisioningContextProvider>();
+            builder.Services.TryAddSingleton<IProvisioningContextProvider, PublishModeProvisioningContextProvider>();
         }
         else
         {
-            builder.Services.AddSingleton<IProvisioningContextProvider, RunModeProvisioningContextProvider>();
+            builder.Services.TryAddSingleton<RunModeProvisioningContextProvider>();
+            builder.Services.TryAddSingleton<IProvisioningContextProvider>(sp => sp.GetRequiredService<RunModeProvisioningContextProvider>());
+            builder.Services.TryAddSingleton<IAzureProvisioningOptionsManager>(sp => sp.GetRequiredService<RunModeProvisioningContextProvider>());
         }
+
+        // The controller is registered unconditionally because AzureProvisioner is resolved by the run-mode
+        // Azure environment initialization. In publish mode, the controller's interactive features
+        // (change-context, change-location) are never invoked, but it must be resolvable.
+        builder.Services.TryAddSingleton<IAzureProvisioningOptionsManager, NoOpAzureProvisioningOptionsManager>();
+        builder.Services.TryAddSingleton<AzureProvisioningController>();
+
         builder.Services.TryAddSingleton<IProcessRunner, DefaultProcessRunner>();
 
         return builder;

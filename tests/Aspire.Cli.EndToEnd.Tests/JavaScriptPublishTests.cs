@@ -10,7 +10,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 
 /// <summary>
 /// End-to-end test for JavaScript publish methods. Uses checked-in fixture apps for all four
-/// publish patterns (StaticWebsite, NodeServer, NpmScript, AddNextJsApp), deploys them in a
+/// publish patterns (StaticWebsite, NodeServer, PackageScript, AddNextJsApp), deploys them in a
 /// single apphost via aspire deploy, and verifies all Docker images build successfully.
 /// </summary>
 public sealed class JavaScriptPublishTests(ITestOutputHelper output)
@@ -31,9 +31,9 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
 
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -45,7 +45,7 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
         await auto.DownAsync();
         await auto.WaitUntilTextAsync("> TypeScript (Node.js)", timeout: TimeSpan.FromSeconds(5));
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
         await auto.DeclineAgentInitPromptAsync(counter);
 
         if (localChannel is not null)
@@ -85,10 +85,6 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
         await auto.TypeAsync("docker ps -q --filter label=com.docker.compose.project | xargs -r docker rm -f 2>/dev/null || true");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-        await pendingRun;
     }
 
     [Fact]
@@ -103,17 +99,16 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.Polyglot, workspace: workspace);
 
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
-        var testBodyFailed = false;
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         try
         {
             await auto.PrepareDockerEnvironmentAsync(counter, workspace);
             await auto.InstallAspireCliAsync(strategy, counter);
 
-            await auto.RunCommandFailFastAsync("aspire init --language typescript --non-interactive", counter, TimeSpan.FromMinutes(2));
+            await auto.RunCommandAsync("aspire init --language typescript --non-interactive", counter, TimeSpan.FromMinutes(2));
 
             if (localChannel is not null)
             {
@@ -128,15 +123,10 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
             WriteRuntimeAppHost(workspace);
             WriteRuntimeVerificationScript(workspace);
 
-            await auto.RunCommandFailFastAsync("unset ASPIRE_PLAYGROUND", counter);
+            await auto.RunCommandAsync("unset ASPIRE_PLAYGROUND", counter);
 
-            await auto.RunCommandFailFastAsync("aspire run > aspire-run.log 2>&1 & echo $! > aspire-run.pid", counter);
-            await auto.RunCommandFailFastAsync("bash verify-runtime.sh", counter, TimeSpan.FromMinutes(2));
-        }
-        catch
-        {
-            testBodyFailed = true;
-            throw;
+            await auto.RunCommandAsync("aspire run > aspire-run.log 2>&1 & echo $! > aspire-run.pid", counter);
+            await auto.RunCommandAsync("bash verify-runtime.sh", counter, TimeSpan.FromMinutes(2));
         }
         finally
         {
@@ -148,37 +138,14 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
             {
                 // Best effort. A failure before aspire run writes its PID leaves no process to stop.
             }
-
-            try
-            {
-                await auto.CaptureAspireDiagnosticsAsync(counter, workspace);
-            }
-            catch
-            {
-                // Best effort diagnostics capture.
-            }
-
-            try
-            {
-                await auto.TypeAsync("exit");
-                await auto.EnterAsync();
-                await pendingRun;
-            }
-            catch
-            {
-                if (!testBodyFailed)
-                {
-                    throw;
-                }
-            }
         }
     }
 
     private static void WriteAppHost(TemporaryWorkspace workspace)
     {
-        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts");
         File.WriteAllText(appHostPath, """
-            import { createBuilder } from './.modules/aspire.js';
+            import { createBuilder } from './.aspire/modules/aspire.mjs';
 
             const builder = await createBuilder();
             await builder.addDockerComposeEnvironment('compose');
@@ -197,7 +164,7 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
                 .withExternalHttpEndpoints();
 
             await builder.addViteApp('npmscript', './npmscript')
-                .publishAsNpmScript({ startScriptName: 'start' })
+                .publishAsPackageScript({ scriptName: 'start' })
                 .withExternalHttpEndpoints();
 
             await builder.addNextJsApp('nextjs', './nextjs')
@@ -209,9 +176,9 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
 
     private static void WriteRuntimeAppHost(TemporaryWorkspace workspace)
     {
-        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts");
         File.WriteAllText(appHostPath, $$"""
-            import { createBuilder } from './.modules/aspire.js';
+            import { createBuilder } from './.aspire/modules/aspire.mjs';
 
             const builder = await createBuilder();
 
@@ -368,22 +335,7 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
         foreach (var fixtureDir in Directory.GetDirectories(s_fixturesDir))
         {
             var targetDir = Path.Combine(workspace.WorkspaceRoot.FullName, Path.GetFileName(fixtureDir));
-            CopyDirectory(fixtureDir, targetDir);
-        }
-    }
-
-    private static void CopyDirectory(string source, string destination)
-    {
-        Directory.CreateDirectory(destination);
-
-        foreach (var file in Directory.GetFiles(source))
-        {
-            File.Copy(file, Path.Combine(destination, Path.GetFileName(file)));
-        }
-
-        foreach (var dir in Directory.GetDirectories(source))
-        {
-            CopyDirectory(dir, Path.Combine(destination, Path.GetFileName(dir)));
+            TestDirectoryHelpers.CopyDirectory(fixtureDir, targetDir);
         }
     }
 }

@@ -138,4 +138,10 @@
   <data name="StepArgumentDescription" xml:space="preserve">
     <value>The name of the step to execute</value>
   </data>
+  <data name="StepArgumentRequired" xml:space="preserve">
+    <value>The 'step' argument is required.</value>
+  </data>
+  <data name="ListStepsRequiresStep" xml:space="preserve">
+    <value>The 'step' argument is required when using --list-steps. Example: 'aspire do deploy --list-steps'. Common starting steps are 'build', 'publish' and 'deploy'. See https://aspire.dev/reference/cli/commands/aspire-do/ for the full list of pipeline steps.</value>
+  </data>
 </root>

@@ -173,6 +173,37 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     }
 
     [Fact]
+    public void Resolve_WhenAppHostAndParentDefineDifferentToolchains_ReturnsAppHostToolchain()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("apps").CreateSubdirectory("apphost");
+        File.WriteAllText(Path.Combine(appHostDirectory.Parent!.FullName, "package.json"), "{ \"packageManager\": \"pnpm@10.12.1\" }");
+        File.WriteAllText(Path.Combine(appHostDirectory.FullName, "package.json"), "{ \"packageManager\": \"bun@1.2.0\" }");
+
+        var resolution = TypeScriptAppHostToolchainResolver.ResolveWithReason(appHostDirectory);
+
+        Assert.Equal(TypeScriptAppHostToolchain.Bun, resolution.Toolchain);
+        Assert.Equal($"packageManager 'bun@1.2.0' found in {Path.Combine(appHostDirectory.FullName, "package.json")}", resolution.Reason);
+    }
+
+    [Fact]
+    public void Resolve_WhenAppHostLockFileAndParentPackageManagerDiffer_ReturnsAppHostLockFileToolchain()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("apps").CreateSubdirectory("apphost");
+        File.WriteAllText(Path.Combine(appHostDirectory.Parent!.FullName, "package.json"), "{ \"packageManager\": \"yarn@4.14.1\" }");
+        File.WriteAllText(Path.Combine(appHostDirectory.FullName, "package.json"), "{ \"name\": \"apphost\" }");
+        File.WriteAllText(Path.Combine(appHostDirectory.FullName, "pnpm-lock.yaml"), "lockfileVersion: '9.0'");
+
+        var resolution = TypeScriptAppHostToolchainResolver.ResolveWithReason(appHostDirectory);
+
+        Assert.Equal(TypeScriptAppHostToolchain.Pnpm, resolution.Toolchain);
+        Assert.Equal($"pnpm-lock.yaml found in {appHostDirectory.FullName}", resolution.Reason);
+    }
+
+    [Fact]
     public void Resolve_WhenGrandparentDirectoryDefinesToolchain_ReturnsNpm()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -244,9 +275,9 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
                 "nodemon",
                 "--signal", "SIGTERM",
                 "--watch", ".",
-                "--ext", "ts",
+                "--ext", "ts,mts",
                 "--ignore", "node_modules/",
-                "--ignore", ".modules/",
+                "--ignore", ".aspire/modules/",
                 "--exec", "bun run tsc --noEmit -p tsconfig.apphost.json && bun run \"{appHostFile}\""
             ],
             runtimeSpec.WatchExecute!.Args);
@@ -276,6 +307,9 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
 
         var runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(baseRuntimeSpec, TypeScriptAppHostToolchain.Pnpm);
 
+        var installDependencies = Assert.IsType<CommandSpec>(runtimeSpec.InstallDependencies);
+        Assert.Equal("pnpm", installDependencies.Command);
+        Assert.Equal(["install", "--ignore-workspace"], installDependencies.Args);
         var preExecute = Assert.Single(runtimeSpec.PreExecute!);
         Assert.Equal("pnpm", preExecute.Command);
         Assert.Equal(["exec", "tsc", "--noEmit", "-p", "tsconfig.apphost.json"], preExecute.Args);
@@ -292,7 +326,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
             Language = KnownLanguageId.TypeScript,
             DisplayName = "TypeScript (Node.js)",
             CodeGenLanguage = "TypeScript",
-            DetectionPatterns = ["apphost.ts"],
+            DetectionPatterns = ["apphost.mts"],
             InstallDependencies = new CommandSpec
             {
                 Command = "npm",
