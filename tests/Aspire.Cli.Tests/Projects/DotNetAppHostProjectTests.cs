@@ -274,6 +274,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.False(watch);
             Assert.True(noBuild);
             Assert.False(noRestore);
+            Assert.Equal(bundleRoot.FullName, env!["AspireCliBundlePath"]);
             Assert.Equal(Path.Combine(bundleRoot.FullName, BundleDiscovery.DcpDirectoryName), env![BundleDiscovery.DcpPathEnvVar]);
             Assert.Equal(
                 Path.Combine(bundleRoot.FullName, BundleDiscovery.ManagedDirectoryName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),

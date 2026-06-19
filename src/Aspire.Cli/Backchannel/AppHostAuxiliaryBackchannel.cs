@@ -123,20 +123,20 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     /// Creates and connects a new auxiliary backchannel to the specified socket path.
     /// </summary>
     /// <param name="socketPath">The path to the Unix domain socket.</param>
-    /// <param name="logger">Optional logger for diagnostic messages.</param>
+    /// <param name="logger">Logger for diagnostic messages.</param>
+    /// <param name="profilingTelemetry">Profiling service.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <param name="profilingTelemetry">Optional profiling service.</param>
     /// <returns>A connected AppHostAuxiliaryBackchannel instance.</returns>
     public static Task<AppHostAuxiliaryBackchannel> ConnectAsync(
         string socketPath,
         ILogger logger,
-        CancellationToken cancellationToken = default,
-        ProfilingTelemetry? profilingTelemetry = null)
+        ProfilingTelemetry profilingTelemetry,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(logger);
 
         var hash = AppHostHelper.ExtractHashFromSocketPath(socketPath) ?? string.Empty;
-        return CreateFromSocketAsync(hash, socketPath, isInScope: true, logger, socket: null, cancellationToken, profilingTelemetry);
+        return CreateFromSocketAsync(hash, socketPath, isInScope: true, logger, profilingTelemetry, socket: null, cancellationToken);
     }
 
     /// <summary>
@@ -147,19 +147,19 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     /// <param name="hash">The AppHost hash identifier.</param>
     /// <param name="socketPath">The socket path.</param>
     /// <param name="isInScope">Whether this AppHost is within the scope of the working directory.</param>
+    /// <param name="logger">Logger.</param>
+    /// <param name="profilingTelemetry">Profiling service.</param>
     /// <param name="socket">Optional already-connected socket. If null, a new connection will be established.</param>
-    /// <param name="logger">Optional logger.</param>
     /// <param name="cancellationToken">Cancellation token (only used when socket is null).</param>
-    /// <param name="profilingTelemetry">Optional profiling service.</param>
     /// <returns>A connected AppHostAuxiliaryBackchannel instance.</returns>
     internal static async Task<AppHostAuxiliaryBackchannel> CreateFromSocketAsync(
         string hash,
         string socketPath,
         bool isInScope,
         ILogger logger,
-        Socket? socket = null,
-        CancellationToken cancellationToken = default,
-        ProfilingTelemetry? profilingTelemetry = null)
+        ProfilingTelemetry profilingTelemetry,
+        Socket? socket,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(logger);
 

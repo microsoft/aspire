@@ -1,7 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <!-- net10.0 (not DefaultTargetFramework=net8.0): references tools/SelectTests, which targets
+         net10.0 for its Microsoft.Build ProjectGraph dependency, and loads that graph at runtime. -->
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsTestProject>true</IsTestProject>
@@ -18,13 +20,16 @@
   <ItemGroup>
     <!-- Roslyn for compiling mock test assemblies -->
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+    <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" />
     <PackageReference Include="xunit.v3.extensibility.core" />
     <PackageReference Include="xunit.v3.assert" />
+    <PackageReference Include="YamlDotNet" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Aspire.TestUtilities\Aspire.TestUtilities.csproj" />
     <ProjectReference Include="..\..\tools\TypeScriptApiCompat\TypeScriptApiCompat.csproj" />
+    <ProjectReference Include="..\..\tools\SelectTests\SelectTests.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -484,7 +484,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
 
             // Use the centralized factory to create the connection
             // This ensures capabilities are always fetched
-            var connection = await AppHostAuxiliaryBackchannel.CreateFromSocketAsync(hash, socketPath, isInScope, logger, socket, cancellationToken, profilingTelemetry).ConfigureAwait(false);
+            var connection = await AppHostAuxiliaryBackchannel.CreateFromSocketAsync(hash, socketPath, isInScope, logger, profilingTelemetry, socket, cancellationToken).ConfigureAwait(false);
 
             // Update isInScope based on actual appHostInfo now that we have it
             connection.IsInScope = IsAppHostInScope(connection.AppHostInfo?.AppHostPath);

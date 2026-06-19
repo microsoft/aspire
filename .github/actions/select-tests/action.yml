@@ -1,0 +1,166 @@
+name: 'Select relevant tests'
+description: >
+  Compute the CI test subset (and the non-.NET job booleans) relevant to a PR's changed files,
+  using the SelectTests tool (Layer 1 MSBuild graph + Layer 2 curated trigger map). In enforce mode
+  with a non-ALL selection it writes an OverrideProjectToBuild props file that the enumerate-tests
+  action consumes (beforeBuildPropsPath) to enumerate only the selected projects.
+inputs:
+  checkout:
+    required: false
+    default: 'true'
+    description: 'Whether to check out the repo. Set false when the caller has already checked out and the same working tree must be reused by a later step (e.g. enumerate-tests with checkout=false).'
+  setupDotNet:
+    required: false
+    default: 'true'
+    description: 'Whether to bootstrap the .NET SDK (./dotnet.sh --version). Set false when the caller already installed the SDK in the same job. Selection only needs the SDK -- not a full repo restore -- because it builds an MSBuild ProjectGraph, which auto-resolves SDKs.'
+  enforce:
+    required: false
+    default: 'false'
+    description: 'The audit/enforce knob. false (audit): no restriction props are written, so enumerate-tests builds the FULL matrix and run_* are all true; the summary still reports what enforcing would have skipped. true (enforce): a non-ALL selection writes the restriction props and run_* gate the non-.NET jobs.'
+  slnx:
+    required: false
+    default: ''
+    description: 'Path to the solution that defines the project universe (forwarded as --slnx). Empty defaults to <repo-root>/Aspire.slnx.'
+  triggerMap:
+    required: false
+    default: ''
+    description: 'Path to the curated trigger map (forwarded as --map). Empty defaults to <repo-root>/eng/github-ci/test-trigger-map.yml.'
+  beforeBuildProps:
+    required: false
+    default: ''
+    description: 'Where to write the OverrideProjectToBuild restriction props (consumed by eng/Build.props via $(BeforeBuildPropsPath)). Empty defaults to $GITHUB_WORKSPACE/artifacts/BeforeBuildProps.props -- absolute so eng/Build.props resolves it regardless of cwd, under artifacts/ (gitignored) so it is not seen as a source change.'
+  commentFile:
+    required: false
+    default: ''
+    description: 'Where the selector writes the human-readable selection summary (also goes to the job step summary) so the caller can post it as a PR comment. Empty defaults to $GITHUB_WORKSPACE/artifacts/select-tests-comment.md.'
+  selectionJsonFile:
+    required: false
+    default: ''
+    description: 'Where the selector writes the machine-readable selection record (mode, inputs, and every selected test/job with its per-item causes incl. the Layer 1 decision path). Uploaded as an artifact for post-hoc debugging. Empty defaults to $GITHUB_WORKSPACE/artifacts/select-tests-selection.json.'
+  forceAll:
+    required: false
+    default: 'false'
+    description: 'Kill switch: when ''true'' the selector returns the full matrix and all jobs regardless of the diff. The caller computes this -- on PRs from the run-full-ci label. Non-PR events (no base SHA) force the full set regardless.'
+  prBaseSha:
+    required: false
+    default: ''
+    description: 'The PR base SHA. When set, selection diffs base..head; the base commit is fetched first. Empty (non-PR events) selects everything.'
+  headSha:
+    required: false
+    default: ${{ github.sha }}
+    description: 'The head SHA to diff to.'
+
+outputs:
+  project_override_props:
+    description: 'Path to the restriction props that was written, or empty when enumerate-tests should enumerate everything.'
+    value: ${{ steps.select.outputs.project_override_props }}
+  has_dotnet_tests:
+    description: 'false only for an enforcing, non-ALL selection with no buildable test project (the caller then skips enumerate-tests and emits an empty matrix). ALL and audit are always true.'
+    value: ${{ steps.select.outputs.has_dotnet_tests }}
+  selection:
+    description: >
+      JSON object of the non-.NET job gates, one boolean per job the trigger map knows, keyed
+      run_<job> (e.g. {"run_polyglot":true,"run_extension_e2e":false,...}). Consume via fromJSON(),
+      e.g. fromJSON(steps.select.outputs.selection).run_polyglot. One object (rather than an output
+      per job) means adding a trigger-map job needs no change here -- only the consuming if: names
+      the new key. Audit mode forces every value true (the full matrix still runs).
+    value: ${{ steps.select.outputs.selection }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout code
+      if: ${{ inputs.checkout == 'true' }}
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      # This action runs PR-authored code (the SelectTests build); don't leave the checkout's
+      # GITHUB_TOKEN persisted in .git/config where that code could read it. The base-commit fetch
+      # below is unauthenticated (public repo) and nothing here pushes, so dropping it is safe.
+      with:
+        persist-credentials: false
+
+    # Minimal SDK bootstrap -- not a full ./restore.sh. dotnet.sh -> InitializeDotNetCli installs only
+    # the SDK into repo-local .dotnet (no runtime toolsets, no project restore). SelectTests then builds
+    # its MSBuild ProjectGraph over the solution on this SDK (MSBuild SDKs auto-resolve) -- selection
+    # does not need the repo restored.
+    - name: Install SDK (minimal)
+      if: ${{ inputs.setupDotNet == 'true' }}
+      shell: bash
+      run: ./dotnet.sh --version
+
+    - name: Select relevant tests
+      id: select
+      shell: bash
+      env:
+        FORCE_ALL: ${{ inputs.forceAll }}
+        PR_BASE_SHA: ${{ inputs.prBaseSha }}
+        HEAD_SHA: ${{ inputs.headSha }}
+        BEFORE_BUILD_PROPS: ${{ inputs.beforeBuildProps }}
+        SELECT_TESTS_COMMENT_FILE: ${{ inputs.commentFile }}
+        SELECT_TESTS_JSON_FILE: ${{ inputs.selectionJsonFile }}
+        ENFORCE_SELECTION: ${{ inputs.enforce }}
+        SLNX: ${{ inputs.slnx }}
+        TRIGGER_MAP: ${{ inputs.triggerMap }}
+      run: |
+        set -euo pipefail
+
+        # Resolve the side-channel paths under the workspace when the caller didn't override them.
+        # Absolute (under artifacts/, gitignored) so eng/Build.props's $(BeforeBuildPropsPath) resolves
+        # it regardless of cwd and it is never seen as a source change.
+        BEFORE_BUILD_PROPS="${BEFORE_BUILD_PROPS:-$GITHUB_WORKSPACE/artifacts/BeforeBuildProps.props}"
+        SELECT_TESTS_COMMENT_FILE="${SELECT_TESTS_COMMENT_FILE:-$GITHUB_WORKSPACE/artifacts/select-tests-comment.md}"
+        export SELECT_TESTS_COMMENT_FILE
+        # The machine-readable selection record (per-item causes + decision paths), uploaded below for
+        # post-hoc debugging of "why did this test/job run?" without re-running CI.
+        SELECT_TESTS_JSON_FILE="${SELECT_TESTS_JSON_FILE:-$GITHUB_WORKSPACE/artifacts/select-tests-selection.json}"
+        export SELECT_TESTS_JSON_FILE
+
+        args=(--repo-root . --before-build-props "$BEFORE_BUILD_PROPS")
+        [ -n "$SLNX" ] && args+=(--slnx "$SLNX")
+        [ -n "$TRIGGER_MAP" ] && args+=(--map "$TRIGGER_MAP")
+        [ "$ENFORCE_SELECTION" = "true" ] && args+=(--enforce)
+
+        # Kill switch: the caller sets forceAll (on PRs, from the run-full-ci label) to force the whole
+        # matrix regardless of which files changed.
+        if [ "$FORCE_ALL" = "true" ]; then
+          args+=(--force-all)
+        elif [ -n "$PR_BASE_SHA" ]; then
+          # Pull requests diff base..head. This job's checkout is shallow, so fetch the base commit.
+          # If it can't be made available we FAIL rather than fall back to --force-all: base.sha is
+          # always reachable on origin, so a failure here is a real problem (a bad fetch or a
+          # rewritten base), and masking it with run-all would teach the audit nothing.
+          if ! git fetch --no-tags --depth=1 origin "$PR_BASE_SHA"; then
+            echo "::error::Failed to fetch PR base commit $PR_BASE_SHA; cannot compute the changed-file diff." >&2
+            exit 1
+          fi
+          if ! git cat-file -e "${PR_BASE_SHA}^{commit}" 2>/dev/null; then
+            echo "::error::PR base commit $PR_BASE_SHA is unavailable after fetch; cannot compute the changed-file diff." >&2
+            exit 1
+          fi
+          args+=(--from "$PR_BASE_SHA" --to "$HEAD_SHA")
+        else
+          # Non-PR events (e.g. push to main) have no reliable base -> run everything.
+          args+=(--force-all)
+        fi
+
+        # SelectTests computes the Layer 1 affected-projects graph in-process from the solution
+        # (Microsoft.Build via MSBuildLocator -- needs only the minimal SDK above, not a full repo
+        # restore) and, when enforcing a non-ALL selection, writes the OverrideProjectToBuild props at
+        # $BEFORE_BUILD_PROPS (consumed by the enumerate-tests action's beforeBuildPropsPath). It also
+        # writes the `selection` job-boolean object and project_override_props (to $GITHUB_OUTPUT) and the summary.
+        # The tool selects ALL *by design* when told to (--force-all from the kill switch, or a non-PR
+        # event with no base), so a non-zero exit means the selector itself crashed (incl. a fatal
+        # Layer 1 graph failure -- under-selecting would silently skip tests). Let that fail the run
+        # rather than mask the bug behind a silent fallback.
+        ./dotnet.sh run --project tools/SelectTests/SelectTests.csproj -- "${args[@]}"
+
+    # Publish the machine-readable selection record so a maintainer can answer "why did this test/job
+    # run?" weeks later without re-running CI. always() so it is captured even when a later step fails;
+    # if no path was set, the default under artifacts/ is used. A missing file (e.g. the selector crashed
+    # before writing it) is tolerated rather than failing the upload.
+    - name: Upload selection record
+      if: always()
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+      with:
+        name: select-tests-selection-${{ runner.os }}
+        path: ${{ inputs.selectionJsonFile != '' && inputs.selectionJsonFile || 'artifacts/select-tests-selection.json' }}
+        if-no-files-found: ignore
