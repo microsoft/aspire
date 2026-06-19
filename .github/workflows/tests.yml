@@ -11,10 +11,24 @@ on:
         required: false
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   setup_for_tests:
     name: Setup for tests
     runs-on: ubuntu-latest
+    # This job checks out and runs PR-authored code (SelectTests, the test build), so it is kept at
+    # contents:read with no pull-requests:write. The selection comment is posted from the
+    # separate comment_selection job below, which runs no PR code and holds the write scope instead.
+    permissions:
+      contents: read
+    env:
+      # Single source of truth for the selection-summary path: passed to the select-tests action
+      # (so it writes here) and reused by the upload step below (so it uploads the same file).
+      # Mirrors the action's own default; keeping it here lets one value drive both the write and
+      # the upload instead of repeating the literal path.
+      SELECT_TESTS_COMMENT_FILE: ${{ github.workspace }}/artifacts/select-tests-comment.md
     outputs:
       tests_matrix_no_nugets: ${{ steps.split_matrix.outputs.tests_matrix_no_nugets }}
       tests_matrix_no_nugets_overflow: ${{ steps.split_matrix.outputs.tests_matrix_no_nugets_overflow }}
@@ -22,20 +36,212 @@ jobs:
       tests_matrix_requires_nugets_windows: ${{ steps.split_matrix.outputs.tests_matrix_requires_nugets_windows }}
       tests_matrix_requires_nugets_macos: ${{ steps.split_matrix.outputs.tests_matrix_requires_nugets_macos }}
       tests_matrix_requires_cli_archive: ${{ steps.split_matrix.outputs.tests_matrix_requires_cli_archive }}
+      # Selective CI (see docs/ci/test-trigger-selector-design.md). The audit/enforce knob is the
+      # select-tests action's `enforce` input; tests.yml just consumes what the selector returns.
+      # In audit the selector returns run-all (every gate true + the full matrix), so everything runs.
+      run_polyglot: ${{ fromJSON(steps.select_tests.outputs.selection).run_polyglot }}
+      run_typescript_sdk: ${{ fromJSON(steps.select_tests.outputs.selection).run_typescript_sdk }}
+      run_typescript_api_compat: ${{ fromJSON(steps.select_tests.outputs.selection).run_typescript_api_compat }}
+      run_extension_unit: ${{ fromJSON(steps.select_tests.outputs.selection).run_extension_unit }}
+      run_extension_e2e: ${{ fromJSON(steps.select_tests.outputs.selection).run_extension_e2e }}
+      run_cli_starter: ${{ fromJSON(steps.select_tests.outputs.selection).run_cli_starter }}
+      run_winget_installer: ${{ fromJSON(steps.select_tests.outputs.selection).run_winget_installer }}
+      run_homebrew_installer: ${{ fromJSON(steps.select_tests.outputs.selection).run_homebrew_installer }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        # This job runs PR-authored code; don't leave the checkout's GITHUB_TOKEN persisted in
+        # .git/config where that code could read it. The select-tests base-commit fetch is
+        # unauthenticated (public repo) and nothing here pushes, so dropping the credential is safe.
+        with:
+          persist-credentials: false
 
+      # Compute the selected test subset + non-.NET job booleans. The action reuses this job's checkout
+      # (checkout=false) so the BeforeBuildProps.props it may write survives for enumerate-tests below,
+      # and does its own minimal SDK bootstrap (setupDotNet=true). enforce: 'false' keeps this audit-only
+      # (the knob is documented on the action's `enforce` input). No job-level actions/setup-dotnet on
+      # purpose -- global.json declares tools.runtimes, so Arcade always uses repo-local .dotnet.
+      - name: Select relevant tests
+        id: select_tests
+        uses: ./.github/actions/select-tests
+        with:
+          checkout: 'false'
+          enforce: 'false'
+          commentFile: ${{ env.SELECT_TESTS_COMMENT_FILE }}
+          # Kill switch: the 'run-full-ci' PR label forces the full matrix + all jobs. Read from the event
+          # payload snapshot, so adding the label takes effect on the next push (or reopen), not on a
+          # plain re-run of an existing run. Empty on non-PR events -> the action force-alls anyway.
+          forceAll: ${{ contains(github.event.pull_request.labels.*.name, 'run-full-ci') }}
+          prBaseSha: ${{ github.event.pull_request.base.sha }}
+          headSha: ${{ github.sha }}
+
+      # Hand the selection summary to the separate comment_selection job (below) as an artifact. The
+      # comment is posted from THAT job, which holds pull-requests:write but runs no PR code, so this
+      # job -- which checks out and runs PR-authored code -- never holds the write token.
+      - name: Upload selection summary
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: select-tests-comment
+          path: ${{ env.SELECT_TESTS_COMMENT_FILE }}
+          if-no-files-found: ignore
+          retention-days: 1
+
+      # enumerate-tests reuses this job's checkout + restore (checkout/restore=false) so the props
+      # file the selector wrote survives -- a fresh checkout would git-clean it away. When a
+      # restriction was written, beforeBuildPropsPath points enumerate at the selected subset; in
+      # audit mode project_override_props is empty and enumerate builds the full matrix.
+      #
+      # Skipped entirely when the selection has no .NET test projects (has_dotnet_tests=false, e.g. an
+      # extension-only / polyglot-only change whose only targets are non-.NET jobs). An empty selection
+      # cannot be expressed as an empty ProjectToBuild -- that makes the enumerate build fall back to the
+      # whole solution and fail on non-test tooling projects -- so we skip the build and let the matrix
+      # default to empty below; the selected non-.NET jobs still run (gated by the run_* outputs).
       - uses: ./.github/actions/enumerate-tests
         id: generate_tests_matrix
+        if: ${{ steps.select_tests.outputs.has_dotnet_tests != 'false' }}
         with:
           buildArgs: '/p:IncludeTemplateTests=true /p:IncludeCliE2ETests=${{ github.event_name == ''pull_request'' }}'
+          checkout: 'false'
+          # The job only did a minimal SDK bootstrap above, so enumerate must restore. beforeBuildPropsPath
+          # (set when a non-ALL selection wrote a restriction) narrows that restore + the enumeration
+          # build to the selected projects; an unrestricted selection restores everything.
+          restore: 'true'
+          # The job already installed the SDK via dotnet.sh above, so the action's setup-dotnet would
+          # just re-download it into a location nothing reads (global.json has tools.runtimes -> Arcade
+          # always uses repo-local .dotnet). Skip it; restore: 'true' still bootstraps the toolset.
+          setupDotNet: 'false'
+          beforeBuildPropsPath: ${{ steps.select_tests.outputs.project_override_props }}
+
+      # The expanded matrix can exceed 128KB. It MUST reach the bash step below via a file, not an
+      # environment variable: a single env string over Linux's MAX_ARG_STRLEN (~128KB) makes the
+      # step's execve("/usr/bin/bash") fail with E2BIG ("Argument list too long"). pwsh writes its
+      # run-script to a file, so interpolating the (trusted, build-generated) matrix into a literal
+      # here-string here keeps it out of the environment entirely.
+      - name: Write test matrix to file
+        shell: pwsh
+        run: |
+          $m = @'
+          ${{ steps.generate_tests_matrix.outputs.all_tests }}
+          '@.Trim()
+          # enumerate-tests is skipped for a no-.NET-tests selection, leaving all_tests empty; default to
+          # an empty matrix so the split step and the downstream `include[0] != null` guards see zero.
+          if ([string]::IsNullOrWhiteSpace($m)) { $m = '{"include":[]}' }
+          $m | Set-Content -Path "${{ github.workspace }}/all_tests.json" -Encoding utf8 -NoNewline
 
       - name: Split matrix by dependency type
         id: split_matrix
         shell: pwsh
         run: |
+          $matrix = Get-Content -Raw "${{ github.workspace }}/all_tests.json"
           $splitScript = "${{ github.workspace }}/eng/scripts/split-test-matrix-by-deps.ps1"
-          & $splitScript -AllTestsMatrix '${{ steps.generate_tests_matrix.outputs.all_tests }}' -OutputToGitHubEnv
+          & $splitScript -AllTestsMatrix $matrix -OutputToGitHubEnv
+
+  # Posts the "selected tests" PR comment. Deliberately isolated from setup_for_tests: that
+  # job checks out and runs PR-authored code, so it must not hold pull-requests:write. This job runs
+  # NO PR code -- it only downloads the selection-summary artifact and posts it -- so granting it the
+  # write scope is least-privilege. Informational only; a token/permission hiccup (e.g. a fork PR
+  # with a read-only token) must never fail CI, hence continue-on-error.
+  #
+  # One comment per pushed commit: a re-run of the same commit updates that commit's comment in place
+  # (no duplicate -- re-runs are common), a new commit posts a fresh comment at the bottom, and
+  # comments from superseded commits are collapsed (minimized, never deleted) so the timeline stays
+  # clean while the per-push history is preserved. Every comment links the head commit it was computed
+  # for, which is also the idempotency key.
+  comment_selection:
+    name: Comment selected tests on PR
+    runs-on: ubuntu-latest
+    needs: setup_for_tests
+    if: ${{ github.event_name == 'pull_request' }}
+    continue-on-error: true
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Download selection summary
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: select-tests-comment
+          path: ${{ github.workspace }}/select-tests-comment
+      - uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        env:
+          SELECT_TESTS_COMMENT_FILE: ${{ github.workspace }}/select-tests-comment/select-tests-comment.md
+        with:
+          script: |
+            const fs = require('fs');
+            const file = process.env.SELECT_TESTS_COMMENT_FILE;
+            if (!file || !fs.existsSync(file)) {
+              core.info(`No selection summary at ${file}; skipping comment.`);
+              return;
+            }
+            const marker = '<!-- select-tests-comment -->';
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            // Link the head commit the selection was computed for. On pull_request the workflow runs
+            // against an ephemeral merge ref, so prefer the PR head SHA (what the author pushed and
+            // recognizes) and fall back to context.sha otherwise. The full SHA is also the idempotency
+            // key: a comment whose body links this SHA is "the comment for this commit".
+            const sha = context.payload.pull_request?.head?.sha ?? context.sha;
+            const shortSha = sha.slice(0, 7);
+            const shaUrl = `${context.serverUrl}/${owner}/${repo}/commit/${sha}`;
+            const footer = `\n\n---\n_Selection computed for commit [\`${shortSha}\`](${shaUrl})._`;
+            const body = `${marker}\n${fs.readFileSync(file, 'utf8')}${footer}`;
+
+            // One comment per pushed commit. Re-runs of the same commit find that commit's existing
+            // comment (its body links this SHA) and update it in place -- no duplicate. A new commit
+            // matches nothing and posts a fresh comment at the bottom.
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
+            const mine = comments.filter(c => c.body && c.body.includes(marker));
+            const current = mine.filter(c => c.body.includes(sha)).at(-1);
+            let keepId;
+            try {
+              if (current) {
+                await github.rest.issues.updateComment({ owner, repo, comment_id: current.id, body });
+                keepId = current.id;
+                core.info(`Updated selection comment ${current.id} for ${shortSha}.`);
+              } else {
+                const created = await github.rest.issues.createComment({ owner, repo, issue_number, body });
+                keepId = created.data.id;
+                core.info(`Created selection comment ${created.data.id} for ${shortSha}.`);
+              }
+            } catch (error) {
+              core.info(`Could not create or update selection comment for ${shortSha}: ${error.message}`);
+              return;
+            }
+
+            // Collapse every other prior selection comment (superseded commits, or the legacy single
+            // sticky comment from before this per-commit logic) instead of deleting them, so the
+            // timeline stays clean but the per-push history is preserved.
+            //
+            // Only the run for the PR's CURRENT head may collapse the others. A manual re-run of an
+            // older run carries that older commit in its event payload; if it is no longer the PR head,
+            // refresh its own comment (above) but do NOT minimize -- otherwise it would collapse the
+            // newer commit's live comment. Default to "not live" if the head can't be resolved, so a
+            // transient API error never collapses the wrong comment.
+            let isLiveHead = false;
+            try {
+              const pull = await github.rest.pulls.get({ owner, repo, pull_number: issue_number });
+              isLiveHead = pull.data.head.sha === sha;
+            } catch (error) {
+              core.info(`Could not resolve PR head (${error.message}); skipping minimization.`);
+            }
+            if (isLiveHead) {
+              // minimizeComment is GraphQL-only and takes the node_id from the REST listing. Best
+              // effort: a failure (e.g. already minimized) must not fail this informational job.
+              for (const c of mine) {
+                if (c.id === keepId) {
+                  continue;
+                }
+                try {
+                  await github.graphql(
+                    `mutation($id: ID!) { minimizeComment(input: { subjectId: $id, classifier: OUTDATED }) { minimizedComment { isMinimized } } }`,
+                    { id: c.node_id });
+                } catch (error) {
+                  core.info(`Could not minimize comment ${c.id}: ${error.message}`);
+                }
+              }
+            }
 
   build_packages:
     name: Build packages
@@ -87,15 +293,26 @@ jobs:
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      targets: '[{"os": "macos-15-intel", "runner": "macos-15-intel", "rids": "osx-x64"}]'
+      # Cross-compile osx-x64 on the Apple Silicon (arm64) macos-latest runner
+      # instead of the Intel macos-15-intel runner. The Intel runner is ~2.5x
+      # slower per core and made this the long pole of the CLI build (~18m vs
+      # ~8m on Apple Silicon). Native AOT officially supports arm64 -> osx-x64
+      # cross-compilation, and this archive is only packaged and structurally
+      # verified (verify-cli-tool-nupkg.ps1 / verify-cli-npm-package.ps1) — the
+      # x64 binary is never executed here, so running it on arm64 hardware is
+      # never attempted. This mirrors the AzDO release pipeline, which already
+      # builds osx-x64 on an arm64 mac agent (eng/pipelines/templates/build_sign_native.yml).
+      targets: '[{"os": "macos-latest", "runner": "macos-latest", "rids": "osx-x64"}]'
 
   prepare_winget_installer_artifacts:
     name: Prepare WinGet installer artifacts
     uses: ./.github/workflows/prepare-installer-artifacts.yml
     needs: [
+      setup_for_tests,
       build_cli_archive_windows,
       build_cli_archive_windows_arm64,
     ]
+    if: ${{ needs.setup_for_tests.outputs.run_winget_installer == 'true' }}
     with:
       installer: winget
 
@@ -103,9 +320,11 @@ jobs:
     name: Prepare Homebrew installer artifacts
     uses: ./.github/workflows/prepare-installer-artifacts.yml
     needs: [
+      setup_for_tests,
       build_cli_archive_macos,
       build_cli_archive_macos_x64,
     ]
+    if: ${{ needs.setup_for_tests.outputs.run_homebrew_installer == 'true' }}
     with:
       installer: homebrew
 
@@ -223,61 +442,19 @@ jobs:
     name: Polyglot SDK Validation
     # Pull requests validate the current TypeScript AppHost LTS runtime. Main branch
     # builds add the older supported LTS runtime without adding that cost to every PR.
-    if: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/main' }}
+    # In audit the selector returns run_polyglot=true, so this keeps its existing event behavior;
+    if: ${{ (github.event_name == 'pull_request' || github.ref == 'refs/heads/main') && (needs.setup_for_tests.outputs.run_polyglot == 'true') }}
     uses: ./.github/workflows/polyglot-validation.yml
-    needs: [build_packages, build_cli_archive_linux]
+    needs: [setup_for_tests, build_packages, build_cli_archive_linux]
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
-
-  extension_e2e_changes:
-    name: Detect VS Code extension E2E changes
-    runs-on: ubuntu-latest
-    outputs:
-      run_extension_e2e: ${{ steps.changed.outputs.run_extension_e2e }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Check changed paths
-        id: changed
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          base='${{ github.event.pull_request.base.sha || github.event.before }}'
-          head='${{ github.sha }}'
-
-          if [ -z "$base" ] || [[ "$base" =~ ^0+$ ]]; then
-            echo "No usable base SHA is available; running extension E2E tests."
-            echo "run_extension_e2e=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
-            git fetch --no-tags --depth=1 origin "$base" || true
-          fi
-
-          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
-            echo "Base SHA $base is not available after shallow fetch; running extension E2E tests."
-            echo "run_extension_e2e=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          changed_files="$(git diff --name-only "$base" "$head")"
-          echo "$changed_files"
-
-          if echo "$changed_files" | grep -E -q '^(extension/|src/Aspire\.Cli/|src/Aspire/Cli/|src/Aspire\.Hosting[^/]*/|src/Aspire\.Dashboard[^/]*/|tests/Aspire\.Cli\.Tests/|tests/Aspire\.Cli\.EndToEnd\.Tests/|tests/Aspire\.Hosting\.Tests/Cli/|eng/scripts/get-aspire-cli|\.github/workflows/(tests|extension-e2e-tests|build-packages|build-cli-native-archives)\.yml$)'; then
-            echo "run_extension_e2e=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "run_extension_e2e=false" >> "$GITHUB_OUTPUT"
-          fi
 
   cli_starter_validation_windows:
     name: Aspire CLI Starter Validation (${{ matrix.os.name }})
     runs-on: ${{ matrix.os.runner }}
     timeout-minutes: 15
-    needs: [build_packages, build_cli_archive_windows, build_cli_archive_windows_arm64]
-    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' }}
+    needs: [setup_for_tests, build_packages, build_cli_archive_windows, build_cli_archive_windows_arm64]
+    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' && (needs.setup_for_tests.outputs.run_cli_starter == 'true') }}
     strategy:
       fail-fast: false
       matrix:
@@ -355,6 +532,10 @@ jobs:
   extension_tests_win:
     name: Run VS Code extension unit tests (Windows)
     runs-on: windows-latest
+    needs: [setup_for_tests]
+    # Also gated on run_extension_e2e (not just run_extension_unit): extension_e2e_tests `needs` this
+    # job, so gating it off while e2e runs would skip e2e via need-propagation.
+    if: ${{ needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true' }}
     env:
       NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
       COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
@@ -443,6 +624,8 @@ jobs:
     # platform-specific branch beyond Linux is the cache path, which is
     # explicitly overridden via COREPACK_HOME in the build entrypoints.
     runs-on: ubuntu-latest
+    needs: [setup_for_tests]
+    if: ${{ needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true' }}
     env:
       NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
       COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
@@ -489,16 +672,20 @@ jobs:
 
   extension_e2e_tests:
     name: Run VS Code extension E2E tests
-    if: ${{ needs.extension_e2e_changes.outputs.run_extension_e2e == 'true' }}
+    if: ${{ needs.setup_for_tests.outputs.run_extension_e2e == 'true' }}
     uses: ./.github/workflows/extension-e2e-tests.yml
-    needs: [extension_e2e_changes, build_packages, build_cli_archive_linux, build_cli_archive_windows, extension_tests_win, extension_bootstrap_linux]
+    needs: [setup_for_tests, build_packages, build_cli_archive_linux, build_cli_archive_windows, extension_tests_win, extension_bootstrap_linux]
 
   typescript_sdk_tests:
     name: TypeScript SDK Unit Tests
+    needs: [setup_for_tests]
+    if: ${{ needs.setup_for_tests.outputs.run_typescript_sdk == 'true' }}
     uses: ./.github/workflows/typescript-sdk-tests.yml
 
   typescript_api_compat:
     name: TypeScript API Compatibility
+    needs: [setup_for_tests]
+    if: ${{ needs.setup_for_tests.outputs.run_typescript_api_compat == 'true' }}
     uses: ./.github/workflows/typescript-api-compat.yml
 
   results:
@@ -517,7 +704,6 @@ jobs:
       prepare_winget_installer_artifacts,
       prepare_homebrew_installer_artifacts,
       build_cli_e2e_image,
-      extension_e2e_changes,
       extension_tests_win,
       extension_e2e_tests,
       extension_bootstrap_linux,
@@ -596,8 +782,11 @@ jobs:
         # result. Specifically:
         # - tests_no_nugets_overflow: this overflow bucket is expected to be empty unless the
         #   primary no-nugets matrix exceeds the overflow threshold.
-        # - tests_requires_nugets_macos: some runs intentionally produce no macOS requires-nugets
-        #   tests, so an empty matrix and 'skipped' result are expected.
+        # - the test-bucket jobs (tests_no_nugets, tests_requires_nugets_{linux,windows,macos},
+        #   tests_requires_cli_archive): selective CI routes a PR's changes to a subset of buckets, so
+        #   any bucket can be legitimately empty -> its job is 'skipped'. Each is therefore gated on its
+        #   matrix being non-empty (include[0] != null); a 'skipped' result is only a failure when the
+        #   bucket actually had work. Before selective CI these were always populated on a full run.
         # - cli_starter_validation_windows: this job only runs for pull requests and is expected to
         #   be skipped for other workflow events.
         # - extension_e2e_tests: this job only runs when the PR/push changes the VS Code extension,
@@ -610,37 +799,47 @@ jobs:
               (contains(needs.*.result, 'failure') ||
                contains(needs.*.result, 'cancelled') ||
                (github.event_name == 'pull_request' &&
-                (needs.extension_tests_win.result == 'skipped' ||
-                 (needs.extension_e2e_changes.outputs.run_extension_e2e == 'true' &&
+                ((needs.extension_tests_win.result == 'skipped' && (needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true')) ||
+                 (needs.setup_for_tests.outputs.run_extension_e2e == 'true' &&
                   needs.extension_e2e_tests.result == 'skipped') ||
-                 needs.cli_starter_validation_windows.result == 'skipped' ||
-                 needs.typescript_sdk_tests.result == 'skipped' ||
-                 needs.typescript_api_compat.result == 'skipped' ||
+                 (needs.cli_starter_validation_windows.result == 'skipped' && (needs.setup_for_tests.outputs.run_cli_starter == 'true')) ||
+                 (needs.typescript_sdk_tests.result == 'skipped' &&
+                  (needs.setup_for_tests.outputs.run_typescript_sdk == 'true')) ||
+                 (needs.typescript_api_compat.result == 'skipped' &&
+                  (needs.setup_for_tests.outputs.run_typescript_api_compat == 'true')) ||
                  needs.build_cli_archive_macos_x64.result == 'skipped' ||
-                 needs.prepare_winget_installer_artifacts.result == 'skipped' ||
-                 needs.prepare_homebrew_installer_artifacts.result == 'skipped' ||
-                 needs.tests_no_nugets.result == 'skipped' ||
-                 needs.tests_requires_nugets_linux.result == 'skipped' ||
-                 needs.tests_requires_nugets_windows.result == 'skipped' ||
+                 (needs.prepare_winget_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.run_winget_installer == 'true')) ||
+                 (needs.prepare_homebrew_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.run_homebrew_installer == 'true')) ||
+                 (fromJson(needs.setup_for_tests.outputs.tests_matrix_no_nugets).include[0] != null &&
+                  needs.tests_no_nugets.result == 'skipped') ||
+                 (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_linux).include[0] != null &&
+                  needs.tests_requires_nugets_linux.result == 'skipped') ||
+                 (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_windows).include[0] != null &&
+                  needs.tests_requires_nugets_windows.result == 'skipped') ||
                  (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null &&
                   needs.tests_requires_nugets_macos.result == 'skipped') ||
                  (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_cli_archive).include[0] != null &&
                   needs.build_cli_e2e_image.result == 'skipped') ||
-                 needs.tests_requires_cli_archive.result == 'skipped' ||
-                 needs.polyglot_validation.result == 'skipped')) ||
+                 (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_cli_archive).include[0] != null &&
+                  needs.tests_requires_cli_archive.result == 'skipped') ||
+                 (needs.polyglot_validation.result == 'skipped' && (needs.setup_for_tests.outputs.run_polyglot == 'true')))) ||
                (github.event_name != 'pull_request' &&
-                (needs.extension_tests_win.result == 'skipped' ||
-                 (needs.extension_e2e_changes.outputs.run_extension_e2e == 'true' &&
+                ((needs.extension_tests_win.result == 'skipped' && (needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true')) ||
+                 (needs.setup_for_tests.outputs.run_extension_e2e == 'true' &&
                   needs.extension_e2e_tests.result == 'skipped') ||
-                 needs.typescript_sdk_tests.result == 'skipped' ||
+                 (needs.typescript_sdk_tests.result == 'skipped' &&
+                  (needs.setup_for_tests.outputs.run_typescript_sdk == 'true')) ||
                  needs.build_cli_archive_macos_x64.result == 'skipped' ||
-                 needs.prepare_winget_installer_artifacts.result == 'skipped' ||
-                 needs.prepare_homebrew_installer_artifacts.result == 'skipped' ||
-                 needs.tests_no_nugets.result == 'skipped' ||
-                 needs.tests_requires_nugets_linux.result == 'skipped' ||
-                 needs.tests_requires_nugets_windows.result == 'skipped' ||
+                 (needs.prepare_winget_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.run_winget_installer == 'true')) ||
+                 (needs.prepare_homebrew_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.run_homebrew_installer == 'true')) ||
+                 (fromJson(needs.setup_for_tests.outputs.tests_matrix_no_nugets).include[0] != null &&
+                  needs.tests_no_nugets.result == 'skipped') ||
+                 (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_linux).include[0] != null &&
+                  needs.tests_requires_nugets_linux.result == 'skipped') ||
+                 (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_windows).include[0] != null &&
+                  needs.tests_requires_nugets_windows.result == 'skipped') ||
                  (github.ref == 'refs/heads/main' &&
-                  needs.polyglot_validation.result == 'skipped') ||
+                  (needs.polyglot_validation.result == 'skipped' && (needs.setup_for_tests.outputs.run_polyglot == 'true'))) ||
                  (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null &&
                   needs.tests_requires_nugets_macos.result == 'skipped')))) }}
         run: |

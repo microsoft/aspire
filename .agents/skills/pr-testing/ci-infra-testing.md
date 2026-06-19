@@ -46,7 +46,7 @@ Follow this file when the PR touches any of:
 - `.github/actions/**` — composite actions
 - `.github/aw/**`, `.github/agents/**` — gh-aw config / agent docs
 - `eng/scripts/*.ps1`, `eng/scripts/*.sh` — scripts invoked by workflows
-- `eng/testing/github-ci-trigger-patterns.txt` — the CI-skip pattern file
+- `eng/github-ci/ci-skip-entirely-patterns.txt` — the CI-skip pattern file
 - `eng/test-retry-patterns.json` — auto-rerun retry patterns
 
 **Azure DevOps (Track B):**
@@ -143,7 +143,7 @@ actually *validated the change*, not merely that they completed.
 
 | Workflow | Runs on the PR when… |
 |----------|----------------------|
-| `ci.yml` | Always, **unless every** changed file matches a glob in `eng/testing/github-ci-trigger-patterns.txt` (then build/test jobs skip). |
+| `ci.yml` | Always, **unless every** changed file matches a glob in `eng/github-ci/ci-skip-entirely-patterns.txt` (then build/test jobs skip). |
 | `tests-quarantine.yml`, `tests-outerloop.yml` | **Only** if the PR touches one of: that file itself, `specialized-test-runner.yml`, `run-tests.yml`, `build-cli-e2e-image.yml`. Otherwise schedule/dispatch only. **The PR run is one project only** — a plumbing smoke test, not full coverage (see below). |
 | `markdownlint.yml` | On every PR — `pull_request` with **no** `paths` filter. |
 | `polyglot-validation.yml`, `typescript-api-compat.yml`, `typescript-sdk-tests.yml`, `extension-e2e-tests.yml` | **Reusable (`workflow_call`)** — not triggered directly. They run via `tests.yml` (itself called by `ci.yml`), so they execute on the PR when `ci.yml`/`tests.yml` run, subject to their own internal `if:` / path gating inside `tests.yml`. |
@@ -156,7 +156,7 @@ Concrete check for the CI-skip path:
 ```bash
 # Will ci.yml skip build/test for this PR? Compare changed files to the skip globs.
 git --no-pager diff --name-only origin/main...HEAD
-cat eng/testing/github-ci-trigger-patterns.txt
+cat eng/github-ci/ci-skip-entirely-patterns.txt
 ```
 
 If you changed `tests-quarantine.yml` / `tests-outerloop.yml` / their shared
@@ -239,7 +239,7 @@ The repo unit-tests its workflow helper scripts (JavaScript, PowerShell, and
 bash) and asserts YAML contracts in `tests/Infrastructure.Tests/`. PR CI runs
 that project **only when `ci.yml`'s test job isn't skipped** — and it *is*
 skipped when every changed file matches a glob in
-`eng/testing/github-ci-trigger-patterns.txt`, which includes `eng/pipelines/**`
+`eng/github-ci/ci-skip-entirely-patterns.txt`, which includes `eng/pipelines/**`
 and `auto-rerun-transient-ci-failures.*` (see Step I-1). So for an infra-only PR
 that touches just those paths, CI does **not** run `Infrastructure.Tests` for
 you — run the matching class locally. When the test job does run, use the map
@@ -636,7 +636,7 @@ Cited PRs are real prior breakages (illustrative, not exhaustive).
 | Too-**broad** `paths:` on a build-heavy reusable workflow re-triggers it on every eng/CI change and exhausts runner disk. | New `pull_request` reusable-workflow triggers must scope `paths:` to just the orchestrating YAMLs, not `src/`/`**`. Simulate which files match before merge. (#12143, #15921) |
 | `tests-quarantine.yml` and `tests-outerloop.yml` carry **independent** shared `paths:` lists that must stay in sync. | Editing one → edit the other identically (each also lists itself). The only acceptable diff between their lists is the self-entry. (COPILOT INSTRUCTIONS comment at top of both files) |
 | Two-dot `git diff base..head` reports files changed on **base** since branch-point as PR changes; three-dot `base...head` is merge-base correct. | Grep workflows/scripts for `git diff --name-only` — prefer three-dot for "files this PR changed". (#17220) |
-| Editing `eng/testing/github-ci-trigger-patterns.txt` itself is a skippable change, so a typo there **won't** be caught by CI. | Validate new globs by hand against the action's conversion rules; consider temporarily removing the file's self-skip to force one validating CI run. |
+| Editing `eng/github-ci/ci-skip-entirely-patterns.txt` itself is a skippable change, so a typo there **won't** be caught by CI. | Validate new globs by hand against the action's conversion rules; consider temporarily removing the file's self-skip to force one validating CI run. |
 
 ### 5. OS / shell / runner portability
 

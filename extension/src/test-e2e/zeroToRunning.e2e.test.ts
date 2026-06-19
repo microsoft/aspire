@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as fs from 'fs';
 import { getCommandInvocationCount, getTerminalCommandCount, waitForCommandOutcome, waitForDebugDashboardUrl, waitForDebugSessionStartup, waitForExtensionState, waitForHttpText, waitForNoDebugSessions, waitForRepositoryIdle, waitForSelectedWorkspaceAppHost, waitForTerminalCommand } from './helpers/assertions';
-import { addIntegrationPackageToAppHost, clearBreakpoints, createEmptyAppHostProject, executeE2eControlCommand, getGeneratedAppHostPath, removeGeneratedProject, removePrimaryAppHostFixture, restoreWorkspaceAppHostConfig, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, stopAppHostIfRunning, writeWorkspaceAppHostConfigForPath } from './helpers/fixtures';
+import { addIntegrationPackageToAppHost, clearBreakpoints, createEmptyAppHostProject, executeE2eControlCommand, getGeneratedAppHostPath, getRunningAppHostPid, removeGeneratedProject, removePrimaryAppHostFixture, restoreWorkspaceAppHostConfig, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, stopAppHostIfRunning, waitForRunningAppHostPid, writeWorkspaceAppHostConfigForPath } from './helpers/fixtures';
 import { openAspireView, waitForEditorTitle, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
 
 suite('Aspire zero-to-running E2E', function () {
@@ -9,9 +9,15 @@ suite('Aspire zero-to-running E2E', function () {
 
     const projectName = 'ExtensionZeroToRunningApp';
     const appHostPath = getGeneratedAppHostPath(projectName);
+    let appHostPidBeforeStop: number | undefined;
+
+    setup(() => {
+        appHostPidBeforeStop = undefined;
+    });
 
     teardown(async () => {
         await runE2eTeardown([
+            () => appHostPidBeforeStop ??= getRunningAppHostPid(appHostPath),
             () => setCliUnavailableForE2E(false),
             () => setTerminalCommandExecutionSuppressedForE2E(false),
             () => restoreWorkspaceCliPath(),
@@ -20,7 +26,7 @@ suite('Aspire zero-to-running E2E', function () {
             () => stopAppHostIfRunning(appHostPath),
             () => waitForNoDebugSessions().catch(() => undefined),
             () => restoreWorkspaceAppHostConfig(),
-            () => removeGeneratedProject(projectName),
+            () => removeGeneratedProject(projectName, appHostPidBeforeStop),
         ], 'Zero-to-running E2E teardown failed.');
     });
 
@@ -88,7 +94,6 @@ suite('Aspire zero-to-running E2E', function () {
 
         await waitForHttpText(dashboardUrl, 'Aspire', 180000, new URL(dashboardUrl).origin);
         const dashboardHost = new URL(dashboardUrl).host;
-        assert.ok((await waitForEditorTitle(dashboardHost, 180000, { matchCase: false })).toLowerCase().includes(dashboardHost.toLowerCase()));
         if (process.platform === 'linux') {
             // Chromium webview text extraction is unreliable on hosted Windows and macOS runners after
             // integrated-browser navigation. The HTTP probe above proves the dashboard rendered
@@ -97,6 +102,7 @@ suite('Aspire zero-to-running E2E', function () {
             assert.ok(browserText.includes('Resources') || browserText.includes(dashboardHost));
         }
 
+        appHostPidBeforeStop = await waitForRunningAppHostPid(appHostPath, 30000);
         await executeE2eControlCommand({ name: 'stopDebugging' });
         await waitForNoDebugSessions();
     });

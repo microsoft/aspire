@@ -91,14 +91,14 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     return this._startupCompleted;
   }
 
-  constructor(session: vscode.DebugSession, rpcServer: AspireRpcServer, dcpServer: AspireDcpServer, terminalProvider: AspireTerminalProvider, removeAspireDebugSession: (session: AspireDebugSession) => void) {
+  constructor(session: vscode.DebugSession, rpcServer: AspireRpcServer, dcpServer: AspireDcpServer, terminalProvider: AspireTerminalProvider, removeAspireDebugSession: (session: AspireDebugSession) => void, debugSessionId: string = generateDcpIdPrefix()) {
     this._session = session;
     this._rpcServer = rpcServer;
     this._dcpServer = dcpServer;
     this._terminalProvider = terminalProvider;
     this.configuration = session.configuration as AspireExtendedDebugConfiguration;
 
-    this.debugSessionId = generateDcpIdPrefix();
+    this.debugSessionId = debugSessionId;
 
     this._disposables.push({
       dispose: () => removeAspireDebugSession(this)

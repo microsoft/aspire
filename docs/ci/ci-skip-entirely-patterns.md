@@ -1,8 +1,8 @@
-# CI Trigger Patterns
+# CI Skip-Entirely Patterns
 
 ## Overview
 
-The file `eng/testing/github-ci-trigger-patterns.txt` lists glob patterns for files whose changes do **not** require the full CI to run.
+The file `eng/github-ci/ci-skip-entirely-patterns.txt` lists glob patterns for files whose changes do **not** require the full CI to run. This is the top-level skip gate, not the selective-test router (see [`test-trigger-map.md`](test-trigger-map.md) for path → test/job routing).
 
 When a pull request is opened or updated, the CI workflow (`ci.yml`) checks whether **all** changed files match at least one pattern in the file. If they do, the workflow is skipped (no build or test jobs run). This keeps CI fast for changes that only affect documentation, pipeline configuration, or unrelated workflow files.
 
@@ -10,7 +10,7 @@ When a pull request is opened or updated, the CI workflow (`ci.yml`) checks whet
 
 ## Why a Separate File?
 
-Previously the patterns were inlined in `.github/workflows/ci.yml`. Any change to that file (even just adding a new pattern to skip CI) would trigger CI on itself. Moving the patterns to `eng/testing/github-ci-trigger-patterns.txt` decouples pattern maintenance from the workflow definition.
+Previously the patterns were inlined in `.github/workflows/ci.yml`. Any change to that file (even just adding a new pattern to skip CI) would trigger CI on itself. Moving the patterns to `eng/github-ci/ci-skip-entirely-patterns.txt` decouples pattern maintenance from the workflow definition.
 
 ## Pattern Syntax
 
@@ -46,17 +46,17 @@ eng/test-configuration.json
 
 To add files whose changes should not trigger CI:
 
-1. Open `eng/testing/github-ci-trigger-patterns.txt`.
+1. Open `eng/github-ci/ci-skip-entirely-patterns.txt`.
 2. Add one pattern per line, optionally preceded by a comment.
 3. Submit a PR — CI will not run for that PR if all changed files match the patterns.
 
-> **Tip:** Changing the patterns file itself is listed as a skippable change (`eng/testing/github-ci-trigger-patterns.txt`), so a PR that only updates this file will not trigger CI.
+> **Tip:** Changing the patterns file itself is listed as a skippable change (`eng/github-ci/ci-skip-entirely-patterns.txt`), so a PR that only updates this file will not trigger CI.
 
 ## How It Works
 
 The `.github/actions/check-changed-files` composite action:
 
-1. Reads `eng/testing/github-ci-trigger-patterns.txt` from the checked-out repository.
+1. Reads `eng/github-ci/ci-skip-entirely-patterns.txt` from the checked-out repository.
 2. Converts each glob pattern to an anchored ERE (Extended Regular Expression) regex:
    - `**` → `.*`
    - `*` → `[^/]*`
@@ -66,6 +66,6 @@ The `.github/actions/check-changed-files` composite action:
 
 ## Related Files
 
-- `eng/testing/github-ci-trigger-patterns.txt` — the patterns file described on this page
+- `eng/github-ci/ci-skip-entirely-patterns.txt` — the patterns file described on this page
 - `.github/actions/check-changed-files/action.yml` — the composite action that reads and evaluates the patterns
 - `.github/workflows/ci.yml` — the CI workflow that calls the action

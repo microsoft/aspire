@@ -14,6 +14,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 using Microsoft.AspNetCore.InternalTesting;
@@ -1156,8 +1157,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                 GetChannelsAsyncCallback = (ct) =>
                 {
                     // Create test channels matching the expected names
-                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!);
-                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!, null!);
+                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!, NullLogger.Instance);
+                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!, null!, NullLogger.Instance);
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel, dailyChannel });
                 }
             };
@@ -1221,8 +1222,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                 GetChannelsAsyncCallback = (ct) =>
                 {
                     // Create test channels matching the expected names
-                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!);
-                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!, null!);
+                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!, NullLogger.Instance);
+                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!, null!, NullLogger.Instance);
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel, dailyChannel });
                 }
             };
@@ -1275,8 +1276,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                 GetChannelsAsyncCallback = (ct) =>
                 {
                     // Create test channels matching the expected names
-                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!);
-                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!, null!);
+                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!, NullLogger.Instance);
+                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!, null!, NullLogger.Instance);
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel, dailyChannel });
                 }
             };
@@ -1342,8 +1343,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             {
                 GetChannelsAsyncCallback = (ct) =>
                 {
-                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!);
-                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!, null!);
+                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!, NullLogger.Instance);
+                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!, null!, NullLogger.Instance);
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel, dailyChannel });
                 }
             };
@@ -1403,7 +1404,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             {
                 GetChannelsAsyncCallback = (ct) =>
                 {
-                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!);
+                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!, NullLogger.Instance);
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel });
                 }
             };
@@ -2610,8 +2611,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             {
                 GetChannelsAsyncCallback = (ct) =>
                 {
-                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!);
-                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!, null!);
+                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!, NullLogger.Instance);
+                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!, null!, NullLogger.Instance);
                     return Task.FromResult<IEnumerable<PackageChannel>>([stableChannel, dailyChannel]);
                 }
             };

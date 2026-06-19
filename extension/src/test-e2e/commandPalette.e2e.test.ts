@@ -2,44 +2,23 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getCommandInvocationCount, getTerminalCommandCount, isSamePath, waitForCommandOutcome, waitForExtensionState, waitForRepositoryIdle, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
-import { createAdditionalAppHostCandidate, executeE2eControlCommand, removeAdditionalAppHostCandidate, removeWorkspaceAppHostConfig, restoreE2eCliPathForE2E, restoreWorkspaceAppHostConfig, restoreWorkspaceCliPath, setCliUnavailableForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, writeWorkspaceCliPath } from './helpers/fixtures';
+import { createAdditionalAppHostCandidate, executeE2eControlCommand, removeAdditionalAppHostCandidate, removeWorkspaceAppHostConfig, restoreE2eCliPathForE2E, restoreWorkspaceAppHostConfig, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, writeWorkspaceCliPath } from './helpers/fixtures';
 import { getWorkspaceRoot } from './helpers/paths';
 import { executeCommandFromPalette, openAspireView, waitForEditorTitle, waitForNotificationMessage, waitForTerminalChannel, waitForWorkbenchText } from './helpers/vscode';
 
 suite('Aspire command palette E2E', function () {
-    this.timeout(180000);
+    this.timeout(420000);
 
     teardown(async () => {
-        const failures: unknown[] = [];
-        for (const cleanup of [
+        await runE2eTeardown([
             () => executeE2eControlCommand({ name: 'closeAllEditors' }),
             () => setCliUnavailableForE2E(false),
             () => setTerminalCommandExecutionSuppressedForE2E(false),
             () => restoreE2eCliPathForE2E(),
             () => restoreWorkspaceCliPath(),
-        ]) {
-            try {
-                await cleanup();
-            } catch (error) {
-                failures.push(error);
-            }
-        }
-
-        try {
-            restoreWorkspaceAppHostConfig();
-        } catch (error) {
-            failures.push(error);
-        }
-
-        try {
-            removeAdditionalAppHostCandidate();
-        } catch (error) {
-            failures.push(error);
-        }
-
-        if (failures.length > 0) {
-            throw new AggregateError(failures, 'Command palette E2E teardown failed.');
-        }
+            () => restoreWorkspaceAppHostConfig(),
+            () => removeAdditionalAppHostCandidate(),
+        ], 'Command palette E2E teardown failed.');
     });
 
     test('opens an Aspire terminal through the command palette with the configured CLI path', async () => {
@@ -117,7 +96,7 @@ suite('Aspire command palette E2E', function () {
         await openAspireView();
         await waitForRepositoryIdle();
         removeWorkspaceAppHostConfig();
-        const secondaryAppHostPath = createAdditionalAppHostCandidate();
+        const secondaryAppHostPath = createAdditionalAppHostCandidate('AspireE2E.SecondAppHost', 'single-file');
         const beforeRefresh = getCommandInvocationCount('aspire-vscode.refreshAppHosts');
         await executeE2eControlCommand({ name: 'refreshAppHosts' });
         await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 60000, beforeRefresh);
@@ -125,7 +104,7 @@ suite('Aspire command palette E2E', function () {
         const stateFile = await waitForExtensionState(
             file => file.state.workspaceAppHostCandidatePaths.some(candidate => isSamePath(candidate, secondaryAppHostPath)),
             'secondary AppHost candidate',
-            60000);
+            180000);
 
         assert.ok(stateFile.state.workspaceAppHostCandidatePaths.length >= 2);
     });

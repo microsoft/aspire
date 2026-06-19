@@ -61,6 +61,18 @@ internal interface IAppHostServerSessionFactory
         Dictionary<string, string>? launchSettingsEnvVars,
         bool debug,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Starts a server session from an already-prepared server project.
+    /// </summary>
+    /// <param name="appHostServerProject">The prepared server project to start.</param>
+    /// <param name="environmentVariables">Optional environment variables for the server process.</param>
+    /// <param name="debug">Whether to enable debug logging.</param>
+    /// <returns>The started server session.</returns>
+    IAppHostServerSession Start(
+        IAppHostServerProject appHostServerProject,
+        Dictionary<string, string>? environmentVariables,
+        bool debug);
 }
 
 /// <summary>

@@ -1541,6 +1541,162 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain("<PackageVersion", updatedProps, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task UpdateProjectAsync_StableChannel_DoesNotCreateNuGetConfigWhenNoneExists()
+    {
+        // When updating to the stable channel (maps Aspire* to nuget.org, so no config is
+        // needed) and no project-local nuget.config exists, the updater should NOT create one.
+        // See: https://github.com/microsoft/aspire/issues/18124
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var (appHostProjectFile, _) = await SetupNuGetConfigTestProject(workspace);
+
+        var services = CreateNuGetConfigTestServices(workspace, "9.5.0", "nuget.org");
+        using var provider = services.BuildServiceProvider();
+
+        var channels = await provider.GetRequiredService<IPackagingService>().GetChannelsAsync().DefaultTimeout();
+        var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
+        await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, channels.Single(c => c.Name == "stable"))).DefaultTimeout();
+
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config")));
+        Assert.False(File.Exists(Path.Combine(appHostProjectFile.DirectoryName!, "nuget.config")));
+    }
+
+    [Fact]
+    public async Task UpdateProjectAsync_StableChannel_UpdatesExistingNuGetConfig()
+    {
+        // When updating to the stable channel and a project-local nuget.config already
+        // exists (e.g. from a previous daily channel), the updater should update it to
+        // clean up old feeds.
+        // See: https://github.com/microsoft/aspire/issues/18124
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var (appHostProjectFile, _) = await SetupNuGetConfigTestProject(workspace);
+
+        // Pre-existing nuget.config from a previous daily channel
+        var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
+        await File.WriteAllTextAsync(nugetConfigPath,
+            """
+            <?xml version="1.0" encoding="utf-8"?>
+            <configuration>
+              <packageSources>
+                <add key="aspire-daily" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" />
+                <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+              </packageSources>
+              <packageSourceMapping>
+                <packageSource key="aspire-daily">
+                  <package pattern="Aspire*" />
+                </packageSource>
+                <packageSource key="nuget.org">
+                  <package pattern="*" />
+                </packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+
+        var services = CreateNuGetConfigTestServices(workspace, "9.5.0", "nuget.org", getNuGetConfigPathsCallback: (_, _, _) =>
+        {
+            return (0, new[]
+            {
+                nugetConfigPath,
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NuGet", "NuGet.Config")
+            });
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var channels = await provider.GetRequiredService<IPackagingService>().GetChannelsAsync().DefaultTimeout();
+        var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
+        await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, channels.Single(c => c.Name == "stable"))).DefaultTimeout();
+
+        Assert.True(File.Exists(nugetConfigPath));
+        var updatedConfig = await File.ReadAllTextAsync(nugetConfigPath);
+        Assert.Contains("https://api.nuget.org/v3/index.json", updatedConfig);
+    }
+
+    [Fact]
+    public async Task UpdateProjectAsync_DailyChannel_CreatesNuGetConfigWhenNoneExists()
+    {
+        // Contrast: when updating to the daily channel (routes Aspire* to a custom feed),
+        // the updater should create a nuget.config if none exists.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var (appHostProjectFile, _) = await SetupNuGetConfigTestProject(workspace);
+
+        var services = CreateNuGetConfigTestServices(workspace, "9.5.0-preview.1", "daily");
+        using var provider = services.BuildServiceProvider();
+
+        var channels = await provider.GetRequiredService<IPackagingService>().GetChannelsAsync().DefaultTimeout();
+        var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
+        await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, channels.Single(c => c.Name == "daily"))).DefaultTimeout();
+
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config")));
+    }
+
+    private static async Task<(FileInfo AppHostProjectFile, DirectoryInfo AppHostFolder)> SetupNuGetConfigTestProject(TemporaryWorkspace workspace)
+    {
+        var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
+        var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
+
+        await File.WriteAllTextAsync(
+            appHostProjectFile.FullName,
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+                <Sdk Name="Aspire.AppHost.Sdk" Version="9.4.1" />
+            </Project>
+            """);
+
+        return (appHostProjectFile, appHostFolder);
+    }
+
+    private IServiceCollection CreateNuGetConfigTestServices(
+        TemporaryWorkspace workspace,
+        string targetVersion,
+        string source,
+        Func<DirectoryInfo, ProcessInvocationOptions, CancellationToken, (int, string[])>? getNuGetConfigPathsCallback = null)
+    {
+        return CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
+        {
+            config.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner()
+                {
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
+                    {
+                        var packages = new List<NuGetPackageCli>
+                        {
+                            query switch
+                            {
+                                "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = targetVersion, Source = source },
+                                "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = targetVersion, Source = source },
+                                _ => throw new InvalidOperationException("Unexpected package query."),
+                            }
+                        };
+                        return (0, packages.ToArray());
+                    },
+
+                    GetProjectItemsAndPropertiesAsyncCallback = (projectFile, _, _, _, _) =>
+                    {
+                        var itemsAndProperties = new JsonObject();
+                        itemsAndProperties.WithSdkVersion("9.4.1");
+                        itemsAndProperties.WithPackageReference("Aspire.Hosting.AppHost", "9.4.1");
+
+                        var json = itemsAndProperties.ToJsonString();
+                        var document = JsonDocument.Parse(json);
+                        return (0, document);
+                    },
+
+                    AddPackageAsyncCallback = (_, _, _, _, _, _, _) => 0
+                };
+
+                if (getNuGetConfigPathsCallback is not null)
+                {
+                    runner.GetNuGetConfigPathsAsyncCallback = getNuGetConfigPathsCallback;
+                }
+
+                return runner;
+            };
+
+            config.InteractionServiceFactory = (s) => new TestInteractionService();
+        });
+    }
+
     private static UpdatePackagesContext CreateUpdateContext(FileInfo appHostFile, PackageChannel channel) =>
         new()
         {
@@ -3652,6 +3808,249 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         // The restore must come after every package add. If anyone re-enables per-package
         // restore (or moves the final restore back into / before the loop) this fails.
         Assert.Equal(calls.Count - 1, calls.IndexOf(restore));
+    }
+
+    [Fact]
+    public async Task UpdateProjectFileAsync_StableChannel_DoesNotCreateNuGetConfigWhenNoneExists()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
+        var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
+
+        await File.WriteAllTextAsync(
+            appHostProjectFile.FullName,
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+                <Sdk Name="Aspire.AppHost.Sdk" Version="9.4.1" />
+            </Project>
+            """);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
+        {
+            config.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner()
+                {
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
+                    {
+                        var package = query switch
+                        {
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.4.3", Source = "stable" },
+                            "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "13.4.3", Source = "stable" },
+                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "13.4.3", Source = "stable" },
+                            _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
+                        };
+
+                        return (0, new[] { package });
+                    },
+
+                    GetProjectItemsAndPropertiesAsyncCallback = (projectFile, _, _, _, _) =>
+                    {
+                        var itemsAndProperties = new JsonObject();
+                        itemsAndProperties.WithSdkVersion("9.4.1");
+                        itemsAndProperties.WithPackageReference("Aspire.Hosting.AppHost", "9.4.1");
+                        itemsAndProperties.WithPackageReference("Aspire.Hosting.Redis", "9.4.1");
+
+                        var document = JsonDocument.Parse(itemsAndProperties.ToJsonString());
+                        return (0, document);
+                    },
+
+                    AddPackageAsyncCallback = (projectFile, packageId, packageVersion, source, noRestore, _, _) => 0,
+                };
+            };
+
+            config.InteractionServiceFactory = (s) => new TestInteractionService();
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var packagingService = provider.GetRequiredService<IPackagingService>();
+
+        // The stable channel is Explicit but maps Aspire* only to nuget.org (the ambient source),
+        // so ShouldCreateNuGetConfig() is false and no project-level config is required.
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+        var stableChannel = channels.Single(c => c.Name == "stable");
+
+        var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, stableChannel)).DefaultTimeout();
+
+        Assert.True(updateResult.UpdatedApplied);
+
+        // Regression guard for https://github.com/microsoft/aspire/issues/18124: updating to the
+        // stable channel must NOT drop a redundant <clear/>-based NuGet.config. None existed, so
+        // none should have been created anywhere under the workspace.
+        var nugetConfigs = workspace.WorkspaceRoot
+            .EnumerateFiles("*", SearchOption.AllDirectories)
+            .Where(f => string.Equals(f.Name, "nuget.config", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        Assert.Empty(nugetConfigs);
+    }
+
+    [Fact]
+    public async Task UpdateProjectFileAsync_StableChannel_UpdatesExistingNuGetConfig()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
+        var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
+
+        await File.WriteAllTextAsync(
+            appHostProjectFile.FullName,
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+                <Sdk Name="Aspire.AppHost.Sdk" Version="9.4.1" />
+            </Project>
+            """);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
+        {
+            config.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner()
+                {
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
+                    {
+                        var package = query switch
+                        {
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.4.3", Source = "stable" },
+                            "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "13.4.3", Source = "stable" },
+                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "13.4.3", Source = "stable" },
+                            _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
+                        };
+
+                        return (0, new[] { package });
+                    },
+
+                    GetProjectItemsAndPropertiesAsyncCallback = (projectFile, _, _, _, _) =>
+                    {
+                        var itemsAndProperties = new JsonObject();
+                        itemsAndProperties.WithSdkVersion("9.4.1");
+                        itemsAndProperties.WithPackageReference("Aspire.Hosting.AppHost", "9.4.1");
+                        itemsAndProperties.WithPackageReference("Aspire.Hosting.Redis", "9.4.1");
+
+                        var document = JsonDocument.Parse(itemsAndProperties.ToJsonString());
+                        return (0, document);
+                    },
+
+                    AddPackageAsyncCallback = (projectFile, packageId, packageVersion, source, noRestore, _, _) => 0,
+                };
+            };
+
+            config.InteractionServiceFactory = (s) => new TestInteractionService();
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        // The update path writes/refreshes the config in the recommended directory, which falls
+        // back to the CLI working directory when only global configs are discovered (the default
+        // TestDotNetCliRunner behavior). Seed an existing config there with a private feed and no
+        // packageSourceMapping so the merge is a real change.
+        var executionContext = provider.GetRequiredService<Aspire.Cli.CliExecutionContext>();
+        var existingConfigFile = new FileInfo(Path.Combine(executionContext.WorkingDirectory.FullName, "nuget.config"));
+        await File.WriteAllTextAsync(
+            existingConfigFile.FullName,
+            """
+            <?xml version="1.0" encoding="utf-8"?>
+            <configuration>
+              <packageSources>
+                <add key="contoso" value="https://contoso.example/feed/v3/index.json" />
+              </packageSources>
+            </configuration>
+            """);
+
+        var packagingService = provider.GetRequiredService<IPackagingService>();
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+        var stableChannel = channels.Single(c => c.Name == "stable");
+
+        var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, stableChannel)).DefaultTimeout();
+
+        Assert.True(updateResult.UpdatedApplied);
+
+        // Even though the stable channel never *creates* a config, an existing one is still
+        // refreshed so feeds left over from a previous channel get cleaned up (#18124). The merge
+        // preserves the user's feed and adds a packageSourceMapping that wasn't there before.
+        Assert.True(existingConfigFile.Exists);
+        var updatedContent = await File.ReadAllTextAsync(existingConfigFile.FullName);
+        Assert.Contains("contoso", updatedContent, StringComparison.Ordinal);
+        Assert.Contains("packageSourceMapping", updatedContent, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task UpdateProjectFileAsync_DailyChannel_CreatesNuGetConfigWhenNoneExists()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
+        var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
+
+        await File.WriteAllTextAsync(
+            appHostProjectFile.FullName,
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+                <Sdk Name="Aspire.AppHost.Sdk" Version="9.4.1" />
+            </Project>
+            """);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
+        {
+            config.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner()
+                {
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
+                    {
+                        var package = query switch
+                        {
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.5.0-preview.1", Source = "daily" },
+                            "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "13.5.0-preview.1", Source = "daily" },
+                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "13.5.0-preview.1", Source = "daily" },
+                            _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
+                        };
+
+                        return (0, new[] { package });
+                    },
+
+                    GetProjectItemsAndPropertiesAsyncCallback = (projectFile, _, _, _, _) =>
+                    {
+                        var itemsAndProperties = new JsonObject();
+                        itemsAndProperties.WithSdkVersion("9.4.1");
+                        itemsAndProperties.WithPackageReference("Aspire.Hosting.AppHost", "9.4.1");
+                        itemsAndProperties.WithPackageReference("Aspire.Hosting.Redis", "9.4.1");
+
+                        var document = JsonDocument.Parse(itemsAndProperties.ToJsonString());
+                        return (0, document);
+                    },
+
+                    AddPackageAsyncCallback = (projectFile, packageId, packageVersion, source, noRestore, _, _) => 0,
+                };
+            };
+
+            config.InteractionServiceFactory = (s) => new TestInteractionService();
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var packagingService = provider.GetRequiredService<IPackagingService>();
+
+        // Contrast with the stable channel: daily maps Aspire* to a custom feed, so
+        // ShouldCreateNuGetConfig() is true and a project-level config must be created.
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+        var dailyChannel = channels.Single(c => c.Name == "daily");
+
+        var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, dailyChannel)).DefaultTimeout();
+
+        Assert.True(updateResult.UpdatedApplied);
+
+        var nugetConfigs = workspace.WorkspaceRoot
+            .EnumerateFiles("*", SearchOption.AllDirectories)
+            .Where(f => string.Equals(f.Name, "nuget.config", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        var createdConfig = Assert.Single(nugetConfigs);
+        var content = await File.ReadAllTextAsync(createdConfig.FullName);
+        Assert.Contains("packageSourceMapping", content, StringComparison.Ordinal);
     }
 }
 

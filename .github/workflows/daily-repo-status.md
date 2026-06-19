@@ -5,6 +5,8 @@ description: |
   release/13.3 branch, pending PR reviews, and discussions. Generates
   a 7-day burndown chart using cached daily snapshots.
 
+max-daily-ai-credits: -1
+
 on:
   schedule: daily around 9am
   workflow_dispatch:
@@ -14,6 +16,7 @@ permissions:
   issues: read
   pull-requests: read
   discussions: read
+  copilot-requests: write
 
 network: defaults
 

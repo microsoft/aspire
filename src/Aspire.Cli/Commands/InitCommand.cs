@@ -17,7 +17,6 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Templating;
-using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Hosting.Utils;
 using Aspire.Shared;
@@ -281,7 +280,11 @@ internal sealed class InitCommand : BaseCommand
         // Drop bare single-file apphost. Pin the SDK version so later operations
         // (project updating, version parsing in ProjectUpdater/FallbackProjectParser)
         // can locate and update the directive — they expect the @<version> form.
-        var aspireVersion = VersionHelper.GetDefaultTemplateVersion();
+        // Use IdentitySdkVersion (build-metadata stripped) rather than IdentityVersion:
+        // the directive references the published Aspire.AppHost.Sdk NuGet package, whose
+        // version never carries a +<sha> suffix. This also matches the empty-apphost
+        // template path (CliTemplateFactory.EmptyTemplate) so both emit the same form.
+        var aspireVersion = _executionContext.IdentitySdkVersion;
         var appHostContent = $$"""
             #:sdk Aspire.AppHost.Sdk@{{aspireVersion}}
 

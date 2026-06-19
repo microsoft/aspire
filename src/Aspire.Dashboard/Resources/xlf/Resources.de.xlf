@@ -114,32 +114,32 @@
       </trans-unit>
       <trans-unit id="ResourcesDetailsContainerArgumentsProperty">
         <source>Container arguments</source>
-        <target state="translated">Containerargumente</target>
+        <target state="new">Container arguments</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsContainerCommandProperty">
         <source>Container command</source>
-        <target state="translated">Containerbefehl</target>
+        <target state="new">Container command</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsContainerIdProperty">
         <source>Container ID</source>
-        <target state="translated">Container-ID</target>
+        <target state="new">Container ID</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsContainerImageProperty">
         <source>Container image</source>
-        <target state="translated">Containerimage</target>
+        <target state="new">Container image</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsContainerLifetimeProperty">
         <source>Container lifetime</source>
-        <target state="translated">Containerlebensdauer</target>
+        <target state="new">Container lifetime</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsContainerPortsProperty">
         <source>Container ports</source>
-        <target state="translated">Containerports</target>
+        <target state="new">Container ports</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsDisplayNameProperty">
@@ -149,22 +149,22 @@
       </trans-unit>
       <trans-unit id="ResourcesDetailsExecutableArgumentsProperty">
         <source>Executable arguments</source>
-        <target state="translated">Ausführbare Argumente</target>
+        <target state="new">Executable arguments</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsExecutablePathProperty">
         <source>Executable path</source>
-        <target state="translated">Pfad der ausführbaren Datei</target>
+        <target state="new">Executable path</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsExecutableProcessIdProperty">
         <source>Process ID</source>
-        <target state="translated">Prozess-ID</target>
+        <target state="new">Process ID</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsExecutableWorkingDirectoryProperty">
         <source>Working directory</source>
-        <target state="translated">Arbeitsverzeichnis</target>
+        <target state="new">Working directory</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsExitCodeProperty">
@@ -179,17 +179,17 @@
       </trans-unit>
       <trans-unit id="ResourcesDetailsParameterValueProperty">
         <source>Value</source>
-        <target state="translated">Wert</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcesDetailsProjectPathProperty">
-        <source>Project path</source>
-        <target state="translated">Projektpfad</target>
+        <target state="new">Value</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsProjectLaunchProfileProperty">
         <source>Launch profile</source>
-        <target state="translated">Profil starten</target>
+        <target state="new">Launch profile</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcesDetailsProjectPathProperty">
+        <source>Project path</source>
+        <target state="new">Project path</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsStartTimeProperty">
