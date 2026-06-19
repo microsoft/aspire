@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Internal refactoring to use DI factory pattern for testability — no user-facing impact",
+  "mergedAt": "2026-06-18T18:51:00Z",
+  "number": 18314,
+  "runDate": "2026-06-19T00:34:48Z",
+  "status": "excluded",
+  "title": "Replace direct AppHostServerSession.Start calls with IAppHostServerSessionFactory"
+}

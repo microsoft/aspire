@@ -1,0 +1,9 @@
+{
+  "author": "jfversluis",
+  "comment": "Test-only changes: adds CI test coverage for Aspire.Hosting.Maui — no user-facing production changes",
+  "mergedAt": "2026-06-18T23:22:13Z",
+  "number": 14768,
+  "runDate": "2026-06-19T00:34:48Z",
+  "status": "excluded",
+  "title": "Add Aspire.Hosting.Maui.Tests to CI and expand test coverage"
+}
