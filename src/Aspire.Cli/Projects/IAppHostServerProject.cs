@@ -22,7 +22,7 @@ internal sealed record AppHostServerPrepareResult(
     bool NeedsCodeGeneration = false);
 
 /// <summary>
-/// Result of <see cref="IAppHostServerProject.Run"/> — a launched AppHost server process plus the
+/// Result of <see cref="IAppHostServerProject.RunAsync"/> — a launched AppHost server process plus the
 /// captured output.
 /// </summary>
 /// <param name="SocketPath">RPC socket the server is publishing on.</param>
@@ -43,7 +43,7 @@ internal sealed record AppHostServerRunResult(
     IProcessExecution Execution);
 
 /// <summary>
-/// Controls how <see cref="IAppHostServerProject.Run"/> spawns and tears down the server child.
+/// Controls how <see cref="IAppHostServerProject.RunAsync"/> spawns and tears down the server child.
 /// The default (all-null / false) preserves today's force-kill-on-cancel behavior for the non-Run
 /// callers (SDK gen, scaffolding, publish, dump). The run path supplies the graceful infrastructure.
 /// </summary>
@@ -110,8 +110,8 @@ internal interface IAppHostServerProject
     /// default) preserves force-kill-on-cancel semantics for non-Run callers (SDK gen, scaffolding,
     /// publish, dump). The run path passes a populated <see cref="AppHostServerRunControl"/>.
     /// </param>
-    /// <returns>The launched server process execution and its captured output.</returns>
-    AppHostServerRunResult Run(
+    /// <returns>A task producing the launched server process execution and its captured output.</returns>
+    Task<AppHostServerRunResult> RunAsync(
         int hostPid,
         IReadOnlyDictionary<string, string>? environmentVariables = null,
         string[]? additionalArgs = null,

@@ -319,7 +319,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         // Short-lived RPC session: Start() spawns the server synchronously. We never observe the
         // exit-code task because disposal flows the exit code through the activity scope and the only
         // failure mode we care about surfaces via the RPC call below.
-        serverSession.Start();
+        await serverSession.StartAsync();
 
         // Step 3: Connect to server
         var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
@@ -498,7 +498,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             IAppHostRpcClient rpcClient;
             using (_profilingTelemetry.StartRunAppHostStartAppHostServer())
             {
-                serverSession.Start();
+                await serverSession.StartAsync();
                 serverCompletion = serverSession.WaitForExitAsync();
 
                 // Give the server a moment to start
@@ -1084,7 +1084,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             IAppHostRpcClient rpcClient;
             using (_profilingTelemetry.StartRunAppHostStartAppHostServer())
             {
-                serverSession.Start();
+                await serverSession.StartAsync();
                 serverCompletion = serverSession.WaitForExitAsync();
 
                 try

@@ -199,7 +199,7 @@ internal sealed class SdkDumpCommand : BaseCommand
             // Short-lived RPC session: Start() spawns the server synchronously. We never observe the
             // exit-code task (WaitForExitAsync) because disposal flows the exit code through the
             // activity scope and the only failure mode we care about surfaces via the RPC call below.
-            serverSession.Start();
+            await serverSession.StartAsync();
 
             // Connect and get capabilities
             var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
@@ -303,7 +303,7 @@ internal sealed class SdkDumpCommand : BaseCommand
             // Short-lived RPC session: Start() spawns the server synchronously. We never observe the
             // exit-code task (WaitForExitAsync) because disposal flows the exit code through the
             // activity scope and the only failure mode we care about surfaces via the RPC call below.
-            serverSession.Start();
+            await serverSession.StartAsync();
 
             var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
             outputDirectory.Create();

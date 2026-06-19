@@ -915,7 +915,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
     internal static string RedactSourceForDisplay(string source) => PackageSourceRedactor.RedactForDisplay(source);
 
     /// <inheritdoc />
-    public AppHostServerRunResult Run(
+    public async Task<AppHostServerRunResult> RunAsync(
         int hostPid,
         IReadOnlyDictionary<string, string>? environmentVariables = null,
         string[]? additionalArgs = null,
@@ -972,7 +972,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         }
         catch
         {
-            execution.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            await execution.DisposeAsync().ConfigureAwait(false);
             throw;
         }
 

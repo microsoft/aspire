@@ -23,11 +23,11 @@ namespace Aspire.Cli.Projects;
 internal interface IAppHostServerSession : IAsyncDisposable
 {
     /// <summary>
-    /// Synchronously launches the AppHost server process and wires lifecycle observation. Returns
-    /// once the process has been spawned. For codegen the process lifetime is observed indirectly
-    /// (via the RPC call and disposal), so this seam exposes no exit-code task.
+    /// Launches the AppHost server process and wires lifecycle observation. The returned task
+    /// completes once the process has been spawned. For codegen the process lifetime is observed
+    /// indirectly (via the RPC call and disposal), so this seam exposes no exit-code task.
     /// </summary>
-    void Start();
+    Task StartAsync();
 
     /// <summary>
     /// Connects to the running AppHost server and returns an RPC client for code generation.

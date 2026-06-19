@@ -29,7 +29,7 @@ internal sealed class FakeFailingAppHostServerProject(string appDirectoryPath) :
         CancellationToken cancellationToken = default) =>
         Task.FromResult(new AppHostServerPrepareResult(Success: false, Output: null));
 
-    public AppHostServerRunResult Run(
+    public Task<AppHostServerRunResult> RunAsync(
         int hostPid,
         IReadOnlyDictionary<string, string>? environmentVariables = null,
         string[]? additionalArgs = null,

@@ -466,7 +466,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     public string GetInstanceIdentifier() => GetProjectFilePath();
 
     /// <inheritdoc />
-    public AppHostServerRunResult Run(
+    public async Task<AppHostServerRunResult> RunAsync(
         int hostPid,
         IReadOnlyDictionary<string, string>? environmentVariables = null,
         string[]? additionalArgs = null,
@@ -582,7 +582,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         }
         catch
         {
-            execution.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            await execution.DisposeAsync().ConfigureAwait(false);
             throw;
         }
 

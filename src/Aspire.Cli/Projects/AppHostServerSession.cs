@@ -12,13 +12,13 @@ namespace Aspire.Cli.Projects;
 
 /// <summary>
 /// Owns the lifetime of an AppHost server child process. Construction stashes configuration
-/// (including the stop token) without launching anything; <see cref="Start"/> synchronously
-/// launches the process and wires lifecycle observation, and <see cref="WaitForExitAsync"/>
+/// (including the stop token) without launching anything; <see cref="StartAsync"/> launches the
+/// process and wires lifecycle observation, and <see cref="WaitForExitAsync"/>
 /// returns the task that completes with the process exit code.
 /// </summary>
 /// <remarks>
 /// The session drives the child entirely through the <see cref="IProcessExecution"/> returned by
-/// <see cref="IAppHostServerProject.Run"/>. Termination is requested either by cancelling the
+/// <see cref="IAppHostServerProject.RunAsync"/>. Termination is requested either by cancelling the
 /// <c>stopRequested</c> token passed to the constructor, or by calling <see cref="DisposeAsync"/>.
 /// Both routes cancel the same internal linked CTS, which the drive loop passes to
 /// <see cref="IProcessExecution.WaitForExitAsync(CancellationToken)"/>; the execution runs the
@@ -39,7 +39,12 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     private readonly IGracefulShutdownWindow? _shutdownService;
     private readonly bool _isolateConsole;
 
-    private readonly object _startGate = new();
+    // Serializes StartAsync against DisposeAsync so a concurrent dispose cannot orphan a
+    // just-spawned process (see StartAsync for the ordering guarantee). A SemaphoreSlim is used
+    // rather than a Monitor lock because StartAsync now awaits the spawn (_project.RunAsync) and
+    // DisposeAsync awaits while holding the gate. We never touch AvailableWaitHandle, so the
+    // semaphore allocates no wait handle and does not need disposal.
+    private readonly SemaphoreSlim _startGate = new(1, 1);
     private bool _startInvoked;
     private bool _disposed;
 
@@ -83,25 +88,25 @@ internal sealed class AppHostServerSession : IAppHostServerSession
 
     /// <summary>
     /// Gets the authentication token injected into the server environment. Available before
-    /// <see cref="Start"/> so callers can plumb it into the guest AppHost environment.
+    /// <see cref="StartAsync"/> so callers can plumb it into the guest AppHost environment.
     /// </summary>
     public string AuthenticationToken => _authenticationToken;
 
     /// <summary>
-    /// Gets the RPC socket path, or <see langword="null"/> if <see cref="Start"/> has not
+    /// Gets the RPC socket path, or <see langword="null"/> if <see cref="StartAsync"/> has not
     /// been called (or threw before the process was published).
     /// </summary>
     public string? SocketPath => _socketPath;
 
     /// <summary>
     /// Gets the output collector for the server's stdout/stderr, or <see langword="null"/> if
-    /// <see cref="Start"/> has not been called (or threw before the process was published).
+    /// <see cref="StartAsync"/> has not been called (or threw before the process was published).
     /// </summary>
     public OutputCollector? Output => _output;
 
     /// <summary>
     /// Gets whether the underlying AppHost server process has exited, or <see langword="null"/>
-    /// if <see cref="Start"/> has not been called (or threw before the process was
+    /// if <see cref="StartAsync"/> has not been called (or threw before the process was
     /// published). Routes through the <see cref="IProcessExecution"/>, which encapsulates the
     /// isolated Windows spawn quirk (the underlying Process is obtained via
     /// <see cref="System.Diagnostics.Process.GetProcessById(int)"/>); see
@@ -132,29 +137,31 @@ internal sealed class AppHostServerSession : IAppHostServerSession
 
     /// <summary>
     /// Gets the underlying server process id for read-only observation, or <see langword="null"/>
-    /// if <see cref="Start"/> has not been called (or threw before the process was published).
+    /// if <see cref="StartAsync"/> has not been called (or threw before the process was published).
     /// Prefer <see cref="HasServerExited"/> for has-exited checks and
     /// <see cref="TryGetServerExitCode"/> for exit-code reads.
     /// </summary>
     public int? ServerProcessId => _execution?.ProcessId;
 
     /// <summary>
-    /// Synchronously launches the AppHost server process and wires lifecycle observation. Returns
-    /// once the process has been spawned and its socket path and PID are published (the process then
-    /// runs in the background). Use <see cref="WaitForExitAsync"/> to observe the exit code.
+    /// Launches the AppHost server process and wires lifecycle observation. The returned task
+    /// completes once the process has been spawned and its socket path and PID are published (the
+    /// process then runs in the background). Use <see cref="WaitForExitAsync"/> to observe the exit
+    /// code.
     /// </summary>
-    /// <exception cref="InvalidOperationException">Thrown if <see cref="Start"/> has already been called.</exception>
+    /// <exception cref="InvalidOperationException">Thrown if <see cref="StartAsync"/> has already been called.</exception>
     /// <exception cref="ObjectDisposedException">Thrown if the session has been disposed.</exception>
-    public void Start()
+    public async Task StartAsync()
     {
-        // Hold _startGate across the entire startup body — env build, _project.Run, field
-        // publication, and drive-loop start. DisposeAsync's top-of-method lock then either runs
-        // before us (and Start sees _disposed and throws) or after us (and Dispose sees a
-        // fully-published execution + run task). Without this widening there is a window between
-        // _project.Run returning and the run task starting where a concurrent Dispose would orphan
-        // the just-launched process. Every operation below is synchronous, so a Monitor lock is
-        // safe (no await inside).
-        lock (_startGate)
+        // Hold _startGate across the entire startup body — env build, _project.RunAsync, field
+        // publication, and drive-loop start. DisposeAsync also acquires _startGate before flipping
+        // _disposed, so it either runs before us (and StartAsync sees _disposed and throws) or after
+        // us (and Dispose sees a fully-published execution + run task). Without this widening there
+        // is a window between _project.RunAsync returning and the run task starting where a
+        // concurrent Dispose would orphan the just-launched process. The await on RunAsync is why
+        // this is a SemaphoreSlim rather than a Monitor lock.
+        await _startGate.WaitAsync().ConfigureAwait(false);
+        try
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
 
@@ -190,17 +197,18 @@ internal sealed class AppHostServerSession : IAppHostServerSession
             AppHostServerRunResult result;
             try
             {
-                result = _project.Run(
+                result = await _project.RunAsync(
                     Environment.ProcessId,
                     serverEnvironmentVariables,
                     debug: _debug,
-                    runControl: new AppHostServerRunControl(_isolateConsole, _gracefulShutdownSignaler, _shutdownService));
+                    runControl: new AppHostServerRunControl(_isolateConsole, _gracefulShutdownSignaler, _shutdownService)).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
                 _activity.SetError(ex.Message);
                 _activity.Dispose();
                 (_project as IDisposable)?.Dispose();
+                // Trip the completion so DisposeAsync (which awaits it unconditionally) doesn't hang.
                 completion.TrySetException(ex);
                 throw;
             }
@@ -228,6 +236,10 @@ internal sealed class AppHostServerSession : IAppHostServerSession
             // execution captured these at spawn time instead.
             _activity.SetProcessInvocation(result.Execution.FileName, result.Execution.Arguments);
         }
+        finally
+        {
+            _startGate.Release();
+        }
     }
 
     /// <summary>
@@ -235,7 +247,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     /// its own, or because the stop token supplied to the constructor was cancelled (or the session
     /// was disposed) and the shutdown ladder ran. Returns the same task on every call.
     /// </summary>
-    /// <exception cref="InvalidOperationException">Thrown if <see cref="Start"/> has not been called.</exception>
+    /// <exception cref="InvalidOperationException">Thrown if <see cref="StartAsync"/> has not been called.</exception>
     public Task<int> WaitForExitAsync()
     {
         // The completion is the lifetime signal published by Start; DriveAsync trips it (never the
@@ -267,7 +279,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     }
 
     /// <summary>
-    /// Returns an RPC client connected to the server. Must be called after <see cref="Start"/>.
+    /// Returns an RPC client connected to the server. Must be called after <see cref="StartAsync"/>.
     /// </summary>
     public async Task<IAppHostRpcClient> GetRpcClientAsync(CancellationToken cancellationToken)
     {
@@ -316,13 +328,26 @@ internal sealed class AppHostServerSession : IAppHostServerSession
 
     public async ValueTask DisposeAsync()
     {
-        lock (_startGate)
+        // Acquire _startGate the same way StartAsync does so dispose is serialized against an
+        // in-flight start: we either flip _disposed before StartAsync acquires the gate (it then
+        // throws ObjectDisposedException and spawns nothing) or after it has fully published the
+        // execution + run task (we then tear that down below). The gate is released immediately;
+        // the teardown runs outside it so a late StartAsync observes _disposed and bails fast.
+        bool alreadyDisposed;
+        await _startGate.WaitAsync().ConfigureAwait(false);
+        try
         {
-            if (_disposed)
-            {
-                return;
-            }
+            alreadyDisposed = _disposed;
             _disposed = true;
+        }
+        finally
+        {
+            _startGate.Release();
+        }
+
+        if (alreadyDisposed)
+        {
+            return;
         }
 
         // Cancel the stop trigger. This drives the run loop's WaitForExitAsync(_stopCts.Token)
@@ -362,8 +387,8 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         }
 
         // Observe the completion task unconditionally to prevent UnobservedTaskException if
-        // Start's _project.Run threw synchronously and faulted the completion before the
-        // execution was published. When the process did start, DriveAsync has already tripped this.
+        // StartAsync's _project.RunAsync faulted the completion before the execution was published.
+        // When the process did start, DriveAsync has already tripped this.
         if (_completion is { } completion)
         {
             try
@@ -420,5 +445,5 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     }
 
     private static InvalidOperationException NotStarted() =>
-        new($"{nameof(AppHostServerSession)} has not been started. Call {nameof(Start)} first.");
+        new($"{nameof(AppHostServerSession)} has not been started. Call {nameof(StartAsync)} first.");
 }

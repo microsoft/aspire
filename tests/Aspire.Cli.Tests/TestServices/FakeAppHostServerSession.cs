@@ -15,9 +15,7 @@ internal sealed class FakeAppHostServerSession : IAppHostServerSession
 {
     private readonly FakeAppHostRpcClient _rpcClient = new();
 
-    public void Start()
-    {
-    }
+    public Task StartAsync() => Task.CompletedTask;
 
     public Task<IAppHostRpcClient> GetRpcClientAsync(CancellationToken cancellationToken)
         => Task.FromResult<IAppHostRpcClient>(_rpcClient);

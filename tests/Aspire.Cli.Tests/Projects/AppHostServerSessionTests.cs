@@ -39,7 +39,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             debug: false,
             NullLogger<AppHostServerSession>.Instance,
             CancellationToken.None);
-        session.Start();
+        await session.StartAsync();
 
         Assert.Equal("present", environmentVariables["EXISTING_VALUE"]);
         Assert.False(environmentVariables.ContainsKey(KnownConfigNames.RemoteAppHostToken));
@@ -69,7 +69,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             NullLogger<AppHostServerSession>.Instance,
             CancellationToken.None,
             profilingTelemetry);
-        session.Start();
+        await session.StartAsync();
 
         Assert.Equal("present", environmentVariables["EXISTING_VALUE"]);
         Assert.False(environmentVariables.ContainsKey(KnownConfigNames.RemoteAppHostToken));
@@ -109,7 +109,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             NullLogger<AppHostServerSession>.Instance,
             CancellationToken.None,
             profilingTelemetry);
-        session.Start();
+        await session.StartAsync();
 
         Assert.Same(parentActivity, Activity.Current);
 
@@ -146,7 +146,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             debug: false,
             NullLogger<AppHostServerSession>.Instance,
             CancellationToken.None);
-        session.Start();
+        await session.StartAsync();
 
         // Wait for the process to exit so the stopwatch measures only the early-exit detection
         // latency, not the variable execution time of "dotnet --version" on loaded CI machines.
@@ -193,9 +193,9 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             NullLogger<AppHostServerSession>.Instance,
             CancellationToken.None);
 
-        session.Start();
+        await session.StartAsync();
 
-        Assert.Throws<InvalidOperationException>(session.Start);
+        await Assert.ThrowsAsync<InvalidOperationException>(session.StartAsync);
     }
 
     [Fact]
@@ -210,7 +210,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             NullLogger<AppHostServerSession>.Instance,
             stopCts.Token);
 
-        session.Start();
+        await session.StartAsync();
         var completion = session.WaitForExitAsync();
 
         // Process should be running before we ask the session to stop.
@@ -263,7 +263,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             gracefulShutdownSignaler: signaler,
             shutdownService: shutdownService);
 
-        session.Start();
+        await session.StartAsync();
         var completion = session.WaitForExitAsync();
         Assert.False(completion.IsCompleted);
         var serverPid = session.ServerProcessId!.Value;
@@ -311,7 +311,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             gracefulShutdownSignaler: signaler,
             shutdownService: shutdownService);
 
-        session.Start();
+        await session.StartAsync();
         var completion = session.WaitForExitAsync();
         Assert.False(completion.IsCompleted);
 
@@ -355,7 +355,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             gracefulShutdownSignaler: signaler,
             shutdownService: shutdownService);
 
-        session.Start();
+        await session.StartAsync();
         var completion = session.WaitForExitAsync();
         Assert.False(completion.IsCompleted);
 
@@ -391,7 +391,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             gracefulShutdownSignaler: signaler,
             shutdownService: shutdownService);
 
-        session.Start();
+        await session.StartAsync();
         var completion = session.WaitForExitAsync();
         Assert.False(completion.IsCompleted);
         var pid = session.ServerProcessId!.Value;
@@ -422,7 +422,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             NullLogger<AppHostServerSession>.Instance,
             CancellationToken.None);
 
-        session.Start();
+        await session.StartAsync();
         var exitCode = await session.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(30));
         Assert.Equal(0, exitCode);
     }
@@ -478,7 +478,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
                 NullLogger<AppHostServerSession>.Instance,
                 CancellationToken.None);
 
-            Assert.Throws<InvalidOperationException>(session.Start);
+            await Assert.ThrowsAsync<InvalidOperationException>(session.StartAsync);
 
             await session.DisposeAsync();
         }
@@ -615,7 +615,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public AppHostServerRunResult Run(
+        public Task<AppHostServerRunResult> RunAsync(
             int hostPid,
             IReadOnlyDictionary<string, string>? environmentVariables = null,
             string[]? additionalArgs = null,
@@ -638,10 +638,10 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             execution.Start();
 
             StartedExecution = execution;
-            return new AppHostServerRunResult(
+            return Task.FromResult(new AppHostServerRunResult(
                 SocketPath: "test.sock",
                 OutputCollector: new OutputCollector(),
-                Execution: execution);
+                Execution: execution));
         }
     }
 
@@ -659,7 +659,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public AppHostServerRunResult Run(
+        public Task<AppHostServerRunResult> RunAsync(
             int hostPid,
             IReadOnlyDictionary<string, string>? environmentVariables = null,
             string[]? additionalArgs = null,
@@ -686,10 +686,10 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             var execution = CreateServerExecution(startInfo, runControl);
             execution.Start();
 
-            return new AppHostServerRunResult(
+            return Task.FromResult(new AppHostServerRunResult(
                 SocketPath: "test.sock",
                 OutputCollector: new OutputCollector(),
-                Execution: execution);
+                Execution: execution));
         }
     }
 
@@ -709,7 +709,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public AppHostServerRunResult Run(
+        public Task<AppHostServerRunResult> RunAsync(
             int hostPid,
             IReadOnlyDictionary<string, string>? environmentVariables = null,
             string[]? additionalArgs = null,

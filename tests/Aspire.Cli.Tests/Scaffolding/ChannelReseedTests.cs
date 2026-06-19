@@ -138,7 +138,7 @@ public class ChannelReseedTests(ITestOutputHelper outputHelper)
             return Task.FromResult(new AppHostServerPrepareResult(Success: false, Output: null));
         }
 
-        public AppHostServerRunResult Run(
+        public Task<AppHostServerRunResult> RunAsync(
             int hostPid,
             IReadOnlyDictionary<string, string>? environmentVariables = null,
             string[]? additionalArgs = null,
