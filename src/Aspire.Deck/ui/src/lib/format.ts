@@ -139,18 +139,49 @@ export function formatMetricValue(value: number | null, unit: string | null): st
   }
 }
 
-// Normalizes an OTLP/UCUM unit for display. UCUM "annotation" units are wrapped in
-// curly braces — e.g. "{request}", "{operation}", "{connection}" — and describe what
-// is being counted rather than a dimensional unit (the count itself is dimensionless).
-// They should not be shown as a unit suffix (Prometheus and the Aspire dashboard strip
-// them). This removes every "{...}" annotation segment (UCUM allows them anywhere, e.g.
-// "{packet}/s") and returns null when nothing dimensional remains.
+// Normalizes an OTLP/UCUM unit for display, mirroring the Aspire dashboard's
+// OtlpUnits.GetUnit: strip UCUM "annotation" units (curly braces, e.g. "{request}"
+// — a "count of foo" is unitless), convert rate units ("foo/bar" -> "foo per bar"),
+// and expand abbreviations to full words ("ms" -> "milliseconds"). Returns null when
+// nothing dimensional remains (so the value is shown as a plain count).
+// See src/Aspire.Dashboard/Otlp/Model/OtlpUnits.cs.
 export function displayUnit(unit: string | null): string | null {
   if (!unit) {
     return null;
   }
-  const stripped = unit.replace(/\{[^}]*\}/g, "").trim();
-  return stripped.length > 0 ? stripped : null;
+  // UCUM allows annotations anywhere, e.g. "{packet}/s" -> "/s".
+  const stripped = unit.replace(/\{[^}]*\}/g, "");
+  if (stripped.length === 0) {
+    return null;
+  }
+  // Rate units: "foo/bar" -> "foo per bar".
+  const slash = stripped.indexOf("/");
+  if (slash > 0 && slash < stripped.length - 1) {
+    return `${mapUnit(stripped.slice(0, slash))} per ${mapPerUnit(stripped.slice(slash + 1))}`;
+  }
+  const mapped = mapUnit(stripped);
+  return mapped.length > 0 ? mapped : null;
+}
+
+const UNIT_MAP: Record<string, string> = {
+  d: "days", h: "hours", min: "minutes", s: "seconds", ms: "milliseconds", us: "microseconds", ns: "nanoseconds",
+  By: "bytes", KiBy: "kibibytes", MiBy: "mebibytes", GiBy: "gibibytes", TiBy: "tibibytes",
+  KBy: "kilobytes", MBy: "megabytes", GBy: "gigabytes", TBy: "terabytes",
+  B: "bytes", KB: "kilobytes", MB: "megabytes", GB: "gigabytes", TB: "terabytes",
+  m: "meters", V: "volts", A: "amperes", J: "joules", W: "watts", g: "grams",
+  Cel: "celsius", Hz: "hertz", "1": "", "%": "percent", $: "dollars",
+};
+
+const PER_UNIT_MAP: Record<string, string> = {
+  s: "second", m: "minute", h: "hour", d: "day", w: "week", mo: "month", y: "year",
+};
+
+function mapUnit(unit: string): string {
+  return UNIT_MAP[unit] ?? unit;
+}
+
+function mapPerUnit(perUnit: string): string {
+  return PER_UNIT_MAP[perUnit] ?? perUnit;
 }
 
 export function shortId(id: string | null, length = 8): string {
