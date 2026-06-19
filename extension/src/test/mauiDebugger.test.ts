@@ -1186,6 +1186,69 @@ suite('MAUI Debugger Extension Tests', () => {
         });
     });
 
+    test('uses MAUI active target without stale AdbTarget for stopped Android emulators', async () => {
+        const debugTargetsManager = {
+            selectedTargets: [] as Array<{ device: string; platform: string }>,
+            async setActiveDebugTarget(device: string, platform: string): Promise<{ id: string }> {
+                this.selectedTargets.push({ device, platform });
+
+                return { id: device };
+            }
+        };
+        installMauiExtensionStub({
+            maui: {
+                debugTargetsManager
+            }
+        });
+        installMauiRunStartWrapperStubs();
+        useMauiDeviceListProviderForTests(async () => [
+            {
+                identifier: 'Pixel_9a',
+                platform: 'android',
+                platforms: ['android'],
+                isEmulator: true,
+                isRunning: false,
+                name: 'Pixel 9a'
+            }
+        ]);
+
+        const debuggerExtension = getResourceDebuggerExtensions().find(extension => extension.resourceType === 'maui');
+        assert.ok(debuggerExtension);
+
+        const launchConfig = {
+            type: 'maui',
+            project_path: '/workspace/MauiApp/MauiApp.csproj',
+            target_framework: 'net10.0-android',
+            platform: 'android',
+            target_kind: 'emulator',
+            msbuild_properties: {
+                AdbTarget: '-e'
+            }
+        } as ExecutableLaunchConfiguration;
+        const debugConfig = createDebugConfig('stopped-android-emulator');
+
+        await debuggerExtension.createDebugSessionConfigurationCallback!(
+            launchConfig,
+            ['run', '-f', 'net10.0-android', '-p:AdbTarget=-e'],
+            [],
+            { debug: true, runId: 'stopped-android-emulator', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession },
+            debugConfig);
+
+        assert.strictEqual(debugConfig.device, undefined);
+        assertNoMsBuildProperties(debugConfig);
+
+        try {
+            await runWithRunStartWrappers('stopped-android-emulator', async () => {
+                assert.deepStrictEqual(debugTargetsManager.selectedTargets, [{
+                    device: 'Pixel_9a',
+                    platform: 'android'
+                }]);
+            });
+        } finally {
+            cleanupRun('stopped-android-emulator');
+        }
+    });
+
     test('resolves explicit Android emulator names to MAUI target identifiers', async () => {
         installMauiExtensionStub();
         useMauiDeviceListProviderForTests(async () => [
@@ -1567,4 +1630,8 @@ function createDebugConfig(runId = '1'): AspireResourceExtendedDebugConfiguratio
 function assertMsBuildProperties(debugConfig: AspireResourceExtendedDebugConfiguration, expected: Record<string, string>): void {
     assert.ok(debugConfig.msbuildProperties instanceof Map);
     assert.deepStrictEqual(Object.fromEntries(debugConfig.msbuildProperties), expected);
+}
+
+function assertNoMsBuildProperties(debugConfig: AspireResourceExtendedDebugConfiguration): void {
+    assert.strictEqual(debugConfig.msbuildProperties, undefined);
 }

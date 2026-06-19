@@ -58,6 +58,11 @@ interface MauiDeviceInfo {
     name?: string;
 }
 
+interface ResolvedMauiDeviceTarget {
+    device: string;
+    useDebugConfigurationDevice: boolean;
+}
+
 type MauiDeviceListProvider = () => Promise<MauiDeviceInfo[]>;
 let mauiDeviceListProvider: MauiDeviceListProvider = listMauiDevices;
 
@@ -232,6 +237,15 @@ function applyAndroidDebugTargetProperties(debugConfiguration: AspireResourceExt
     setMsBuildProperties(debugConfiguration, msbuildProperties);
 }
 
+function removeAndroidDebugTargetProperties(debugConfiguration: AspireResourceExtendedDebugConfiguration, platform: string | undefined, msbuildProperties: Map<string, string>): void {
+    if (platform !== 'android' || !msbuildProperties.has('AdbTarget')) {
+        return;
+    }
+
+    msbuildProperties.delete('AdbTarget');
+    setMsBuildProperties(debugConfiguration, msbuildProperties);
+}
+
 function getDefaultIosSimulatorRuntimeIdentifier(): string {
     return process.arch === 'arm64' ? 'iossimulator-arm64' : 'iossimulator-x64';
 }
@@ -257,7 +271,7 @@ function applyIosDebugTargetProperties(debugConfiguration: AspireResourceExtende
     setMsBuildProperties(debugConfiguration, msbuildProperties);
 }
 
-async function resolveExplicitDevice(platform: string | undefined, targetKind: MauiTargetKind | undefined, configuredDevice: string | undefined): Promise<string | undefined> {
+async function resolveExplicitDevice(platform: string | undefined, targetKind: MauiTargetKind | undefined, configuredDevice: string | undefined): Promise<ResolvedMauiDeviceTarget | undefined> {
     if (!configuredDevice) {
         return undefined;
     }
@@ -273,11 +287,11 @@ async function resolveExplicitDevice(platform: string | undefined, targetKind: M
                 device.name?.toLowerCase() === normalizedConfiguredDevice);
 
         if (matchingDevice) {
-            return matchingDevice.identifier;
+            return createResolvedDeviceTarget(platform, targetKind, matchingDevice);
         }
     }
 
-    return configuredDevice;
+    return createResolvedDeviceTargetFromIdentifier(configuredDevice);
 }
 
 function getDefaultDesktopDevice(platform: string | undefined, targetKind: MauiTargetKind | undefined): string | undefined {
@@ -321,6 +335,8 @@ function setMsBuildProperties(debugConfiguration: AspireResourceExtendedDebugCon
         // `.forEach` when appending `-p:` arguments. Keep the live debug config
         // as a Map; logging converts it to a plain object separately.
         debugConfiguration.msbuildProperties = properties;
+    } else {
+        delete debugConfiguration.msbuildProperties;
     }
 }
 
@@ -409,7 +425,22 @@ function getStringArrayProperty(value: Record<string, unknown>, property: string
     return propertyValue.filter((item): item is string => typeof item === 'string');
 }
 
-async function resolveDefaultDevice(platform: string | undefined, targetKind: MauiTargetKind | undefined): Promise<string | undefined> {
+function createResolvedDeviceTarget(platform: string | undefined, targetKind: MauiTargetKind | undefined, device: MauiDeviceInfo): ResolvedMauiDeviceTarget {
+    const isStoppedAndroidEmulator = platform === 'android' && targetKind === 'emulator' && device.isEmulator && !device.isRunning;
+    return {
+        device: device.identifier,
+        useDebugConfigurationDevice: !isStoppedAndroidEmulator,
+    };
+}
+
+function createResolvedDeviceTargetFromIdentifier(device: string): ResolvedMauiDeviceTarget {
+    return {
+        device,
+        useDebugConfigurationDevice: true,
+    };
+}
+
+async function resolveDefaultDevice(platform: string | undefined, targetKind: MauiTargetKind | undefined): Promise<ResolvedMauiDeviceTarget | undefined> {
     if (!platform || !targetKind || platform === 'maccatalyst' || platform === 'windows') {
         return undefined;
     }
@@ -434,11 +465,11 @@ async function resolveDefaultDevice(platform: string | undefined, targetKind: Ma
     }
 
     if (candidates.length === 1) {
-        return candidates[0].identifier;
+        return createResolvedDeviceTarget(platform, targetKind, candidates[0]);
     }
 
     if (platform === 'ios' && targetKind === 'simulator') {
-        return candidates[0].identifier;
+        return createResolvedDeviceTarget(platform, targetKind, candidates[0]);
     }
 
     throw new Error(`Unable to resolve a default ${targetDescription} target for MAUI debugging because multiple targets are available: ${candidates.map(getDeviceIdentity).join(', ')}. Pass an explicit device/simulator id to the Aspire MAUI platform resource.`);
@@ -739,16 +770,21 @@ export const mauiDebuggerExtension: ResourceDebuggerExtension = {
         const msbuildProperties = getMsBuildProperties(debugConfiguration);
         const targetKind = getMauiTargetKind(launchConfig, msbuildProperties, debugConfiguration.runtimeIdentifier);
         const configuredDevice = launchConfig.device ?? getExplicitDeviceFromMsBuildProperties(msbuildProperties);
-        const device = await resolveExplicitDevice(platform, targetKind, configuredDevice) ??
-            getDefaultDesktopDevice(platform, targetKind) ??
+        const defaultDesktopDevice = getDefaultDesktopDevice(platform, targetKind);
+        const resolvedDevice = await resolveExplicitDevice(platform, targetKind, configuredDevice) ??
+            (defaultDesktopDevice ? createResolvedDeviceTargetFromIdentifier(defaultDesktopDevice) : undefined) ??
             await resolveDefaultDevice(platform, targetKind);
-        if (device) {
-            debugConfiguration.device = device;
-            applyAndroidDebugTargetProperties(debugConfiguration, platform, msbuildProperties, device);
-            if (platform === 'ios') {
-                applyIosDebugTargetProperties(debugConfiguration, targetKind, device);
+        if (resolvedDevice) {
+            if (resolvedDevice.useDebugConfigurationDevice) {
+                debugConfiguration.device = resolvedDevice.device;
+                applyAndroidDebugTargetProperties(debugConfiguration, platform, msbuildProperties, resolvedDevice.device);
+            } else {
+                removeAndroidDebugTargetProperties(debugConfiguration, platform, msbuildProperties);
             }
-            registerMauiActiveDebugTargetWrapper(launchOptions.runId, platform, device);
+            if (platform === 'ios') {
+                applyIosDebugTargetProperties(debugConfiguration, targetKind, resolvedDevice.device);
+            }
+            registerMauiActiveDebugTargetWrapper(launchOptions.runId, platform, resolvedDevice.device);
         }
 
         if (!debugConfiguration.cwd) {
