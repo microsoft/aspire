@@ -1107,6 +1107,44 @@ suite('MAUI Debugger Extension Tests', () => {
             /Unable to resolve a default android emulator target/);
     });
 
+    test('reports default Android physical device selector failures before MAUI can prompt', async () => {
+        installMauiExtensionStub();
+        useMauiDeviceListProviderForTests(async () => [
+            {
+                identifier: 'Pixel_9a',
+                platform: 'android',
+                platforms: ['android'],
+                isEmulator: true,
+                isRunning: false,
+                name: 'Pixel 9a'
+            }
+        ]);
+
+        const debuggerExtension = getResourceDebuggerExtensions().find(extension => extension.resourceType === 'maui');
+        assert.ok(debuggerExtension);
+
+        const launchConfig = {
+            type: 'maui',
+            project_path: '/workspace/MauiApp/MauiApp.csproj',
+            target_framework: 'net10.0-android',
+            platform: 'android',
+            target_kind: 'device',
+            msbuild_properties: {
+                AdbTarget: '-d'
+            }
+        } as ExecutableLaunchConfiguration;
+        const debugConfig = createDebugConfig();
+
+        await assert.rejects(
+            debuggerExtension.createDebugSessionConfigurationCallback!(
+                launchConfig,
+                ['run', '-f', 'net10.0-android', '-p:AdbTarget=-d'],
+                [],
+                { debug: true, runId: 'structured-android-device', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession },
+                debugConfig),
+            /Unable to resolve a default android device target/);
+    });
+
     test('resolves default Android emulator selectors when a matching target is available', async () => {
         installMauiExtensionStub();
         useMauiDeviceListProviderForTests(async () => [
