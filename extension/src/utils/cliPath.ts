@@ -20,13 +20,27 @@ const fsAccessAsync = promisify(fs.access);
  */
 export function getDefaultCliInstallPaths(): string[] {
     const homeDir = os.homedir();
-    const exeName = process.platform === 'win32' ? 'aspire.exe' : 'aspire';
+    const bundleInstallDirectory = path.join(homeDir, '.aspire', 'bin');
+    const globalToolDirectory = path.join(homeDir, '.dotnet', 'tools');
+
+    if (process.platform === 'win32') {
+        return [
+            // Bundle install (recommended): ~/.aspire/bin/aspire.exe
+            path.join(bundleInstallDirectory, 'aspire.exe'),
+            // Some Windows installs expose command shims instead of native executables.
+            path.join(bundleInstallDirectory, 'aspire.cmd'),
+            // .NET global tool: ~/.dotnet/tools/aspire.exe
+            path.join(globalToolDirectory, 'aspire.exe'),
+            // .NET global tool command shim: ~/.dotnet/tools/aspire.cmd
+            path.join(globalToolDirectory, 'aspire.cmd'),
+        ];
+    }
 
     return [
         // Bundle install (recommended): ~/.aspire/bin/aspire
-        path.join(homeDir, '.aspire', 'bin', exeName),
+        path.join(bundleInstallDirectory, 'aspire'),
         // .NET global tool: ~/.dotnet/tools/aspire
-        path.join(homeDir, '.dotnet', 'tools', exeName),
+        path.join(globalToolDirectory, 'aspire'),
     ];
 }
 

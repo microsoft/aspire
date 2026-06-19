@@ -32,11 +32,11 @@ suite('utils/cliPath tests', () => {
             assert.ok(paths[0].startsWith(path.join(homeDir, '.aspire', 'bin')), `First path should be bundle install: ${paths[0]}`);
         });
 
-        test('returns global tool path (~/.dotnet/tools) as second entry', () => {
+        test('includes global tool path (~/.dotnet/tools)', () => {
             const paths = getDefaultCliInstallPaths();
             const homeDir = os.homedir();
 
-            assert.ok(paths[1].startsWith(path.join(homeDir, '.dotnet', 'tools')), `Second path should be global tool: ${paths[1]}`);
+            assert.ok(paths.some(p => p.startsWith(path.join(homeDir, '.dotnet', 'tools'))), `Should include global tool path: ${paths.join(', ')}`);
         });
 
         test('uses correct executable name for current platform', () => {
@@ -45,10 +45,27 @@ suite('utils/cliPath tests', () => {
             for (const p of paths) {
                 const basename = path.basename(p);
                 if (process.platform === 'win32') {
-                    assert.strictEqual(basename, 'aspire.exe');
-                } else {
+                    assert.ok(basename === 'aspire.exe' || basename === 'aspire.cmd', `Windows path should use aspire.exe or aspire.cmd: ${basename}`);
+                }
+                else {
                     assert.strictEqual(basename, 'aspire');
                 }
+            }
+        });
+
+        test('includes Windows cmd shim path for dotnet global tools', () => {
+            const platformStub = sinon.stub(process, 'platform').value('win32');
+
+            try {
+                const paths = getDefaultCliInstallPaths();
+                const homeDir = os.homedir();
+
+                assert.ok(
+                    paths.includes(path.join(homeDir, '.dotnet', 'tools', 'aspire.cmd')),
+                    'Should check the .cmd shim created by dotnet tool installs on Windows');
+            }
+            finally {
+                platformStub.restore();
             }
         });
     });
