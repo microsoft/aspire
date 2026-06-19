@@ -90,6 +90,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
                 .OrderBy(p => p.FriendlyName, new CommunityToolkitFirstComparer())
                 .ToArray();
 
+            var polyglotFilterRemovedAllIntegrations = false;
             if (applyPolyglotFilter)
             {
                 var compatiblePackagesWithShortName = packagesWithShortName
@@ -97,6 +98,13 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
                     .ToArray();
                 var hiddenIntegrationCount = packagesWithShortName.Length - compatiblePackagesWithShortName.Length;
                 packagesWithShortName = compatiblePackagesWithShortName;
+
+                // Distinguish "the polyglot filter removed every integration" from "a search term matched
+                // nothing". Only the former should report NoPolyglotCompatibleIntegrationsFound; when
+                // compatible integrations exist but none match the query, DisplayIntegrationResults must
+                // fall through to NoIntegrationPackagesMatchedSearchTerm instead of falsely claiming the
+                // AppHost language has no compatible integrations.
+                polyglotFilterRemovedAllIntegrations = hiddenIntegrationCount > 0 && packagesWithShortName.Length == 0;
 
                 // Mirror `aspire add`: tell the user when the polyglot filter removed integrations and how to
                 // reveal them. Only show this when results remain; when the filter removes every integration,
@@ -109,7 +117,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
                 }
             }
 
-            return CommandResult.FromExitCode(DisplayIntegrationResults(packagesWithShortName, searchTerm, format, applyPolyglotFilter));
+            return CommandResult.FromExitCode(DisplayIntegrationResults(packagesWithShortName, searchTerm, format, polyglotFilterRemovedAllIntegrations));
         }
         catch (ProjectLocatorException ex)
         {
@@ -127,7 +135,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
         }
     }
 
-    private int DisplayIntegrationResults(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, string? searchTerm, OutputFormat format, bool polyglotFilterApplied)
+    private int DisplayIntegrationResults(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, string? searchTerm, OutputFormat format, bool polyglotFilterRemovedAllIntegrations)
     {
         var matches = (searchTerm is null
             ? packages.Select(p => (p.FriendlyName, p.Package, p.Channel, SearchScore: 0.0))
@@ -157,10 +165,11 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
 
         if (results.Length == 0)
         {
-            if (polyglotFilterApplied)
+            if (polyglotFilterRemovedAllIntegrations)
             {
                 // The polyglot filter removed every result, so point the user at --all rather than
-                // implying no integrations exist at all.
+                // implying no integrations exist at all. A search-term mismatch (compatible integrations
+                // exist but none match the query) does not reach this branch; it falls through below.
                 InteractionService.DisplayError(AddCommandStrings.NoPolyglotCompatibleIntegrationsFound);
             }
             else if (searchTerm is not null)

@@ -3091,6 +3091,54 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Null(displayedSubtleMessage);
     }
 
+    [Fact]
+    public async Task IntegrationSearchPolyglotAppHostWithSearchTermMismatchReportsSearchTermError()
+    {
+        // A polyglot AppHost where compatible integrations exist but none match the search term must
+        // report NoIntegrationPackagesMatchedSearchTerm, not the false NoPolyglotCompatibleIntegrationsFound.
+        // The polyglot filter did not empty the list (Redis is compatible); the search term did.
+        string? displayedSubtleMessage = null;
+        var testInteractionService = new TestInteractionService
+        {
+            DisplaySubtleMessageCallback = message => displayedSubtleMessage = message
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
+        File.WriteAllText(appHostFile.FullName, string.Empty);
+
+        var implicitCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(
+                [CreatePackage("Aspire.Hosting.Redis", "1.0.0"), CreatePackage("Aspire.Hosting.Foo", "1.0.0")]),
+            GetPackagesAsyncCallback = (_, query, _, _, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(
+                query == "tags:polyglot" ? [CreatePackage("Aspire.Hosting.Redis", "1.0.0")] : [])
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([
+                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures())
+                ])
+            };
+        });
+        services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true)));
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"integration search zzznomatch --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Contains(string.Format(AddCommandStrings.NoIntegrationPackagesMatchedSearchTerm, "zzznomatch"), testInteractionService.DisplayedErrors);
+        // The polyglot filter hid Foo, so the hidden-count hint still appears alongside the search-term error.
+        Assert.Equal(string.Format(AddCommandStrings.PolyglotIntegrationsHidden, 1), displayedSubtleMessage);
+    }
+
     private static NuGetPackage CreatePackage(string id, string version)
     {
         return new NuGetPackage
