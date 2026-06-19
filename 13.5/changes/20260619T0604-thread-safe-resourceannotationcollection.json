@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "ResourceAnnotationCollection is now thread-safe, preventing race conditions when pipeline steps concurrently read and write annotations during publish and deploy operations. Reads are lock-free via snapshot enumeration, while writes are lock-protected.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔒",
+  "firstMergedAt": "2026-06-19T06:04:43Z",
+  "lastMergedAt": "2026-06-19T06:04:43Z",
+  "name": "Thread-safe ResourceAnnotationCollection",
+  "owner": "JamesNK",
+  "prs": [
+    18259
+  ]
+}

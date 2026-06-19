@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Internal CLI refactoring - DI registration for AppHostConnectionResolver, no user-facing behavior change",
+  "mergedAt": "2026-06-19T01:16:12Z",
+  "number": 18316,
+  "runDate": "2026-06-19T07:46:07Z",
+  "status": "excluded",
+  "title": "Register AppHostConnectionResolver in DI and inject via constructors"
+}

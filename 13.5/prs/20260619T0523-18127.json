@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI engineering - selective test runner in audit mode, no user-facing behavior change",
+  "mergedAt": "2026-06-19T05:23:55Z",
+  "number": 18127,
+  "runDate": "2026-06-19T07:46:07Z",
+  "status": "excluded",
+  "title": "feat(ci): select only affected tests and jobs per PR (audit mode)"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": true,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "C# AppHost projects now use the Aspire CLI bundle by default, without requiring AspireUseCliBundle=true in the project file. If the CLI bundle cannot be resolved, the build reports ASPIRE009 with install guidance. Users can opt out by setting <AspireUseCliBundle>false</AspireUseCliBundle> in their project file, which emits ASPIRE010.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "⚙️",
+  "firstMergedAt": "2026-06-19T04:59:48Z",
+  "lastMergedAt": "2026-06-19T04:59:48Z",
+  "name": "AppHost projects default to CLI bundle",
+  "owner": "DamianEdwards",
+  "prs": [
+    18188
+  ]
+}

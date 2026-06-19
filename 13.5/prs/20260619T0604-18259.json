@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Bug fix for thread-safety in ResourceAnnotationCollection during concurrent pipeline steps",
+  "mergedAt": "2026-06-19T06:04:43Z",
+  "number": 18259,
+  "runDate": "2026-06-19T07:46:07Z",
+  "status": "included",
+  "title": "Make ResourceAnnotationCollection thread-safe"
+}
