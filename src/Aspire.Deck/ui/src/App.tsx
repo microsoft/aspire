@@ -4,7 +4,7 @@ import { getConfig } from "./api/deck";
 import { Sidebar, type PageId } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
 import { NotConnected } from "./components/NotConnected";
-import { useConnection, useResources, useTelemetry } from "./lib/useDeckEvent";
+import { useConnection, useResources, useTelemetry, useApphosts } from "./lib/useDeckEvent";
 import { useTheme } from "./lib/theme";
 import { ResourcesPage } from "./pages/ResourcesPage";
 import { ConsolePage } from "./pages/ConsolePage";
@@ -18,6 +18,7 @@ export function App() {
   const connection = useConnection();
   const { resources } = useResources();
   const telemetry = useTelemetry();
+  const apphosts = useApphosts();
   const [config, setConfig] = useState<DeckConfig | null>(null);
   const [page, setPage] = useState<PageId>("resources");
 
@@ -58,7 +59,7 @@ export function App() {
         />
       </div>
       <div className="app__topbar">
-        <TopBar config={config} connection={connection} theme={theme} onToggleTheme={toggleTheme} />
+        <TopBar config={config} connection={connection} apphosts={apphosts} theme={theme} onToggleTheme={toggleTheme} />
       </div>
       <main className="app__content">
         {showNotConnected ? (

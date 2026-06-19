@@ -1,8 +1,12 @@
 //! Client for the AppHost resource service (`aspire.v1.DashboardService`). This
-//! speaks exactly the same gRPC contract the Blazor dashboard's
-//! `DashboardClient` uses, so the AppHost cannot tell the difference between the
-//! two dashboards.
+//! speaks exactly the same gRPC contract the Blazor dashboard's `DashboardClient`
+//! uses, so the AppHost cannot tell the difference between the two dashboards.
+//!
+//! Aspire Deck can attach to multiple AppHosts; each is a [`Session`] with its own
+//! connection. The resource loop runs per session and only pushes events to the UI
+//! while its session is the active one (the UI shows one AppHost at a time).
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use tauri::{AppHandle, Emitter};
@@ -22,7 +26,7 @@ use crate::proto::aspire::v1::{
     ResourceCommandRequest, ResourceCommandResponseKind, WatchResourceConsoleLogsRequest,
     WatchResourcesRequest,
 };
-use crate::state::AppState;
+use crate::state::{AppState, Session};
 
 const RECONNECT_DELAY: Duration = Duration::from_secs(2);
 
@@ -47,11 +51,9 @@ impl Interceptor for ApiKeyInterceptor {
 pub type ResourceServiceClient =
     DashboardServiceClient<InterceptedService<Channel, ApiKeyInterceptor>>;
 
-fn build_interceptor(state: &AppState) -> ApiKeyInterceptor {
-    let key = if state.config.resource_service.auth_mode == AuthMode::ApiKey {
-        state
-            .config
-            .resource_service
+fn build_interceptor(session: &Session) -> ApiKeyInterceptor {
+    let key = if session.auth_mode == AuthMode::ApiKey {
+        session
             .api_key
             .as_ref()
             .and_then(|k| MetadataValue::try_from(k.as_str()).ok())
@@ -78,59 +80,52 @@ async fn connect_channel(url: &str) -> Result<Channel, String> {
     endpoint.connect().await.map_err(|e| e.to_string())
 }
 
-/// Builds a client from the currently-connected channel, if any.
-pub fn client_from_state(state: &AppState) -> Option<ResourceServiceClient> {
-    let channel = state.channel.lock().unwrap().clone()?;
+/// Builds a client from a session's currently-connected channel, if any.
+pub fn client_from_session(session: &Session) -> Option<ResourceServiceClient> {
+    let channel = session.channel.lock().unwrap().clone()?;
     Some(DashboardServiceClient::with_interceptor(
         channel,
-        build_interceptor(state),
+        build_interceptor(session),
     ))
 }
 
-fn emit_connection(app: &AppHandle, state: &str, message: Option<String>) {
-    let _ = app.emit(
-        "deck://connection",
-        &ConnectionStatus::new("resourceService", state, message),
-    );
+/// Records a session's connection state and pushes it to the UI when the session
+/// is active. Storing it lets the UI be re-primed with the correct state when the
+/// user switches to this AppHost.
+fn set_connection(app: &AppHandle, state: &AppState, session: &Session, conn_state: &str, message: Option<String>) {
+    let status = ConnectionStatus::new("resourceService", conn_state, message);
+    *session.connection.lock().unwrap() = status.clone();
+    if state.is_active(&session.id) {
+        let _ = app.emit("deck://connection", &status);
+    }
+    // The switcher shows each AppHost's connection state, so refresh it too.
+    state.emit_apphosts();
 }
 
-/// The long-running task that maintains the resource service connection, watches
-/// for resource changes, and pushes them to the UI. Reconnects with a fixed
-/// backoff when the stream drops.
-pub async fn run_resource_loop(app: AppHandle, state: std::sync::Arc<AppState>) {
-    let url = match state.config.resource_service.url.clone() {
-        Some(url) => url,
-        None => {
-            // Standalone mode (e.g. `aspire deck run` with no AppHost). There is
-            // no resource service to talk to; surface that clearly and stop.
-            emit_connection(
-                &app,
-                "disconnected",
-                Some("No resource service configured".to_string()),
-            );
-            return;
-        }
-    };
-
+/// The long-running task that maintains one AppHost's resource service connection,
+/// watches for resource changes, and pushes them to the UI while the session is
+/// active. Reconnects with a fixed backoff when the stream drops.
+pub async fn run_session_loop(app: AppHandle, state: Arc<AppState>, session: Arc<Session>) {
+    let url = session.resource_service_url.clone();
     let mut is_reconnect = false;
 
     loop {
-        emit_connection(&app, "connecting", Some(url.clone()));
+        set_connection(&app, &state, &session, "connecting", Some(url.clone()));
 
         let channel = match connect_channel(&url).await {
             Ok(channel) => channel,
             Err(err) => {
-                emit_connection(&app, "error", Some(err));
+                set_connection(&app, &state, &session, "error", Some(err));
                 tokio::time::sleep(RECONNECT_DELAY).await;
                 is_reconnect = true;
                 continue;
             }
         };
 
-        *state.channel.lock().unwrap() = Some(channel.clone());
+        *session.channel.lock().unwrap() = Some(channel.clone());
 
         let mut client =
-            DashboardServiceClient::with_interceptor(channel, build_interceptor(&state));
+            DashboardServiceClient::with_interceptor(channel, build_interceptor(&session));
 
         // Fetch the application name (best effort).
         if let Ok(info) = client
@@ -138,19 +133,21 @@ pub async fn run_resource_loop(app: AppHandle, state: std::sync::Arc<AppState>) 
             .await
         {
             let name = info.into_inner().application_name;
-            *state.application_name.lock().unwrap() = Some(name);
+            *session.application_name.lock().unwrap() = Some(name);
+            // The name feeds the switcher label.
+            state.emit_apphosts();
         }
 
-        emit_connection(&app, "connected", Some(url.clone()));
+        set_connection(&app, &state, &session, "connected", Some(url.clone()));
 
-        if let Err(err) = watch_resources(&app, &state, &mut client, is_reconnect).await {
-            emit_connection(&app, "disconnected", Some(err));
+        if let Err(err) = watch_resources(&app, &state, &session, &mut client, is_reconnect).await {
+            set_connection(&app, &state, &session, "disconnected", Some(err));
         } else {
-            emit_connection(&app, "disconnected", None);
+            set_connection(&app, &state, &session, "disconnected", None);
         }
 
         // Drop the cached channel so command handlers don't use a dead one.
-        *state.channel.lock().unwrap() = None;
+        *session.channel.lock().unwrap() = None;
         tokio::time::sleep(RECONNECT_DELAY).await;
         is_reconnect = true;
     }
@@ -159,6 +156,7 @@ pub async fn run_resource_loop(app: AppHandle, state: std::sync::Arc<AppState>) 
 async fn watch_resources(
     app: &AppHandle,
     state: &AppState,
+    session: &Session,
     client: &mut ResourceServiceClient,
     is_reconnect: bool,
 ) -> Result<(), String> {
@@ -177,19 +175,21 @@ async fn watch_resources(
             Some(watch_resources_update::Kind::InitialData(initial)) => {
                 let resources: Vec<Resource> = initial.resources.iter().map(Resource::from).collect();
                 {
-                    let mut map = state.resources.lock().unwrap();
+                    let mut map = session.resources.lock().unwrap();
                     map.clear();
                     for resource in &resources {
                         map.insert(resource.name.clone(), resource.clone());
                     }
                 }
-                let _ = app.emit("deck://resources", &ResourcesEvent::snapshot(resources));
+                if state.is_active(&session.id) {
+                    let _ = app.emit("deck://resources", &ResourcesEvent::snapshot(resources));
+                }
             }
             Some(watch_resources_update::Kind::Changes(changes)) => {
                 let mut upserts = Vec::new();
                 let mut deletes = Vec::new();
                 {
-                    let mut map = state.resources.lock().unwrap();
+                    let mut map = session.resources.lock().unwrap();
                     for change in &changes.value {
                         match &change.kind {
                             Some(watch_resources_change::Kind::Upsert(resource)) => {
@@ -205,7 +205,7 @@ async fn watch_resources(
                         }
                     }
                 }
-                if !upserts.is_empty() || !deletes.is_empty() {
+                if state.is_active(&session.id) && (!upserts.is_empty() || !deletes.is_empty()) {
                     let _ = app.emit("deck://resources", &ResourcesEvent::change(upserts, deletes));
                 }
             }
@@ -216,14 +216,11 @@ async fn watch_resources(
     Ok(())
 }
 
-/// Streams console logs for a resource until the stream completes or the task is
-/// aborted (via unsubscribe). Each batch of lines is emitted on `deck://console-log`.
-pub async fn stream_console_logs(
-    app: AppHandle,
-    state: std::sync::Arc<AppState>,
-    resource_name: String,
-) {
-    let mut client = match client_from_state(&state) {
+/// Streams console logs for a resource on the given session until the stream
+/// completes or the task is aborted (via unsubscribe). Each batch of lines is
+/// emitted on `deck://console-log`.
+pub async fn stream_console_logs(app: AppHandle, session: Arc<Session>, resource_name: String) {
+    let mut client = match client_from_session(&session) {
         Some(client) => client,
         None => return,
     };
@@ -265,17 +262,17 @@ pub async fn stream_console_logs(
     }
 }
 
-/// Executes a command against a resource.
+/// Executes a command against a resource on the given session.
 // `parameter` and `error_message` are deprecated in the proto but still part of
 // the generated struct/response; we set/read them for wire compatibility.
 #[allow(deprecated)]
 pub async fn execute_command(
-    state: std::sync::Arc<AppState>,
+    session: Arc<Session>,
     resource_name: String,
     resource_type: String,
     command_name: String,
 ) -> CommandResponse {
-    let mut client = match client_from_state(&state) {
+    let mut client = match client_from_session(&session) {
         Some(client) => client,
         None => {
             return CommandResponse {

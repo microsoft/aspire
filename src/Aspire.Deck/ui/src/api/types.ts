@@ -170,3 +170,12 @@ export interface ExecuteCommandArgs {
   resourceType: string;
   commandName: string;
 }
+
+// An attached AppHost shown in the switcher. Deck can attach to multiple AppHosts
+// at once (each `aspire run --deck`); the UI shows one — the active one — at a time.
+export interface AppHostInfo {
+  id: string;
+  name: string;
+  state: ConnectionState;
+  active: boolean;
+}

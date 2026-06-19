@@ -81,6 +81,23 @@ to Deck. The CLI picks the endpoints and wires both sides (unsecured loopback tr
 dev). Deck hosts the OTLP endpoints and connects to the resource service — fully replacing the
 dashboard for that run.
 
+#### Multiple AppHosts + switching
+
+Deck is a persistent app that **multiple AppHosts can attach to**. The first `aspire run --deck`
+launches Deck; subsequent `aspire run --deck` invocations discover the running Deck (via its
+instance file) and **attach** their AppHost to it instead of launching another. The Deck top bar
+shows an **AppHost switcher** when more than one is attached, so you can switch which AppHost you're
+viewing live.
+
+- **Discovery**: Deck writes `<home>/.aspire/deck/instance.json` (control endpoint, shared OTLP
+  endpoints, a registration token, and its PID). The CLI reads it, verifies the process is alive,
+  and registers/unregisters AppHosts over the loopback control endpoint (token-gated).
+- **Lifetime**: the run that launches Deck owns its lifetime (closing that run closes Deck).
+  Attached runs only register on start and unregister on exit.
+- **Telemetry note (preview)**: OTLP telemetry is currently shared across attached AppHosts (a
+  single ingestion store). Resources, console logs, and commands are per-AppHost; per-AppHost
+  telemetry isolation is a planned follow-up.
+
 `aspire deck` options: `--otlp-grpc-url`, `--otlp-http-url`, `--resource-service-url`,
 `--deck-path`. The binary is resolved from `--deck-path`, then `ASPIRE_DECK_PATH`, then a local
 build under `src/Aspire.Deck/src-tauri/target/`.

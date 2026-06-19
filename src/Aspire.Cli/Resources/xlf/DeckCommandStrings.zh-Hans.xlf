@@ -2,6 +2,16 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="zh-Hans" original="../DeckCommandStrings.resx">
     <body>
+      <trans-unit id="DeckAttachFailed">
+        <source>Could not attach this AppHost to the running Aspire Deck.</source>
+        <target state="new">Could not attach this AppHost to the running Aspire Deck.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeckAttached">
+        <source>Attached '{0}' to the running Aspire Deck (preview). Switch AppHosts from the Deck top bar.</source>
+        <target state="new">Attached '{0}' to the running Aspire Deck (preview). Switch AppHosts from the Deck top bar.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DeckExecutableNotFound">
         <source>Could not find the Aspire Deck executable. Build it under src/Aspire.Deck and set ASPIRE_DECK_PATH or pass --deck-path.</source>
         <target state="new">Could not find the Aspire Deck executable. Build it under src/Aspire.Deck and set ASPIRE_DECK_PATH or pass --deck-path.</target>

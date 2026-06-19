@@ -249,6 +249,7 @@ internal static class CliTestHelper
         services.AddTransient<DashboardCommand>();
         services.AddTransient<DashboardRunCommand>();
         services.AddTransient<DeckLauncher>();
+        services.AddTransient<DeckBroker>();
         services.AddTransient<DeckCommand>();
         services.AddTransient<UpdateCommand>();
         services.AddTransient<SetupCommand>();

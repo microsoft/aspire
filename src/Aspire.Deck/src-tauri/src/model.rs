@@ -368,6 +368,20 @@ impl ConnectionStatus {
     }
 }
 
+/// Summary of an attached AppHost, for the UI's AppHost switcher.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppHostInfo {
+    /// Stable id for the AppHost (assigned at registration).
+    pub id: String,
+    /// Display name (the application name reported by the resource service, or the id).
+    pub name: String,
+    /// Last known resource-service connection state for this AppHost.
+    pub state: String,
+    /// Whether this is the AppHost the UI is currently showing.
+    pub active: bool,
+}
+
 /// Response from executing a resource command.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

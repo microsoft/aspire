@@ -3,6 +3,7 @@
 // defined in CONTRACT.md so that App code is identical in both modes.
 
 import type {
+  AppHostInfo,
   CanvasManifest,
   CommandResponse,
   ConnectionStatus,
@@ -246,6 +247,12 @@ const canvases: CanvasManifest[] = [
   },
 ];
 
+// Two attached AppHosts so the switcher is exercisable in browser/mock mode.
+const mockApphosts: AppHostInfo[] = [
+  { id: "local", name: "TestShop", state: "connected", active: true },
+  { id: "demo-2", name: "OrdersService", state: "connected", active: false },
+];
+
 const metricDefs: Array<{ name: string; unit: string | null; resource: string; base: number; jitter: number }> = [
   { name: "http.server.request.duration", unit: "ms", resource: "frontend", base: 42, jitter: 18 },
   { name: "http.server.active_requests", unit: "{request}", resource: "frontend", base: 7, jitter: 6 },
@@ -297,6 +304,7 @@ class MockBackend {
   private resourceSubs = new Set<(e: ResourcesEvent) => void>();
   private connectionSubs = new Set<(s: ConnectionStatus) => void>();
   private telemetrySubs = new Set<(t: TelemetrySummary) => void>();
+  private apphostSubs = new Set<(a: AppHostInfo[]) => void>();
   private consoleSubs = new Map<string, Set<(e: ConsoleLogEvent) => void>>();
   private consoleLineCounters = new Map<string, number>();
 
@@ -327,6 +335,25 @@ class MockBackend {
 
   listCanvases(): CanvasManifest[] {
     return structuredClone(canvases);
+  }
+
+  listApphosts(): AppHostInfo[] {
+    return structuredClone(mockApphosts);
+  }
+
+  selectApphost(id: string): void {
+    for (const a of mockApphosts) {
+      a.active = a.id === id;
+    }
+    for (const cb of this.apphostSubs) {
+      cb(structuredClone(mockApphosts));
+    }
+  }
+
+  onApphosts(cb: (a: AppHostInfo[]) => void): Unsubscribe {
+    this.apphostSubs.add(cb);
+    cb(structuredClone(mockApphosts));
+    return () => this.apphostSubs.delete(cb);
   }
 
   getTelemetrySummary(): TelemetrySummary {

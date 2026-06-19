@@ -162,4 +162,10 @@
   <data name="DeckLaunched" xml:space="preserve">
     <value>Aspire Deck (preview) launched. Telemetry endpoint: {0}</value>
   </data>
+  <data name="DeckAttached" xml:space="preserve">
+    <value>Attached '{0}' to the running Aspire Deck (preview). Switch AppHosts from the Deck top bar.</value>
+  </data>
+  <data name="DeckAttachFailed" xml:space="preserve">
+    <value>Could not attach this AppHost to the running Aspire Deck.</value>
+  </data>
 </root>

@@ -1,5 +1,9 @@
 //! Tauri command handlers — the request/response half of the UI boundary.
 //! See `../CONTRACT.md`.
+//!
+//! Resource/console/command operations target the *active* AppHost session. The
+//! AppHost switcher commands (`deck_list_apphosts`/`deck_select_apphost`) change
+//! which session is active.
 
 use std::sync::Arc;
 
@@ -7,20 +11,39 @@ use tauri::{AppHandle, State};
 
 use crate::canvas::CanvasManifest;
 use crate::config::DeckConfigView;
-use crate::model::{CommandResponse, Resource};
+use crate::model::{AppHostInfo, CommandResponse, Resource};
 use crate::otlp::TelemetrySummary;
 use crate::resource_client;
 use crate::state::AppState;
 
 #[tauri::command]
 pub fn deck_get_config(state: State<'_, Arc<AppState>>) -> DeckConfigView {
-    let application_name = state.application_name.lock().unwrap().clone();
+    let application_name = state
+        .active_session()
+        .and_then(|s| s.application_name.lock().unwrap().clone());
     state.config.view(application_name)
 }
 
 #[tauri::command]
 pub fn deck_list_resources(state: State<'_, Arc<AppState>>) -> Vec<Resource> {
-    state.resources.lock().unwrap().values().cloned().collect()
+    match state.active_session() {
+        Some(session) => session.resources.lock().unwrap().values().cloned().collect(),
+        None => Vec::new(),
+    }
+}
+
+#[tauri::command]
+pub fn deck_list_apphosts(state: State<'_, Arc<AppState>>) -> Vec<AppHostInfo> {
+    state.apphost_list()
+}
+
+#[tauri::command]
+pub fn deck_select_apphost(state: State<'_, Arc<AppState>>, id: String) {
+    let state = state.inner().clone();
+    // Only switch to a known AppHost.
+    if state.sessions.lock().unwrap().contains_key(&id) {
+        state.set_active(&id);
+    }
 }
 
 #[tauri::command]
@@ -39,24 +62,27 @@ pub fn deck_subscribe_console_logs(
     state: State<'_, Arc<AppState>>,
     resource_name: String,
 ) {
-    let state = state.inner().clone();
+    let session = match state.active_session() {
+        Some(session) => session,
+        None => return,
+    };
 
     // Replace any existing subscription for this resource.
     {
-        let mut tasks = state.console_tasks.lock().unwrap();
+        let mut tasks = session.console_tasks.lock().unwrap();
         if let Some(existing) = tasks.remove(&resource_name) {
             existing.abort();
         }
     }
 
-    let task_state = state.clone();
+    let task_session = session.clone();
     let task_app = app.clone();
     let name = resource_name.clone();
     let handle = tauri::async_runtime::spawn(async move {
-        resource_client::stream_console_logs(task_app, task_state, name).await;
+        resource_client::stream_console_logs(task_app, task_session, name).await;
     });
 
-    state
+    session
         .console_tasks
         .lock()
         .unwrap()
@@ -65,8 +91,10 @@ pub fn deck_subscribe_console_logs(
 
 #[tauri::command]
 pub fn deck_unsubscribe_console_logs(state: State<'_, Arc<AppState>>, resource_name: String) {
-    if let Some(handle) = state.console_tasks.lock().unwrap().remove(&resource_name) {
-        handle.abort();
+    if let Some(session) = state.active_session() {
+        if let Some(handle) = session.console_tasks.lock().unwrap().remove(&resource_name) {
+            handle.abort();
+        }
     }
 }
 
@@ -77,8 +105,16 @@ pub async fn deck_execute_command(
     resource_type: String,
     command_name: String,
 ) -> Result<CommandResponse, String> {
-    let state = state.inner().clone();
-    Ok(resource_client::execute_command(state, resource_name, resource_type, command_name).await)
+    let session = match state.active_session() {
+        Some(session) => session,
+        None => {
+            return Ok(CommandResponse {
+                kind: "failed".to_string(),
+                message: Some("No AppHost is attached".to_string()),
+            })
+        }
+    };
+    Ok(resource_client::execute_command(session, resource_name, resource_type, command_name).await)
 }
 
 #[tauri::command]

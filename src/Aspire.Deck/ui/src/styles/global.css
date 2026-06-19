@@ -1158,3 +1158,92 @@ table.data tbody tr.selected {
   color: var(--text-muted);
   font-style: italic;
 }
+
+/* --- AppHost switcher ----------------------------------------------------- */
+.apphost-switcher {
+  position: relative;
+  margin-left: 16px;
+}
+
+.apphost-switcher__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.apphost-switcher__button:hover {
+  border-color: var(--border-strong);
+}
+
+.apphost-switcher__name {
+  font-weight: 600;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.apphost-switcher__count {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-surface-2);
+  border-radius: 9px;
+  padding: 1px 6px;
+}
+
+.apphost-switcher__menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 240px;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-pop);
+  z-index: 40;
+}
+
+.apphost-switcher__menu li {
+  margin: 0;
+}
+
+.apphost-switcher__item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.apphost-switcher__item:hover {
+  background: var(--bg-hover);
+}
+
+.apphost-switcher__item--active {
+  background: var(--accent-soft);
+}
+
+.apphost-switcher__item-name {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

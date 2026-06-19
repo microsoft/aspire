@@ -9,6 +9,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { mockBackend } from "./mock";
 import type {
+  AppHostInfo,
   CanvasManifest,
   CommandResponse,
   ConnectionStatus,
@@ -63,6 +64,30 @@ export function listCanvases(): Promise<CanvasManifest[]> {
     return invoke<CanvasManifest[]>("deck_list_canvases");
   }
   return Promise.resolve(mockBackend.listCanvases());
+}
+
+export function listApphosts(): Promise<AppHostInfo[]> {
+  if (isTauri()) {
+    return invoke<AppHostInfo[]>("deck_list_apphosts");
+  }
+  return Promise.resolve(mockBackend.listApphosts());
+}
+
+export function selectApphost(id: string): Promise<void> {
+  if (isTauri()) {
+    return invoke<void>("deck_select_apphost", { id });
+  }
+  mockBackend.selectApphost(id);
+  return Promise.resolve();
+}
+
+export function onApphosts(cb: (apphosts: AppHostInfo[]) => void): Unsubscribe {
+  if (isTauri()) {
+    const unlisten = bridgeListen<AppHostInfo[]>("deck://apphosts", cb);
+    void listApphosts().then(cb);
+    return unlisten;
+  }
+  return mockBackend.onApphosts(cb);
 }
 
 export function getTelemetrySummary(): Promise<TelemetrySummary> {

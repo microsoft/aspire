@@ -18,6 +18,12 @@ The backend exposes **commands** (request/response via `@tauri-apps/api/core` `i
 | `deck_execute_command` | `{ resourceName, resourceType, commandName }` | `CommandResponse` |
 | `deck_list_canvases` | – | `CanvasManifest[]` |
 | `deck_get_telemetry_summary` | – | `TelemetrySummary` |
+| `deck_list_apphosts` | – | `AppHostInfo[]` (attached AppHosts) |
+| `deck_select_apphost` | `{ id: string }` | `void` (switches the active AppHost) |
+
+Resource/console/command operations target the **active** AppHost. Deck can attach to
+multiple AppHosts at once (one per `aspire run --deck`); `deck_select_apphost` changes which
+one is shown.
 
 ## Events (listen)
 
@@ -27,6 +33,7 @@ The backend exposes **commands** (request/response via `@tauri-apps/api/core` `i
 | `deck://resources` | `ResourcesEvent` |
 | `deck://console-log` | `ConsoleLogEvent` |
 | `deck://telemetry` | `TelemetrySummary` (debounced push when new OTLP data arrives) |
+| `deck://apphosts` | `AppHostInfo[]` (attached AppHosts changed, or the active one switched) |
 
 ## Types
 
@@ -158,6 +165,14 @@ export interface CanvasManifest {
   icon: string | null;        // optional emoji or icon name
   entry: string;              // relative html entry, e.g. "index.html"
   url: string;                // resolved asset url the UI can load in an <iframe>
+}
+
+// --- AppHost switcher ---
+export interface AppHostInfo {
+  id: string;                 // stable id assigned at registration
+  name: string;               // application name, or the id until connected
+  state: ConnectionState;     // resource-service connection state
+  active: boolean;            // whether this AppHost is the one being shown
 }
 ```
 

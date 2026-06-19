@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  onApphosts,
   onConnection,
   onResources,
   onTelemetry,
 } from "../api/deck";
 import type {
+  AppHostInfo,
   ConnectionState,
   ConnectionStatus,
   ConnectionTarget,
@@ -77,4 +79,17 @@ export function useTelemetry(): TelemetrySummary | null {
   }, []);
 
   return summary;
+}
+
+// Tracks the set of attached AppHosts (for the switcher). The list updates live as
+// AppHosts attach/detach or their connection state changes.
+export function useApphosts(): AppHostInfo[] {
+  const [apphosts, setApphosts] = useState<AppHostInfo[]>([]);
+
+  useEffect(() => {
+    const unsubscribe = onApphosts(setApphosts);
+    return unsubscribe;
+  }, []);
+
+  return apphosts;
 }
