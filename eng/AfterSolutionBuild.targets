@@ -74,7 +74,7 @@
         $isSpecializedWorkflow = ($testRunnerName -eq 'QuarantinedTestRunsheetBuilder' -or $testRunnerName -eq 'OuterloopTestRunsheetBuilder')
 
         if ($isPullRequest -and $isSpecializedWorkflow -and $combined.Count -gt 0) {
-            Write-Host "Running on pull_request event for specialized tests - filtering to single test project"
+            Write-Host "Running on pull_request event for specialized tests - picking a single test project as a sanity check"
             # Get the first unique project name and keep all OS entries for that project
             $firstProjectName = $combined[0].project
             $combined = @($combined | Where-Object { $_.project -eq $firstProjectName })

@@ -30,6 +30,7 @@ internal sealed class AspireJsonConfiguration
     /// </summary>
     [JsonPropertyName("appHostPath")]
     [LocalAspireJsonConfigurationProperty]
+    [HiddenFromConfigurationSchema]
     [Description("The path to the AppHost entry point file (e.g., \"Program.cs\", \"app.ts\"). Relative to the directory containing .aspire/settings.json.")]
     public string? AppHostPath { get; set; }
 

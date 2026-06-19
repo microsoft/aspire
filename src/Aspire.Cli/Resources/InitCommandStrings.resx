@@ -102,4 +102,34 @@
   <data name="LanguageOptionDescription" xml:space="preserve">
     <value>The programming language for the AppHost (csharp, typescript)</value>
   </data>
+  <data name="AppHostCreatedRunOne" xml:space="preserve">
+    <value>Aspire AppHost created! To complete setup, run:</value>
+  </data>
+  <data name="AppHostCreatedRunOneOf" xml:space="preserve">
+    <value>Aspire AppHost created! To complete setup, run one of:</value>
+  </data>
+  <data name="DeprecatedOptionWarning" xml:space="preserve">
+    <value>`aspire init {0}` is deprecated and no longer affects generated AppHosts. It is accepted for compatibility and will be removed in a future version.</value>
+  </data>
+  <data name="FileAlreadyExistsSkipping" xml:space="preserve">
+    <value>{0} already exists — skipping.</value>
+  </data>
+  <data name="CreatedFile" xml:space="preserve">
+    <value>Created {0}</value>
+  </data>
+  <data name="InstallingAspireProjectTemplates" xml:space="preserve">
+    <value>Installing Aspire project templates...</value>
+  </data>
+  <data name="CreatingAppHostFromTemplate" xml:space="preserve">
+    <value>Creating AppHost from template...</value>
+  </data>
+  <data name="FailedToCreateAppHostFromTemplate" xml:space="preserve">
+    <value>Failed to create AppHost from template (exit code {0}).</value>
+  </data>
+  <data name="FailedToParseExistingConfig" xml:space="preserve">
+    <value>Failed to parse existing {0} at '{1}': {2}</value>
+  </data>
+  <data name="FixOrRemoveConfigAndRerun" xml:space="preserve">
+    <value>Fix or remove {0} and re-run `aspire init`.</value>
+  </data>
 </root>

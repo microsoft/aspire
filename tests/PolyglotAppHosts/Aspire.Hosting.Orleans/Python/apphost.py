@@ -5,11 +5,11 @@ from aspire_app import create_builder
 
 
 with create_builder() as builder:
-    provider = builder.add_connection_string("connection-string")
+    provider = builder.add_connection_string("connection-string", env_var_name="ORLEANS_PROVIDER_CONNECTION_STRING")
     orleans = builder.add_orleans("resource")
     orleans_client = orleans.as_client()
     silo = builder.add_container("resource", "image")
-    silo.with_orleans_reference()
+    silo.with_orleans_reference(orleans)
     client = builder.add_container("resource", "image")
-    client.with_orleans_client_reference()
+    client.with_orleans_client_reference(orleans_client)
     builder.run()

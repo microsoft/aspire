@@ -174,6 +174,52 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
             .AppendContentAsFile(storageBicep, "bicep");
     }
 
+    [Fact]
+    public async Task AzurePublishingContext_WritesScopedModuleExpressions()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        builder.AddAzureContainerAppEnvironment("acaEnv");
+        var resourceGroup = builder.AddParameter("moduleResourceGroup", "rg-shared", publishValueAsDefault: true);
+        var subscription = builder.AddParameter("moduleSubscription", "12345678-1234-1234-1234-123456789012", publishValueAsDefault: true);
+
+        var resourceGroupScoped = builder.AddBicepTemplateString("resourceGroupScoped",
+            """
+            param location string
+
+            output value string = 'resourceGroup'
+            """);
+        resourceGroupScoped.Resource.Scope = new(resourceGroup.Resource, subscription.Resource);
+
+        var subscriptionScoped = builder.AddBicepTemplateString("subscriptionScoped",
+            """
+            targetScope = 'subscription'
+
+            param location string
+
+            output value string = 'subscription'
+            """);
+        subscriptionScoped.Resource.Scope = AzureBicepResourceScope.ForSubscription(subscription.Resource);
+
+        var tenantScoped = builder.AddBicepTemplateString("tenantScoped",
+            """
+            targetScope = 'tenant'
+
+            param location string
+
+            output value string = 'tenant'
+            """);
+        tenantScoped.Resource.Scope = AzureBicepResourceScope.ForTenant();
+
+        var app = builder.Build();
+        app.Run();
+
+        var mainBicep = File.ReadAllText(Path.Combine(tempDir.Path, "main.bicep"));
+
+        await Verify(mainBicep, "bicep");
+    }
+
     private sealed class TestProject : IProjectMetadata
     {
         public string ProjectPath => "another-path";

@@ -1,0 +1,15 @@
+﻿FROM oven/bun:1 AS build
+
+WORKDIR /app
+COPY . .
+
+FROM oven/bun:1 AS runtime
+
+WORKDIR /app
+COPY --from=build /app /app
+
+ENV NODE_ENV=production
+
+USER bun
+
+ENTRYPOINT ["bun","server.ts"]

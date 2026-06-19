@@ -120,11 +120,26 @@
   <data name="Description" xml:space="preserve">
     <value>Add a hosting integration to the AppHost</value>
   </data>
+  <data name="IntegrationCommandDescription" xml:space="preserve">
+    <value>Manage Aspire hosting integrations</value>
+  </data>
+  <data name="IntegrationListDescription" xml:space="preserve">
+    <value>List available Aspire hosting integrations</value>
+  </data>
+  <data name="IntegrationSearchDescription" xml:space="preserve">
+    <value>Search available Aspire hosting integrations</value>
+  </data>
+  <data name="IntegrationSearchQueryArgumentDescription" xml:space="preserve">
+    <value>The integration search query.</value>
+  </data>
   <data name="IntegrationArgumentDescription" xml:space="preserve">
     <value>The name of the integration to add (e.g. redis, postgres)</value>
   </data>
   <data name="ProjectArgumentDescription" xml:space="preserve">
-    <value>The path to the Aspire AppHost project file to add the integration to</value>
+    <value>The Aspire AppHost project file, or a directory to search, to add the integration to</value>
+  </data>
+  <data name="IntegrationSearchAppHostOptionDescription" xml:space="preserve">
+    <value>The Aspire AppHost project file, or a directory to search, for channel-aware integration discovery</value>
   </data>
   <data name="VersionArgumentDescription" xml:space="preserve">
     <value>The version of the integration to add</value>
@@ -132,8 +147,15 @@
   <data name="SourceArgumentDescription" xml:space="preserve">
     <value>The NuGet source to use for the integration</value>
   </data>
+  <data name="FormatOptionDescription" xml:space="preserve">
+    <value>Output format (Table or Json)</value>
+  </data>
   <data name="SearchingForAspirePackages" xml:space="preserve">
     <value>Searching for Aspire integrations...</value>
+  </data>
+  <data name="SearchingForSpecifiedPackageVersion" xml:space="preserve">
+    <value>Searching for version '{1}' of {0}...</value>
+    <comment>{0} is the package name, {1} is the requested version.</comment>
   </data>
   <data name="NoIntegrationPackagesFound" xml:space="preserve">
     <value>No integration packages were found. Please check your internet connection or NuGet source configuration.</value>
@@ -148,8 +170,8 @@
     <value>Adding Aspire hosting integration...</value>
   </data>
   <data name="PackageInstallationFailed" xml:space="preserve">
-    <value>The package installation failed with exit code {0}. See logs at {1}</value>
-    <comment>{0} is a number, {1} is the log file path</comment>
+    <value>The package installation failed with exit code {0}.</value>
+    <comment>{0} is a number</comment>
   </data>
   <data name="PackageAddedSuccessfully" xml:space="preserve">
     <value>The package {0}::{1} was added successfully.</value>
@@ -157,6 +179,9 @@
   </data>
   <data name="ErrorOccurredWhileAddingPackage" xml:space="preserve">
     <value>An error occurred while adding the package: {0}</value>
+  </data>
+  <data name="ErrorOccurredWhileSearchingIntegrations" xml:space="preserve">
+    <value>An error occurred while searching integrations: {0}</value>
   </data>
   <data name="SelectAVersionOfPackage" xml:space="preserve">
     <value>Select a version of {0}:</value>
@@ -168,6 +193,39 @@
   <data name="NoPackagesMatchedSearchTerm" xml:space="preserve">
     <value>No packages matched your search term '{0}'. Showing all available packages.</value>
     <comment>{0} is the search term provided by the user.</comment>
+  </data>
+  <data name="NoIntegrationPackagesMatchedSearchTerm" xml:space="preserve">
+    <value>No integration packages matched '{0}'.</value>
+    <comment>{0} is the search term provided by the user.</comment>
+  </data>
+  <data name="FoundIntegrationPackages" xml:space="preserve">
+    <value>Found {0} integration package(s).</value>
+    <comment>{0} is the number of integration packages found.</comment>
+  </data>
+  <data name="FoundIntegrationPackagesMatchingSearchTerm" xml:space="preserve">
+    <value>Found {0} integration package(s) matching '{1}'.</value>
+    <comment>{0} is the number of integration packages found, {1} is the search term provided by the user.</comment>
+  </data>
+  <data name="HeaderName" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="HeaderPackage" xml:space="preserve">
+    <value>Package</value>
+  </data>
+  <data name="HeaderVersion" xml:space="preserve">
+    <value>Version</value>
+  </data>
+  <data name="SpecifiedVersionNotFoundForPackage" xml:space="preserve">
+    <value>The requested version '{1}' was not found for package '{0}'.</value>
+    <comment>{0} is the package name, {1} is the requested version.</comment>
+  </data>
+  <data name="SpecifiedVersionRequiresExactPackageMatch" xml:space="preserve">
+    <value>When --version is specified in non-interactive mode, the integration name must exactly match a package or friendly name. No exact match was found for '{0}'.</value>
+    <comment>{0} is the integration name provided by the user.</comment>
+  </data>
+  <data name="NonInteractiveRequiresExactPackageMatch" xml:space="preserve">
+    <value>No exact match was found for '{0}'. In non-interactive mode the integration name must exactly match a package id or friendly name; fuzzy fallback is disabled to prevent silently selecting the wrong package.</value>
+    <comment>{0} is the integration name provided by the user.</comment>
   </data>
   <data name="UsePrereleasePackages" xml:space="preserve">
     <value>Use pre-release packages</value>

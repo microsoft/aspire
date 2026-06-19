@@ -1,4 +1,5 @@
 #pragma warning disable ASPIREAZURE001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
@@ -77,7 +78,7 @@ public class AzureUserAssignedIdentityTests
             r => Assert.IsType<AzureUserAssignedIdentityResource>(r),
             r =>
             {
-                Assert.IsType<AzureProvisioningResource>(r);
+                Assert.IsType<AzureRoleAssignmentResource>(r);
                 Assert.Equal("myidentity-roles-myregistry", r.Name);
             });
 
@@ -87,7 +88,9 @@ public class AzureUserAssignedIdentityTests
         var registryResource = Assert.Single(model.Resources.OfType<AzureContainerRegistryResource>(), r => r.Name == "myregistry");
         var (_, registryBicep) = await GetManifestWithBicep(registryResource, skipPreparer: true);
 
-        var identityRoleAssignments = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), r => r.Name == "myidentity-roles-myregistry");
+        var identityRoleAssignments = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(), r => r.Name == "myidentity-roles-myregistry");
+        Assert.Same(registryResource, identityRoleAssignments.TargetAzureResource);
+        Assert.Same(identityResource, identityRoleAssignments.OwnerResource);
         var (_, identityRoleAssignmentsBicep) = await GetManifestWithBicep(identityRoleAssignments, skipPreparer: true);
 
         await Verify(identityBicep, "bicep")
@@ -159,7 +162,7 @@ public class AzureUserAssignedIdentityTests
             r => Assert.IsType<AzureStorageResource>(r),
             r => Assert.IsType<AzureUserAssignedIdentityResource>(r),
             r => Assert.IsType<ProjectResource>(r),
-            r => Assert.IsType<AzureProvisioningResource>(r));
+            r => Assert.IsType<AzureRoleAssignmentResource>(r));
 
         // Verify the identity resource is the only one that exists
         var identityResource = Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>());
@@ -171,8 +174,10 @@ public class AzureUserAssignedIdentityTests
         Assert.Same(identity.Resource, identityAnnotation.IdentityResource);
 
         // Verify the role assignment resource for the project
-        var roleAssignmentResource = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(),
+        var roleAssignmentResource = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(),
             r => r.Name == "myapp-roles-mystorage");
+        Assert.Same(storage.Resource, roleAssignmentResource.TargetAzureResource);
+        Assert.Same(computeResource, roleAssignmentResource.OwnerResource);
 
         // Get the Bicep for all resources
         var deploymentTarget = Assert.Single(computeResource.Annotations.OfType<DeploymentTargetAnnotation>());
@@ -215,7 +220,7 @@ public class AzureUserAssignedIdentityTests
             r => Assert.IsType<AzureStorageResource>(r),
             r => Assert.IsType<AzureUserAssignedIdentityResource>(r),
             r => Assert.IsType<ProjectResource>(r),
-            r => Assert.IsType<AzureProvisioningResource>(r));
+            r => Assert.IsType<AzureRoleAssignmentResource>(r));
 
         // Verify the identity resource is the only one that exists
         var identityResource = Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>());
@@ -227,8 +232,10 @@ public class AzureUserAssignedIdentityTests
         Assert.Same(identity.Resource, identityAnnotation.IdentityResource);
 
         // Verify the role assignment resource for the project
-        var roleAssignmentResource = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(),
+        var roleAssignmentResource = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(),
             r => r.Name == "myapp-roles-mystorage");
+        Assert.Same(storage.Resource, roleAssignmentResource.TargetAzureResource);
+        Assert.Same(computeResource, roleAssignmentResource.OwnerResource);
 
         // Get the Bicep for all resources
         var deploymentTarget = Assert.Single(computeResource.Annotations.OfType<DeploymentTargetAnnotation>());
@@ -293,8 +300,8 @@ public class AzureUserAssignedIdentityTests
             r => Assert.IsType<AzureUserAssignedIdentityResource>(r),
             r => Assert.IsType<ProjectResource>(r),
             r => Assert.IsType<ProjectResource>(r),
-            r => Assert.True(r is AzureProvisioningResource { Name: "myapp-roles-mystorage" }),
-            r => Assert.True(r is AzureProvisioningResource { Name: "myapp2-roles-mystorage" }));
+            r => Assert.True(r is AzureRoleAssignmentResource { Name: "myapp-roles-mystorage" }),
+            r => Assert.True(r is AzureRoleAssignmentResource { Name: "myapp2-roles-mystorage" }));
 
         // Verify the identity resource is the only one that exists
         var identityResource = Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>());
@@ -309,10 +316,14 @@ public class AzureUserAssignedIdentityTests
         Assert.Same(identity.Resource, identityAnnotation2.IdentityResource);
 
         // Verify the role assignment resource for the project
-        var roleAssignmentResource = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(),
+        var roleAssignmentResource = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(),
             r => r.Name == "myapp-roles-mystorage");
-        var roleAssignmentResource2 = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(),
+        var roleAssignmentResource2 = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(),
             r => r.Name == "myapp2-roles-mystorage");
+        Assert.Same(storage.Resource, roleAssignmentResource.TargetAzureResource);
+        Assert.Same(computeResource, roleAssignmentResource.OwnerResource);
+        Assert.Same(storage.Resource, roleAssignmentResource2.TargetAzureResource);
+        Assert.Same(computeResource2, roleAssignmentResource2.OwnerResource);
         // Each project uses the same identity, but assigns different roles
         Assert.NotSame(roleAssignmentResource, roleAssignmentResource2);
 

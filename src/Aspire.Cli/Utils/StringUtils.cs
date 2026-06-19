@@ -1,19 +1,31 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.RegularExpressions;
+using Spectre.Console;
 
 namespace Aspire.Cli.Utils;
 
-internal static partial class StringUtils
+internal static class StringUtils
 {
-    public static string RemoveSpectreFormatting(this string input)
+    public static string RemoveMarkup(string input)
     {
-        return RemoveSpectreFormattingRegex().Replace(input, string.Empty).Trim();
-    }
+        if (string.IsNullOrEmpty(input))
+        {
+            return input;
+        }
 
-    [GeneratedRegex(@"\[[^\]]+\]")]
-    private static partial Regex RemoveSpectreFormattingRegex();
+        try
+        {
+            return Markup.Remove(input);
+        }
+        catch (InvalidOperationException)
+        {
+            // Backchannel payloads can contain plain text with literal '[' or ']' from
+            // user/project output (for example, compiler diagnostics). Treat malformed
+            // markup as plain text so error reporting never throws while logging another error.
+            return input;
+        }
+    }
 
     /// <summary>
     /// Calculates a fuzzy match score between a search term and a target string.

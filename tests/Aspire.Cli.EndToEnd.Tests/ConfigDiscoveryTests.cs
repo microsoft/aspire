@@ -18,7 +18,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// Reproduces the bug where <c>aspire new myproject</c> creates the config inside
 /// <c>myproject/</c>, but running <c>aspire run</c> from the parent directory
 /// creates a spurious <c>aspire.config.json</c> in the parent instead of finding
-/// the one adjacent to <c>apphost.ts</c>.
+/// the one adjacent to <c>apphost.mts</c>.
 /// </remarks>
 public sealed class ConfigDiscoveryTests(ITestOutputHelper output)
 {
@@ -31,22 +31,21 @@ public sealed class ConfigDiscoveryTests(ITestOutputHelper output)
     public async Task RunFromParentDirectory_UsesExistingConfigNearAppHost()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(
-            repoRoot, installMode, output,
+            repoRoot, strategy, output,
             variant: CliE2ETestHelpers.DockerfileVariant.Polyglot,
             mountDockerSocket: true,
             workspace: workspace);
 
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         const string projectName = "ConfigTest";
 
@@ -110,12 +109,12 @@ public sealed class ConfigDiscoveryTests(ITestOutputHelper output)
         using var doc = JsonDocument.Parse(currentContent);
         var root = doc.RootElement;
 
-        // Verify appHost.path is "apphost.ts"
+        // Verify appHost.path is "apphost.mts"
         Assert.True(root.TryGetProperty("appHost", out var appHost),
             $"aspire.config.json missing 'appHost' property. Content:\n{currentContent}");
         Assert.True(appHost.TryGetProperty("path", out var pathProp),
             $"aspire.config.json missing 'appHost.path'. Content:\n{currentContent}");
-        Assert.Equal("apphost.ts", pathProp.GetString());
+        Assert.Equal("apphost.mts", pathProp.GetString());
 
         // Verify language is typescript
         Assert.True(appHost.TryGetProperty("language", out var langProp),
@@ -140,10 +139,5 @@ public sealed class ConfigDiscoveryTests(ITestOutputHelper output)
         }
         Assert.True(hasApplicationUrl,
             $"No profile has 'applicationUrl'. Content:\n{currentContent}");
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 }

@@ -3,5 +3,6 @@
     "dotnet.solution.autoOpen": "./Aspire.slnx",
     "dotnet.preview.enableSupportForSlnx": true,
     "dotnet.testWindow.useTestingPlatformProtocol": true,
-    "aspire.enableSettingsFileCreationPromptOnStartup": false
+    "aspire.enableSettingsFileCreationPromptOnStartup": false,
+    "aspire.enableAutoRestore": false
 }

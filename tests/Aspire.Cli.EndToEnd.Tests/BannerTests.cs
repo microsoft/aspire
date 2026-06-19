@@ -19,19 +19,18 @@ public sealed class BannerTests(ITestOutputHelper output)
     public async Task Banner_DisplayedOnFirstRun()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Delete the first-time use sentinel file to simulate first run
         // The sentinel is stored at ~/.aspire/cli/cli.firstUseSentinel
@@ -49,30 +48,33 @@ public sealed class BannerTests(ITestOutputHelper output)
         await auto.WaitUntilAsync(
             s => s.ContainsText(RootCommandStrings.BannerWelcomeText) && s.ContainsText("Telemetry"),
             timeout: TimeSpan.FromSeconds(30), description: "waiting for banner and telemetry notice on first run");
+<<<<<<< HEAD
         await auto.WaitForSuccessPromptFailFastAsync(counter);
         await auto.TypeAsync("exit");
         await auto.EnterAsync();
 
         await pendingRun;
+=======
+        await auto.WaitForSuccessPromptAsync(counter);
+>>>>>>> origin/main
     }
 
     [Fact]
     public async Task Banner_DisplayedWithExplicitFlag()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Clear screen to have a clean slate for pattern matching
         await auto.ClearScreenAsync(counter);
@@ -81,30 +83,33 @@ public sealed class BannerTests(ITestOutputHelper output)
         await auto.WaitUntilAsync(
             s => s.ContainsText(RootCommandStrings.BannerWelcomeText) && s.ContainsText("CLI"),
             timeout: TimeSpan.FromSeconds(30), description: "waiting for banner with version info");
+<<<<<<< HEAD
         await auto.WaitForSuccessPromptFailFastAsync(counter);
         await auto.TypeAsync("exit");
         await auto.EnterAsync();
 
         await pendingRun;
+=======
+        await auto.WaitForSuccessPromptAsync(counter);
+>>>>>>> origin/main
     }
 
     [Fact]
     public async Task Banner_NotDisplayedWithNoLogoFlag()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Delete the first-time use sentinel file to simulate first run,
         // but use --nologo to suppress the banner
@@ -129,10 +134,14 @@ public sealed class BannerTests(ITestOutputHelper output)
             // Only return true once the help hint is visible at the end of the output
             return s.ContainsText(HelpGroupStrings.HelpHint);
         }, timeout: TimeSpan.FromSeconds(30), description: "waiting for help output to complete");
+<<<<<<< HEAD
         await auto.WaitForSuccessPromptFailFastAsync(counter);
         await auto.TypeAsync("exit");
         await auto.EnterAsync();
 
         await pendingRun;
+=======
+        await auto.WaitForSuccessPromptAsync(counter);
+>>>>>>> origin/main
     }
 }

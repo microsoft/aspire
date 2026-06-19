@@ -37,15 +37,55 @@
         <target state="translated">無法同時使用 --watch 和 --no-build。</target>
         <note />
       </trans-unit>
+      <trans-unit id="CertificateGenerationFailed">
+        <source>Failed to generate HTTPS development certificate (result: {0}).</source>
+        <target state="new">Failed to generate HTTPS development certificate (result: {0}).</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CertificatesMayNotBeFullyTrusted">
         <source>Developer certificates may not be fully trusted (trust exit code was: {0}).</source>
         <target state="translated">開發人員憑證可能未完全受信任 (信任結束代碼為: {0})。</target>
         <note />
       </trans-unit>
+      <trans-unit id="CertificatesNotTrustedNonInteractive">
+        <source>Developer certificates are not trusted. Trust them interactively by running 'aspire certs trust'.</source>
+        <target state="new">Developer certificates are not trusted. Trust them interactively by running 'aspire certs trust'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CertificatesPartiallyTrustedNonInteractive">
+        <source>Developer certificates are only partially trusted. Trust them interactively by running 'aspire certs trust'.</source>
+        <target state="new">Developer certificates are only partially trusted. Trust them interactively by running 'aspire certs trust'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CodegenDebugHeader">
+        <source>Diagnostic details:</source>
+        <target state="new">Diagnostic details:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CodegenDebugHint">
+        <source>Run with '--debug' for full diagnostic details.</source>
+        <target state="new">Run with '--debug' for full diagnostic details.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CodegenIncompatibleSdkSummary">
+        <source>{0} SDK code generation failed because the installed Aspire CLI appears to be incompatible with the configured Aspire SDK. Run 'aspire update' to align the CLI and SDK and try again.</source>
+        <target state="new">{0} SDK code generation failed because the installed Aspire CLI appears to be incompatible with the configured Aspire SDK. Run 'aspire update' to align the CLI and SDK and try again.</target>
+        <note>{0} is the AppHost language display name, e.g. 'TypeScript (Node.js)'.</note>
+      </trans-unit>
+      <trans-unit id="CodegenVersionSkewWarning">
+        <source>The installed Aspire CLI version ({0}) differs from the configured Aspire SDK version ({1}). If you run into errors, run 'aspire update' to align them.</source>
+        <target state="new">The installed Aspire CLI version ({0}) differs from the configured Aspire SDK version ({1}). If you run into errors, run 'aspire update' to align them.</target>
+        <note>{0} is the CLI version, {1} is the SDK version configured in aspire.config.json.</note>
+      </trans-unit>
       <trans-unit id="CommandNotSupportedWithSingleFileAppHost">
         <source>This command is not yet supported with single file AppHosts.</source>
         <target state="needs-review-translation">單一檔案 AppHost 尚不支援此命令。</target>
         <note />
+      </trans-unit>
+      <trans-unit id="ConfigurationFileMustBeJsonObject">
+        <source>The configuration file '{0}' must contain a JSON object.</source>
+        <target state="new">The configuration file '{0}' must contain a JSON object.</target>
+        <note>{0} is the configuration file path that the user authored.</note>
       </trans-unit>
       <trans-unit id="ConfigurationKeyNotFound">
         <source>Configuration key {0} not found.</source>
@@ -62,9 +102,24 @@
         <target state="translated">設定值為必須。</target>
         <note />
       </trans-unit>
+      <trans-unit id="ConfiguredAppHostPathHasInvalidCharacters">
+        <source>The configured AppHost path in '{0}' ('{1}') is empty or contains characters that are not allowed in a file path.</source>
+        <target state="new">The configured AppHost path in '{0}' ('{1}') is empty or contains characters that are not allowed in a file path.</target>
+        <note>{0} is the configuration file path that the user authored, {1} is the field/setting name within that file (for example "appHost.path" or "appHostPath")</note>
+      </trans-unit>
+      <trans-unit id="ConfiguredAppHostPathMustBeString">
+        <source>The configured AppHost path in '{0}' ('{1}') must be a JSON string.</source>
+        <target state="new">The configured AppHost path in '{0}' ('{1}') must be a JSON string.</target>
+        <note>{0} is the configuration file path that the user authored, {1} is the field/setting name within that file (for example "appHost.path" or "appHostPath")</note>
+      </trans-unit>
       <trans-unit id="CouldNotParseAspireSDKVersion">
         <source>Could not parse Aspire.Hosting package version.</source>
         <target state="translated">無法剖析 Aspire.Hosting 套件版本。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DotNetSdkUnavailableAppHostDiscoveryWarning">
+        <source>Warning: Required .NET SDK not found; .NET AppHost projects may be missing from results.</source>
+        <target state="new">Warning: Required .NET SDK not found; .NET AppHost projects may be missing from results.</target>
         <note />
       </trans-unit>
       <trans-unit id="ErrorDeletingConfiguration">
@@ -87,6 +142,11 @@
         <target state="translated">如果已設定 ASPIRE_EXTENSION_ENDPOINT，則必須設定 Aspire 延伸模組權杖。請確定已設定 ASPIRE_EXTENSION_TOKEN</target>
         <note>Do not localize ASPIRE_EXTENSION_TOKEN and ASPIRE_EXTENSION_ENDPOINT</note>
       </trans-unit>
+      <trans-unit id="FailedToParsePackageSearchResults">
+        <source>Failed to parse package search results.</source>
+        <target state="new">Failed to parse package search results.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FailedToParseTemplateVersionFromStdout">
         <source>Failed to parse template version from stdout.</source>
         <target state="translated">無法從 stdout 剖析範本版本。</target>
@@ -107,6 +167,16 @@
         <target state="translated">無法搜尋套件。結束代碼: {0}。</target>
         <note>{0} is a number</note>
       </trans-unit>
+      <trans-unit id="GlobalAppHostPathCannotBeSetWithConfigCommand">
+        <source>The AppHost path cannot be set in global settings. Use 'appHost.path' in a local aspire.config.json file instead.</source>
+        <target state="new">The AppHost path cannot be set in global settings. Use 'appHost.path' in a local aspire.config.json file instead.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="GlobalAppHostPathIgnored">
+        <source>Global settings file '{0}' contains '{1}', which is not supported. AppHost paths must be configured locally.</source>
+        <target state="new">Global settings file '{0}' contains '{1}', which is not supported. AppHost paths must be configured locally.</target>
+        <note>{0} is the global settings file path, {1} is the configured key such as appHost.path or appHostPath.</note>
+      </trans-unit>
       <trans-unit id="InvalidJsonInConfigFile">
         <source>The configuration file '{0}' contains invalid JSON: {1}</source>
         <target state="new">The configuration file '{0}' contains invalid JSON: {1}</target>
@@ -120,6 +190,11 @@
       <trans-unit id="InvalidSocketPath">
         <source>The provided extension socket path needs two valid parts.</source>
         <target state="translated">提供的延伸模組通訊端路徑需要兩個有效的部分。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LegacyAppHostPathCannotBeSetWithConfigCommand">
+        <source>The legacy AppHost path key 'appHostPath' cannot be set with 'aspire config set'. Use 'appHost.path' in a local aspire.config.json file instead.</source>
+        <target state="new">The legacy AppHost path key 'appHostPath' cannot be set with 'aspire config set'. Use 'appHost.path' in a local aspire.config.json file instead.</target>
         <note />
       </trans-unit>
       <trans-unit id="MinimumSdkVersionNotMet">
@@ -168,9 +243,9 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectFilesCreatedButNodeToolsNotFound">
-        <source>Project files were created, but Aspire could not run 'npm install' automatically because the required Node.js tools were not found on PATH. You may see missing package errors or red squiggles in your IDE until you install Node.js and run 'npm install' in the project directory.</source>
-        <target state="new">Project files were created, but Aspire could not run 'npm install' automatically because the required Node.js tools were not found on PATH. You may see missing package errors or red squiggles in your IDE until you install Node.js and run 'npm install' in the project directory.</target>
-        <note>Do not translate 'npm install', 'Node.js', or 'PATH'.</note>
+        <source>Project files were created, but Aspire could not run '{0}' automatically because the required JavaScript tooling was not found on PATH. You may see missing package errors or red squiggles in your IDE until you install {1} and run '{0}' in the project directory.</source>
+        <target state="new">Project files were created, but Aspire could not run '{0}' automatically because the required JavaScript tooling was not found on PATH. You may see missing package errors or red squiggles in your IDE until you install {1} and run '{0}' in the project directory.</target>
+        <note>{0} is the install command, such as 'npm install', 'bun install', 'yarn install', or 'pnpm install'. {1} is the toolchain display name, such as 'Node.js', 'Bun', 'Yarn', or 'pnpm'. Do not translate 'PATH'.</note>
       </trans-unit>
       <trans-unit id="ProjectIsNotAppHost">
         <source>The project does not contain an Aspire AppHost.</source>

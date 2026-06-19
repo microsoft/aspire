@@ -13,7 +13,11 @@ export type Capability =
     | 'ms-dotnettools.csharp' // Older AppHost versions used this extension identifier instead of project
     | 'python' // Support for running Python projects
     | 'ms-python.python' // Older AppHost versions used this extension identifier instead of python
+    | 'go' // Support for running Go projects
+    | 'golang.go' // Older AppHost versions used this extension identifier instead of go
     | 'node' // Support for running Node.js projects
+    | 'bun' // Support for running Bun projects
+    | 'oven.bun-vscode' // Bun debug adapter extension identifier
     | 'browser' // Support for browser debugging (built-in to VS Code via js-debug)
     | 'azure-functions'; // Support for running Azure Functions projects
 
@@ -36,6 +40,10 @@ export function isPythonInstalled() {
     return isExtensionInstalled("ms-python.python");
 }
 
+export function isGoInstalled() {
+    return isExtensionInstalled("golang.go");
+}
+
 export function isAzureFunctionsExtensionInstalled() {
     return isExtensionInstalled("ms-azuretools.vscode-azurefunctions");
 }
@@ -43,6 +51,10 @@ export function isAzureFunctionsExtensionInstalled() {
 export function isNodeInstalled() {
     // Node.js debugging uses VS Code's built-in js-debug, no extension needed
     return true;
+}
+
+export function isBunInstalled() {
+    return isExtensionInstalled("oven.bun-vscode");
 }
 
 export function getSupportedCapabilities(): Capabilities {
@@ -69,9 +81,19 @@ export function getSupportedCapabilities(): Capabilities {
         capabilities.push("ms-python.python");
     }
 
+    if (isGoInstalled()) {
+        capabilities.push("go");
+        capabilities.push("golang.go");
+    }
+
     if (isNodeInstalled()) {
         capabilities.push("node");
         capabilities.push("browser");
+    }
+
+    if (isBunInstalled()) {
+        capabilities.push("bun");
+        capabilities.push("oven.bun-vscode");
     }
 
     return capabilities;

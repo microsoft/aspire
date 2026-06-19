@@ -43,8 +43,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerGraphAccessibleLabel">
-        <source>Graph. For an accessible view please navigate to the Resources tab</source>
-        <target state="translated">图。有关可访问的视图，请导航到“资源”选项卡</target>
+        <source>Graph. For an accessible view please navigate to the Table tab</source>
+        <target state="needs-review-translation">图。有关可访问的视图，请导航到“资源”选项卡</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerGraphTab">
@@ -72,19 +72,14 @@
         <target state="translated">已检测到基数上限</target>
         <note />
       </trans-unit>
-      <trans-unit id="ChartContainerParametersTab">
-        <source>Parameters</source>
-        <target state="translated">参数</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ChartContainerShowCountLabel">
         <source>Show count</source>
         <target state="translated">显示计数</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerTableTab">
-        <source>Resources</source>
-        <target state="translated">资源</target>
+        <source>Table</source>
+        <target state="needs-review-translation">资源</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerUnableToDisplay">
@@ -93,18 +88,18 @@
         <note />
       </trans-unit>
       <trans-unit id="ClearAllResources">
-        <source>Remove all</source>
-        <target state="translated">全部移除</target>
+        <source>Remove all telemetry</source>
+        <target state="needs-review-translation">全部移除</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearPendingSelectedResource">
-        <source>Remove for resource</source>
-        <target state="translated">删除资源</target>
+        <source>Remove telemetry for resource</source>
+        <target state="needs-review-translation">删除资源</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearSelectedResource">
-        <source>Remove for {0}</source>
-        <target state="translated">删除 {0}</target>
+        <source>Remove telemetry for {0}</source>
+        <target state="needs-review-translation">删除 {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearSignalsButtonTitle">
@@ -157,9 +152,29 @@
         <target state="translated">导出 .env</target>
         <note />
       </trans-unit>
-      <trans-unit id="ExportJson">
-        <source>Export JSON</source>
-        <target state="translated">导出 JSON</target>
+      <trans-unit id="ResourcesContainerGraphAccessibleLabel">
+        <source>Graph. For an accessible view please navigate to the Resources tab</source>
+        <target state="new">Graph. For an accessible view please navigate to the Resources tab</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcesContainerGraphTab">
+        <source>Graph</source>
+        <target state="new">Graph</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcesContainerParametersTab">
+        <source>Parameters</source>
+        <target state="new">Parameters</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcesContainerTableTab">
+        <source>Resources</source>
+        <target state="new">Resources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ViewJson">
+        <source>View JSON</source>
+        <target state="new">View JSON</target>
         <note />
       </trans-unit>
       <trans-unit id="FilterPlaceholder">
@@ -357,6 +372,11 @@
         <target state="translated">页面工具栏</target>
         <note />
       </trans-unit>
+      <trans-unit id="ParameterSetValueAction">
+        <source>Click to set parameter value</source>
+        <target state="new">Click to set parameter value</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ParameterValueNotSet">
         <source>Value not set</source>
         <target state="translated">未设置值</target>
@@ -437,6 +457,11 @@
         <target state="translated">资源</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceDetailsStateDescriptionHeader">
+        <source>State details</source>
+        <target state="new">State details</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourceDetailsTypeHeader">
         <source>Type</source>
         <target state="translated">类型</target>
@@ -502,10 +527,10 @@
         <target state="translated">详细信息</target>
         <note />
       </trans-unit>
-      <trans-unit id="SpanDetailsDuration">
-        <source>Duration &lt;strong&gt;{0}&lt;/strong&gt;</source>
-        <target state="translated">持续时间 &lt;strong&gt;{0}&lt;/strong&gt;</target>
-        <note>{0} is a duration. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</note>
+      <trans-unit id="SpanDetailsDurationLabel">
+        <source>Duration</source>
+        <target state="new">Duration</target>
+        <note />
       </trans-unit>
       <trans-unit id="SpanDetailsEventsHeader">
         <source>Events</source>
@@ -517,14 +542,14 @@
         <target state="translated">链接</target>
         <note />
       </trans-unit>
-      <trans-unit id="SpanDetailsResource">
-        <source>Resource &lt;strong&gt;{0}&lt;/strong&gt;</source>
-        <target state="translated">资源 &lt;strong&gt;{0}&lt;/strong&gt;</target>
-        <note>{0} is the application name. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</note>
-      </trans-unit>
       <trans-unit id="SpanDetailsResourceHeader">
         <source>Resource</source>
         <target state="translated">资源</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SpanDetailsResourceLabel">
+        <source>Resource</source>
+        <target state="new">Resource</target>
         <note />
       </trans-unit>
       <trans-unit id="SpanDetailsSpanColumnHeader">
@@ -542,10 +567,10 @@
         <target state="translated">范围</target>
         <note />
       </trans-unit>
-      <trans-unit id="SpanDetailsStartTime">
-        <source>Start time &lt;strong&gt;{0}&lt;/strong&gt;</source>
-        <target state="translated">开始时间 &lt;strong&gt;{0}&lt;/strong&gt;</target>
-        <note>{0} is a duration. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</note>
+      <trans-unit id="SpanDetailsStartTimeLabel">
+        <source>Start time</source>
+        <target state="new">Start time</target>
+        <note />
       </trans-unit>
       <trans-unit id="SpanTypeCloud">
         <source>Cloud</source>
@@ -597,20 +622,20 @@
         <target state="translated">日志条目</target>
         <note />
       </trans-unit>
-      <trans-unit id="StructuredLogsDetailsResource">
-        <source>Resource &lt;strong&gt;{0}&lt;/strong&gt;</source>
-        <target state="translated">资源 &lt;strong&gt;{0}&lt;/strong&gt;</target>
-        <note>{0} is the application name. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</note>
-      </trans-unit>
       <trans-unit id="StructuredLogsDetailsResourceHeader">
         <source>Resource</source>
         <target state="translated">资源</target>
         <note />
       </trans-unit>
-      <trans-unit id="StructuredLogsDetailsTimestamp">
-        <source>Timestamp &lt;strong&gt;{0}&lt;/strong&gt;</source>
-        <target state="translated">时间戳 &lt;strong&gt;{0}&lt;/strong&gt;</target>
-        <note>{0} is a date. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</note>
+      <trans-unit id="StructuredLogsDetailsResourceLabel">
+        <source>Resource</source>
+        <target state="new">Resource</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StructuredLogsDetailsTimestampLabel">
+        <source>Timestamp</source>
+        <target state="new">Timestamp</target>
+        <note />
       </trans-unit>
       <trans-unit id="TimeOffsetColumnHeader">
         <source>Time offset</source>

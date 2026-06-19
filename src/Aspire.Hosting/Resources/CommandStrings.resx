@@ -159,4 +159,28 @@
   <data name="RebuilderResourceNotFound" xml:space="preserve">
     <value>Rebuilder resource for '{0}' not found.</value>
   </data>
+  <data name="ResourceDeletedParameter" xml:space="preserve">
+    <value>Successfully deleted parameter '{0}'.</value>
+    <comment>{0} is the resource name.</comment>
+  </data>
+  <data name="ResourceRebuilt" xml:space="preserve">
+    <value>Successfully rebuilt '{0}'.</value>
+    <comment>{0} is the resource name.</comment>
+  </data>
+  <data name="ResourceRestarted" xml:space="preserve">
+    <value>Successfully restarted '{0}'.</value>
+    <comment>{0} is the resource name.</comment>
+  </data>
+  <data name="ResourceSetParameter" xml:space="preserve">
+    <value>Successfully set parameter '{0}'.</value>
+    <comment>{0} is the resource name.</comment>
+  </data>
+  <data name="ResourceStarted" xml:space="preserve">
+    <value>Successfully started '{0}'.</value>
+    <comment>{0} is the resource name.</comment>
+  </data>
+  <data name="ResourceStopped" xml:space="preserve">
+    <value>Successfully stopped '{0}'.</value>
+    <comment>{0} is the resource name.</comment>
+  </data>
 </root>

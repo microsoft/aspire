@@ -2,7 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.RegularExpressions;
+using System.Globalization;
 using Aspire.DashboardService.Proto.V1;
+using Google.Protobuf.Collections;
+using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Configuration;
@@ -125,51 +128,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
                                 .SelectMany(i => i.DynamicLoading?.DependsOnInputs ?? [])
                                 .ToList();
 
-                            var inputInstances = inputs.Inputs.Select(input =>
-                            {
-                                var updateStateOnChange = updateStateOnChangeInputs.Any(i => string.Equals(i, input.Name, StringComparisons.InteractionInputName));
-
-                                var dto = new Aspire.DashboardService.Proto.V1.InteractionInput
-                                {
-                                    Name = input.Name,
-                                    InputType = MapInputType(input.InputType),
-                                    Required = input.Required,
-                                    AllowCustomChoice = input.AllowCustomChoice,
-                                    UpdateStateOnChange = updateStateOnChange,
-                                    Disabled = input.Disabled
-                                };
-                                if (input.EffectiveLabel != null)
-                                {
-                                    dto.Label = input.EffectiveLabel;
-                                }
-                                if (input.Description != null)
-                                {
-                                    dto.Description = input.Description;
-                                    dto.EnableDescriptionMarkdown = input.EnableDescriptionMarkdown;
-                                }
-                                if (input.Placeholder != null)
-                                {
-                                    dto.Placeholder = input.Placeholder;
-                                }
-                                if (input.Value != null)
-                                {
-                                    dto.Value = input.Value;
-                                }
-                                if (input.Options != null)
-                                {
-                                    dto.Options.Add(input.Options.ToDictionary());
-                                }
-                                if (input.DynamicLoadingState is { } providerState)
-                                {
-                                    dto.Loading = providerState.Loading;
-                                }
-                                if (input.MaxLength != null)
-                                {
-                                    dto.MaxLength = input.MaxLength.Value;
-                                }
-                                dto.ValidationErrors.AddRange(input.ValidationErrors);
-                                return dto;
-                            }).ToList();
+                            var inputInstances = inputs.Inputs.Select(input => CreateInteractionInputDto(input, updateStateOnChangeInputs)).ToList();
                             change.InputsDialog.InputItems.AddRange(inputInstances);
                         }
 
@@ -202,7 +161,6 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         }
     }
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
     private static Aspire.DashboardService.Proto.V1.MessageIntent MapMessageIntent(Aspire.Hosting.MessageIntent? intent)
     {
         if (intent is null)
@@ -221,7 +179,53 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         };
     }
 
-    private static Aspire.DashboardService.Proto.V1.InputType MapInputType(Aspire.Hosting.InputType inputType)
+    internal static Aspire.DashboardService.Proto.V1.InteractionInput CreateInteractionInputDto(Aspire.Hosting.InteractionInput input, IReadOnlyList<string>? updateStateOnChangeInputs = null)
+    {
+        var updateStateOnChange = updateStateOnChangeInputs?.Any(i => string.Equals(i, input.Name, StringComparisons.InteractionInputName)) == true;
+
+        var dto = new Aspire.DashboardService.Proto.V1.InteractionInput
+        {
+            Name = input.Name,
+            InputType = MapInputType(input.InputType),
+            Required = input.Required,
+            AllowCustomChoice = input.AllowCustomChoice,
+            UpdateStateOnChange = updateStateOnChange,
+            Disabled = input.Disabled
+        };
+        if (input.EffectiveLabel != null)
+        {
+            dto.Label = input.EffectiveLabel;
+        }
+        if (input.Description != null)
+        {
+            dto.Description = input.Description;
+            dto.EnableDescriptionMarkdown = input.EnableDescriptionMarkdown;
+        }
+        if (input.Placeholder != null)
+        {
+            dto.Placeholder = input.Placeholder;
+        }
+        if (input.Value != null)
+        {
+            dto.Value = input.Value;
+        }
+        if (input.Options != null)
+        {
+            dto.Options.Add(input.Options.ToDictionary());
+        }
+        if (input.DynamicLoadingState is { } providerState)
+        {
+            dto.Loading = providerState.Loading;
+        }
+        if (input.MaxLength != null)
+        {
+            dto.MaxLength = input.MaxLength.Value;
+        }
+        dto.ValidationErrors.AddRange(input.ValidationErrors);
+        return dto;
+    }
+
+    internal static Aspire.DashboardService.Proto.V1.InputType MapInputType(Aspire.Hosting.InputType inputType)
     {
         return inputType switch
         {
@@ -246,8 +250,6 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             _ => throw new InvalidOperationException($"Unexpected input type: {inputType}"),
         };
     }
-
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
     public override async Task WatchResources(
         WatchResourcesRequest request,
@@ -360,11 +362,20 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
 
     public override async Task<ResourceCommandResponse> ExecuteResourceCommand(ResourceCommandRequest request, ServerCallContext context)
     {
-        var (result, errorMessage, commandResult, resultFormat) = await serviceData.ExecuteCommandAsync(request.ResourceName, request.CommandName, context.CancellationToken).ConfigureAwait(false);
+        var (result, message, value, invalidArguments) = await serviceData.ExecuteCommandAsync(
+            request.ResourceName,
+            request.CommandName,
+            new ExecuteResourceCommandOptions
+            {
+                ArgumentValues = ConvertArgumentValues(request.Arguments),
+                NonInteractive = request.NonInteractive
+            },
+            context.CancellationToken).ConfigureAwait(false);
         var responseKind = result switch
         {
             ExecuteCommandResultType.Success => ResourceCommandResponseKind.Succeeded,
             ExecuteCommandResultType.Canceled => ResourceCommandResponseKind.Cancelled,
+            ExecuteCommandResultType.Failure when invalidArguments is not null => ResourceCommandResponseKind.InvalidArguments,
             ExecuteCommandResultType.Failure => ResourceCommandResponseKind.Failed,
             _ => ResourceCommandResponseKind.Undefined
         };
@@ -372,21 +383,60 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         var response = new ResourceCommandResponse
         {
             Kind = responseKind,
-            ErrorMessage = errorMessage ?? string.Empty,
-            ResultFormat = resultFormat switch
+            Message = message ?? string.Empty,
+        };
+
+#pragma warning disable CS0612 // Type or member is obsolete
+        response.ErrorMessage = message ?? string.Empty;
+#pragma warning restore CS0612 // Type or member is obsolete
+
+        if (value is not null)
+        {
+            static Aspire.DashboardService.Proto.V1.CommandResultFormat MapFormat(ApplicationModel.CommandResultFormat format) => format switch
             {
                 ApplicationModel.CommandResultFormat.Text => Aspire.DashboardService.Proto.V1.CommandResultFormat.Text,
                 ApplicationModel.CommandResultFormat.Json => Aspire.DashboardService.Proto.V1.CommandResultFormat.Json,
+                ApplicationModel.CommandResultFormat.Markdown => Aspire.DashboardService.Proto.V1.CommandResultFormat.Markdown,
                 _ => Aspire.DashboardService.Proto.V1.CommandResultFormat.None
-            }
-        };
+            };
 
-        if (commandResult is not null)
-        {
-            response.Result = commandResult;
+            response.Result = new ResourceCommandResult
+            {
+                Value = value.Value,
+                Format = MapFormat(value.Format),
+                DisplayImmediately = value.DisplayImmediately
+            };
         }
 
         return response;
+    }
+
+    private static IReadOnlyDictionary<string, string?>? ConvertArgumentValues(MapField<string, Value> arguments)
+    {
+        if (arguments.Count == 0)
+        {
+            return null;
+        }
+
+        var values = new Dictionary<string, string?>(StringComparers.InteractionInputName);
+        foreach (var field in arguments)
+        {
+            values[field.Key] = ConvertArgumentValue(field.Key, field.Value);
+        }
+
+        return values;
+    }
+
+    private static string? ConvertArgumentValue(string name, Value value)
+    {
+        return value.KindCase switch
+        {
+            Value.KindOneofCase.StringValue => value.StringValue,
+            Value.KindOneofCase.NumberValue => value.NumberValue.ToString("R", CultureInfo.InvariantCulture),
+            Value.KindOneofCase.BoolValue => value.BoolValue ? "true" : "false",
+            Value.KindOneofCase.NullValue => null,
+            _ => throw new RpcException(new Status(StatusCode.InvalidArgument, $"Resource command argument '{name}' must be a string, number, boolean, or null."))
+        };
     }
 
     private async Task ExecuteAsync(Func<CancellationToken, Task> execute, ServerCallContext serverCallContext)

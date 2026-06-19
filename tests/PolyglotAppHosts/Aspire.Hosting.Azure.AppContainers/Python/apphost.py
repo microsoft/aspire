@@ -4,6 +4,11 @@
 from aspire_app import create_builder
 
 
+def configure_container_app(_infrastructure, app):
+    app.configure_custom_domain(custom_domain, certificate_name)
+    app.configure_scale({"MinReplicas": 1})
+
+
 with create_builder() as builder:
     # Test addAzureContainerAppEnvironment factory method
     env = builder.add_azure_container_app_environment("resource")
@@ -20,22 +25,20 @@ with create_builder() as builder:
     certificate_name = builder.add_parameter("parameter")
     # Test publishAsAzureContainerApp on a container resource with callback
     web = builder.add_container("resource", "image")
-    web.publish_as_azure_container_app(
-        lambda infrastructure, app: app.configure_custom_domain(custom_domain, certificate_name)
-    )
+    web.publish_as_azure_container_app(configure_container_app)
     # Test publishAsAzureContainerAppJob on an executable resource
     api = builder.add_executable("resource", "echo", ".", [])
     api.publish_as_azure_container_app_job()
     # Test publishAsAzureContainerAppJob (parameterless - manual trigger)
     worker = builder.add_container("resource", "image")
     worker.publish_as_azure_container_app_job()
-    # Test publishAsConfiguredAzureContainerAppJob (with callback)
+    # Test publishAsAzureContainerAppJob (with callback)
     processor = builder.add_container("resource", "image")
-    processor.publish_as_configured_azure_container_app_job()
+    processor.publish_as_azure_container_app_job()
     # Test publishAsScheduledAzureContainerAppJob (simple - no callback)
     scheduler = builder.add_container("resource", "image")
     scheduler.publish_as_scheduled_azure_container_app_job()
-    # Test publishAsConfiguredScheduledAzureContainerAppJob (with callback)
+    # Test publishAsScheduledAzureContainerAppJob (with callback)
     reporter = builder.add_container("resource", "image")
-    reporter.publish_as_configured_scheduled_azure_container_app_job()
+    reporter.publish_as_scheduled_azure_container_app_job()
     builder.run()

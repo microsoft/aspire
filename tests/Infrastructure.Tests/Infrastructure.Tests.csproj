@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Aspire.TestUtilities\Aspire.TestUtilities.csproj" />
+    <ProjectReference Include="..\..\tools\TypeScriptApiCompat\TypeScriptApiCompat.csproj" />
   </ItemGroup>
 
   <ItemGroup>

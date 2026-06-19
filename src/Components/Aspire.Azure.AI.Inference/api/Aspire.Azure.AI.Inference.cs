@@ -23,6 +23,21 @@ namespace Aspire.Azure.AI.Inference
         public string? ServiceKey { get { throw null; } }
     }
 
+    public partial class AspireEmbeddingsClientBuilder
+    {
+        public AspireEmbeddingsClientBuilder(Microsoft.Extensions.Hosting.IHostApplicationBuilder hostBuilder, string? serviceKey, string? deploymentName, bool disableTracing, bool enableSensitiveTelemetryData) { }
+
+        public string? DeploymentName { get { throw null; } }
+
+        public bool DisableTracing { get { throw null; } }
+
+        public bool EnableSensitiveTelemetryData { get { throw null; } }
+
+        public Microsoft.Extensions.Hosting.IHostApplicationBuilder HostBuilder { get { throw null; } }
+
+        public string? ServiceKey { get { throw null; } }
+    }
+
     public sealed partial class ChatCompletionsClientSettings
     {
         public string? ConnectionString { get { throw null; } set { } }
@@ -49,10 +64,18 @@ namespace Microsoft.Extensions.Hosting
     {
         public static Aspire.Azure.AI.Inference.AspireChatCompletionsClientBuilder AddAzureChatCompletionsClient(this IHostApplicationBuilder builder, string connectionName, System.Action<Aspire.Azure.AI.Inference.ChatCompletionsClientSettings>? configureSettings = null, System.Action<global::Azure.Core.Extensions.IAzureClientBuilder<global::Azure.AI.Inference.ChatCompletionsClient, global::Azure.AI.Inference.AzureAIInferenceClientOptions>>? configureClientBuilder = null) { throw null; }
 
+        public static Aspire.Azure.AI.Inference.AspireEmbeddingsClientBuilder AddAzureEmbeddingsClient(this IHostApplicationBuilder builder, string connectionName, System.Action<Aspire.Azure.AI.Inference.ChatCompletionsClientSettings>? configureSettings = null, System.Action<global::Azure.Core.Extensions.IAzureClientBuilder<global::Azure.AI.Inference.EmbeddingsClient, global::Azure.AI.Inference.AzureAIInferenceClientOptions>>? configureClientBuilder = null) { throw null; }
+
         public static AI.ChatClientBuilder AddChatClient(this Aspire.Azure.AI.Inference.AspireChatCompletionsClientBuilder builder, string? deploymentName = null) { throw null; }
+
+        public static AI.EmbeddingGeneratorBuilder<string, AI.Embedding<float>> AddEmbeddingGenerator(this Aspire.Azure.AI.Inference.AspireEmbeddingsClientBuilder builder, string? deploymentName = null) { throw null; }
 
         public static Aspire.Azure.AI.Inference.AspireChatCompletionsClientBuilder AddKeyedAzureChatCompletionsClient(this IHostApplicationBuilder builder, string name, System.Action<Aspire.Azure.AI.Inference.ChatCompletionsClientSettings>? configureSettings = null, System.Action<global::Azure.Core.Extensions.IAzureClientBuilder<global::Azure.AI.Inference.ChatCompletionsClient, global::Azure.AI.Inference.AzureAIInferenceClientOptions>>? configureClientBuilder = null) { throw null; }
 
+        public static Aspire.Azure.AI.Inference.AspireEmbeddingsClientBuilder AddKeyedAzureEmbeddingsClient(this IHostApplicationBuilder builder, string name, System.Action<Aspire.Azure.AI.Inference.ChatCompletionsClientSettings>? configureSettings = null, System.Action<global::Azure.Core.Extensions.IAzureClientBuilder<global::Azure.AI.Inference.EmbeddingsClient, global::Azure.AI.Inference.AzureAIInferenceClientOptions>>? configureClientBuilder = null) { throw null; }
+
         public static AI.ChatClientBuilder AddKeyedChatClient(this Aspire.Azure.AI.Inference.AspireChatCompletionsClientBuilder builder, string serviceKey, string? deploymentName = null) { throw null; }
+
+        public static AI.EmbeddingGeneratorBuilder<string, AI.Embedding<float>> AddKeyedEmbeddingGenerator(this Aspire.Azure.AI.Inference.AspireEmbeddingsClientBuilder builder, string serviceKey, string? deploymentName = null) { throw null; }
     }
 }

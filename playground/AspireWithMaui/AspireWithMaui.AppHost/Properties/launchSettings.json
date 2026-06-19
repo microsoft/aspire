@@ -5,24 +5,20 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "https://localhost:17279;http://localhost:15173",
+      "applicationUrl": "https://AspireWithMaui.dev.localhost:17279;http://AspireWithMaui.dev.localhost:15173",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21046",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22093"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     },
     "http": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "http://localhost:15173",
+      "applicationUrl": "http://AspireWithMaui.dev.localhost:15173",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:19172",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://localhost:20091"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     }
   }

@@ -107,9 +107,18 @@ jobs:
           ARTIFACT_DIR="${{ github.workspace }}/cli-artifacts"
           mkdir -p "$ARTIFACT_DIR/bin"
           mkdir -p "$ARTIFACT_DIR/packages"
+          mkdir -p "$ARTIFACT_DIR/managed"
 
           # Copy CLI binary and dependencies
           cp -r "${{ github.workspace }}/artifacts/bin/Aspire.Cli/Release/net10.0/"* "$ARTIFACT_DIR/bin/"
+
+          # Copy managed AppHost server (required for bundle-dependent commands like aspire new/init for TypeScript/Python)
+          MANAGED_DIR="${{ github.workspace }}/artifacts/bin/Aspire.Managed/Release/net10.0"
+          if [ -d "$MANAGED_DIR" ]; then
+            cp -r "$MANAGED_DIR/"* "$ARTIFACT_DIR/managed/"
+          else
+            echo "⚠️ Aspire.Managed build output not found at $MANAGED_DIR"
+          fi
 
           # Copy NuGet packages
           PACKAGES_DIR="${{ github.workspace }}/artifacts/packages/Release/Shipping"
@@ -119,6 +128,8 @@ jobs:
 
           echo "CLI artifacts prepared:"
           ls -la "$ARTIFACT_DIR/bin/"
+          echo "Managed artifacts:"
+          ls -la "$ARTIFACT_DIR/managed/" 2>/dev/null || echo "(none)"
           echo "Package count: $(find "$ARTIFACT_DIR/packages" -name "*.nupkg" | wc -l)"
 
       - name: Upload CLI artifacts
@@ -178,6 +189,16 @@ jobs:
           # Add to PATH for this job
           echo "$ASPIRE_HOME/bin" >> $GITHUB_PATH
 
+          # Copy managed AppHost server (required for bundle layout discovery)
+          if [ -d "${{ github.workspace }}/cli-artifacts/managed" ]; then
+            mkdir -p "$ASPIRE_HOME/managed"
+            cp -r "${{ github.workspace }}/cli-artifacts/managed/"* "$ASPIRE_HOME/managed/"
+            chmod +x "$ASPIRE_HOME/managed/aspire-managed" 2>/dev/null || true
+          fi
+
+          # Create dcp directory stub (required for layout discovery validation)
+          mkdir -p "$ASPIRE_HOME/dcp"
+
           # Set up NuGet hive for local packages
           HIVE_DIR="$ASPIRE_HOME/hives/local/packages"
           mkdir -p "$HIVE_DIR"
@@ -188,9 +209,12 @@ jobs:
 
           echo "✅ Aspire CLI installed:"
           "$ASPIRE_HOME/bin/aspire" --version
+          echo "Layout:"
+          ls -la "$ASPIRE_HOME/managed/" 2>/dev/null || echo "  (no managed)"
+          ls -la "$ASPIRE_HOME/dcp/" 2>/dev/null || echo "  (no dcp)"
 
       - name: Azure Login (OIDC)
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_DEPLOYMENT_TEST_CLIENT_ID }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_DEPLOYMENT_TEST_TENANT_ID }}
@@ -227,6 +251,16 @@ jobs:
           docker info | head -20
           echo "✅ Docker is available"
 
+      # Pin Helm to satisfy Aspire.Hosting.Kubernetes' minimum supported version
+      # (HelmVersionValidator.MinimumHelmVersion, currently v4.2.0). The new
+      # check-helm-prereqs-{env} pipeline step now fails fast on older Helm
+      # CLIs, so the runner image's preinstalled Helm — which lags behind —
+      # would otherwise break every AKS deployment scenario.
+      - name: Setup Helm
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: v4.2.0
+
       - name: Run deployment test (${{ matrix.shortname }})
         id: run_tests
         env:
@@ -239,11 +273,11 @@ jobs:
           Azure__Location: westus3
           GH_TOKEN: ${{ github.token }}
         run: |
-          ./dotnet.sh test tests/Aspire.Deployment.EndToEnd.Tests/Aspire.Deployment.EndToEnd.Tests.csproj \
+          ./dotnet.sh test --project tests/Aspire.Deployment.EndToEnd.Tests/Aspire.Deployment.EndToEnd.Tests.csproj \
             -c Release \
-            --logger "trx;LogFileName=${{ matrix.shortname }}.trx" \
             --results-directory ${{ github.workspace }}/testresults \
             -- \
+            --report-trx --report-trx-filename "${{ matrix.shortname }}.trx" \
             --filter-not-trait "quarantined=true" \
             ${{ matrix.extraTestArgs }} \
             || echo "test_failed=true" >> $GITHUB_OUTPUT
@@ -285,7 +319,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Create GitHub Issue
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -299,12 +333,31 @@ jobs:
 
             **Workflow Run:** ${runUrl}
 
+            ### Investigation Checklist
+
+            - [ ] Review workflow logs for error details
+            - [ ] Check if failures are timeout-related or deployment failures
+            - [ ] Download test artifacts (logs, asciinema recordings)
+            - [ ] Identify common failure patterns across tests
+            - [ ] Check Azure authentication and resource provisioning status
+
+            ### Resources
+
+            - **Workflow Logs:** See link above for detailed test output
+            - **Test Artifacts:** Download recordings and logs from the workflow run (testresults/recordings, testresults/logs)
+            - **Deployment E2E Tests:** \`tests/Aspire.Deployment.EndToEnd.Tests/\`
+            - **Test Helpers:** \`tests/Shared/Hex1bAutomatorTestHelpers.cs\`
+
             ### Next Steps
+
             1. Check the workflow run for detailed error logs
-            2. Download test artifacts for asciinema recordings
-            3. Investigate and fix the failing tests
+            2. Download test artifacts for asciinema recordings and error logs
+            3. Investigate which specific tests are failing
+            4. Determine if this is a timeout, deployment, or test automation issue
+            5. Implement fix and verify with local test run
 
             ### Labels
+
             This issue was automatically created by the deployment E2E test workflow.
 
             /cc @microsoft/aspire-team
@@ -339,7 +392,8 @@ jobs:
                 repo: context.repo.repo,
                 title: issueTitle,
                 body: issueBody,
-                labels: ['area-testing', 'deployment-e2e']
+                labels: ['area-testing', 'area-deployment', 'deployment-e2e'],
+                assignees: ['mitchdenny']
               });
               console.log(`Created issue: ${issue.data.html_url}`);
             }
@@ -356,7 +410,7 @@ jobs:
     steps:
       - name: Get job results and download recording artifacts
         id: get_results
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const fs = require('fs');

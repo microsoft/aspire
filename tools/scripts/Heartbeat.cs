@@ -3,7 +3,7 @@
 // diagnose runner hangs and disk space issues during tests.
 //
 // Usage: dotnet tools/scripts/Heartbeat.cs [interval-seconds]
-// Default interval: 5 seconds
+// Default interval: 60 seconds
 //
 // Example: dotnet tools/scripts/Heartbeat.cs 10
 
@@ -16,7 +16,12 @@ var os = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "Linux" :
          RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "Windows" :
          throw new NotSupportedException("Unsupported OS platform");
 
-var intervalSeconds = args.Length > 0 && int.TryParse(args[0], out var parsed) ? parsed : 5;
+const int defaultIntervalSeconds = 60;
+var intervalSeconds = args.Length > 0 &&
+                      int.TryParse(args[0], out var parsed) &&
+                      parsed >= 1
+    ? parsed
+    : defaultIntervalSeconds;
 var cts = new CancellationTokenSource();
 
 Console.CancelKeyPress += (_, e) =>

@@ -20,6 +20,8 @@ export const aspireHostingSdkVersion = (version: string) => vscode.l10n.t('Aspir
 export const aspireCliVersion = (version: string) => vscode.l10n.t('Aspire CLI Version: {0}.', version);
 export const requiredCapability = (capability: string) => vscode.l10n.t('Required capability: {0}.', capability);
 export const aspireTerminalName = vscode.l10n.t('Aspire terminal');
+export const terminalCommandArgumentControlCharacters = vscode.l10n.t('Aspire terminal command arguments cannot contain control characters.');
+export const terminalCommandUnsafeLiteral = vscode.l10n.t('Aspire terminal command syntax can only contain command names and flags.');
 export const aspireOutputChannelName = vscode.l10n.t('Aspire Extension');
 export const fieldRequired = vscode.l10n.t('This field is required.');
 export const runProject = (projectName: string) => vscode.l10n.t('Run {0}', projectName);
@@ -55,15 +57,45 @@ export const processExceptionOccurred = (error: string, command: string) => vsco
 // Aspire panel strings
 export const pidDescription = (pid: number) => vscode.l10n.t('PID: {0}', pid);
 export const dashboardLabel = vscode.l10n.t('Dashboard');
-export const cliPidLabel = (pid: number) => vscode.l10n.t('CLI PID: {0}', pid);
-export const appHostPidLabel = (pid: number) => vscode.l10n.t('AppHost PID: {0}', pid);
 export const errorFetchingAppHosts = (error: string) => vscode.l10n.t('Error fetching running AppHosts: {0}', error);
+export const aspireDescribeMinimumVersion = '13.2.0';
+export const aspireCliDescribeNotSupported = (version: string) => vscode.l10n.t('Workspace resources require Aspire CLI {0} or newer. Update the Aspire CLI and refresh the Aspire panel.', version);
+export const appHostDescribeMayNotBeSupported = (version: string) => vscode.l10n.t('No workspace resources were returned. Workspace resources require the AppHost to reference Aspire.Hosting {0} or newer.', version);
 export const resourcesGroupLabel = vscode.l10n.t('Resources');
+export const commandsLabel = vscode.l10n.t('Commands');
 export const noCommandsAvailable = vscode.l10n.t('No commands available for this resource.');
 export const selectCommandPlaceholder = vscode.l10n.t('Select a command to execute');
+export const resourceCommandArgumentsTitle = (command: string) => vscode.l10n.t('Run {0}', command);
+export const resourceCommandArgumentInputTitle = (command: string, input: string) => vscode.l10n.t('{0}: {1}', command, input);
+export const resourceCommandCustomChoice = (value: string) => vscode.l10n.t('Use "{0}"', value);
+export const resourceCommandCustomChoiceDescription = vscode.l10n.t('Custom value');
+export const resourceCommandDynamicInputsUnsupported = vscode.l10n.t('This command has dynamic inputs that the Aspire extension cannot prompt for yet. Run it from the Aspire Dashboard or Aspire CLI instead.');
+export const resourceCommandDynamicInputsFailed = vscode.l10n.t('Failed to load dynamic command inputs. Run this command from the Aspire Dashboard or Aspire CLI instead.');
+export const resourceCommandLoadingDynamicInputs = vscode.l10n.t('Updating command inputs...');
+export const resourceCommandSecretWarning = vscode.l10n.t('This command has secret arguments. Values are masked while you enter them, but they are passed to the Aspire CLI terminal and may be visible in terminal history or scrollback.');
+export const resourceCommandContinue = vscode.l10n.t('Continue');
+export const resourceCommandDontShowAgain = vscode.l10n.t("Don't show again");
+export const resourceCommandInvalidNumber = vscode.l10n.t('Enter a number using invariant culture, for example 1, -1.5, or 1e3.');
+export const resourceCommandMaxLength = (length: number) => vscode.l10n.t('Value must be {0} characters or fewer.', length);
+export const resourceCommandDisabledDescription = vscode.l10n.t('(disabled)');
 export const selectDashboardPlaceholder = vscode.l10n.t('Select a dashboard to open');
+export const dashboardUrlNotFound = vscode.l10n.t('No Aspire Dashboard URL is available. Start an AppHost and try again.');
+export const dashboardUrlUnsupported = vscode.l10n.t('The Aspire Dashboard URL must use http or https.');
 export const workspaceAppHostLabel = vscode.l10n.t('Workspace AppHost');
+export const workspaceAppHostsGroupLabel = vscode.l10n.t('Workspace AppHosts');
+export const runningAppHostsGroupLabel = vscode.l10n.t('Running AppHosts');
+export const appHostOpenSourceActionLabel = vscode.l10n.t('Open AppHost source');
+export const appHostRunActionLabel = vscode.l10n.t('Run AppHost');
+export const appHostDebugActionLabel = vscode.l10n.t('Debug AppHost');
+export const appHostPathLabel = vscode.l10n.t('Path');
+export const appHostStartingDescription = vscode.l10n.t('Starting...');
+export const appHostStoppingDescription = vscode.l10n.t('Stopping...');
 export const resourceCountDescription = (count: number) => vscode.l10n.t('({0} resources)', count);
+export const appHostCandidateDescription = (language: string, status: string) => vscode.l10n.t('{0} · {1}', language, status);
+export const workspaceViewSelectedSingleAppHost = (language?: string) => language
+    ? vscode.l10n.t('Workspace view selected because aspire ls found one buildable {0} AppHost.', language)
+    : vscode.l10n.t('Workspace view selected because aspire ls found one buildable AppHost.');
+export const workspaceViewSelectedMultipleAppHosts = (count: number) => vscode.l10n.t('Workspace view selected because aspire ls found {0} buildable AppHosts.', count);
 export const tooltipType = (type: string) => vscode.l10n.t('Type: {0}', type);
 export const tooltipState = (state: string) => vscode.l10n.t('State: {0}', state);
 export const tooltipHealth = (health: string) => vscode.l10n.t('Health: {0}', health);
@@ -72,6 +104,7 @@ export const healthChecksLabel = vscode.l10n.t('Health Checks');
 export const healthCheckDescription = (status: string) => vscode.l10n.t('Status: {0}', status);
 export const resourceDescriptionHealth = (passed: number, total: number) => vscode.l10n.t('Health: {0}/{1}', passed, total);
 export const resourceDescriptionExitCode = (exitCode: number) => vscode.l10n.t('Exit Code: {0}', exitCode);
+export const parameterValueMissing = vscode.l10n.t('Value missing');
 export const failedToStartDebugSession = vscode.l10n.t('Failed to start debug session.');
 export const failedToGetConfigInfo = (exitCode: number) => vscode.l10n.t('Failed to get Aspire config info (exit code: {0}). Try updating the Aspire CLI with: aspire update', exitCode);
 export const failedToParseConfigInfo = (error: any) => vscode.l10n.t('Failed to parse Aspire config info: {0}. Try updating the Aspire CLI with: aspire update', error);
@@ -79,6 +112,12 @@ export const errorGettingConfigInfo = (error: any) => vscode.l10n.t('Error getti
 export const invalidLaunchConfiguration = (projectPath: string) => vscode.l10n.t('Invalid launch configuration for {0}.', projectPath);
 export const browserDisplayName = (url: string) => vscode.l10n.t('Browser: {0}', url);
 export const browserLabel = vscode.l10n.t('Browser');
+export const goDisplayName = (program: string) => `Go: ${program}`;
+export const goLabel = 'Go';
+export const bunDisplayName = (script: string) => `Bun: ${script}`;
+export const bunLabel = 'Bun';
+export const nodeDisplayName = (script: string) => `Node.js: ${script}`;
+export const nodeLabel = 'Node.js';
 export const dontShowAgainLabel = vscode.l10n.t("Don't Show Again");
 export const doYouWantToSetDefaultApphost = (appHost: string) => vscode.l10n.t('Do you want to set {0} as the default AppHost for this workspace?', appHost);
 export const doYouWantToSelectDefaultApphost = vscode.l10n.t('Do you want to select the default AppHost for this workspace?');
@@ -91,7 +130,10 @@ export const invalidOrMissingToken = vscode.l10n.t('Invalid or missing token in 
 export const invalidTokenLength = vscode.l10n.t('Invalid token length in Authorization header.');
 export const authorizationHeaderMustStartWithBearer = vscode.l10n.t('Authorization header must start with \'Bearer \'.');
 export const authorizationAndDcpHeadersRequired = vscode.l10n.t('Authorization and Microsoft-Developer-DCP-Instance-ID headers are required.');
+export const authorizationHeaderRequired = vscode.l10n.t('Authorization header is required.');
 export const buildFailedForProjectWithError = (project: string, error: string) => vscode.l10n.t('Build failed for project {0} with error: {1}.', project, error);
+export const failedToInspectRuntimeConfig = (outputPath: string, error: string) => vscode.l10n.t('Failed to inspect runtimeconfig for {0}: {1}', outputPath, error);
+export const dotNetRunFallbackDisablesDebugger = (outputPath: string, projectPath: string) => vscode.l10n.t('Project output {0} is not directly runnable; launching {1} with dotnet run without debugger attach. Breakpoints will not be hit for this resource.', outputPath, projectPath);
 export const lookingForDevkitBuildTask = vscode.l10n.t('C# Dev Kit is installed, looking for C# Dev Kit build task...');
 export const csharpDevKitNotInstalled = vscode.l10n.t('C# Dev Kit is not installed, building using dotnet CLI...');
 export const dismissLabel = vscode.l10n.t('Dismiss');
@@ -99,6 +141,7 @@ export const openCliInstallInstructions = vscode.l10n.t('See CLI installation in
 export const cliNotAvailable = vscode.l10n.t('Aspire CLI is not available on PATH. Please install it and restart VS Code.');
 export const cliFoundAtDefaultPath = (path: string) => vscode.l10n.t('Aspire CLI found at {0}. The extension will use this path.', path);
 export const selectDirectoryTitle = vscode.l10n.t('Select directory');
+export const unableToAddFolderToWorkspace = (path: string) => vscode.l10n.t('Unable to add folder to workspace: {0}', path);
 export const runningAspireRestore = (configPath: string) => vscode.l10n.t('Running aspire restore on {0} ...', configPath);
 export const runningAspireRestoreProgress = (completed: number, total: number) => vscode.l10n.t('Running aspire restore ({0}/{1} projects) ...', completed, total);
 export const aspireRestoreCompleted = (configPath: string) => vscode.l10n.t('Aspire restore completed for {0}.', configPath);
@@ -109,23 +152,32 @@ export const selectFileTitle = vscode.l10n.t('Select file');
 export const enterPipelineStep = vscode.l10n.t('Enter the pipeline step to execute');
 export const appHostSourceNotFound = vscode.l10n.t('Could not determine the AppHost source file to open.');
 export const appHostSourceOpenFailed = (path: string) => vscode.l10n.t('Failed to open AppHost source file: {0}', path);
+export const logFilePathInvalid = vscode.l10n.t('Could not determine the AppHost log file to open.');
+export const logFileOpenFailed = (path: string, error: string) => vscode.l10n.t('Failed to open AppHost log file {0}: {1}', path, error);
+export const logFileLabel = vscode.l10n.t('AppHost logs');
 
-// CodeLens strings
-export const codeLensDebugPipelineStep = vscode.l10n.t('$(bug) Debug pipeline step');
-export const codeLensResourceRunning = vscode.l10n.t('$(pass) Running');
-export const codeLensResourceRunningWarning = vscode.l10n.t('$(warning) Running');
-export const codeLensResourceRunningError = vscode.l10n.t('$(error) Running');
-export const codeLensResourceStarting = vscode.l10n.t('$(loading~spin) Starting');
-export const codeLensResourceStopping = vscode.l10n.t('$(loading~spin) Stopping');
-export const codeLensResourceNotStarted = vscode.l10n.t('$(circle-outline) Not Started');
-export const codeLensResourceWaiting = vscode.l10n.t('$(loading~spin) Waiting');
-export const codeLensResourceStopped = vscode.l10n.t('$(circle-outline) Stopped');
-export const codeLensResourceStoppedWithExitCode = (exitCode: number) => vscode.l10n.t('$(circle-outline) Stopped (Exit Code: {0})', exitCode);
-export const codeLensResourceStoppedError = vscode.l10n.t('$(error) Stopped');
-export const codeLensResourceStoppedErrorWithExitCode = (exitCode: number) => vscode.l10n.t('$(error) Stopped (Exit Code: {0})', exitCode);
-export const codeLensResourceError = vscode.l10n.t('$(error) Error');
-export const codeLensRestart = vscode.l10n.t('$(debug-restart) Restart');
-export const codeLensStop = vscode.l10n.t('$(debug-stop) Stop');
-export const codeLensStart = vscode.l10n.t('$(debug-start) Start');
-export const codeLensViewLogs = vscode.l10n.t('$(output) Logs');
-export const codeLensCommand = (name: string) => vscode.l10n.t('$(terminal) {0}', name);
+// CodeLens strings.
+// The "\u200A" between the codicon and the label is U+200A HAIR SPACE; it adds
+// roughly one extra pixel of breathing room between the icon and the text in the
+// CodeLens title. The CodeLens API exposes no other typography control.
+export const codeLensDebugPipelineStep = vscode.l10n.t('$(bug)\u200A Debug pipeline step');
+export const codeLensResourceRunning = vscode.l10n.t('$(pass)\u200A Running');
+export const codeLensResourceRunningWarning = vscode.l10n.t('$(warning)\u200A Running');
+export const codeLensResourceRunningError = vscode.l10n.t('$(error)\u200A Running');
+export const codeLensResourceStarting = vscode.l10n.t('$(loading~spin)\u200A Starting');
+export const codeLensResourceStopping = vscode.l10n.t('$(loading~spin)\u200A Stopping');
+export const codeLensResourceNotStarted = vscode.l10n.t('$(circle-outline)\u200A Not Started');
+export const codeLensResourceWaiting = vscode.l10n.t('$(loading~spin)\u200A Waiting');
+export const codeLensResourceStopped = vscode.l10n.t('$(circle-outline)\u200A Stopped');
+export const codeLensResourceStoppedWithExitCode = (exitCode: number) => vscode.l10n.t('$(circle-outline)\u200A Stopped (Exit Code: {0})', exitCode);
+export const codeLensResourceStoppedError = vscode.l10n.t('$(error)\u200A Stopped');
+export const codeLensResourceStoppedErrorWithExitCode = (exitCode: number) => vscode.l10n.t('$(error)\u200A Stopped (Exit Code: {0})', exitCode);
+export const codeLensResourceError = vscode.l10n.t('$(error)\u200A Error');
+export const codeLensResourceValueMissing = vscode.l10n.t('$(warning)\u200A Value missing');
+export const codeLensRestart = vscode.l10n.t('$(debug-restart)\u200A Restart');
+export const codeLensStop = vscode.l10n.t('$(debug-stop)\u200A Stop');
+export const codeLensStart = vscode.l10n.t('$(debug-start)\u200A Start');
+export const codeLensViewLogs = vscode.l10n.t('$(output)\u200A Logs');
+export const codeLensCommand = (name: string) => vscode.l10n.t('$(terminal)\u200A {0}', name);
+export const codeLensOpenDashboard = vscode.l10n.t('$(dashboard)\u200A Open Dashboard');
+export const codeLensViewAppHostLogs = vscode.l10n.t('$(output)\u200A View Logs');

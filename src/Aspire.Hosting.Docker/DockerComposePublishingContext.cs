@@ -88,16 +88,14 @@ internal sealed class DockerComposePublishingContext(
                 {
                     var dockerfileContext = new DockerfileFactoryContext
                     {
-                        Services = executionContext.ServiceProvider,
+                        Services = executionContext.Services,
                         Resource = serviceResource.TargetResource,
                         CancellationToken = cancellationToken
                     };
-                    await dockerfileBuildAnnotation.MaterializeDockerfileAsync(dockerfileContext, cancellationToken).ConfigureAwait(false);
 
                     // Copy to a resource-specific path in the output folder for publishing
                     var resourceDockerfilePath = Path.Combine(OutputPath, $"{serviceResource.TargetResource.Name}.Dockerfile");
-                    Directory.CreateDirectory(OutputPath);
-                    File.Copy(dockerfileBuildAnnotation.DockerfilePath, resourceDockerfilePath, overwrite: true);
+                    await dockerfileBuildAnnotation.EmitDockerfileArtifactsAsync(dockerfileContext, resourceDockerfilePath).ConfigureAwait(false);
                 }
 
                 var composeService = await serviceResource.BuildComposeServiceAsync().ConfigureAwait(false);
@@ -113,7 +111,7 @@ internal sealed class DockerComposePublishingContext(
                 {
                     foreach (var a in fsAnnotations)
                     {
-                        var files = await a.Callback(new() { Model = serviceResource.TargetResource, ServiceProvider = executionContext.ServiceProvider }, CancellationToken.None).ConfigureAwait(false);
+                        var files = await a.Callback(new() { Model = serviceResource.TargetResource, Services = executionContext.Services }, CancellationToken.None).ConfigureAwait(false);
                         foreach (var file in files)
                         {
                             HandleComposeFileConfig(composeFile, composeService, file, a.DefaultOwner, a.DefaultGroup, a.Umask ?? DefaultUmask, a.DestinationPath);

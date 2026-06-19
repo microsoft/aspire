@@ -54,7 +54,8 @@ public static class ContainerAppExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Configures the custom domain for the container app")]
+    /// <ats-remarks />
+    [AspireExport]
     [Experimental("ASPIREACADOMAINS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static void ConfigureCustomDomain(this ContainerApp app, IResourceBuilder<ParameterResource> customDomain, IResourceBuilder<ParameterResource> certificateName)
     {
@@ -150,8 +151,7 @@ public static class ContainerAppExtensions
     /// </example>
     /// <para>This overload allows custom configuration of the container app job via a callback.</para>
     /// </remarks>
-    [AspireExport("publishAsConfiguredAzureContainerAppJob", Description = "Configures the compute resource as an Azure Container App Job with custom configuration")]
-    [Experimental("ASPIREAZURE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal publishAsAzureContainerAppJob dispatcher export.")]
     public static IResourceBuilder<T> PublishAsAzureContainerAppJob<T>(this IResourceBuilder<T> resource, Action<AzureResourceInfrastructure, ContainerAppJob> configure)
         where T : IComputeResource
     {
@@ -188,8 +188,7 @@ public static class ContainerAppExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Configures the compute resource as a manually triggered Azure Container App Job")]
-    [Experimental("ASPIREAZURE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal publishAsAzureContainerAppJob dispatcher export.")]
     public static IResourceBuilder<T> PublishAsAzureContainerAppJob<T>(this IResourceBuilder<T> resource)
         where T : IComputeResource
     {
@@ -200,6 +199,22 @@ public static class ContainerAppExtensions
             // Manual trigger is the default, so no additional configuration is needed
             // This overload provides a simpler API for the common manual trigger case
         });
+    }
+
+    /// <summary>
+    /// Configures the compute resource as an Azure Container App Job
+    /// </summary>
+    [AspireExport("publishAsAzureContainerAppJob")]
+    internal static IResourceBuilder<T> PublishAsAzureContainerAppJobForPolyglot<T>(
+        this IResourceBuilder<T> resource,
+        Action<AzureResourceInfrastructure, ContainerAppJob>? configure = null)
+        where T : IComputeResource
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+
+        return configure is null
+            ? resource.PublishAsAzureContainerAppJob()
+            : resource.PublishAsAzureContainerAppJob(configure);
     }
 
     /// <summary>
@@ -222,8 +237,7 @@ public static class ContainerAppExtensions
     /// </example>
     /// <para>This overload allows custom configuration of the scheduled container app job via a callback.</para>
     /// </remarks>
-    [AspireExport("publishAsConfiguredScheduledAzureContainerAppJob", Description = "Configures the compute resource as a scheduled Azure Container App Job with custom configuration")]
-    [Experimental("ASPIREAZURE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal publishAsScheduledAzureContainerAppJob dispatcher export.")]
     public static IResourceBuilder<T> PublishAsScheduledAzureContainerAppJob<T>(this IResourceBuilder<T> resource, string cronExpression, Action<AzureResourceInfrastructure, ContainerAppJob>? configure = null)
         where T : IComputeResource
     {
@@ -240,20 +254,17 @@ public static class ContainerAppExtensions
     }
 
     /// <summary>
-    /// Configures the specified compute resource as a scheduled Azure Container App Job with the provided cron expression.
+    /// Configures the compute resource as a scheduled Azure Container App Job
     /// </summary>
-    /// <typeparam name="T">The type of the compute resource.</typeparam>
-    /// <param name="resource">The compute resource builder.</param>
-    /// <param name="cronExpression">The cron expression that defines the schedule for the job.</param>
-    /// <returns>The updated compute resource builder.</returns>
-    /// <remarks>
-    /// This method is a convenience wrapper that configures the job with a schedule trigger using the specified cron expression.
-    /// </remarks>
-    [AspireExport(Description = "Configures the compute resource as a scheduled Azure Container App Job")]
-    [Experimental("ASPIREAZURE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    internal static IResourceBuilder<T> PublishAsScheduledAzureContainerAppJob<T>(this IResourceBuilder<T> resource, string cronExpression)
+    [AspireExport("publishAsScheduledAzureContainerAppJob")]
+    internal static IResourceBuilder<T> PublishAsScheduledAzureContainerAppJobForPolyglot<T>(
+        this IResourceBuilder<T> resource,
+        string cronExpression,
+        Action<AzureResourceInfrastructure, ContainerAppJob>? configure = null)
         where T : IComputeResource
     {
-        return resource.PublishAsScheduledAzureContainerAppJob(cronExpression, configure: null);
+        ArgumentNullException.ThrowIfNull(resource);
+
+        return resource.PublishAsScheduledAzureContainerAppJob(cronExpression, configure);
     }
 }

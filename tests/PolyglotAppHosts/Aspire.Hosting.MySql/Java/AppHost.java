@@ -2,7 +2,7 @@ import aspire.*;
 
 void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
-        var rootPassword = builder.addParameter("mysql-root-password", true);
+        var rootPassword = builder.addParameter("mysql-root-password", new AddParameterOptions().secret(true));
         var mysql = builder.addMySql("mysql", new AddMySqlOptions().password(rootPassword).port(3306.0));
         mysql
             .withPassword(rootPassword)

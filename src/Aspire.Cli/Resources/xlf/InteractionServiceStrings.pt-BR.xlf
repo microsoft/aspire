@@ -1,10 +1,15 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="pt-BR" original="../InteractionServiceStrings.resx">
     <body>
       <trans-unit id="AppHostConnectionLost">
-        <source>The connection to the AppHost was lost: {0}.</source>
+        <source>The connection to the AppHost was lost: {0}</source>
         <target state="needs-review-translation">A conexão com o host do aplicativo foi perdida: {0}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostConnectionLostGeneric">
+        <source>The connection to the application was lost.</source>
+        <target state="new">The connection to the application was lost.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostNotCompatibleConsiderUpgrading">
@@ -12,14 +17,29 @@
         <target state="needs-review-translation">A versão do AppHost não é compatível. Atualize o apphost ou o Aspire CLI.</target>
         <note />
       </trans-unit>
+      <trans-unit id="AppHostNotCompatibleUpdateAppHost">
+        <source>The AppHost is using an older Aspire version than the Aspire CLI. Update the AppHost's Aspire packages to continue.</source>
+        <target state="new">The AppHost is using an older Aspire version than the Aspire CLI. Update the AppHost's Aspire packages to continue.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostNotCompatibleUpdateCli">
+        <source>The Aspire CLI is older than the Aspire version used by the AppHost. Update the Aspire CLI to continue.</source>
+        <target state="new">The Aspire CLI is older than the Aspire version used by the AppHost. Update the Aspire CLI to continue.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostShutDown">
+        <source>The application shut down.</source>
+        <target state="new">The application shut down.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AspireCLIVersion">
-        <source>Aspire CLI Version</source>
-        <target state="translated">Versão da CLI do Aspire</target>
+        <source>Aspire CLI version</source>
+        <target state="needs-review-translation">Versão da CLI do Aspire</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireHostingSDKVersion">
-        <source>Aspire.Hosting Version</source>
-        <target state="translated">Versão do Aspire.Hosting</target>
+        <source>Aspire.Hosting version</source>
+        <target state="needs-review-translation">Versão do Aspire.Hosting</target>
         <note />
       </trans-unit>
       <trans-unit id="BuildingAppHost">
@@ -63,7 +83,7 @@
         <note>Represents a type of link</note>
       </trans-unit>
       <trans-unit id="ErrorConnectingToAppHost">
-        <source>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}.</source>
+        <source>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}</source>
         <target state="needs-review-translation">Erro ao se conectar ao host de aplicativo. O host de aplicativo possivelmente falhou antes de estar disponível: {0}.</target>
         <note />
       </trans-unit>
@@ -73,14 +93,14 @@
         <note />
       </trans-unit>
       <trans-unit id="InteractiveInputNotSupported">
-        <source>Interactive input is not supported in this environment. Use the --non-interactive flag or ensure the CLI is running in an interactive terminal.</source>
-        <target state="translated">Não há suporte para entrada interativa neste ambiente. Use o sinalizador --não-interativo ou verifique se a CLI está em execução em um terminal interativo.</target>
+        <source>This prompt requires interactive input but the CLI is running in non-interactive mode. This operation does not yet support non-interactive execution.</source>
+        <target state="needs-review-translation">Não há suporte para entrada interativa neste ambiente. Use o sinalizador --não-interativo ou verifique se a CLI está em execução em um terminal interativo.</target>
         <note />
       </trans-unit>
       <trans-unit id="MoreInfoNewCliVersion">
-        <source>[dim]For more information, see: [link]{0}[/][/]</source>
-        <target state="translated">[dim]Para obter mais informações, consulte: [link]{0}[/][/]</target>
-        <note>Do not translate [dim] and [link]. Also leave [/] as-is. {0} is a URL</note>
+        <source>[dim]For more information, see: {0}[/]</source>
+        <target state="needs-review-translation">[dim]Para obter mais informações, consulte: [link]{0}[/][/]</target>
+        <note>Do not translate [dim]. Also leave [/] as-is. {0} is a pre-formatted link</note>
       </trans-unit>
       <trans-unit id="NewCliVersionAvailable">
         <source>[yellow]A new version of Aspire is available: {0}[/]</source>
@@ -92,19 +112,39 @@
         <target state="translated">Nenhum item disponível para seleção: {0}</target>
         <note>{0} is the original selection prompt text.</note>
       </trans-unit>
+      <trans-unit id="NoSupportedAppHostsFound">
+        <source>No supported app hosts were found.</source>
+        <target state="new">No supported app hosts were found.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NonInteractiveAvailableValues">
+        <source>Available values: {0}</source>
+        <target state="new">Available values: {0}</target>
+        <note>{0} is a comma-separated list of valid values</note>
+      </trans-unit>
+      <trans-unit id="NonInteractiveInvalidValue">
+        <source>The value '{0}' is not valid for {1}.</source>
+        <target state="new">The value '{0}' is not valid for {1}.</target>
+        <note>{0} is the provided value. {1} is the option/argument display name.</note>
+      </trans-unit>
+      <trans-unit id="NonInteractiveOptionRequired">
+        <source>The {0} option must be specified when running in non-interactive mode.</source>
+        <target state="new">The {0} option must be specified when running in non-interactive mode.</target>
+        <note>{0} is the option/argument display name like '--publisher' or '&lt;integration&gt;'</note>
+      </trans-unit>
       <trans-unit id="OperationCancelled">
         <source>The operation was canceled.</source>
         <target state="translated">A operação foi cancelada.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeBuilt">
-        <source>The project could not be built. See logs at {0}</source>
-        <target state="translated">O projeto não pôde ser compilado. Ver logs em {0}</target>
+        <source>The project could not be built.</source>
+        <target state="new">The project could not be built.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeCreated">
-        <source>The app could not be created. See logs at {0}</source>
-        <target state="new">The app could not be created. See logs at {0}</target>
+        <source>The app could not be created.</source>
+        <target state="new">The app could not be created.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionDoesntExist">
@@ -122,15 +162,30 @@
         <target state="needs-review-translation">O argumento do projeto não foi especificado e nenhum arquivo de projeto do host do aplicativo foi detectado.</target>
         <note />
       </trans-unit>
+      <trans-unit id="ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts">
+        <source>The --apphost option specified a directory that contains multiple AppHost project files.</source>
+        <target state="new">The --apphost option specified a directory that contains multiple AppHost project files.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ProjectOptionSpecifiedDirectoryContainsNoAppHosts">
+        <source>The --apphost option specified a directory that does not contain any AppHost project files.</source>
+        <target state="new">The --apphost option specified a directory that does not contain any AppHost project files.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="RequiredCapability">
-        <source>Required Capability</source>
-        <target state="translated">Funcionalidade Necessária</target>
+        <source>Required capability</source>
+        <target state="needs-review-translation">Funcionalidade Necessária</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchingProjects">
         <source>Searching...</source>
         <target state="translated">Pesquisando...</target>
         <note />
+      </trans-unit>
+      <trans-unit id="SeeAppHostLogsAt">
+        <source>See AppHost logs at {0}</source>
+        <target state="new">See AppHost logs at {0}</target>
+        <note>{0} is the log file path of the CLI process managing the AppHost</note>
       </trans-unit>
       <trans-unit id="SeeLogsAt">
         <source>See logs at {0}</source>

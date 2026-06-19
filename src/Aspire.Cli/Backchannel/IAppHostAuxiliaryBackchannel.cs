@@ -42,6 +42,28 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     bool SupportsV2 { get; }
 
     /// <summary>
+    /// Gets a value indicating whether the AppHost supports v3 API.
+    /// </summary>
+    bool SupportsV3 { get; }
+
+    /// <summary>
+    /// Gets AppHost information using the v2 API.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The AppHost information response.</returns>
+    Task<GetAppHostInfoResponse?> GetAppHostInfoV2Async(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets a value indicating whether the AppHost advertises the
+    /// <c>terminals.v1</c> capability — covers both the per-replica terminal info
+    /// surface returned by <see cref="GetTerminalInfoAsync"/> AND the per-resource
+    /// list returned by <see cref="ListTerminalsAsync"/> (with current grid size,
+    /// attached peer count, and peer details on <see cref="TerminalReplicaInfo"/>).
+    /// These surfaces ship together and are gated by a single capability flag.
+    /// </summary>
+    bool SupportsTerminalsV1 { get; }
+
+    /// <summary>
     /// Gets the Dashboard URLs from the AppHost.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -49,29 +71,58 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     Task<DashboardUrlsState?> GetDashboardUrlsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Gets the current resource snapshots from the AppHost.
+    /// Waits until the AppHost reaches its startup readiness point.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The AppHost startup readiness response, or null if unavailable.</returns>
+    Task<WaitForAppHostReadyResponse?> WaitForAppHostReadyAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the current resource snapshots from the AppHost.
+    /// </summary>
+    /// <param name="includeHidden">When <see langword="true"/>, includes resources with hidden state.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A list of resource snapshots representing current state.</returns>
-    Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(CancellationToken cancellationToken = default);
+    Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(bool includeHidden, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Watches for resource snapshot changes and streams them from the AppHost.
     /// </summary>
+    /// <param name="includeHidden">When <see langword="true"/>, includes resources with hidden state.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>An async enumerable of resource snapshots as they change.</returns>
-    IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync(CancellationToken cancellationToken = default);
+    IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync(bool includeHidden, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets resource log lines from the AppHost.
     /// </summary>
-    /// <param name="resourceName">Optional resource name. If null, streams logs from all resources (only valid when follow is true).</param>
+    /// <param name="resourceName">Optional resource name. If null, streams logs from all resources.</param>
     /// <param name="follow">If true, continuously streams new logs. If false, returns existing logs and completes.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>An async enumerable of log lines.</returns>
     IAsyncEnumerable<ResourceLogLine> GetResourceLogsAsync(
         string? resourceName = null,
         bool follow = false,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets console log lines from the AppHost.
+    /// </summary>
+    /// <param name="request">The console log request.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>An async enumerable of log lines.</returns>
+    IAsyncEnumerable<ResourceLogLine> GetConsoleLogsAsync(
+        GetConsoleLogsRequest request,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets console log lines from the AppHost in batches.
+    /// </summary>
+    /// <param name="request">The console log request.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>An async enumerable of log batches.</returns>
+    IAsyncEnumerable<ResourceLogBatch> GetConsoleLogBatchesAsync(
+        GetConsoleLogsRequest request,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -108,11 +159,13 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     /// </summary>
     /// <param name="resourceName">The name of the resource.</param>
     /// <param name="commandName">The name of the command (e.g., "start", "stop", "restart").</param>
+    /// <param name="options">Options for command execution.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The result of the command execution.</returns>
     Task<ExecuteResourceCommandResponse> ExecuteResourceCommandAsync(
         string resourceName,
         string commandName,
+        ExecuteResourceCommandOptions? options = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -128,4 +181,23 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
         string status,
         int timeoutSeconds,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets terminal information for a resource.
+    /// </summary>
+    /// <param name="resourceName">The resource name.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Terminal information for the resource.</returns>
+    Task<GetTerminalInfoResponse> GetTerminalInfoAsync(
+        string resourceName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lists every <c>WithTerminal</c>-enabled resource in the AppHost. Returns an empty list when
+    /// no resource is configured. Each entry includes per-replica current grid size and attached
+    /// peer details (when <see cref="TerminalSummary.IsHostReachable"/> is true). Backs
+    /// <c>aspire terminal ps</c>. Gated on <see cref="SupportsTerminalsV1"/>; older AppHosts
+    /// without this capability return an empty response.
+    /// </summary>
+    Task<ListTerminalsResponse> ListTerminalsAsync(CancellationToken cancellationToken = default);
 }

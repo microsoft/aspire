@@ -64,7 +64,7 @@ public class LogTests
 
         var logs = repository.GetLogs(new GetLogsContext
         {
-            ResourceKey = resources[0].ResourceKey,
+            ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -119,7 +119,7 @@ public class LogTests
 
         var logs = repository.GetLogs(new GetLogsContext
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -171,7 +171,7 @@ public class LogTests
 
         var logs = repository.GetLogs(new GetLogsContext
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -419,7 +419,7 @@ public class LogTests
         // Act
         var logs = repository.GetLogs(new GetLogsContext
         {
-            ResourceKey = new ResourceKey("TestService", "UnknownResource"),
+            ResourceKeys = [new ResourceKey("TestService", "UnknownResource")],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -517,7 +517,7 @@ public class LogTests
 
         var logs = repository.GetLogs(new GetLogsContext
         {
-            ResourceKey = resources[0].ResourceKey,
+            ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
             Count = 1,
             Filters = []
@@ -659,7 +659,7 @@ public class LogTests
 
         var logs = repository.GetLogs(new GetLogsContext
         {
-            ResourceKey = resources[0].ResourceKey,
+            ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -807,7 +807,7 @@ public class LogTests
         // Assert
         Assert.Empty(repository.GetLogs(new GetLogsContext
         {
-            ResourceKey = resourceKey,
+            ResourceKeys = [resourceKey],
             StartIndex = 0,
             Count = 1,
             Filters = [new FieldTelemetryFilter { Condition = FilterCondition.Contains, Field = nameof(OtlpLogEntry.Message), Value = "does_not_contain" }]
@@ -815,7 +815,7 @@ public class LogTests
 
         Assert.Single(repository.GetLogs(new GetLogsContext
         {
-            ResourceKey = resourceKey,
+            ResourceKeys = [resourceKey],
             StartIndex = 0,
             Count = 1,
             Filters = [new FieldTelemetryFilter { Condition = FilterCondition.Contains, Field = nameof(OtlpLogEntry.Message), Value = "message" }]
@@ -854,7 +854,7 @@ public class LogTests
         // Assert
         Assert.Empty(repository.GetLogs(new GetLogsContext
         {
-            ResourceKey = resourceKey,
+            ResourceKeys = [resourceKey],
             StartIndex = 0,
             Count = 1,
             Filters = [new FieldTelemetryFilter { Condition = FilterCondition.Contains, Field = KnownStructuredLogFields.EventNameField, Value = "does_not_contain" }]
@@ -862,7 +862,7 @@ public class LogTests
 
         Assert.Single(repository.GetLogs(new GetLogsContext
         {
-            ResourceKey = resourceKey,
+            ResourceKeys = [resourceKey],
             StartIndex = 0,
             Count = 1,
             Filters = [new FieldTelemetryFilter { Condition = FilterCondition.Contains, Field = KnownStructuredLogFields.EventNameField, Value = "MyEvent" }]
@@ -923,7 +923,7 @@ public class LogTests
 
         var logs1 = repository.GetLogs(new GetLogsContext
         {
-            ResourceKey = resources[0].ResourceKey,
+            ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -946,7 +946,7 @@ public class LogTests
 
         var logs2 = repository.GetLogs(new GetLogsContext
         {
-            ResourceKey = resources[1].ResourceKey,
+            ResourceKeys = [resources[1].ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1022,7 +1022,7 @@ public class LogTests
         var resourceKey = new ResourceKey("resource1", InstanceId: null);
         var logs = repository.GetLogs(new GetLogsContext
         {
-            ResourceKey = resourceKey,
+            ResourceKeys = [resourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1112,7 +1112,7 @@ public class LogTests
 
         var logs = repository.GetLogs(new GetLogsContext
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1177,7 +1177,7 @@ public class LogTests
 
         var logs = repository.GetLogs(new GetLogsContext
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1251,7 +1251,7 @@ public class LogTests
 
         var logs = repository.GetLogs(new GetLogsContext
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1291,7 +1291,7 @@ public class LogTests
 
         var logs = repository.GetLogs(new GetLogsContext
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1332,7 +1332,7 @@ public class LogTests
 
         var logs = repository.GetLogs(new GetLogsContext
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1373,7 +1373,7 @@ public class LogTests
 
         var logs = repository.GetLogs(new GetLogsContext
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1416,7 +1416,7 @@ public class LogTests
 
         var logs = repository.GetLogs(new GetLogsContext
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1458,7 +1458,7 @@ public class LogTests
 
         var logs = repository.GetLogs(new GetLogsContext
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1468,5 +1468,62 @@ public class LogTests
             {
                 Assert.Null(resource.EventName);
             });
+    }
+
+    [Fact]
+    public void GetLogs_DisabledFiltersAreIgnored()
+    {
+        var repository = CreateRepository();
+
+        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope("TestLogger"),
+                        LogRecords =
+                        {
+                            CreateLogRecord(time: s_testTime, message: "matching log", severity: SeverityNumber.Info),
+                            CreateLogRecord(time: s_testTime.AddSeconds(1), message: "other log", severity: SeverityNumber.Info)
+                        }
+                    }
+                }
+            }
+        });
+
+        // Enabled filter matches "matching", disabled filter would exclude everything
+        var filters = new List<TelemetryFilter>
+        {
+            new FieldTelemetryFilter
+            {
+                Field = nameof(OtlpLogEntry.Message),
+                Value = "matching",
+                Condition = FilterCondition.Contains,
+                Enabled = true
+            },
+            new FieldTelemetryFilter
+            {
+                Field = nameof(OtlpLogEntry.Message),
+                Value = "IMPOSSIBLE",
+                Condition = FilterCondition.Contains,
+                Enabled = false
+            }
+        };
+
+        var logs = repository.GetLogs(new GetLogsContext
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = 10,
+            Filters = filters
+        });
+
+        // The disabled filter should be ignored — only the enabled "matching" filter applies
+        Assert.Single(logs.Items);
+        Assert.Equal("matching log", logs.Items[0].Message);
     }
 }

@@ -12,9 +12,19 @@
         <target state="needs-review-translation">在写入日志时实时流式传输这些日志。</target>
         <note />
       </trans-unit>
+      <trans-unit id="IncludeHiddenOptionDescription">
+        <source>Include hidden resources in the output</source>
+        <target state="new">Include hidden resources in the output</target>
+        <note />
+      </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
         <target state="needs-review-translation">以 JSON 格式输出日志(NDJSON)。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoLogsFound">
+        <source>No logs found.</source>
+        <target state="new">No logs found.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoResourcesFound">
@@ -35,6 +45,11 @@
       <trans-unit id="ResourceRequiredWithoutFollow">
         <source>A resource name is required when not using --follow. Use --follow to stream logs from all resources.</source>
         <target state="translated">不使用 --follow 时必须指定资源名称。使用 --follow 流式传输所有资源的日志。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SearchOptionDescription">
+        <source>Full-text search to filter log content. See https://aka.ms/aspire/cli-search for more details</source>
+        <target state="new">Full-text search to filter log content. See https://aka.ms/aspire/cli-search for more details</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">

@@ -1,6 +1,6 @@
 {
   "author": "Microsoft",
-  "name": "Aspire Başlangıç Uygulaması (ASP.NET Core/React)",
+  "name": "Aspire Başlangıç Uygulaması (ASP.NET Core/React, C# AppHost)",
   "description": "İsteğe bağlı Redis önbelleğiyle bir React ön uç ve C# Minimal API arka uç hizmetini içeren bir Aspire uygulaması oluşturmak için proje şablonu.",
   "symbols/Framework/description": "Projenin hedef çerçevesi.",
   "symbols/Framework/choices/net8.0/description": "Hedef net8.0",

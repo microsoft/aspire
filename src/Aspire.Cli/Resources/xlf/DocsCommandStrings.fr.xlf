@@ -3,7 +3,7 @@
   <file datatype="xml" source-language="en" target-language="fr" original="../DocsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Browse and search Aspire documentation from aspire.dev</source>
+        <source>Browse and search Aspire documentation and API reference from aspire.dev</source>
         <target state="needs-review-translation">Parcourir et rechercher la documentation Aspire sur aspire.dev.</target>
         <note />
       </trans-unit>

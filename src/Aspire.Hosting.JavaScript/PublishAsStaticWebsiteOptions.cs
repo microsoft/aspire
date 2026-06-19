@@ -1,11 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace Aspire.Hosting.JavaScript;
 
 /// <summary>
 /// Options for configuring the static website publish mode.
 /// </summary>
+[Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public class PublishAsStaticWebsiteOptions
 {
     /// <summary>
@@ -19,7 +22,7 @@ public class PublishAsStaticWebsiteOptions
     /// Gets or sets whether to remove the API path prefix before forwarding to the backend.
     /// For example, with <c>apiPath="/api"</c> and <c>StripPrefix=true</c>, a request to
     /// <c>/api/weatherforecast</c> is forwarded as <c>/weatherforecast</c>.
-    /// Defaults to <see langword="true"/>.
+    /// Defaults to <see langword="false"/>.
     /// </summary>
     public bool StripPrefix { get; set; }
 

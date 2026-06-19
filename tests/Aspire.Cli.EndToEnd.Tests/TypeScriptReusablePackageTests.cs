@@ -18,18 +18,16 @@ public sealed class TypeScriptReusablePackageTests(ITestOutputHelper output)
     public async Task RestoreSupportsConfigOnlyHelperPackageAndCrossPackageTypes()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, variant: CliE2ETestHelpers.DockerfileVariant.Polyglot, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.Polyglot, workspace: workspace);
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         var appDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "app"));
         var helperDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "packages", "aspire-commands"));
@@ -44,7 +42,7 @@ public sealed class TypeScriptReusablePackageTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        var appAppHostPath = Path.Combine(appDirectory.FullName, "apphost.ts");
+        var appAppHostPath = Path.Combine(appDirectory.FullName, "apphost.mts");
         Assert.True(File.Exists(appAppHostPath), $"Expected the CLI-created app to contain {appAppHostPath}.");
 
         await auto.TypeAsync("aspire add Aspire.Hosting.Redis");
@@ -56,8 +54,8 @@ public sealed class TypeScriptReusablePackageTests(ITestOutputHelper output)
         WriteHelperPackageFiles(helperDirectory, helperSourceDirectory, sdkVersion);
         RewriteAppHostFiles(appDirectory);
 
-        // The helper package is intentionally config-only: it has aspire.config.json but no apphost.ts.
-        var helperAppHostPath = Path.Combine(helperDirectory.FullName, "apphost.ts");
+        // The helper package is intentionally config-only: it has aspire.config.json but no apphost.mts.
+        var helperAppHostPath = Path.Combine(helperDirectory.FullName, "apphost.mts");
         Assert.False(File.Exists(helperAppHostPath), $"Config-only helper package unexpectedly contained {helperAppHostPath}.");
 
         await auto.TypeAsync($"cd {CliE2ETestHelpers.ToContainerPath(helperDirectory.FullName, workspace)}");
@@ -69,13 +67,13 @@ public sealed class TypeScriptReusablePackageTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        var helperModulesDirectory = Path.Combine(helperDirectory.FullName, ".modules");
-        Assert.True(Directory.Exists(helperModulesDirectory), $".modules directory was not created for helper package at {helperModulesDirectory}");
-        Assert.Contains("addRedis", File.ReadAllText(Path.Combine(helperModulesDirectory, "aspire.ts")));
+        var helperModulesDirectory = Path.Combine(helperDirectory.FullName, ".aspire", "modules");
+        Assert.True(Directory.Exists(helperModulesDirectory), $".aspire/modules directory was not created for helper package at {helperModulesDirectory}");
+        Assert.Contains("addRedis", File.ReadAllText(Path.Combine(helperModulesDirectory, "aspire.mts")));
 
         await auto.TypeAsync("npx tsc --noEmit");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
         await auto.TypeAsync($"cd {CliE2ETestHelpers.ToContainerPath(appDirectory.FullName, workspace)}");
         await auto.EnterAsync();
@@ -88,12 +86,7 @@ public sealed class TypeScriptReusablePackageTests(ITestOutputHelper output)
 
         await auto.TypeAsync("npx tsc --noEmit");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
     }
 
     private static string GetSdkVersion(DirectoryInfo appDirectory)
@@ -106,8 +99,8 @@ public sealed class TypeScriptReusablePackageTests(ITestOutputHelper output)
 
     private static void RewriteAppHostFiles(DirectoryInfo appDirectory)
     {
-        File.WriteAllText(Path.Combine(appDirectory.FullName, "apphost.ts"), """
-            import { createBuilder, refExpr } from './.modules/aspire.js';
+        File.WriteAllText(Path.Combine(appDirectory.FullName, "apphost.mts"), """
+            import { createBuilder, refExpr } from './.aspire/modules/aspire.mjs';
             import { configureRedis } from '../packages/aspire-commands/src/index.js';
 
             const builder = await createBuilder();
@@ -132,10 +125,10 @@ public sealed class TypeScriptReusablePackageTests(ITestOutputHelper output)
                 "rootDir": ".."
               },
               "include": [
-                "apphost.ts",
-                ".modules/**/*.ts",
+                "apphost.mts",
+                ".aspire/modules/**/*.mts",
                 "../packages/aspire-commands/src/**/*.ts",
-                "../packages/aspire-commands/.modules/**/*.ts"
+                "../packages/aspire-commands/.aspire/modules/**/*.mts"
               ],
               "exclude": [
                 "node_modules"
@@ -191,7 +184,7 @@ public sealed class TypeScriptReusablePackageTests(ITestOutputHelper output)
               },
               "include": [
                 "src/**/*.ts",
-                ".modules/**/*.ts"
+                ".aspire/modules/**/*.mts"
               ],
               "exclude": [
                 "node_modules"
@@ -205,7 +198,7 @@ public sealed class TypeScriptReusablePackageTests(ITestOutputHelper output)
                 ExecuteCommandResult,
                 RedisResource,
                 ReferenceExpression
-            } from '../.modules/aspire.js';
+            } from '../.aspire/modules/aspire.mjs';
 
             export async function configureRedis(
                 redis: RedisResource,
@@ -217,7 +210,7 @@ public sealed class TypeScriptReusablePackageTests(ITestOutputHelper output)
                     "flush",
                     "Flush Redis cache",
                     async (context: ExecuteCommandContext): Promise<ExecuteCommandResult> => ({
-                        success: (await context.resourceName.get()).length > 0
+                        success: (await context.resourceName()).length > 0
                     }));
             }
             """);

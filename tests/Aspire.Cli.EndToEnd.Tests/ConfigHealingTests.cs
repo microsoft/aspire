@@ -25,22 +25,21 @@ public sealed class ConfigHealingTests(ITestOutputHelper output)
     public async Task InvalidAppHostPathWithComments_IsHealedOnRun()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
 
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(
-            repoRoot, installMode, output,
+            repoRoot, strategy, output,
             mountDockerSocket: true,
             workspace: workspace);
 
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // 1. Create a starter project
         await auto.AspireNewAsync("HealTest", counter, useRedisCache: false);
@@ -97,10 +96,5 @@ public sealed class ConfigHealingTests(ITestOutputHelper output)
             throw new InvalidOperationException(
                 $"Config file still contains invalid path after healing. Content:\n{content}");
         }
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 }

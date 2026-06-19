@@ -15,6 +15,9 @@ namespace Aspire.Cli.Utils.EnvironmentChecker;
 /// </summary>
 internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateToolRunner certificateToolRunner) : IEnvironmentCheck
 {
+    internal const string CheckName = "dev-certs";
+    internal const string VersionCheckName = "dev-certs-version";
+
     public int Order => 35; // After SDK check (30), before container checks (40+)
 
     private static readonly string s_trustFixCommand = string.Format(CultureInfo.InvariantCulture, DoctorCommandStrings.DevCertsTrustFixFormat, "aspire certs trust");
@@ -34,8 +37,8 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
             logger.LogDebug(ex, "Error checking dev-certs");
             return Task.FromResult<IReadOnlyList<EnvironmentCheckResult>>([new EnvironmentCheckResult
             {
-                Category = "environment",
-                Name = "dev-certs",
+                Category = EnvironmentCheckCategories.Environment,
+                Name = CheckName,
                 Status = EnvironmentCheckStatus.Warning,
                 Message = "Unable to check HTTPS development certificate",
                 Details = ex.Message
@@ -55,8 +58,8 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
         {
             return [new EnvironmentCheckResult
             {
-                Category = "environment",
-                Name = "dev-certs",
+                Category = EnvironmentCheckCategories.Environment,
+                Name = CheckName,
                 Status = EnvironmentCheckStatus.Warning,
                 Message = DoctorCommandStrings.DevCertsNoCertificateMessage,
                 Details = DoctorCommandStrings.DevCertsNoCertificateDetails,
@@ -96,8 +99,8 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
             {
                 results.Add(new EnvironmentCheckResult
                 {
-                    Category = "environment",
-                    Name = "dev-certs",
+                    Category = EnvironmentCheckCategories.Environment,
+                    Name = CheckName,
                     Status = EnvironmentCheckStatus.Warning,
                     Message = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsMultipleNoneTrustedMessageFormat, certInfos.Count),
                     Details = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsMultipleNoneTrustedDetailsFormat, certDetails),
@@ -110,8 +113,8 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
             {
                 results.Add(new EnvironmentCheckResult
                 {
-                    Category = "environment",
-                    Name = "dev-certs",
+                    Category = EnvironmentCheckCategories.Environment,
+                    Name = CheckName,
                     Status = EnvironmentCheckStatus.Warning,
                     Message = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsMultipleSomeUntrustedMessageFormat, certInfos.Count),
                     Details = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsMultipleSomeUntrustedDetailsFormat, certDetails),
@@ -125,8 +128,8 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
             {
                 results.Add(new EnvironmentCheckResult
                 {
-                    Category = "environment",
-                    Name = "dev-certs",
+                    Category = EnvironmentCheckCategories.Environment,
+                    Name = CheckName,
                     Status = EnvironmentCheckStatus.Pass,
                     Message = DoctorCommandStrings.DevCertsTrustedMessage,
                     Metadata = metadata
@@ -139,8 +142,8 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
             var cert = certInfos[0];
             results.Add(new EnvironmentCheckResult
             {
-                Category = "environment",
-                Name = "dev-certs",
+                Category = EnvironmentCheckCategories.Environment,
+                Name = CheckName,
                 Status = EnvironmentCheckStatus.Warning,
                 Message = DoctorCommandStrings.DevCertsNotTrustedMessage,
                 Details = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsNotTrustedDetailsFormat, cert.Thumbprint ?? "unknown"),
@@ -155,8 +158,8 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
             var devCertsTrustPath = CertificateHelpers.GetDevCertsTrustPath();
             results.Add(new EnvironmentCheckResult
             {
-                Category = "environment",
-                Name = "dev-certs",
+                Category = EnvironmentCheckCategories.Environment,
+                Name = CheckName,
                 Status = EnvironmentCheckStatus.Warning,
                 Message = DoctorCommandStrings.DevCertsPartiallyTrustedMessage,
                 Details = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsPartiallyTrustedDetailsFormat, devCertsTrustPath),
@@ -170,8 +173,8 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
             // Trusted certificate - success case
             results.Add(new EnvironmentCheckResult
             {
-                Category = "environment",
-                Name = "dev-certs",
+                Category = EnvironmentCheckCategories.Environment,
+                Name = CheckName,
                 Status = EnvironmentCheckStatus.Pass,
                 Message = DoctorCommandStrings.DevCertsTrustedMessage,
                 Metadata = metadata
@@ -184,8 +187,8 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
             var versions = string.Join(", ", oldTrustedVersions.Select(v => $"v{v}"));
             results.Add(new EnvironmentCheckResult
             {
-                Category = "environment",
-                Name = "dev-certs-version",
+                Category = EnvironmentCheckCategories.Environment,
+                Name = VersionCheckName,
                 Status = EnvironmentCheckStatus.Warning,
                 Message = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsOldVersionMessageFormat, versions),
                 Details = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsOldVersionDetailsFormat, CertificateManager.CurrentMinimumAspNetCoreCertificateVersion),

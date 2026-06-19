@@ -20,13 +20,14 @@ public static class ExecutableResourceBuilderExtensions
     /// <param name="workingDirectory">The working directory of the executable.</param>
     /// <param name="args">The arguments to the executable.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// You can run any executable command using its full path.
     /// As a security feature, Aspire doesn't run executable unless the command is located in a path listed in the PATH environment variable.
     /// <para/>
     /// To run an executable file that's in the current directory, specify the full path or use the relative path <c>./</c> to represent the current directory.
     /// </remarks>
-    [AspireExport(Description = "Adds an executable resource")]
+    [AspireExport]
     public static IResourceBuilder<ExecutableResource> AddExecutable(this IDistributedApplicationBuilder builder, [ResourceName] string name, string command, string workingDirectory, params string[]? args)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -74,7 +75,7 @@ public static class ExecutableResourceBuilderExtensions
     /// <typeparam name="T">Type of executable resource</typeparam>
     /// <param name="builder">Resource builder</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Publishes the executable as a Docker container")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the overload with the optional configure callback.")]
     public static IResourceBuilder<T> PublishAsDockerFile<T>(this IResourceBuilder<T> builder) where T : ExecutableResource
     {
         return builder.PublishAsDockerFile(c => { });
@@ -108,6 +109,7 @@ public static class ExecutableResourceBuilderExtensions
     /// The resulting container image is built, and when the optional <paramref name="configure"/> action is provided,
     /// it is used to configure the container resource.
     /// </summary>
+    /// <ats-summary>Publishes an executable as a Docker file</ats-summary>
     /// <remarks>
     /// When the executable resource is converted to a container resource, the arguments to the executable
     /// are not used. This is because arguments to the executable often contain physical paths that are not valid
@@ -117,7 +119,8 @@ public static class ExecutableResourceBuilderExtensions
     /// <param name="builder">Resource builder</param>
     /// <param name="configure">Optional action to configure the container resource</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("publishAsDockerFileWithConfigure", Description = "Publishes an executable as a Docker file with optional container configuration", RunSyncOnBackgroundThread = true)]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<T> PublishAsDockerFile<T>(this IResourceBuilder<T> builder, Action<IResourceBuilder<ContainerResource>>? configure)
         where T : ExecutableResource
     {
@@ -173,7 +176,8 @@ public static class ExecutableResourceBuilderExtensions
     /// <param name="builder">Builder for the executable resource.</param>
     /// <param name="command">Command.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withExecutableCommand", Description = "Sets the executable command")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport("withExecutableCommand")]
     public static IResourceBuilder<T> WithCommand<T>(this IResourceBuilder<T> builder, string command) where T : ExecutableResource
     {
         ArgumentException.ThrowIfNullOrEmpty(command);
@@ -203,7 +207,8 @@ public static class ExecutableResourceBuilderExtensions
     /// <param name="builder">Builder for the executable resource.</param>
     /// <param name="workingDirectory">Working directory.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Sets the executable working directory")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithWorkingDirectory<T>(this IResourceBuilder<T> builder, string workingDirectory) where T : ExecutableResource
     {
         ArgumentNullException.ThrowIfNull(workingDirectory);

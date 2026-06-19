@@ -63,13 +63,8 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Manage the Aspire dashboard</source>
-        <target state="new">Manage the Aspire dashboard</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="EnableApiOptionDescription">
-        <source>Enable the telemetry API endpoint on the dashboard</source>
-        <target state="new">Enable the telemetry API endpoint on the dashboard</target>
+        <source>Manage the Aspire dashboard (Preview)</source>
+        <target state="new">Manage the Aspire dashboard (Preview)</target>
         <note />
       </trans-unit>
       <trans-unit id="FrontendUrlOptionDescription">
@@ -108,8 +103,8 @@
         <note />
       </trans-unit>
       <trans-unit id="RunDescription">
-        <source>Start the Aspire dashboard</source>
-        <target state="new">Start the Aspire dashboard</target>
+        <source>Start the Aspire dashboard (Preview)</source>
+        <target state="new">Start the Aspire dashboard (Preview)</target>
         <note />
       </trans-unit>
       <trans-unit id="StartingDashboard">

@@ -40,15 +40,15 @@ else
                                 <span class="@GetLogContentClass()" data-content="@context.Content" data-language="@context.FormatKind">
                                     @context.Content
                                 </span>
-                            }
-                            else
-                            {
-                                <span class="log-content">
-                                    @context.Content
-                                </span>
-                            }
-                        </span>
-                    </div>
+                             }
+                             else
+                             {
+                                 <span class="log-content">
+                                     @GetFormattedPlaintext(context)
+                                 </span>
+                             }
+                         </span>
+                     </div>
                 </div>
         }
         </div>;

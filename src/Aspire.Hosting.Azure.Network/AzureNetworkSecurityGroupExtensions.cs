@@ -19,6 +19,7 @@ public static class AzureNetworkSecurityGroupExtensions
     /// <param name="builder">The builder for the distributed application.</param>
     /// <param name="name">The name of the Network Security Group resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureNetworkSecurityGroupResource}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <example>
     /// This example adds a Network Security Group with a security rule:
     /// <code>
@@ -34,7 +35,7 @@ public static class AzureNetworkSecurityGroupExtensions
     ///     });
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds an Azure Network Security Group resource to the application model.")]
+    [AspireExport]
     public static IResourceBuilder<AzureNetworkSecurityGroupResource> AddNetworkSecurityGroup(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name)
@@ -60,6 +61,7 @@ public static class AzureNetworkSecurityGroupExtensions
     /// <param name="builder">The Network Security Group resource builder.</param>
     /// <param name="rule">The security rule configuration.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureNetworkSecurityGroupResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <example>
     /// This example adds multiple security rules to a Network Security Group:
     /// <code>
@@ -84,7 +86,7 @@ public static class AzureNetworkSecurityGroupExtensions
     ///     });
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds a security rule to an Azure Network Security Group resource.")]
+    [AspireExport]
     public static IResourceBuilder<AzureNetworkSecurityGroupResource> WithSecurityRule(
         this IResourceBuilder<AzureNetworkSecurityGroupResource> builder,
         AzureSecurityRule rule)

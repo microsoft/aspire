@@ -24,10 +24,20 @@ internal static class ExtensionUtils
             return false;
         }
 
-        // Per DCP IDE execution spec, project launch configuration support is implicit.
-        // Custom launch types (for example, azure-functions) must be explicitly advertised.
-        return supportsDebuggingAnnotation.LaunchConfigurationType == "project"
-            || (supportedLaunchConfigurations is not null && supportedLaunchConfigurations.Contains(supportsDebuggingAnnotation.LaunchConfigurationType));
+        // When the IDE did not send DEBUG_SESSION_INFO (e.g. Visual Studio), fall back to the
+        // legacy rule that "project" launch configuration support is implicit. VS launches all
+        // project resources natively without advertising a capability list.
+        if (supportedLaunchConfigurations is null)
+        {
+            return supportsDebuggingAnnotation.LaunchConfigurationType == "project";
+        }
+
+        // The IDE advertised an explicit capability list — honor it for every type, including
+        // "project". An IDE that can launch project resources must include "project" in its list
+        // (the VS Code extension does this when the C# extension is installed). Treating "project"
+        // as implicitly supported here would route resources to an IDE that cannot launch them
+        // and leave them stuck.
+        return supportedLaunchConfigurations.Contains(supportsDebuggingAnnotation.LaunchConfigurationType);
     }
 
     private static string[]? GetSupportedLaunchConfigurations(IConfiguration configuration)

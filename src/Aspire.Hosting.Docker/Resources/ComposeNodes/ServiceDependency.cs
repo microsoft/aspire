@@ -8,6 +8,7 @@ namespace Aspire.Hosting.Docker.Resources.ComposeNodes;
 /// <summary>
 /// Represents a service dependency in a Docker Compose file.
 /// </summary>
+[AspireExport(ExposeProperties = true)]
 [YamlSerializable]
 public sealed class ServiceDependency
 {

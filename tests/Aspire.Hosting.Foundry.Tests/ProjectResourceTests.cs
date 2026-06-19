@@ -1,9 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Foundry.Tests;
 
@@ -35,32 +37,77 @@ public class ProjectResourceTests
     }
 
     [Fact]
-    public void AddProject_InRunMode_ModelsDefaultContainerRegistry()
+    public void AddProject_InRunMode_DoesNotCreateDefaultContainerRegistry()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
 
-        var registry = Assert.Single(builder.Resources.OfType<AzureContainerRegistryResource>());
-        Assert.Equal("my-project-acr", registry.Name);
-        Assert.Same(project.Resource.DefaultContainerRegistry, registry);
-        Assert.Same(project.Resource.DefaultContainerRegistry, project.Resource.ContainerRegistry);
+        Assert.DoesNotContain(builder.Resources, r => r.Name == "my-project-acr");
+        Assert.Empty(builder.Resources.OfType<AzureContainerRegistryResource>());
+        Assert.Null(project.Resource.DefaultContainerRegistry);
+        Assert.Null(project.Resource.ContainerRegistry);
     }
 
     [Fact]
-    public void WithContainerRegistry_ReferencesExplicitContainerRegistryForProvisioningOrdering()
+    public void WithAzureContainerRegistry_ReferencesExplicitContainerRegistryForProvisioningOrdering()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         var registry = builder.AddAzureContainerRegistry("registry");
         var project = builder.AddFoundry("account")
             .AddProject("my-project")
-            .WithContainerRegistry(registry);
+            .WithAzureContainerRegistry(registry);
 
         Assert.Same(registry.Resource, project.Resource.ContainerRegistry);
         Assert.True(project.Resource.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var annotation));
         Assert.Same(registry.Resource, annotation.Registry);
+    }
+
+    [Fact]
+    public async Task WithAzureContainerRegistry_RemovesDefaultContainerRegistryDuringBeforeStart()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var registry = builder.AddAzureContainerRegistry("acr");
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project")
+            .WithAzureContainerRegistry(registry);
+
+        var defaultRegistry = project.Resource.DefaultContainerRegistry;
+        Assert.NotNull(defaultRegistry);
+        Assert.Contains(defaultRegistry, builder.Resources);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var registries = model.Resources.OfType<AzureContainerRegistryResource>().ToList();
+        Assert.Single(registries);
+        Assert.Same(registry.Resource, registries[0]);
+        Assert.DoesNotContain(defaultRegistry, registries);
+    }
+
+    [Fact]
+    public async Task AddProject_WithoutHostedAgents_RemovesDefaultContainerRegistryDuringBeforeStart()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var defaultRegistry = project.Resource.DefaultContainerRegistry;
+        Assert.NotNull(defaultRegistry);
+        Assert.Contains(defaultRegistry, builder.Resources);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var registries = model.Resources.OfType<AzureContainerRegistryResource>().ToList();
+        Assert.DoesNotContain(defaultRegistry, registries);
+        Assert.Null(project.Resource.DefaultContainerRegistry);
     }
 
     [Fact]
@@ -188,4 +235,6 @@ public class ProjectResourceTests
         Assert.Same(foundry.Resource, project.Resource.CapabilityHostConfiguration.AzureOpenAI);
     }
 
+    [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
+    private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
 }

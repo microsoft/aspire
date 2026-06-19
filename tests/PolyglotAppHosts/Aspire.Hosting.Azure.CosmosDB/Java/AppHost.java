@@ -10,13 +10,13 @@ void main() throws Exception {
         var db = cosmos.addCosmosDatabase("app-db", "appdb");
         // 4) addContainer (single partition key path)
         db.addContainer("orders", "/orderId", "orders-container");
-        // 5) addContainerWithPartitionKeyPaths (IEnumerable<string> export)
-        db.addContainerWithPartitionKeyPaths("events", new String[] { "/tenantId", "/eventId" }, "events-container");
+        // 5) addContainer (IEnumerable<string> partition key paths)
+        db.addContainer("events", new String[] { "/tenantId", "/eventId" }, "events-container");
         // 6) withAccessKeyAuthentication
         cosmos.withAccessKeyAuthentication();
-        // 7) withAccessKeyAuthenticationWithKeyVault
+        // 7) withAccessKeyAuthentication(keyVault)
         var keyVault = builder.addAzureKeyVault("kv");
-        cosmos.withAccessKeyAuthenticationWithKeyVault(keyVault);
+        cosmos.withAccessKeyAuthentication(keyVault);
         // 8) runAsEmulator + emulator container configuration methods
         var cosmosEmulator = builder.addAzureCosmosDB("cosmos-emulator");
         cosmosEmulator.runAsEmulator((emulator) -> {

@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+
 using System.Text;
 using System.Text.Json;
 using Aspire.TestUtilities;
@@ -184,4 +186,15 @@ public class SeqFunctionalTests(ITestOutputHelper testOutputHelper)
             }
         }
     }
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public Task Seq_WithPersistentLifetime_ReusesContainer()
+    {
+        return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
+            testOutputHelper,
+            builder => builder.AddSeq("resource").WithPersistentLifetime(),
+            "resource",
+            useTestContainerRegistry: true);
+    }
+
 }

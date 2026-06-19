@@ -13,7 +13,7 @@
 
   <ItemGroup>
     <PackageReference Include="Grpc.Net.ClientFactory" />
-    <PackageReference Include="Grpc.Tools" />
+    <PackageReference Include="Grpc.Tools" VersionOverride="2.68.1" PrivateAssets="all" />
     <PackageReference Include="Google.Protobuf" />
   </ItemGroup>
 

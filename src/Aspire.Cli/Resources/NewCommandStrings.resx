@@ -118,6 +118,9 @@
   <data name="SourceArgumentDescription" xml:space="preserve">
     <value>The NuGet source to use for the project templates</value>
   </data>
+  <data name="SourceWithCredentialsCannotBePersisted" xml:space="preserve">
+    <value>The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</value>
+  </data>
   <data name="VersionArgumentDescription" xml:space="preserve">
     <value>The version of the project templates to use</value>
   </data>
@@ -132,6 +135,15 @@
   </data>
   <data name="EnterTheProjectName" xml:space="preserve">
     <value>Enter the project name</value>
+  </data>
+  <data name="SelectProjectCreationLocation" xml:space="preserve">
+    <value>Where do you want the project to be created?</value>
+  </data>
+  <data name="CreateProjectNameSubdirectoryChoice" xml:space="preserve">
+    <value>In a subdirectory named '{0}' in the selected folder</value>
+  </data>
+  <data name="CreateProjectDirectlyInSelectedFolderChoice" xml:space="preserve">
+    <value>Directly in the selected folder</value>
   </data>
   <data name="InvalidProjectName" xml:space="preserve">
     <value>Invalid project name.</value>
@@ -150,5 +162,23 @@
   </data>
   <data name="ResolvingTemplateVersion" xml:space="preserve">
     <value>Resolving template version...</value>
+  </data>
+  <data name="NonInteractiveTemplateRequired" xml:space="preserve">
+    <value>A template must be specified when running in non-interactive mode. Use 'aspire new &lt;template&gt;'.</value>
+  </data>
+  <data name="OutputDirectoryNotEmptyNonInteractive" xml:space="preserve">
+    <value>The output directory '{0}' already exists and is not empty. Specify --output with a different location.</value>
+  </data>
+  <data name="OutputDirectoryNotEmptyInteractive" xml:space="preserve">
+    <value>The output directory '{0}' already exists and is not empty. Specify a different location.</value>
+  </data>
+  <data name="OutputPathContainsInvalidCharacters" xml:space="preserve">
+    <value>The output path '{0}' contains invalid characters.</value>
+  </data>
+  <data name="NoPackageChannelsAvailable" xml:space="preserve">
+    <value>No package channels are available.</value>
+  </data>
+  <data name="NoChannelFoundMatching" xml:space="preserve">
+    <value>No channel found matching '{0}'. Valid options are: {1}.</value>
   </data>
 </root>

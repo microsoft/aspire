@@ -7,7 +7,7 @@
   "symbols/Framework/choices/net9.0/description": "目標 net9.0",
   "symbols/Framework/choices/net10.0/description": "目標 net10.0",
   "symbols/UseRedisCache/displayName": "使用 Redis 進行快取 (需要支援的容器執行階段)(_U)",
-  "symbols/UseRedisCache/description": "設定是否要將應用程式設為使用 Redis 進行快取。需要支援的容器執行階段，才能在本機執行，如需詳細資料，請參閱 https://aka.ms/dotnet/aspire/containers。",
+  "symbols/UseRedisCache/description": "設定是否要將應用程式設為使用 Redis 進行快取。需要支援的容器執行階段，才能在本機執行，如需詳細資料，請參閱 https://aka.ms/aspire/containers。",
   "symbols/appHostHttpPort/description": "要用於 AppHost 專案 launchSettings.json 中 HTTP 端點的連接埠號碼。",
   "symbols/appHostOtlpHttpPort/description": "要用於 AppHost 專案 launchSettings.json 中 OTLP HTTP 端點的連接埠號碼。",
   "symbols/appHostResourceHttpPort/description": "要用於 AppHost 專案 launchSettings.json 中資源服務 HTTP 端點的連接埠號碼。",

@@ -17,5 +17,10 @@ export function getRegisterMcpServerInWorkspace(): boolean {
 }
 
 export function getEnableAutoRestore(): boolean {
-    return getAspireConfig().get<boolean>('enableAutoRestore', true);
+    return getAspireConfig().get<boolean>('enableAutoRestore', false);
+}
+
+export function getAppHostDiscoveryTimeoutMs(): number {
+    const timeoutMs = getAspireConfig().get<number>('appHostDiscoveryTimeoutMs', 30000);
+    return Number.isFinite(timeoutMs) ? Math.max(timeoutMs, 1000) : 30000;
 }

@@ -69,7 +69,7 @@
                         else if (chatMessage.LimitResetDate is { } limitResetDate)
                         {
                             <div>
-                                @((MarkupString)Loc.GetString(nameof(AIAssistant.ChatRequestErrorReachedLimitCopilot), "https://aka.ms/dotnet/aspire/copilot-pro", limitResetDate.ToString("d", CultureInfo.CurrentCulture)).ToString())
+                                @((MarkupString)Loc.GetString(nameof(AIAssistant.ChatRequestErrorReachedLimitCopilot), "https://aka.ms/aspire/copilot-pro", limitResetDate.ToString("d", CultureInfo.CurrentCulture)).ToString())
                             </div>
                         }
                     }
@@ -95,7 +95,8 @@
                                 <FluentButton Appearance="Appearance.Stealth"
                                               OnClick="@(() => LikeChatMessage(chatMessage))"
                                               Title="@Loc[nameof(AIAssistant.LikeMessageButtonText)]"
-                                              aria-label="@Loc[nameof(AIAssistant.LikeMessageButtonText)]">
+                                              aria-label="@Loc[nameof(AIAssistant.LikeMessageButtonText)]"
+                                              aria-pressed="@(chatMessage.IsLiked ? "true" : "false")">
                                     <FluentIcon Value="@(!chatMessage.IsLiked ? (Icon)new Icons.Regular.Size16.ThumbLike() : new Icons.Filled.Size16.ThumbLike())" Color="Color.Neutral" />
                                 </FluentButton>
                             </span>
@@ -103,7 +104,8 @@
                                 <FluentButton Appearance="Appearance.Stealth"
                                               OnClick="@(() => DislikeChatMessage(chatMessage))"
                                               Title="@Loc[nameof(AIAssistant.DislikeMessageButtonText)]"
-                                              aria-label="@Loc[nameof(AIAssistant.DislikeMessageButtonText)]">
+                                              aria-label="@Loc[nameof(AIAssistant.DislikeMessageButtonText)]"
+                                              aria-pressed="@(chatMessage.IsDisliked ? "true" : "false")">
                                     <FluentIcon Value="@(!chatMessage.IsDisliked ? (Icon)new Icons.Regular.Size16.ThumbDislike() : new Icons.Filled.Size16.ThumbDislike())" Color="Color.Neutral" />
                                 </FluentButton>
                             </span>
@@ -210,14 +212,14 @@ else
             <p>
                 @{
                     var helpText = (ChatViewModel.Launcher == KnownLaunchers.VisualStudio)
-                    ? Loc.GetString(nameof(AIAssistant.ChatRequestErrorForbiddenVisualStudio), "https://aka.ms/dotnet/aspire/copilot-vs-login")
-                    : Loc.GetString(nameof(AIAssistant.ChatRequestErrorForbiddenVSCode), "https://aka.ms/dotnet/aspire/copilot-vscode-login");
+                    ? Loc.GetString(nameof(AIAssistant.ChatRequestErrorForbiddenVisualStudio), "https://aka.ms/aspire/copilot-vs-login")
+                    : Loc.GetString(nameof(AIAssistant.ChatRequestErrorForbiddenVSCode), "https://aka.ms/aspire/copilot-vscode-login");
                 }
 
                 @((MarkupString)helpText.ToString())
             </p>
             <p>
-                @((MarkupString)Loc.GetString(nameof(AIAssistant.ChatRequestErrorForbiddenCopilotSubscription), "https://aka.ms/dotnet/aspire/copilot-free-signup").ToString())
+                @((MarkupString)Loc.GetString(nameof(AIAssistant.ChatRequestErrorForbiddenCopilotSubscription), "https://aka.ms/aspire/copilot-free-signup").ToString())
             </p>
         </div>;
     }

@@ -28,7 +28,7 @@ public class AzurePrivateEndpointResource(
     /// <summary>
     /// Gets the "name" output reference for the resource.
     /// </summary>
-    public BicepOutputReference NameOutput => new("name", this);
+    public BicepOutputReference NameOutputReference => new("name", this);
 
     /// <summary>
     /// Gets the subnet where the private endpoint will be created.
@@ -41,9 +41,9 @@ public class AzurePrivateEndpointResource(
     public IAzurePrivateEndpointTarget Target { get; } = target;
 
     /// <summary>
-    /// Gets or sets the Private DNS Zone for this endpoint.
+    /// Gets the Private DNS Zones for this endpoint.
     /// </summary>
-    internal AzurePrivateDnsZoneResource? DnsZone { get; set; }
+    internal List<AzurePrivateDnsZoneResource> DnsZones { get; } = [];
 
     /// <inheritdoc/>
     public override ProvisionableResource AddAsExistingResource(AzureResourceInfrastructure infra)
@@ -67,7 +67,7 @@ public class AzurePrivateEndpointResource(
             infra,
             endpoint))
         {
-            endpoint.Name = NameOutput.AsProvisioningParameter(infra);
+            endpoint.Name = NameOutputReference.AsProvisioningParameter(infra);
         }
 
         infra.Add(endpoint);
