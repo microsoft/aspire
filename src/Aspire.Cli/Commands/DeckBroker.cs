@@ -156,6 +156,15 @@ internal sealed class DeckBroker(ILogger<DeckBroker> logger)
         return await PostAsync(info, "unregister", body, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Brings the running Deck window to the front. Used by <c>aspire deck</c> when a hub is already
+    /// running so it focuses the existing window instead of opening a second.
+    /// </summary>
+    public async Task<bool> FocusAsync(DeckInstanceInfo info, CancellationToken cancellationToken)
+    {
+        return await PostAsync(info, "focus", "{}", cancellationToken).ConfigureAwait(false);
+    }
+
     private async Task<bool> PostAsync(DeckInstanceInfo info, string path, string jsonBody, CancellationToken cancellationToken)
     {
         try

@@ -146,5 +146,11 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DeckAttachFailed", resourceCulture);
             }
         }
+
+        public static string DeckAlreadyRunning {
+            get {
+                return ResourceManager.GetString("DeckAlreadyRunning", resourceCulture);
+            }
+        }
     }
 }

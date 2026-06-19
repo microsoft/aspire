@@ -32,6 +32,7 @@ internal sealed class DeckCommand : BaseCommand
     protected override bool UpdateNotificationsEnabled => true;
 
     private readonly DeckLauncher _deckLauncher;
+    private readonly DeckBroker _deckBroker;
     private readonly FileLoggerProvider _fileLoggerProvider;
     private readonly ILogger<DeckCommand> _logger;
 
@@ -57,12 +58,14 @@ internal sealed class DeckCommand : BaseCommand
 
     public DeckCommand(
         DeckLauncher deckLauncher,
+        DeckBroker deckBroker,
         FileLoggerProvider fileLoggerProvider,
         ILogger<DeckCommand> logger,
         CommonCommandServices services)
         : base("deck", DeckCommandStrings.Description, services)
     {
         _deckLauncher = deckLauncher;
+        _deckBroker = deckBroker;
         _fileLoggerProvider = fileLoggerProvider;
         _logger = logger;
 
@@ -74,6 +77,16 @@ internal sealed class DeckCommand : BaseCommand
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
+        // Deck is a single persistent hub. If one is already running, focus its window
+        // instead of opening a second — `aspire deck` is the way to bring it to front.
+        var existing = _deckBroker.FindRunningInstance();
+        if (existing is not null)
+        {
+            await _deckBroker.FocusAsync(existing, cancellationToken).ConfigureAwait(false);
+            InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, DeckCommandStrings.DeckAlreadyRunning);
+            return CommandResult.Success();
+        }
+
         var deckPath = _deckLauncher.ResolveExecutable(parseResult.GetValue(s_deckPathOption));
         if (deckPath is null)
         {

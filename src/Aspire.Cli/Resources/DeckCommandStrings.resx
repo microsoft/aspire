@@ -168,4 +168,7 @@
   <data name="DeckAttachFailed" xml:space="preserve">
     <value>Could not attach this AppHost to the running Aspire Deck.</value>
   </data>
+  <data name="DeckAlreadyRunning" xml:space="preserve">
+    <value>Aspire Deck is already running; brought it to the front.</value>
+  </data>
 </root>

@@ -68,12 +68,19 @@ exactly as it would with the dashboard.
 # one-time: opt into the preview command
 aspire config set features.deckCommandEnabled true
 
-# run your app with Aspire Deck substituting the dashboard
+# run your app with Aspire Deck substituting the dashboard (opens Deck on this app)
 aspire run --deck
 
-# or launch Deck standalone (wire it up yourself / attach to a running resource service)
+# open the Deck hub (focuses it if already running)
 aspire deck
 ```
+
+`aspire deck` opens the Deck hub. If a hub is already running it **focuses** that window
+instead of opening a second one. The hub shows the AppHosts attached to it — a single one is
+auto-selected; when more than one is attached the top bar shows an **AppHost switcher**.
+
+`aspire run --deck` runs the local AppHost, ensures the hub is up (launching it if needed, or
+attaching to a running one), and **auto-selects** the app you just ran so Deck opens showing it.
 
 With `aspire run --deck` the AppHost runs in **external dashboard mode**: the built-in dashboard
 process is not started, but the AppHost still hosts the resource service and exports OTLP telemetry

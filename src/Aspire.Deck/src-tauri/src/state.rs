@@ -154,12 +154,12 @@ impl AppState {
             sessions.insert(id.clone(), session.clone());
         }
 
-        // The first attached AppHost becomes the active one.
+        // The newly attached AppHost becomes the active one, so `aspire run --deck`
+        // opens Deck showing the app you just ran (and a fresh attach brings it to
+        // the front).
         {
             let mut active = self.active.lock().unwrap();
-            if active.is_none() {
-                *active = Some(id.clone());
-            }
+            *active = Some(id.clone());
         }
 
         let loop_app = self.app.clone();
@@ -171,9 +171,7 @@ impl AppState {
         *session.loop_handle.lock().unwrap() = Some(handle);
 
         self.emit_apphosts();
-        if self.is_active(&id) {
-            self.emit_active_snapshot();
-        }
+        self.emit_active_snapshot();
     }
 
     /// Unregisters (detaches) an AppHost, aborting its loop. If it was active, the

@@ -15,6 +15,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
+use tauri::Manager;
 
 use crate::config::AuthMode;
 use crate::state::AppState;
@@ -104,6 +105,29 @@ pub fn start(state: Arc<AppState>, otlp_grpc_url: String, otlp_http_url: String)
         StatusCode::OK
     }
 
+    // Lists attached AppHosts (also handy for diagnostics).
+    async fn apphosts(State(state): State<Arc<AppState>>) -> axum::Json<Vec<crate::model::AppHostInfo>> {
+        axum::Json(state.apphost_list())
+    }
+
+    // Brings Deck's window to the front. `aspire deck` calls this when a hub is
+    // already running so it focuses the existing window instead of opening a second.
+    let focus_token = token.clone();
+    let focus = move |State(state): State<Arc<AppState>>, headers: HeaderMap| {
+        let token = focus_token.clone();
+        async move {
+            if !check_token(&headers, &token) {
+                return StatusCode::UNAUTHORIZED;
+            }
+            if let Some(window) = state.app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+            StatusCode::OK
+        }
+    };
+
     let register_token = token.clone();
     let register = move |State(state): State<Arc<AppState>>, headers: HeaderMap, Json(body): Json<RegisterRequest>| {
         let token = register_token.clone();
@@ -135,6 +159,8 @@ pub fn start(state: Arc<AppState>, otlp_grpc_url: String, otlp_http_url: String)
 
     let router = Router::new()
         .route("/health", get(health))
+        .route("/apphosts", get(apphosts))
+        .route("/focus", post(focus))
         .route("/register", post(register))
         .route("/unregister", post(unregister))
         .with_state(state.clone());
