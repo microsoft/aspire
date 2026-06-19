@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTelemetry } from "../lib/useDeckEvent";
-import { formatMetricValue } from "../lib/format";
+import { formatMetricValue, displayUnit } from "../lib/format";
 import { Sparkline } from "../components/Sparkline";
 import { EmptyState } from "../components/EmptyState";
 import { MetricsIcon } from "../components/Icons";
@@ -105,14 +105,14 @@ export function MetricsPage() {
                   </span>
                   <span className="cell-muted">
                     {activeMetric.name}
-                    {activeMetric.unit ? ` (${activeMetric.unit})` : ""}
+                    {displayUnit(activeMetric.unit) ? ` (${displayUnit(activeMetric.unit)})` : ""}
                   </span>
                 </div>
                 <div className="cell-muted" style={{ fontSize: 12 }}>
                   {activeMetric.resourceName ?? "—"} · {activeMetric.pointCount.toLocaleString()} points
                 </div>
                 <div className="metric-detail__chart">
-                  <Sparkline values={activeBuffer} unit={activeMetric.unit} height={260} />
+                  <Sparkline values={activeBuffer} unit={displayUnit(activeMetric.unit)} height={260} />
                 </div>
               </>
             ) : (

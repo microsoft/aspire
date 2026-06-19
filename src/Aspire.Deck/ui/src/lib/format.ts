@@ -133,9 +133,24 @@ export function formatMetricValue(value: number | null, unit: string | null): st
       return `${(value * 100).toFixed(1)}%`;
     default: {
       const rounded = Math.abs(value) >= 100 ? value.toFixed(0) : value.toFixed(2);
-      return unit ? `${rounded} ${unit}` : rounded;
+      const u = displayUnit(unit);
+      return u ? `${rounded} ${u}` : rounded;
     }
   }
+}
+
+// Normalizes an OTLP/UCUM unit for display. UCUM "annotation" units are wrapped in
+// curly braces — e.g. "{request}", "{operation}", "{connection}" — and describe what
+// is being counted rather than a dimensional unit (the count itself is dimensionless).
+// They should not be shown as a unit suffix (Prometheus and the Aspire dashboard strip
+// them). This removes every "{...}" annotation segment (UCUM allows them anywhere, e.g.
+// "{packet}/s") and returns null when nothing dimensional remains.
+export function displayUnit(unit: string | null): string | null {
+  if (!unit) {
+    return null;
+  }
+  const stripped = unit.replace(/\{[^}]*\}/g, "").trim();
+  return stripped.length > 0 ? stripped : null;
 }
 
 export function shortId(id: string | null, length = 8): string {
