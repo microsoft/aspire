@@ -203,16 +203,16 @@ internal sealed class ProcessExecution : IProcessExecution
         {
             // Best-effort: drain the signaler so its dcp shell-out doesn't outlive us as
             // an orphan; safe because the process has already exited so dcp will return
-            // promptly. Bounded so a stuck dcp can't keep us pinned.
-            try
+            // promptly. Skip the timer allocation when the signaler already finished (the
+            // common case — it observed the same exit). SuppressThrowing swallows both the
+            // drain timeout and any signaler fault without a try/catch; bounded so a stuck
+            // dcp can't keep us pinned.
+            if (!signalTask.IsCompleted)
             {
                 using var drainCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-                await signalTask.WaitAsync(drainCts.Token).ConfigureAwait(false);
+                await signalTask.WaitAsync(drainCts.Token).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
             }
-            catch
-            {
-                // Best-effort.
-            }
+
             return;
         }
 
