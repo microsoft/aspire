@@ -12,9 +12,9 @@ namespace Aspire.Cli.Projects;
 
 /// <summary>
 /// Owns the lifetime of an AppHost server child process. Construction stashes configuration
-/// (including the stop token) without launching anything; <see cref="StartAsync"/> launches the
-/// process, wires lifecycle observation, and returns a task that completes with the process exit
-/// code.
+/// (including the stop token) without launching anything; <see cref="Start"/> synchronously
+/// launches the process and wires lifecycle observation, and <see cref="WaitForExitAsync"/>
+/// returns the task that completes with the process exit code.
 /// </summary>
 /// <remarks>
 /// The session drives the child entirely through the <see cref="IProcessExecution"/> returned by
@@ -83,25 +83,25 @@ internal sealed class AppHostServerSession : IAppHostServerSession
 
     /// <summary>
     /// Gets the authentication token injected into the server environment. Available before
-    /// <see cref="StartAsync"/> so callers can plumb it into the guest AppHost environment.
+    /// <see cref="Start"/> so callers can plumb it into the guest AppHost environment.
     /// </summary>
     public string AuthenticationToken => _authenticationToken;
 
     /// <summary>
-    /// Gets the RPC socket path, or <see langword="null"/> if <see cref="StartAsync"/> has not
+    /// Gets the RPC socket path, or <see langword="null"/> if <see cref="Start"/> has not
     /// been called (or threw before the process was published).
     /// </summary>
     public string? SocketPath => _socketPath;
 
     /// <summary>
     /// Gets the output collector for the server's stdout/stderr, or <see langword="null"/> if
-    /// <see cref="StartAsync"/> has not been called (or threw before the process was published).
+    /// <see cref="Start"/> has not been called (or threw before the process was published).
     /// </summary>
     public OutputCollector? Output => _output;
 
     /// <summary>
     /// Gets whether the underlying AppHost server process has exited, or <see langword="null"/>
-    /// if <see cref="StartAsync"/> has not been called (or threw before the process was
+    /// if <see cref="Start"/> has not been called (or threw before the process was
     /// published). Routes through the <see cref="IProcessExecution"/>, which encapsulates the
     /// isolated Windows spawn quirk (the underlying Process is obtained via
     /// <see cref="System.Diagnostics.Process.GetProcessById(int)"/>); see
@@ -132,24 +132,24 @@ internal sealed class AppHostServerSession : IAppHostServerSession
 
     /// <summary>
     /// Gets the underlying server process id for read-only observation, or <see langword="null"/>
-    /// if <see cref="StartAsync"/> has not been called (or threw before the process was published).
+    /// if <see cref="Start"/> has not been called (or threw before the process was published).
     /// Prefer <see cref="HasServerExited"/> for has-exited checks and
     /// <see cref="TryGetServerExitCode"/> for exit-code reads.
     /// </summary>
     public int? ServerProcessId => _execution?.ProcessId;
 
     /// <summary>
-    /// Launches the AppHost server process. The returned task completes with the process exit
-    /// code when the process exits (either on its own, or because the stop token supplied to the
-    /// constructor was cancelled and the session ran the shutdown ladder).
+    /// Synchronously launches the AppHost server process and wires lifecycle observation. Returns
+    /// once the process has been spawned and its socket path and PID are published (the process then
+    /// runs in the background). Use <see cref="WaitForExitAsync"/> to observe the exit code.
     /// </summary>
-    /// <exception cref="InvalidOperationException">Thrown if <see cref="StartAsync"/> has already been called.</exception>
+    /// <exception cref="InvalidOperationException">Thrown if <see cref="Start"/> has already been called.</exception>
     /// <exception cref="ObjectDisposedException">Thrown if the session has been disposed.</exception>
-    public Task<int> StartAsync()
+    public void Start()
     {
         // Hold _startGate across the entire startup body — env build, _project.Run, field
         // publication, and drive-loop start. DisposeAsync's top-of-method lock then either runs
-        // before us (and StartAsync sees _disposed and throws) or after us (and Dispose sees a
+        // before us (and Start sees _disposed and throws) or after us (and Dispose sees a
         // fully-published execution + run task). Without this widening there is a window between
         // _project.Run returning and the run task starting where a concurrent Dispose would orphan
         // the just-launched process. Every operation below is synchronous, so a Monitor lock is
@@ -227,16 +227,28 @@ internal sealed class AppHostServerSession : IAppHostServerSession
             // Process is obtained via Process.GetProcessById and its StartInfo is empty, so the
             // execution captured these at spawn time instead.
             _activity.SetProcessInvocation(result.Execution.FileName, result.Execution.Arguments);
-
-            return completion.Task;
         }
+    }
+
+    /// <summary>
+    /// Returns the task that completes with the process exit code when the server exits — either on
+    /// its own, or because the stop token supplied to the constructor was cancelled (or the session
+    /// was disposed) and the shutdown ladder ran. Returns the same task on every call.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown if <see cref="Start"/> has not been called.</exception>
+    public Task<int> WaitForExitAsync()
+    {
+        // The completion is the lifetime signal published by Start; DriveAsync trips it (never the
+        // raw run task, which is hardened to never throw). Hand back the same task each call so a
+        // caller can capture it, poll IsCompleted, and await it without spawning new tasks.
+        return (_completion ?? throw NotStarted()).Task;
     }
 
     // Owns the single WaitForExitAsync call for the child. On normal exit it trips the completion
     // with the exit code. On cancellation (external stop OR DisposeAsync), the execution runs the
     // shared shutdown ladder from inside WaitForExitAsync and ALWAYS rethrows OCE even when the
     // ladder cleanly exited the process — so we read the (now-exited or killed) exit code and trip
-    // the completion with it. This preserves the "StartAsync always completes with an int, never
+    // the completion with it. This preserves the "WaitForExitAsync always completes with an int, never
     // surfaces OCE" contract that GuestAppHostProject and the codegen path depend on.
     private static async Task DriveAsync(IProcessExecution execution, TaskCompletionSource<int> completion, CancellationToken stopToken)
     {
@@ -255,7 +267,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     }
 
     /// <summary>
-    /// Returns an RPC client connected to the server. Must be called after <see cref="StartAsync"/>.
+    /// Returns an RPC client connected to the server. Must be called after <see cref="Start"/>.
     /// </summary>
     public async Task<IAppHostRpcClient> GetRpcClientAsync(CancellationToken cancellationToken)
     {
@@ -267,7 +279,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         }
 
         var socketPath = _socketPath ?? throw NotStarted();
-        // _completion is published alongside _socketPath in StartAsync, so a non-null socket
+        // _completion is published alongside _socketPath in Start, so a non-null socket
         // path guarantees the server-exit signal is available here.
         var serverExitTask = (_completion ?? throw NotStarted()).Task;
 
@@ -350,7 +362,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         }
 
         // Observe the completion task unconditionally to prevent UnobservedTaskException if
-        // StartAsync's _project.Run threw synchronously and faulted the completion before the
+        // Start's _project.Run threw synchronously and faulted the completion before the
         // execution was published. When the process did start, DriveAsync has already tripped this.
         if (_completion is { } completion)
         {
@@ -360,7 +372,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
             }
             catch
             {
-                // Exceptions surface to the StartAsync caller; swallow during disposal.
+                // Exceptions surface to the Start caller; swallow during disposal.
             }
         }
 
@@ -408,5 +420,5 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     }
 
     private static InvalidOperationException NotStarted() =>
-        new($"{nameof(AppHostServerSession)} has not been started. Call {nameof(StartAsync)} first.");
+        new($"{nameof(AppHostServerSession)} has not been started. Call {nameof(Start)} first.");
 }

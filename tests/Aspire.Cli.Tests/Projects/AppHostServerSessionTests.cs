@@ -25,7 +25,7 @@ namespace Aspire.Cli.Tests.Projects;
 public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
 {
     [Fact]
-    public async Task StartAsync_DoesNotMutateCallerEnvironmentVariables()
+    public async Task Start_DoesNotMutateCallerEnvironmentVariables()
     {
         var project = new RecordingAppHostServerProject();
         var environmentVariables = new Dictionary<string, string>
@@ -39,7 +39,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             debug: false,
             NullLogger<AppHostServerSession>.Instance,
             CancellationToken.None);
-        _ = session.StartAsync();
+        session.Start();
 
         Assert.Equal("present", environmentVariables["EXISTING_VALUE"]);
         Assert.False(environmentVariables.ContainsKey(KnownConfigNames.RemoteAppHostToken));
@@ -50,7 +50,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task StartAsync_PropagatesProfilingContextToServerEnvironment()
+    public async Task Start_PropagatesProfilingContextToServerEnvironment()
     {
         var project = new RecordingAppHostServerProject();
         var environmentVariables = new Dictionary<string, string>
@@ -69,7 +69,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             NullLogger<AppHostServerSession>.Instance,
             CancellationToken.None,
             profilingTelemetry);
-        _ = session.StartAsync();
+        session.Start();
 
         Assert.Equal("present", environmentVariables["EXISTING_VALUE"]);
         Assert.False(environmentVariables.ContainsKey(KnownConfigNames.RemoteAppHostToken));
@@ -89,7 +89,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task StartAsync_DoesNotLeaveServerProcessActivityAmbient()
+    public async Task Start_DoesNotLeaveServerProcessActivityAmbient()
     {
         var project = new RecordingAppHostServerProject();
         using var parentSource = new ActivitySource("test-apphost-server-parent");
@@ -109,7 +109,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             NullLogger<AppHostServerSession>.Instance,
             CancellationToken.None,
             profilingTelemetry);
-        _ = session.StartAsync();
+        session.Start();
 
         Assert.Same(parentActivity, Activity.Current);
 
@@ -146,7 +146,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             debug: false,
             NullLogger<AppHostServerSession>.Instance,
             CancellationToken.None);
-        _ = session.StartAsync();
+        session.Start();
 
         // Wait for the process to exit so the stopwatch measures only the early-exit detection
         // latency, not the variable execution time of "dotnet --version" on loaded CI machines.
@@ -183,7 +183,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task StartAsync_CalledTwice_Throws()
+    public async Task Start_CalledTwice_Throws()
     {
         var project = new RecordingAppHostServerProject();
         await using var session = new AppHostServerSession(
@@ -193,13 +193,13 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             NullLogger<AppHostServerSession>.Instance,
             CancellationToken.None);
 
-        _ = session.StartAsync();
+        session.Start();
 
-        Assert.Throws<InvalidOperationException>(() => { _ = session.StartAsync(); });
+        Assert.Throws<InvalidOperationException>(session.Start);
     }
 
     [Fact]
-    public async Task StartAsync_StopRequested_KillsProcessAndCompletesTask()
+    public async Task Start_StopRequested_KillsProcessAndCompletesTask()
     {
         var project = new LongRunningAppHostServerProject();
         using var stopCts = new CancellationTokenSource();
@@ -210,7 +210,8 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             NullLogger<AppHostServerSession>.Instance,
             stopCts.Token);
 
-        var completion = session.StartAsync();
+        session.Start();
+        var completion = session.WaitForExitAsync();
 
         // Process should be running before we ask the session to stop.
         Assert.False(completion.IsCompleted);
@@ -226,7 +227,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task StartAsync_StopRequested_WithGracefulServices_InvokesGracefulSignalerAndExits()
+    public async Task Start_StopRequested_WithGracefulServices_InvokesGracefulSignalerAndExits()
     {
         // External-stop flow with graceful infra wired: the session's ladder must invoke the
         // injected graceful signaler before falling through to wait-for-exit. Simulating "graceful
@@ -262,7 +263,8 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             gracefulShutdownSignaler: signaler,
             shutdownService: shutdownService);
 
-        var completion = session.StartAsync();
+        session.Start();
+        var completion = session.WaitForExitAsync();
         Assert.False(completion.IsCompleted);
         var serverPid = session.ServerProcessId!.Value;
 
@@ -278,7 +280,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task StartAsync_StopRequested_GracefulIgnored_ExpireEscalatesToTreeKill()
+    public async Task Start_StopRequested_GracefulIgnored_ExpireEscalatesToTreeKill()
     {
         // External stop fires, the fake signaler accepts the request but the process refuses to
         // exit (simulating a child that ignores SIGTERM/Ctrl+C). Expiring the central token must
@@ -309,7 +311,8 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             gracefulShutdownSignaler: signaler,
             shutdownService: shutdownService);
 
-        var completion = session.StartAsync();
+        session.Start();
+        var completion = session.WaitForExitAsync();
         Assert.False(completion.IsCompleted);
 
         stopCts.Cancel();
@@ -327,7 +330,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task StartAsync_StopRequested_GracefulSignalerThrows_StillEscalatesToKill()
+    public async Task Start_StopRequested_GracefulSignalerThrows_StillEscalatesToKill()
     {
         // Best-effort contract: a thrown exception from the signaler (e.g. DCP layout discovery
         // failed, network blip, anything) must not strand the kill ladder. The ladder logs and
@@ -352,7 +355,8 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             gracefulShutdownSignaler: signaler,
             shutdownService: shutdownService);
 
-        var completion = session.StartAsync();
+        session.Start();
+        var completion = session.WaitForExitAsync();
         Assert.False(completion.IsCompleted);
 
         stopCts.Cancel();
@@ -387,7 +391,8 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             gracefulShutdownSignaler: signaler,
             shutdownService: shutdownService);
 
-        var completion = session.StartAsync();
+        session.Start();
+        var completion = session.WaitForExitAsync();
         Assert.False(completion.IsCompleted);
         var pid = session.ServerProcessId!.Value;
         Assert.False(session.HasServerExited);
@@ -407,7 +412,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task StartAsync_ProcessExitsNaturally_CompletionReturnsExitCode()
+    public async Task Start_ProcessExitsNaturally_CompletionReturnsExitCode()
     {
         var project = new RecordingAppHostServerProject();
         await using var session = new AppHostServerSession(
@@ -417,12 +422,13 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             NullLogger<AppHostServerSession>.Instance,
             CancellationToken.None);
 
-        var exitCode = await session.StartAsync().WaitAsync(TimeSpan.FromSeconds(30));
+        session.Start();
+        var exitCode = await session.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(30));
         Assert.Equal(0, exitCode);
     }
 
     [Fact]
-    public async Task StartAsync_ProjectRunThrows_DisposesProjectAndFaultsCompletion()
+    public async Task Start_ProjectRunThrows_DisposesProjectAndFaultsCompletion()
     {
         var project = new ThrowingAppHostServerProject();
 
@@ -447,10 +453,10 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             // completion task alive and UnobservedTaskException never fires.
             await RunScenarioAsync(project);
 
-            // DisposeAsync must observe the faulted completion task created by StartAsync's catch
+            // DisposeAsync must observe the faulted completion task created by Start's catch
             // path. Otherwise the orphaned faulted task surfaces as an UnobservedTaskException once
             // GC reaps the TaskCompletionSource — silent corruption for short-lived RPC callers
-            // that intentionally discard the StartAsync result.
+            // that intentionally never call WaitForExitAsync.
             GC.Collect();
             GC.WaitForPendingFinalizers();
             GC.Collect();
@@ -472,7 +478,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
                 NullLogger<AppHostServerSession>.Instance,
                 CancellationToken.None);
 
-            Assert.Throws<InvalidOperationException>(() => { _ = session.StartAsync(); });
+            Assert.Throws<InvalidOperationException>(session.Start);
 
             await session.DisposeAsync();
         }
