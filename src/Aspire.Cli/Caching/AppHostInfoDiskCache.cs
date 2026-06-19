@@ -328,10 +328,10 @@ internal sealed class AppHostInfoDiskCache : IAppHostInfoDiskCache
         }
     }
 
-    // Normalize path casing on case-insensitive filesystems so differently-cased paths
-    // (for example, `c:\...` vs `C:\...`) resolve to the same cache key. This prevents
-    // cache misses between callers that supply different casing for the same project path.
-    // Match ProjectLocator's pathComparison convention: Windows/macOS insensitive, Linux sensitive.
+    // Normalize the Windows drive-letter casing so the same physical project resolves to one cache
+    // key regardless of how the drive was cased by the caller (for example, `c:\...` from VS Code
+    // vs `C:\...` from a terminal). Only the drive letter is normalized — the rest of the path is
+    // left as-is, and no normalization happens off Windows.
     private static string NormalizePathForHash(string path)
     {
         var canonical = Path.TrimEndingDirectorySeparator(path);

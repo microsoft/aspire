@@ -251,15 +251,16 @@ public class AppHostInfoDiskCacheTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void ComputeKey_IsCaseInsensitiveForProjectPathOnCaseInsensitiveFilesystems()
+    public void ComputeKey_IsCaseInsensitiveForDriveLetterOnWindows()
     {
         // On Windows the same physical project is reached through paths that differ only by drive
         // casing — VS Code launches the CLI with a lowercase drive letter ("c:\...") while a
         // terminal uses an uppercase one ("C:\..."). Both must derive the same cache key, otherwise
         // a terminal-populated entry is invisible to the extension's no-evaluate read and the
-        // AppHost stays "possibly-buildable". Only assert on case-insensitive filesystems; on
-        // case-sensitive ones (Linux) the differently-cased path is a genuinely different file.
-        if (!OperatingSystem.IsWindows() && !OperatingSystem.IsMacOS())
+        // AppHost stays "possibly-buildable". NormalizePathForHash only normalizes the drive letter
+        // (not the rest of the path), so this only applies on Windows; flip just the drive letter
+        // here to mirror the real c:\ vs C:\ scenario.
+        if (!OperatingSystem.IsWindows())
         {
             return;
         }
@@ -267,8 +268,12 @@ public class AppHostInfoDiskCacheTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var projectFile = CreateProjectFile(workspace);
 
-        var keyLower = AppHostInfoDiskCache.ComputeKeyAsync(new FileInfo(projectFile.FullName.ToLowerInvariant()));
-        var keyUpper = AppHostInfoDiskCache.ComputeKeyAsync(new FileInfo(projectFile.FullName.ToUpperInvariant()));
+        var fullPath = projectFile.FullName;
+        var lowerDrivePath = char.ToLowerInvariant(fullPath[0]) + fullPath[1..];
+        var upperDrivePath = char.ToUpperInvariant(fullPath[0]) + fullPath[1..];
+
+        var keyLower = AppHostInfoDiskCache.ComputeKeyAsync(new FileInfo(lowerDrivePath));
+        var keyUpper = AppHostInfoDiskCache.ComputeKeyAsync(new FileInfo(upperDrivePath));
         Assert.Equal(keyLower, keyUpper);
     }
 
