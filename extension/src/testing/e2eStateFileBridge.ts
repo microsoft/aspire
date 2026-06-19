@@ -350,7 +350,8 @@ async function executeE2eControlCommand(
       const element = getEndpointElement(appHostTreeProvider, command);
       const commandPromise = vscode.commands.executeCommand('aspire-vscode.openInIntegratedBrowser', element);
       markStarted();
-      return await commandPromise;
+      await commandPromise;
+      return { url: command.url };
     }
     case 'stopResource': {
       const element = getResourceElement(appHostTreeProvider, command.resourceName, command.appHostPath);

@@ -14,6 +14,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Channels;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Dcp;
@@ -4014,6 +4015,88 @@ public class DcpExecutorTests
     }
 
     [Fact]
+    public async Task MauiProjectWithExecutableAnnotationAndSupportedLaunchConfiguration_RunsInIdeWithLaunchMetadata()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
+        var annotationToRemove = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
+        if (annotationToRemove is not null)
+        {
+            projectBuilder.Resource.Annotations.Remove(annotationToRemove);
+        }
+        projectBuilder
+            .WithAnnotation(new ExecutableAnnotation
+            {
+                Command = "dotnet",
+                WorkingDirectory = "/tmp/mauiapp"
+            })
+            .WithDebugSupport(mode => new TestMauiLaunchConfiguration
+            {
+                Mode = mode,
+                ProjectPath = "/tmp/mauiapp/MauiApp.csproj",
+                TargetFramework = "net10.0-android",
+                Platform = "android",
+                TargetKind = "emulator",
+                MsBuildProperties = new Dictionary<string, string>
+                {
+                    ["AdbTarget"] = "-e"
+                }
+            }, "maui")
+            .WithArgs("run", "-f", "net10.0-android", "-p:AdbTarget=-e");
+
+        var runSessionInfo = new RunSessionInfo
+        {
+            ProtocolsSupported = ["coreclr"],
+            SupportedLaunchConfigurations = ["maui"]
+        };
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(runSessionInfo),
+            [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234",
+            [KnownConfigNames.DebugSessionRunMode] = "Debug"
+        };
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var distributedApplicationOptions = new DistributedApplicationOptions { AssemblyName = typeof(DcpExecutorTests).Assembly.FullName };
+        var expectedConfiguration = System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyConfigurationAttribute>(typeof(DcpExecutorTests).Assembly)?.Configuration;
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration, distributedApplicationOptions: distributedApplicationOptions);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "proj");
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+        Assert.Equal("dotnet", exe.Spec.ExecutablePath);
+        Assert.Equal("/tmp/mauiapp", exe.Spec.WorkingDirectory);
+        Assert.NotNull(exe.Spec.FallbackExecutionTypes);
+        Assert.Equal(ExecutionType.Process, Assert.Single(exe.Spec.FallbackExecutionTypes!));
+        var expectedArgs = new List<string> { "run" };
+        if (!string.IsNullOrEmpty(expectedConfiguration))
+        {
+            expectedArgs.AddRange(["--configuration", expectedConfiguration]);
+        }
+        expectedArgs.Add("--no-launch-profile");
+        expectedArgs.AddRange(["-f", "net10.0-android", "-p:AdbTarget=-e"]);
+        Assert.Equal(expectedArgs, exe.Spec.Args);
+
+        Assert.True(exe.TryGetAnnotationAsObjectList<TestMauiLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var launchConfigs));
+        var launchConfig = Assert.Single(launchConfigs);
+        Assert.Equal("maui", launchConfig.Type);
+        Assert.Equal(ExecutableLaunchMode.Debug, launchConfig.Mode);
+        Assert.Equal("/tmp/mauiapp/MauiApp.csproj", launchConfig.ProjectPath);
+        Assert.Equal("net10.0-android", launchConfig.TargetFramework);
+        Assert.Equal("android", launchConfig.Platform);
+        Assert.Equal("emulator", launchConfig.TargetKind);
+        Assert.Equal("-e", launchConfig.MsBuildProperties!["AdbTarget"]);
+    }
+
+    [Fact]
     public async Task ProjectWithNonProjectAnnotationAndExecutableAnnotation_LaunchProfileArgsStayAfterDotnetRunArgs()
     {
         var builder = DistributedApplication.CreateBuilder();
@@ -5880,6 +5963,28 @@ public class DcpExecutorTests
     {
         public string ProjectPath => "TestProject";
         public LaunchSettings LaunchSettings { get; } = new();
+    }
+
+    private sealed class TestMauiLaunchConfiguration : ExecutableLaunchConfiguration
+    {
+        public TestMauiLaunchConfiguration() : base("maui")
+        {
+        }
+
+        [JsonPropertyName("project_path")]
+        public string ProjectPath { get; set; } = string.Empty;
+
+        [JsonPropertyName("target_framework")]
+        public string TargetFramework { get; set; } = string.Empty;
+
+        [JsonPropertyName("platform")]
+        public string Platform { get; set; } = string.Empty;
+
+        [JsonPropertyName("target_kind")]
+        public string TargetKind { get; set; } = string.Empty;
+
+        [JsonPropertyName("msbuild_properties")]
+        public Dictionary<string, string>? MsBuildProperties { get; set; }
     }
 
     private sealed class TestProjectWithLaunchSettings : IProjectMetadata

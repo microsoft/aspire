@@ -495,12 +495,23 @@ function hasStructuredBuildMetadata(launchConfig: MauiLaunchConfiguration): bool
         (launchConfig.msbuild_properties !== undefined && Object.keys(launchConfig.msbuild_properties).length > 0);
 }
 
-function applyDotnetRunArgumentsToMauiConfiguration(args: string[] | undefined, debugConfiguration: AspireResourceExtendedDebugConfiguration, applyBuildProperties: boolean): void {
+function getMsBuildPropertyKey(properties: Map<string, string>, propertyName: string): string | undefined {
+    const normalizedPropertyName = propertyName.toLowerCase();
+    for (const key of properties.keys()) {
+        if (key.toLowerCase() === normalizedPropertyName) {
+            return key;
+        }
+    }
+
+    return undefined;
+}
+
+function applyDotnetRunArgumentsToMauiConfiguration(args: string[] | undefined, debugConfiguration: AspireResourceExtendedDebugConfiguration, overwriteBuildProperties: boolean): void {
     if (!args?.length) {
         return;
     }
 
-    const msbuildProperties = applyBuildProperties ? getMsBuildProperties(debugConfiguration) : undefined;
+    const msbuildProperties = getMsBuildProperties(debugConfiguration);
     for (let i = 0; i < args.length; i++) {
         const arg = args[i];
         if (arg === '--') {
@@ -514,15 +525,17 @@ function applyDotnetRunArgumentsToMauiConfiguration(args: string[] | undefined, 
             if (separator > 0) {
                 const propertyName = property.slice(0, separator);
                 const propertyValue = property.slice(separator + 1);
-                if (applyBuildProperties) {
-                    msbuildProperties!.set(propertyName, propertyValue);
+                const existingPropertyKey = getMsBuildPropertyKey(msbuildProperties, propertyName);
+                const shouldApplyBuildProperty = overwriteBuildProperties || !existingPropertyKey;
+                if (shouldApplyBuildProperty) {
+                    msbuildProperties.set(propertyName, propertyValue);
                 }
                 switch (propertyName.toLowerCase()) {
                     case 'configuration':
                         setConfiguration(debugConfiguration, propertyValue);
                         break;
                     case 'runtimeidentifier':
-                        if (applyBuildProperties) {
+                        if (shouldApplyBuildProperty && (overwriteBuildProperties || !debugConfiguration.runtimeIdentifier)) {
                             debugConfiguration.runtimeIdentifier = propertyValue;
                         }
                         break;
@@ -543,23 +556,23 @@ function applyDotnetRunArgumentsToMauiConfiguration(args: string[] | undefined, 
         }
 
         if ((arg === '-r' || arg === '--runtime') && args[i + 1]) {
-            if (applyBuildProperties) {
-                debugConfiguration.runtimeIdentifier = args[++i];
+            const runtimeIdentifier = args[++i];
+            if (overwriteBuildProperties || !debugConfiguration.runtimeIdentifier) {
+                debugConfiguration.runtimeIdentifier = runtimeIdentifier;
             }
             continue;
         }
 
         const runtimePrefix = arg.startsWith('-r:') ? '-r:' : arg.startsWith('--runtime=') ? '--runtime=' : undefined;
         if (runtimePrefix) {
-            if (applyBuildProperties) {
-                debugConfiguration.runtimeIdentifier = arg.slice(runtimePrefix.length);
+            const runtimeIdentifier = arg.slice(runtimePrefix.length);
+            if (overwriteBuildProperties || !debugConfiguration.runtimeIdentifier) {
+                debugConfiguration.runtimeIdentifier = runtimeIdentifier;
             }
         }
     }
 
-    if (msbuildProperties) {
-        setMsBuildProperties(debugConfiguration, msbuildProperties);
-    }
+    setMsBuildProperties(debugConfiguration, msbuildProperties);
 }
 
 function applyMacCatalystEnvironmentOverlay(env: EnvVar[], debugConfiguration: AspireResourceExtendedDebugConfiguration): void {

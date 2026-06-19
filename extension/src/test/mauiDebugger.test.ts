@@ -1,4 +1,5 @@
 import * as assert from 'assert';
+import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { getSupportedCapabilities } from '../capabilities';
@@ -374,7 +375,7 @@ suite('MAUI Debugger Extension Tests', () => {
 
         const updates: Array<{ key: string; value: unknown; target: vscode.ConfigurationTarget | boolean | null | undefined }> = [];
         const getConfigurationStub = sinon.stub(vscode.workspace, 'getConfiguration').callsFake((_section?: string, scope?: vscode.ConfigurationScope | null) => {
-            assert.strictEqual(scope instanceof vscode.Uri ? scope.fsPath : undefined, '/workspace/MauiApp/MauiApp.csproj');
+            assert.strictEqual(scope instanceof vscode.Uri ? path.normalize(scope.fsPath) : undefined, path.normalize('/workspace/MauiApp/MauiApp.csproj'));
 
             return {
                 get: (key: string, defaultValue?: unknown) => key === 'maui.configuration.useLaunchJsonConfigurations' ? false : defaultValue,
@@ -1065,7 +1066,7 @@ suite('MAUI Debugger Extension Tests', () => {
         });
     });
 
-    test('uses structured Android launch metadata without parsing fallback dotnet run arguments', async () => {
+    test('uses structured Android launch metadata while preserving generated fallback MSBuild properties', async () => {
         installMauiExtensionStub();
         useMauiDeviceListProviderForTests(async () => [
             {
@@ -1103,7 +1104,7 @@ suite('MAUI Debugger Extension Tests', () => {
 
         await debuggerExtension.createDebugSessionConfigurationCallback!(
             launchConfig,
-            ['run', '-f', 'net10.0-android', '-p:AdbTarget=-e'],
+            ['run', '-f', 'net10.0-android', '-p:AdbTarget=-e', '-p:CustomAfterMicrosoftCommonTargets=/tmp/maui-env.targets'],
             [],
             { debug: true, runId: 'structured-android-device', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession },
             debugConfig);
@@ -1112,6 +1113,7 @@ suite('MAUI Debugger Extension Tests', () => {
         assert.strictEqual(debugConfig.debugTarget, undefined);
         assertMsBuildProperties(debugConfig, {
             AdbTarget: '-s physical-device',
+            CustomAfterMicrosoftCommonTargets: '/tmp/maui-env.targets',
         });
     });
 
