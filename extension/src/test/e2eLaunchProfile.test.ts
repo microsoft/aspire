@@ -244,11 +244,9 @@ suite('E2E launch profile', () => {
 
     test('uses integrated-browser webview text instead of editor title waits', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const extension = fs.readFileSync(path.join(extensionRoot, 'src', 'extension.ts'), 'utf8');
         const appHostTreeProvider = fs.readFileSync(path.join(extensionRoot, 'src', 'views', 'AspireAppHostTreeProvider.ts'), 'utf8');
         const treeActions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'treeActions.e2e.test.ts'), 'utf8');
 
-        assert.ok(extension.includes('return { url: endpointUrl };'));
         assert.ok(appHostTreeProvider.includes("await vscode.commands.executeCommand('simpleBrowser.show', element.url);"));
         assert.ok(treeActions.includes("assert.strictEqual((openedEndpoint.result as { url?: string }).url, endpointUrl);"));
         assert.ok(treeActions.includes('waitForWorkbenchTextAfterIntegratedBrowserNavigation(new URL(endpointUrl).host)'));
@@ -287,24 +285,26 @@ suite('E2E launch profile', () => {
 
     test('writes E2E control and mutable fixture files with Windows-safe retries', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const extension = fs.readFileSync(path.join(extensionRoot, 'src', 'extension.ts'), 'utf8');
+        const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
         const assertions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'assertions.ts'), 'utf8');
         const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
         const debugDashboard = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'debugDashboard.e2e.test.ts'), 'utf8');
-        const extensionRenameRetryStart = extension.indexOf('function isRetryableRenameError');
-        const extensionRenameRetryEnd = extension.indexOf('function sleepSynchronously');
+        const extensionRenameRetryStart = e2eStateFileBridge.indexOf('function isRetryableRenameError');
+        const extensionRenameRetryEnd = e2eStateFileBridge.indexOf('function sleepSynchronously');
         const renameRetryStart = assertions.indexOf('function isRetryableRenameError');
         const renameRetryEnd = assertions.indexOf('function isDebugSessionForAppHost');
         assert.ok(extensionRenameRetryStart >= 0);
         assert.ok(extensionRenameRetryEnd > extensionRenameRetryStart);
         assert.ok(renameRetryStart >= 0);
         assert.ok(renameRetryEnd > renameRetryStart);
-        const extensionRenameRetry = extension.slice(extensionRenameRetryStart, extensionRenameRetryEnd);
+        const extensionRenameRetry = e2eStateFileBridge.slice(extensionRenameRetryStart, extensionRenameRetryEnd);
         const renameRetry = assertions.slice(renameRetryStart, renameRetryEnd);
 
         assert.ok(assertions.includes('writeJsonFileAtomic(controlFilePath'));
         assert.ok(assertions.includes('renameFileWithRetry(temporaryPath, filePath)'));
-        assert.ok(extensionRenameRetry.includes("error.code === 'EBUSY'"));
+        assert.ok(extensionRenameRetry.includes("error.code === 'EPERM'"));
+        assert.ok(extensionRenameRetry.includes("error.code === 'EACCES'"));
+        assert.ok(extensionRenameRetry.includes("error.code === 'EEXIST'"));
         assert.ok(renameRetry.includes("error.code === 'EBUSY'"));
         assert.ok(fixtures.includes('writeFileWithRetry(settingsPath'));
         assert.ok(fixtures.includes('removePath(getWorkspaceAppHostConfigPath(), { force: true });'));

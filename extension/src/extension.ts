@@ -17,6 +17,7 @@ import { AspireDebugConfigurationProvider } from './debugger/AspireDebugConfigur
 import { AspireExtensionContext } from './AspireExtensionContext';
 import AspireRpcServer, { RpcServerConnectionInfo } from './server/AspireRpcServer';
 import AspireDcpServer from './dcp/AspireDcpServer';
+import { TestRunSessionManager } from './dcp/TestRunSessionManager';
 import { configureLaunchJsonCommand } from './commands/configureLaunchJson';
 import { AspireTerminalProvider, shellArg } from './utils/AspireTerminalProvider';
 import { MessageConnection } from 'vscode-jsonrpc';
@@ -41,9 +42,9 @@ import { createResourceCommandArgumentLoader } from './views/ResourceCommandArgu
 import { ResourceCommandJson } from './views/AppHostDataRepository';
 import { AppHostDiscoveryService } from './utils/appHostDiscovery';
 import { AppHostLaunchService } from './services/AppHostLaunchService';
-import { createStateSnapshot, getDashboardUrl } from './extensionState';
+import { cloneAppHostState, createStateSnapshot, getDashboardUrl } from './extensionState';
 import { createE2eStateFileBridge, isE2eBridgeEnabled } from './testing/e2eStateFileBridge';
-import type { AspireExtensionApi, AspireExtensionStateSnapshot, WaitForStateOptions } from './types/extensionApi';
+import type { AspireAppHostState, AspireExtensionApi, AspireExtensionStateSnapshot, WaitForStateOptions } from './types/extensionApi';
 import { AppHostsViewTelemetry } from './views/AppHostsViewTelemetry';
 
 let aspireExtensionContext = new AspireExtensionContext();
@@ -54,6 +55,7 @@ export async function activate(context: vscode.ExtensionContext) {
   initializeTelemetry(context);
 
   const terminalProvider = new AspireTerminalProvider(context.subscriptions);
+  const testRunSessionManager = new TestRunSessionManager();
 
   const rpcServer = await AspireRpcServer.create(
     (rpcServerConnectionInfo: RpcServerConnectionInfo, connection: MessageConnection, token: string, debugSessionId: string | null) => {
@@ -72,6 +74,8 @@ export async function activate(context: vscode.ExtensionContext) {
       onRunSessionAccepted: () => engagement?.recordDebugSession(),
     },
   );
+
+  testRunSessionManager.initializeConnectionInfo(dcpServer.connectionInfo);
 
   terminalProvider.rpcServerConnectionInfo = rpcServer.connectionInfo;
   terminalProvider.dcpServerConnectionInfo = dcpServer.connectionInfo;
@@ -311,6 +315,14 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(vscode.debug.registerDebugAdapterDescriptorFactory('aspire', new AspireDebugAdapterDescriptorFactory(rpcServer, dcpServer, terminalProvider, aspireExtensionContext.addAspireDebugSession.bind(aspireExtensionContext), aspireExtensionContext.removeAspireDebugSession.bind(aspireExtensionContext))));
+  context.subscriptions.push(testRunSessionManager.listenForLeasedDebugSessions({
+    rpcServer,
+    dcpServer,
+    terminalProvider,
+    addAspireDebugSession: aspireExtensionContext.addAspireDebugSession.bind(aspireExtensionContext),
+    removeAspireDebugSession: aspireExtensionContext.removeAspireDebugSession.bind(aspireExtensionContext),
+    getAspireDebugSession: aspireExtensionContext.getAspireDebugSession.bind(aspireExtensionContext),
+  }));
 
   aspireExtensionContext.initialize(rpcServer, context, debugConfigProvider, dcpServer, terminalProvider, editorCommandProvider);
 
@@ -366,7 +378,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const e2eStateFileBridge = createE2eStateFileBridge(context, aspireExtensionContext, dataRepository, appHostLaunchService, appHostTreeProvider, terminalProvider, onDidChangeStateEmitter.event);
   context.subscriptions.push(e2eStateFileBridge);
 
-  const api = createExtensionApi(context, rpcServer, dcpServer, dataRepository, appHostLaunchService, appHostTreeProvider, onDidChangeStateEmitter.event);
+  const api = createExtensionApi(context, rpcServer, dcpServer, testRunSessionManager, dataRepository, appHostLaunchService, appHostTreeProvider, onDidChangeStateEmitter.event);
 
   return Object.freeze(api);
 }
@@ -415,6 +427,7 @@ function createExtensionApi(
   context: vscode.ExtensionContext,
   rpcServer: AspireRpcServer,
   dcpServer: AspireDcpServer,
+  testRunSessionManager: TestRunSessionManager,
   dataRepository: AppHostDataRepository,
   appHostLaunchService: AppHostLaunchService,
   appHostTreeProvider: AspireAppHostTreeProvider,
@@ -447,7 +460,7 @@ function createExtensionApi(
   };
 
   const api: AspireExtensionApi & { __testOnlyRpcServerInfo?: RpcServerConnectionInfo } = {
-    apiVersion: 1,
+    apiVersion: 2,
     rpcServerInfo: { address: rpcServer.connectionInfo.address },
     dcpServerInfo: { address: dcpServer.connectionInfo.address },
     logDirectory: context.logUri.fsPath,
@@ -458,6 +471,18 @@ function createExtensionApi(
     waitForState,
     waitForRepositoryIdle: options => waitForState(state => !state.isRepositoryLoading && state.isWorkspaceAppHostDiscoveryComplete, options),
     getDashboardUrl: appHostPath => getDashboardUrl(dataRepository, appHostPath),
+    async getRunningAppHosts(): Promise<readonly AspireAppHostState[]> {
+      const appHosts = await dataRepository.fetchAppHostsOnce();
+      return appHosts.map(appHost => cloneAppHostState(appHost, false));
+    },
+    async stopResource(resourceName: string, appHostPath: string): Promise<void> {
+      return dataRepository.runResourceCommand(resourceName, appHostPath, 'stop');
+    },
+    async startResource(resourceName: string, appHostPath: string): Promise<void> {
+      return dataRepository.runResourceCommand(resourceName, appHostPath, 'start');
+    },
+    acquireTestRunSession: (options) => testRunSessionManager.acquireTestRunSession(options),
+    releaseTestRunSession: (id) => testRunSessionManager.releaseTestRunSession(id),
   };
   if (context.extensionMode === vscode.ExtensionMode.Test) {
     api.__testOnlyRpcServerInfo = rpcServer.connectionInfo;

@@ -60,12 +60,12 @@ export function getSensitiveDashboardUrl(dataRepository: AppHostDataRepository, 
   return dashboardUrl ? stripResourceSuffix(dashboardUrl) : undefined;
 }
 
-function cloneAppHostState(appHost: AppHostDisplayInfo, includeSensitiveDashboardUrls: boolean): AspireAppHostState {
+export function cloneAppHostState(appHost: AppHostDisplayInfo, includeSensitiveDashboardUrls: boolean): AspireAppHostState {
   return {
     appHostPath: appHost.appHostPath,
     appHostPid: appHost.appHostPid,
     dashboardUrl: appHost.dashboardUrl && includeSensitiveDashboardUrls ? stripResourceSuffix(appHost.dashboardUrl) : (sanitizeDashboardUrl(appHost.dashboardUrl) ?? null),
-    resources: appHost.resources?.map(resource => cloneResourceState(resource, includeSensitiveDashboardUrls)) ?? appHost.resources,
+    resources: appHost.resources ? appHost.resources.map(resource => cloneResourceState(resource, includeSensitiveDashboardUrls)) : appHost.resources,
   };
 }
 
@@ -75,6 +75,7 @@ function cloneResourceState(resource: ResourceJson, includeSensitiveDashboardUrl
     displayName: resource.displayName,
     resourceType: resource.resourceType,
     state: resource.state,
+    projectPath: resource.properties?.['project.path'] ?? null,
     dashboardUrl: resource.dashboardUrl && includeSensitiveDashboardUrls ? stripResourceSuffix(resource.dashboardUrl) : (sanitizeDashboardUrl(resource.dashboardUrl) ?? null),
     urls: resource.urls?.map(cloneResourceUrlState) ?? null,
     commands: resource.commands ? cloneResourceCommands(resource.commands) : null,
@@ -128,4 +129,3 @@ export function isSamePath(left: string, right: string): boolean {
     ? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
     : normalizedLeft === normalizedRight;
 }
-
