@@ -36,12 +36,12 @@ npm run preview  # serve the production build locally
 
 ## Tauri integration
 
-A `tauri.conf.json` in the Rust crate should point at this UI:
+A `tauri.conf.json` in the Rust crate points at this UI's build output. Deck loads the embedded
+build (no `devUrl`), so debug and release builds behave the same:
 
 ```json
 {
   "build": {
-    "devUrl": "http://localhost:1430",
     "frontendDist": "../ui/dist"
   }
 }

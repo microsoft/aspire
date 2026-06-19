@@ -5,8 +5,6 @@
   "identifier": "com.microsoft.aspire.deck",
   "build": {
     "frontendDist": "../ui/dist",
-    "devUrl": "http://localhost:1430",
-    "beforeDevCommand": "npm --prefix ../ui run dev",
     "beforeBuildCommand": "npm --prefix ../ui run build"
   },
   "app": {

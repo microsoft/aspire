@@ -122,13 +122,18 @@ service (`ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL`) at the external dashboard.
 Prerequisites: a Rust toolchain, Node.js, and the Tauri prerequisites for your OS.
 
 ```bash
-# build the UI (embedded by Tauri)
+# build the UI (embedded by Tauri at compile time)
 npm --prefix ui install
 npm --prefix ui run build
 
-# run the native app (Rust backend + embedded UI)
-cargo tauri dev --manifest-path src-tauri/Cargo.toml      # or: cargo run --manifest-path src-tauri/Cargo.toml
+# build and run the native app (Rust backend + embedded UI)
+cargo run --manifest-path src-tauri/Cargo.toml
 ```
+
+Aspire Deck always loads its UI from the embedded build output (`ui/dist`) — there is no Tauri
+dev-server wiring (`devUrl`), so a debug `cargo run`/`cargo build` works the same as a release
+build. When iterating on the UI, re-run `npm --prefix ui run build` and rebuild the Rust app to
+pick up the changes.
 
 The UI can also run standalone in a browser against a built-in **mock backend** (no AppHost
 required) via `npm --prefix ui run dev` — useful for UI work and for previewing canvases.
