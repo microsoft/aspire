@@ -5,9 +5,7 @@ using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
-using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
-using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
 
 namespace Aspire.Cli.Commands;
@@ -39,13 +37,11 @@ internal sealed class McpCallCommand : BaseCommand
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", SharedCommandStrings.AppHostOptionDescription);
 
     public McpCallCommand(
-        IAuxiliaryBackchannelMonitor backchannelMonitor,
-        IProjectLocator projectLocator,
-        ILogger<McpCallCommand> logger,
+        AppHostConnectionResolver connectionResolver,
         CommonCommandServices services)
         : base("call", McpCommandStrings.CallCommand_Description, services)
     {
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, services.ExecutionContext, services.HostEnvironment, logger);
+        _connectionResolver = connectionResolver;
 
         Arguments.Add(s_resourceArgument);
         Arguments.Add(s_toolArgument);

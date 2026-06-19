@@ -215,6 +215,7 @@ internal static class CliTestHelper
 
         services.AddSingleton(new ConsoleCancellationManager(processTerminationTimeout: Timeout.InfiniteTimeSpan));
         services.AddSingleton<CommonCommandServices>();
+        services.AddTransient<AppHostConnectionResolver>();
         services.AddTransient<RootCommand>();
         services.AddTransient<NewCommand>();
         services.AddTransient<InitCommand>();
