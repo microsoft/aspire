@@ -77,6 +77,7 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
                 return true;
             }
 
+            Log.LogWarning("The AspireCliBundlePath value '{0}' does not point to a valid Aspire CLI bundle layout.", AspireCliBundlePath);
             return true;
         }
 
@@ -88,12 +89,19 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
                 return true;
             }
 
+            Log.LogWarning("The AspireCliPath value '{0}' does not point to an existing Aspire CLI executable with a valid bundle layout.", AspireCliPath);
             return true;
         }
 
         if (TryResolveFromPath(out var pathBundle))
         {
             SetOutputs(pathBundle);
+            return true;
+        }
+
+        if (TryResolveFromLayoutPath(GetDefaultAspireHomeDirectory(), out var aspireHomeBundle))
+        {
+            SetOutputs(aspireHomeBundle);
             return true;
         }
 
@@ -334,6 +342,7 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
         if (Directory.Exists(versionsRoot))
         {
             foreach (var versionDirectory in EnumerateDirectories(versionsRoot)
+                         .Where(IsVersionDirectoryCandidate)
                          .OrderByDescending(GetVersionDirectoryVersion)
                          .ThenByDescending(Path.GetFileName, StringComparer.OrdinalIgnoreCase))
             {
@@ -351,9 +360,26 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
     private static Version GetVersionDirectoryVersion(string path)
     {
         var directoryName = Path.GetFileName(path);
-        return Version.TryParse(StripVersionIdHash(directoryName), out var version)
+        return Version.TryParse(GetLeadingVersion(StripVersionIdHash(directoryName)), out var version)
             ? version
             : s_unversionedDirectoryVersion;
+    }
+
+    private static string GetLeadingVersion(string directoryName)
+    {
+        // BundleService.ComputeVersionId keeps the informational-version prefix and appends a hash:
+        //   13.10.0-preview.1.25301.1_gdae6efcb-bbbbbbbbbbbbbbbb
+        // System.Version cannot parse the prerelease/hash suffix, but it can compare the leading
+        // numeric version that determines which extracted bundle is newer.
+        var versionEnd = 0;
+        while (versionEnd < directoryName.Length && directoryName[versionEnd] is (>= '0' and <= '9') or '.')
+        {
+            versionEnd++;
+        }
+
+        return versionEnd == 0
+            ? string.Empty
+            : directoryName.Substring(0, versionEnd).TrimEnd('.');
     }
 
     private static string StripVersionIdHash(string directoryName)
@@ -384,6 +410,14 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
         }
 
         return true;
+    }
+
+    private static bool IsVersionDirectoryCandidate(string path)
+    {
+        var directoryName = Path.GetFileName(path);
+        return !directoryName.Contains(".tmp.", StringComparison.Ordinal)
+            && !directoryName.Contains(".bad.", StringComparison.Ordinal)
+            && !directoryName.Contains(".old.", StringComparison.Ordinal);
     }
 
     private static IEnumerable<string> EnumerateDirectories(string path)
