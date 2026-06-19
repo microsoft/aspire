@@ -187,69 +187,84 @@ internal sealed class ProcessExecution : IProcessExecution
         // and rely on the signal still being dispatched best-effort.
         var signalTask = InvokeSignalerAsync(signaler, SafePid(process), gracefulToken);
 
-        // Phase 2: wait for exit with the FULL graceful budget. When the apphost exits,
-        // the signaler task observes the same exit and completes shortly after. Whoever
-        // triggered shutdown (CCM.Cancel) owns the timing of `gracefulToken`.
         try
         {
-            await process.WaitForExitAsync(gracefulToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            // Graceful budget expired; fall through to kill.
-        }
+            // Phase 2: wait for exit with the FULL graceful budget. When the apphost exits,
+            // the signaler task observes the same exit and completes shortly after. Whoever
+            // triggered shutdown (CCM.Cancel) owns the timing of `gracefulToken`.
+            try
+            {
+                await process.WaitForExitAsync(gracefulToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Graceful budget expired; fall through to kill.
+            }
 
-        if (process.HasExited)
+            if (process.HasExited)
+            {
+                return;
+            }
+
+            // Phase 3: ALWAYS tree-kill on escalation, regardless of OS. Even when the graceful
+            // signal returned cleanly, descendants may still be alive — e.g. on Windows tsx wraps
+            // node and swallows Ctrl+C/Ctrl+Break, leaving the child node and any further
+            // descendants running after the tsx shell exits. Skipping tree-kill would orphan them.
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch (InvalidOperationException)
+            {
+                // Process exited between HasExited check and Kill — nothing to do.
+                return;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to kill {FileName} (pid {Pid}).", _fileName, SafePid(process));
+                return;
+            }
+
+            // Phase 4: brief separately-bounded drain after kill — independent of the central token
+            // because by now the central budget has already expired. 1 s is enough for the OS to
+            // reap the process so the subsequent ExitCode read succeeds.
+            try
+            {
+                using var killDrain = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+                await process.WaitForExitAsync(killDrain.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Best-effort; nothing more we can do.
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error draining killed {FileName} (pid {Pid}).", _fileName, SafePid(process));
+            }
+        }
+        finally
         {
-            // Best-effort: drain the signaler so its dcp shell-out doesn't outlive us as
-            // an orphan; safe because the process has already exited so dcp will return
-            // promptly. Skip the timer allocation when the signaler already finished (the
-            // common case — it observed the same exit). SuppressThrowing swallows both the
-            // drain timeout and any signaler fault without a try/catch; bounded so a stuck
-            // dcp can't keep us pinned.
-            if (!signalTask.IsCompleted)
+            // Always observe the signaler before returning — on EVERY path (clean exit, tree-kill
+            // escalation, or an early return from the catch arms above). Two reasons:
+            //   1. The signaler begins with `await Task.Yield()` (see InvokeSignalerAsync), so its
+            //      body — which records the target pid and dispatches the dcp/SIGTERM signal — runs
+            //      on a thread-pool continuation. Returning from the kill path WITHOUT awaiting it
+            //      could abandon the ladder before that continuation runs, so the signal would never
+            //      be dispatched. Awaiting here guarantees it ran.
+            //   2. Draining prevents the signaler's dcp shell-out from outliving us as an orphan.
+            // By now the process has exited or been tree-killed, so dcp returns promptly. Skip the
+            // timer allocation when the signaler already finished (the common case — it observed the
+            // same exit). SuppressThrowing swallows both the bounded drain timeout and any signaler
+            // fault without a try/catch.
+            if (signalTask.IsCompleted)
+            {
+                await signalTask.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+            }
+            else
             {
                 using var drainCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
                 await signalTask.WaitAsync(drainCts.Token).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
             }
-
-            return;
-        }
-
-        // Phase 3: ALWAYS tree-kill on escalation, regardless of OS. Even when the graceful
-        // signal returned cleanly, descendants may still be alive — e.g. on Windows tsx wraps
-        // node and swallows Ctrl+C/Ctrl+Break, leaving the child node and any further
-        // descendants running after the tsx shell exits. Skipping tree-kill would orphan them.
-        try
-        {
-            process.Kill(entireProcessTree: true);
-        }
-        catch (InvalidOperationException)
-        {
-            // Process exited between HasExited check and Kill — nothing to do.
-            return;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to kill {FileName} (pid {Pid}).", _fileName, SafePid(process));
-            return;
-        }
-
-        // Phase 4: brief separately-bounded drain after kill — independent of the central token
-        // because by now the central budget has already expired. 1 s is enough for the OS to
-        // reap the process so the subsequent ExitCode read succeeds.
-        try
-        {
-            using var killDrain = new CancellationTokenSource(TimeSpan.FromSeconds(1));
-            await process.WaitForExitAsync(killDrain.Token).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            // Best-effort; nothing more we can do.
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Error draining killed {FileName} (pid {Pid}).", _fileName, SafePid(process));
         }
     }
 

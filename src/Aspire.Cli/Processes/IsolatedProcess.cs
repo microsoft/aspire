@@ -120,6 +120,7 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
     private readonly Func<TimeSpan, ValueTask> _disposeAsync;
     private readonly Func<int>? _exitCodeProvider;
     private readonly Func<bool>? _hasExitedProvider;
+    private readonly Func<CancellationToken, Task>? _waitForExitProvider;
     private int _disposed;
 
     private IsolatedProcess(
@@ -130,7 +131,8 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
         Task standardErrorClosed,
         Func<TimeSpan, ValueTask> disposeAsync,
         Func<int>? exitCodeProvider,
-        Func<bool>? hasExitedProvider)
+        Func<bool>? hasExitedProvider,
+        Func<CancellationToken, Task>? waitForExitProvider)
     {
         Process = process;
         Id = process.Id;
@@ -141,6 +143,7 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
         _disposeAsync = disposeAsync;
         _exitCodeProvider = exitCodeProvider;
         _hasExitedProvider = hasExitedProvider;
+        _waitForExitProvider = waitForExitProvider;
     }
 
     /// <summary>The underlying <see cref="System.Diagnostics.Process"/> for escape-hatch scenarios.</summary>
@@ -191,8 +194,16 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
     public Task StandardErrorClosed { get; }
 
     /// <summary>Mirrors <see cref="Process.WaitForExitAsync(CancellationToken)"/>.</summary>
+    /// <remarks>
+    /// The Windows spawn path overrides this to wait on the kept <c>CreateProcess</c> handle rather
+    /// than the <see cref="Process.GetProcessById(int)"/> instance, whose
+    /// <see cref="Process.WaitForExitAsync(CancellationToken)"/> can complete before the kernel marks
+    /// the process exited — which would make an immediately-following <see cref="ExitCode"/> read
+    /// throw. Routing the wait through the same kept handle as <see cref="ExitCode"/> /
+    /// <see cref="HasExited"/> keeps them consistent. See https://github.com/dotnet/runtime/issues/45003.
+    /// </remarks>
     public Task WaitForExitAsync(CancellationToken cancellationToken = default)
-        => Process.WaitForExitAsync(cancellationToken);
+        => _waitForExitProvider?.Invoke(cancellationToken) ?? Process.WaitForExitAsync(cancellationToken);
 
     /// <summary>
     /// Mirrors <see cref="Process.Kill(bool)"/>. Defaults to <see langword="true"/>
@@ -367,6 +378,12 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
     /// <paramref name="exitCodeProvider"/> — Windows reads via <c>WaitForSingleObject</c>
     /// against the kept handle; Unix uses the default <see cref="Process.HasExited"/>.
     /// </param>
+    /// <param name="waitForExitProvider">
+    /// Optional override for <see cref="WaitForExitAsync"/>. Same rationale as
+    /// <paramref name="exitCodeProvider"/> — Windows waits on the kept handle so the wait stays
+    /// consistent with the ExitCode/HasExited reads; Unix uses the default
+    /// <see cref="Process.WaitForExitAsync(CancellationToken)"/>.
+    /// </param>
     private static IsolatedProcess WrapStartedProcess(
         IsolatedProcessStartInfo startInfo,
         Process process,
@@ -376,7 +393,8 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
         Action<IsolatedProcess, string> standardErrorHandler,
         Func<ValueTask>? extraDispose,
         Func<int>? exitCodeProvider = null,
-        Func<bool>? hasExitedProvider = null)
+        Func<bool>? hasExitedProvider = null,
+        Func<CancellationToken, Task>? waitForExitProvider = null)
     {
         // Snapshot identity off startInfo now — the caller may mutate the startInfo after
         // we return and we don't want the wrapper to observe those changes.
@@ -438,7 +456,8 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
             standardErrorClosed: errorTcs.Task,
             DisposeAsync,
             exitCodeProvider,
-            hasExitedProvider);
+            hasExitedProvider,
+            waitForExitProvider);
 
         // The pumps capture 'isolated' as the handler's "sender". The assignment is fully
         // visible to the pump's Task.Run worker by happens-before semantics.

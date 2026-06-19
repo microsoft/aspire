@@ -635,4 +635,93 @@ internal static partial class WindowsProcessInterop
 
         return ptr;
     }
+
+    /// <summary>
+    /// Asynchronously waits for the process owned by <paramref name="processHandle"/> to exit by
+    /// registering a thread-pool wait on the kernel process object.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="System.Diagnostics.Process.WaitForExitAsync(CancellationToken)"/> on a
+    /// <see cref="System.Diagnostics.Process.GetProcessById(int)"/> instance is unreliable on
+    /// Windows (see https://github.com/dotnet/runtime/issues/45003): it can complete before the
+    /// kernel has marked the process exited, so a subsequent <c>GetExitCodeProcess</c> read still
+    /// reports <c>STILL_ACTIVE</c>. This waits on the kept <c>CreateProcess</c> handle — the same
+    /// authoritative source <see cref="GetExitCodeProcess"/> and the zero-timeout
+    /// <see cref="WaitForSingleObject"/> read from — so when this completes an ExitCode read is
+    /// guaranteed to succeed.
+    /// </remarks>
+    [SupportedOSPlatform("windows")]
+    public static Task WaitForExitAsync(SafeProcessHandle processHandle, CancellationToken cancellationToken)
+    {
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return Task.FromCanceled(cancellationToken);
+        }
+
+        if (processHandle.IsClosed || processHandle.IsInvalid)
+        {
+            // No live handle to wait on (the wrapper disposed it); the process is gone as far as we
+            // can observe, so mirror a completed wait rather than throwing.
+            return Task.CompletedTask;
+        }
+
+        // Fast path: already signaled, so skip the thread-pool registration entirely.
+        if (WaitForSingleObject(processHandle, 0) == WaitObject0)
+        {
+            return Task.CompletedTask;
+        }
+
+        return WaitForExitCoreAsync(processHandle, cancellationToken);
+
+        static async Task WaitForExitCoreAsync(SafeProcessHandle processHandle, CancellationToken cancellationToken)
+        {
+            // Pin the SafeProcessHandle for the duration of the wait so a concurrent Dispose (the
+            // wrapper's ExtraDispose closes this handle) cannot recycle the raw handle out from
+            // under the registered thread-pool wait. If the handle was closed in the meantime,
+            // DangerousAddRef throws ObjectDisposedException — treat that as "already gone".
+            var added = false;
+            try
+            {
+                processHandle.DangerousAddRef(ref added);
+            }
+            catch (ObjectDisposedException)
+            {
+                return;
+            }
+
+            var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            // RegisterWaitForSingleObject needs a managed WaitHandle. Wrap the raw process handle in
+            // a non-owning SafeWaitHandle (the SafeProcessHandle keeps ownership) and graft it onto a
+            // throwaway ManualResetEvent — the canonical way to wait on a foreign kernel handle.
+            var waitHandle = new ManualResetEvent(false);
+            var placeholder = waitHandle.SafeWaitHandle;
+            waitHandle.SafeWaitHandle = new SafeWaitHandle(processHandle.DangerousGetHandle(), ownsHandle: false);
+            placeholder.Dispose();
+
+            RegisteredWaitHandle? registration = null;
+            var ctr = cancellationToken.Register(static s => ((TaskCompletionSource)s!).TrySetCanceled(), tcs);
+            try
+            {
+                registration = ThreadPool.RegisterWaitForSingleObject(
+                    waitHandle,
+                    static (state, _) => ((TaskCompletionSource)state!).TrySetResult(),
+                    tcs,
+                    millisecondsTimeOutInterval: Timeout.Infinite,
+                    executeOnlyOnce: true);
+
+                await tcs.Task.ConfigureAwait(false);
+            }
+            finally
+            {
+                ctr.Dispose();
+                registration?.Unregister(null);
+                waitHandle.Dispose();
+                if (added)
+                {
+                    processHandle.DangerousRelease();
+                }
+            }
+        }
+    }
 }

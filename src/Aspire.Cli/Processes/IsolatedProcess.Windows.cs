@@ -213,7 +213,8 @@ internal sealed partial class IsolatedProcess
                     standardErrorHandler,
                     ExtraDispose,
                     exitCodeProvider: GetExitCode,
-                    hasExitedProvider: GetHasExited);
+                    hasExitedProvider: GetHasExited,
+                    waitForExitProvider: ct => WindowsProcessInterop.WaitForExitAsync(capturedProcessHandle, ct));
             }
             catch
             {
