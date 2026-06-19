@@ -325,6 +325,7 @@ jobs:
           script: |
             const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const date = new Date().toISOString().split('T')[0];
+            const rootCauseIssue = '#18223';
 
             const issueTitle = `[Deployment E2E] Nightly test failure - ${date}`;
             const issueBody = `## Deployment E2E Test Failure
@@ -356,6 +357,10 @@ jobs:
             4. Determine if this is a timeout, deployment, or test automation issue
             5. Implement fix and verify with local test run
 
+            ### Root-cause investigation
+
+            - Consolidated investigation tracker: ${rootCauseIssue}
+
             ### Labels
 
             This issue was automatically created by the deployment E2E test workflow.
@@ -363,30 +368,49 @@ jobs:
             /cc @microsoft/aspire-team
             `;
 
-            // Check if a similar issue already exists (created today)
-            const existingIssues = await github.rest.issues.listForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: 'open',
-              labels: 'area-testing,deployment-e2e',
-              per_page: 10
-            });
+            const existingIssues = await github.paginate(
+              github.rest.issues.listForRepo,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                labels: 'area-testing,deployment-e2e',
+                per_page: 100
+              });
 
-            const todayIssue = existingIssues.data.find(issue =>
-              issue.title.includes(date) && issue.title.includes('[Deployment E2E]')
-            );
+            const nightlyIssues = existingIssues
+              .filter(issue => issue.title.includes('[Deployment E2E] Nightly test failure'))
+              .sort((left, right) => new Date(right.created_at) - new Date(left.created_at));
 
-            if (todayIssue) {
-              console.log(`Issue already exists for today: ${todayIssue.html_url}`);
-              // Add a comment instead
+            if (nightlyIssues.length > 0) {
+              const newestIssue = nightlyIssues[0];
+              const staleIssues = nightlyIssues.slice(1);
+
+              console.log(`Using newest nightly tracker issue: ${newestIssue.html_url}`);
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: todayIssue.number,
-                body: `Another failure occurred. See: ${runUrl}`
+                issue_number: newestIssue.number,
+                body: `Another nightly deployment E2E failure occurred. See: ${runUrl}\n\nRoot-cause investigation: ${rootCauseIssue}`
               });
+
+              for (const staleIssue of staleIssues) {
+                console.log(`Closing stale duplicate issue: ${staleIssue.html_url}`);
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: staleIssue.number,
+                  body: `Closing as duplicate of #${newestIssue.number} to keep a single nightly Deployment E2E tracker.\n\nRoot-cause investigation: ${rootCauseIssue}`
+                });
+
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: staleIssue.number,
+                  state: 'closed'
+                });
+              }
             } else {
-              // Create new issue
               const issue = await github.rest.issues.create({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
