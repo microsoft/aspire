@@ -47,6 +47,9 @@
 
   <ItemGroup>
     <None Include="$(TargetPath)" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <!-- Ship the polyglot opt-out property registration so the analyzer can read
+         $(IsAspirePolyglotCompatible) when consumed purely as a package. -->
+    <None Include="buildTransitive\Aspire.Hosting.Integration.Analyzers.props" Pack="true" PackagePath="buildTransitive" />
   </ItemGroup>
 
   <ItemGroup>
