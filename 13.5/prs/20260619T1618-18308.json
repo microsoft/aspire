@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Bug fix: terminal resources now always run as process (not IDE) to ensure terminal bridging works in debug sessions",
+  "mergedAt": "2026-06-19T16:18:01Z",
+  "number": 18308,
+  "runDate": "2026-06-19T18:33:39Z",
+  "status": "included",
+  "title": "Suppress debugger/IDE execution for terminal-attached resources"
+}

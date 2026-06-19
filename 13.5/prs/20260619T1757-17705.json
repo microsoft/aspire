@@ -1,0 +1,9 @@
+{
+  "author": "LittleLittleCloud",
+  "comment": "New feature: VS Code extension exposes AppHost query and resource management APIs for C#DK v2 integration",
+  "mergedAt": "2026-06-19T17:57:53Z",
+  "number": 17705,
+  "runDate": "2026-06-19T18:33:39Z",
+  "status": "included",
+  "title": "[C#DK v2 Aspire integration] Expose apphost query API and aspire resource management API from aspire extension"
+}

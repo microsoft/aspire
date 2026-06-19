@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "When running multiple AppHost instances with --isolated, each instance now binds its resource service endpoint to a random OS-assigned port instead of the fixed port from the launch profile. This prevents 'address already in use' errors when starting a second --isolated instance on the same machine.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔌",
+  "firstMergedAt": "2026-06-19T16:25:31Z",
+  "lastMergedAt": "2026-06-19T16:25:31Z",
+  "name": "Fix port collision when running multiple isolated AppHost instances",
+  "owner": "JamesNK",
+  "prs": [
+    18332
+  ]
+}

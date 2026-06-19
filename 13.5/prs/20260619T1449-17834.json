@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "Bot-authored npm dependency bump (dependabot)",
+  "mergedAt": "2026-06-19T14:49:54Z",
+  "number": 17834,
+  "runDate": "2026-06-19T18:33:39Z",
+  "status": "excluded",
+  "title": "Bump the npm_and_yarn group across 4 directories with 2 updates"
+}

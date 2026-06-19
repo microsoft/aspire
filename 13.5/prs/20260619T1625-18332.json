@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Bug fix: --isolated mode now uses random ports for resource service endpoint to prevent collisions",
+  "mergedAt": "2026-06-19T16:25:31Z",
+  "number": 18332,
+  "runDate": "2026-06-19T18:33:39Z",
+  "status": "included",
+  "title": "Fix resource service port collision in --isolated mode"
+}

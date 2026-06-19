@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Resources configured with WithTerminal() now always run as a plain process rather than through the IDE debugger, ensuring their terminal sessions connect correctly when debugging. Previously, IDE debug sessions would route terminal-attached resources through IDE execution, which bypasses the PTY bridging required for terminal attachment.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-06-19T16:18:01Z",
+  "lastMergedAt": "2026-06-19T16:18:01Z",
+  "name": "Fix terminal resources not connecting in IDE debug sessions",
+  "owner": "mitchdenny",
+  "prs": [
+    18308
+  ]
+}

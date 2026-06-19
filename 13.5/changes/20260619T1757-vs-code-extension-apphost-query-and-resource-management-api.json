@@ -1,0 +1,21 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [
+    "@LittleLittleCloud"
+  ],
+  "description": "The Aspire VS Code extension now exposes AppHost query and resource management APIs through its extension API surface, enabling C# Dev Kit v2 and other tools to programmatically query AppHost state and manage Aspire resources from the extension.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔗",
+  "firstMergedAt": "2026-06-19T17:57:53Z",
+  "lastMergedAt": "2026-06-19T17:57:53Z",
+  "name": "VS Code extension exposes AppHost and resource management APIs",
+  "owner": "adamint",
+  "prs": [
+    17705
+  ]
+}
