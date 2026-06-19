@@ -52,15 +52,7 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
         await auto.WaitUntilAsync(
             s => s.ContainsText("dev-certs") && s.ContainsText("partially trusted"),
             timeout: TimeSpan.FromSeconds(60), description: "doctor to complete with partial trust warning");
-<<<<<<< HEAD
         await auto.WaitForSuccessPromptFailFastAsync(counter);
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
-=======
-        await auto.WaitForSuccessPromptAsync(counter);
->>>>>>> origin/main
     }
 
     [Fact]
@@ -103,14 +95,7 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
             return s.ContainsText("certificate is trusted") &&
                    s.ContainsText("Developer Control Plane (DCP) connection health checks succeeded");
         }, timeout: TimeSpan.FromSeconds(60), description: "doctor to complete with trusted certificate");
-<<<<<<< HEAD
         await auto.WaitForSuccessPromptFailFastAsync(counter);
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-=======
-        await auto.WaitForSuccessPromptAsync(counter);
-    }
->>>>>>> origin/main
 
     [Theory]
     [MemberData(nameof(AlternativeToolchains))]

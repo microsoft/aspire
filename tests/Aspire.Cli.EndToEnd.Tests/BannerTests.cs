@@ -48,15 +48,7 @@ public sealed class BannerTests(ITestOutputHelper output)
         await auto.WaitUntilAsync(
             s => s.ContainsText(RootCommandStrings.BannerWelcomeText) && s.ContainsText("Telemetry"),
             timeout: TimeSpan.FromSeconds(30), description: "waiting for banner and telemetry notice on first run");
-<<<<<<< HEAD
         await auto.WaitForSuccessPromptFailFastAsync(counter);
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
-=======
-        await auto.WaitForSuccessPromptAsync(counter);
->>>>>>> origin/main
     }
 
     [Fact]
@@ -83,15 +75,7 @@ public sealed class BannerTests(ITestOutputHelper output)
         await auto.WaitUntilAsync(
             s => s.ContainsText(RootCommandStrings.BannerWelcomeText) && s.ContainsText("CLI"),
             timeout: TimeSpan.FromSeconds(30), description: "waiting for banner with version info");
-<<<<<<< HEAD
         await auto.WaitForSuccessPromptFailFastAsync(counter);
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
-=======
-        await auto.WaitForSuccessPromptAsync(counter);
->>>>>>> origin/main
     }
 
     [Fact]
@@ -134,14 +118,6 @@ public sealed class BannerTests(ITestOutputHelper output)
             // Only return true once the help hint is visible at the end of the output
             return s.ContainsText(HelpGroupStrings.HelpHint);
         }, timeout: TimeSpan.FromSeconds(30), description: "waiting for help output to complete");
-<<<<<<< HEAD
         await auto.WaitForSuccessPromptFailFastAsync(counter);
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
-=======
-        await auto.WaitForSuccessPromptAsync(counter);
->>>>>>> origin/main
     }
 }
