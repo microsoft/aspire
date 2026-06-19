@@ -67,14 +67,14 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     /// <param name="environmentVariables">The environment variables to pass to the server.</param>
     /// <param name="debug">Whether to enable debug logging for the server.</param>
     /// <param name="logger">The logger to use for lifecycle diagnostics.</param>
-    /// <param name="profilingTelemetry">Optional profiling telemetry for the server process lifetime.</param>
+    /// <param name="profilingTelemetry">Profiling telemetry for the server process lifetime.</param>
     /// <returns>The started AppHost server session.</returns>
     internal static AppHostServerSession Start(
         IAppHostServerProject appHostServerProject,
         Dictionary<string, string>? environmentVariables,
         bool debug,
         ILogger logger,
-        ProfilingTelemetry? profilingTelemetry = null)
+        ProfilingTelemetry profilingTelemetry)
     {
         var currentPid = Environment.ProcessId;
         var serverEnvironmentVariables = environmentVariables is null
@@ -84,9 +84,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         var authenticationToken = TokenGenerator.GenerateToken();
         serverEnvironmentVariables[KnownConfigNames.RemoteAppHostToken] = authenticationToken;
 
-        var activity = profilingTelemetry is null
-            ? default
-            : profilingTelemetry.StartAppHostServerLifetime(appHostServerProject.GetType().Name);
+        var activity = profilingTelemetry.StartAppHostServerLifetime(appHostServerProject.GetType().Name);
         if (activity.IsRunning)
         {
             activity.AddContextToEnvironment(serverEnvironmentVariables);

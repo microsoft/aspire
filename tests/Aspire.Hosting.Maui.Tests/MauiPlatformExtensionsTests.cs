@@ -56,8 +56,8 @@ public class MauiPlatformExtensionsTests
     public void AddPlatform_CreatesResourceWithCorrectName(PlatformTestConfig config)
     {
         // Arrange
-        var projectContent = CreateProjectContent(config.RequiredTfm);
-        var tempFile = CreateTempProjectFile(projectContent);
+        var projectContent = MauiTestHelper.CreateProjectContent(config.RequiredTfm);
+        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
 
         try
         {
@@ -76,7 +76,7 @@ public class MauiPlatformExtensionsTests
         }
         finally
         {
-            CleanupTempFile(tempFile);
+            MauiTestHelper.CleanupTempFile(tempFile);
         }
     }
 
@@ -85,8 +85,8 @@ public class MauiPlatformExtensionsTests
     public void AddPlatform_WithCustomName_UsesProvidedName(PlatformTestConfig config)
     {
         // Arrange
-        var projectContent = CreateProjectContent(config.RequiredTfm);
-        var tempFile = CreateTempProjectFile(projectContent);
+        var projectContent = MauiTestHelper.CreateProjectContent(config.RequiredTfm);
+        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
 
         try
         {
@@ -102,7 +102,7 @@ public class MauiPlatformExtensionsTests
         }
         finally
         {
-            CleanupTempFile(tempFile);
+            MauiTestHelper.CleanupTempFile(tempFile);
         }
     }
 
@@ -111,8 +111,8 @@ public class MauiPlatformExtensionsTests
     public void AddPlatform_DuplicateName_ThrowsException(PlatformTestConfig config)
     {
         // Arrange
-        var projectContent = CreateProjectContent(config.RequiredTfm);
-        var tempFile = CreateTempProjectFile(projectContent);
+        var projectContent = MauiTestHelper.CreateProjectContent(config.RequiredTfm);
+        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
 
         try
         {
@@ -128,7 +128,7 @@ public class MauiPlatformExtensionsTests
         }
         finally
         {
-            CleanupTempFile(tempFile);
+            MauiTestHelper.CleanupTempFile(tempFile);
         }
     }
 
@@ -137,8 +137,8 @@ public class MauiPlatformExtensionsTests
     public void AddPlatform_HasCorrectAnnotations(PlatformTestConfig config)
     {
         // Arrange
-        var projectContent = CreateProjectContent(config.RequiredTfm);
-        var tempFile = CreateTempProjectFile(projectContent);
+        var projectContent = MauiTestHelper.CreateProjectContent(config.RequiredTfm);
+        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
 
         try
         {
@@ -164,7 +164,7 @@ public class MauiPlatformExtensionsTests
         }
         finally
         {
-            CleanupTempFile(tempFile);
+            MauiTestHelper.CleanupTempFile(tempFile);
         }
     }
 
@@ -173,8 +173,8 @@ public class MauiPlatformExtensionsTests
     public void AddPlatform_ImplementsIMauiPlatformResource(PlatformTestConfig config)
     {
         // Arrange
-        var projectContent = CreateProjectContent(config.RequiredTfm);
-        var tempFile = CreateTempProjectFile(projectContent);
+        var projectContent = MauiTestHelper.CreateProjectContent(config.RequiredTfm);
+        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
 
         try
         {
@@ -189,7 +189,7 @@ public class MauiPlatformExtensionsTests
         }
         finally
         {
-            CleanupTempFile(tempFile);
+            MauiTestHelper.CleanupTempFile(tempFile);
         }
     }
 
@@ -198,8 +198,8 @@ public class MauiPlatformExtensionsTests
     public void AddPlatform_MultiplePlatforms_AllCreated(PlatformTestConfig config)
     {
         // Arrange
-        var projectContent = CreateProjectContent(config.RequiredTfm);
-        var tempFile = CreateTempProjectFile(projectContent);
+        var projectContent = MauiTestHelper.CreateProjectContent(config.RequiredTfm);
+        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
 
         try
         {
@@ -219,7 +219,7 @@ public class MauiPlatformExtensionsTests
         }
         finally
         {
-            CleanupTempFile(tempFile);
+            MauiTestHelper.CleanupTempFile(tempFile);
         }
     }
 
@@ -229,7 +229,7 @@ public class MauiPlatformExtensionsTests
     {
         // Arrange - Create project without the required TFM
         var projectContent = CreateProjectContentWithout(config.PlatformIdentifier);
-        var tempFile = CreateTempProjectFile(projectContent);
+        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
 
         try
         {
@@ -254,7 +254,7 @@ public class MauiPlatformExtensionsTests
         }
         finally
         {
-            CleanupTempFile(tempFile);
+            MauiTestHelper.CleanupTempFile(tempFile);
         }
     }
 
@@ -262,8 +262,8 @@ public class MauiPlatformExtensionsTests
     public async Task AddAndroidEmulator_WithEnvironment_EnvironmentVariablesAreSet()
     {
         // Arrange
-        var projectContent = CreateProjectContent("net10.0-android");
-        var tempFile = CreateTempProjectFile(projectContent);
+        var projectContent = MauiTestHelper.CreateProjectContent("net10.0-android");
+        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
 
         try
         {
@@ -286,7 +286,7 @@ public class MauiPlatformExtensionsTests
         }
         finally
         {
-            CleanupTempFile(tempFile);
+            MauiTestHelper.CleanupTempFile(tempFile);
         }
     }
 
@@ -294,8 +294,8 @@ public class MauiPlatformExtensionsTests
     public void AddAndroidDeviceAndEmulator_CanCoexist()
     {
         // Arrange
-        var projectContent = CreateProjectContent("net10.0-android");
-        var tempFile = CreateTempProjectFile(projectContent);
+        var projectContent = MauiTestHelper.CreateProjectContent("net10.0-android");
+        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
 
         try
         {
@@ -315,7 +315,7 @@ public class MauiPlatformExtensionsTests
         }
         finally
         {
-            CleanupTempFile(tempFile);
+            MauiTestHelper.CleanupTempFile(tempFile);
         }
     }
 
@@ -323,8 +323,8 @@ public class MauiPlatformExtensionsTests
     public void AddAndroidDevice_WithDeviceId_CreatesResourceWithCorrectName()
     {
         // Arrange
-        var projectContent = CreateProjectContent("net10.0-android");
-        var tempFile = CreateTempProjectFile(projectContent);
+        var projectContent = MauiTestHelper.CreateProjectContent("net10.0-android");
+        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
 
         try
         {
@@ -341,7 +341,7 @@ public class MauiPlatformExtensionsTests
         }
         finally
         {
-            CleanupTempFile(tempFile);
+            MauiTestHelper.CleanupTempFile(tempFile);
         }
     }
 
@@ -349,8 +349,8 @@ public class MauiPlatformExtensionsTests
     public void AddAndroidEmulator_WithEmulatorId_CreatesResourceWithCorrectName()
     {
         // Arrange
-        var projectContent = CreateProjectContent("net10.0-android");
-        var tempFile = CreateTempProjectFile(projectContent);
+        var projectContent = MauiTestHelper.CreateProjectContent("net10.0-android");
+        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
 
         try
         {
@@ -367,7 +367,7 @@ public class MauiPlatformExtensionsTests
         }
         finally
         {
-            CleanupTempFile(tempFile);
+            MauiTestHelper.CleanupTempFile(tempFile);
         }
     }
 
@@ -375,8 +375,8 @@ public class MauiPlatformExtensionsTests
     public void AddiOSDevice_WithDeviceId_CreatesResourceWithCorrectName()
     {
         // Arrange
-        var projectContent = CreateProjectContent("net10.0-ios");
-        var tempFile = CreateTempProjectFile(projectContent);
+        var projectContent = MauiTestHelper.CreateProjectContent("net10.0-ios");
+        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
 
         try
         {
@@ -393,7 +393,7 @@ public class MauiPlatformExtensionsTests
         }
         finally
         {
-            CleanupTempFile(tempFile);
+            MauiTestHelper.CleanupTempFile(tempFile);
         }
     }
 
@@ -401,8 +401,8 @@ public class MauiPlatformExtensionsTests
     public void AddiOSSimulator_WithSimulatorId_CreatesResourceWithCorrectName()
     {
         // Arrange
-        var projectContent = CreateProjectContent("net10.0-ios");
-        var tempFile = CreateTempProjectFile(projectContent);
+        var projectContent = MauiTestHelper.CreateProjectContent("net10.0-ios");
+        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
 
         try
         {
@@ -419,7 +419,7 @@ public class MauiPlatformExtensionsTests
         }
         finally
         {
-            CleanupTempFile(tempFile);
+            MauiTestHelper.CleanupTempFile(tempFile);
         }
     }
 
@@ -427,8 +427,8 @@ public class MauiPlatformExtensionsTests
     public void AddiOSDeviceAndSimulator_CanCoexist()
     {
         // Arrange
-        var projectContent = CreateProjectContent("net10.0-ios");
-        var tempFile = CreateTempProjectFile(projectContent);
+        var projectContent = MauiTestHelper.CreateProjectContent("net10.0-ios");
+        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
 
         try
         {
@@ -448,7 +448,7 @@ public class MauiPlatformExtensionsTests
         }
         finally
         {
-            CleanupTempFile(tempFile);
+            MauiTestHelper.CleanupTempFile(tempFile);
         }
     }
 
@@ -458,8 +458,8 @@ public class MauiPlatformExtensionsTests
     public void AddiOS_HasEnvironmentAnnotation(bool isDevice)
     {
         // Arrange
-        var projectContent = CreateProjectContent("net10.0-ios");
-        var tempFile = CreateTempProjectFile(projectContent);
+        var projectContent = MauiTestHelper.CreateProjectContent("net10.0-ios");
+        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
 
         try
         {
@@ -483,7 +483,7 @@ public class MauiPlatformExtensionsTests
         }
         finally
         {
-            CleanupTempFile(tempFile);
+            MauiTestHelper.CleanupTempFile(tempFile);
         }
     }
 
@@ -491,8 +491,8 @@ public class MauiPlatformExtensionsTests
     public async Task AddiOSSimulator_WithEnvironment_EnvironmentVariablesAreSet()
     {
         // Arrange
-        var projectContent = CreateProjectContent("net10.0-ios");
-        var tempFile = CreateTempProjectFile(projectContent);
+        var projectContent = MauiTestHelper.CreateProjectContent("net10.0-ios");
+        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
 
         try
         {
@@ -515,7 +515,7 @@ public class MauiPlatformExtensionsTests
         }
         finally
         {
-            CleanupTempFile(tempFile);
+            MauiTestHelper.CleanupTempFile(tempFile);
         }
     }
 
@@ -525,8 +525,8 @@ public class MauiPlatformExtensionsTests
     public void AddAndroid_HasEnvironmentAnnotation(bool isDevice)
     {
         // Arrange
-        var projectContent = CreateProjectContent("net10.0-android");
-        var tempFile = CreateTempProjectFile(projectContent);
+        var projectContent = MauiTestHelper.CreateProjectContent("net10.0-android");
+        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
 
         try
         {
@@ -550,7 +550,7 @@ public class MauiPlatformExtensionsTests
         }
         finally
         {
-            CleanupTempFile(tempFile);
+            MauiTestHelper.CleanupTempFile(tempFile);
         }
     }
 
@@ -561,8 +561,8 @@ public class MauiPlatformExtensionsTests
     public void WithOtlpDevTunnel_AddsOtlpDevTunnelAnnotation(PlatformTestConfig config)
     {
         // Arrange
-        var projectContent = CreateProjectContent(config.RequiredTfm);
-        var tempFile = CreateTempProjectFile(projectContent);
+        var projectContent = MauiTestHelper.CreateProjectContent(config.RequiredTfm);
+        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
 
         try
         {
@@ -582,7 +582,7 @@ public class MauiPlatformExtensionsTests
         }
         finally
         {
-            CleanupTempFile(tempFile);
+            MauiTestHelper.CleanupTempFile(tempFile);
         }
     }
 
@@ -591,8 +591,8 @@ public class MauiPlatformExtensionsTests
     public void WithOtlpDevTunnel_MultiplePlatforms_SharesSameInfrastructure(PlatformTestConfig config)
     {
         // Arrange
-        var projectContent = CreateProjectContent(config.RequiredTfm);
-        var tempFile = CreateTempProjectFile(projectContent);
+        var projectContent = MauiTestHelper.CreateProjectContent(config.RequiredTfm);
+        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
 
         try
         {
@@ -611,7 +611,7 @@ public class MauiPlatformExtensionsTests
         }
         finally
         {
-            CleanupTempFile(tempFile);
+            MauiTestHelper.CleanupTempFile(tempFile);
         }
     }
 
@@ -620,8 +620,8 @@ public class MauiPlatformExtensionsTests
     public async Task WithOtlpDevTunnel_SetsEndpointWithoutIntermediateEnvironmentVariables(PlatformTestConfig config)
     {
         // Arrange
-        var projectContent = CreateProjectContent(config.RequiredTfm);
-        var tempFile = CreateTempProjectFile(projectContent);
+        var projectContent = MauiTestHelper.CreateProjectContent(config.RequiredTfm);
+        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
 
         try
         {
@@ -657,22 +657,11 @@ public class MauiPlatformExtensionsTests
         }
         finally
         {
-            CleanupTempFile(tempFile);
+            MauiTestHelper.CleanupTempFile(tempFile);
         }
     }
 
     // Helper methods
-
-    private static string CreateProjectContent(string requiredTfm)
-    {
-        return $$"""
-            <Project Sdk="Microsoft.NET.Sdk">
-                <PropertyGroup>
-                    <TargetFrameworks>{{requiredTfm}};net10.0-ios</TargetFrameworks>
-                </PropertyGroup>
-            </Project>
-            """;
-    }
 
     private static string CreateProjectContentWithout(string excludePlatform)
     {
@@ -691,22 +680,6 @@ public class MauiPlatformExtensionsTests
                 </PropertyGroup>
             </Project>
             """;
-    }
-
-    private static string CreateTempProjectFile(string content)
-    {
-        var tempFolder = Directory.CreateTempSubdirectory();
-        var tempFile = Path.Combine(tempFolder.FullName, "TempMauiProject.csproj");
-        File.WriteAllText(tempFile, content);
-        return tempFile;
-    }
-
-    private static void CleanupTempFile(string filePath)
-    {
-        if (File.Exists(filePath))
-        {
-            File.Delete(filePath);
-        }
     }
 
     // Configuration class for platform-specific test data

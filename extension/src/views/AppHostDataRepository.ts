@@ -4,7 +4,7 @@ import { ChildProcessWithoutNullStreams } from 'child_process';
 import { spawnCliProcess } from '../debugger/languages/cli';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
-import { appHostDescribeMayNotBeSupported, aspireCliDescribeNotSupported, aspireDescribeMinimumVersion, errorFetchingAppHosts, workspaceViewSelectedMultipleAppHosts, workspaceViewSelectedSingleAppHost } from '../loc/strings';
+import { appHostDescribeMayNotBeSupported, appHostPathMustBeNonEmptyAbsolute, aspireCliCommandFailed, aspireCliCommandTimedOut, aspireCliDescribeNotSupported, aspireCliOutputParseFailed, aspireDescribeMinimumVersion, errorFetchingAppHosts, workspaceViewSelectedMultipleAppHosts, workspaceViewSelectedSingleAppHost } from '../loc/strings';
 import { AppHostCandidate, AppHostDiscoveryService, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult, isBuildableAppHostCandidate } from '../utils/appHostDiscovery';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { describeIncludeDisabledCommandsCapability } from '../types/configInfo';
@@ -92,6 +92,38 @@ export interface AppHostDisplayInfo {
     resources: ResourceJson[] | null | undefined;
 }
 
+interface DescribeSnapshotJson {
+    resources?: ResourceJson[];
+}
+
+export class AspireCliNotInstalledError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'AspireCliNotInstalledError';
+    }
+}
+
+export class AspireCliFailedError extends Error {
+    constructor(
+        public readonly command: string,
+        public readonly exitCode: number | null,
+        public readonly stdout: string,
+        public readonly stderr: string) {
+        super(aspireCliCommandFailed(command, String(exitCode), getCommandOutputSuffix(stdout, stderr)));
+        this.name = 'AspireCliFailedError';
+    }
+}
+
+export class AspireCliParseError extends Error {
+    constructor(
+        public readonly command: string,
+        public readonly output: string,
+        innerError: unknown) {
+        super(aspireCliOutputParseFailed(command, String(innerError)));
+        this.name = 'AspireCliParseError';
+    }
+}
+
 export type ViewMode = 'workspace' | 'global';
 
 interface GlobalDescribeStream {
@@ -124,10 +156,14 @@ interface PostStopRefreshTimer {
  *    mode this backs the full tree; in workspace mode it confirms whether the
  *    selected workspace AppHost is running when the resource stream is empty.
  */
+const oneShotOutputBufferLimit = 4000;
+
 export class AppHostDataRepository {
     private static readonly _processShutdownGracePeriodMs = 5000;
     private static readonly _appHostStopRefreshDelayMs = 400;
     private static readonly _appHostStopRefreshMaxAttempts = 75;
+    private static readonly _oneShotCommandTimeoutMs = 30000;
+    private static readonly _oneShotOutputBufferLimit = oneShotOutputBufferLimit;
 
     private readonly _onDidChangeData = new vscode.EventEmitter<void>();
     readonly onDidChangeData = this._onDidChangeData.event;
@@ -165,6 +201,7 @@ export class AppHostDataRepository {
     private _pollingInterval: ReturnType<typeof setInterval> | undefined;
     private _psProcesses = new Set<ChildProcessWithoutNullStreams>();
     private _psPollingGeneration = 0;
+    private _oneShotProcesses = new Set<ChildProcessWithoutNullStreams>();
     private _psFetchVersion = 0;
     private _supportsPsFollow = true;
     private _fetchInProgress = false;
@@ -402,17 +439,43 @@ export class AppHostDataRepository {
     }
 
     private _hasAppHost(appHostPath: string): boolean {
-        return this._appHosts.some(appHost => isMatchingAppHostPath(appHost.appHostPath, appHostPath));
+        return this._findMatchingRunningAppHostPath(appHostPath) !== undefined;
     }
 
     private _resolveStopRefreshKey(appHostPath: string): string {
+        const resolvedAppHostPath = this._findMatchingRunningAppHostPath(appHostPath) ?? appHostPath;
         for (const existingPath of this._postStopRefreshTimers.keys()) {
-            if (isMatchingAppHostPath(existingPath, appHostPath)) {
+            if (isMatchingAppHostPath(existingPath, resolvedAppHostPath)) {
                 return existingPath;
             }
         }
 
-        return getComparisonKey(path.normalize(appHostPath));
+        return getComparisonKey(path.normalize(resolvedAppHostPath));
+    }
+
+    private _findMatchingRunningAppHostPath(appHostPath: string): string | undefined {
+        const runningAppHostPaths = this._getRunningAppHostPaths();
+        const exactMatch = runningAppHostPaths.find(runningPath => isMatchingAppHostPath(runningPath, appHostPath));
+        if (exactMatch) {
+            return exactMatch;
+        }
+
+        const folderMatches = runningAppHostPaths.filter(runningPath => isAppHostPathUnderFolder(runningPath, appHostPath));
+        return folderMatches.length === 1 ? folderMatches[0] : undefined;
+    }
+
+    private _getRunningAppHostPaths(): string[] {
+        const paths: string[] = [];
+        for (const appHostPath of [
+            ...this._appHosts.map(appHost => appHost.appHostPath),
+            this._workspaceAppHost?.appHostPath,
+        ]) {
+            if (appHostPath && !paths.some(existingPath => isSameAppHostPath(existingPath, appHostPath))) {
+                paths.push(appHostPath);
+            }
+        }
+
+        return paths;
     }
 
     private _clearPostStopRefreshTimers(): void {
@@ -427,6 +490,36 @@ export class AppHostDataRepository {
         this._syncPolling();
     }
 
+    async fetchAppHostsOnce(): Promise<AppHostDisplayInfo[]> {
+        const appHosts = await this._runCliJson<AppHostDisplayInfo[] | AppHostDisplayInfo>('aspire ps', ['ps', '--format', 'json']);
+        const appHostList = Array.isArray(appHosts) ? appHosts : [appHosts];
+        const appHostsWithResources = await Promise.allSettled(appHostList.map(async appHost => ({
+            ...appHost,
+            resources: await this._fetchAppHostResourcesOnce(appHost.appHostPath),
+        })));
+
+        return appHostsWithResources.map((result, index) => {
+            if (result.status === 'fulfilled') {
+                return result.value;
+            }
+
+            extensionLogOutputChannel.warn(`Failed to describe AppHost ${appHostList[index].appHostPath}: ${result.reason}`);
+            return {
+                ...appHostList[index],
+                resources: [],
+            };
+        });
+    }
+
+    async runResourceCommand(resourceName: string, appHostPath: string, commandName: 'start' | 'stop'): Promise<void> {
+        const trimmedAppHostPath = appHostPath.trim();
+        if (!trimmedAppHostPath || !path.isAbsolute(trimmedAppHostPath)) {
+            throw new Error(appHostPathMustBeNonEmptyAbsolute);
+        }
+
+        await this._runCliCommand(`aspire resource ${commandName}`, ['resource', resourceName, commandName, '--apphost', trimmedAppHostPath]);
+    }
+
     dispose(): void {
         this._disposed = true;
         this._clearPostStopRefreshTimers();
@@ -434,6 +527,7 @@ export class AppHostDataRepository {
         this._stopPolling();
         this._stopDescribeWatch();
         this._stopAllGlobalDescribes();
+        this._stopOneShotProcesses();
         this._cancelWorkspaceAppHostDiscovery();
         this._configChangeDisposable.dispose();
         this._appHostDiscoveryChangeDisposable.dispose();
@@ -1069,6 +1163,7 @@ export class AppHostDataRepository {
         if (!trimmed) {
             return true;
         }
+
         try {
             const resource: ResourceJson = JSON.parse(trimmed);
             if (resource.name) {
@@ -1083,6 +1178,83 @@ export class AppHostDataRepository {
         }
 
         return false;
+    }
+
+    private async _runCliJson<T>(command: string, args: string[]): Promise<T> {
+        const { stdout } = await this._runCliCommand(command, args);
+
+        try {
+            return parseCliJsonOutput<T>(stdout);
+        } catch (error) {
+            throw new AspireCliParseError(command, stdout, error);
+        }
+    }
+
+    private async _runCliCommand(command: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
+        const cliPath = await this._terminalProvider.getAspireCliExecutablePath().catch(error => {
+            throw new AspireCliNotInstalledError(String(error));
+        });
+
+        return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+            let stdout = '';
+            let stderr = '';
+            let settled = false;
+            let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
+            let cliProcess: ChildProcessWithoutNullStreams | undefined;
+
+            const settle = (callback: () => void) => {
+                if (settled) {
+                    return;
+                }
+
+                settled = true;
+                if (timeoutTimer) {
+                    clearTimeout(timeoutTimer);
+                    timeoutTimer = undefined;
+                }
+                if (cliProcess) {
+                    this._oneShotProcesses.delete(cliProcess);
+                    if (cliProcess.exitCode === null && !cliProcess.killed) {
+                        this._terminateProcess(cliProcess, command);
+                    }
+                }
+                callback();
+            };
+
+            timeoutTimer = setTimeout(() => {
+                settle(() => reject(new AspireCliFailedError(command, null, stdout, stderr || aspireCliCommandTimedOut(AppHostDataRepository._oneShotCommandTimeoutMs))));
+            }, AppHostDataRepository._oneShotCommandTimeoutMs);
+
+            cliProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
+                noExtensionVariables: true,
+                stdoutCallback: (data) => { stdout += data; },
+                stderrCallback: (data) => { stderr = appendLimitedOutput(stderr, data, AppHostDataRepository._oneShotOutputBufferLimit); },
+                exitCallback: (code) => {
+                    if (code !== 0) {
+                        settle(() => reject(new AspireCliFailedError(command, code, stdout, stderr)));
+                        return;
+                    }
+
+                    settle(() => resolve({ stdout, stderr }));
+                },
+                errorCallback: (error) => {
+                    settle(() => reject(new AspireCliNotInstalledError(error.message)));
+                },
+            });
+            this._oneShotProcesses.add(cliProcess);
+        });
+    }
+
+    private async _fetchAppHostResourcesOnce(appHostPath: string): Promise<ResourceJson[]> {
+        const snapshot = await this._runCliJson<DescribeSnapshotJson>('aspire describe', ['describe', '--format', 'json', '--apphost', appHostPath]);
+        return snapshot.resources ?? [];
+    }
+
+    private _stopOneShotProcesses(): void {
+        for (const process of this._oneShotProcesses) {
+            this._terminateProcess(process, 'one-shot aspire command');
+        }
+        this._oneShotProcesses.clear();
     }
 
     private _stopGlobalDescribe(appHostPath: string): void {
@@ -1766,6 +1938,45 @@ function getComparisonKey(value: string): string {
     return process.platform === 'win32' ? value.toLowerCase() : value;
 }
 
+function getCommandOutputSuffix(stdout: string, stderr: string): string {
+    const output = (stderr || stdout).trim();
+    const limitedOutput = output.length <= oneShotOutputBufferLimit
+        ? output
+        : output.slice(output.length - oneShotOutputBufferLimit);
+
+    return limitedOutput ? `: ${limitedOutput}` : '';
+}
+
+function appendLimitedOutput(existing: string, data: string, limit: number): string {
+    const combined = existing + data;
+
+    return combined.length <= limit ? combined : combined.slice(combined.length - limit);
+}
+
+function parseCliJsonOutput<T>(stdout: string): T {
+    try {
+        return JSON.parse(stdout);
+    } catch (error) {
+        // Some CLI invocations can emit startup diagnostics before the final JSON payload:
+        //   Starting AppHost...
+        //   {"resources":[{"name":"api", ...}]}
+        // Parse the whole output first for the normal deterministic path, then fall back to
+        // the last JSON-looking line so older or chatty CLIs do not poison the snapshot.
+        for (const line of stdout.split(/\r?\n/).reverse()) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+                try {
+                    return JSON.parse(trimmed);
+                } catch {
+                    // Keep scanning in case the CLI wrote a JSON-looking diagnostic after the payload.
+                }
+            }
+        }
+
+        throw error;
+    }
+}
+
 function isPathInWorkspace(filePath: string): boolean {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     if (!workspaceFolder) {
@@ -1823,6 +2034,21 @@ export function isMatchingAppHostPath(left: string | undefined, right: string | 
     // the same workspace AppHost.
     return getComparisonKey(path.dirname(normalizedLeft)) === getComparisonKey(path.dirname(normalizedRight))
         && isProjectFileToSourceFileMatch(normalizedLeft, normalizedRight);
+}
+
+export function isAppHostPathUnderFolder(appHostPath: string | undefined, folderPath: string | undefined): boolean {
+    if (!appHostPath || !folderPath) {
+        return false;
+    }
+
+    const normalizedAppHostPath = getComparisonKey(path.normalize(appHostPath));
+    const normalizedFolderPath = getComparisonKey(path.normalize(folderPath));
+    if (normalizedAppHostPath === normalizedFolderPath) {
+        return false;
+    }
+
+    const folderPrefix = normalizedFolderPath.endsWith(path.sep) ? normalizedFolderPath : `${normalizedFolderPath}${path.sep}`;
+    return normalizedAppHostPath.startsWith(folderPrefix);
 }
 
 function isProjectFileToSourceFileMatch(left: string, right: string): boolean {

@@ -8,6 +8,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Hosting.Backchannel;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
 using Semver;
 
@@ -139,7 +140,10 @@ internal static class AppHostHelper
         int currentPid,
         ILogger logger)
     {
-        var matchingSockets = BackchannelConstants.FindMatchingSockets(appHostPath, homeDirectory);
+        // Resolve symlinks so callers that provide "/tmp/..." can still match sockets keyed
+        // off the physical path (for example "/private/tmp/..." on macOS).
+        var resolvedPath = PathNormalizer.ResolveSymlinks(appHostPath);
+        var matchingSockets = BackchannelConstants.FindMatchingSockets(resolvedPath, homeDirectory);
         var remainingSockets = PruneOrphanedSockets(matchingSockets, currentPid, out var deletedCount);
         if (deletedCount > 0)
         {

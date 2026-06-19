@@ -47,6 +47,7 @@ import {
     ResourceCommandArgumentInputJson,
     ResourceJson,
     ViewMode,
+    isAppHostPathUnderFolder,
     isMatchingAppHostPath,
     shortenPaths,
     ResourceCommandJson,
@@ -672,8 +673,9 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     }
 
     private _trackStoppingAppHost(appHostPath: string): void {
-        const existingKey = this._findStoppingAppHostKey(appHostPath);
-        const key = existingKey ?? getComparisonKey(path.normalize(path.resolve(appHostPath)));
+        const resolvedAppHostPath = this._findKnownRunningAppHostPath(appHostPath) ?? appHostPath;
+        const existingKey = this._findStoppingAppHostKey(resolvedAppHostPath);
+        const key = existingKey ?? getComparisonKey(path.normalize(path.resolve(resolvedAppHostPath)));
         const existingTimeout = this._stoppingAppHostTimeouts.get(key);
         if (existingTimeout) {
             clearTimeout(existingTimeout);
@@ -699,11 +701,32 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return false;
         }
 
-        if (this._repository.workspaceAppHost?.appHostPath && isMatchingAppHostPath(this._repository.workspaceAppHost.appHostPath, appHostPath)) {
-            return true;
+        return this._findKnownRunningAppHostPath(appHostPath) !== undefined;
+    }
+
+    private _findKnownRunningAppHostPath(appHostPath: string): string | undefined {
+        const runningAppHostPaths = this._getKnownRunningAppHostPaths();
+        const exactMatch = runningAppHostPaths.find(runningPath => isMatchingAppHostPath(runningPath, appHostPath));
+        if (exactMatch) {
+            return exactMatch;
         }
 
-        return this._repository.appHosts.some(appHost => isMatchingAppHostPath(appHost.appHostPath, appHostPath));
+        const folderMatches = runningAppHostPaths.filter(runningPath => isAppHostPathUnderFolder(runningPath, appHostPath));
+        return folderMatches.length === 1 ? folderMatches[0] : undefined;
+    }
+
+    private _getKnownRunningAppHostPaths(): string[] {
+        const paths: string[] = [];
+        for (const appHostPath of [
+            this._repository.workspaceAppHost?.appHostPath,
+            ...this._repository.appHosts.map(appHost => appHost.appHostPath),
+        ]) {
+            if (appHostPath && !paths.some(existingPath => isSamePath(existingPath, appHostPath))) {
+                paths.push(appHostPath);
+            }
+        }
+
+        return paths;
     }
 
     private _findStoppingAppHostKey(appHostPath: string | undefined): string | undefined {

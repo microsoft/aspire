@@ -2,7 +2,7 @@
 
 How to set up your machine, the code layout, and the fastest inner-loop for changes.
 
-Bug fixes, new commands, debugger-language support, walkthrough content, settings, and docs are all welcome. To find a starting point, browse [`area-extension` issues labeled `good first issue` or `help wanted`](https://github.com/microsoft/aspire/issues?q=is%3Aissue+is%3Aopen+label%3Aarea-extension+label%3A%22good+first+issue%22%2C%22help+wanted%22).
+Bug fixes, new commands, debugger-language support, walkthrough content, settings, and docs are all welcome. To find a starting point, browse [`area-vscode-extension` issues labeled `good first issue` or `help wanted`](https://github.com/microsoft/aspire/issues?q=is%3Aissue+is%3Aopen+label%3Aarea-vscode-extension+label%3A%22good+first+issue%22%2C%22help+wanted%22).
 
 ## Install prerequisites
 
