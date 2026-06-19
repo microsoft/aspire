@@ -157,34 +157,45 @@ suite('utils/cliPath tests', () => {
             assert.ok(setConfiguredPath.notCalled, 'should not update settings when CLI is on PATH');
         });
 
-        test('clears setting when CLI is on PATH and setting was previously set to a default path', async () => {
+        test('prefers valid configured default path over PATH', async () => {
             const setConfiguredPath = sinon.stub().resolves();
 
             const deps = createMockDeps({
                 getConfiguredPath: () => bundlePath,
                 isOnPath: async () => true,
+                tryExecute: async (p) => p === bundlePath,
                 setConfiguredPath,
             });
 
             const result = await resolveCliPath(deps);
 
-            assert.strictEqual(result.source, 'path');
-            assert.ok(setConfiguredPath.calledOnceWith(''), 'should clear the setting');
+            assert.strictEqual(result.source, 'configured');
+            assert.strictEqual(result.cliPath, bundlePath);
+            assert.ok(setConfiguredPath.notCalled, 'should not clear an explicit configured path');
         });
 
-        test('clears setting when CLI is on PATH and setting was previously set to global tool path', async () => {
+        test('prefers configured Windows cmd shim path over PATH', async () => {
             const setConfiguredPath = sinon.stub().resolves();
+            const windowsGlobalToolCmdPath = 'C:\\Users\\user\\.dotnet\\tools\\aspire.cmd';
 
             const deps = createMockDeps({
-                getConfiguredPath: () => globalToolPath,
+                getConfiguredPath: () => windowsGlobalToolCmdPath,
+                getDefaultPaths: () => [
+                    'C:\\Users\\user\\.aspire\\bin\\aspire.exe',
+                    'C:\\Users\\user\\.aspire\\bin\\aspire.cmd',
+                    'C:\\Users\\user\\.dotnet\\tools\\aspire.exe',
+                    windowsGlobalToolCmdPath,
+                ],
                 isOnPath: async () => true,
+                tryExecute: async (p) => p === windowsGlobalToolCmdPath,
                 setConfiguredPath,
             });
 
             const result = await resolveCliPath(deps);
 
-            assert.strictEqual(result.source, 'path');
-            assert.ok(setConfiguredPath.calledOnceWith(''), 'should clear the setting');
+            assert.strictEqual(result.source, 'configured');
+            assert.strictEqual(result.cliPath, windowsGlobalToolCmdPath);
+            assert.ok(setConfiguredPath.notCalled, 'should not clear an explicit configured .cmd path');
         });
 
         test('returns not-found when CLI is not on PATH and not at any default path', async () => {
@@ -252,12 +263,14 @@ suite('utils/cliPath tests', () => {
                 getConfiguredPath: () => bundlePath,
                 isOnPath: async () => false,
                 findAtDefaultPath: async () => bundlePath,
+                tryExecute: async (p) => p === bundlePath,
                 setConfiguredPath,
             });
 
             const result = await resolveCliPath(deps);
 
-            assert.strictEqual(result.source, 'default-install');
+            assert.strictEqual(result.source, 'configured');
+            assert.strictEqual(result.cliPath, bundlePath);
             assert.ok(setConfiguredPath.notCalled, 'should not re-set the path if it already matches');
         });
     });

@@ -168,12 +168,11 @@ const defaultDependencies: CliPathDependencies = {
  * If the CLI is found at a default installation path but not on PATH,
  * the VS Code setting is updated to use that path.
  *
- * If the CLI is on PATH and a setting was previously auto-configured to a default path,
- * the setting is cleared to prefer PATH.
+ * If a setting is configured, it is treated as authoritative when valid because users can
+ * intentionally pin a default-location shim while PATH resolves a different CLI.
  */
 export async function resolveCliPath(deps: CliPathDependencies = defaultDependencies): Promise<CliPathResolutionResult> {
     const configuredPath = deps.getConfiguredPath();
-    const defaultPaths = deps.getDefaultPaths();
     const e2eCliPath = process.env.ASPIRE_EXTENSION_E2E_CLI_PATH?.trim();
 
     if (e2eCliPath) {
@@ -185,8 +184,7 @@ export async function resolveCliPath(deps: CliPathDependencies = defaultDependen
         extensionLogOutputChannel.warn(`E2E CLI path is invalid: ${e2eCliPath}`);
     }
 
-    // Check if user has configured a custom path (not one of the defaults)
-    if (configuredPath && !defaultPaths.includes(configuredPath)) {
+    if (configuredPath) {
         const isValid = await deps.tryExecute(configuredPath);
         if (isValid) {
             return { cliPath: configuredPath, available: true, source: 'configured' };
@@ -199,13 +197,6 @@ export async function resolveCliPath(deps: CliPathDependencies = defaultDependen
     // 2. Check if CLI is on PATH
     const onPath = await deps.isOnPath();
     if (onPath) {
-        // If we previously auto-set the path to a default install location, clear it
-        // since PATH is now working
-        if (defaultPaths.includes(configuredPath)) {
-            extensionLogOutputChannel.info('Clearing aspireCliExecutablePath setting since CLI is on PATH');
-            await deps.setConfiguredPath('');
-        }
-
         return { cliPath: 'aspire', available: true, source: 'path' };
     }
 
