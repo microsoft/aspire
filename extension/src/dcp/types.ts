@@ -103,6 +103,16 @@ export function isAzureFunctionsLaunchConfiguration(obj: any): obj is AzureFunct
     return obj && obj.type === 'azure-functions';
 }
 
+export interface JavaLaunchConfiguration extends ExecutableLaunchConfiguration {
+    type: "java";
+    request?: "launch" | "attach";
+    working_directory?: string;
+}
+
+export function isJavaLaunchConfiguration(obj: any): obj is JavaLaunchConfiguration {
+    return obj && obj.type === 'java';
+}
+
 export interface EnvVar {
     name: string;
     value: string;
