@@ -47,15 +47,9 @@ public sealed class IsolatedInstancesOtelLogsTests(ITestOutputHelper output)
         const string appHost1 = "instance1/IsolatedApp.AppHost/IsolatedApp.AppHost.csproj";
         const string appHost2 = "instance2/IsolatedApp.AppHost/IsolatedApp.AppHost.csproj";
 
-        // Start instance1 with --isolated
-        await auto.TypeAsync($"aspire start --isolated --apphost {appHost1}");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        // Start instance2 with --isolated
-        await auto.TypeAsync($"aspire start --isolated --apphost {appHost2}");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        // Start both instances with --isolated
+        await auto.AspireStartAsync(counter, isolated: true, apphost: appHost1);
+        await auto.AspireStartAsync(counter, isolated: true, apphost: appHost2);
 
         // Wait for the apiservice resource in instance1 to be running
         await auto.TypeAsync($"aspire wait apiservice --apphost {appHost1} --status up --timeout 300");
@@ -69,41 +63,43 @@ public sealed class IsolatedInstancesOtelLogsTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("is up (running).", timeout: TimeSpan.FromMinutes(6));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Capture otel logs from instance1
-        await auto.TypeAsync($"aspire otel logs --apphost {appHost1} --format json > /tmp/otel_instance1.json 2>&1");
+        // Capture otel logs from both instances into workspace-relative files
+        // so they are included in [CaptureWorkspaceOnFailure] artifacts.
+        await auto.TypeAsync($"aspire otel logs --apphost {appHost1} --format json > otel_instance1.json 2>&1");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Capture otel logs from instance2
-        await auto.TypeAsync($"aspire otel logs --apphost {appHost2} --format json > /tmp/otel_instance2.json 2>&1");
+        await auto.TypeAsync($"aspire otel logs --apphost {appHost2} --format json > otel_instance2.json 2>&1");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Assert both files have structured log content (resourceLogs key)
-        await auto.TypeAsync("grep -q 'resourceLogs' /tmp/otel_instance1.json && echo 'INSTANCE1_HAS_LOGS' || echo 'INSTANCE1_NO_LOGS'");
+        await auto.TypeAsync("grep -q 'resourceLogs' otel_instance1.json && echo 'INSTANCE1_HAS_LOGS' || echo 'INSTANCE1_NO_LOGS'");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("INSTANCE1_HAS_LOGS", timeout: TimeSpan.FromSeconds(10));
         await auto.WaitForAnyPromptAsync(counter);
 
-        await auto.TypeAsync("grep -q 'resourceLogs' /tmp/otel_instance2.json && echo 'INSTANCE2_HAS_LOGS' || echo 'INSTANCE2_NO_LOGS'");
+        await auto.TypeAsync("grep -q 'resourceLogs' otel_instance2.json && echo 'INSTANCE2_HAS_LOGS' || echo 'INSTANCE2_NO_LOGS'");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("INSTANCE2_HAS_LOGS", timeout: TimeSpan.FromSeconds(10));
         await auto.WaitForAnyPromptAsync(counter);
 
-        // Assert that telemetry from the two instances is different.
-        // Each instance has its own service.instance.id in OTLP, so the JSON payloads differ.
-        await auto.TypeAsync("if ! diff -q /tmp/otel_instance1.json /tmp/otel_instance2.json > /dev/null 2>&1; then echo 'TELEMETRY_DIFFERS'; else echo 'TELEMETRY_SAME'; fi");
+        // Extract the ContentRoot values from each instance's structured logs and verify they
+        // point at the correct instance directory. The OTLP JSON body contains log messages like:
+        //   "Content root path: /workspace/instance1/IsolatedApp.AppHost"
+        // Matching against the instance directory proves each AppHost runs from its own root.
+        await auto.TypeAsync("grep -o 'Content root path: [^\"]*' otel_instance1.json | head -1");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("TELEMETRY_DIFFERS", timeout: TimeSpan.FromSeconds(10));
+        await auto.WaitUntilTextAsync("instance1", timeout: TimeSpan.FromSeconds(10));
+        await auto.WaitForAnyPromptAsync(counter);
+
+        await auto.TypeAsync("grep -o 'Content root path: [^\"]*' otel_instance2.json | head -1");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("instance2", timeout: TimeSpan.FromSeconds(10));
         await auto.WaitForAnyPromptAsync(counter);
 
         // Stop both instances
-        await auto.TypeAsync($"aspire stop --apphost {appHost1}");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        await auto.TypeAsync($"aspire stop --apphost {appHost2}");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.AspireStopAsync(counter, apphost: appHost1);
+        await auto.AspireStopAsync(counter, apphost: appHost2);
     }
 }

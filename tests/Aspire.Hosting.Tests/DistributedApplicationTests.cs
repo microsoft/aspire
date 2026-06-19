@@ -1443,7 +1443,7 @@ public class DistributedApplicationTests
         var args = new string[] {
             $"{KnownConfigNames.ResourceServiceEndpointUrl}={configuredResourceServiceUrl}"
         };
-        using var testProgram = CreateTestProgram(testName, args: args, disableDashboard: false);
+        using var testProgram = CreateTestProgram(testName, args: args, disableDashboard: false, randomizePorts: false);
 
         await using var app = testProgram.Build();
 
@@ -1454,6 +1454,41 @@ public class DistributedApplicationTests
         {
             var resourceServiceUri = await dashboardServiceHost.GetResourceServiceUriAsync();
             Assert.Equal(configuredResourceServiceUrl, resourceServiceUri.TrimEnd('/'));
+        }
+        finally
+        {
+            await ((IHostedService)dashboardServiceHost).StopAsync(CancellationToken.None);
+        }
+    }
+
+    [Theory]
+    [InlineData("localhost", "127.0.0.1")]
+    [InlineData("127.0.0.1", "127.0.0.1")]
+    [InlineData("[::1]", "[::1]")]
+    public async Task StartAsync_ResourceServiceEndpointUrl_RandomizePortsIgnoresConfiguredPort(string host, string expectedHost)
+    {
+        const string testName = "dashboard-resource-service-randomize-ports";
+        const int hardcodedPort = 5000;
+        var configuredResourceServiceUrl = $"http://{host}:{hardcodedPort}";
+        var args = new string[] {
+            $"{KnownConfigNames.ResourceServiceEndpointUrl}={configuredResourceServiceUrl}"
+        };
+        using var testProgram = CreateTestProgram(testName, args: args, disableDashboard: false, randomizePorts: true);
+
+        await using var app = testProgram.Build();
+
+        var dashboardServiceHost = app.Services.GetRequiredService<DashboardServiceHost>();
+        await ((IHostedService)dashboardServiceHost).StartAsync(CancellationToken.None);
+
+        try
+        {
+            var resourceServiceUri = await dashboardServiceHost.GetResourceServiceUriAsync();
+            var actualUri = new Uri(resourceServiceUri);
+
+            // When RandomizePorts is true (e.g. --isolated mode), the configured port should be
+            // ignored and a dynamic port assigned instead to avoid collisions.
+            Assert.NotEqual(hardcodedPort, actualUri.Port);
+            Assert.Equal(expectedHost, actualUri.Host);
         }
         finally
         {
