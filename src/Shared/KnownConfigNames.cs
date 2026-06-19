@@ -21,6 +21,13 @@ internal static class KnownConfigNames
     public const string DashboardApiDisabled = "ASPIRE_DASHBOARD_API_DISABLED";
     public const string DashboardForwardedHeadersEnabled = "ASPIRE_DASHBOARD_FORWARDEDHEADERS_ENABLED";
 
+    // When set, the AppHost still hosts the resource service and configures resources to export
+    // OTLP telemetry, but it does NOT launch the built-in Aspire dashboard process. This lets an
+    // external dashboard (e.g. Aspire Deck) substitute for the dashboard: the external app hosts
+    // the OTLP endpoints (pointed at via DashboardOtlpGrpcEndpointUrl/DashboardOtlpHttpEndpointUrl)
+    // and connects to the resource service (ResourceServiceEndpointUrl).
+    public const string DashboardExternal = "ASPIRE_DASHBOARD_EXTERNAL";
+
     public const string ShowDashboardResources = "ASPIRE_SHOW_DASHBOARD_RESOURCES";
     public const string ResourceServiceEndpointUrl = "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL";
 
@@ -109,6 +116,8 @@ internal static class KnownConfigNames
         public const string DashboardCorsAllowedOrigins = "DOTNET_DASHBOARD_CORS_ALLOWED_ORIGINS";
         public const string DashboardConfigFilePath = "DOTNET_DASHBOARD_CONFIG_FILE_PATH";
         public const string DashboardFileConfigDirectory = "DOTNET_DASHBOARD_FILE_CONFIG_DIRECTORY";
+
+        public const string DashboardExternal = "DOTNET_DASHBOARD_EXTERNAL";
 
         public const string ShowDashboardResources = "DOTNET_SHOW_DASHBOARD_RESOURCES";
         public const string ResourceServiceEndpointUrl = "DOTNET_RESOURCE_SERVICE_ENDPOINT_URL";

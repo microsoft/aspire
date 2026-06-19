@@ -3,11 +3,9 @@
 
 using System.CommandLine;
 using System.Globalization;
-using System.Runtime.InteropServices;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.Layout;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
@@ -33,7 +31,7 @@ internal sealed class DeckCommand : BaseCommand
 
     protected override bool UpdateNotificationsEnabled => true;
 
-    private readonly LayoutProcessRunner _layoutProcessRunner;
+    private readonly DeckLauncher _deckLauncher;
     private readonly FileLoggerProvider _fileLoggerProvider;
     private readonly ILogger<DeckCommand> _logger;
 
@@ -58,13 +56,13 @@ internal sealed class DeckCommand : BaseCommand
     };
 
     public DeckCommand(
-        LayoutProcessRunner layoutProcessRunner,
+        DeckLauncher deckLauncher,
         FileLoggerProvider fileLoggerProvider,
         ILogger<DeckCommand> logger,
         CommonCommandServices services)
         : base("deck", DeckCommandStrings.Description, services)
     {
-        _layoutProcessRunner = layoutProcessRunner;
+        _deckLauncher = deckLauncher;
         _fileLoggerProvider = fileLoggerProvider;
         _logger = logger;
 
@@ -76,7 +74,7 @@ internal sealed class DeckCommand : BaseCommand
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
-        var deckPath = ResolveDeckExecutable(parseResult);
+        var deckPath = _deckLauncher.ResolveExecutable(parseResult.GetValue(s_deckPathOption));
         if (deckPath is null)
         {
             InteractionService.DisplayError(DeckCommandStrings.DeckExecutableNotFound);
@@ -92,83 +90,11 @@ internal sealed class DeckCommand : BaseCommand
         var resourceServiceUrl = parseResult.GetValue(s_resourceServiceUrlOption)
             ?? ExecutionContext.GetEnvironmentVariable(KnownConfigNames.ResourceServiceEndpointUrl);
 
-        // The Deck reads all of its configuration from the environment (the same
-        // variables the dashboard reads), so the CLI's job is to populate them and
-        // launch the process. Start from the current environment so existing
-        // DASHBOARD__* settings (auth modes, API keys) flow through unchanged.
-        var environmentVariables = new Dictionary<string, string>
-        {
-            [KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = otlpGrpcUrl,
-            [KnownConfigNames.DashboardOtlpHttpEndpointUrl] = otlpHttpUrl,
-        };
-
-        if (!string.IsNullOrEmpty(resourceServiceUrl))
-        {
-            environmentVariables[KnownConfigNames.ResourceServiceEndpointUrl] = resourceServiceUrl;
-        }
-
-        var info = new DeckInfo(otlpGrpcUrl, otlpHttpUrl, resourceServiceUrl);
-        return await ExecuteForegroundAsync(deckPath, environmentVariables, info, cancellationToken).ConfigureAwait(false);
+        var info = new DeckLaunchInfo(otlpGrpcUrl, otlpHttpUrl, resourceServiceUrl);
+        return await ExecuteForegroundAsync(deckPath, info, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Resolves the Aspire Deck executable, in priority order:
-    /// the <c>--deck-path</c> option, the <c>ASPIRE_DECK_PATH</c> environment
-    /// variable, then a conventional build output under the repository.
-    /// </summary>
-    private string? ResolveDeckExecutable(ParseResult parseResult)
-    {
-        var fromOption = parseResult.GetValue(s_deckPathOption);
-        if (!string.IsNullOrEmpty(fromOption) && File.Exists(fromOption))
-        {
-            return fromOption;
-        }
-
-        var fromEnv = ExecutionContext.GetEnvironmentVariable("ASPIRE_DECK_PATH");
-        if (!string.IsNullOrEmpty(fromEnv) && File.Exists(fromEnv))
-        {
-            return fromEnv;
-        }
-
-        return ResolveDevBuildExecutable();
-    }
-
-    /// <summary>
-    /// Locates a locally built Deck binary by walking up from the CLI's base
-    /// directory looking for <c>src/Aspire.Deck/src-tauri/target</c> (the Cargo
-    /// output directory), preferring a release build over a debug build. This
-    /// makes <c>aspire deck</c> work out of the box from a repo checkout after
-    /// the Deck has been built, without requiring <c>ASPIRE_DECK_PATH</c>.
-    /// </summary>
-    private static string? ResolveDevBuildExecutable()
-    {
-        var exeName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-            ? "aspire-deck.exe"
-            : "aspire-deck";
-
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            var target = Path.Combine(dir.FullName, "src", "Aspire.Deck", "src-tauri", "target");
-            if (Directory.Exists(target))
-            {
-                foreach (var profile in new[] { "release", "debug" })
-                {
-                    var candidate = Path.Combine(target, profile, exeName);
-                    if (File.Exists(candidate))
-                    {
-                        return candidate;
-                    }
-                }
-            }
-
-            dir = dir.Parent;
-        }
-
-        return null;
-    }
-
-    private async Task<CommandResult> ExecuteForegroundAsync(string deckPath, IDictionary<string, string> environmentVariables, DeckInfo info, CancellationToken cancellationToken)
+    private async Task<CommandResult> ExecuteForegroundAsync(string deckPath, DeckLaunchInfo info, CancellationToken cancellationToken)
     {
         _logger.LogDebug("Starting Aspire Deck: {DeckPath}", deckPath);
 
@@ -182,7 +108,7 @@ internal sealed class DeckCommand : BaseCommand
         IProcessExecution process;
         try
         {
-            process = _layoutProcessRunner.Start(deckPath, [], environmentVariables: environmentVariables, options: options);
+            process = _deckLauncher.Start(deckPath, info, options: options);
         }
         catch (Exception ex)
         {
@@ -224,7 +150,7 @@ internal sealed class DeckCommand : BaseCommand
         return CommandResult.Success();
     }
 
-    private static void RenderDeckSummary(IInteractionService interactionService, DeckInfo info, string logFilePath)
+    private static void RenderDeckSummary(IInteractionService interactionService, DeckLaunchInfo info, string logFilePath)
     {
         interactionService.DisplayEmptyLine();
         var grid = new Grid();
@@ -262,6 +188,4 @@ internal sealed class DeckCommand : BaseCommand
         var padder = new Padder(grid, new Padding(3, 0));
         interactionService.DisplayRenderable(padder);
     }
-
-    private sealed record DeckInfo(string OtlpGrpcUrl, string OtlpHttpUrl, string? ResourceServiceUrl);
 }

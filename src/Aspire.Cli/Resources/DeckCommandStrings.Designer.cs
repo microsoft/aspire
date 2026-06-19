@@ -128,5 +128,11 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("LogsLabel", resourceCulture);
             }
         }
+
+        public static string DeckLaunched {
+            get {
+                return ResourceManager.GetString("DeckLaunched", resourceCulture);
+            }
+        }
     }
 }

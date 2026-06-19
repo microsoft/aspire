@@ -72,6 +72,7 @@ internal sealed class RunCommand : BaseCommand
     private readonly ICliHostEnvironment _hostEnvironment;
     private readonly ProfilingTelemetry _profilingTelemetry;
     private readonly TimeProvider _timeProvider;
+    private readonly DeckLauncher _deckLauncher;
     private bool _isDetachMode;
     private const int MaxDisplayedAppHostStartupOutputLines = 80;
 
@@ -92,6 +93,10 @@ internal sealed class RunCommand : BaseCommand
     {
         Description = RunCommandStrings.NoBuildArgumentDescription
     };
+    private static readonly Option<bool> s_deckOption = new("--deck")
+    {
+        Description = RunCommandStrings.DeckArgumentDescription
+    };
 
     public RunCommand(
         IDotNetCliRunner runner,
@@ -106,6 +111,7 @@ internal sealed class RunCommand : BaseCommand
         ICliHostEnvironment hostEnvironment,
         ProfilingTelemetry profilingTelemetry,
         TimeProvider timeProvider,
+        DeckLauncher deckLauncher,
         CommonCommandServices services)
         : base("run", RunCommandStrings.Description, services)
     {
@@ -122,9 +128,16 @@ internal sealed class RunCommand : BaseCommand
         _hostEnvironment = hostEnvironment;
         _profilingTelemetry = profilingTelemetry;
         _timeProvider = timeProvider;
+        _deckLauncher = deckLauncher;
 
         Options.Add(s_detachOption);
         Options.Add(s_noBuildOption);
+        // 'aspire run --deck' substitutes Aspire Deck (a native preview UI) for the built-in
+        // dashboard. Hidden while Deck is in preview; gated by the same feature flag as 'aspire deck'.
+        if (services.Features.IsFeatureEnabled(KnownFeatures.DeckCommandEnabled, defaultValue: false))
+        {
+            Options.Add(s_deckOption);
+        }
         AppHostLauncher.AddLaunchOptions(this);
 
         TreatUnmatchedTokensAsErrors = false;
@@ -151,6 +164,32 @@ internal sealed class RunCommand : BaseCommand
         if (format == OutputFormat.Json && !detach)
         {
             return CommandResult.Failure(CliExitCodes.InvalidCommand, RunCommandStrings.FormatRequiresDetach);
+        }
+
+        // '--deck' substitutes Aspire Deck for the built-in dashboard: the AppHost runs in external
+        // dashboard mode (no dashboard process) while Deck hosts the OTLP endpoints and connects to
+        // the resource service. Resolve the Deck executable up front so we fail fast before starting
+        // the AppHost. The option is only registered when the preview feature flag is enabled, so a
+        // value is only ever present in that case.
+        var useDeck = _features.IsFeatureEnabled(KnownFeatures.DeckCommandEnabled, defaultValue: false)
+            && parseResult.GetValue(s_deckOption);
+        DeckLaunchInfo? deckInfo = null;
+        string? deckPath = null;
+        if (useDeck)
+        {
+            deckPath = _deckLauncher.ResolveExecutable(explicitPath: null);
+            if (deckPath is null)
+            {
+                return CommandResult.Failure(CliExitCodes.DashboardFailure, DeckCommandStrings.DeckExecutableNotFound);
+            }
+
+            // The CLI picks the endpoints so it can tell both the AppHost (where to send telemetry /
+            // host the resource service) and Deck (what to host / connect to) the same URLs. Plain
+            // http on loopback keeps the local dev wiring unsecured and key-free.
+            deckInfo = new DeckLaunchInfo(
+                OtlpGrpcUrl: $"http://localhost:{DeckLauncher.GetFreeLoopbackPort()}",
+                OtlpHttpUrl: $"http://localhost:{DeckLauncher.GetFreeLoopbackPort()}",
+                ResourceServiceUrl: $"http://localhost:{DeckLauncher.GetFreeLoopbackPort()}");
         }
 
         // Validate that --no-build is not used when watch mode would be enabled.
@@ -279,6 +318,19 @@ internal sealed class RunCommand : BaseCommand
                 ProfileCaptureEnvironment.AddCurrentToEnvironment(context.EnvironmentVariables);
             }
 
+            if (deckInfo is not null)
+            {
+                // Run the AppHost in external dashboard mode: it keeps hosting the resource service
+                // and exports OTLP telemetry to Deck's endpoints, but does not launch the built-in
+                // dashboard. Unsecured loopback transport avoids API-key/cert plumbing for local dev.
+                context.EnvironmentVariables[KnownConfigNames.DashboardExternal] = "true";
+                context.EnvironmentVariables[KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = deckInfo.OtlpGrpcUrl;
+                context.EnvironmentVariables[KnownConfigNames.DashboardOtlpHttpEndpointUrl] = deckInfo.OtlpHttpUrl;
+                context.EnvironmentVariables[KnownConfigNames.ResourceServiceEndpointUrl] = deckInfo.ResourceServiceUrl!;
+                context.EnvironmentVariables[KnownConfigNames.DashboardUnsecuredAllowAnonymous] = "true";
+                context.EnvironmentVariables[KnownConfigNames.AllowUnsecuredTransport] = "true";
+            }
+
             // Start the project run as a pending task - we'll handle UX while it runs
             Task<int> pendingRun;
             var startupTimeout = TimeSpan.FromSeconds(timeoutSeconds);
@@ -353,7 +405,13 @@ internal sealed class RunCommand : BaseCommand
                 var dashboardUrls = startup.DashboardUrls;
                 pendingLogCapture = startup.PendingLogCapture;
 
-                if (dashboardUrls.DashboardHealthy is false)
+                // In deck mode there is no built-in dashboard, so an "unhealthy" dashboard is
+                // expected — launch Deck instead and skip the dashboard warning.
+                if (deckInfo is not null && deckPath is not null)
+                {
+                    LaunchDeck(deckPath, deckInfo, pendingRun, cancellationToken);
+                }
+                else if (dashboardUrls.DashboardHealthy is false)
                 {
                     InteractionService.DisplayMessage(KnownEmojis.Warning, RunCommandStrings.DashboardFailedToStart);
                 }
@@ -853,6 +911,56 @@ internal sealed class RunCommand : BaseCommand
         }
 
         InteractionService.DisplayRenderable(BuildCtrlCRenderable(longestLocalizedLengthWithColon));
+    }
+
+    /// <summary>
+    /// Launches Aspire Deck wired to the AppHost (which is running in external dashboard mode) and
+    /// ties its lifetime to the run: Deck is terminated when the AppHost run completes or the command
+    /// is cancelled. The user closing Deck does not stop the run (mirroring the dashboard browser tab).
+    /// </summary>
+    private void LaunchDeck(string deckPath, DeckLaunchInfo deckInfo, Task<int> pendingRun, CancellationToken cancellationToken)
+    {
+        var outputCollector = new OutputCollector(_fileLoggerProvider, CliLogFormat.Categories.Dashboard);
+        var options = new ProcessInvocationOptions
+        {
+            StandardOutputCallback = outputCollector.AppendOutput,
+            StandardErrorCallback = outputCollector.AppendError,
+        };
+
+        IProcessExecution deckProcess;
+        try
+        {
+            deckProcess = _deckLauncher.Start(deckPath, deckInfo, options: options);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to start Aspire Deck process: {DeckPath}", deckPath);
+            InteractionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, DeckCommandStrings.DeckFailedToStart, ex.Message));
+            return;
+        }
+
+        void KillDeck()
+        {
+            try
+            {
+                if (!deckProcess.HasExited)
+                {
+                    deckProcess.Kill(entireProcessTree: true);
+                }
+            }
+            catch
+            {
+                // Best effort: the process may already be gone.
+            }
+
+            deckProcess.Dispose();
+        }
+
+        // Bound Deck's lifetime to the run: stop it when the AppHost exits or the user cancels.
+        cancellationToken.Register(KillDeck);
+        _ = pendingRun.ContinueWith(_ => KillDeck(), TaskScheduler.Default);
+
+        InteractionService.DisplayMessage(KnownEmojis.Rocket, string.Format(CultureInfo.CurrentCulture, DeckCommandStrings.DeckLaunched, deckInfo.OtlpGrpcUrl));
     }
 
     private static async Task<bool> RequestAppHostStopForProfileAsync(

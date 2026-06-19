@@ -17,6 +17,11 @@
         <target state="new">Failed to start Aspire Deck: {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="DeckLaunched">
+        <source>Aspire Deck (preview) launched. Telemetry endpoint: {0}</source>
+        <target state="new">Aspire Deck (preview) launched. Telemetry endpoint: {0}</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DeckPathOptionDescription">
         <source>The path to the Aspire Deck executable. Defaults to the ASPIRE_DECK_PATH environment variable or a local build.</source>
         <target state="new">The path to the Aspire Deck executable. Defaults to the ASPIRE_DECK_PATH environment variable or a local build.</target>

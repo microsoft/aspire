@@ -62,6 +62,17 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
     {
         Debug.Assert(executionContext.IsRunMode, "Dashboard resource should only be added in run mode");
 
+        // External dashboard mode: an external app (e.g. Aspire Deck) substitutes for the built-in
+        // dashboard. We keep hosting the resource service and exporting OTLP telemetry (the OTLP
+        // endpoint is taken from configuration via the resource OTLP fallback in
+        // OtlpConfigurationExtensions), but we do NOT add or launch the dashboard process. Skip
+        // adding the resource and watching its logs, since there is no dashboard resource.
+        if (configuration.GetBool(KnownConfigNames.DashboardExternal, KnownConfigNames.Legacy.DashboardExternal) is true)
+        {
+            distributedApplicationLogger.LogInformation("An external dashboard is configured; the built-in Aspire dashboard will not be started.");
+            return Task.CompletedTask;
+        }
+
         if (@event.Model.Resources.SingleOrDefault(r => string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName)) is { } dashboardResource)
         {
             ConfigureAspireDashboardResource(dashboardResource);

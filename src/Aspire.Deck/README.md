@@ -68,13 +68,30 @@ exactly as it would with the dashboard.
 # one-time: opt into the preview command
 aspire config set features.deckCommandEnabled true
 
-# launch Deck (resolves a built binary; wires OTLP + resource-service env vars)
+# run your app with Aspire Deck substituting the dashboard
+aspire run --deck
+
+# or launch Deck standalone (wire it up yourself / attach to a running resource service)
 aspire deck
 ```
+
+With `aspire run --deck` the AppHost runs in **external dashboard mode**: the built-in dashboard
+process is not started, but the AppHost still hosts the resource service and exports OTLP telemetry
+to Deck. The CLI picks the endpoints and wires both sides (unsecured loopback transport for local
+dev). Deck hosts the OTLP endpoints and connects to the resource service — fully replacing the
+dashboard for that run.
 
 `aspire deck` options: `--otlp-grpc-url`, `--otlp-http-url`, `--resource-service-url`,
 `--deck-path`. The binary is resolved from `--deck-path`, then `ASPIRE_DECK_PATH`, then a local
 build under `src/Aspire.Deck/src-tauri/target/`.
+
+#### External dashboard mode (`ASPIRE_DASHBOARD_EXTERNAL`)
+
+`aspire run --deck` sets `ASPIRE_DASHBOARD_EXTERNAL=true` on the AppHost. This is a general
+hosting capability: when set, the AppHost keeps hosting the resource service and configures
+resources to export OTLP telemetry, but does **not** launch the built-in dashboard. Point the
+OTLP endpoints (`ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL` / `..._HTTP_ENDPOINT_URL`) and the resource
+service (`ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL`) at the external dashboard.
 
 ### From source (development)
 

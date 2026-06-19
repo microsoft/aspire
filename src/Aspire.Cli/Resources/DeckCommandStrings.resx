@@ -159,4 +159,7 @@
   <data name="LogsLabel" xml:space="preserve">
     <value>Logs</value>
   </data>
+  <data name="DeckLaunched" xml:space="preserve">
+    <value>Aspire Deck (preview) launched. Telemetry endpoint: {0}</value>
+  </data>
 </root>
