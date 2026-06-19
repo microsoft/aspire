@@ -10,6 +10,8 @@ description: |
   does not invent a new format, and it never invents changes that aren't backed
   by commits in the range.
 
+max-daily-ai-credits: -1
+
 on:
   pull_request:
     # `labeled` is the only trigger: `.github/workflows/extension-release.yml`

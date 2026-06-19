@@ -11,6 +11,8 @@ description: |
   comments on the original PR with a link to the draft PR (or a "no docs
   needed" message).
 
+max-daily-ai-credits: -1
+
 on:
   pull_request:
     types: [closed]

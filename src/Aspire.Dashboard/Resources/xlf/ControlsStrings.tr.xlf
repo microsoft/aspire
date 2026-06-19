@@ -43,8 +43,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerGraphAccessibleLabel">
-        <source>Graph. For an accessible view please navigate to the Resources tab</source>
-        <target state="translated">Graph. Erişilebilir bir görünüm için lütfen Kaynaklar sekmesine gidin</target>
+        <source>Graph. For an accessible view please navigate to the Table tab</source>
+        <target state="needs-review-translation">Graph. Erişilebilir bir görünüm için lütfen Kaynaklar sekmesine gidin</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerGraphTab">
@@ -72,19 +72,14 @@
         <target state="translated">Kardinalite sınırlaması algılandı</target>
         <note />
       </trans-unit>
-      <trans-unit id="ChartContainerParametersTab">
-        <source>Parameters</source>
-        <target state="translated">Parametreler</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ChartContainerShowCountLabel">
         <source>Show count</source>
         <target state="translated">Sayıyı göster</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerTableTab">
-        <source>Resources</source>
-        <target state="translated">Kaynaklar</target>
+        <source>Table</source>
+        <target state="needs-review-translation">Kaynaklar</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerUnableToDisplay">
@@ -157,9 +152,29 @@
         <target state="translated">ENV dosyasını dışarı aktar</target>
         <note />
       </trans-unit>
-      <trans-unit id="ExportJson">
-        <source>Export JSON</source>
-        <target state="translated">JSON Dosyasını Dışarı Aktar</target>
+      <trans-unit id="ResourcesContainerGraphAccessibleLabel">
+        <source>Graph. For an accessible view please navigate to the Resources tab</source>
+        <target state="new">Graph. For an accessible view please navigate to the Resources tab</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcesContainerGraphTab">
+        <source>Graph</source>
+        <target state="new">Graph</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcesContainerParametersTab">
+        <source>Parameters</source>
+        <target state="new">Parameters</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcesContainerTableTab">
+        <source>Resources</source>
+        <target state="new">Resources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ViewJson">
+        <source>View JSON</source>
+        <target state="new">View JSON</target>
         <note />
       </trans-unit>
       <trans-unit id="FilterPlaceholder">

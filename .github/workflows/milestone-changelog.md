@@ -6,6 +6,8 @@ description: |
   of new features, improvements, and notable bug fixes. A companion GitHub issue collects
   editorial feedback (e.g., exclude a change, rename an entry, merge entries).
 
+max-daily-ai-credits: -1
+
 # ──────────────────────────────────────────────────────────
 # Architecture
 #
