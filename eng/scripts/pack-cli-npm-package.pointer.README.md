@@ -11,6 +11,16 @@ Your stack, streamlined. Aspire is a multi-language, code-first orchestration an
 
 Use an AppHost to describe how services, frontends, containers, databases, caches, and connections fit together in code. The Aspire CLI runs the whole app locally, opens the OpenTelemetry dashboard for logs, traces, metrics, and health checks, and carries the same app model into deployment.
 
+## Standalone dashboard
+
+The Aspire dashboard shows logs, traces, and metrics for any app that exports OpenTelemetry, even without an AppHost. Start one in a single command:
+
+```bash
+aspire dashboard run
+```
+
+This launches the dashboard with an OTLP endpoint your apps can point at via `OTEL_EXPORTER_OTLP_ENDPOINT`. Use `aspire dashboard run --help` to see options such as `--frontend-url`, `--otlp-grpc-url`, and `--allow-anonymous`. See [Run the Aspire dashboard standalone](https://aspire.dev/dashboard/standalone/) for setup details.
+
 ## A simple app definition
 
 You describe your app in a TypeScript AppHost (`apphost.mts`). The example below runs an Express API and a Vite frontend, exposes the API over HTTP, and wires the frontend to it:
@@ -91,16 +101,6 @@ aspire run
 ```
 
 The native platform packages are installed through npm optional dependencies. Do not install this package with optional dependencies disabled, or the `aspire` launcher will not be able to find the native CLI binary.
-
-## Standalone dashboard
-
-The Aspire dashboard shows logs, traces, and metrics for any app that exports OpenTelemetry, even without an AppHost. Start one in a single command:
-
-```bash
-aspire dashboard run
-```
-
-This launches the dashboard with an OTLP endpoint your apps can point at via `OTEL_EXPORTER_OTLP_ENDPOINT`. Use `aspire dashboard run --help` to see options such as `--frontend-url`, `--otlp-grpc-url`, and `--allow-anonymous`.
 
 ## Update
 
