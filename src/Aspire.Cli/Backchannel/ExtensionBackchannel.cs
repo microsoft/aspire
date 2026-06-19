@@ -121,6 +121,9 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
+                // The active connector owns the setup task until its token cancels. Waiters with live
+                // tokens take over by installing a new setup task, while the reference check avoids
+                // clearing a replacement task already installed by another waiter.
                 lock (_connectionSetupLock)
                 {
                     if (ReferenceEquals(_connectionSetupTcs, connectionSetupTcs))

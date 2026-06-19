@@ -368,13 +368,16 @@ suite('E2E launch profile', () => {
         assert.ok(stopAppHost.includes('const runningAppHost = await getRunningAppHostAccordingToCli(appHostPath);'));
         assert.ok(stopAppHost.includes('await waitForProcessExit(runningAppHost.appHostPid, 30000);'));
         assert.ok(stopAppHost.includes('if (!await getRunningAppHostAccordingToCli(appHostPath))'));
+        assert.ok(stopAppHost.includes('if (isProcessRunning(runningAppHost.appHostPid))'));
+        assert.ok(stopAppHost.includes('await stopProcess(runningAppHost.appHostPid, 30000);'));
         assert.ok(fixtures.includes('export function getRunningAppHostPid(appHostPath: string): number | undefined'));
         assert.ok(fixtures.includes('export async function waitForRunningAppHostPid(appHostPath: string, timeoutMs: number): Promise<number>'));
         assert.ok(fixtures.includes('removeGeneratedProject(projectName: string, knownAppHostPid?: number)'));
         assert.ok(zeroToRunning.includes('let appHostPidBeforeStop: number | undefined;'));
         assert.ok(zeroToRunning.includes('setup(() => {'));
         assert.ok(zeroToRunning.includes('appHostPidBeforeStop = undefined;'));
-        assert.ok(zeroToRunning.includes('appHostPidBeforeStop ??= getRunningAppHostPid(appHostPath);'));
+        assert.ok(zeroToRunning.includes('() => appHostPidBeforeStop ??= getRunningAppHostPid(appHostPath)'));
+        assert.ok(zeroToRunning.indexOf('() => appHostPidBeforeStop ??= getRunningAppHostPid(appHostPath)') > zeroToRunning.indexOf('await runE2eTeardown(['));
         assert.ok(zeroToRunning.indexOf('appHostPidBeforeStop = await waitForRunningAppHostPid(appHostPath, 30000);') < zeroToRunning.lastIndexOf("executeE2eControlCommand({ name: 'stopDebugging' })"));
         assert.ok(zeroToRunning.includes('removeGeneratedProject(projectName, appHostPidBeforeStop)'));
         assert.ok(commandPalette.includes('runE2eTeardown'));

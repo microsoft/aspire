@@ -97,6 +97,55 @@ public class ExtensionBackchannelTests(ITestOutputHelper outputHelper)
         Assert.Equal(1, connectAttempts);
     }
 
+    [Fact]
+    public async Task ConnectAsync_WhenConnectorIsCanceled_ConcurrentWaiterTakesOverSetup()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var firstConnectorCts = new CancellationTokenSource();
+        var firstSetupEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var takeoverSetupEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseTakeoverSetup = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var setupException = new ExtensionIncompatibleException("Simulated takeover setup failure.", "test-capability");
+        var connectAttempts = 0;
+        var backchannel = CreateBackchannel(
+            "127.0.0.1:1",
+            workspace.CreateExecutionContext(),
+            async cancellationToken =>
+            {
+                var attempt = Interlocked.Increment(ref connectAttempts);
+                if (attempt == 1)
+                {
+                    firstSetupEntered.TrySetResult();
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                    return;
+                }
+
+                takeoverSetupEntered.TrySetResult();
+                await releaseTakeoverSetup.Task;
+                throw setupException;
+            });
+
+        var firstConnectTask = backchannel.ConnectAsync(firstConnectorCts.Token);
+        await firstSetupEntered.Task.DefaultTimeout();
+
+        var waiterTasks = Enumerable.Range(0, 4)
+            .Select(_ => backchannel.ConnectAsync(CancellationToken.None))
+            .ToArray();
+        await Task.Delay(100).DefaultTimeout();
+
+        await firstConnectorCts.CancelAsync();
+        await Assert.ThrowsAsync<TaskCanceledException>(() => firstConnectTask).DefaultTimeout();
+        await takeoverSetupEntered.Task.DefaultTimeout();
+
+        releaseTakeoverSetup.SetResult();
+
+        var waiterExceptions = await Task.WhenAll(
+            waiterTasks.Select(async task => await Record.ExceptionAsync(() => task)))
+            .DefaultTimeout();
+        Assert.All(waiterExceptions, exception => Assert.Same(setupException, exception));
+        Assert.Equal(2, connectAttempts);
+    }
+
     private static ExtensionBackchannel CreateBackchannel(
         string endpoint,
         CliExecutionContext executionContext,

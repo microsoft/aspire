@@ -313,8 +313,22 @@ export async function stopAppHostIfRunning(appHostPath: string): Promise<void> {
             return;
         }
 
-        await waitForProcessExit(runningAppHost.appHostPid, 30000);
+        try {
+            await waitForProcessExit(runningAppHost.appHostPid, 30000);
+        }
+        catch {
+            if (isProcessRunning(runningAppHost.appHostPid)) {
+                await stopProcess(runningAppHost.appHostPid, 30000);
+            }
+        }
+
         if (!await getRunningAppHostAccordingToCli(appHostPath)) {
+            await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid, 'after stopping');
+            return;
+        }
+
+        if (isProcessRunning(runningAppHost.appHostPid)) {
+            await stopProcess(runningAppHost.appHostPid, 30000);
             await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid, 'after stopping');
             return;
         }

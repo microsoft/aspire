@@ -16,9 +16,8 @@ suite('Aspire zero-to-running E2E', function () {
     });
 
     teardown(async () => {
-        appHostPidBeforeStop ??= getRunningAppHostPid(appHostPath);
-
         await runE2eTeardown([
+            () => appHostPidBeforeStop ??= getRunningAppHostPid(appHostPath),
             () => setCliUnavailableForE2E(false),
             () => setTerminalCommandExecutionSuppressedForE2E(false),
             () => restoreWorkspaceCliPath(),
