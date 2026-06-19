@@ -248,6 +248,7 @@ internal static class CliTestHelper
         services.AddTransient<DoctorCommand>();
         services.AddTransient<DashboardCommand>();
         services.AddTransient<DashboardRunCommand>();
+        services.AddTransient<DeckCommand>();
         services.AddTransient<UpdateCommand>();
         services.AddTransient<SetupCommand>();
         services.AddTransient<McpCommand>();

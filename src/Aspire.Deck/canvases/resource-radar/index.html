@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Resource Radar</title>
+    <style>
+      /*
+       * A sample Aspire Deck canvas. Canvases are sandboxed HTML panels rendered
+       * in an <iframe>. This one uses the documented `postMessage` bridge (see
+       * .agents/skills/deck-canvas/SKILL.md) to pull live resource + telemetry
+       * data from the Deck host and render it. It is intentionally dependency-free
+       * and self-contained so it works from a `file://` URL.
+       */
+      :root {
+        color-scheme: dark;
+        --bg: #161419;
+        --panel: #1f1c26;
+        --panel-2: #272231;
+        --border: #332d40;
+        --text: #ece9f1;
+        --muted: #a59fb3;
+        --accent: #b794f6;
+        --accent-strong: #9f7aea;
+        --green: #48bb78;
+        --amber: #ecc94b;
+        --red: #f56565;
+        --grey: #718096;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; }
+      body {
+        background: radial-gradient(1200px 600px at 80% -10%, #2a2335 0%, var(--bg) 60%);
+        color: var(--text);
+        font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        padding: 22px;
+      }
+      header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; }
+      h1 { font-size: 18px; margin: 0; letter-spacing: 0.2px; }
+      .sub { color: var(--muted); font-size: 12.5px; }
+      .counters { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 22px; }
+      .counter {
+        background: linear-gradient(180deg, var(--panel-2), var(--panel));
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 16px 18px;
+      }
+      .counter .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; }
+      .counter .value { font-size: 30px; font-weight: 650; margin-top: 6px; font-variant-numeric: tabular-nums; }
+      .counter .value::after { content: ""; }
+      .grid-title { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; margin: 0 0 10px; }
+      .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 14px;
+        transition: border-color 120ms ease, transform 120ms ease;
+      }
+      .card:hover { border-color: var(--accent-strong); transform: translateY(-1px); }
+      .card .row { display: flex; align-items: center; gap: 9px; }
+      .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; box-shadow: 0 0 0 3px rgba(255,255,255,0.04); }
+      .dot.green { background: var(--green); }
+      .dot.amber { background: var(--amber); }
+      .dot.red { background: var(--red); }
+      .dot.grey { background: var(--grey); }
+      .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .type { color: var(--muted); font-size: 12px; margin-top: 8px; }
+      .state { color: var(--muted); font-size: 12px; margin-top: 2px; }
+      .empty { color: var(--muted); padding: 40px; text-align: center; border: 1px dashed var(--border); border-radius: 12px; }
+      .pulse { animation: pulse 1.4s ease-in-out infinite; }
+      @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>📡 Resource Radar</h1>
+      <span class="sub" id="status">connecting…</span>
+    </header>
+
+    <section class="counters">
+      <div class="counter"><div class="label">Logs</div><div class="value" id="logCount">–</div></div>
+      <div class="counter"><div class="label">Spans</div><div class="value" id="spanCount">–</div></div>
+      <div class="counter"><div class="label">Metrics</div><div class="value" id="metricCount">–</div></div>
+    </section>
+
+    <p class="grid-title">Resources</p>
+    <div class="cards" id="cards">
+      <div class="empty pulse">Waiting for resources…</div>
+    </div>
+
+    <script>
+      // --- Aspire Deck canvas bridge client -------------------------------
+      // Protocol (all messages carry channel "aspire-deck"):
+      //   canvas -> host:  { channel, kind:"request",  id, method, params? }
+      //   host  -> canvas: { channel, kind:"response", id, ok, result?, error? }
+      //   host  -> canvas: { channel, kind:"event",    event, payload }
+      const CHANNEL = "aspire-deck";
+      let nextId = 1;
+      const pending = new Map();
+
+      function request(method, params) {
+        return new Promise((resolve, reject) => {
+          const id = nextId++;
+          pending.set(id, { resolve, reject });
+          parent.postMessage({ channel: CHANNEL, kind: "request", id, method, params }, "*");
+        });
+      }
+
+      const handlers = {};
+      function on(event, cb) { handlers[event] = cb; }
+
+      window.addEventListener("message", (e) => {
+        const msg = e.data;
+        if (!msg || msg.channel !== CHANNEL) {
+          return;
+        }
+        if (msg.kind === "response") {
+          const p = pending.get(msg.id);
+          if (!p) {
+            return;
+          }
+          pending.delete(msg.id);
+          msg.ok ? p.resolve(msg.result) : p.reject(new Error(msg.error));
+        } else if (msg.kind === "event") {
+          handlers[msg.event]?.(msg.payload);
+        }
+      });
+
+      // --- Rendering ------------------------------------------------------
+      const resources = new Map();
+
+      function healthClass(r) {
+        const h = (r.health || "").toLowerCase();
+        if (h === "healthy") return "green";
+        if (h === "degraded") return "amber";
+        if (h === "unhealthy") return "red";
+        const s = (r.state || "").toLowerCase();
+        if (s.includes("running")) return "green";
+        if (s.includes("fail") || s.includes("error") || s.includes("exited")) return "red";
+        return "grey";
+      }
+
+      function renderCards() {
+        const host = document.getElementById("cards");
+        const list = [...resources.values()].filter((r) => !r.isHidden);
+        if (list.length === 0) {
+          host.innerHTML = '<div class="empty">No resources reported yet.</div>';
+          return;
+        }
+        list.sort((a, b) => a.displayName.localeCompare(b.displayName));
+        host.innerHTML = list
+          .map((r) => {
+            const cls = healthClass(r);
+            const state = r.state || "unknown";
+            return (
+              '<div class="card"><div class="row"><span class="dot ' + cls + '"></span>' +
+              '<span class="name" title="' + esc(r.displayName) + '">' + esc(r.displayName) + "</span></div>" +
+              '<div class="type">' + esc(r.resourceType) + "</div>" +
+              '<div class="state">' + esc(state) + "</div></div>"
+            );
+          })
+          .join("");
+      }
+
+      function esc(s) {
+        return String(s ?? "").replace(/[&<>"]/g, (c) =>
+          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c],
+        );
+      }
+
+      function applyResourcesEvent(evt) {
+        if (evt.type === "snapshot") {
+          resources.clear();
+          for (const r of evt.resources || []) {
+            resources.set(r.name, r);
+          }
+        } else {
+          for (const r of evt.upserts || []) {
+            resources.set(r.name, r);
+          }
+          for (const name of evt.deletes || []) {
+            resources.delete(name);
+          }
+        }
+        renderCards();
+      }
+
+      function applyTelemetry(summary) {
+        document.getElementById("logCount").textContent = summary.logCount.toLocaleString();
+        document.getElementById("spanCount").textContent = summary.spanCount.toLocaleString();
+        document.getElementById("metricCount").textContent = summary.metricCount.toLocaleString();
+      }
+
+      on("resources", applyResourcesEvent);
+      on("telemetry", applyTelemetry);
+
+      // --- Bootstrap ------------------------------------------------------
+      async function start() {
+        const status = document.getElementById("status");
+        try {
+          // Handshake: tells the host to begin streaming resource + telemetry events.
+          await request("ready");
+          const cfg = await request("getConfig");
+          status.textContent = (cfg && cfg.applicationName) ? cfg.applicationName : "connected";
+
+          applyResourcesEvent({ type: "snapshot", resources: await request("listResources") });
+          applyTelemetry(await request("getTelemetrySummary"));
+        } catch (err) {
+          status.textContent = "not connected to a Deck host";
+          document.getElementById("cards").innerHTML =
+            '<div class="empty">This canvas is open outside of Aspire Deck, so no live data is available.</div>';
+        }
+      }
+
+      start();
+    </script>
+  </body>
+</html>

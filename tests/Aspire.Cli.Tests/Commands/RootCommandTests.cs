@@ -535,6 +535,35 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void DeckCommand_NotAvailable_WhenFeatureDisabled()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var hasDeckCommand = command.Subcommands.Any(cmd => cmd.Name == "deck");
+
+        Assert.False(hasDeckCommand);
+    }
+
+    [Fact]
+    public void DeckCommand_Available_WhenFeatureEnabled()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.EnabledFeatures = [KnownFeatures.DeckCommandEnabled];
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var hasDeckCommand = command.Subcommands.Any(cmd => cmd.Name == "deck");
+
+        Assert.True(hasDeckCommand);
+    }
+
+    [Fact]
     public void AllVisibleCommands_HaveHelpGroup()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

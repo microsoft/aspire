@@ -165,6 +165,7 @@ internal sealed class RootCommand : BaseRootCommand
         TelemetryCommand telemetryCommand,
         ExportCommand exportCommand,
         DashboardCommand dashboardCommand,
+        DeckCommand deckCommand,
         DocsCommand docsCommand,
         SecretCommand secretCommand,
         SdkCommand sdkCommand,
@@ -274,6 +275,13 @@ internal sealed class RootCommand : BaseRootCommand
         Subcommands.Add(exportCommand);
         Subcommands.Add(docsCommand);
         Subcommands.Add(dashboardCommand);
+        // 'aspire deck' launches Aspire Deck, a native (Tauri) preview of the dashboard.
+        // Hidden behind a feature flag while in preview. Toggle with
+        // `aspire config set features.deckCommandEnabled true`.
+        if (features.IsFeatureEnabled(KnownFeatures.DeckCommandEnabled, defaultValue: false))
+        {
+            Subcommands.Add(deckCommand);
+        }
         Subcommands.Add(secretCommand);
 
 #if DEBUG

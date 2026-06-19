@@ -1,0 +1,7 @@
+{
+  "id": "resource-radar",
+  "title": "Resource Radar",
+  "description": "Live resource health and telemetry counters, rendered as a custom canvas.",
+  "icon": "📡",
+  "entry": "index.html"
+}

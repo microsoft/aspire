@@ -1,0 +1,454 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+syntax = "proto3";
+
+package aspire.v1;
+
+option csharp_namespace = "Aspire.DashboardService.Proto.V1";
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+////////////////////////////////////////////
+
+message ApplicationInformationRequest {
+}
+
+message ApplicationInformationResponse {
+    string application_name = 1;
+}
+
+////////////////////////////////////////////
+
+// Defines a command that may be invoked on a resource.
+// Defined by the resource service and sent to the dashboard.
+// When a command is to be executed, an instance of ResourceCommandRequest is constructed
+// using data from this message.
+message ResourceCommand {
+    // Unique identifier for the command. Not intended for display.
+    string name = 1;
+    // The display name of the command, to be shown in the UI. May be localized.
+    string display_name = 2;
+    // When present, this message must be shown to the user and their confirmation obtained
+    // before sending the request for this command to be executed.
+    // The user will be presented with Ok/Cancel options.
+    optional string confirmation_message = 3;
+    // Deprecated. Optional parameter that configures the command in some way.
+    // Clients must return any value provided by the server when invoking
+    // the command.
+    optional google.protobuf.Value parameter = 4 [deprecated = true];
+    // A flag that indicates whether the command is highlighted in the UI.
+    bool is_highlighted = 5;
+    // Optional icon name. This name should be a valid FluentUI icon name.
+    // https://aka.ms/fluentui-system-icons
+    optional string icon_name = 6;
+    // Optional icon variant.
+    optional IconVariant icon_variant = 7;
+    // Optional description of the command, to be shown in the UI.
+    // Could be used as a tooltip. May be localized.
+    optional string display_description = 8;
+    // The state of the command. Controls whether the command is enabled, disabled,
+    // or hidden in the UI.
+    ResourceCommandState state = 9;
+    // Static, ordered input metadata that describes the invocation arguments accepted by the command.
+    // Dashboard clients can render these inputs and send a map of Values in ResourceCommandRequest.arguments keyed by InteractionInput.name.
+    repeated InteractionInput argument_inputs = 10;
+}
+
+enum IconVariant {
+    ICON_VARIANT_REGULAR = 0;
+    ICON_VARIANT_FILLED = 1;
+}
+
+// Represents a request to execute a command.
+// Sent by the dashboard to DashboardService.ExecuteResourceCommand.
+// Constructed with data from a corresponding ResourceCommand.
+message ResourceCommandRequest {
+    // Unique identifier for the command.
+    // Copied from the ResourceCommand that this request object is initialized from.
+    string command_name = 1;
+    // The name of the resource to apply the command to. Matches Resource.name.
+    // Copied from the ResourceCommand that this request object is initialized from.
+    string resource_name = 2;
+    // The unique name of the resource type. Matches ResourceType.unique_name and Resource.resource_type.
+    // Copied from the ResourceCommand that this request object is initialized from.
+    string resource_type = 3;
+    // Deprecated. An optional parameter to accompany the command.
+    // Copied from the ResourceCommand that this request object is initialized from.
+    optional google.protobuf.Value parameter = 4 [deprecated = true];
+    // Invocation arguments to pass to the command.
+    // Unlike parameter, this value is supplied by the client for this execution.
+    // Keys are InteractionInput.name values; each value is a google.protobuf.Value (string, number, bool, or null).
+    map<string, google.protobuf.Value> arguments = 5;
+    // When true, command execution should fail instead of prompting for missing input.
+    bool non_interactive = 6;
+}
+
+enum ResourceCommandState {
+    RESOURCE_COMMAND_STATE_ENABLED = 0;
+    RESOURCE_COMMAND_STATE_DISABLED = 1;
+    RESOURCE_COMMAND_STATE_HIDDEN = 2;
+}
+
+enum ResourceCommandResponseKind {
+    RESOURCE_COMMAND_RESPONSE_KIND_UNDEFINED = 0;
+    RESOURCE_COMMAND_RESPONSE_KIND_SUCCEEDED = 1;
+    RESOURCE_COMMAND_RESPONSE_KIND_FAILED = 2;
+    RESOURCE_COMMAND_RESPONSE_KIND_CANCELLED = 3;
+    RESOURCE_COMMAND_RESPONSE_KIND_INVALID_ARGUMENTS = 4;
+}
+
+message ResourceCommandResponse {
+    ResourceCommandResponseKind kind = 1;
+    optional string error_message = 2 [deprecated = true];
+    optional string message = 3;
+    optional ResourceCommandResult result = 4;
+}
+
+message ResourceCommandResult {
+    string value = 1;
+    CommandResultFormat format = 2;
+    bool display_immediately = 3;
+}
+
+enum CommandResultFormat {
+    COMMAND_RESULT_FORMAT_NONE = 0;
+    COMMAND_RESULT_FORMAT_TEXT = 1;
+    COMMAND_RESULT_FORMAT_JSON = 2;
+    COMMAND_RESULT_FORMAT_MARKDOWN = 3;
+}
+
+////////////////////////////////////////////
+
+message ResourceType {
+    // Unique name for the resource type. Equivalent to Resource.resource_type
+    // If "display_name" is omitted, this value will be used in UIs.
+    string unique_name = 1;
+
+    // Display string for references to this type in UI. May be localized.
+    // If this value is omitted, UIs will show "unique_name" instead.
+    optional string display_name = 2;
+
+    // Any commands that may be executed against resources of this type, avoiding
+    // the need to copy the value to every Resource instance.
+    //
+    // Note that these commands must apply to matching resources at any time.
+    //
+    // If the set of commands changes over time, use the "commands" property
+    // of the Resource itself.
+    repeated ResourceCommand commands = 3;
+}
+
+////////////////////////////////////////////
+
+message EnvironmentVariable {
+    string name = 1;
+    optional string value = 2;
+    bool is_from_spec = 3;
+}
+
+message Url {
+    // The name of endpoint associated with the url
+    optional string endpoint_name = 1;
+    // The uri of the url. Format is scheme://host:port/{*path}
+    string full_url = 2;
+    // Determines if this url shows up in the details view only by default.
+    // If true, the url will not be shown in the list of urls in the top level resources view.
+    bool is_internal = 3;
+    // Indicates if this URL is inactive. A non-running resource may still return inactive URLs.
+    // If true, the inactive url will not be shown in the dashboard.
+    bool is_inactive = 4;
+    // Display properties of the Url
+    UrlDisplayProperties display_properties = 5;
+}
+
+message UrlDisplayProperties {
+  // The sort order of the url. Lower values are displayed first in the UI. The absence of a value is treated as lowest order.
+  int32 sort_order = 1;
+  // The display name of the url, to appear in the UI.
+  string display_name = 2;
+}
+
+// Data about a volume mounted to a container.
+message Volume {
+    // The source of the volume, such as "TestShop.AppHost-postgres-data".
+    string source = 1;
+    // The target path in the container, such as "/var/lib/postgresql/data".
+    string target = 2;
+    // The type of the mount, such as "bind" or "volume".
+    string mount_type = 3;
+    // Whether the volume is mounted as read-only or not.
+    bool is_read_only = 4;
+}
+
+message HealthReport {
+    // The health status of the resource. Not provided if we have not yet received an initial report from the check.
+    optional HealthStatus status = 1;
+    // Identifies the health check that produced this report.
+    string key = 2;
+    // The reason for the health status.
+    string description = 3;
+    // Any exception details.
+    string exception = 4;
+    // The timestamp when this health check was last executed.
+    optional google.protobuf.Timestamp last_run_at = 5;
+}
+
+enum HealthStatus {
+    HEALTH_STATUS_HEALTHY = 0;
+    HEALTH_STATUS_UNHEALTHY = 1;
+    HEALTH_STATUS_DEGRADED = 2;
+}
+
+message ResourceRelationship {
+    // The name of the resource.
+    string resource_name = 1;
+    // The type of relationship.
+    string type = 2;
+}
+
+message ResourceProperty {
+    // Name of the data item, e.g. "container.id", "executable.pid", "project.path", ...
+    string name = 1;
+    // TODO move display_name to reference data, sent once when the connection starts (https://github.com/microsoft/aspire/issues/1644)
+    // Optional display name, may be localized
+    optional string display_name = 2;
+    // The data value. May be null, a number, a string, a boolean, a dictionary of values (Struct), or a list of values (ValueList).
+    google.protobuf.Value value = 3;
+    // TODO move is_sensitive to reference data, sent once when the connection starts (https://github.com/microsoft/aspire/issues/1644)
+    // Whether the value is sensitive and should be masked in the UI by default.
+    // Defaults to false. When true, the user must explicitly unmask the value to view it.
+    optional bool is_sensitive = 4;
+    // A flag that indicates whether the property is highlighted in the UI.
+    // Highlighted properties are shown by default even when they are not known to the dashboard.
+    bool is_highlighted = 5;
+    // Optional sort order used when displaying the property in the UI.
+    optional int32 sort_order = 6;
+}
+
+// Models the full state of an resource (container, executable, project, etc) at a particular point in time.
+message Resource {
+    reserved 8, 9, 10, 16;
+    string name = 1;
+    string resource_type = 2;
+    string display_name = 3;
+    string uid = 4;
+    optional string state = 5;
+    optional google.protobuf.Timestamp created_at = 6;
+    repeated EnvironmentVariable environment = 7;
+
+    repeated ResourceCommand commands = 11;
+
+    // Properties holding data not modeled directly on the message.
+    //
+    // For:
+    // - Containers: image, container_id, ports
+    // - Executables: process_id, executable_path, working_directory, arguments
+    // - Projects: process_id, project_path
+    repeated ResourceProperty properties = 12;
+
+    // The list of urls that this resource exposes.
+    repeated Url urls = 13;
+
+    // The style of the state. This is used to determine the state icon.
+    // Supported styles are "success", "info", "warning" and "error". Any other style
+    // will be treated as "unknown".
+    optional string state_style = 14;
+
+    // The set of volumes mounted to the resource. Only applies to containers.
+    repeated Volume volumes = 15;
+
+    // Reports from health checks, about this resource.
+    repeated HealthReport health_reports = 17;
+
+    // The resource start time.
+    optional google.protobuf.Timestamp started_at = 18;
+    // The resource stop time.
+    optional google.protobuf.Timestamp stopped_at = 19;
+
+    // The list of relationships for this resource.
+    repeated ResourceRelationship relationships = 20;
+
+    // Whether the resource should be visually hidden in the dashboard.
+    bool is_hidden = 21;
+
+    // Whether the resource is built into Aspire and supports more detailed telemetry.
+    bool supports_detailed_telemetry = 22;
+
+    // Optional custom icon name to use for the resource. This should be a valid FluentUI icon name.
+    // If not specified, the dashboard will use default icons based on the resource type.
+    optional string icon_name = 23;
+
+    // Optional icon variant for the custom icon.
+    optional IconVariant icon_variant = 24;
+}
+
+////////////////////////////////////////////
+
+// Models a snapshot of resource state
+message InitialResourceData {
+    repeated Resource resources = 1;
+    repeated ResourceType resource_types = 2;
+}
+
+////////////////////////////////////////////
+
+message ResourceDeletion {
+    string resource_name = 1;
+    string resource_type = 2;
+}
+
+message WatchResourcesChange  {
+    oneof kind {
+        ResourceDeletion delete = 1;
+        Resource upsert = 2;
+    }
+}
+
+message WatchResourcesChanges {
+    repeated WatchResourcesChange value = 1;
+}
+
+////////////////////////////////////////////
+
+// Initiates a subscription for data about resources.
+message WatchResourcesRequest {
+    // True if the client is establishing this connection because a prior one closed unexpectedly.
+    optional bool is_reconnect = 1;
+}
+
+// A message received from the server when watching resources. Has multiple types of payload.
+message WatchResourcesUpdate {
+    oneof kind {
+        // The current resource state, along with other reference data such as the set of resource types that may exist.
+        // Received once upon connection, before any changes.
+        InitialResourceData initial_data = 1;
+        // One or more deltas to apply.
+        WatchResourcesChanges changes = 2;
+    }
+}
+
+////////////////////////////////////////////
+
+message ConsoleLogLine {
+    string text = 1;
+    // Indicates whether this line came from STDERR or not.
+    optional bool is_std_err = 2;
+    int32 line_number = 3;
+}
+
+// Initiates a subscription for the logs of a resource.
+message WatchResourceConsoleLogsRequest {
+    // Specifies the resource to watch logs from.
+    string resource_name = 1;
+    // A flag that indicates whether to suppress following new logs.
+    // The method completes once the current set of logs is received.
+    bool suppress_follow = 2;
+}
+
+// A message received from the server when watching resource logs.
+// Contains potentially many lines to be appended to the log.
+message WatchResourceConsoleLogsUpdate {
+    repeated ConsoleLogLine log_lines = 1;
+}
+
+// A message sent to the server to update interaction state. Has multiple types of payload.
+message WatchInteractionsRequestUpdate {
+    // The interaction id.
+    int32 interaction_id = 1;
+
+    oneof kind {
+        InteractionComplete complete = 2;
+        InteractionMessageBox message_box = 3;
+        InteractionInputsDialog inputs_dialog = 4;
+        InteractionNotification notification = 5;
+    }
+
+    // A flag indicating that the message is an update and shouldn't complete the interaction.
+    // Currently only used for inputs dialog updates.
+    optional bool response_update = 6;
+}
+// A message received from the server when watching interactions. Has multiple types of payload.
+message WatchInteractionsResponseUpdate {
+    // The interaction id.
+    int32 interaction_id = 1;
+
+    string title = 2;
+    string message = 3;
+    string primary_button_text = 4;
+    string secondary_button_text = 5;
+    bool show_secondary_button = 6;
+    bool show_dismiss = 7;
+    bool enable_message_markdown = 8;
+
+    oneof kind {
+        InteractionComplete complete = 16;
+        InteractionMessageBox message_box = 17;
+        InteractionInputsDialog inputs_dialog = 18;
+        InteractionNotification notification = 19;
+    }
+}
+// Represents the completion of an interaction.
+message InteractionComplete {
+}
+// Represents a message box interaction, which is a modal dialog with a message and buttons.
+message InteractionMessageBox {
+    MessageIntent intent = 1;
+    optional bool result = 2;
+}
+// Represents a notification interaction, which is a non-modal message with an optional link.
+message InteractionNotification {
+    MessageIntent intent = 1;
+    optional bool result = 2;
+    string link_text = 3;
+    string link_url = 4;
+}
+// Represents a dialog that collects inputs from the user.
+message InteractionInputsDialog {
+    repeated InteractionInput input_items = 1;
+}
+// Represents an input item in an interaction dialog.
+message InteractionInput {
+    string label = 1;
+    string placeholder = 2;
+    InputType input_type = 3;
+    bool required = 4;
+    map<string, string> options = 5;
+    string value = 6;
+    repeated string validation_errors = 7;
+    string description = 8;
+    bool enable_description_markdown = 9;
+    int32 max_length = 10;
+    bool allow_custom_choice = 11;
+    bool loading = 12;
+    bool update_state_on_change = 13;
+    string name = 14;
+    bool disabled = 15;
+}
+enum MessageIntent {
+    MESSAGE_INTENT_NONE = 0;
+    MESSAGE_INTENT_SUCCESS = 1;
+    MESSAGE_INTENT_WARNING = 2;
+    MESSAGE_INTENT_ERROR = 3;
+    MESSAGE_INTENT_INFORMATION = 4;
+    MESSAGE_INTENT_CONFIRMATION = 5;
+}
+enum InputType {
+    INPUT_TYPE_UNSPECIFIED = 0;
+    INPUT_TYPE_TEXT = 1;
+    INPUT_TYPE_SECRET_TEXT = 2;
+    INPUT_TYPE_CHOICE = 3;
+    INPUT_TYPE_BOOLEAN = 4;
+    INPUT_TYPE_NUMBER = 5;
+}
+
+////////////////////////////////////////////
+
+service DashboardService {
+    rpc GetApplicationInformation(ApplicationInformationRequest) returns (ApplicationInformationResponse);
+    rpc WatchResources(WatchResourcesRequest) returns (stream WatchResourcesUpdate);
+    rpc WatchResourceConsoleLogs(WatchResourceConsoleLogsRequest) returns (stream WatchResourceConsoleLogsUpdate);
+    rpc ExecuteResourceCommand(ResourceCommandRequest) returns (ResourceCommandResponse);
+    rpc WatchInteractions(stream WatchInteractionsRequestUpdate) returns (stream WatchInteractionsResponseUpdate);
+}

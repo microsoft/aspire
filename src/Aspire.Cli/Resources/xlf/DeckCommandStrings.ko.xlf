@@ -1,0 +1,77 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="ko" original="../DeckCommandStrings.resx">
+    <body>
+      <trans-unit id="DeckExecutableNotFound">
+        <source>Could not find the Aspire Deck executable. Build it under src/Aspire.Deck and set ASPIRE_DECK_PATH or pass --deck-path.</source>
+        <target state="new">Could not find the Aspire Deck executable. Build it under src/Aspire.Deck and set ASPIRE_DECK_PATH or pass --deck-path.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeckExitedWithError">
+        <source>Aspire Deck exited with error code {0}.</source>
+        <target state="new">Aspire Deck exited with error code {0}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeckFailedToStart">
+        <source>Failed to start Aspire Deck: {0}</source>
+        <target state="new">Failed to start Aspire Deck: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeckPathOptionDescription">
+        <source>The path to the Aspire Deck executable. Defaults to the ASPIRE_DECK_PATH environment variable or a local build.</source>
+        <target state="new">The path to the Aspire Deck executable. Defaults to the ASPIRE_DECK_PATH environment variable or a local build.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Description">
+        <source>Start Aspire Deck, a preview native dashboard.</source>
+        <target state="new">Start Aspire Deck, a preview native dashboard.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LogsLabel">
+        <source>Logs</source>
+        <target state="new">Logs</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OtlpGrpcLabel">
+        <source>OTLP/gRPC</source>
+        <target state="new">OTLP/gRPC</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OtlpGrpcUrlOptionDescription">
+        <source>The URL the OTLP gRPC endpoint listens on for telemetry ingestion.</source>
+        <target state="new">The URL the OTLP gRPC endpoint listens on for telemetry ingestion.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OtlpHttpLabel">
+        <source>OTLP/HTTP</source>
+        <target state="new">OTLP/HTTP</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OtlpHttpUrlOptionDescription">
+        <source>The URL the OTLP HTTP endpoint listens on for telemetry ingestion.</source>
+        <target state="new">The URL the OTLP HTTP endpoint listens on for telemetry ingestion.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceServiceLabel">
+        <source>Resources</source>
+        <target state="new">Resources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceServiceNotConfigured">
+        <source>(not configured)</source>
+        <target state="new">(not configured)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceServiceUrlOptionDescription">
+        <source>The URL of the AppHost resource service to connect to.</source>
+        <target state="new">The URL of the AppHost resource service to connect to.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StoppingDeck">
+        <source>Stopping Aspire Deck...</source>
+        <target state="new">Stopping Aspire Deck...</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

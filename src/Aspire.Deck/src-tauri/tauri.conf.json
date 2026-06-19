@@ -1,0 +1,37 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Aspire Deck",
+  "version": "0.1.0",
+  "identifier": "com.microsoft.aspire.deck",
+  "build": {
+    "frontendDist": "../ui/dist",
+    "devUrl": "http://localhost:1430",
+    "beforeDevCommand": "npm --prefix ../ui run dev",
+    "beforeBuildCommand": "npm --prefix ../ui run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Aspire Deck",
+        "width": 1440,
+        "height": 920,
+        "minWidth": 920,
+        "minHeight": 600,
+        "theme": "Dark"
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/icon.png"
+    ],
+    "category": "DeveloperTool",
+    "shortDescription": "A native dashboard for .NET Aspire",
+    "longDescription": "Aspire Deck is a native, GPU-accelerated dashboard for .NET Aspire. It is a drop-in replacement for the Blazor dashboard's inter-process communication: it hosts the same OTLP ingestion endpoints and speaks the same resource-service gRPC protocol."
+  }
+}

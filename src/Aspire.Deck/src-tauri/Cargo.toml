@@ -1,0 +1,46 @@
+[package]
+name = "aspire-deck"
+version = "0.1.0"
+description = "Aspire Deck — a native dashboard for .NET Aspire"
+authors = ["Microsoft"]
+edition = "2021"
+rust-version = "1.77"
+
+# The library is what Tauri runs; main.rs is a thin shim so the same code can be
+# reused by integration tests and mobile targets in the future.
+[lib]
+name = "aspire_deck_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+tonic-build = "0.12"
+# protox is a pure-Rust protobuf compiler, so the build does not require a
+# system `protoc` to be installed.
+protox = "0.7"
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+tonic = { version = "0.12", features = ["tls", "tls-roots"] }
+prost = "0.13"
+prost-types = "0.13"
+axum = "0.7"
+tower = "0.5"
+http = "1"
+bytes = "1"
+futures-util = "0.3"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1", features = ["v4"] }
+indexmap = { version = "2", features = ["serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+open = "5"
+hex = "0.4"
+
+[features]
+# This feature is used for production builds or when a dev server is not specified,
+# DO NOT REMOVE!!
+custom-protocol = ["tauri/custom-protocol"]

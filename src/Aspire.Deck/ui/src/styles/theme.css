@@ -1,0 +1,97 @@
+/* Aspire Deck design tokens. Dark is the default; light is opt-in via
+   [data-theme="light"] on <html>. Accent is Aspire purple. */
+
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --accent: #a855f7;
+  --accent-strong: #8b5cf6;
+  --accent-soft: rgba(168, 85, 247, 0.16);
+  --accent-border: rgba(168, 85, 247, 0.42);
+
+  --bg-app: #0d0d12;
+  --bg-base: #111118;
+  --bg-surface: #16161f;
+  --bg-surface-2: #1c1c27;
+  --bg-elevated: #20202c;
+  --bg-hover: rgba(255, 255, 255, 0.04);
+  --bg-active: rgba(168, 85, 247, 0.12);
+  --bg-input: #14141d;
+
+  --border: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --border-focus: var(--accent-border);
+
+  --text: #ececf1;
+  --text-secondary: #a6a6b4;
+  --text-muted: #6f6f80;
+  --text-inverted: #0d0d12;
+
+  --success: #34d399;
+  --success-soft: rgba(52, 211, 153, 0.14);
+  --info: #60a5fa;
+  --info-soft: rgba(96, 165, 250, 0.14);
+  --warning: #fbbf24;
+  --warning-soft: rgba(251, 191, 36, 0.14);
+  --error: #f87171;
+  --error-soft: rgba(248, 113, 113, 0.14);
+  --neutral: #8a8a9a;
+  --neutral-soft: rgba(138, 138, 154, 0.14);
+
+  --shadow-drawer: -24px 0 60px rgba(0, 0, 0, 0.55);
+  --shadow-pop: 0 16px 48px rgba(0, 0, 0, 0.5);
+
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+
+  --sidebar-w: 232px;
+  --topbar-h: 56px;
+
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+    "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+  --font-mono: "SFMono-Regular", "JetBrains Mono", "Cascadia Code", Menlo, Consolas,
+    "Liberation Mono", monospace;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --accent: #8b5cf6;
+  --accent-strong: #7c3aed;
+  --accent-soft: rgba(139, 92, 246, 0.12);
+  --accent-border: rgba(139, 92, 246, 0.4);
+
+  --bg-app: #f4f4f7;
+  --bg-base: #fbfbfd;
+  --bg-surface: #ffffff;
+  --bg-surface-2: #f7f7fa;
+  --bg-elevated: #ffffff;
+  --bg-hover: rgba(15, 15, 25, 0.035);
+  --bg-active: rgba(139, 92, 246, 0.1);
+  --bg-input: #ffffff;
+
+  --border: rgba(15, 15, 25, 0.09);
+  --border-strong: rgba(15, 15, 25, 0.16);
+  --border-focus: var(--accent-border);
+
+  --text: #1a1a22;
+  --text-secondary: #54545f;
+  --text-muted: #8a8a95;
+  --text-inverted: #ffffff;
+
+  --success: #059669;
+  --success-soft: rgba(5, 150, 105, 0.12);
+  --info: #2563eb;
+  --info-soft: rgba(37, 99, 235, 0.12);
+  --warning: #d97706;
+  --warning-soft: rgba(217, 119, 6, 0.12);
+  --error: #dc2626;
+  --error-soft: rgba(220, 38, 38, 0.12);
+  --neutral: #6b7280;
+  --neutral-soft: rgba(107, 114, 128, 0.12);
+
+  --shadow-drawer: -24px 0 60px rgba(15, 15, 25, 0.12);
+  --shadow-pop: 0 16px 48px rgba(15, 15, 25, 0.16);
+}
