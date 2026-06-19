@@ -49,7 +49,7 @@ internal sealed record AppHostServerRunResult(
 /// </summary>
 /// <param name="IsolateConsole">
 /// When <see langword="true"/>, on Windows the server is spawned via <see cref="IsolatedProcess"/>
-/// into its own hidden console (CREATE_NEW_CONSOLE | SW_HIDE) so DCP's <c>stop-process-tree</c> can
+/// into its own hidden console (CREATE_NEW_CONSOLE | SW_HIDE) so a graceful shutdown can
 /// <c>AttachConsole</c> + post <c>CTRL_C_EVENT</c> against the server without also signalling the CLI,
 /// and the child is bound to the process-wide <see cref="WindowsConsoleProcessJob"/> kill-on-close
 /// safety net. On Unix the spawn is effectively the same as today's path.

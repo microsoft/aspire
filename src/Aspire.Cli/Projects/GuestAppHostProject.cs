@@ -678,7 +678,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 // Pass appHostSystemToken so a fatal backchannel failure (or user cancellation, since
                 // appHostSystemCts is linked to cancellationToken AND CCM.Token) tears down the guest
                 // process. The launcher will kill the guest's process tree when this token cancels.
-                // Pass GuestLaunchOptions so the launcher uses an isolated console + DCP graceful
+                // Pass GuestLaunchOptions so the launcher uses an isolated console + graceful
                 // shutdown on Windows, matching what the AppHost server already does.
                 var guestLaunchOptions = new GuestLaunchOptions(
                     IsolateConsoleForGracefulShutdown: true,

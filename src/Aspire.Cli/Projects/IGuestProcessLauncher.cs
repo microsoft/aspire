@@ -17,8 +17,8 @@ namespace Aspire.Cli.Projects;
 /// <param name="IsolateConsoleForGracefulShutdown">
 /// When <see langword="true"/>, spawn the guest via
 /// <see cref="IsolatedProcess"/> so it lands in its own hidden console
-/// group. Required on Windows for the AttachConsole + GenerateConsoleCtrlEvent dance
-/// (executed by <see cref="ProcessTreeGracefulShutdownService"/>) to target the guest
+/// group. Required on Windows so the graceful CTRL+C signal (issued by
+/// <see cref="ProcessTreeGracefulShutdownService"/>) can target the guest
 /// without also signalling the CLI itself. No-op on Unix where SIGTERM is sufficient.
 /// </param>
 /// <param name="GracefulShutdownSignaler">

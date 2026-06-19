@@ -40,10 +40,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     private readonly bool _isolateConsole;
 
     // Serializes StartAsync against DisposeAsync so a concurrent dispose cannot orphan a
-    // just-spawned process (see StartAsync for the ordering guarantee). A SemaphoreSlim is used
-    // rather than a Monitor lock because StartAsync now awaits the spawn (_project.RunAsync) and
-    // DisposeAsync awaits while holding the gate. We never touch AvailableWaitHandle, so the
-    // semaphore allocates no wait handle and does not need disposal.
+    // just-spawned process (see StartAsync for the ordering guarantee).
     private readonly SemaphoreSlim _startGate = new(1, 1);
     private bool _startInvoked;
     private bool _disposed;
@@ -158,8 +155,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         // _disposed, so it either runs before us (and StartAsync sees _disposed and throws) or after
         // us (and Dispose sees a fully-published execution + run task). Without this widening there
         // is a window between _project.RunAsync returning and the run task starting where a
-        // concurrent Dispose would orphan the just-launched process. The await on RunAsync is why
-        // this is a SemaphoreSlim rather than a Monitor lock.
+        // concurrent Dispose would orphan the just-launched process.
         await _startGate.WaitAsync().ConfigureAwait(false);
         try
         {

@@ -128,8 +128,8 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
         {
             StandardOutputCallback = HandleStdoutLine,
             StandardErrorCallback = HandleStderrLine,
-            // Run-path spawn: isolated console group + anonymous-pipe stdio so DCP's AttachConsole +
-            // GenerateConsoleCtrlEvent dance can target the guest without also signalling the CLI.
+            // Run-path spawn: isolated console group + anonymous-pipe stdio so a graceful CTRL+C can
+            // target the guest without also signalling the CLI.
             IsolateConsole = options?.IsolateConsoleForGracefulShutdown == true,
             GracefulShutdownSignaler = options?.GracefulShutdownSignaler,
             ShutdownService = options?.ShutdownService,

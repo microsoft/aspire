@@ -180,7 +180,7 @@ internal sealed class ConsoleCancellationManager : IDisposable, IGracefulShutdow
     /// Sets the graceful-shutdown budget for the currently-executing command. Default is zero, meaning
     /// ladders that consume <see cref="GracefulShutdownToken"/> fall through to escalation immediately
     /// (preserving today's behavior for every command that doesn't opt in). The <c>aspire run</c> handler
-    /// calls this so DCP and the AppHost get a real cooperative-shutdown window before escalation.
+    /// calls this so the AppHost gets a real cooperative-shutdown window before escalation.
     /// </summary>
     public void ConfigureForCommand(TimeSpan gracefulBudget)
     {

@@ -156,9 +156,8 @@ internal sealed class ProcessExecution : IProcessExecution
     /// <paramref name="signaler"/> is supplied. Graceful mode (signaler present — <c>aspire run</c>)
     /// runs the four-phase "graceful signal → bounded wait → force tree-kill → bounded drain"
     /// escalation; force mode (no signaler — build/restore/etc.) does a best-effort courtesy SIGTERM on
-    /// Unix (a no-op on Windows) then an immediate kill. Both modes use the same primitives — DCP
-    /// <c>stop-process-tree</c> on Windows and SIGTERM on Unix — and differ only in whether a graceful
-    /// budget is honored before the kill.
+    /// Unix (a no-op on Windows) then an immediate kill. Both modes tree-kill the same way and differ
+    /// only in whether a graceful budget is honored before the kill.
     /// </summary>
     /// <remarks>
     /// Whoever triggers shutdown (<see cref="ConsoleCancellationManager.Cancel"/>) owns the central
@@ -173,18 +172,14 @@ internal sealed class ProcessExecution : IProcessExecution
             return;
         }
 
-        // Phase 1: fire-and-forget the graceful signal so its wait does not consume the
-        // graceful budget. On Windows, DCP's `stop-process-tree` delivers the Ctrl+C signal
-        // synchronously (in milliseconds) and then BLOCKS until the target process actually
-        // exits. Awaiting it sequentially would burn the entire graceful window inside DCP's
-        // wait, leaving zero time for Phase 2's WaitForExitAsync — which then forces a
-        // tree-kill at the budget boundary even when the AppHost was milliseconds away from
-        // exiting cleanly. By running the signaler in parallel, the apphost receives the
-        // signal immediately AND the full graceful budget is allocated to actual exit-wait.
-        // Important: the signaler is invoked unconditionally (not gated on the graceful
-        // token) so that when the token is already cancelled at ladder-entry the signal
-        // still goes out — callers like `aspire stop` Expire() the budget intentionally
-        // and rely on the signal still being dispatched best-effort.
+        // Phase 1: fire-and-forget the graceful signal so its own wait does not consume the
+        // graceful budget. The signal request blocks until the target process exits, so awaiting
+        // it sequentially would burn the entire graceful window and leave nothing for Phase 2's
+        // exit-wait — forcing a tree-kill even when the apphost was about to exit cleanly. Running
+        // it in parallel lets the apphost receive the signal immediately while the full budget goes
+        // to the exit-wait. The signal is dispatched unconditionally (not gated on the graceful
+        // token) so callers that intentionally Expire() the budget (e.g. `aspire stop`) still get a
+        // best-effort signal.
         var signalTask = InvokeSignalerAsync(signaler, SafePid(process), gracefulToken);
 
         try
@@ -244,18 +239,15 @@ internal sealed class ProcessExecution : IProcessExecution
         }
         finally
         {
-            // Always observe the signaler before returning — on EVERY path (clean exit, tree-kill
-            // escalation, or an early return from the catch arms above). Two reasons:
-            //   1. The signaler begins with `await Task.Yield()` (see InvokeSignalerAsync), so its
-            //      body — which records the target pid and dispatches the dcp/SIGTERM signal — runs
-            //      on a thread-pool continuation. Returning from the kill path WITHOUT awaiting it
-            //      could abandon the ladder before that continuation runs, so the signal would never
-            //      be dispatched. Awaiting here guarantees it ran.
-            //   2. Draining prevents the signaler's dcp shell-out from outliving us as an orphan.
-            // By now the process has exited or been tree-killed, so dcp returns promptly. Skip the
-            // timer allocation when the signaler already finished (the common case — it observed the
-            // same exit). SuppressThrowing swallows both the bounded drain timeout and any signaler
-            // fault without a try/catch.
+            // Always observe the signaler before returning, on EVERY path (clean exit, tree-kill
+            // escalation, or an early return from a catch arm above). The signaler begins with
+            // `await Task.Yield()` (see InvokeSignalerAsync), so its body — which records the target
+            // pid and dispatches the signal — runs on a thread-pool continuation; returning without
+            // awaiting it could abandon the ladder before that continuation runs, so the signal would
+            // never be dispatched. Awaiting here also drains it so a slow signal can't outlive us as
+            // an orphan. By now the process has exited or been tree-killed, so the signal returns
+            // promptly. Skip the timer allocation when it already finished; SuppressThrowing swallows
+            // both the bounded drain timeout and any signaler fault without a try/catch.
             if (signalTask.IsCompleted)
             {
                 await signalTask.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
@@ -271,10 +263,9 @@ internal sealed class ProcessExecution : IProcessExecution
     private void ForceKillChild(Process process)
     {
         // Mirrors the force path: resolve "already gone?", issue a best-effort courtesy SIGTERM on Unix
-        // (so a SIGTERM-aware child can flush), then hard-kill. On Windows
-        // ProcessSignaler.RequestGracefulShutdown is a no-op — Ctrl+C delivery to a child requires DCP's
-        // stop-process-tree console dance, which only the signaler-backed graceful ladder performs — so
-        // we skip straight to the kill.
+        // (so a SIGTERM-aware child can flush), then hard-kill. On Windows there is no graceful signal
+        // to send here — Ctrl+C delivery only happens on the signaler-backed graceful ladder — so we
+        // skip straight to the kill.
         var entireProcessTree = _options.KillEntireProcessTreeOnCancel;
         try
         {
@@ -323,16 +314,13 @@ internal sealed class ProcessExecution : IProcessExecution
     {
         try
         {
-            // startTime is intentionally null: includeStartTimeForDcp is always false at this
-            // call site (the Unix branch ignores StartTime entirely; the Windows DCP branch
-            // only consults it when includeStartTimeForDcp is true). Querying Process.StartTime
-            // here would just risk an InvalidOperationException on a process whose handle has
-            // been closed or is in a state that disallows the read.
+            // startTime is null because includeStartTimeForDcp is false here: neither the Unix nor
+            // the Windows signal path consults StartTime at this call site, and querying
+            // Process.StartTime could throw on a process whose handle has already been closed.
             //
-            // Yield onto the thread pool so we don't block the caller while the signaler
-            // performs its (sometimes slow) work — DCP's stop-process-tree blocks until the
-            // target process actually exits, which is exactly the wait we want to avoid
-            // serializing in front of Phase 2's WaitForExitAsync.
+            // Yield onto the thread pool first: the signal request blocks until the target process
+            // exits, which is exactly the wait we don't want to serialize in front of Phase 2's
+            // exit-wait (see ShutdownLadderAsync Phase 1).
             await Task.Yield();
 
             await signaler.RequestProcessTreeGracefulShutdownAsync(

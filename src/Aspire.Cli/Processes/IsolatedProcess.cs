@@ -51,8 +51,8 @@ internal sealed class IsolatedProcessStartInfo
 
     /// <summary>
     /// When <see langword="true"/> (the default) the child is spawned in its own hidden console
-    /// group on Windows (CREATE_NEW_CONSOLE | SW_HIDE) so DCP's <c>stop-process-tree</c> CTRL+C
-    /// dance can target it without also signalling the CLI. When <see langword="false"/> the child
+    /// group on Windows (CREATE_NEW_CONSOLE | SW_HIDE) so a graceful CTRL+C can target it without
+    /// also signalling the CLI. When <see langword="false"/> the child
     /// is spawned via an ordinary redirected <see cref="Process.Start(ProcessStartInfo)"/> — no new
     /// console, no <see cref="JobHandle"/>, and stdin wired to an empty pipe — which is the shape
     /// every non-isolated CLI subprocess (build, restore, package add, …) uses. On Unix both modes
@@ -98,9 +98,9 @@ internal sealed class IsolatedProcessStartInfo
 
 /// <summary>
 /// Mirrors <see cref="System.Diagnostics.Process"/> for a child spawned by <see cref="Start"/>.
-/// On Windows the child gets its own hidden console (CREATE_NEW_CONSOLE | SW_HIDE) so DCP's
-/// <c>stop-process-tree</c> can <c>AttachConsole</c> + post <c>CTRL_C_EVENT</c> at it without
-/// also signalling the CLI; on Unix it's a thin <see cref="Process.Start(ProcessStartInfo)"/>
+/// On Windows the child gets its own hidden console (CREATE_NEW_CONSOLE | SW_HIDE) so a graceful
+/// shutdown can <c>AttachConsole</c> + post <c>CTRL_C_EVENT</c> at it without also signalling the
+/// CLI; on Unix it's a thin <see cref="Process.Start(ProcessStartInfo)"/>
 /// wrapper because SIGTERM via the process group is enough.
 /// </summary>
 /// <remarks>
