@@ -224,13 +224,6 @@ The legacy file continues to work — this is a non-blocking warning.</target>
         <target state="new">Legacy .aspire/settings.json detected at {0}</target>
         <note>{0} is the full path to the legacy settings file.</note>
       </trans-unit>
-      <trans-unit id="LegacyTypeScriptAppHostFix">
-        <source>Run 'aspire migrate' to upgrade to the recommended 'apphost.mts' format.
-The legacy layout continues to work — this is a non-blocking warning.</source>
-        <target state="new">Run 'aspire migrate' to upgrade to the recommended 'apphost.mts' format.
-The legacy layout continues to work — this is a non-blocking warning.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="LegacyTypeScriptAppHostMessageFormat">
         <source>Legacy 'apphost.ts' layout detected at {0}</source>
         <target state="new">Legacy 'apphost.ts' layout detected at {0}</target>
@@ -240,6 +233,13 @@ The legacy layout continues to work — this is a non-blocking warning.</target>
         <source>Operating system: {0}</source>
         <target state="new">Operating system: {0}</target>
         <note>{0} is the operating system display name and version, for example "Windows 10.0.22631", "macOS 26.0", or "Linux Ubuntu 24.04".</note>
+      </trans-unit>
+      <trans-unit id="PendingMigrationFix">
+        <source>Run 'aspire migrate' to apply the recommended migration.
+The current layout continues to work — this is a non-blocking warning.</source>
+        <target state="new">Run 'aspire migrate' to apply the recommended migration.
+The current layout continues to work — this is a non-blocking warning.</target>
+        <note />
       </trans-unit>
       <trans-unit id="SdkCategoryHeader">
         <source>.NET SDK</source>

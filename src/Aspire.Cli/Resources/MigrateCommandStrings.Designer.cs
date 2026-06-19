@@ -60,7 +60,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Migrate a legacy TypeScript AppHost (apphost.ts) to the recommended apphost.mts format..
+        ///   Looks up a localized string similar to Migrate the current project to the latest recommended Aspire conventions..
         /// </summary>
         internal static string Description {
             get {
@@ -78,7 +78,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to No legacy 'apphost.ts' AppHost was found in the current project. Nothing to migrate..
+        ///   Looks up a localized string similar to Nothing to migrate. The current project is already using the latest recommended Aspire conventions..
         /// </summary>
         internal static string NothingToMigrate {
             get {
@@ -87,11 +87,29 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Migrate '{0}' to '{1}'? This rewrites SDK imports and updates aspire.config.json and tsconfig.apphost.json..
+        ///   Looks up a localized string similar to The following migrations will be applied:.
         /// </summary>
-        internal static string ConfirmPromptFormat {
+        internal static string AvailableMigrationsHeader {
             get {
-                return ResourceManager.GetString("ConfirmPromptFormat", resourceCulture);
+                return ResourceManager.GetString("AvailableMigrationsHeader", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Apply these migrations?.
+        /// </summary>
+        internal static string ConfirmApplyPrompt {
+            get {
+                return ResourceManager.GetString("ConfirmApplyPrompt", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Migrate '{0}' to '{1}' (rewrites SDK imports and updates aspire.config.json and tsconfig.apphost.json)..
+        /// </summary>
+        internal static string TypeScriptMigrationTitleFormat {
+            get {
+                return ResourceManager.GetString("TypeScriptMigrationTitleFormat", resourceCulture);
             }
         }
         

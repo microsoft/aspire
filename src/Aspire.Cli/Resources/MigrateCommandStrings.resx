@@ -118,16 +118,22 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Migrate a legacy TypeScript AppHost (apphost.ts) to the recommended apphost.mts format.</value>
+    <value>Migrate the current project to the latest recommended Aspire conventions.</value>
   </data>
   <data name="YesOptionDescription" xml:space="preserve">
     <value>Perform the migration without prompting for confirmation.</value>
   </data>
   <data name="NothingToMigrate" xml:space="preserve">
-    <value>No legacy 'apphost.ts' AppHost was found in the current project. Nothing to migrate.</value>
+    <value>Nothing to migrate. The current project is already using the latest recommended Aspire conventions.</value>
   </data>
-  <data name="ConfirmPromptFormat" xml:space="preserve">
-    <value>Migrate '{0}' to '{1}'? This rewrites SDK imports and updates aspire.config.json and tsconfig.apphost.json.</value>
+  <data name="AvailableMigrationsHeader" xml:space="preserve">
+    <value>The following migrations will be applied:</value>
+  </data>
+  <data name="ConfirmApplyPrompt" xml:space="preserve">
+    <value>Apply these migrations?</value>
+  </data>
+  <data name="TypeScriptMigrationTitleFormat" xml:space="preserve">
+    <value>Migrate '{0}' to '{1}' (rewrites SDK imports and updates aspire.config.json and tsconfig.apphost.json).</value>
     <comment>{0} is the legacy apphost.ts file name, {1} is the modern apphost.mts file name.</comment>
   </data>
   <data name="MigrationCancelled" xml:space="preserve">

@@ -246,8 +246,8 @@ The legacy file continues to work — this is a non-blocking warning.</value>
     <value>Legacy 'apphost.ts' layout detected at {0}</value>
     <comment>{0} is the full path to the legacy apphost.ts file.</comment>
   </data>
-  <data name="LegacyTypeScriptAppHostFix" xml:space="preserve">
-    <value>Run 'aspire migrate' to upgrade to the recommended 'apphost.mts' format.
-The legacy layout continues to work — this is a non-blocking warning.</value>
+  <data name="PendingMigrationFix" xml:space="preserve">
+    <value>Run 'aspire migrate' to apply the recommended migration.
+The current layout continues to work — this is a non-blocking warning.</value>
   </data>
 </root>

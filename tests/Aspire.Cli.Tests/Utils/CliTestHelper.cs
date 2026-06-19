@@ -36,6 +36,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Migrations;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.EnvironmentChecker;
 using Aspire.Cli.Packaging;
@@ -265,6 +266,7 @@ internal static class CliTestHelper
         services.AddTransient<WaitCommand>();
         services.AddTransient<RestoreCommand>();
         services.AddTransient<MigrateCommand>();
+        services.AddSingleton<IMigration, TypeScriptAppHostMigration>();
         services.AddTransient<SdkCommand>();
         services.AddTransient<SdkGenerateCommand>();
         services.AddTransient<SdkDumpCommand>();

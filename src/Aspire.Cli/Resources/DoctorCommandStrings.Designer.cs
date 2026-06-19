@@ -564,11 +564,11 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Run 'aspire migrate' to upgrade to the recommended 'apphost.mts' format....
+        ///   Looks up a localized string similar to Run 'aspire migrate' to apply the recommended migration....
         /// </summary>
-        public static string LegacyTypeScriptAppHostFix {
+        public static string PendingMigrationFix {
             get {
-                return ResourceManager.GetString("LegacyTypeScriptAppHostFix", resourceCulture);
+                return ResourceManager.GetString("PendingMigrationFix", resourceCulture);
             }
         }
     }
