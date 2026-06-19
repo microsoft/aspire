@@ -267,6 +267,12 @@ internal sealed class ConsoleCancellationManager : IDisposable, IGracefulShutdow
         Cancel(SigIntExitCode);
     }
 
+    // ProcessExit fires when the runtime is already tearing the process down (e.g. an unhandled
+    // exception elsewhere, or the host ending). The handler has a bounded execution window (~2s on
+    // .NET) before the runtime force-terminates the process, and that window is not enough to run the
+    // full graceful-then-drain ladder Cancel() schedules — the Task.Delay continuations may never be
+    // serviced before the process dies. So on this path the ladder is best-effort only; we still call
+    // Cancel() to request cooperative shutdown, but rely on the OS tearing everything down regardless.
     private void OnProcessExit(object? sender, EventArgs e) => Cancel(SigTermExitCode);
 
     internal void Cancel(int exitCode)

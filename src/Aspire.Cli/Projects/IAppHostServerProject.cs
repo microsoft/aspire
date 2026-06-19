@@ -101,6 +101,13 @@ internal interface IAppHostServerProject
     /// <summary>
     /// Runs the AppHost server process.
     /// </summary>
+    /// <remarks>
+    /// Implementations should return promptly once the child process has been spawned and its
+    /// identity (socket path, PID) is available; long-running initialization should happen after the
+    /// returned task completes. <see cref="AppHostServerSession"/> awaits this call while holding its
+    /// start gate, and <c>DisposeAsync</c> acquires the same gate — so any latency here directly
+    /// delays how quickly a concurrent dispose can begin tearing the session down.
+    /// </remarks>
     /// <param name="hostPid">The host process ID (CLI) for orphan detection.</param>
     /// <param name="environmentVariables">Environment variables to pass to the server.</param>
     /// <param name="additionalArgs">Additional command-line arguments.</param>

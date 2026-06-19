@@ -119,15 +119,15 @@ internal sealed class TestProcessExecutionFactory : IProcessExecutionFactory
         // the PSI overload) flow through the same assertion + callback machinery as every other caller.
         var args = startInfo.ArgumentList.ToArray();
 
-        // Only forward an env dictionary when the caller supplied custom values; otherwise leave it null
-        // so we don't materialize (and assert against) the entire inherited parent environment.
-        IDictionary<string, string>? env = null;
-        if (startInfo.Environment.Count > 0)
-        {
-            env = startInfo.Environment
-                .Where(static kvp => kvp.Value is not null)
-                .ToDictionary(static kvp => kvp.Key, static kvp => kvp.Value!);
-        }
+        // ProcessStartInfo.Environment is lazily seeded with the full parent-process environment on
+        // first access (caller-supplied overrides are layered on top), so it is always populated.
+        // Forward the whole resolved set as the authoritative environment for the spawn — this mirrors
+        // the production ProcessExecutionFactory PSI overload, which also treats startInfo.Environment
+        // as authoritative. Tests that assert on env should look up the specific keys they set rather
+        // than expecting only caller-supplied vars to be present.
+        IDictionary<string, string> env = startInfo.Environment
+            .Where(static kvp => kvp.Value is not null)
+            .ToDictionary(static kvp => kvp.Key, static kvp => kvp.Value!);
 
         var workingDirectory = new DirectoryInfo(
             string.IsNullOrEmpty(startInfo.WorkingDirectory) ? Directory.GetCurrentDirectory() : startInfo.WorkingDirectory);
