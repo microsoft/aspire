@@ -5,7 +5,6 @@ using System.CommandLine;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Dashboard.Otlp.Model;
@@ -48,8 +47,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
 
     public TelemetryLogsCommand(
         IInteractionService interactionService,
-        IAuxiliaryBackchannelMonitor backchannelMonitor,
-        IProjectLocator projectLocator,
+        AppHostConnectionResolver connectionResolver,
         ICliHostEnvironment hostEnvironment,
         IHttpClientFactory httpClientFactory,
         ResourceColorMap resourceColorMap,
@@ -64,7 +62,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         _resourceColorMap = resourceColorMap;
         _timeProvider = timeProvider;
         _logger = logger;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, services.ExecutionContext, services.HostEnvironment, logger);
+        _connectionResolver = connectionResolver;
 
         Arguments.Add(s_resourceArgument);
         Options.Add(s_appHostOption);

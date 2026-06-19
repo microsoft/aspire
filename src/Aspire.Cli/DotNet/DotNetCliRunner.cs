@@ -111,6 +111,7 @@ internal sealed class DotNetCliRunner(
         // Build the final environment variables by merging caller-provided env with dotnet-specific settings.
         var finalEnv = env?.ToDictionary() ?? new Dictionary<string, string>();
         ConfigureDotNetEnvironment(finalEnv);
+        AddAspireCliPathEnvironment(finalEnv, projectFile);
         processActivity.AddContextToEnvironment(finalEnv);
 
         var command = commandOverride is null ? null : CommandPathResolver.NormalizeRunCommand(commandOverride);
@@ -496,6 +497,16 @@ internal sealed class DotNetCliRunner(
             }
 
         } while (await timer.WaitForNextTickAsync(cancellationToken));
+    }
+
+    private static void AddAspireCliPathEnvironment(Dictionary<string, string> env, FileInfo? projectFile)
+    {
+        if (projectFile is null || env.ContainsKey("AspireCliPath") || string.IsNullOrWhiteSpace(Environment.ProcessPath))
+        {
+            return;
+        }
+
+        env["AspireCliPath"] = Environment.ProcessPath;
     }
 
     private TimeSpan GetBackchannelConnectionTimeout()
