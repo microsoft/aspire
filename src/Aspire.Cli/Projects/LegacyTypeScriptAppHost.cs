@@ -63,16 +63,23 @@ internal static class LegacyTypeScriptAppHost
     /// // becomes
     /// import { createBuilder } from './.aspire/modules/aspire.mjs';
     /// </code>
-    /// The <c>.modules/</c> → <c>.aspire/modules/</c> substitution is safe because the modern
-    /// path segment is <c>/modules/</c> (slash-prefixed), never <c>.modules/</c> (dot-prefixed).
+    /// All rewrites are anchored to the <c>.modules/</c> path segment so that only the generated
+    /// SDK imports are touched. Unanchored extension replacements would corrupt unrelated user
+    /// imports — e.g. <c>./database.js</c> contains the substring <c>base.js</c> and would
+    /// otherwise become <c>./database.mjs</c>. The <c>.modules/</c> → <c>.aspire/modules/</c>
+    /// substitution itself is safe because the modern path segment is <c>/modules/</c>
+    /// (slash-prefixed), never <c>.modules/</c> (dot-prefixed).
     /// </remarks>
     internal static string RewriteAppHostContent(string content)
     {
         return content
-            .Replace(".modules/", ".aspire/modules/", StringComparison.Ordinal)
-            .Replace("aspire.js", "aspire.mjs", StringComparison.Ordinal)
-            .Replace("base.js", "base.mjs", StringComparison.Ordinal)
-            .Replace("transport.js", "transport.mjs", StringComparison.Ordinal);
+            // Rewrite the known generated SDK imports (folder + extension) in one anchored step.
+            .Replace(".modules/aspire.js", ".aspire/modules/aspire.mjs", StringComparison.Ordinal)
+            .Replace(".modules/base.js", ".aspire/modules/base.mjs", StringComparison.Ordinal)
+            .Replace(".modules/transport.js", ".aspire/modules/transport.mjs", StringComparison.Ordinal)
+            // Move any remaining .modules/ references to .aspire/modules/ without altering file
+            // extensions, so user imports outside the generated SDK are never rewritten.
+            .Replace(".modules/", ".aspire/modules/", StringComparison.Ordinal);
     }
 
     /// <summary>

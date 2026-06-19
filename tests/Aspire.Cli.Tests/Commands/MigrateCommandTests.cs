@@ -134,4 +134,63 @@ public class MigrateCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(migratedContent, await File.ReadAllTextAsync(Path.Combine(root.FullName, "apphost.mts")));
     }
+
+    [Fact]
+    public async Task MigrateCommand_WhenDeclined_DoesNotApplyMigration()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.WorkspaceRoot;
+        await WriteLegacyLayoutAsync(root);
+
+        var services = (ServiceCollection)CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AppHostProjectFactory = _ => new TestAppHostProjectFactory();
+            options.InteractionServiceFactory = _ => new TestInteractionService
+            {
+                ConfirmCallback = (_, _) => false
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("migrate");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(Aspire.Cli.CliExitCodes.Success, exitCode);
+
+        Assert.True(File.Exists(Path.Combine(root.FullName, "apphost.ts")));
+        Assert.False(File.Exists(Path.Combine(root.FullName, "apphost.mts")));
+        Assert.True(Directory.Exists(Path.Combine(root.FullName, ".modules")));
+
+        var config = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(root.FullName, "aspire.config.json")))!;
+        Assert.Equal("apphost.ts", config["appHost"]!["path"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task MigrateCommand_WhenConfirmed_AppliesMigration()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.WorkspaceRoot;
+        await WriteLegacyLayoutAsync(root);
+
+        var services = (ServiceCollection)CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AppHostProjectFactory = _ => new TestAppHostProjectFactory();
+            options.InteractionServiceFactory = _ => new TestInteractionService
+            {
+                ConfirmCallback = (_, _) => true
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("migrate");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(Aspire.Cli.CliExitCodes.Success, exitCode);
+
+        Assert.False(File.Exists(Path.Combine(root.FullName, "apphost.ts")));
+        var modernContent = await File.ReadAllTextAsync(Path.Combine(root.FullName, "apphost.mts"));
+        Assert.Equal(ExpectedModernAppHostContent, modernContent);
+    }
 }

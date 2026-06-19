@@ -65,6 +65,30 @@ public class LegacyTypeScriptAppHostHelperTests(ITestOutputHelper outputHelper)
         Assert.Equal(expected, LegacyTypeScriptAppHost.RewriteAppHostContent(legacy));
     }
 
+    [Fact]
+    public void RewriteAppHostContent_DoesNotRewriteUnrelatedUserImports()
+    {
+        // User imports that merely contain a generated file name as a substring (e.g. 'database.js'
+        // contains 'base.js') must not be rewritten — only the './.modules/' SDK imports are.
+        var legacy =
+            """
+            import { createBuilder } from './.modules/aspire.js';
+            import { db } from './database.js';
+            import { svc } from './myaspire.js';
+            import { t } from './lib/transport.js';
+            """;
+
+        var expected =
+            """
+            import { createBuilder } from './.aspire/modules/aspire.mjs';
+            import { db } from './database.js';
+            import { svc } from './myaspire.js';
+            import { t } from './lib/transport.js';
+            """;
+
+        Assert.Equal(expected, LegacyTypeScriptAppHost.RewriteAppHostContent(legacy));
+    }
+
     [Theory]
     [InlineData("apphost.ts", "apphost.mts")]
     [InlineData(".modules/aspire.ts", ".aspire/modules/aspire.mts")]
