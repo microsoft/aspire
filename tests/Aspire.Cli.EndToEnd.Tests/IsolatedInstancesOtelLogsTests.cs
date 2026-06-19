@@ -88,14 +88,16 @@ public sealed class IsolatedInstancesOtelLogsTests(ITestOutputHelper output)
         // point at the correct instance directory. The OTLP JSON body contains log messages like:
         //   "Content root path: /workspace/instance1/IsolatedApp.AppHost"
         // Matching against the instance directory proves each AppHost runs from its own root.
-        await auto.TypeAsync("grep -o 'Content root path: [^\"]*' otel_instance1.json | head -1");
+        // Use unique sentinel markers so WaitUntilTextAsync doesn't match pre-existing scrollback
+        // (e.g. from the mv/cp/--apphost commands that also contain "instance1"/"instance2").
+        await auto.TypeAsync("grep -o 'Content root path: [^\"]*' otel_instance1.json | grep -q 'instance1' && echo 'CONTENTROOT1_OK' || echo 'CONTENTROOT1_FAIL'");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("instance1", timeout: TimeSpan.FromSeconds(10));
+        await auto.WaitUntilTextAsync("CONTENTROOT1_OK", timeout: TimeSpan.FromSeconds(10));
         await auto.WaitForAnyPromptAsync(counter);
 
-        await auto.TypeAsync("grep -o 'Content root path: [^\"]*' otel_instance2.json | head -1");
+        await auto.TypeAsync("grep -o 'Content root path: [^\"]*' otel_instance2.json | grep -q 'instance2' && echo 'CONTENTROOT2_OK' || echo 'CONTENTROOT2_FAIL'");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("instance2", timeout: TimeSpan.FromSeconds(10));
+        await auto.WaitUntilTextAsync("CONTENTROOT2_OK", timeout: TimeSpan.FromSeconds(10));
         await auto.WaitForAnyPromptAsync(counter);
 
         // Stop both instances

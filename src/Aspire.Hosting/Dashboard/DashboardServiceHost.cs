@@ -146,9 +146,10 @@ internal sealed class DashboardServiceHost : IHostedService
                 kestrelOptions.Listen(IPAddress.Loopback, port: 0, ConfigureListen);
                 _logger.LogDebug("Resource service endpoint not configured. Listening on {Scheme}://127.0.0.1:<random>.", scheme);
             }
-            else if (IPAddress.TryParse(uri.Host, out var ip) && IPAddress.IsLoopback(ip))
+            else if (IPAddress.TryParse(uri.DnsSafeHost, out var ip) && IPAddress.IsLoopback(ip))
             {
                 // Bind to the exact loopback address specified (e.g. 127.0.0.1 or [::1]).
+                // Use DnsSafeHost to strip brackets from IPv6 literals so TryParse succeeds.
                 kestrelOptions.Listen(ip, effectivePort, ConfigureListen);
                 _logger.LogDebug("Resource service endpoint: {Uri} (effective port: {Port})", uri, effectivePort);
             }
