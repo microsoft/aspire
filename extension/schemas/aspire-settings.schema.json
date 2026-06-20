@@ -173,6 +173,22 @@
           "description": "Enable or disable access to the staging channel for early access to preview features and packages",
           "default": false
         },
+        "terminalCommandsEnabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "(Experimental) Enable the 'aspire terminal' command group ('aspire terminal ps', 'aspire terminal attach'). Used in conjunction with the experimental WithTerminal() API (ASPIRETERMINAL001). Hidden by default while the API surface is in preview.",
+          "default": false
+        },
         "updateNotificationsEnabled": {
           "anyOf": [
             {

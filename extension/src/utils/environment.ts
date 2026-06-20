@@ -3,6 +3,8 @@ import { EnvVar } from "../dcp/types";
 
 export const aspireCliPathEnvironmentVariableName = 'AspireCliPath';
 
+const filteredEnvironmentKeyCounts = new Map<string, number>();
+
 export function mergeEnvs(base: NodeJS.ProcessEnv, envVars?: EnvVar[]): Record<string, string | undefined> {
     const merged = filterBaseEnvironment(base);
     if (envVars) {
@@ -59,8 +61,32 @@ function filterBaseEnvironment(env: NodeJS.ProcessEnv): Record<string, string | 
     const aspireCliPathKey = aspireCliPathEnvironmentVariableName.toLowerCase();
 
     return Object.fromEntries(
-        Object.entries(env).filter(([key]) => !key.startsWith('ASPIRE_EXTENSION_E2E_') && key.toLowerCase() !== aspireCliPathKey)
+        Object.entries(env).filter(([key]) =>
+            !key.startsWith('ASPIRE_EXTENSION_E2E_') &&
+            !filteredEnvironmentKeyCounts.has(key) &&
+            key.toLowerCase() !== aspireCliPathKey)
     );
+}
+
+export function addFilteredEnvironmentKeys(keys: string[]): void {
+    for (const key of keys) {
+        filteredEnvironmentKeyCounts.set(key, (filteredEnvironmentKeyCounts.get(key) ?? 0) + 1);
+    }
+}
+
+export function removeFilteredEnvironmentKeys(keys: string[]): void {
+    for (const key of keys) {
+        const count = filteredEnvironmentKeyCounts.get(key);
+        if (count === undefined) {
+            continue;
+        }
+
+        if (count <= 1) {
+            filteredEnvironmentKeyCounts.delete(key);
+        } else {
+            filteredEnvironmentKeyCounts.set(key, count - 1);
+        }
+    }
 }
 
 export const enum EnvironmentVariables {

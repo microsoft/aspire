@@ -280,6 +280,9 @@
     <trans-unit id="aspire-vscode.strings.failedToParseConfigInfo">
       <source xml:lang="en">Failed to parse Aspire config info: {0}. Try updating the Aspire CLI with: aspire update</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.aspireCliOutputParseFailed">
+      <source xml:lang="en">Failed to parse {0} output: {1}</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.failedToShowPromptEmpty">
       <source xml:lang="en">Failed to show prompt, text was empty.</source>
     </trans-unit>
@@ -562,6 +565,9 @@
     <trans-unit id="command.stopAppHost">
       <source xml:lang="en">Stop</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.testRunSessionManagerNotInitialized">
+      <source xml:lang="en">Test run session manager has not been initialized with DCP server connection information.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.incompatibleAppHostError">
       <source xml:lang="en">The AppHost is not compatible. Consider upgrading the AppHost or Aspire CLI.</source>
     </trans-unit>
@@ -679,8 +685,17 @@
     <trans-unit id="walkthrough.getStarted.nextSteps.description">
       <source xml:lang="en">You&apos;re all set! Add integrations for databases, messaging, and cloud services, or deploy your app to production.&#10;&#10;[Add an integration](command:aspire-vscode.add)&#10;&#10;[Open Aspire docs](https://aspire.dev/docs/)</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostPathMustBeNonEmptyAbsolute">
+      <source xml:lang="en">appHostPath must be a non-empty absolute path</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.aspireRestoreFailed">
       <source xml:lang="en">aspire restore failed for {0}: {1}</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.aspireCliCommandTimedOut">
+      <source xml:lang="en">timed out after {0}ms</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.aspireCliCommandFailed">
+      <source xml:lang="en">{0} exited with code {1}{2}</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostCandidateDescription">
       <source xml:lang="en">{0} · {1}</source>
