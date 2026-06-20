@@ -340,18 +340,18 @@ async function executeE2eControlCommand(
       return await vscode.env.clipboard.readText();
     }
     case 'copyEndpointUrl': {
-      const element = getEndpointElement(appHostTreeProvider, command);
-      const commandPromise = vscode.commands.executeCommand('aspire-vscode.copyEndpointUrl', element);
+      const endpoint = getEndpointElement(appHostTreeProvider, command);
+      const commandPromise = vscode.commands.executeCommand('aspire-vscode.copyEndpointUrl', endpoint.element);
       markStarted();
       await commandPromise;
       return await vscode.env.clipboard.readText();
     }
     case 'openInIntegratedBrowser': {
-      const element = getEndpointElement(appHostTreeProvider, command);
-      const commandPromise = vscode.commands.executeCommand('aspire-vscode.openInIntegratedBrowser', element);
+      const endpoint = getEndpointElement(appHostTreeProvider, command);
+      const commandPromise = vscode.commands.executeCommand('aspire-vscode.openInIntegratedBrowser', endpoint.element);
       markStarted();
       await commandPromise;
-      return { url: command.url };
+      return { url: endpoint.url };
     }
     case 'stopResource': {
       const element = getResourceElement(appHostTreeProvider, command.resourceName, command.appHostPath);
@@ -1048,7 +1048,7 @@ function getResourceElement(appHostTreeProvider: AspireAppHostTreeProvider, reso
 function getEndpointElement(
   appHostTreeProvider: AspireAppHostTreeProvider,
   command: Extract<AspireExtensionE2EControlCommand, { name: 'copyEndpointUrl' | 'openInIntegratedBrowser' }>
-): unknown {
+): { element: unknown; url: string } {
   const element = appHostTreeProvider.findEndpointElement({
     appHostPath: command.appHostPath,
     resourceName: command.resourceName,
@@ -1058,7 +1058,19 @@ function getEndpointElement(
     throw new Error('Aspire extension E2E endpoint command could not find a matching endpoint.');
   }
 
-  return element;
+  if (!hasEndpointUrl(element)) {
+    throw new Error('Aspire extension E2E endpoint command found an endpoint tree item without a URL.');
+  }
+
+  return { element, url: element.url };
+}
+
+function hasEndpointUrl(element: unknown): element is { url: string } {
+  return typeof element === 'object'
+    && element !== null
+    && 'url' in element
+    && typeof element.url === 'string'
+    && element.url.length > 0;
 }
 
 function getResourceCommandElement(
