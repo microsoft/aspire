@@ -59,23 +59,23 @@
                         <FluentPopover AnchorId="@id" @bind-Open="context.PopupVisible" VerticalThreshold="@(Math.Min((context.Values.Count + 1) * 36 + 48, 300))" AutoFocus="false">
                             <Header>@context.Name</Header>
                             <Body>
-                                <FluentStack Orientation="Orientation.Vertical" Class="dimension-popup">
-                                    <FluentCheckbox Label="@Loc[nameof(ControlsStrings.LabelAll)]"
-                                                    ThreeState="true"
-                                                    ShowIndeterminate="false"
-                                                    ThreeStateOrderUncheckToIntermediate="true"
-                                                    @bind-CheckState:get="context.AreAllValuesSelected"
-                                                    @bind-CheckState:set="@(v => OnAllValuesSelectionChangedAsync(context, v))"/>
-                                    @foreach (var tag in context.Values.OrderBy(v => v.Text))
-                                    {
-                                        var isChecked = context.SelectedValues.Contains(tag);
-                                        <FluentCheckbox Label="@tag.Text"
-                                                        title="@tag.Text"
-                                                        @key=tag
-                                                        @bind-Value:get="isChecked"
-                                                        @bind-Value:set="c => OnTagSelectionChangedAsync(context, tag, c)"/>
-                                    }
-                                </FluentStack>
+                            <FluentStack Orientation="Orientation.Vertical" Class="dimension-popup">
+                                <FluentCheckbox Label="@Loc[nameof(ControlsStrings.LabelAll)]"
+                                                ThreeState="true"
+                                                ShowIndeterminate="false"
+                                                ThreeStateOrderUncheckToIntermediate="true"
+                                                @bind-CheckState:get="context.AreAllValuesSelected"
+                                                @bind-CheckState:set="@(v => OnAllValuesSelectionChangedAsync(context, v))"/>
+                                @foreach (var tag in context.Values.OrderBy(v => v.Text))
+                                {
+                                    var isChecked = context.SelectedValues.Contains(tag);
+                                    <FluentCheckbox Label="@tag.Text"
+                                                    title="@tag.Text"
+                                                    @key=tag
+                                                    @bind-Value:get="isChecked"
+                                                    @bind-Value:set="c => OnTagSelectionChangedAsync(context, tag, c)"/>
+                                }
+                            </FluentStack>
                             </Body>
                         </FluentPopover>
                     </AspireTemplateColumn>

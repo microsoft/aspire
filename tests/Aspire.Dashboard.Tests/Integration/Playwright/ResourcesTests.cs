@@ -22,6 +22,27 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task UrlLink_EnterDoesNotOpenResourceDetails()
+    {
+        await RunTestAsync(async page =>
+        {
+            await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
+
+            var popup = await page.RunAndWaitForPopupAsync(async () =>
+            {
+                var urlLink = page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = "https://example.com" }).First;
+                await urlLink.FocusAsync();
+                await page.Keyboard.PressAsync("Enter");
+            });
+
+            Assert.StartsWith("https://example.com", popup.Url);
+            await popup.CloseAsync();
+            await Assertions.Expect(page.Locator(".details-header-title")).ToHaveCountAsync(0);
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task ResourceViewTabs_RemainVisibleAtNarrowViewport()
     {
         await RunTestAsync(async page =>
@@ -44,7 +65,14 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
     {
         protected override IReadOnlyList<ResourceViewModel> Resources =>
         [
-            MockDashboardClient.TestResource1,
+            ModelTestHelpers.CreateResource(
+                resourceName: "TestResource",
+                resourceType: KnownResourceTypes.Project,
+                state: KnownResourceState.Running,
+                urls:
+                [
+                    new UrlViewModel("https", new Uri("https://example.com"), isInternal: false, isInactive: false, UrlDisplayPropertiesViewModel.Empty)
+                ]),
             ModelTestHelpers.CreateResource(
                 resourceName: "HiddenResource",
                 resourceType: KnownResourceTypes.Container,
