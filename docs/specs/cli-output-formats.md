@@ -56,7 +56,7 @@ Use `--no-evaluate` to keep discovery in strict non-inspecting mode for tooling 
 | ----- | ---------- | ----------- |
 | `path` | All candidates | Full path to the candidate AppHost project file. |
 | `language` | All candidates | Detected AppHost language, such as `C#` or `TypeScript`. |
-| `status` | All candidates | Candidate validation status: `buildable`, `possibly-unbuildable`, or `possibly-buildable` |
+| `status` | All candidates | Candidate validation status: `buildable`, `possibly-unbuildable`, or `possibly-buildable`. |
 
 ### `aspire start` and `aspire run --detach`
 
