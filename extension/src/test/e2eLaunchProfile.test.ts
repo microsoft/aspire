@@ -254,6 +254,8 @@ suite('E2E launch profile', () => {
         assert.ok(treeActions.includes("waitForHttpText(endpointUrl, 'ok')"));
         assert.ok(!treeActions.includes('waitForEditorTitle(new URL(endpointUrl).host'));
         assert.ok(e2eStateFileBridge.includes('return { url: endpoint.url };'));
+        assert.ok(e2eStateFileBridge.includes("case 'publishAppHost':"));
+        assert.ok(e2eStateFileBridge.includes("appHostLaunchService.launch(command.appHostPath, 'publish', true)"));
     });
 
     test('hides AppHost outside the workspace for empty-discovery coverage', () => {

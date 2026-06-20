@@ -141,7 +141,7 @@ export function createE2eStateFileBridge(
               }
             };
 
-            const result = await executeE2eControlCommand(context, aspireContext, appHostTreeProvider, terminalProvider, payload.command, markCommandStarted);
+            const result = await executeE2eControlCommand(context, aspireContext, appHostLaunchService, appHostTreeProvider, terminalProvider, payload.command, markCommandStarted);
             controlStatus = { revision, status: 'applied', result };
           }
           else {
@@ -241,6 +241,7 @@ function getE2eErrorMessage(error: unknown): string {
 async function executeE2eControlCommand(
   context: vscode.ExtensionContext,
   aspireContext: AspireExtensionContext,
+  appHostLaunchService: AppHostLaunchService,
   appHostTreeProvider: AspireAppHostTreeProvider,
   terminalProvider: AspireTerminalProvider,
   command: AspireExtensionE2EControlCommand,
@@ -288,6 +289,15 @@ async function executeE2eControlCommand(
     case 'debugAppHost': {
       const element = getAppHostElement(appHostTreeProvider, command.appHostPath);
       const commandPromise = vscode.commands.executeCommand('aspire-vscode.debugAppHost', element);
+      markStarted();
+      return await commandPromise;
+    }
+    case 'publishAppHost': {
+      if (!command.appHostPath) {
+        throw new Error('Aspire extension E2E publishAppHost requires appHostPath.');
+      }
+
+      const commandPromise = appHostLaunchService.launch(command.appHostPath, 'publish', true);
       markStarted();
       return await commandPromise;
     }
