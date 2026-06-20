@@ -20,10 +20,16 @@ The backend exposes **commands** (request/response via `@tauri-apps/api/core` `i
 | `deck_get_telemetry_summary` | – | `TelemetrySummary` |
 | `deck_list_apphosts` | – | `AppHostInfo[]` (attached AppHosts) |
 | `deck_select_apphost` | `{ id: string }` | `void` (switches the active AppHost) |
+| `deck_respond_interaction` | `{ action: string, values: Record<string,string> }` | `void` (replies to the active interaction) |
 
 Resource/console/command operations target the **active** AppHost. Deck can attach to
 multiple AppHosts at once (one per `aspire run --deck`); `deck_select_apphost` changes which
 one is shown.
+
+`deck_respond_interaction` replies to the active AppHost's pending interaction (raised by a
+resource command that needs inputs, a message box, or a notification). `action` is one of
+`submit`/`update` (inputs dialog — `update` re-validates without completing), `cancel`/`primary`/
+`secondary` (message box / notification buttons); `values` maps input `name` → string value.
 
 ## Events (listen)
 
@@ -34,6 +40,7 @@ one is shown.
 | `deck://console-log` | `ConsoleLogEvent` |
 | `deck://telemetry` | `TelemetrySummary` (debounced push when new OTLP data arrives) |
 | `deck://apphosts` | `AppHostInfo[]` (attached AppHosts changed, or the active one switched) |
+| `deck://interaction` | `InteractionInfo` (active AppHost raised/updated an interaction; `kind: "complete"` clears it) |
 
 ## Types
 
@@ -173,6 +180,42 @@ export interface AppHostInfo {
   name: string;               // application name, or the id until connected
   state: ConnectionState;     // resource-service connection state
   active: boolean;            // whether this AppHost is the one being shown
+}
+
+// --- Interactions (command inputs / prompts) ---
+export type InteractionKind = "inputsDialog" | "messageBox" | "notification" | "complete";
+export type InteractionInputType = "text" | "secretText" | "choice" | "boolean" | "number";
+
+export interface InteractionInputInfo {
+  name: string;
+  label: string;
+  placeholder: string;
+  inputType: InteractionInputType;
+  required: boolean;
+  options: [string, string][];   // [value, display] for choice inputs
+  value: string;                 // server-provided current value
+  validationErrors: string[];    // shown inline under the field
+  description: string;
+  maxLength: number;             // 0 = unlimited
+  allowCustomChoice: boolean;    // choice inputs may accept a free value
+  disabled: boolean;
+  updateStateOnChange: boolean;  // re-validate via deck_respond_interaction("update") on change
+}
+
+export interface InteractionInfo {
+  interactionId: number;
+  kind: InteractionKind;
+  title: string;
+  message: string;
+  primaryButtonText: string;
+  secondaryButtonText: string;
+  showSecondaryButton: boolean;
+  showDismiss: boolean;
+  enableMessageMarkdown: boolean;
+  intent: "none" | "success" | "warning" | "error" | "information" | "confirmation";
+  inputs: InteractionInputInfo[];
+  linkText: string;              // notification link
+  linkUrl: string;
 }
 ```
 

@@ -41,6 +41,14 @@ pub struct Session {
     pub loop_handle: Mutex<Option<JoinHandle<()>>>,
     /// Last known connection state, re-emitted to the UI when this session becomes active.
     pub connection: Mutex<ConnectionStatus>,
+    /// Sender for the bidi WatchInteractions stream, used to reply to interaction
+    /// prompts (command inputs, message boxes). Present while the stream is connected.
+    pub interaction_tx: Mutex<Option<tokio::sync::mpsc::Sender<crate::proto::aspire::v1::WatchInteractionsRequestUpdate>>>,
+    /// The most recent interaction pushed by the AppHost (the last server message),
+    /// kept so the UI can be re-primed on session switch and responses can be rebuilt.
+    pub pending_interaction: Mutex<Option<crate::proto::aspire::v1::WatchInteractionsResponseUpdate>>,
+    /// The interaction-watch loop task.
+    pub interaction_handle: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl Session {
@@ -56,6 +64,9 @@ impl Session {
             console_tasks: Mutex::new(HashMap::new()),
             loop_handle: Mutex::new(None),
             connection: Mutex::new(ConnectionStatus::new("resourceService", "connecting", None)),
+            interaction_tx: Mutex::new(None),
+            pending_interaction: Mutex::new(None),
+            interaction_handle: Mutex::new(None),
         }
     }
 
@@ -63,6 +74,9 @@ impl Session {
     /// is unregistered (e.g. the run ends).
     pub fn shutdown(&self) {
         if let Some(handle) = self.loop_handle.lock().unwrap().take() {
+            handle.abort();
+        }
+        if let Some(handle) = self.interaction_handle.lock().unwrap().take() {
             handle.abort();
         }
         let mut tasks = self.console_tasks.lock().unwrap();
@@ -170,6 +184,15 @@ impl AppState {
         });
         *session.loop_handle.lock().unwrap() = Some(handle);
 
+        // Also watch the interaction stream so command-input prompts surface in the UI.
+        let int_app = self.app.clone();
+        let int_state = self.clone();
+        let int_session = session.clone();
+        let int_handle = tauri::async_runtime::spawn(async move {
+            crate::interaction::run_interaction_loop(int_app, int_state, int_session).await;
+        });
+        *session.interaction_handle.lock().unwrap() = Some(int_handle);
+
         self.emit_apphosts();
         self.emit_active_snapshot();
     }
@@ -211,12 +234,15 @@ impl AppState {
             let resources: Vec<Resource> =
                 session.resources.lock().unwrap().values().cloned().collect();
             let _ = self.app.emit("deck://resources", &ResourcesEvent::snapshot(resources));
+            // Re-prime any in-flight interaction for the newly active AppHost.
+            crate::interaction::emit_active_interaction(&self.app, &session);
         } else {
             // No AppHost attached — show a disconnected, empty state.
             let _ = self
                 .app
                 .emit("deck://connection", &ConnectionStatus::new("resourceService", "disconnected", None));
             let _ = self.app.emit("deck://resources", &ResourcesEvent::snapshot(vec![]));
+            let _ = self.app.emit("deck://interaction", &crate::model::InteractionEvent::complete());
         }
     }
 }

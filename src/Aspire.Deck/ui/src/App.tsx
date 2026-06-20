@@ -4,7 +4,7 @@ import { getConfig } from "./api/deck";
 import { Sidebar, type PageId } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
 import { NotConnected } from "./components/NotConnected";
-import { useConnection, useResources, useTelemetry, useApphosts } from "./lib/useDeckEvent";
+import { useConnection, useResources, useTelemetry, useApphosts, useInteraction } from "./lib/useDeckEvent";
 import { useTheme } from "./lib/theme";
 import { ResourcesPage } from "./pages/ResourcesPage";
 import { ConsolePage } from "./pages/ConsolePage";
@@ -12,6 +12,7 @@ import { StructuredLogsPage } from "./pages/StructuredLogsPage";
 import { TracesPage } from "./pages/TracesPage";
 import { MetricsPage } from "./pages/MetricsPage";
 import { CanvasesPage } from "./pages/CanvasesPage";
+import { InteractionPane } from "./components/InteractionPane";
 
 export function App() {
   const { theme, toggleTheme } = useTheme();
@@ -19,6 +20,7 @@ export function App() {
   const { resources } = useResources();
   const telemetry = useTelemetry();
   const apphosts = useApphosts();
+  const interaction = useInteraction();
   const [config, setConfig] = useState<DeckConfig | null>(null);
   const [page, setPage] = useState<PageId>("resources");
 
@@ -77,6 +79,7 @@ export function App() {
           </>
         )}
       </main>
+      {interaction ? <InteractionPane interaction={interaction} /> : null}
     </div>
   );
 }

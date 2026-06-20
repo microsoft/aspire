@@ -13,6 +13,7 @@ mod canvas;
 mod commands;
 mod config;
 mod control;
+mod interaction;
 mod model;
 mod otlp;
 mod proto;
@@ -100,6 +101,7 @@ pub fn run() {
             commands::deck_unsubscribe_console_logs,
             commands::deck_execute_command,
             commands::deck_open_external,
+            commands::deck_respond_interaction,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Aspire Deck")

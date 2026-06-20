@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   onApphosts,
   onConnection,
+  onInteraction,
   onResources,
   onTelemetry,
 } from "../api/deck";
@@ -10,6 +11,7 @@ import type {
   ConnectionState,
   ConnectionStatus,
   ConnectionTarget,
+  InteractionInfo,
   Resource,
   ResourcesEvent,
   TelemetrySummary,
@@ -92,4 +94,19 @@ export function useApphosts(): AppHostInfo[] {
   }, []);
 
   return apphosts;
+}
+
+// Tracks the active AppHost's current interaction prompt (command inputs, message
+// box, notification). Null when there is no active interaction.
+export function useInteraction(): InteractionInfo | null {
+  const [interaction, setInteraction] = useState<InteractionInfo | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = onInteraction((i) => {
+      setInteraction(i.kind === "complete" ? null : i);
+    });
+    return unsubscribe;
+  }, []);
+
+  return interaction;
 }

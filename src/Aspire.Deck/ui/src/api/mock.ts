@@ -10,6 +10,8 @@ import type {
   ConsoleLogEvent,
   DeckConfig,
   ExecuteCommandArgs,
+  InteractionInfo,
+  InteractionInputInfo,
   LogRecordSummary,
   MetricSummary,
   Resource,
@@ -232,6 +234,15 @@ function defaultCommands(state: string): Resource["commands"] {
       isHighlighted: running,
       state: running ? "enabled" : "disabled",
     },
+    {
+      name: "scale",
+      displayName: "Scale…",
+      displayDescription: "Set the replica count (prompts for input).",
+      confirmationMessage: null,
+      iconName: "ArrowClockwise",
+      isHighlighted: false,
+      state: "enabled",
+    },
   ];
 }
 
@@ -305,6 +316,8 @@ class MockBackend {
   private connectionSubs = new Set<(s: ConnectionStatus) => void>();
   private telemetrySubs = new Set<(t: TelemetrySummary) => void>();
   private apphostSubs = new Set<(a: AppHostInfo[]) => void>();
+  private interactionSubs = new Set<(i: InteractionInfo) => void>();
+  private pendingInteraction: InteractionInfo | null = null;
   private consoleSubs = new Map<string, Set<(e: ConsoleLogEvent) => void>>();
   private consoleLineCounters = new Map<string, number>();
 
@@ -374,11 +387,84 @@ class MockBackend {
       case "resource-stop":
         this.setResourceState(target, "Exited", "info", null);
         break;
+      case "scale":
+        // Custom command that prompts for inputs (demonstrates the interaction pane).
+        this.emitInteraction(this.buildScaleDialog([]));
+        return { kind: "succeeded", message: "Awaiting input…" };
       default:
         return { kind: "undefined", message: `Unknown command '${args.commandName}'.` };
     }
 
     return { kind: "succeeded", message: `Command '${args.commandName}' executed on '${args.resourceName}'.` };
+  }
+
+  // --- Interactions (mock) ---
+
+  private buildScaleDialog(errorsFor: { name: string; error: string }[]): InteractionInfo {
+    const errs = (name: string): string[] => errorsFor.filter((e) => e.name === name).map((e) => e.error);
+    const inputs: InteractionInputInfo[] = [
+      {
+        name: "replicas", label: "Replicas", placeholder: "1-10", inputType: "number", required: true,
+        options: [], value: "1", validationErrors: errs("replicas"), description: "Number of instances to run.",
+        maxLength: 0, allowCustomChoice: false, disabled: false, updateStateOnChange: true,
+      },
+      {
+        name: "tier", label: "Tier", placeholder: "", inputType: "choice", required: true,
+        options: [["standard", "Standard"], ["premium", "Premium"]], value: "standard",
+        validationErrors: errs("tier"), description: "Compute tier for the replicas.",
+        maxLength: 0, allowCustomChoice: false, disabled: false, updateStateOnChange: false,
+      },
+      {
+        name: "drain", label: "Drain connections before scaling down", placeholder: "", inputType: "boolean",
+        required: false, options: [], value: "true", validationErrors: [], description: "",
+        maxLength: 0, allowCustomChoice: false, disabled: false, updateStateOnChange: false,
+      },
+    ];
+    return {
+      interactionId: 1, kind: "inputsDialog", title: "Scale resource",
+      message: "Choose how many replicas to run.", primaryButtonText: "Scale", secondaryButtonText: "Cancel",
+      showSecondaryButton: true, showDismiss: true, enableMessageMarkdown: false, intent: "none",
+      inputs, linkText: "", linkUrl: "",
+    };
+  }
+
+  private emitInteraction(i: InteractionInfo): void {
+    this.pendingInteraction = i.kind === "complete" ? null : i;
+    for (const cb of this.interactionSubs) {
+      cb(i);
+    }
+  }
+
+  onInteraction(cb: (i: InteractionInfo) => void): Unsubscribe {
+    this.interactionSubs.add(cb);
+    cb(this.pendingInteraction ?? this.completeInteraction());
+    return () => this.interactionSubs.delete(cb);
+  }
+
+  respondInteraction(action: string, values: Record<string, string>): void {
+    if (action === "submit" || action === "update") {
+      const errors: { name: string; error: string }[] = [];
+      const replicas = Number(values.replicas);
+      if (!Number.isInteger(replicas) || replicas < 1 || replicas > 10) {
+        errors.push({ name: "replicas", error: "Replicas must be a whole number between 1 and 10." });
+      }
+      if (errors.length > 0 || action === "update") {
+        this.emitInteraction(this.buildScaleDialog(errors));
+        return;
+      }
+      this.emitInteraction(this.completeInteraction());
+      return;
+    }
+    // cancel / dismiss
+    this.emitInteraction(this.completeInteraction());
+  }
+
+  private completeInteraction(): InteractionInfo {
+    return {
+      interactionId: 0, kind: "complete", title: "", message: "", primaryButtonText: "", secondaryButtonText: "",
+      showSecondaryButton: false, showDismiss: false, enableMessageMarkdown: false, intent: "none",
+      inputs: [], linkText: "", linkUrl: "",
+    };
   }
 
   onResources(cb: (e: ResourcesEvent) => void): Unsubscribe {

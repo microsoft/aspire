@@ -179,3 +179,39 @@ export interface AppHostInfo {
   state: ConnectionState;
   active: boolean;
 }
+
+// --- Interactions (command inputs / prompts) ---
+export type InteractionKind = "inputsDialog" | "messageBox" | "notification" | "complete";
+export type InteractionInputType = "text" | "secretText" | "choice" | "boolean" | "number";
+
+export interface InteractionInputInfo {
+  name: string;
+  label: string;
+  placeholder: string;
+  inputType: InteractionInputType;
+  required: boolean;
+  options: [string, string][]; // [value, display]
+  value: string;
+  validationErrors: string[];
+  description: string;
+  maxLength: number;
+  allowCustomChoice: boolean;
+  disabled: boolean;
+  updateStateOnChange: boolean;
+}
+
+export interface InteractionInfo {
+  interactionId: number;
+  kind: InteractionKind;
+  title: string;
+  message: string;
+  primaryButtonText: string;
+  secondaryButtonText: string;
+  showSecondaryButton: boolean;
+  showDismiss: boolean;
+  enableMessageMarkdown: boolean;
+  intent: "none" | "success" | "warning" | "error" | "information" | "confirmation";
+  inputs: InteractionInputInfo[];
+  linkText: string;
+  linkUrl: string;
+}

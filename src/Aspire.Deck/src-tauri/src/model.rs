@@ -389,3 +389,164 @@ pub struct CommandResponse {
     pub kind: String,
     pub message: Option<String>,
 }
+
+// ---------------------------------------------------------------------------
+// Interactions (command inputs / prompts)
+// ---------------------------------------------------------------------------
+
+/// A single input requested by an interaction dialog (e.g. a command that needs
+/// parameters). Mirrors `aspire.v1.InteractionInput`.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InteractionInputDto {
+    pub name: String,
+    pub label: String,
+    pub placeholder: String,
+    /// "text" | "secretText" | "choice" | "boolean" | "number".
+    pub input_type: String,
+    pub required: bool,
+    /// Choice options as (value, display) pairs, preserving server order.
+    pub options: Vec<(String, String)>,
+    pub value: String,
+    pub validation_errors: Vec<String>,
+    pub description: String,
+    pub max_length: i32,
+    pub allow_custom_choice: bool,
+    pub disabled: bool,
+    /// When true, the UI re-validates with the server on every change.
+    pub update_state_on_change: bool,
+}
+
+/// An interaction pushed from the AppHost over the WatchInteractions stream. The
+/// UI renders inputs dialogs as a side pane, and message box / notification more
+/// simply. Mirrors `aspire.v1.WatchInteractionsResponseUpdate`.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InteractionEvent {
+    pub interaction_id: i32,
+    /// "inputsDialog" | "messageBox" | "notification" | "complete".
+    pub kind: String,
+    pub title: String,
+    pub message: String,
+    pub primary_button_text: String,
+    pub secondary_button_text: String,
+    pub show_secondary_button: bool,
+    pub show_dismiss: bool,
+    pub enable_message_markdown: bool,
+    /// "none" | "success" | "warning" | "error" | "information" | "confirmation".
+    pub intent: String,
+    pub inputs: Vec<InteractionInputDto>,
+    pub link_text: String,
+    pub link_url: String,
+}
+
+fn input_type_str(value: i32) -> &'static str {
+    match pb::InputType::try_from(value) {
+        Ok(pb::InputType::SecretText) => "secretText",
+        Ok(pb::InputType::Choice) => "choice",
+        Ok(pb::InputType::Boolean) => "boolean",
+        Ok(pb::InputType::Number) => "number",
+        // Unspecified and Text both render as a text box.
+        _ => "text",
+    }
+}
+
+fn message_intent_str(value: i32) -> &'static str {
+    match pb::MessageIntent::try_from(value) {
+        Ok(pb::MessageIntent::Success) => "success",
+        Ok(pb::MessageIntent::Warning) => "warning",
+        Ok(pb::MessageIntent::Error) => "error",
+        Ok(pb::MessageIntent::Information) => "information",
+        Ok(pb::MessageIntent::Confirmation) => "confirmation",
+        _ => "none",
+    }
+}
+
+impl From<&pb::InteractionInput> for InteractionInputDto {
+    fn from(i: &pb::InteractionInput) -> Self {
+        InteractionInputDto {
+            name: i.name.clone(),
+            label: i.label.clone(),
+            placeholder: i.placeholder.clone(),
+            input_type: input_type_str(i.input_type).to_string(),
+            required: i.required,
+            // `options` is a protobuf map (unordered); sort by display for stable UI.
+            options: {
+                let mut opts: Vec<(String, String)> =
+                    i.options.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+                opts.sort_by(|a, b| a.1.cmp(&b.1));
+                opts
+            },
+            value: i.value.clone(),
+            validation_errors: i.validation_errors.clone(),
+            description: i.description.clone(),
+            max_length: i.max_length,
+            allow_custom_choice: i.allow_custom_choice,
+            disabled: i.disabled,
+            update_state_on_change: i.update_state_on_change,
+        }
+    }
+}
+
+impl InteractionEvent {
+    /// A synthetic "complete" event used to clear the UI (no active interaction).
+    pub fn complete() -> Self {
+        InteractionEvent {
+            interaction_id: 0,
+            kind: "complete".to_string(),
+            title: String::new(),
+            message: String::new(),
+            primary_button_text: String::new(),
+            secondary_button_text: String::new(),
+            show_secondary_button: false,
+            show_dismiss: false,
+            enable_message_markdown: false,
+            intent: "none".to_string(),
+            inputs: Vec::new(),
+            link_text: String::new(),
+            link_url: String::new(),
+        }
+    }
+
+    pub fn from_response(update: &pb::WatchInteractionsResponseUpdate) -> Self {
+        use pb::watch_interactions_response_update::Kind;
+
+        let mut event = InteractionEvent {
+            interaction_id: update.interaction_id,
+            kind: "complete".to_string(),
+            title: update.title.clone(),
+            message: update.message.clone(),
+            primary_button_text: update.primary_button_text.clone(),
+            secondary_button_text: update.secondary_button_text.clone(),
+            show_secondary_button: update.show_secondary_button,
+            show_dismiss: update.show_dismiss,
+            enable_message_markdown: update.enable_message_markdown,
+            intent: "none".to_string(),
+            inputs: Vec::new(),
+            link_text: String::new(),
+            link_url: String::new(),
+        };
+
+        match &update.kind {
+            Some(Kind::InputsDialog(dialog)) => {
+                event.kind = "inputsDialog".to_string();
+                event.inputs = dialog.input_items.iter().map(InteractionInputDto::from).collect();
+            }
+            Some(Kind::MessageBox(mb)) => {
+                event.kind = "messageBox".to_string();
+                event.intent = message_intent_str(mb.intent).to_string();
+            }
+            Some(Kind::Notification(n)) => {
+                event.kind = "notification".to_string();
+                event.intent = message_intent_str(n.intent).to_string();
+                event.link_text = n.link_text.clone();
+                event.link_url = n.link_url.clone();
+            }
+            Some(Kind::Complete(_)) | None => {
+                event.kind = "complete".to_string();
+            }
+        }
+
+        event
+    }
+}

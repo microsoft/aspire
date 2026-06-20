@@ -16,6 +16,7 @@ import type {
   ConsoleLogEvent,
   DeckConfig,
   ExecuteCommandArgs,
+  InteractionInfo,
   Resource,
   ResourcesEvent,
   TelemetrySummary,
@@ -88,6 +89,25 @@ export function onApphosts(cb: (apphosts: AppHostInfo[]) => void): Unsubscribe {
     return unlisten;
   }
   return mockBackend.onApphosts(cb);
+}
+
+// Subscribes to interaction prompts (command inputs, message boxes, notifications)
+// from the active AppHost. A "complete" kind clears the current interaction.
+export function onInteraction(cb: (interaction: InteractionInfo) => void): Unsubscribe {
+  if (isTauri()) {
+    return bridgeListen<InteractionInfo>("deck://interaction", cb);
+  }
+  return mockBackend.onInteraction(cb);
+}
+
+// Replies to the active AppHost's current interaction. `values` maps input names to
+// string values (booleans as "true"/"false", choices as the option value).
+export function respondInteraction(action: string, values: Record<string, string>): void {
+  if (isTauri()) {
+    void invoke("deck_respond_interaction", { action, values });
+    return;
+  }
+  mockBackend.respondInteraction(action, values);
 }
 
 export function getTelemetrySummary(): Promise<TelemetrySummary> {

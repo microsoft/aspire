@@ -121,3 +121,17 @@ pub async fn deck_execute_command(
 pub fn deck_open_external(url: String) -> Result<(), String> {
     open::that(url).map_err(|e| e.to_string())
 }
+
+/// Replies to the active AppHost's current interaction (command-input dialog,
+/// message box, or notification). `values` maps input names to their string
+/// values (booleans as "true"/"false", choices as the option value).
+#[tauri::command]
+pub fn deck_respond_interaction(
+    state: State<'_, Arc<AppState>>,
+    action: String,
+    values: std::collections::HashMap<String, String>,
+) {
+    if let Some(session) = state.active_session() {
+        crate::interaction::respond(&session, &action, values);
+    }
+}

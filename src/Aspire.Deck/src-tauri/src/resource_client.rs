@@ -51,7 +51,7 @@ impl Interceptor for ApiKeyInterceptor {
 pub type ResourceServiceClient =
     DashboardServiceClient<InterceptedService<Channel, ApiKeyInterceptor>>;
 
-fn build_interceptor(session: &Session) -> ApiKeyInterceptor {
+pub(crate) fn build_interceptor(session: &Session) -> ApiKeyInterceptor {
     let key = if session.auth_mode == AuthMode::ApiKey {
         session
             .api_key
@@ -65,7 +65,7 @@ fn build_interceptor(session: &Session) -> ApiKeyInterceptor {
 
 /// Establishes a channel to the resource service endpoint. Uses TLS when the URL
 /// scheme is https.
-async fn connect_channel(url: &str) -> Result<Channel, String> {
+pub(crate) async fn connect_channel(url: &str) -> Result<Channel, String> {
     let mut endpoint = Channel::from_shared(url.to_string())
         .map_err(|e| format!("invalid resource service URL: {e}"))?
         .connect_timeout(Duration::from_secs(10))
