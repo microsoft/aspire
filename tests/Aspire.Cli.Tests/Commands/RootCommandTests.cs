@@ -89,7 +89,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task FeedbackCommand_Idea_PrintsIssueTemplateChooserUrl()
+    public async Task FeedbackCommand_Idea_PrintsIssueTemplateUrl()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var interactionService = new TestInteractionService();
@@ -106,7 +106,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(0, exitCode);
         var message = Assert.Single(interactionService.DisplayedMessages).Message;
-        Assert.Contains("https://github.com/microsoft/aspire/issues/new/choose", message, StringComparison.Ordinal);
+        Assert.Contains("https://github.com/microsoft/aspire/issues/new?", message, StringComparison.Ordinal);
         Assert.Contains("template=20_feature-request.yml", message, StringComparison.Ordinal);
         Assert.Contains("title=My%20idea", message, StringComparison.Ordinal);
         Assert.Contains("solution=Make%20Aspire%20better", message, StringComparison.Ordinal);
@@ -148,6 +148,31 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains("template=20_feature-request.yml", message, StringComparison.Ordinal);
         Assert.Contains("title=A%20prompted%20idea", message, StringComparison.Ordinal);
         Assert.Contains("solution=Prompted%20idea%20body", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task FeedbackCommand_General_PrintsBlankIssueUrlWithoutTemplateParameter()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("feedback general --title \"General feedback\" --body \"Details\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        var message = Assert.Single(interactionService.DisplayedMessages).Message;
+        Assert.Contains("https://github.com/microsoft/aspire/issues/new?", message, StringComparison.Ordinal);
+        Assert.Contains("title=General%20feedback", message, StringComparison.Ordinal);
+        Assert.Contains("body=Details", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("template=", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("blank.yml", message, StringComparison.Ordinal);
     }
 
     [Fact]

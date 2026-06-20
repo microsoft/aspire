@@ -21,12 +21,12 @@ internal sealed record FeedbackIssueContext(
 
 internal static class FeedbackIssueUrlBuilder
 {
-    private const string RepositoryIssuesUrl = "https://github.com/microsoft/aspire/issues/new/choose";
+    private const string RepositoryNewIssueUrl = "https://github.com/microsoft/aspire/issues/new";
+    private const string RepositoryIssueChooserUrl = "https://github.com/microsoft/aspire/issues/new/choose";
     private const string BugReportTemplate = "10_bug_report.yml";
     private const string FeatureRequestTemplate = "20_feature-request.yml";
-    private const string BlankIssueTemplate = "blank.yml";
 
-    public static string BuildChooserUrl() => RepositoryIssuesUrl;
+    public static string BuildChooserUrl() => RepositoryIssueChooserUrl;
 
     public static string BuildUrl(FeedbackIssueContext context)
     {
@@ -72,7 +72,6 @@ internal static class FeedbackIssueUrlBuilder
     {
         var query = new Dictionary<string, string?>
         {
-            ["template"] = BlankIssueTemplate,
             ["title"] = context.Title ?? "Aspire feedback",
             ["body"] = BuildBlankIssueBody(context.MainText, context.AdditionalContext)
         };
@@ -110,7 +109,7 @@ internal static class FeedbackIssueUrlBuilder
 
     private static string BuildUrl(IReadOnlyDictionary<string, string?> query)
     {
-        var builder = new StringBuilder(RepositoryIssuesUrl);
+        var builder = new StringBuilder(RepositoryNewIssueUrl);
         var separator = '?';
 
         foreach (var (key, value) in query)

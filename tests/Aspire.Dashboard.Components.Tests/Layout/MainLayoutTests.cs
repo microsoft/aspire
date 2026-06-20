@@ -279,7 +279,7 @@ public partial class MainLayoutTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task FeedbackDialog_ReportBug_OpensIssueTemplateChooserUrlWithEditableDetails()
+    public async Task FeedbackDialog_ReportBug_OpensIssueTemplateUrlWithEditableDetails()
     {
         SetupMainLayoutServices(feedbackDiagnosticProvider: new TestDashboardFeedbackDiagnosticProvider(
             doctorOutput: """{"sdk":"10.0.301"}""",
@@ -326,7 +326,7 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.Contains(JSInterop.Invocations, invocation =>
             invocation.Identifier == "open" &&
             TryGetOpenArguments(invocation.Arguments, out var url, out var target) &&
-            url.StartsWith("https://github.com/microsoft/aspire/issues/new/choose?", StringComparison.Ordinal) &&
+            url.StartsWith("https://github.com/microsoft/aspire/issues/new?", StringComparison.Ordinal) &&
             url.Contains("template=10_bug_report.yml", StringComparison.Ordinal) &&
             url.Contains("title=Bug%20title", StringComparison.Ordinal) &&
             url.Contains("description=Bug%20details", StringComparison.Ordinal) &&
