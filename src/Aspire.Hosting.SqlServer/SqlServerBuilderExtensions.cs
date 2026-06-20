@@ -111,7 +111,15 @@ public static partial class SqlServerBuilderExtensions
 
                 if (executionContext.IsRunMode && useDeveloperCertificate)
                 {
-                    var cert = devCertService.Certificates.First();
+                    var cert = devCertService.Certificates.FirstOrDefault();
+                    if (cert is null)
+                    {
+                        // Without an available developer certificate there is nothing to mount into SQL Server,
+                        // so keep TLS disabled and allow clients to use TrustServerCertificate.
+                        sqlBuilder.WithEndpoint(SqlServerServerResource.PrimaryEndpointName, x => x.TlsEnabled = false);
+                        return;
+                    }
+
                     if (cert.GetCertificateVersion() < 6)
                     {
                         // Older dev certs are injected into SQL Server but do not include 127.0.0.1 in the SAN,

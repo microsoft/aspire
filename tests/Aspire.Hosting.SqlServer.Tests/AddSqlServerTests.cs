@@ -202,6 +202,24 @@ public class AddSqlServerTests
     }
 
     [Fact]
+    public async Task SqlServerConnectionStringWithImplicitDeveloperCertificateAndNoCertificatesUsesTrustServerCertificate()
+    {
+        var connectionStrings = await GetConnectionStringsForScenarioAsync(
+            builder =>
+            {
+                builder.Services.AddSingleton<IDeveloperCertificateService>(
+                    new TestDeveloperCertificateService([], supportsContainerTrust: true, trustCertificate: true, tlsTerminate: true));
+
+                return builder.AddSqlServer("sqlserver");
+            });
+
+        Assert.True(connectionStrings.ConnectionStringBuilder.TrustServerCertificate);
+        Assert.True(string.IsNullOrEmpty(connectionStrings.ConnectionStringBuilder.HostNameInCertificate));
+        Assert.Contains(";trustServerCertificate=true", connectionStrings.JdbcConnectionString);
+        Assert.DoesNotContain(";encrypt=", connectionStrings.JdbcConnectionString, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task SqlServerConnectionStringWithCustomCertificate()
     {
         using var certificate = CreateCertificate();
