@@ -237,7 +237,7 @@ internal sealed class VsCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
         }
 
         var mcpConfigPath = Path.Combine(vsCodeFolder.FullName, McpConfigFileName);
-        var config = await McpConfigFileHelper.ReadConfigAsync(mcpConfigPath, cancellationToken: cancellationToken);
+        var config = await McpConfigFileHelper.ReadConfigAsync(mcpConfigPath, null, cancellationToken);
 
         // Ensure "servers" object exists
         if (!config.ContainsKey("servers") || config["servers"] is not JsonObject)
