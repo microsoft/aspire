@@ -60,12 +60,14 @@ suite('Aspire extension edge case E2E', function () {
         await executeE2eControlCommand({ name: 'executeAspireCommand', commandId: 'aspire-vscode.settings' });
         await waitForCommandOutcome('aspire-vscode.settings', 'success', 60000, settingsBefore);
 
+        const launchJsonPath = path.join(getWorkspaceRoot(), '.vscode', 'launch.json');
+        fs.rmSync(launchJsonPath, { force: true });
+
         const configureBefore = getCommandInvocationCount('aspire-vscode.configureLaunchJson');
         await executeE2eControlCommand({ name: 'executeAspireCommand', commandId: 'aspire-vscode.configureLaunchJson' }, { waitFor: 'started' });
         await chooseActiveQuickPick('Do not open the dashboard');
         await waitForCommandOutcome('aspire-vscode.configureLaunchJson', 'success', 60000, configureBefore);
 
-        const launchJsonPath = path.join(getWorkspaceRoot(), '.vscode', 'launch.json');
         const launchJson = JSON.parse(fs.readFileSync(launchJsonPath, 'utf8')) as { configurations?: Array<{ type?: string; dashboardBrowser?: string }> };
         assert.ok(launchJson.configurations?.some(configuration => configuration.type === 'aspire' && configuration.dashboardBrowser === 'none'));
     });
