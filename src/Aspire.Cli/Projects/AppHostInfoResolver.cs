@@ -194,7 +194,7 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
 
     private static AppHostProjectInfo CreateHeuristicInfo(FileInfo projectFile)
     {
-        var isLikelyAppHost = IsLikelyAppHost(projectFile);
+        var isLikelyAppHost = AppHostProjectUtils.IsLikelyAppHost(projectFile);
 
         return new AppHostProjectInfo(
             ExitCode: isLikelyAppHost ? 0 : 1,
@@ -208,16 +208,6 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
             RunArguments: null,
             TargetFramework: null,
             TargetFrameworks: null);
-    }
-
-    internal static bool IsLikelyAppHost(FileInfo projectFile)
-    {
-        var fileNameSuggestsAppHost = projectFile.Name.EndsWith("AppHost.csproj", StringComparison.OrdinalIgnoreCase);
-        var folderContainsAppHostCSharpFile = projectFile.Directory?
-            .EnumerateFiles("*", SearchOption.TopDirectoryOnly)
-            .Any(f => f.Name.Equals("AppHost.cs", StringComparison.OrdinalIgnoreCase)) ?? false;
-
-        return fileNameSuggestsAppHost || folderContainsAppHostCSharpFile;
     }
 
     private static AppHostProjectInfo ParseAppHostInfo(AppHostProjectInspectionOutput? msbuildOutput, int exitCode)

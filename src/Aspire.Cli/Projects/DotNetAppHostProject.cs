@@ -241,7 +241,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
     private static bool IsPossiblyUnbuildableAppHost(FileInfo projectFile)
     {
-        return AppHostInfoResolver.IsLikelyAppHost(projectFile);
+        return AppHostProjectUtils.IsLikelyAppHost(projectFile);
     }
 
     /// <inheritdoc />
