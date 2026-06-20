@@ -42,8 +42,7 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
             consoleInteractionService,
             new TestExtensionBackchannel(),
             extensionPromptEnabled: false,
-            logger: NullLogger<ExtensionInteractionService>.Instance,
-            cancellationToken: CancellationToken.None);
+            logger: NullLogger<ExtensionInteractionService>.Instance);
 
         var fileLinkMarkup = MarkupHelpers.SafeFileLink(extensionInteractionService, logFilePath);
         extensionInteractionService.DisplayMessage(

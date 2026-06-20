@@ -1149,8 +1149,7 @@ public class Program
                 return new ExtensionInteractionService(consoleInteractionService,
                     provider.GetRequiredService<IExtensionBackchannel>(),
                     extensionPromptEnabled,
-                    logger: provider.GetRequiredService<ILogger<ExtensionInteractionService>>(),
-                    cancellationToken: CancellationToken.None);
+                    logger: provider.GetRequiredService<ILogger<ExtensionInteractionService>>());
             });
         }
         else
