@@ -3,7 +3,6 @@
 
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Text.RegularExpressions;
 using Microsoft.Build.Framework;
 
 namespace Aspire.Hosting.Tasks;
@@ -85,9 +84,11 @@ public sealed class GetAspireCliVersion : Microsoft.Build.Utilities.Task
 
         // Aspire CLI version output is a bare informational version, for example:
         //   13.5.0-preview.1.26319.9+gabcdef
-        // The run-hook gate only needs the numeric floor so 13.5.0 previews satisfy the 13.5.0 minimum.
-        var versionMatch = Regex.Match(output, @"(?<version>\d+\.\d+\.\d+)");
-        return versionMatch.Success ? versionMatch.Groups["version"].Value : null;
+        // Strip the prerelease suffix before parsing so 13.5.0 previews satisfy the 13.5.0 minimum.
+        var prereleaseIndex = output.IndexOf('-');
+        var version = prereleaseIndex >= 0 ? output.Substring(0, prereleaseIndex) : output;
+
+        return Version.TryParse(version, out _) ? version : null;
     }
 
     private static ProcessStartInfo CreateStartInfo(string? cliPath)

@@ -304,6 +304,22 @@ public class AppHostSdkTargetsTests
     }
 
     [Fact]
+    public async Task ComputeRunArgumentsDoesNotUseAspireCliWhenCliVersionOutputIsUnparseable()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var project = await CreateRunHookProjectAsync(tempDirectory.Path, aspireUseCliBundle: true);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "fake-cli"));
+        var cliPath = Path.Combine(fakeCliDirectory.FullName, OperatingSystem.IsWindows() ? "aspire.cmd" : "aspire");
+        await CreateFakeAspireCliWithVersionAsync(fakeCliDirectory.FullName, "aspire version 13.5.0");
+
+        var properties = await GetComputeRunArgumentsPropertiesAsync(
+            project,
+            [$"-p:AspireCliPath={cliPath}", "-p:RunArguments=--custom foo"]);
+
+        AssertUsesDotNetRun(properties, project, "--custom foo");
+    }
+
+    [Fact]
     public async Task ComputeRunArgumentsDoesNotUseAspireCliWhenCliVersionCannotBeDetermined()
     {
         using var tempDirectory = new TestTempDirectory();
