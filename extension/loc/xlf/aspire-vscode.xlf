@@ -377,7 +377,7 @@
       <source xml:lang="en">Learn how to create, run, and monitor distributed applications with Aspire.</source>
     </trans-unit>
     <trans-unit id="configuration.aspire.enableAspireDashboardAutoLaunch">
-      <source xml:lang="en">Legacy setting for Aspire Dashboard launch behavior. Use Aspire: Dashboard Browser instead. When set, this legacy setting overrides the new setting.</source>
+      <source xml:lang="en">Legacy setting for Aspire Dashboard launch behavior. Use Aspire: Dashboard Browser instead. Explicit notification or off values still override Aspire: Dashboard Browser; launch uses Aspire: Dashboard Browser, falling back to VS Code&apos;s integrated browser for compatibility.</source>
     </trans-unit>
     <trans-unit id="command.new">
       <source xml:lang="en">New Aspire project</source>

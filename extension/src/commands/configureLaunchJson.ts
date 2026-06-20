@@ -42,7 +42,7 @@ export async function configureLaunchJsonCommand() {
 
         const dashboardBrowser = await promptForDashboardLaunchBehavior();
         if (!dashboardBrowser) {
-            return;
+            throw new vscode.CancellationError();
         }
 
         const defaultConfig = {
@@ -78,6 +78,10 @@ export async function configureLaunchJsonCommand() {
 
 
     } catch (error) {
+        if (error instanceof vscode.CancellationError) {
+            throw error;
+        }
+
         vscode.window.showErrorMessage(failedToConfigureLaunchJson(error));
     }
 }

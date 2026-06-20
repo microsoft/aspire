@@ -1,6 +1,5 @@
 import * as assert from 'assert';
 import * as fs from 'fs/promises';
-import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import * as sinon from 'sinon';
@@ -10,7 +9,7 @@ import { configureLaunchJsonCommand } from '../commands/configureLaunchJson';
 suite('configureLaunchJsonCommand', () => {
     test('prompts for dashboard launch behavior and writes it to launch.json', async () => {
         const sandbox = sinon.createSandbox();
-        const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'aspire-configure-launch-'));
+        const tempRoot = await createTestWorkspace();
 
         try {
             const workspaceFolder = {
@@ -43,7 +42,7 @@ suite('configureLaunchJsonCommand', () => {
 
     test('does not write launch.json when dashboard launch behavior selection is canceled', async () => {
         const sandbox = sinon.createSandbox();
-        const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'aspire-configure-launch-'));
+        const tempRoot = await createTestWorkspace();
 
         try {
             const workspaceFolder = {
@@ -55,7 +54,10 @@ suite('configureLaunchJsonCommand', () => {
             sandbox.stub(vscode.workspace, 'workspaceFolders').value([workspaceFolder]);
             sandbox.stub(vscode.window, 'showQuickPick').resolves(undefined);
 
-            await configureLaunchJsonCommand();
+            await assert.rejects(
+                () => configureLaunchJsonCommand(),
+                error => error instanceof vscode.CancellationError
+            );
 
             const launchJsonPath = path.join(tempRoot, '.vscode', 'launch.json');
             await assert.rejects(() => fs.stat(launchJsonPath), (error: NodeJS.ErrnoException) => error.code === 'ENOENT');
@@ -68,7 +70,7 @@ suite('configureLaunchJsonCommand', () => {
 
     test('does not prompt for dashboard launch behavior when Aspire launch configuration already exists', async () => {
         const sandbox = sinon.createSandbox();
-        const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'aspire-configure-launch-'));
+        const tempRoot = await createTestWorkspace();
 
         try {
             const vscodeDir = path.join(tempRoot, '.vscode');
@@ -109,3 +111,10 @@ suite('configureLaunchJsonCommand', () => {
         }
     });
 });
+
+async function createTestWorkspace() {
+    const tempRoot = path.resolve(__dirname, '..', '..', '.test-workspaces', 'configure-launch-json');
+    await fs.mkdir(tempRoot, { recursive: true });
+
+    return await fs.mkdtemp(path.join(tempRoot, 'workspace-'));
+}
