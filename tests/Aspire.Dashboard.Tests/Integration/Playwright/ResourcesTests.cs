@@ -61,6 +61,28 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
         });
     }
 
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ResourceViewTabs_RemainVisibleAtNarrowHorizontalViewport()
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(360, 720);
+            await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
+
+            var tabs = page.Locator(".resources-tab-header[orientation='horizontal']");
+            await Assertions.Expect(tabs).ToBeVisibleAsync();
+
+            var tableTab = page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = ControlsStrings.ResourcesContainerTableTab, Exact = true });
+            var parametersTab = page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = ControlsStrings.ResourcesContainerParametersTab, Exact = true });
+            var graphTab = page.Locator("#tab-Graph");
+
+            await AssertTabVisibleWithinViewportAsync(tableTab, 360);
+            await AssertTabVisibleWithinViewportAsync(parametersTab, 360);
+            await AssertTabVisibleWithinViewportAsync(graphTab, 360);
+        });
+    }
+
     public sealed class ResourcesDashboardServerFixture : DashboardServerFixture
     {
         protected override IReadOnlyList<ResourceViewModel> Resources =>
@@ -78,5 +100,15 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
                 resourceType: KnownResourceTypes.Container,
                 hidden: true)
         ];
+    }
+
+    private static async Task AssertTabVisibleWithinViewportAsync(ILocator tab, int viewportWidth)
+    {
+        await Assertions.Expect(tab).ToBeVisibleAsync();
+
+        var tabBounds = await tab.BoundingBoxAsync();
+        Assert.NotNull(tabBounds);
+        Assert.True(tabBounds.X >= 0, $"Tab should be within the viewport, but its X position was {tabBounds.X}.");
+        Assert.True(tabBounds.X + tabBounds.Width <= viewportWidth, $"Tab should fit inside the {viewportWidth}px viewport, but its right edge was {tabBounds.X + tabBounds.Width}.");
     }
 }
