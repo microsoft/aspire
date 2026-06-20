@@ -430,7 +430,9 @@ suite('utils/cliPath tests', () => {
             const tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-cli-path-percent-test-'));
             try {
                 const wrapperPath = path.join(tempDirectory, 'aspire.cmd');
-                fs.writeFileSync(wrapperPath, '@echo off\r\nif "%~1"=="%%PRIVATE_FEED%%" (\r\n  echo received literal percent argument\r\n  exit /b 0\r\n)\r\necho got "%~1"\r\nexit /b 1\r\n');
+                const scriptPath = path.join(tempDirectory, 'assert-percent.js');
+                fs.writeFileSync(scriptPath, `const actual = process.argv[2];\nif (actual !== '%PRIVATE_FEED%') {\n  console.error(JSON.stringify(process.argv.slice(2)));\n  process.exit(1);\n}\n`);
+                fs.writeFileSync(wrapperPath, `@echo off\r\n"${process.execPath}" "${scriptPath}" %*\r\n`);
 
                 const command = getCliExecutionCommand(wrapperPath, ['%PRIVATE_FEED%']);
                 await execFileAsync(command.file, command.args, {
@@ -451,7 +453,9 @@ suite('utils/cliPath tests', () => {
             const tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-cli-path-backslash-test-'));
             try {
                 const wrapperPath = path.join(tempDirectory, 'aspire.cmd');
-                fs.writeFileSync(wrapperPath, '@echo off\r\nif "%~1"=="C:\\out\\" (\r\n  echo received trailing backslash argument\r\n  exit /b 0\r\n)\r\necho got "%~1"\r\nexit /b 1\r\n');
+                const scriptPath = path.join(tempDirectory, 'assert-backslash.js');
+                fs.writeFileSync(scriptPath, `const actual = process.argv[2];\nif (actual !== 'C:\\\\out\\\\') {\n  console.error(JSON.stringify(process.argv.slice(2)));\n  process.exit(1);\n}\n`);
+                fs.writeFileSync(wrapperPath, `@echo off\r\n"${process.execPath}" "${scriptPath}" %*\r\n`);
 
                 const command = getCliExecutionCommand(wrapperPath, ['C:\\out\\']);
                 await execFileAsync(command.file, command.args, {
