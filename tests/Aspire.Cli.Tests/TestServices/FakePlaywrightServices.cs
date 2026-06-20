@@ -36,7 +36,7 @@ internal sealed class FakeNpmRunner : INpmRunner
 /// </summary>
 internal sealed class FakeNpmProvenanceChecker : INpmProvenanceChecker
 {
-    public Task<ProvenanceVerificationResult> VerifyProvenanceAsync(string packageName, string version, string expectedSourceRepository, string expectedWorkflowPath, string expectedBuildType, Func<WorkflowRefInfo, bool>? validateWorkflowRef, string? sriIntegrity = null, CancellationToken cancellationToken = default)
+    public Task<ProvenanceVerificationResult> VerifyProvenanceAsync(string packageName, string version, string expectedSourceRepository, string expectedWorkflowPath, string expectedBuildType, Func<WorkflowRefInfo, bool>? validateWorkflowRef, string? sriIntegrity, CancellationToken cancellationToken)
         => Task.FromResult(new ProvenanceVerificationResult
         {
             Outcome = ProvenanceVerificationOutcome.Verified,

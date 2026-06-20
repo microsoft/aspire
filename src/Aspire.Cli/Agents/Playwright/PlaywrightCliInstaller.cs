@@ -205,8 +205,8 @@ internal sealed class PlaywrightCliInstaller(
                 refInfo => string.Equals(refInfo.Kind, "tags", StringComparison.Ordinal) &&
                            (string.Equals(refInfo.Name, $"{packageInfo.Version}", StringComparison.Ordinal) ||
                             string.Equals(refInfo.Name, $"v{packageInfo.Version}", StringComparison.Ordinal)),
-                sriIntegrity: packageInfo.Integrity,
-                cancellationToken: cancellationToken);
+                packageInfo.Integrity,
+                cancellationToken);
 
             if (!provenanceResult.IsVerified)
             {

@@ -184,11 +184,11 @@ internal interface INpmProvenanceChecker
     /// If the callback returns <c>false</c>, verification fails with <see cref="ProvenanceVerificationOutcome.WorkflowRefMismatch"/>.
     /// </param>
     /// <param name="sriIntegrity">
-    /// An optional SRI integrity string (e.g., "sha512-...") for the package tarball.
+    /// An SRI integrity string (e.g., "sha512-...") for the package tarball, or null if unavailable.
     /// When provided, implementations that perform cryptographic verification can verify
     /// that the attestation covers this specific artifact digest.
     /// </param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>A <see cref="ProvenanceVerificationResult"/> indicating the outcome and any extracted provenance data.</returns>
-    Task<ProvenanceVerificationResult> VerifyProvenanceAsync(string packageName, string version, string expectedSourceRepository, string expectedWorkflowPath, string expectedBuildType, Func<WorkflowRefInfo, bool>? validateWorkflowRef, string? sriIntegrity = null, CancellationToken cancellationToken = default);
+    Task<ProvenanceVerificationResult> VerifyProvenanceAsync(string packageName, string version, string expectedSourceRepository, string expectedWorkflowPath, string expectedBuildType, Func<WorkflowRefInfo, bool>? validateWorkflowRef, string? sriIntegrity, CancellationToken cancellationToken);
 }
