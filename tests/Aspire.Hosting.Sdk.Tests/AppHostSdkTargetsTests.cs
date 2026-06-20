@@ -479,7 +479,7 @@ public class AppHostSdkTargetsTests
             await File.WriteAllTextAsync(windowsAspirePath, """
                 @echo off
                 if "%~1"=="--version" (
-                    echo aspire version 13.5.0
+                    echo 13.5.0
                     exit /b 0
                 )
                 type nul > "%ASPIRE_TEST_CAPTURE_PATH%"
@@ -497,7 +497,7 @@ public class AppHostSdkTargetsTests
         await File.WriteAllTextAsync(aspirePath, """
             #!/bin/sh
             if [ "$1" = "--version" ]; then
-                echo "aspire version 13.5.0"
+                echo "13.5.0"
                 exit 0
             fi
             printf '%s\n' "$@" > "$ASPIRE_TEST_CAPTURE_PATH"
@@ -514,7 +514,7 @@ public class AppHostSdkTargetsTests
             await File.WriteAllTextAsync(Path.Combine(fakeCliDirectory, "aspire.cmd"), $$"""
                 @echo off
                 if "%~1"=="--version" (
-                    echo aspire version {{version}}
+                    echo {{version}}
                     exit /b 0
                 )
                 type nul > "%ASPIRE_TEST_CAPTURE_PATH%"
@@ -532,7 +532,7 @@ public class AppHostSdkTargetsTests
         await File.WriteAllTextAsync(aspirePath, $$"""
             #!/bin/sh
             if [ "$1" = "--version" ]; then
-                echo "aspire version {{version}}"
+                echo "{{version}}"
                 exit 0
             fi
             printf '%s\n' "$@" > "$ASPIRE_TEST_CAPTURE_PATH"
@@ -548,7 +548,7 @@ public class AppHostSdkTargetsTests
                 @echo off
                 if "%~1"=="--version" (
                     for /L %%i in (1,1,4096) do echo stderr-padding-abcdefghijklmnopqrstuvwxyz-0123456789 1>&2
-                    echo aspire version {{version}}
+                    echo {{version}}
                     exit /b 0
                 )
                 exit /b 0
@@ -566,7 +566,7 @@ public class AppHostSdkTargetsTests
                     echo "stderr-padding-abcdefghijklmnopqrstuvwxyz-0123456789" >&2
                     i=$((i + 1))
                 done
-                echo "aspire version {{version}}"
+                echo "{{version}}"
                 exit 0
             fi
             exit 0

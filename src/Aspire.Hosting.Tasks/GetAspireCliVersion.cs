@@ -83,9 +83,8 @@ public sealed class GetAspireCliVersion : Microsoft.Build.Utilities.Task
             return null;
         }
 
-        // Aspire CLI version output is either a bare informational version or prefixed text, for example:
+        // Aspire CLI version output is a bare informational version, for example:
         //   13.5.0-preview.1.26319.9+gabcdef
-        //   aspire version 13.5.0
         // The run-hook gate only needs the numeric floor so 13.5.0 previews satisfy the 13.5.0 minimum.
         var versionMatch = Regex.Match(output, @"(?<version>\d+\.\d+\.\d+)");
         return versionMatch.Success ? versionMatch.Groups["version"].Value : null;
