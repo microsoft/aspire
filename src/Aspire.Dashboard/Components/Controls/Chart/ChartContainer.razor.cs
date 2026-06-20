@@ -144,10 +144,10 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
 
     private static bool MatchFilter(KeyValuePair<string, string>[] attributes, DimensionFilterViewModel filter)
     {
-        // No filter selected, so we show all of the data.
+        // No filter selected.
         if (filter.SelectedValues.Count == 0)
         {
-            return true;
+            return false;
         }
 
         var value = OtlpHelpers.GetValue(attributes, filter.Name);
@@ -253,7 +253,15 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
             {
                 item.SelectedValues.Clear();
 
-                if (!hasInstrumentChanged)
+                if (hasInstrumentChanged)
+                {
+                    // Select all by default.
+                    foreach (var v in item.Values)
+                    {
+                        item.SelectedValues.Add(v);
+                    }
+                }
+                else
                 {
                     var existing = DimensionFilters.SingleOrDefault(m => m.Name == item.Name);
                     if (existing != null)
@@ -261,7 +269,7 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
                         // Select previously selected.
                         // Automatically select new incoming values if existing values are all selected.
                         var newSelectedValues = (existing.AreAllValuesSelected ?? false)
-                            ? []
+                            ? item.Values
                             : item.Values.Where(newValue => existing.SelectedValues.Any(existingValue => existingValue.Value == newValue.Value));
 
                         foreach (var v in newSelectedValues)
@@ -271,7 +279,11 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
                     }
                     else
                     {
-                        // New filter. Select no filter value to show all the data.
+                        // New filter. Select all by default.
+                        foreach (var v in item.Values)
+                        {
+                            item.SelectedValues.Add(v);
+                        }
                     }
                 }
             }

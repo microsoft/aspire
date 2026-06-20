@@ -27,7 +27,7 @@
                                 @foreach (var item in context.Values.OrderBy(v => v.Order))
                                 {
                                     var isIncludedInFilters = context.SelectedValues.Contains(item);
-                                    var isIncludedInFiltersClass = !areAllValuesSelected && isIncludedInFilters ? "included-in-filters" : "";
+                                    var isIncludedInFiltersClass = isIncludedInFilters ? "included-in-filters" : "";
                                     var additionalAttributes = new Dictionary<string, object>()
                                     {
                                         [KeyForDimentionValue] = item,
