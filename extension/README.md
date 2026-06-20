@@ -60,8 +60,6 @@ Open your Aspire project in VS Code, or create one with **Aspire: New Aspire pro
 
 There's also a built-in walkthrough at **Help → Get Started → Get started with Aspire** that covers the basics step by step.
 
-![Aspire VS Code extension flow: discover the AppHost and resources, run or debug from VS Code, then open the dashboard for URLs and telemetry.](./resources/vscode-extension-happy-path.png)
-
 The core flow is:
 
 1. Open an Aspire repo or create a starter with **Aspire: New Aspire project**.
