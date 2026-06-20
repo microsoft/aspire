@@ -25,6 +25,11 @@
     background: var(--accent-fill-rest);
 }
 
+::deep .fluent-overflow-item:has(.included-in-filters) {
+    /* change ellipsis color */
+    color: var(--foreground-on-accent-rest);
+}
+
 .included-in-filters:hover {
     border-color: var(--accent-foreground-hover);
 }
