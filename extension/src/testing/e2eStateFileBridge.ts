@@ -141,7 +141,7 @@ export function createE2eStateFileBridge(
               }
             };
 
-            const result = await executeE2eControlCommand(context, aspireContext, appHostLaunchService, appHostTreeProvider, terminalProvider, payload.command, markCommandStarted);
+            const result = await executeE2eControlCommand(context, aspireContext, dataRepository, appHostLaunchService, appHostTreeProvider, terminalProvider, payload.command, markCommandStarted);
             controlStatus = { revision, status: 'applied', result };
           }
           else {
@@ -241,6 +241,7 @@ function getE2eErrorMessage(error: unknown): string {
 async function executeE2eControlCommand(
   context: vscode.ExtensionContext,
   aspireContext: AspireExtensionContext,
+  dataRepository: AppHostDataRepository,
   appHostLaunchService: AppHostLaunchService,
   appHostTreeProvider: AspireAppHostTreeProvider,
   terminalProvider: AspireTerminalProvider,
@@ -424,12 +425,7 @@ async function executeE2eControlCommand(
     }
     case 'stopDebugging': {
       markStarted();
-      // In E2E, VS Code's active debug session can be a child session. Dispose the
-      // tracked Aspire sessions directly so AppHost child sessions are stopped too.
-      for (const debugSession of aspireContext.aspireDebugSessions) {
-        debugSession.dispose();
-      }
-      await vscode.debug.stopDebugging();
+      await stopDebuggingForE2E(aspireContext, dataRepository, appHostLaunchService, appHostTreeProvider);
       return undefined;
     }
     case 'closeAllEditors': {
@@ -909,6 +905,32 @@ async function waitForE2eValue<T>(description: string, timeoutMs: number, getVal
   }
 
   throw new Error(`Timed out after ${timeoutMs}ms waiting for ${description}. Last error: ${lastError ?? '<none>'}`);
+}
+
+async function stopDebuggingForE2E(
+  aspireContext: AspireExtensionContext,
+  dataRepository: AppHostDataRepository,
+  appHostLaunchService: AppHostLaunchService,
+  appHostTreeProvider: AspireAppHostTreeProvider
+): Promise<void> {
+  const trackedSessions = aspireContext.aspireDebugSessions;
+  if (trackedSessions.length > 0) {
+    await Promise.all(trackedSessions.map(debugSession => vscode.debug.stopDebugging(debugSession.session)));
+  }
+  else {
+    await vscode.debug.stopDebugging();
+  }
+
+  await waitForE2eValue('Aspire debug sessions and AppHosts to stop', 120000, () => {
+    const state = createStateSnapshot(dataRepository, appHostLaunchService, appHostTreeProvider, aspireContext, true);
+    return state.debugSessions.length === 0
+      && state.appHosts.length === 0
+      && state.launchingPaths.length === 0
+      && state.stoppingPaths.length === 0
+      && state.workspaceAppHost === undefined
+      ? true
+      : undefined;
+  });
 }
 
 function delay(ms: number): Promise<void> {
