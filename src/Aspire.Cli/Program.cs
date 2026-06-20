@@ -596,6 +596,7 @@ public class Program
         builder.Services.AddTransient<CertificatesCleanCommand>();
         builder.Services.AddTransient<CertificatesTrustCommand>();
         builder.Services.AddTransient<DoctorCommand>();
+        builder.Services.AddSingleton<IFeedbackProcessOutputCapture, FeedbackProcessOutputCapture>();
         builder.Services.AddTransient<FeedbackCommand>();
         builder.Services.AddTransient<DashboardCommand>();
         builder.Services.AddTransient<DashboardRunCommand>();

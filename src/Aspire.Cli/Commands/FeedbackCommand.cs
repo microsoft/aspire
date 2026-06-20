@@ -44,6 +44,7 @@ internal sealed class FeedbackCommand : BaseCommand
     private readonly IDotNetSdkInstaller _dotNetSdkInstaller;
     private readonly ILogger<FeedbackCommand> _logger;
     private readonly ICliHostEnvironment _hostEnvironment;
+    private readonly IFeedbackProcessOutputCapture _processOutputCapture;
 
     static FeedbackCommand()
     {
@@ -56,6 +57,7 @@ internal sealed class FeedbackCommand : BaseCommand
         IAppHostInfoResolver appHostInfoResolver,
         IDotNetSdkInstaller dotNetSdkInstaller,
         ILogger<FeedbackCommand> logger,
+        IFeedbackProcessOutputCapture processOutputCapture,
         CommonCommandServices services)
         : base("feedback", SharedCommandStrings.FeedbackCommandDescription, services)
     {
@@ -64,6 +66,7 @@ internal sealed class FeedbackCommand : BaseCommand
         _appHostInfoResolver = appHostInfoResolver;
         _dotNetSdkInstaller = dotNetSdkInstaller;
         _logger = logger;
+        _processOutputCapture = processOutputCapture;
         _hostEnvironment = services.HostEnvironment;
 
         Arguments.Add(s_kindArgument);
@@ -264,7 +267,7 @@ internal sealed class FeedbackCommand : BaseCommand
             return SharedCommandStrings.FeedbackDoctorProcessPathUnavailable;
         }
 
-        var result = await CaptureProcessOutputAsync(processPath, ["doctor", "--no-logo"], TimeSpan.FromSeconds(30), cancellationToken).ConfigureAwait(false);
+        var result = await CaptureProcessOutputAsync(processPath, ["doctor", "--format", "json"], TimeSpan.FromSeconds(30), cancellationToken).ConfigureAwait(false);
         if (result.Cancelled)
         {
             throw new OperationCanceledException(cancellationToken);
@@ -298,7 +301,24 @@ internal sealed class FeedbackCommand : BaseCommand
             startInfo.ArgumentList.Add(argument);
         }
 
-        var result = await ProcessCaptureRunner.RunAsync(
+        var result = await _processOutputCapture.CaptureAsync(startInfo, timeout, cancellationToken).ConfigureAwait(false);
+
+        return (result.ExitCode, result.Capture, result.FailureMessage, result.Cancelled);
+    }
+
+    private sealed record FeedbackKindChoice(FeedbackIssueKind Kind, string Text);
+}
+
+internal interface IFeedbackProcessOutputCapture
+{
+    Task<ProcessCaptureResult<string>> CaptureAsync(ProcessStartInfo startInfo, TimeSpan timeout, CancellationToken cancellationToken);
+}
+
+internal sealed class FeedbackProcessOutputCapture(ILogger<FeedbackProcessOutputCapture> logger) : IFeedbackProcessOutputCapture
+{
+    public async Task<ProcessCaptureResult<string>> CaptureAsync(ProcessStartInfo startInfo, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        return await ProcessCaptureRunner.RunAsync(
             startInfo,
             timeout,
             async (process, token) =>
@@ -317,11 +337,7 @@ internal sealed class FeedbackCommand : BaseCommand
                     : string.Concat(outputTask.Result, Environment.NewLine, errorTask.Result);
             },
             static () => string.Empty,
-            _logger,
+            logger,
             cancellationToken).ConfigureAwait(false);
-
-        return (result.ExitCode, result.Capture, result.FailureMessage, result.Cancelled);
     }
-
-    private sealed record FeedbackKindChoice(FeedbackIssueKind Kind, string Text);
 }
