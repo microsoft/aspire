@@ -61,9 +61,13 @@ suite('extension/package.json', () => {
 
         const workspaceWelcome = runningAppHostsWelcome.find(item => item.contents === '%views.appHosts.welcome%');
         const globalWelcome = runningAppHostsWelcome.find(item => item.contents === '%views.appHosts.globalWelcome%');
+        const compatibilityErrorWelcome = runningAppHostsWelcome.find(item => item.contents === '%views.appHosts.errorWelcome%');
+        const genericErrorWelcome = runningAppHostsWelcome.find(item => item.contents === '%views.appHosts.genericErrorWelcome%');
 
         assertContains(workspaceWelcome?.when, "aspire.viewMode != 'global'");
         assertContains(globalWelcome?.when, "aspire.viewMode == 'global'");
+        assertContains(compatibilityErrorWelcome?.when, 'aspire.fetchAppHostsCompatibilityError');
+        assertContains(genericErrorWelcome?.when, '!aspire.fetchAppHostsCompatibilityError');
     });
 
     test('running apphosts title actions use string view and view mode checks', () => {
