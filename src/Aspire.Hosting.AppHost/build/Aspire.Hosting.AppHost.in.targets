@@ -236,7 +236,7 @@ namespace Projects%3B
 
   <!-- Determines if the resolved CLI version is sufficient for the run hook delegation. -->
   <Target Name="_AspireCheckCliVersion"
-          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(_AspireCliRunHookSuppressed)' != 'true'">
+          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(_AspireCliRunHookSuppressed)' != 'true' and Exists('$(_AspireTasksAssembly)')">
     <GetAspireCliVersion AspireCliPath="$(AspireCliPath)">
       <Output TaskParameter="AspireCliVersion" PropertyName="_AspireResolvedCliVersion" />
     </GetAspireCliVersion>

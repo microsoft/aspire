@@ -299,6 +299,25 @@ public class AppHostSdkTargetsTests
         AssertUsesDotNetRun(properties, project, "--custom foo");
     }
 
+    [Fact]
+    public async Task ComputeRunArgumentsDoesNotUseAspireCliWhenTasksAssemblyIsUnavailable()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var missingTasksAssemblyPath = Path.Combine(tempDirectory.Path, "missing", "Aspire.Hosting.Tasks.dll");
+        var project = await CreateRunHookProjectAsync(
+            tempDirectory.Path,
+            aspireUseCliBundle: true,
+            extraProjectXml: $"""
+                  <PropertyGroup>
+                    <_AspireTasksAssembly>{SecurityElement.Escape(missingTasksAssemblyPath)}</_AspireTasksAssembly>
+                  </PropertyGroup>
+                """);
+
+        var properties = await GetComputeRunArgumentsPropertiesAsync(project, ["-p:RunArguments=--custom foo"]);
+
+        AssertUsesDotNetRun(properties, project, "--custom foo");
+    }
+
     private static async Task<string[]> RunAddReferenceToDashboardAndDcpAsync(string? extraProjectXml)
     {
         var repoRoot = GetRepoRoot();
