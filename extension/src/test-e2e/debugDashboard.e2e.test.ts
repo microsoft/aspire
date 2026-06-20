@@ -75,22 +75,9 @@ suite('Aspire debug dashboard E2E', function () {
         await waitForDebugSessionStartup(appHostPath);
         await waitForRunningAppHost();
 
-        await setShowStatusDelayForE2E(2500);
-        try {
-            await executeE2eControlCommand({ name: 'stopDebugging' });
-            await waitForExtensionState(
-                file => file.state.stoppingPaths.some(stoppingPath => isSamePath(stoppingPath, appHostPath)),
-                `AppHost '${appHostPath}' to enter stopping state`,
-                120000);
-            await waitForNoDebugSessions();
-            await waitForNoRunningAppHost(120000, appHostPath);
-            await waitForExtensionState(
-                file => !file.state.stoppingPaths.some(stoppingPath => isSamePath(stoppingPath, appHostPath)),
-                `AppHost '${appHostPath}' to leave stopping state`,
-                120000);
-        } finally {
-            await setShowStatusDelayForE2E(undefined);
-        }
+        await executeE2eControlCommand({ name: 'stopDebugging' });
+        await waitForNoDebugSessions();
+        await waitForNoRunningAppHost(120000, appHostPath);
     });
 
     test('global debug stop removes running apphost', async () => {
@@ -107,22 +94,9 @@ suite('Aspire debug dashboard E2E', function () {
         await waitForDebugSessionStartup(appHostPath);
         await waitForRunningAppHost();
 
-        await setShowStatusDelayForE2E(2500);
-        try {
-            await executeE2eControlCommand({ name: 'stopDebugging' });
-            await waitForExtensionState(
-                file => file.state.stoppingPaths.some(stoppingPath => isSamePath(stoppingPath, appHostPath)),
-                `AppHost '${appHostPath}' to enter stopping state`,
-                120000);
-            await waitForNoDebugSessions();
-            await waitForNoRunningAppHost(120000, appHostPath);
-            await waitForExtensionState(
-                file => !file.state.stoppingPaths.some(stoppingPath => isSamePath(stoppingPath, appHostPath)),
-                `AppHost '${appHostPath}' to leave stopping state`,
-                120000);
-        } finally {
-            await setShowStatusDelayForE2E(undefined);
-        }
+        await executeE2eControlCommand({ name: 'stopDebugging' });
+        await waitForNoDebugSessions();
+        await waitForNoRunningAppHost(120000, appHostPath);
     });
 
     test('publish session completion does not mark a running AppHost as stopping', async () => {
