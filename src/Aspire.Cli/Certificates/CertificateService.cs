@@ -53,7 +53,7 @@ internal sealed class CertificateService(
     Func<bool> isLinux) : ICertificateService
 {
     private const string SslCertDirEnvVar = "SSL_CERT_DIR";
-    private readonly Func<bool> _isLinux = isLinux;
+    private readonly Func<bool> _isLinux = isLinux ?? throw new ArgumentNullException(nameof(isLinux));
 
     public async Task<EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(CancellationToken cancellationToken)
     {

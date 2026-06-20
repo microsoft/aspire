@@ -12,7 +12,7 @@ namespace Aspire.Cli.Certificates;
 /// </summary>
 internal sealed class NativeCertificateToolRunner(CertificateManager certificateManager, Func<bool> isLinux) : ICertificateToolRunner
 {
-    private readonly Func<bool> _isLinux = isLinux;
+    private readonly Func<bool> _isLinux = isLinux ?? throw new ArgumentNullException(nameof(isLinux));
 
     public CertificateTrustResult CheckHttpCertificate()
     {

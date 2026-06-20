@@ -144,7 +144,7 @@ internal sealed class UpdateCommand : BaseCommand
 
             try
             {
-                return await ExecuteSelfUpdateAsync(parseResult, cancellationToken: cancellationToken);
+                return await ExecuteSelfUpdateAsync(parseResult, null, cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -394,7 +394,7 @@ internal sealed class UpdateCommand : BaseCommand
 
                     if (shouldUpdateCli)
                     {
-                        return await ExecuteSelfUpdateAsync(parseResult, cancellationToken: cancellationToken);
+                        return await ExecuteSelfUpdateAsync(parseResult, null, cancellationToken);
                     }
                 }
             }
@@ -496,7 +496,7 @@ internal sealed class UpdateCommand : BaseCommand
             || string.Equals(ExecutionContext.IdentityChannel, PackageChannelNames.Staging, StringComparisons.ChannelName);
     }
 
-    private async Task<CommandResult> ExecuteSelfUpdateAsync(ParseResult parseResult, string? selectedChannel = null, CancellationToken cancellationToken = default)
+    private async Task<CommandResult> ExecuteSelfUpdateAsync(ParseResult parseResult, string? selectedChannel, CancellationToken cancellationToken)
     {
         var channel = selectedChannel ?? parseResult.GetValue(_channelOption) ?? parseResult.GetValue(_qualityOption);
 

@@ -31,6 +31,9 @@ internal sealed class GuestRuntime
     /// <param name="fileLoggerProvider">Optional file logger for writing output to disk.</param>
     public GuestRuntime(RuntimeSpec spec, ILogger logger, Func<string, string?> commandResolver, ProfilingTelemetry profilingTelemetry, FileLoggerProvider? fileLoggerProvider = null)
     {
+        ArgumentNullException.ThrowIfNull(commandResolver);
+        ArgumentNullException.ThrowIfNull(profilingTelemetry);
+
         _spec = spec;
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;

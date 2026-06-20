@@ -575,6 +575,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
 
     public void Dispose()
     {
+        _extensionTaskChannel.Writer.TryComplete();
         _cts.Cancel();
         _cts.Dispose();
     }

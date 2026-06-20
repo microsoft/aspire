@@ -21,6 +21,8 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
 
     public ProcessGuestLauncher(string language, ILogger logger, Func<string, string?> commandResolver, FileLoggerProvider? fileLoggerProvider = null)
     {
+        ArgumentNullException.ThrowIfNull(commandResolver);
+
         _language = language;
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;
