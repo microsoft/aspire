@@ -542,10 +542,13 @@ suite('AspireTerminalProvider tests', () => {
 
     suite('createEnvironment', () => {
         let originalStartupTimeout: string | undefined;
+        let originalLowercaseStartupTimeout: string | undefined;
 
         setup(() => {
             originalStartupTimeout = process.env[EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT];
+            originalLowercaseStartupTimeout = process.env.aspire_cli_start_timeout;
             delete process.env[EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT];
+            delete process.env.aspire_cli_start_timeout;
 
             terminalProvider.rpcServerConnectionInfo = {
                 address: 'http://localhost:1234',
@@ -561,6 +564,7 @@ suite('AspireTerminalProvider tests', () => {
 
         teardown(() => {
             restoreEnvironmentVariable(EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT, originalStartupTimeout);
+            restoreEnvironmentVariable('aspire_cli_start_timeout', originalLowercaseStartupTimeout);
         });
 
         test('marks extension-managed debug sessions as non-interactive without disabling extension prompts', () => {
@@ -594,6 +598,21 @@ suite('AspireTerminalProvider tests', () => {
             }
             finally {
                 restoreEnvironmentVariable(EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT, originalStartupTimeout);
+            }
+        });
+
+        test('keeps an explicitly configured AppHost startup timeout with different casing on Windows', () => {
+            const platformStub = sinon.stub(process, 'platform').value('win32');
+            process.env.aspire_cli_start_timeout = '300';
+
+            try {
+                const env = terminalProvider.createEnvironment('debug-session-id', false);
+
+                assert.strictEqual(env.ASPIRE_CLI_START_TIMEOUT, undefined);
+                assert.strictEqual(env.aspire_cli_start_timeout, '300');
+            }
+            finally {
+                platformStub.restore();
             }
         });
 
