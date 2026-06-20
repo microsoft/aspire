@@ -27,7 +27,9 @@ function makeDeps(overrides: Partial<CliPathEnvironmentDependencies> = {}): CliP
     return {
         getConfiguredPath: () => '',
         isAbsolute: (cliPath: string) => cliPath.startsWith('/') || /^[A-Za-z]:[\\/]/.test(cliPath),
+        fileExists: () => true,
         log: () => { },
+        warn: () => { },
         ...overrides,
     };
 }
@@ -78,12 +80,34 @@ suite('cliPathEnvironment.syncAspireCliPathEnvironment tests', () => {
         assert.strictEqual(collection.entries.has(ASPIRE_CLI_PATH_ENV_VAR), false);
     });
 
+    test('clears AspireCliPath when the configured absolute path does not exist', () => {
+        const collection = createFakeCollection();
+        collection.entries.set(ASPIRE_CLI_PATH_ENV_VAR, '/stale/aspire');
+
+        const applied = syncAspireCliPathEnvironment(collection, makeDeps({
+            getConfiguredPath: () => '/missing/aspire',
+            fileExists: () => false,
+        }));
+
+        assert.strictEqual(applied, undefined);
+        assert.strictEqual(collection.entries.has(ASPIRE_CLI_PATH_ENV_VAR), false);
+        assert.strictEqual(collection.description, undefined);
+    });
+
     test('writes the contributed-environment description so contributors can see why the variable is set', () => {
         const collection = createFakeCollection();
 
         syncAspireCliPathEnvironment(collection, makeDeps({ getConfiguredPath: () => '/abs/aspire' }));
 
         assert.ok(typeof collection.description === 'string' && collection.description.length > 0, 'description should be populated');
+    });
+
+    test('clears the contributed-environment description when no variable is set', () => {
+        const collection = createFakeCollection();
+
+        syncAspireCliPathEnvironment(collection, makeDeps({ getConfiguredPath: () => 'aspire' }));
+
+        assert.strictEqual(collection.description, undefined);
     });
 });
 

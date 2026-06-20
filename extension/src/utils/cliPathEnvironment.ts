@@ -1,4 +1,5 @@
 import * as path from 'path';
+import * as fs from 'fs';
 import * as vscode from 'vscode';
 import { getConfiguredCliPath } from './cliPath';
 import { extensionLogOutputChannel } from './logging';
@@ -41,21 +42,48 @@ export interface CliPathEnvironmentCollection {
     delete(variable: string): void;
 }
 
+export interface ForwardableCliPathDependencies {
+    isAbsolute: (cliPath: string) => boolean;
+    fileExists: (cliPath: string) => boolean;
+}
+
 /**
  * Test seam: the synchronizer asks the collection (not vscode.workspace) for the
  * current configured CLI path so unit tests can avoid mocking `vscode.workspace`.
  */
-export interface CliPathEnvironmentDependencies {
+export interface CliPathEnvironmentDependencies extends ForwardableCliPathDependencies {
     getConfiguredPath: () => string;
-    isAbsolute: (cliPath: string) => boolean;
     log?: (message: string) => void;
+    warn?: (message: string) => void;
 }
+
+const defaultForwardableCliPathDeps: ForwardableCliPathDependencies = {
+    isAbsolute: path.isAbsolute,
+    fileExists: fileExists,
+};
 
 const defaultDeps: CliPathEnvironmentDependencies = {
     getConfiguredPath: getConfiguredCliPath,
-    isAbsolute: path.isAbsolute,
+    ...defaultForwardableCliPathDeps,
     log: (message) => extensionLogOutputChannel.info(message),
+    warn: (message) => extensionLogOutputChannel.warn(message),
 };
+
+export function isForwardableAspireCliPath(
+    configuredPath: string,
+    deps: ForwardableCliPathDependencies = defaultForwardableCliPathDeps,
+): boolean {
+    return configuredPath.length > 0 && deps.isAbsolute(configuredPath) && deps.fileExists(configuredPath);
+}
+
+function fileExists(filePath: string): boolean {
+    try {
+        return fs.statSync(filePath).isFile();
+    }
+    catch {
+        return false;
+    }
+}
 
 /**
  * Applies the current value of `aspire.aspireCliExecutablePath` to the supplied
@@ -76,22 +104,26 @@ export function syncAspireCliPathEnvironment(
     collection: CliPathEnvironmentCollection,
     deps: CliPathEnvironmentDependencies = defaultDeps,
 ): string | undefined {
-    collection.description = ENVIRONMENT_COLLECTION_DESCRIPTION;
-
     const configuredPath = deps.getConfiguredPath();
 
-    // Only forward absolute paths. `ResolveAspireCliBundle` requires the value to
-    // point at an existing aspire executable file; relative or shell-resolved
-    // names such as `aspire` would fail the `File.Exists` check and the task
-    // would emit a warning without falling back. Leave the env var untouched in
-    // that case so users keep the default behavior (PATH search and
-    // ASPIRE_HOME fallback inside the task).
+    // Only forward paths that `ResolveAspireCliBundle` can consume. Relative,
+    // shell-resolved, or stale absolute values fail the task's File.Exists guard
+    // and make it stop before its PATH/ASPIRE_HOME fallback logic runs.
     if (!configuredPath || !deps.isAbsolute(configuredPath)) {
+        collection.description = undefined;
         collection.delete(ASPIRE_CLI_PATH_ENV_VAR);
         deps.log?.(`Not forwarding ${ASPIRE_CLI_PATH_ENV_VAR}: no absolute aspireCliExecutablePath is configured (current: ${configuredPath || '(empty)'}).`);
         return undefined;
     }
 
+    if (!deps.fileExists(configuredPath)) {
+        collection.description = undefined;
+        collection.delete(ASPIRE_CLI_PATH_ENV_VAR);
+        deps.warn?.(`Not forwarding ${ASPIRE_CLI_PATH_ENV_VAR}: configured aspireCliExecutablePath does not exist (${configuredPath}).`);
+        return undefined;
+    }
+
+    collection.description = ENVIRONMENT_COLLECTION_DESCRIPTION;
     collection.replace(ASPIRE_CLI_PATH_ENV_VAR, configuredPath);
     deps.log?.(`Forwarding ${ASPIRE_CLI_PATH_ENV_VAR}=${configuredPath} to terminals, tasks, and debug processes.`);
     return configuredPath;
