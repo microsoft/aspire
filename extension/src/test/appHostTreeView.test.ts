@@ -73,6 +73,7 @@ function makeTreeProvider(appHosts: readonly AppHostDisplayInfo[], viewMode: Vie
         workspaceAppHostCandidates: [],
         workspaceAppHostName: undefined,
         workspaceAppHostDescription,
+        refresh: () => { },
         onDidChangeData,
     } as unknown as AppHostDataRepository;
 
@@ -101,6 +102,7 @@ function makeTreeProviderWithLaunchService(appHosts: readonly AppHostDisplayInfo
         workspaceAppHostStatus: undefined,
         workspaceAppHostName: undefined,
         workspaceAppHostDescription: undefined,
+        refresh: () => { },
         onDidChangeData,
     } as unknown as AppHostDataRepository;
 
@@ -122,6 +124,7 @@ function makeWorkspaceTreeProvider(workspaceAppHostDescription: string): AspireA
         workspaceAppHostStatus: undefined,
         workspaceAppHostName: 'AppHost.csproj',
         workspaceAppHostDescription,
+        refresh: () => { },
         onDidChangeData,
     } as unknown as AppHostDataRepository;
 
@@ -1738,6 +1741,7 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             workspaceAppHostCandidates: [],
             workspaceAppHostName: undefined,
             workspaceAppHostStatus: undefined,
+            refresh: () => { },
             onDidChangeData,
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
@@ -1760,6 +1764,7 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             workspaceAppHostCandidates: [],
             workspaceAppHostName: undefined,
             workspaceAppHostStatus: undefined,
+            refresh: () => { },
             onDidChangeData,
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
@@ -1784,6 +1789,7 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             }],
             workspaceAppHostName: undefined,
             workspaceAppHostStatus: undefined,
+            refresh: () => { },
             onDidChangeData,
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
@@ -2058,6 +2064,7 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             ],
             workspaceAppHostName: undefined,
             workspaceAppHostStatus: undefined,
+            refresh: () => { },
             onDidChangeData,
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), launchService);

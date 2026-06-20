@@ -481,11 +481,12 @@ suite('AppHostDataRepository', () => {
 
     test('describe watch does not report compatibility error when workspace AppHost returns no data successfully', async () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
-        spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsLineCallback(options);
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ls') {
+                getAppHostsLineCallback = createLsLineCallback(options);
+            }
             return new TestChildProcess();
         });
-        spawnStub.onSecondCall().returns(new TestChildProcess());
         const workspaceFoldersStub = stubWorkspaceFolders([{
             uri: vscode.Uri.file('/workspace'),
             name: 'workspace',
@@ -507,6 +508,9 @@ suite('AppHostDataRepository', () => {
             }));
             await waitForAppHostDiscovery();
 
+            await waitForCondition(
+                () => spawnStub.getCalls().some(call => (call.args[2] as string[])[0] === 'describe'),
+                'describe watch did not start');
             const describeCall = spawnStub.getCalls().find(call => (call.args[2] as string[])[0] === 'describe');
             assert.ok(describeCall);
             const exitCallback = describeCall.args[3].exitCallback;
@@ -522,11 +526,12 @@ suite('AppHostDataRepository', () => {
 
     test('describe watch reports minimum AppHost version when workspace AppHost exits without unsupported command output', async () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
-        spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsLineCallback(options);
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ls') {
+                getAppHostsLineCallback = createLsLineCallback(options);
+            }
             return new TestChildProcess();
         });
-        spawnStub.onSecondCall().returns(new TestChildProcess());
         const workspaceFoldersStub = stubWorkspaceFolders([{
             uri: vscode.Uri.file('/workspace'),
             name: 'workspace',
@@ -548,6 +553,9 @@ suite('AppHostDataRepository', () => {
             }));
             await waitForAppHostDiscovery();
 
+            await waitForCondition(
+                () => spawnStub.getCalls().some(call => (call.args[2] as string[])[0] === 'describe'),
+                'describe watch did not start');
             const describeCall = spawnStub.getCalls().find(call => (call.args[2] as string[])[0] === 'describe');
             assert.ok(describeCall);
             const exitCallback = describeCall.args[3].exitCallback;
@@ -582,11 +590,16 @@ suite('AppHostDataRepository', () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
         const getAppHostsProcess = new TestChildProcess();
         const psProcess = new TestChildProcess();
-        spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsLineCallback(options);
-            return getAppHostsProcess;
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ls') {
+                getAppHostsLineCallback = createLsLineCallback(options);
+                return getAppHostsProcess;
+            }
+            if (args[0] === 'ps') {
+                return psProcess;
+            }
+            return new TestChildProcess();
         });
-        spawnStub.onSecondCall().returns(psProcess);
         const workspaceFoldersStub = stubWorkspaceFolders([{
             uri: vscode.Uri.file('/workspace'),
             name: 'workspace',
@@ -608,6 +621,9 @@ suite('AppHostDataRepository', () => {
             }));
             await waitForAppHostDiscovery();
 
+            await waitForCondition(
+                () => spawnStub.getCalls().some(call => (call.args[2] as string[])[0] === 'describe'),
+                'describe watch did not start');
             const describeCall = spawnStub.getCalls().find(call => (call.args[2] as string[])[0] === 'describe');
             assert.ok(describeCall);
             const describeErrorCallback = describeCall.args[3].errorCallback;
@@ -1216,8 +1232,10 @@ suite('AppHostDataRepository', () => {
         }]);
         const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
-        spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsLineCallback(options);
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ls') {
+                getAppHostsLineCallback = createLsLineCallback(options);
+            }
             return new TestChildProcess();
         });
         const repository = new AppHostDataRepository(terminalProvider);
@@ -1230,6 +1248,18 @@ suite('AppHostDataRepository', () => {
 
             getAppHostsLineCallback(JSON.stringify([]));
             await waitForAppHostDiscovery();
+            await waitForCondition(() =>
+                executeCommandStub.getCalls().some(call =>
+                    call.args[0] === 'setContext'
+                    && call.args[1] === 'aspire.loading'
+                    && call.args[2] === false),
+            'workspace loading context was not cleared');
+            await waitForCondition(() =>
+                executeCommandStub.getCalls().some(call =>
+                    call.args[0] === 'setContext'
+                    && call.args[1] === 'aspire.noAppHosts'
+                    && call.args[2] === true),
+            'workspace no-apphosts context was not set');
 
             const loadingContextCalls = executeCommandStub.getCalls().filter(call =>
                 call.args[0] === 'setContext' && call.args[1] === 'aspire.loading');
@@ -1253,8 +1283,10 @@ suite('AppHostDataRepository', () => {
         }]);
         const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
-        spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsLineCallback(options);
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ls') {
+                getAppHostsLineCallback = createLsLineCallback(options);
+            }
             return new TestChildProcess();
         });
         const repository = new AppHostDataRepository(terminalProvider);
@@ -1274,6 +1306,18 @@ suite('AppHostDataRepository', () => {
                 },
             ]));
             await waitForAppHostDiscovery();
+            await waitForCondition(() =>
+                executeCommandStub.getCalls().some(call =>
+                    call.args[0] === 'setContext'
+                    && call.args[1] === 'aspire.loading'
+                    && call.args[2] === false),
+            'workspace loading context was not cleared');
+            await waitForCondition(() =>
+                executeCommandStub.getCalls().some(call =>
+                    call.args[0] === 'setContext'
+                    && call.args[1] === 'aspire.noAppHosts'
+                    && call.args[2] === true),
+            'workspace no-apphosts context was not set');
 
             const loadingContextCalls = executeCommandStub.getCalls().filter(call =>
                 call.args[0] === 'setContext' && call.args[1] === 'aspire.loading');
