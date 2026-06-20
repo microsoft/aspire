@@ -277,37 +277,62 @@ export class AspireTerminalProvider implements vscode.Disposable {
         };
 
         if (debugSessionId) {
-            env.ASPIRE_EXTENSION_DEBUG_SESSION_ID = debugSessionId;
-            env.DCP_INSTANCE_ID_PREFIX = debugSessionId + '-';
-            env.DEBUG_SESSION_RUN_MODE = noDebug === false ? "Debug" : "NoDebug";
-            env.ASPIRE_EXTENSION_DEBUG_RUN_MODE = noDebug === false ? "Debug" : "NoDebug";
-            env.DEBUG_SESSION_INFO = JSON.stringify(getRunSessionInfo());
-            env.ASPIRE_EXTENSION_CAPABILITIES = getSupportedCapabilities().join(',');
-            // Extension-managed debug/run sessions stream CLI output into VS Code's
-            // debug console, which is not an interactive terminal. Keep prompts routed
-            // through the extension backchannel while disabling Spectre live output
-            // such as the first-run banner and spinners.
-            env.ASPIRE_NON_INTERACTIVE = 'true';
-
-            // While debugging, the developer can pause on a breakpoint (e.g. before builder.Build())
-            // for an arbitrarily long time. Use a very long startup timeout (86400s = 24h) so the parent
-            // Aspire CLI doesn't hit its normal ~120s startup timeout and tear down the debug session.
-            // An explicitly configured ASPIRE_CLI_START_TIMEOUT still wins.
-            if (noDebug === false && !hasConfiguredEnvironmentVariable(env, EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT)) {
-                env[EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT] = '86400';
-            }
-
-            // if DCP debug logging is enabled, set DCP-specific logging environment variables
-            const dcpDebugLoggingEnabled = vscode.workspace.getConfiguration('aspire').get<boolean>('enableAspireDcpDebugLogging', false);
-            const workspaceRoot = vscode.workspace.workspaceFolders?.[0];
-            if (dcpDebugLoggingEnabled && workspaceRoot) {
-                env.DCP_DIAGNOSTICS_LOG_LEVEL = "debug";
-                env.DCP_PRESERVE_EXECUTABLE_LOGS = "1";
-                env.DCP_DIAGNOSTICS_LOG_FOLDER = path.join(workspaceRoot.uri.fsPath, '.aspire', 'dcp', `logs-${debugSessionId}`);
-            }
+            this.addDcpRunSessionEnvironment(env, debugSessionId, noDebug);
         }
 
         return env;
+    }
+
+    createDcpRunSessionEnvironment(debugSessionId: string, noDebug?: boolean): any {
+        const env: any = {
+            ...getEnvironmentWithoutE2EBridgeVariables(),
+
+            // Include DCP server info without the extension RPC backchannel. Short-lived
+            // helper CLI processes must not register an extension backchannel because the
+            // CLI's ProcessExit hook stops the debug session attached to that backchannel.
+            DEBUG_SESSION_PORT: this.dcpServerConnectionInfo.address,
+            DEBUG_SESSION_TOKEN: this.dcpServerConnectionInfo.token,
+            DEBUG_SESSION_SERVER_CERTIFICATE: this.dcpServerConnectionInfo.certificate,
+        };
+
+        delete env.ASPIRE_EXTENSION_ENDPOINT;
+        delete env.ASPIRE_EXTENSION_TOKEN;
+        delete env.ASPIRE_EXTENSION_CERT;
+
+        this.addDcpRunSessionEnvironment(env, debugSessionId, noDebug);
+
+        return env;
+    }
+
+    private addDcpRunSessionEnvironment(env: any, debugSessionId: string, noDebug?: boolean): void {
+        env.ASPIRE_EXTENSION_DEBUG_SESSION_ID = debugSessionId;
+        env.DCP_INSTANCE_ID_PREFIX = debugSessionId + '-';
+        env.DEBUG_SESSION_RUN_MODE = noDebug === false ? "Debug" : "NoDebug";
+        env.ASPIRE_EXTENSION_DEBUG_RUN_MODE = noDebug === false ? "Debug" : "NoDebug";
+        env.DEBUG_SESSION_INFO = JSON.stringify(getRunSessionInfo());
+        env.ASPIRE_EXTENSION_CAPABILITIES = getSupportedCapabilities().join(',');
+        // Extension-managed debug/run sessions stream CLI output into VS Code's
+        // debug console, which is not an interactive terminal. Keep prompts routed
+        // through the extension backchannel while disabling Spectre live output
+        // such as the first-run banner and spinners.
+        env.ASPIRE_NON_INTERACTIVE = 'true';
+
+        // While debugging, the developer can pause on a breakpoint (e.g. before builder.Build())
+        // for an arbitrarily long time. Use a very long startup timeout (86400s = 24h) so the parent
+        // Aspire CLI doesn't hit its normal ~120s startup timeout and tear down the debug session.
+        // An explicitly configured ASPIRE_CLI_START_TIMEOUT still wins.
+        if (noDebug === false && !hasConfiguredEnvironmentVariable(env, EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT)) {
+            env[EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT] = '86400';
+        }
+
+        // if DCP debug logging is enabled, set DCP-specific logging environment variables
+        const dcpDebugLoggingEnabled = vscode.workspace.getConfiguration('aspire').get<boolean>('enableAspireDcpDebugLogging', false);
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0];
+        if (dcpDebugLoggingEnabled && workspaceRoot) {
+            env.DCP_DIAGNOSTICS_LOG_LEVEL = "debug";
+            env.DCP_PRESERVE_EXECUTABLE_LOGS = "1";
+            env.DCP_DIAGNOSTICS_LOG_FOLDER = path.join(workspaceRoot.uri.fsPath, '.aspire', 'dcp', `logs-${debugSessionId}`);
+        }
     }
 
     closeAllOpenAspireTerminals() {

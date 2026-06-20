@@ -15,6 +15,33 @@ namespace Aspire.Hosting.Maui;
 /// </summary>
 internal static class MauiPlatformHelper
 {
+    internal const string MauiLaunchConfigurationType = "maui";
+
+    internal static IResourceBuilder<T> WithMauiIdeLaunchConfiguration<T>(
+        this IResourceBuilder<T> resourceBuilder,
+        string projectPath,
+        string targetFramework,
+        string platform,
+        string targetKind,
+        string? device = null,
+        string? runtimeIdentifier = null,
+        Dictionary<string, string>? msBuildProperties = null) where T : ProjectResource
+    {
+#pragma warning disable ASPIREEXTENSION001 // WithDebugSupport is experimental
+        return resourceBuilder.WithDebugSupport(mode => new MauiLaunchConfiguration
+        {
+            Mode = mode,
+            ProjectPath = projectPath,
+            TargetFramework = targetFramework,
+            Platform = platform,
+            TargetKind = targetKind,
+            Device = device,
+            RuntimeIdentifier = runtimeIdentifier,
+            MsBuildProperties = msBuildProperties
+        }, MauiLaunchConfigurationType);
+#pragma warning restore ASPIREEXTENSION001
+    }
+
     /// <summary>
     /// Gets the absolute project path and working directory from a MAUI project resource.
     /// </summary>
@@ -47,7 +74,8 @@ internal static class MauiPlatformHelper
     /// <param name="isSupported">Function to check if the platform is supported on the current host.</param>
     /// <param name="iconName">The icon name for the resource.</param>
     /// <param name="additionalArgs">Optional additional command-line arguments to pass to dotnet run.</param>
-    internal static void ConfigurePlatformResource<T>(
+    /// <returns>The detected target framework for the platform, or an empty string if one was not found.</returns>
+    internal static string ConfigurePlatformResource<T>(
         IResourceBuilder<T> resourceBuilder,
         string projectPath,
         string platformName,
@@ -110,6 +138,8 @@ internal static class MauiPlatformHelper
             var appBuilder = resourceBuilder.ApplicationBuilder;
             appBuilder.Services.TryAddEventingSubscriber<UnsupportedPlatformEventSubscriber>();
         }
+
+        return platformTfm ?? string.Empty;
     }
 
     /// <summary>
@@ -144,8 +174,8 @@ internal static class MauiPlatformHelper
             // DCP would normally set this to the resource name, so we do the same
             if (context.EnvironmentVariables.TryGetValue(KnownOtelConfigNames.ServiceName, out var serviceName))
             {
-                if (serviceName is string serviceNameStr && 
-                    serviceNameStr.Contains("{{", StringComparison.Ordinal) && 
+                if (serviceName is string serviceNameStr &&
+                    serviceNameStr.Contains("{{", StringComparison.Ordinal) &&
                     serviceNameStr.Contains("}}", StringComparison.Ordinal))
                 {
                     context.EnvironmentVariables[KnownOtelConfigNames.ServiceName] = resource.Name;
@@ -156,8 +186,8 @@ internal static class MauiPlatformHelper
             // DCP would normally set this to a generated suffix, so we use a GUID
             if (context.EnvironmentVariables.TryGetValue(KnownOtelConfigNames.ResourceAttributes, out var resourceAttrs))
             {
-                if (resourceAttrs is string resourceAttrsStr && 
-                    resourceAttrsStr.Contains("{{", StringComparison.Ordinal) && 
+                if (resourceAttrs is string resourceAttrsStr &&
+                    resourceAttrsStr.Contains("{{", StringComparison.Ordinal) &&
                     resourceAttrsStr.Contains("}}", StringComparison.Ordinal))
                 {
                     context.EnvironmentVariables[KnownOtelConfigNames.ResourceAttributes] = $"service.instance.id={instanceId}";

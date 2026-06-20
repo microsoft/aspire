@@ -137,6 +137,10 @@ interface GlobalDescribeStream {
     version: number;
 }
 
+interface PostStopRefreshTimer {
+    timer: ReturnType<typeof setTimeout>;
+}
+
 /**
  * Central data repository for app host and resource information.
  *
@@ -156,6 +160,8 @@ const oneShotOutputBufferLimit = 4000;
 
 export class AppHostDataRepository {
     private static readonly _processShutdownGracePeriodMs = 5000;
+    private static readonly _appHostStopRefreshDelayMs = 400;
+    private static readonly _appHostStopRefreshMaxAttempts = 75;
     private static readonly _oneShotCommandTimeoutMs = 30000;
     private static readonly _oneShotOutputBufferLimit = oneShotOutputBufferLimit;
 
@@ -166,6 +172,7 @@ export class AppHostDataRepository {
     private _viewMode: ViewMode = 'workspace';
     private _panelVisible = false;
     private _appHostFileOpen = false;
+    private _hasEverBeenDataActive = false;
 
     // ── Workspace mode state (describe --follow) ──
     private _workspaceResources: Map<string, ResourceJson> = new Map();
@@ -193,10 +200,16 @@ export class AppHostDataRepository {
     private _workspaceAppHost: AppHostDisplayInfo | undefined;
     private _pollingInterval: ReturnType<typeof setInterval> | undefined;
     private _psProcesses = new Set<ChildProcessWithoutNullStreams>();
+    private _psPollingGeneration = 0;
     private _oneShotProcesses = new Set<ChildProcessWithoutNullStreams>();
     private _psFetchVersion = 0;
     private _supportsPsFollow = true;
     private _fetchInProgress = false;
+    private _postStopRefreshTimers = new Map<string, PostStopRefreshTimer>();
+    private _authoritativeSnapshotInProgress = false;
+    private _authoritativeSnapshotPending = false;
+    private _authoritativeSnapshotRequestId = 0;
+    private _activeAuthoritativeSnapshotRequestId: number | undefined;
 
     // ── Global mode per-AppHost describe streams ──
     // In global mode `ps` only returns AppHost-level data, so to populate
@@ -340,8 +353,14 @@ export class AppHostDataRepository {
         if (this._panelVisible === visible) {
             return;
         }
+        const wasDataActive = this._dataActive;
         this._panelVisible = visible;
-        this._syncPolling();
+        const becameDataActive = !wasDataActive && this._dataActive;
+        const resumedFromInactive = becameDataActive && this._hasEverBeenDataActive;
+        if (this._dataActive) {
+            this._hasEverBeenDataActive = true;
+        }
+        this._syncPolling(resumedFromInactive);
     }
 
     /**
@@ -355,8 +374,14 @@ export class AppHostDataRepository {
         if (this._appHostFileOpen === open) {
             return;
         }
+        const wasDataActive = this._dataActive;
         this._appHostFileOpen = open;
-        this._syncPolling();
+        const becameDataActive = !wasDataActive && this._dataActive;
+        const resumedFromInactive = becameDataActive && this._hasEverBeenDataActive;
+        if (this._dataActive) {
+            this._hasEverBeenDataActive = true;
+        }
+        this._syncPolling(resumedFromInactive);
     }
 
     refresh(): void {
@@ -375,8 +400,89 @@ export class AppHostDataRepository {
             this._startDescribeWatch();
         }
         if (this._shouldPoll) {
-            this._fetchAppHosts();
+            this._refreshAppHostsFromAuthoritativeSnapshot();
         }
+    }
+
+    requestAppHostStopRefresh(appHostPath: string): void {
+        if (this._disposed || !this._shouldPoll || !appHostPath) {
+            return;
+        }
+
+        const key = this._resolveStopRefreshKey(appHostPath);
+        this._schedulePostStopRefresh(key, AppHostDataRepository._appHostStopRefreshMaxAttempts);
+    }
+
+    private _schedulePostStopRefresh(appHostPath: string, remainingAttempts: number): void {
+        const existing = this._postStopRefreshTimers.get(appHostPath);
+        if (existing) {
+            clearTimeout(existing.timer);
+        }
+
+        const refreshTimer = setTimeout(() => {
+            this._postStopRefreshTimers.delete(appHostPath);
+            if (this._disposed || !this._shouldPoll) {
+                return;
+            }
+
+            if (remainingAttempts < AppHostDataRepository._appHostStopRefreshMaxAttempts && !this._hasAppHost(appHostPath)) {
+                return;
+            }
+
+            this._refreshAppHostsFromAuthoritativeSnapshot();
+            if (remainingAttempts > 1) {
+                this._schedulePostStopRefresh(appHostPath, remainingAttempts - 1);
+            }
+        }, AppHostDataRepository._appHostStopRefreshDelayMs);
+        (refreshTimer as { unref?: () => void }).unref?.();
+        this._postStopRefreshTimers.set(appHostPath, { timer: refreshTimer });
+    }
+
+    private _hasAppHost(appHostPath: string): boolean {
+        return this._findMatchingRunningAppHostPath(appHostPath) !== undefined;
+    }
+
+    private _resolveStopRefreshKey(appHostPath: string): string {
+        const resolvedAppHostPath = this._findMatchingRunningAppHostPath(appHostPath) ?? appHostPath;
+        for (const existingPath of this._postStopRefreshTimers.keys()) {
+            if (isMatchingAppHostPath(existingPath, resolvedAppHostPath)) {
+                return existingPath;
+            }
+        }
+
+        return getComparisonKey(path.normalize(resolvedAppHostPath));
+    }
+
+    private _findMatchingRunningAppHostPath(appHostPath: string): string | undefined {
+        const runningAppHostPaths = this._getRunningAppHostPaths();
+        const exactMatch = runningAppHostPaths.find(runningPath => isMatchingAppHostPath(runningPath, appHostPath));
+        if (exactMatch) {
+            return exactMatch;
+        }
+
+        const folderMatches = runningAppHostPaths.filter(runningPath => isAppHostPathUnderFolder(runningPath, appHostPath));
+        return folderMatches.length === 1 ? folderMatches[0] : undefined;
+    }
+
+    private _getRunningAppHostPaths(): string[] {
+        const paths: string[] = [];
+        for (const appHostPath of [
+            ...this._appHosts.map(appHost => appHost.appHostPath),
+            this._workspaceAppHost?.appHostPath,
+        ]) {
+            if (appHostPath && !paths.some(existingPath => isSameAppHostPath(existingPath, appHostPath))) {
+                paths.push(appHostPath);
+            }
+        }
+
+        return paths;
+    }
+
+    private _clearPostStopRefreshTimers(): void {
+        for (const state of this._postStopRefreshTimers.values()) {
+            clearTimeout(state.timer);
+        }
+        this._postStopRefreshTimers.clear();
     }
 
     activate(): void {
@@ -416,6 +522,8 @@ export class AppHostDataRepository {
 
     dispose(): void {
         this._disposed = true;
+        this._clearPostStopRefreshTimers();
+        this._authoritativeSnapshotPending = false;
         this._stopPolling();
         this._stopDescribeWatch();
         this._stopAllGlobalDescribes();
@@ -458,7 +566,7 @@ export class AppHostDataRepository {
         return this._workspaceAppHostDiscoveryComplete && this._workspaceAppHostPath !== undefined;
     }
 
-    private _syncPolling(): void {
+    private _syncPolling(refreshBeforeFollowOnResume = false): void {
         if (this._disposed) {
             return;
         }
@@ -474,7 +582,15 @@ export class AppHostDataRepository {
         }
 
         if (this._shouldPoll) {
-            this._startPsPolling();
+            const pollingActive = this._pollingInterval !== undefined
+                || this._psProcesses.size > 0
+                || this._fetchInProgress;
+            if (refreshBeforeFollowOnResume && !pollingActive && this._supportsPsFollow && this._appHosts.length > 0) {
+                this._startPsPolling();
+                this._refreshAppHostsFromAuthoritativeSnapshot();
+            } else {
+                this._startPsPolling();
+            }
         } else {
             this._stopPolling();
         }
@@ -1215,8 +1331,13 @@ export class AppHostDataRepository {
     }
 
     private _stopPolling(): void {
+        this._psPollingGeneration++;
         this._psFetchVersion++;
         this._fetchInProgress = false;
+        this._authoritativeSnapshotInProgress = false;
+        this._authoritativeSnapshotPending = false;
+        this._activeAuthoritativeSnapshotRequestId = undefined;
+        this._clearPostStopRefreshTimers();
         if (this._pollingInterval) {
             clearInterval(this._pollingInterval);
             this._pollingInterval = undefined;
@@ -1250,7 +1371,6 @@ export class AppHostDataRepository {
             }
             return;
         }
-
         if (!this._isCurrentPsFetch(fetchVersion)) {
             return;
         }
@@ -1333,7 +1453,7 @@ export class AppHostDataRepository {
         const fetchVersion = ++this._psFetchVersion;
 
         const args = ['ps', '--format', 'json'];
-        this._runPsCommand(args, fetchVersion, (code, stdout, stderr) => {
+        this._runPsCommand(args, (code, stdout, stderr) => {
             if (code === 0) {
                 this._setPsError(undefined);
                 this._handlePsOutput(stdout);
@@ -1342,6 +1462,51 @@ export class AppHostDataRepository {
                 this._setPsError(errorFetchingAppHosts(stderr || `exit code ${code}`));
             }
             this._fetchInProgress = false;
+        }, { fetchVersion });
+    }
+
+    private _refreshAppHostsFromAuthoritativeSnapshot(): void {
+        if (this._disposed || !this._shouldPoll) {
+            return;
+        }
+
+        if (this._authoritativeSnapshotInProgress) {
+            this._authoritativeSnapshotPending = true;
+            return;
+        }
+
+        this._authoritativeSnapshotInProgress = true;
+        const snapshotRequestId = ++this._authoritativeSnapshotRequestId;
+        this._activeAuthoritativeSnapshotRequestId = snapshotRequestId;
+        const pollingGeneration = this._psPollingGeneration;
+        const args = ['ps', '--format', 'json'];
+        this._runPsCommand(args, (code, stdout, stderr) => {
+            if (this._activeAuthoritativeSnapshotRequestId !== snapshotRequestId) {
+                return;
+            }
+
+            if (pollingGeneration !== this._psPollingGeneration) {
+                this._activeAuthoritativeSnapshotRequestId = undefined;
+                this._authoritativeSnapshotInProgress = false;
+                return;
+            }
+
+            if (!this._disposed && this._shouldPoll) {
+                if (code === 0) {
+                    this._setPsError(undefined);
+                    this._handlePsOutput(stdout);
+                } else {
+                    this._clearLoadingForCurrentView();
+                    this._setPsError(errorFetchingAppHosts(stderr || `exit code ${code}`));
+                }
+            }
+
+            this._activeAuthoritativeSnapshotRequestId = undefined;
+            this._authoritativeSnapshotInProgress = false;
+            if (this._authoritativeSnapshotPending) {
+                this._authoritativeSnapshotPending = false;
+                this._refreshAppHostsFromAuthoritativeSnapshot();
+            }
         });
     }
 
@@ -1548,22 +1713,29 @@ export class AppHostDataRepository {
         this._attachGlobalResourcesToAppHosts();
     }
 
-    private async _runPsCommand(args: string[], fetchVersion: number, callback: (code: number, stdout: string, stderr: string) => void): Promise<void> {
+    private async _runPsCommand(args: string[], callback: (code: number, stdout: string, stderr: string) => void, options?: { fetchVersion?: number }): Promise<void> {
+        const fetchVersion = options?.fetchVersion;
+        const isCurrentPsCommand = () => {
+            if (fetchVersion !== undefined) {
+                return this._isCurrentPsFetch(fetchVersion);
+            }
+
+            return !this._disposed && this._shouldPoll;
+        };
+
         let cliPath: string;
         try {
             cliPath = await this._terminalProvider.getAspireCliExecutablePath();
         } catch (error) {
-            if (this._isCurrentPsFetch(fetchVersion)) {
-                const errorMessage = errorFetchingAppHosts(String(error));
-                extensionLogOutputChannel.warn(errorMessage);
-                this._setPsError(errorMessage);
-                this._fetchInProgress = false;
-                this._clearLoadingForCurrentView();
+            if (isCurrentPsCommand()) {
+                const rawErrorMessage = String(error);
+                extensionLogOutputChannel.warn(errorFetchingAppHosts(rawErrorMessage));
+                callback(1, '', rawErrorMessage);
             }
             return;
         }
 
-        if (!this._isCurrentPsFetch(fetchVersion)) {
+        if (!isCurrentPsCommand()) {
             return;
         }
 
@@ -1589,7 +1761,7 @@ export class AppHostDataRepository {
                 removePsProcess();
                 if (!callbackInvoked) {
                     callbackInvoked = true;
-                    if (this._isCurrentPsFetch(fetchVersion)) {
+                    if (isCurrentPsCommand()) {
                         callback(code ?? 1, stdout, stderr);
                     }
                 }
@@ -1599,7 +1771,7 @@ export class AppHostDataRepository {
                 extensionLogOutputChannel.warn(errorFetchingAppHosts(error.message));
                 if (!callbackInvoked) {
                     callbackInvoked = true;
-                    if (this._isCurrentPsFetch(fetchVersion)) {
+                    if (isCurrentPsCommand()) {
                         callback(1, stdout, stderr || error.message);
                     }
                 }
@@ -1862,6 +2034,21 @@ export function isMatchingAppHostPath(left: string | undefined, right: string | 
     // the same workspace AppHost.
     return getComparisonKey(path.dirname(normalizedLeft)) === getComparisonKey(path.dirname(normalizedRight))
         && isProjectFileToSourceFileMatch(normalizedLeft, normalizedRight);
+}
+
+export function isAppHostPathUnderFolder(appHostPath: string | undefined, folderPath: string | undefined): boolean {
+    if (!appHostPath || !folderPath) {
+        return false;
+    }
+
+    const normalizedAppHostPath = getComparisonKey(path.normalize(appHostPath));
+    const normalizedFolderPath = getComparisonKey(path.normalize(folderPath));
+    if (normalizedAppHostPath === normalizedFolderPath) {
+        return false;
+    }
+
+    const folderPrefix = normalizedFolderPath.endsWith(path.sep) ? normalizedFolderPath : `${normalizedFolderPath}${path.sep}`;
+    return normalizedAppHostPath.startsWith(folderPrefix);
 }
 
 function isProjectFileToSourceFileMatch(left: string, right: string): boolean {
