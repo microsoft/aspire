@@ -89,12 +89,15 @@ public sealed class SelectTestsLayer1IntegrationTests
                     BeforeBuildProps: propsPath));
 
                 Assert.Equal(0, exit);
-                // Summary carries the full chain; the terse PR comment names just the seed file.
+                // Summary carries the full chain; the terse PR comment groups the graph fan-out under
+                // the seed file heading instead of repeating the path per project.
                 var summary = File.ReadAllText(System.IO.Path.Combine(fixture.Path, "summary"));
                 Assert.Contains("src/Core/Core.cs → Core → Core.Tests", summary);
 
                 var comment = File.ReadAllText(commentPath);
-                Assert.Contains("via graph from `src/Core/Core.cs`", comment);
+                Assert.Contains("`src/Core/Core.cs`", comment);
+                Assert.Contains("via the project graph", comment);
+                Assert.Contains("`Core.Tests`", comment);
 
                 // The JSON artifact preserves the decision path as a structured array.
                 using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(jsonPath));

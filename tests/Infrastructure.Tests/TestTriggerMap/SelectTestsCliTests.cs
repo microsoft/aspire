@@ -156,10 +156,10 @@ public sealed class SelectTestsCliTests
                 var comment = File.ReadAllText(commentPath);
                 Assert.StartsWith("## Tests selector", comment);
                 Assert.DoesNotContain("audit mode", comment);
-                Assert.Contains("**Test projects (1 / 2)**", comment);
-                Assert.Contains("- `Aspire.Hosting.Tests`", comment);
-                Assert.Contains("**Jobs (1)**", comment);
-                Assert.Contains("- `extension-e2e`", comment);
+                Assert.Contains("### Selected test projects (1 / 2)", comment);
+                Assert.Contains("`Aspire.Hosting.Tests`", comment);
+                Assert.Contains("### Selected jobs (1)", comment);
+                Assert.Contains("`extension-e2e`", comment);
                 Assert.DoesNotContain("### Options", comment);
                 Assert.DoesNotContain("Changed files", comment);
                 Assert.DoesNotContain("Would have been", comment);
@@ -171,10 +171,11 @@ public sealed class SelectTestsCliTests
         });
     }
 
-    // The PR comment lists EVERY cause that selected an item — not a single "primary" cause with a
-    // "(+N more)" tail. A reviewer must see exactly which changed files / edges pulled each test in.
-    // Here both trigger.txt and prod.txt route to Aspire.Hosting.Tests, so its one comment line must
-    // name both files. Failure mode: truncating to one cause hides why a test was selected.
+    // The PR comment attributes EVERY cause that selected an item — no truncation, no "(+N more)"
+    // tail. A reviewer must see exactly which changed files / edges pulled each test in. Here both
+    // trigger.txt and prod.txt route to Aspire.Hosting.Tests, so the grouped "how chosen" section must
+    // show both files as triggers (the project appears under each). Failure mode: dropping a trigger
+    // hides why a test was selected.
     [Fact]
     public void CommentListsEveryCauseWithoutTruncation()
     {
@@ -190,10 +191,10 @@ public sealed class SelectTestsCliTests
                 Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, enforce: true));
 
                 var comment = File.ReadAllText(commentPath);
-                var line = Array.Find(comment.Split('\n'), l => l.Contains("`Aspire.Hosting.Tests`", StringComparison.Ordinal));
-                Assert.NotNull(line);
-                Assert.Contains("`trigger.txt`", line);
-                Assert.Contains("`prod.txt`", line);
+                // Both triggers are named as group headings, and the test they both select appears.
+                Assert.Contains("`trigger.txt`", comment);
+                Assert.Contains("`prod.txt`", comment);
+                Assert.Contains("`Aspire.Hosting.Tests`", comment);
                 Assert.DoesNotContain("more)", comment);
             }
             finally

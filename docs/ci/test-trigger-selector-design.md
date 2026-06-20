@@ -119,8 +119,9 @@ carries, per affected project, an ordered chain
 `changed file → directly-changed project → … → affected test`. The selector
 attaches this to each Layer 1 cause (`Cause.Path`), and the renderers surface
 it: the step summary shows the full chain
-(`src/Core/Core.cs → Core → Core.Tests`), the PR comment a terse
-`via graph from <file>`. Only a single representative shortest path per project
+(`src/Core/Core.cs → Core → Core.Tests`), while the PR comment groups every test
+reached from a seed file under that file's heading (in a "via the project graph"
+bucket). Only a single representative shortest path per project
 is tracked — alternate longer paths are not enumerated.
 
 ### Why a HEAD-only graph
@@ -423,11 +424,17 @@ runs the full matrix and all jobs. The summary shows:
 - any `ALL` or kill-switch escalation and why;
 - unattributed changed files that may need curated rules.
 
-The PR comment carries the same selection in a terser form: each test
-project and job is listed with **every** cause that selected it (e.g. a job
-pulled in only because a test runs reads `via test <Name>`), priority-ordered
-and de-duplicated. The full per-item cause list additionally includes the rule
-`reason` text in the step summary. The comment is posted **one per pushed
+The PR comment carries the same selection in a more scannable form. It leads
+with **what runs** — the flat list of selected jobs and the flat list of
+selected test projects — so a reviewer sees the full impact at a glance even
+when many files changed. It then explains **how** the selection was reached,
+grouping the selected projects under each trigger (changed file, affected
+project, or derived test) that pulled them in: a changed file and its graph
+fan-out appear under one heading, so a single edit's whole closure is stated
+once rather than repeated per project, and large fan-outs collapse into a
+`<details>`. Every cause is still shown — a project selected by several
+triggers appears under each — and a per-job table names what triggered each
+job. The comment is posted **one per pushed
 commit** and links the head commit it was computed for: a re-run of the same
 commit updates that commit's comment in place (no duplicate — re-runs are
 common), a new commit posts a fresh comment at the bottom, and comments from
