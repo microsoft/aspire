@@ -887,10 +887,17 @@ export class AppHostDataRepository {
             };
         }
 
+        if (this._workspaceAppHostPath && exitCode !== 0) {
+            return {
+                message: errorFetchingAppHosts(stderr || `exit code ${exitCode ?? 1}`),
+                isCompatibilityError: false,
+            };
+        }
+
         // A clean exit before `ps` observes the AppHost can happen while the app is still starting.
-        // Once `ps` reports the workspace AppHost as running, an empty describe stream means the
-        // AppHost cannot serve workspace resources even if the CLI process exits successfully.
-        if (this._workspaceAppHostPath && (exitCode !== 0 || this._workspaceAppHost !== undefined)) {
+        // Once `ps` reports the workspace AppHost as running, an empty successful describe stream means
+        // the AppHost cannot serve workspace resources even though the CLI command itself was accepted.
+        if (this._workspaceAppHostPath && this._workspaceAppHost !== undefined) {
             return {
                 message: appHostDescribeMayNotBeSupported(aspireDescribeMinimumVersion),
                 isCompatibilityError: true,

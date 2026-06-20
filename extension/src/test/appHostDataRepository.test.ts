@@ -528,7 +528,7 @@ suite('AppHostDataRepository', () => {
         }
     });
 
-    test('describe watch reports minimum AppHost version when workspace AppHost exits without unsupported command output', async () => {
+    test('describe watch reports generic error when workspace AppHost exits with runtime failure', async () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
         spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
             getAppHostsLineCallback = createLsLineCallback(options);
@@ -540,6 +540,7 @@ suite('AppHostDataRepository', () => {
             name: 'workspace',
             index: 0,
         }]);
+        const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
         const repository = new AppHostDataRepository(terminalProvider);
 
         try {
@@ -558,14 +559,20 @@ suite('AppHostDataRepository', () => {
 
             const describeCall = spawnStub.getCalls().find(call => (call.args[2] as string[])[0] === 'describe');
             assert.ok(describeCall);
+            const stderrCallback = describeCall.args[3].stderrCallback;
             const exitCallback = describeCall.args[3].exitCallback;
+            stderrCallback('No container runtime detected');
             exitCallback(1);
 
             assert.strictEqual(repository.hasError, true);
-            assert.ok(repository.errorMessage?.includes('Aspire.Hosting 13.2.0'), repository.errorMessage);
-            assert.ok(!repository.errorMessage?.includes('Aspire CLI 13.2.0'), repository.errorMessage);
+            assert.ok(repository.errorMessage?.includes('No container runtime detected'), repository.errorMessage);
+
+            const compatibilityContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.fetchAppHostsCompatibilityError');
+            assert.strictEqual(compatibilityContextCalls.at(-1)?.args[2], false);
         } finally {
             repository.dispose();
+            executeCommandStub.restore();
             workspaceFoldersStub.restore();
         }
     });
