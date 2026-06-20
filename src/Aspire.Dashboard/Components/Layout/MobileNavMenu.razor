@@ -51,14 +51,6 @@
             @foreach (var nestedItem in item.NestedMenuItems)
             {
                 var additionalMenuItemAttributes = new Dictionary<string, object>(nestedItem.AdditionalAttributes ?? new Dictionary<string, object>());
-                if (nestedItem.Href is not null)
-                {
-                    additionalMenuItemAttributes["href"] = nestedItem.Href;
-                }
-                if (nestedItem.Target is not null)
-                {
-                    additionalMenuItemAttributes["target"] = nestedItem.Target;
-                }
 
                 <FluentMenuItem AdditionalAttributes="@additionalMenuItemAttributes" OnClick="@(async () => { CloseNavMenu(); if (nestedItem.OnClick is { } onClick) { await onClick(); } })" Label="@nestedItem.Text">
                     @if (nestedItem.Icon is { } icon)
