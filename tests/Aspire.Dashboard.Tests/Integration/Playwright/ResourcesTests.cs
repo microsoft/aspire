@@ -30,12 +30,12 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
 
             var popup = await page.RunAndWaitForPopupAsync(async () =>
             {
-                var urlLink = page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = "https://example.com" }).First;
+                var urlLink = page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = "about:blank#resource-url" }).First;
                 await urlLink.FocusAsync();
                 await page.Keyboard.PressAsync("Enter");
             });
 
-            await popup.WaitForURLAsync(url => url.StartsWith("https://example.com", StringComparison.Ordinal)).DefaultTimeout();
+            await popup.WaitForURLAsync("about:blank#resource-url").DefaultTimeout();
             await popup.CloseAsync();
             await Assertions.Expect(page.Locator(".details-header-title")).ToHaveCountAsync(0);
         });
@@ -71,7 +71,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
                 state: KnownResourceState.Running,
                 urls:
                 [
-                    new UrlViewModel("https", new Uri("https://example.com"), isInternal: false, isInactive: false, UrlDisplayPropertiesViewModel.Empty)
+                    new UrlViewModel("http", new Uri("about:blank#resource-url"), isInternal: false, isInactive: false, UrlDisplayPropertiesViewModel.Empty)
                 ]),
             ModelTestHelpers.CreateResource(
                 resourceName: "HiddenResource",
