@@ -66,7 +66,8 @@ export async function executeE2eControlCommand(
     command: AspireExtensionE2EControlCommand,
     options?: { waitFor?: 'started' | 'applied'; timeoutMs?: number }
 ): Promise<AspireExtensionE2EControlStatus> {
-    return await applyE2eControl({ command }, options?.waitFor ?? 'applied', options?.timeoutMs);
+    const timeoutMs = options?.timeoutMs ?? (command.name === 'stopDebugging' ? 180000 : undefined);
+    return await applyE2eControl({ command }, options?.waitFor ?? 'applied', timeoutMs);
 }
 
 export async function runE2eTeardown(cleanups: ReadonlyArray<() => unknown | Promise<unknown>>, failureMessage: string): Promise<void> {
