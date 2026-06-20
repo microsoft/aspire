@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 import * as sinon from 'sinon';
-import { getCliSpawnCommand, getCliSpawnDiagnostics } from '../debugger/languages/cli';
+import { getCliSpawnCommand, getCliSpawnDiagnostics, mergeCliSpawnEnvironment } from '../debugger/languages/cli';
 import { EnvironmentVariables } from '../utils/environment';
 
 suite('spawnCliProcess tests', () => {
@@ -43,5 +43,37 @@ suite('spawnCliProcess tests', () => {
             message,
             'Spawning Aspire CLI process: /usr/local/bin/aspire run --apphost /workspace/AppHost.csproj; cwd=/workspace; noDebug=false; debugSessionId=debug-session-id; ASPIRE_CLI_START_TIMEOUT=86400');
         assert.strictEqual(message.includes('secret-token'), false);
+    });
+
+    test('redacts command arguments after delimiter from spawn diagnostics', () => {
+        const message = getCliSpawnDiagnostics(
+            '/usr/local/bin/aspire',
+            ['resource', 'database', 'reset-password', '--load-arguments', '--', '--password=s3cr3t'],
+            '/workspace',
+            undefined,
+            undefined,
+            {});
+
+        assert.strictEqual(
+            message,
+            'Spawning Aspire CLI process: /usr/local/bin/aspire resource database reset-password --load-arguments -- <redacted>; cwd=/workspace; noDebug=undefined; debugSessionId=undefined; ASPIRE_CLI_START_TIMEOUT=undefined');
+        assert.strictEqual(message.includes('s3cr3t'), false);
+    });
+
+    test('merges caller env case-insensitively on Windows', () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const env: Record<string, string | undefined> = {
+            [EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT]: '86400',
+        };
+
+        try {
+            mergeCliSpawnEnvironment(env, [{ name: 'aspire_cli_start_timeout', value: '300' }]);
+
+            assert.strictEqual(env.ASPIRE_CLI_START_TIMEOUT, undefined);
+            assert.strictEqual(env.aspire_cli_start_timeout, '300');
+        }
+        finally {
+            platformStub.restore();
+        }
     });
 });
