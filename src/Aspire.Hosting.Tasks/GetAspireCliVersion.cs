@@ -3,6 +3,7 @@
 
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using Microsoft.Build.Framework;
 
 namespace Aspire.Hosting.Tasks;
@@ -197,7 +198,7 @@ public sealed class GetAspireCliVersion : Microsoft.Build.Utilities.Task
         }
     }
 
-    private static bool IsWindows() => Path.DirectorySeparatorChar == '\\';
+    private static bool IsWindows() => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
 
     private static bool IsVersionQueryException(Exception ex)
     {
