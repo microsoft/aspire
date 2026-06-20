@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Serializes concurrent ConnectAsync setup in CLI extension backchannel and improves E2E AppHost teardown. Bug fix in ExtensionBackchannel.cs.",
+  "mergedAt": "2026-06-19T19:33:45Z",
+  "number": 18322,
+  "runDate": "2026-06-20T00:27:22Z",
+  "status": "included",
+  "title": "Harden VS Code extension AppHost E2E paths"
+}

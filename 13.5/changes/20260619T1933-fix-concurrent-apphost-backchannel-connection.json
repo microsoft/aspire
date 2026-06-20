@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The CLI extension backchannel now serializes concurrent ConnectAsync calls, preventing a race condition that caused errors when multiple AppHost connections were initiated simultaneously.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔄",
+  "firstMergedAt": "2026-06-19T19:33:45Z",
+  "lastMergedAt": "2026-06-19T19:33:45Z",
+  "name": "Fix concurrent AppHost backchannel connection setup",
+  "owner": "adamint",
+  "prs": [
+    18322
+  ]
+}

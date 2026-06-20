@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI-only change to quarantine workflow. No user-facing impact.",
+  "mergedAt": "2026-06-19T22:19:38Z",
+  "number": 18325,
+  "runDate": "2026-06-20T00:27:22Z",
+  "status": "excluded",
+  "title": "fix(ci): quarantine job tolerates flaky test outcomes but still fails on infra errors"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "aradalvand",
+  "comment": "Adds combined certificate+key PEM file to HTTPS TLS certificate contexts in AppHost. Community contribution.",
+  "mergedAt": "2026-06-19T22:10:12Z",
+  "number": 18216,
+  "runDate": "2026-06-20T00:27:22Z",
+  "status": "included",
+  "title": "Include concatenated certificate+key PEM file in TLS contexts"
+}

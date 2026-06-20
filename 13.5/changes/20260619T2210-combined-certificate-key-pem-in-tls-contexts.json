@@ -1,0 +1,21 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [
+    "@aradalvand"
+  ],
+  "description": "HTTPS certificate contexts now include a combined certificate-with-key PEM file alongside the separate certificate and key files, making it easier for containers and executables to consume TLS credentials without concatenating them manually.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔐",
+  "firstMergedAt": "2026-06-19T22:10:12Z",
+  "lastMergedAt": "2026-06-19T22:10:12Z",
+  "name": "Combined certificate and private key PEM file in TLS contexts",
+  "owner": "danegsta",
+  "prs": [
+    18216
+  ]
+}
