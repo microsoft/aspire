@@ -124,7 +124,11 @@ public sealed class GetAspireCliVersion : Microsoft.Build.Utilities.Task
     {
         try
         {
+#if NET5_0_OR_GREATER
+            process.Kill(entireProcessTree: true);
+#else
             process.Kill();
+#endif
         }
         catch (Exception ex) when (IsVersionQueryException(ex))
         {

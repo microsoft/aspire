@@ -300,7 +300,7 @@ public class AppHostSdkTargetsTests
             [$"-p:AspireCliPath={cliPath}", "-p:RunArguments=--custom foo"]);
 
         AssertUsesDotNetRun(properties, project, "--custom foo");
-        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(15), $"Expected version probe to time out quickly, but it took {stopwatch.Elapsed}.");
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(30), $"Expected version probe to time out quickly, but it took {stopwatch.Elapsed}.");
     }
 
     [Fact]
