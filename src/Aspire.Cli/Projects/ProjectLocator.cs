@@ -24,8 +24,8 @@ internal interface IProjectLocator
     /// </summary>
     /// <param name="searchDirectory">The directory to search recursively.</param>
     /// <param name="scope">Controls which files are considered. See <see cref="AppHostDiscoveryScope"/>.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
     /// <param name="noEvaluate">Controls whether candidates are fully validated.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A list of candidate AppHost projects with language metadata sorted by full path.</returns>
     Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(
         DirectoryInfo searchDirectory,
@@ -639,10 +639,6 @@ internal sealed class ProjectLocator(
         else if (validationResult.IsPossiblyUnbuildable)
         {
             logger.LogWarning("Ignoring AppHost path '{AppHostPath}' from settings because it may not be a buildable AppHost project{MessageSuffix}.", settingsAppHost.FullName, messageSuffix);
-        }
-        else if (validationResult.IsNotEvaluated)
-        {
-            logger.LogWarning("Ignoring AppHost path '{AppHostPath}' from settings because it was not evaluated{MessageSuffix}.", settingsAppHost.FullName, messageSuffix);
         }
         else
         {
