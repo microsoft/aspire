@@ -17,17 +17,20 @@ internal sealed class LanguageService : ILanguageService
     private readonly IInteractionService _interactionService;
     private readonly IAppHostProjectFactory _projectFactory;
     private readonly ILanguageDiscovery _languageDiscovery;
+    private readonly CliExecutionContext _executionContext;
 
     public LanguageService(
         IConfigurationService configurationService,
         IInteractionService interactionService,
         IAppHostProjectFactory projectFactory,
-        ILanguageDiscovery languageDiscovery)
+        ILanguageDiscovery languageDiscovery,
+        CliExecutionContext executionContext)
     {
         _configurationService = configurationService;
         _interactionService = interactionService;
         _projectFactory = projectFactory;
         _languageDiscovery = languageDiscovery;
+        _executionContext = executionContext;
     }
 
     /// <inheritdoc />
@@ -96,10 +99,21 @@ internal sealed class LanguageService : ILanguageService
         var selected = await _interactionService.PromptForSelectionAsync(
             "Which language would you like to use?",
             languages,
-            lang => lang.DisplayName,
+            GetLanguageDisplayName,
             cancellationToken: cancellationToken);
 
         return (_projectFactory.GetProject(selected), selected);
+    }
+
+    // The static LanguageInfo.DisplayName for TypeScript is "TypeScript (Node.js)" because the toolchain
+    // is only known once the workspace is inspected. Resolve it against the working directory (an
+    // "aspire init" AppHost is created under it, and resolution walks up to the workspace lockfile) so the
+    // prompt names the package manager that will actually be used, e.g. "TypeScript (Bun)".
+    private string GetLanguageDisplayName(LanguageInfo language)
+    {
+        return TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(language)
+            ? TypeScriptAppHostToolchainResolver.GetTypeScriptDisplayName(_executionContext.WorkingDirectory)
+            : language.DisplayName;
     }
 
     /// <inheritdoc />
@@ -146,7 +160,7 @@ internal sealed class LanguageService : ILanguageService
         if (saveLanguageSelection)
         {
             await SetLanguageAsync(selectedLanguage.LanguageId, isGlobal: false, cancellationToken);
-            _interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Language preference saved to local configuration: {selectedProject.DisplayName}");
+            _interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Language preference saved to local configuration: {GetLanguageDisplayName(selectedLanguage)}");
         }
 
         return new AppHostProjectSelection(selectedProject, ShouldPersistSelection: !saveLanguageSelection);

@@ -141,6 +141,27 @@ internal static class TypeScriptAppHostToolchainResolver
         };
     }
 
+    // Builds the interactive language-prompt label for a TypeScript AppHost that would be created under
+    // <paramref name="appHostDirectory"/>, naming the package manager that will actually run it (e.g.
+    // "TypeScript (Bun)") instead of the static "TypeScript (Node.js)" catalog label. The prompt is shown
+    // before any project is scaffolded, so resolution failures - most notably an unsupported classic Yarn
+    // workspace detected mid-walk - fall back to the default "TypeScript (Node.js)" label rather than
+    // aborting the prompt; the unsupported-toolchain error is surfaced later, during scaffolding.
+    public static string GetTypeScriptDisplayName(DirectoryInfo appHostDirectory)
+    {
+        TypeScriptAppHostToolchain toolchain;
+        try
+        {
+            toolchain = ResolveWithReason(appHostDirectory).Toolchain;
+        }
+        catch (YarnClassicNotSupportedException)
+        {
+            toolchain = TypeScriptAppHostToolchain.Npm;
+        }
+
+        return $"TypeScript ({GetDisplayName(toolchain)})";
+    }
+
     public static RuntimeSpec ApplyToRuntimeSpec(RuntimeSpec baseRuntimeSpec, TypeScriptAppHostToolchain toolchain)
     {
         if (toolchain == TypeScriptAppHostToolchain.Npm)

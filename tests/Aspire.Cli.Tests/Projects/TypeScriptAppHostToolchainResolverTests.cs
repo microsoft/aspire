@@ -274,6 +274,44 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     }
 
     [Fact]
+    public void GetTypeScriptDisplayName_WhenBunLockfileAbove_ReturnsBun()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"name\": \"workspace\" }");
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "bun.lock"), "{}");
+
+        // The label is resolved before scaffolding, from the directory the user invoked the command in.
+        var workingDirectory = workspace.WorkspaceRoot.CreateSubdirectory("apps");
+
+        var displayName = TypeScriptAppHostToolchainResolver.GetTypeScriptDisplayName(workingDirectory);
+
+        Assert.Equal("TypeScript (Bun)", displayName);
+    }
+
+    [Fact]
+    public void GetTypeScriptDisplayName_WhenNoMarkers_ReturnsNodeJs()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var displayName = TypeScriptAppHostToolchainResolver.GetTypeScriptDisplayName(workspace.WorkspaceRoot);
+
+        Assert.Equal("TypeScript (Node.js)", displayName);
+    }
+
+    [Fact]
+    public void GetTypeScriptDisplayName_WhenYarnClassic_FallsBackToNodeJs()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"packageManager\": \"yarn@1.22.22\" }");
+
+        // Classic Yarn throws during resolution; the prompt label must not abort, so it falls back to
+        // the default "Node.js" name. The unsupported-toolchain error surfaces later, during scaffolding.
+        var displayName = TypeScriptAppHostToolchainResolver.GetTypeScriptDisplayName(workspace.WorkspaceRoot);
+
+        Assert.Equal("TypeScript (Node.js)", displayName);
+    }
+
+    [Fact]
     public void ShouldSearchParentDirectory_WhenDirectoryIsRoot_ReturnsFalse()
     {
         var directory = new DirectoryInfo(Path.GetPathRoot(Path.GetTempPath())!);

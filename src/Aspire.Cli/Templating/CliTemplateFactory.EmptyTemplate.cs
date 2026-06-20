@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
 using Microsoft.Extensions.Logging;
@@ -111,7 +112,13 @@ internal sealed partial class CliTemplateFactory
             return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
         }
 
-        _interactionService.DisplaySuccess($"Created {language.DisplayName.EscapeMarkup()} project at {outputPath.EscapeMarkup()}");
+        // The static LanguageInfo.DisplayName is "TypeScript (Node.js)"; now that the project is scaffolded,
+        // resolve the toolchain from its directory so the confirmation names the package manager actually used
+        // (e.g. "TypeScript (Bun)"), matching the dependency-install status message shown above.
+        var createdLanguageName = TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(language)
+            ? TypeScriptAppHostToolchainResolver.GetTypeScriptDisplayName(new DirectoryInfo(outputPath))
+            : language.DisplayName;
+        _interactionService.DisplaySuccess($"Created {createdLanguageName.EscapeMarkup()} project at {outputPath.EscapeMarkup()}");
         DisplayPostCreationInstructions(outputPath);
 
         return templateResult;

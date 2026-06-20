@@ -1511,9 +1511,9 @@ public class PackageJsonMergerTests
         var result = PackageJsonMerger.ApplyToolchainToScripts(scaffold, "bun");
 
         var scripts = GetScripts(result);
-        Assert.Equal("bun run aspire:lint", scripts["lint"]?.GetValue<string>());
-        Assert.Equal("bun run aspire:start", scripts["dev"]?.GetValue<string>());
-        Assert.Equal("bun run aspire:build", scripts["build"]?.GetValue<string>());
+        Assert.Equal("bun run --bun aspire:lint", scripts["lint"]?.GetValue<string>());
+        Assert.Equal("bun run --bun aspire:start", scripts["dev"]?.GetValue<string>());
+        Assert.Equal("bun run --bun aspire:build", scripts["build"]?.GetValue<string>());
         // aspire: scripts are not npm-run delegates and must be left untouched.
         Assert.Equal("eslint apphost.mts", scripts["aspire:lint"]?.GetValue<string>());
         Assert.Equal("aspire run", scripts["aspire:start"]?.GetValue<string>());
@@ -1564,6 +1564,108 @@ public class PackageJsonMergerTests
             """;
 
         var result = PackageJsonMerger.ApplyToolchainToScripts(scaffold, "bun");
+
+        Assert.Same(scaffold, result);
+    }
+
+    [Fact]
+    public void ConvenienceAliases_WhenBun_PassBunFlag()
+    {
+        var existing = """
+            {
+              "name": "my-app",
+              "scripts": {
+                "test": "vitest"
+              }
+            }
+            """;
+
+        var scaffold = """
+            {
+              "scripts": {
+                "aspire:start": "aspire run",
+                "aspire:lint": "eslint apphost.ts"
+              }
+            }
+            """;
+
+        var result = MergeJson(existing, scaffold, toolchainCommand: "bun");
+        var scripts = GetScripts(result);
+
+        // For Bun, convenience aliases pass --bun so the spawned tools (eslint, tsc) run on Bun's runtime.
+        Assert.Equal("bun run --bun aspire:start", scripts["start"]?.GetValue<string>());
+        Assert.Equal("bun run --bun aspire:lint", scripts["lint"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void ApplyToolchainToEngines_WhenBun_ReplacesNodeWithBun()
+    {
+        var scaffold = """
+            {
+              "name": "aspire-apphost",
+              "engines": {
+                "node": "^20.19.0 || ^22.13.0 || >=24"
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.ApplyToolchainToEngines(scaffold, "bun");
+
+        var engines = ParseJson(result)["engines"]!.AsObject();
+        Assert.Equal(">=1.0.0", engines["bun"]?.GetValue<string>());
+        Assert.False(engines.ContainsKey("node"));
+    }
+
+    [Fact]
+    public void ApplyToolchainToEngines_WhenBun_PreservesExistingBunVersion()
+    {
+        var scaffold = """
+            {
+              "engines": {
+                "node": "^20.19.0 || ^22.13.0 || >=24",
+                "bun": ">=1.2.0"
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.ApplyToolchainToEngines(scaffold, "bun");
+
+        var engines = ParseJson(result)["engines"]!.AsObject();
+        Assert.Equal(">=1.2.0", engines["bun"]?.GetValue<string>());
+        Assert.False(engines.ContainsKey("node"));
+    }
+
+    [Theory]
+    [InlineData("npm")]
+    [InlineData("pnpm")]
+    [InlineData("yarn")]
+    public void ApplyToolchainToEngines_WhenNotBun_ReturnsContentUnchanged(string toolchainCommand)
+    {
+        var scaffold = """
+            {
+              "engines": {
+                "node": "^20.19.0 || ^22.13.0 || >=24"
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.ApplyToolchainToEngines(scaffold, toolchainCommand);
+
+        Assert.Same(scaffold, result);
+    }
+
+    [Fact]
+    public void ApplyToolchainToEngines_WhenNoNodeEngine_ReturnsContentUnchanged()
+    {
+        var scaffold = """
+            {
+              "engines": {
+                "vscode": "^1.0.0"
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.ApplyToolchainToEngines(scaffold, "bun");
 
         Assert.Same(scaffold, result);
     }

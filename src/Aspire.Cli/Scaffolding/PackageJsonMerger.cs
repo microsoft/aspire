@@ -21,7 +21,15 @@ internal static class PackageJsonMerger
     private const string DevDependenciesKey = "devDependencies";
     private const string EnginesKey = "engines";
     private const string EnginesNodeKey = "node";
+    private const string EnginesBunKey = "bun";
     private const string AspirePrefix = "aspire:";
+    private const string BunCommand = "bun";
+
+    // Conservative floor for the Bun engine constraint: any stable Bun release. Bun is the JavaScript
+    // runtime for a Bun AppHost, so its generated package.json advertises a "bun" engine instead of the
+    // "node" engine that the server-side codegen emits (codegen runs without knowledge of the detected
+    // toolchain). https://bun.sh/docs/runtime/nodejs-apis
+    private const string BunEngineVersionRange = ">=1.0.0";
 
     // package.json standard uses 2-space indentation. These options produce output
     // consistent with npm init / npm install formatting conventions.
@@ -203,9 +211,20 @@ internal static class PackageJsonMerger
         {
             if (scripts[unprefixed] is null)
             {
-                scripts[unprefixed] = $"{normalizedToolchainCommand} run {prefixed}";
+                scripts[unprefixed] = GetRunScriptCommand(normalizedToolchainCommand, prefixed);
             }
         }
+    }
+
+    // Builds the "run a package.json script" invocation for the detected toolchain. For Bun we pass
+    // the --bun flag so the script and any Node-targeted tools it spawns (eslint, tsc) run on Bun's
+    // runtime instead of falling back to Node via the node shim. The other package managers have no
+    // equivalent flag and run scripts under Node. https://bun.sh/docs/cli/run#bun
+    private static string GetRunScriptCommand(string toolchainCommand, string scriptName)
+    {
+        return string.Equals(toolchainCommand, BunCommand, StringComparison.Ordinal)
+            ? $"{BunCommand} run --bun {scriptName}"
+            : $"{toolchainCommand} run {scriptName}";
     }
 
     /// <summary>
@@ -253,7 +272,7 @@ internal static class PackageJsonMerger
                 scriptValue.TryGetValue<string>(out var command) &&
                 command.StartsWith(npmRunPrefix, StringComparison.Ordinal))
             {
-                updates.Add((name, $"{toolchainCommand} run {command[npmRunPrefix.Length..]}"));
+                updates.Add((name, GetRunScriptCommand(toolchainCommand, command[npmRunPrefix.Length..])));
             }
         }
 
@@ -266,6 +285,49 @@ internal static class PackageJsonMerger
         {
             scripts[name] = command;
         }
+
+        return packageJson.ToJsonString(s_jsonOptions);
+    }
+
+    /// <summary>
+    /// Rewrites the <c>engines</c> section of scaffold-generated package.json content to reflect the
+    /// detected <paramref name="toolchainCommand"/>. For a Bun AppHost this replaces the default
+    /// <c>engines.node</c> constraint with a <c>engines.bun</c> constraint because Bun, not Node, is the
+    /// runtime; npm/pnpm/Yarn still run on Node, so their content is returned unchanged.
+    /// </summary>
+    /// <remarks>
+    /// The scaffold codegen always emits <c>engines.node</c> (matching ESLint 10's Node requirement)
+    /// because it runs server-side without knowledge of the detected toolchain. This transform runs on
+    /// both the greenfield write path and (before <see cref="Merge"/>) the brownfield merge path so the
+    /// generated AppHost advertises the package manager that will actually run it. Returns the content
+    /// unchanged when there is no <c>engines.node</c> entry or when the content cannot be parsed.
+    /// </remarks>
+    internal static string ApplyToolchainToEngines(string packageJsonContent, string toolchainCommand)
+    {
+        // Only Bun swaps out the Node.js runtime; npm/pnpm/Yarn all execute on Node, so their generated
+        // package.json keeps the node engine constraint.
+        if (!string.Equals(toolchainCommand, BunCommand, StringComparison.Ordinal))
+        {
+            return packageJsonContent;
+        }
+
+        JsonObject? packageJson;
+        try
+        {
+            packageJson = JsonNode.Parse(packageJsonContent, documentOptions: s_jsonDocumentOptions) as JsonObject;
+        }
+        catch (JsonException)
+        {
+            return packageJsonContent;
+        }
+
+        if (packageJson?[EnginesKey] is not JsonObject engines || engines[EnginesNodeKey] is null)
+        {
+            return packageJsonContent;
+        }
+
+        engines.Remove(EnginesNodeKey);
+        engines[EnginesBunKey] ??= BunEngineVersionRange;
 
         return packageJson.ToJsonString(s_jsonOptions);
     }

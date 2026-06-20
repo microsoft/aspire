@@ -190,28 +190,35 @@ internal sealed class ScaffoldingService : IScaffoldingService
             }
 
             var contentToWrite = content;
-            if (fileName.Equals(PackageJsonFileName, StringComparison.OrdinalIgnoreCase) && File.Exists(filePath))
+            if (fileName.Equals(PackageJsonFileName, StringComparison.OrdinalIgnoreCase))
             {
-                var existingContent = await File.ReadAllTextAsync(filePath, cancellationToken);
-                contentToWrite = PackageJsonMerger.Merge(
-                    existingContent,
-                    content,
-                    _logger,
-                    toolchainCommand: packageManagerCommand);
+                // Reflect the detected toolchain in the scaffold's engines before merging or writing
+                // (e.g. advertise "bun" instead of the codegen's default "node" for a Bun AppHost).
+                var packageJsonContent = PackageJsonMerger.ApplyToolchainToEngines(content, packageManagerCommand);
+
+                if (File.Exists(filePath))
+                {
+                    var existingContent = await File.ReadAllTextAsync(filePath, cancellationToken);
+                    contentToWrite = PackageJsonMerger.Merge(
+                        existingContent,
+                        packageJsonContent,
+                        _logger,
+                        toolchainCommand: packageManagerCommand);
+                }
+                else
+                {
+                    // Fresh package.json (no existing file to merge into): the scaffold codegen emits the
+                    // convenience scripts with an "npm run" prefix because it runs server-side without
+                    // knowledge of the detected toolchain. Rewrite them to the selected toolchain so a
+                    // Bun/pnpm/Yarn AppHost does not shell out to npm. The brownfield merge path above
+                    // already produces toolchain-aware aliases (see PackageJsonMerger.AddConvenienceAliases).
+                    contentToWrite = PackageJsonMerger.ApplyToolchainToScripts(packageJsonContent, packageManagerCommand);
+                }
             }
             else if (IsGitIgnoreFile(fileName) && File.Exists(filePath))
             {
                 var existingContent = await File.ReadAllTextAsync(filePath, cancellationToken);
                 contentToWrite = MergeGitIgnoreContent(existingContent, content);
-            }
-            else if (fileName.Equals(PackageJsonFileName, StringComparison.OrdinalIgnoreCase))
-            {
-                // Fresh package.json (no existing file to merge into): the scaffold codegen emits the
-                // convenience scripts with an "npm run" prefix because it runs server-side without
-                // knowledge of the detected toolchain. Rewrite them to the selected toolchain so a
-                // Bun/pnpm/Yarn AppHost does not shell out to npm. The brownfield merge path above
-                // already produces toolchain-aware aliases (see PackageJsonMerger.AddConvenienceAliases).
-                contentToWrite = PackageJsonMerger.ApplyToolchainToScripts(content, packageManagerCommand);
             }
 
             await File.WriteAllTextAsync(filePath, contentToWrite, cancellationToken);
@@ -393,7 +400,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
             TypeScriptAppHostToolchain.Npm => $"npm --prefix {relativeAppHostDirectory} run {scriptName}",
             TypeScriptAppHostToolchain.Pnpm => $"pnpm --dir {relativeAppHostDirectory} run {scriptName}",
             TypeScriptAppHostToolchain.Yarn => $"yarn --cwd {relativeAppHostDirectory} run {scriptName}",
-            TypeScriptAppHostToolchain.Bun => $"bun --cwd {relativeAppHostDirectory} run {scriptName}",
+            TypeScriptAppHostToolchain.Bun => $"bun --cwd {relativeAppHostDirectory} run --bun {scriptName}",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
         };
     }
