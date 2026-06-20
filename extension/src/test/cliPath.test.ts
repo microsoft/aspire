@@ -3,12 +3,15 @@ import * as sinon from 'sinon';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import { getDefaultCliInstallPaths, resolveCliPath, CliPathDependencies, tryExecuteCli } from '../utils/cliPath';
 import { getCliExecutionCommand } from '../utils/cliExecution';
 
 const bundlePath = '/home/user/.aspire/bin/aspire';
 const globalToolPath = '/home/user/.dotnet/tools/aspire';
 const defaultPaths = [bundlePath, globalToolPath];
+const execFileAsync = promisify(execFile);
 
 function createMockDeps(overrides: Partial<CliPathDependencies> = {}): CliPathDependencies {
     return {
@@ -301,7 +304,7 @@ suite('utils/cliPath tests', () => {
                 const result = getCliExecutionCommand('aspire', ['--version']);
 
                 assert.strictEqual(result.file, process.env.ComSpec);
-                assert.deepStrictEqual(result.args, ['/d', '/c', 'call', 'aspire', '"--version"']);
+                assert.deepStrictEqual(result.args, ['/d', '/s', '/c', '"aspire ^"--version^""']);
                 assert.strictEqual(result.windowsVerbatimArguments, true);
             }
             finally {
@@ -356,7 +359,7 @@ suite('utils/cliPath tests', () => {
                 const result = getCliExecutionCommand(shimPath, ['--version']);
 
                 assert.strictEqual(result.file, process.env.ComSpec);
-                assert.deepStrictEqual(result.args, ['/d', '/c', 'call', `"${shimPath}"`, '"--version"']);
+                assert.deepStrictEqual(result.args, ['/d', '/s', '/c', '"C:\\Users\\user\\cli^ tools^ ^&^ shims\\aspire.cmd ^"--version^""']);
                 assert.strictEqual(result.windowsVerbatimArguments, true);
             }
             finally {
@@ -368,6 +371,95 @@ suite('utils/cliPath tests', () => {
                 else {
                     process.env.ComSpec = originalComSpec;
                 }
+            }
+        });
+
+        test('escapes percent signs for Windows cmd shim arguments', () => {
+            const platformStub = sinon.stub(process, 'platform').value('win32');
+            const originalComSpec = process.env.ComSpec;
+            process.env.ComSpec = 'C:\\Windows\\System32\\cmd.exe';
+
+            try {
+                const result = getCliExecutionCommand('C:\\Tools\\aspire.cmd', ['--source', '%PRIVATE_FEED%']);
+
+                assert.strictEqual(result.file, process.env.ComSpec);
+                assert.deepStrictEqual(result.args, ['/d', '/s', '/c', '"C:\\Tools\\aspire.cmd ^"--source^" ^"^%PRIVATE_FEED^%^""']);
+                assert.strictEqual(result.windowsVerbatimArguments, true);
+            }
+            finally {
+                platformStub.restore();
+
+                if (originalComSpec === undefined) {
+                    delete process.env.ComSpec;
+                }
+                else {
+                    process.env.ComSpec = originalComSpec;
+                }
+            }
+        });
+
+        test('escapes trailing backslashes for Windows cmd shim arguments', () => {
+            const platformStub = sinon.stub(process, 'platform').value('win32');
+            const originalComSpec = process.env.ComSpec;
+            process.env.ComSpec = 'C:\\Windows\\System32\\cmd.exe';
+
+            try {
+                const result = getCliExecutionCommand('C:\\Tools\\aspire.cmd', ['--path=C:\\out\\']);
+
+                assert.strictEqual(result.file, process.env.ComSpec);
+                assert.deepStrictEqual(result.args, ['/d', '/s', '/c', '"C:\\Tools\\aspire.cmd ^"--path=C:\\out\\\\^""']);
+                assert.strictEqual(result.windowsVerbatimArguments, true);
+            }
+            finally {
+                platformStub.restore();
+
+                if (originalComSpec === undefined) {
+                    delete process.env.ComSpec;
+                }
+                else {
+                    process.env.ComSpec = originalComSpec;
+                }
+            }
+        });
+
+        test('passes literal percent-delimited values through Windows cmd wrappers', async function () {
+            if (process.platform !== 'win32') {
+                this.skip();
+            }
+
+            const tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-cli-path-percent-test-'));
+            try {
+                const wrapperPath = path.join(tempDirectory, 'aspire.cmd');
+                fs.writeFileSync(wrapperPath, '@echo off\r\nif "%~1"=="%%PRIVATE_FEED%%" (\r\n  echo received literal percent argument\r\n  exit /b 0\r\n)\r\necho got "%~1"\r\nexit /b 1\r\n');
+
+                const command = getCliExecutionCommand(wrapperPath, ['%PRIVATE_FEED%']);
+                await execFileAsync(command.file, command.args, {
+                    env: { ...process.env, PRIVATE_FEED: 'expanded-value' },
+                    windowsVerbatimArguments: command.windowsVerbatimArguments,
+                });
+            }
+            finally {
+                fs.rmSync(tempDirectory, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+            }
+        });
+
+        test('passes trailing backslash values through Windows cmd wrappers', async function () {
+            if (process.platform !== 'win32') {
+                this.skip();
+            }
+
+            const tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-cli-path-backslash-test-'));
+            try {
+                const wrapperPath = path.join(tempDirectory, 'aspire.cmd');
+                fs.writeFileSync(wrapperPath, '@echo off\r\nif "%~1"=="C:\\out\\" (\r\n  echo received trailing backslash argument\r\n  exit /b 0\r\n)\r\necho got "%~1"\r\nexit /b 1\r\n');
+
+                const command = getCliExecutionCommand(wrapperPath, ['C:\\out\\']);
+                await execFileAsync(command.file, command.args, {
+                    windowsVerbatimArguments: command.windowsVerbatimArguments,
+                });
+            }
+            finally {
+                fs.rmSync(tempDirectory, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
             }
         });
 

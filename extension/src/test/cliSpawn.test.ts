@@ -12,7 +12,7 @@ suite('spawnCliProcess tests', () => {
             const result = getCliSpawnCommand('aspire', ['config', 'info']);
 
             assert.strictEqual(result.command, process.env.ComSpec);
-            assert.deepStrictEqual(result.args, ['/d', '/c', 'call', 'aspire', '"config"', '"info"']);
+            assert.deepStrictEqual(result.args, ['/d', '/s', '/c', '"aspire ^"config^" ^"info^""']);
             assert.strictEqual(result.windowsVerbatimArguments, true);
         }
         finally {
@@ -36,7 +36,55 @@ suite('spawnCliProcess tests', () => {
             const result = getCliSpawnCommand('C:\\Tools\\Aspire CLI\\aspire.cmd', ['config', 'info']);
 
             assert.strictEqual(result.command, process.env.ComSpec);
-            assert.deepStrictEqual(result.args, ['/d', '/c', 'call', '"C:\\Tools\\Aspire CLI\\aspire.cmd"', '"config"', '"info"']);
+            assert.deepStrictEqual(result.args, ['/d', '/s', '/c', '"C:\\Tools\\Aspire^ CLI\\aspire.cmd ^"config^" ^"info^""']);
+            assert.strictEqual(result.windowsVerbatimArguments, true);
+        }
+        finally {
+            platformStub.restore();
+
+            if (originalComSpec === undefined) {
+                delete process.env.ComSpec;
+            }
+            else {
+                process.env.ComSpec = originalComSpec;
+            }
+        }
+    });
+
+    test('escapes percent signs for Windows cmd wrapper arguments', () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const originalComSpec = process.env.ComSpec;
+        process.env.ComSpec = 'C:\\Windows\\System32\\cmd.exe';
+
+        try {
+            const result = getCliSpawnCommand('C:\\Tools\\aspire.cmd', ['resource', 'exec', '%PRIVATE_FEED%']);
+
+            assert.strictEqual(result.command, process.env.ComSpec);
+            assert.deepStrictEqual(result.args, ['/d', '/s', '/c', '"C:\\Tools\\aspire.cmd ^"resource^" ^"exec^" ^"^%PRIVATE_FEED^%^""']);
+            assert.strictEqual(result.windowsVerbatimArguments, true);
+        }
+        finally {
+            platformStub.restore();
+
+            if (originalComSpec === undefined) {
+                delete process.env.ComSpec;
+            }
+            else {
+                process.env.ComSpec = originalComSpec;
+            }
+        }
+    });
+
+    test('escapes trailing backslashes for Windows cmd wrapper arguments', () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const originalComSpec = process.env.ComSpec;
+        process.env.ComSpec = 'C:\\Windows\\System32\\cmd.exe';
+
+        try {
+            const result = getCliSpawnCommand('C:\\Tools\\aspire.cmd', ['resource', 'exec', '--path=C:\\out\\']);
+
+            assert.strictEqual(result.command, process.env.ComSpec);
+            assert.deepStrictEqual(result.args, ['/d', '/s', '/c', '"C:\\Tools\\aspire.cmd ^"resource^" ^"exec^" ^"--path=C:\\out\\\\^""']);
             assert.strictEqual(result.windowsVerbatimArguments, true);
         }
         finally {
