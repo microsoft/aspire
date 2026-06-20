@@ -10,13 +10,11 @@ import { getCliExecutionCommand } from '../utils/cliExecution';
 
 const bundlePath = '/home/user/.aspire/bin/aspire';
 const globalToolPath = '/home/user/.dotnet/tools/aspire';
-const defaultPaths = [bundlePath, globalToolPath];
 const execFileAsync = promisify(execFile);
 
 function createMockDeps(overrides: Partial<CliPathDependencies> = {}): CliPathDependencies {
     return {
         getConfiguredPath: () => '',
-        getDefaultPaths: () => defaultPaths,
         findOnPath: async () => undefined,
         findAtDefaultPath: async () => undefined,
         tryExecute: async () => false,
@@ -199,12 +197,6 @@ suite('utils/cliPath tests', () => {
 
             const deps = createMockDeps({
                 getConfiguredPath: () => windowsGlobalToolCmdPath,
-                getDefaultPaths: () => [
-                    'C:\\Users\\user\\.aspire\\bin\\aspire.exe',
-                    'C:\\Users\\user\\.aspire\\bin\\aspire.cmd',
-                    'C:\\Users\\user\\.dotnet\\tools\\aspire.exe',
-                    windowsGlobalToolCmdPath,
-                ],
                 findOnPath: async () => 'C:\\Users\\user\\.dotnet\\tools\\aspire.exe',
                 tryExecute: async (p) => p === windowsGlobalToolCmdPath,
                 setConfiguredPath,

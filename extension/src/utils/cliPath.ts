@@ -151,7 +151,6 @@ export interface CliPathResolutionResult {
  */
 export interface CliPathDependencies {
     getConfiguredPath: () => string;
-    getDefaultPaths: () => string[];
     findOnPath: () => Promise<string | undefined>;
     findAtDefaultPath: () => Promise<string | undefined>;
     tryExecute: (cliPath: string) => Promise<boolean>;
@@ -160,7 +159,6 @@ export interface CliPathDependencies {
 
 const defaultDependencies: CliPathDependencies = {
     getConfiguredPath: getConfiguredCliPath,
-    getDefaultPaths: getDefaultCliInstallPaths,
     findOnPath: findCliOnPath,
     findAtDefaultPath: findCliAtDefaultPath,
     tryExecute: tryExecuteCli,
