@@ -70,6 +70,8 @@ public sealed class GetAspireCliVersion : Microsoft.Build.Utilities.Task
         if (!process.WaitForExit(5000))
         {
             TryKill(process);
+            TryWaitForExit(process);
+            ObserveDrainTasks(outputTask, errorTask);
             return null;
         }
 
@@ -123,6 +125,57 @@ public sealed class GetAspireCliVersion : Microsoft.Build.Utilities.Task
         try
         {
             process.Kill();
+        }
+        catch (Exception ex) when (IsVersionQueryException(ex))
+        {
+        }
+    }
+
+    private static void TryWaitForExit(Process process)
+    {
+        try
+        {
+            process.WaitForExit(1000);
+        }
+        catch (Exception ex) when (IsVersionQueryException(ex))
+        {
+        }
+    }
+
+    private static void ObserveDrainTasks(params Task<string>[] tasks)
+    {
+        try
+        {
+            Task.WaitAll(tasks, 1000);
+        }
+        catch (AggregateException ex) when (ex.InnerExceptions.All(IsVersionQueryException))
+        {
+        }
+        catch (Exception ex) when (IsVersionQueryException(ex))
+        {
+        }
+
+        foreach (var task in tasks)
+        {
+            ObserveDrainTask(task);
+        }
+    }
+
+    private static void ObserveDrainTask(Task<string> task)
+    {
+        if (!task.IsCompleted)
+        {
+            _ = task.ContinueWith(
+                static t => _ = t.Exception,
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+            return;
+        }
+
+        try
+        {
+            _ = task.GetAwaiter().GetResult();
         }
         catch (Exception ex) when (IsVersionQueryException(ex))
         {
