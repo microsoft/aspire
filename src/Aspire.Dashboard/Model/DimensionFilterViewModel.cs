@@ -56,11 +56,6 @@ public class DimensionFilterViewModel
         if (isChecked)
         {
             SelectedValues.Add(dimensionValue);
-
-            if (AreAllValuesSelected is true)
-            {
-                //SelectedValues.Clear();
-            }
         }
         else
         {

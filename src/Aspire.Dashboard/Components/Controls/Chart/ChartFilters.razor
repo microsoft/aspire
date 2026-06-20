@@ -16,9 +16,6 @@
                 <ChildContent>
                     <AspirePropertyColumn Tooltip="true" TooltipText="@(c => c.Name)" Property="@(c => c.Name)"/>
                     <AspireTemplateColumn Tooltip="true" TooltipText="@(c => c.AreAllValuesSelected is true ? Loc[nameof(ControlsStrings.LabelAll)] : string.Join(", ", c.SelectedValues.OrderBy(v => v.Text).Select(v => v.Text)))">
-                        @{
-                            var areAllValuesSelected = context.AreAllValuesSelected is true;
-                        }
                         <FluentOverflow Class="dimension-overflow" OnOverflowRaised="@(items => HandleOverflowChanged(context, items))">
                             <ChildContent>
                                 @{
@@ -49,7 +46,7 @@
                             </ChildContent>
                             <MoreButtonTemplate Context="overflow">
                                 @{
-                                    var isIncludedInFiltersClass = !areAllValuesSelected && overflow.ItemsOverflow.Any(item => (bool)item.AdditionalAttributes![KeyForIsIncludedInFilters]) ? "included-in-filters" : "";
+                                    var isIncludedInFiltersClass = overflow.ItemsOverflow.Any(item => (bool)item.AdditionalAttributes![KeyForIsIncludedInFilters]) ? "included-in-filters" : "";
                                 }
                                 @* Display must be inline block so the width is correctly calculated. *@
                                 <span class="dimension-tag filter-value-tag @isIncludedInFiltersClass"
