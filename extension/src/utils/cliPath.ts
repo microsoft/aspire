@@ -145,6 +145,17 @@ export function getConfiguredCliPath(): string {
     return vscode.workspace.getConfiguration('aspire').get<string>('aspireCliExecutablePath', '').trim();
 }
 
+function isDefaultCliInstallPath(cliPath: string): boolean {
+    const defaultPaths = getDefaultCliInstallPaths();
+    if (process.platform === 'win32') {
+        const normalizedPath = cliPath.toLowerCase();
+
+        return defaultPaths.some(defaultPath => defaultPath.toLowerCase() === normalizedPath);
+    }
+
+    return defaultPaths.includes(cliPath);
+}
+
 /**
  * Result of checking CLI availability.
  */
@@ -184,11 +195,13 @@ const defaultDependencies: CliPathDependencies = {
  * If the CLI is found at a default installation path but not on PATH,
  * use it for this resolution without rewriting the user's configured path.
  *
- * If a setting is configured, it is treated as authoritative when valid because users can
- * intentionally pin a default-location shim while PATH resolves a different CLI.
+ * If a non-default setting is configured, it is treated as authoritative when valid.
+ * Default-location settings are checked after PATH because older extension builds could
+ * auto-write those values, and they should not pin users away from a working PATH CLI.
  */
 export async function resolveCliPath(deps: CliPathDependencies = defaultDependencies): Promise<CliPathResolutionResult> {
     const configuredPath = deps.getConfiguredPath();
+    const configuredPathIsDefault = configuredPath ? isDefaultCliInstallPath(configuredPath) : false;
     const e2eCliPath = process.env.ASPIRE_EXTENSION_E2E_CLI_PATH?.trim();
 
     if (e2eCliPath) {
@@ -200,7 +213,7 @@ export async function resolveCliPath(deps: CliPathDependencies = defaultDependen
         extensionLogOutputChannel.warn(`E2E CLI path is invalid: ${e2eCliPath}`);
     }
 
-    if (configuredPath) {
+    if (configuredPath && !configuredPathIsDefault) {
         const isValid = await deps.tryExecute(configuredPath);
         if (isValid) {
             return { cliPath: configuredPath, available: true, source: 'configured' };
@@ -214,6 +227,16 @@ export async function resolveCliPath(deps: CliPathDependencies = defaultDependen
     const pathCli = await deps.findOnPath();
     if (pathCli) {
         return { cliPath: pathCli, available: true, source: 'path' };
+    }
+
+    if (configuredPath && configuredPathIsDefault) {
+        const isValid = await deps.tryExecute(configuredPath);
+        if (isValid) {
+            return { cliPath: configuredPath, available: true, source: 'configured' };
+        }
+
+        extensionLogOutputChannel.warn(`Configured CLI path is invalid: ${configuredPath}`);
+        // Continue to check other locations
     }
 
     // 3. Check default installation paths (~/.aspire/bin first, then ~/.dotnet/tools)

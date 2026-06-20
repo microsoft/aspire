@@ -6,11 +6,9 @@ export interface CliExecutionCommand {
 
 export function getCliExecutionCommand(cliPath: string, args: string[]): CliExecutionCommand {
     if (shouldUseCmdForCliPath(cliPath)) {
-        // .cmd/.bat files are interpreted by cmd.exe. Bare "aspire" on PATH may
-        // resolve to a .cmd shim through PATHEXT, so route PATH lookup through
-        // cmd.exe on Windows too. cmd.exe receives a single command string after
-        // /c, so quote for Windows argv parsing first and then escape cmd
-        // metacharacters such as &, %, and trailing backslashes.
+        // .cmd/.bat files are interpreted by cmd.exe. cmd.exe receives a single
+        // command string after /c, so quote for Windows argv parsing first and then
+        // escape cmd metacharacters such as &, %, and trailing backslashes.
         const command = escapeCmdCommand(cliPath);
         const commandLine = [command, ...args.map(escapeCmdArgument)].join(' ');
 
@@ -25,7 +23,7 @@ export function getCliExecutionCommand(cliPath: string, args: string[]): CliExec
 }
 
 function shouldUseCmdForCliPath(cliPath: string): boolean {
-    return process.platform === 'win32' && (cliPath === 'aspire' || /\.(?:cmd|bat)$/i.test(cliPath));
+    return process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(cliPath);
 }
 
 const cmdMetaCharsExpression = /([()%!^"`<>&|;, *?\[\]])/g;

@@ -3,7 +3,7 @@ import * as sinon from 'sinon';
 import { getCliSpawnCommand } from '../debugger/languages/cli';
 
 suite('spawnCliProcess tests', () => {
-    test('runs bare Windows PATH lookup through cmd.exe', () => {
+    test('uses direct execution for unresolved bare Windows command', () => {
         const platformStub = sinon.stub(process, 'platform').value('win32');
         const originalComSpec = process.env.ComSpec;
         process.env.ComSpec = 'C:\\Windows\\System32\\cmd.exe';
@@ -11,9 +11,9 @@ suite('spawnCliProcess tests', () => {
         try {
             const result = getCliSpawnCommand('aspire', ['config', 'info']);
 
-            assert.strictEqual(result.command, process.env.ComSpec);
-            assert.deepStrictEqual(result.args, ['/d', '/s', '/c', '"aspire ^"config^" ^"info^""']);
-            assert.strictEqual(result.windowsVerbatimArguments, true);
+            assert.strictEqual(result.command, 'aspire');
+            assert.deepStrictEqual(result.args, ['config', 'info']);
+            assert.strictEqual(result.windowsVerbatimArguments, false);
         }
         finally {
             platformStub.restore();
