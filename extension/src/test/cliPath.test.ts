@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { getDefaultCliInstallPaths, resolveCliPath, CliPathDependencies, tryExecuteCli } from '../utils/cliPath';
+import { getCliExecutionCommand } from '../utils/cliExecution';
 
 const bundlePath = '/home/user/.aspire/bin/aspire';
 const globalToolPath = '/home/user/.dotnet/tools/aspire';
@@ -13,7 +14,7 @@ function createMockDeps(overrides: Partial<CliPathDependencies> = {}): CliPathDe
     return {
         getConfiguredPath: () => '',
         getDefaultPaths: () => defaultPaths,
-        isOnPath: async () => false,
+        findOnPath: async () => undefined,
         findAtDefaultPath: async () => undefined,
         tryExecute: async () => false,
         setConfiguredPath: async () => {},
@@ -94,7 +95,7 @@ suite('utils/cliPath tests', () => {
 
             const deps = createMockDeps({
                 getConfiguredPath: () => '/configured/path/aspire',
-                isOnPath: async () => true,
+                findOnPath: async () => 'aspire',
                 tryExecute: async (p) => p === e2ePath,
                 setConfiguredPath,
             });
@@ -111,7 +112,7 @@ suite('utils/cliPath tests', () => {
             const setConfiguredPath = sinon.stub().resolves();
 
             const deps = createMockDeps({
-                isOnPath: async () => false,
+                findOnPath: async () => undefined,
                 findAtDefaultPath: async () => bundlePath,
                 setConfiguredPath,
             });
@@ -129,7 +130,7 @@ suite('utils/cliPath tests', () => {
 
             const deps = createMockDeps({
                 getConfiguredPath: () => '',
-                isOnPath: async () => false,
+                findOnPath: async () => undefined,
                 findAtDefaultPath: async () => bundlePath,
                 setConfiguredPath,
             });
@@ -144,7 +145,7 @@ suite('utils/cliPath tests', () => {
             const setConfiguredPath = sinon.stub().resolves();
 
             const deps = createMockDeps({
-                isOnPath: async () => true,
+                findOnPath: async () => 'aspire',
                 findAtDefaultPath: async () => bundlePath,
                 setConfiguredPath,
             });
@@ -157,12 +158,27 @@ suite('utils/cliPath tests', () => {
             assert.ok(setConfiguredPath.notCalled, 'should not update settings when CLI is on PATH');
         });
 
+        test('uses concrete Windows PATH executable returned by path discovery', async () => {
+            const windowsPathExecutable = 'C:\\Users\\user\\.dotnet\\tools\\aspire.exe';
+
+            const deps = createMockDeps({
+                findOnPath: async () => windowsPathExecutable,
+                findAtDefaultPath: async () => bundlePath,
+            });
+
+            const result = await resolveCliPath(deps);
+
+            assert.strictEqual(result.available, true);
+            assert.strictEqual(result.source, 'path');
+            assert.strictEqual(result.cliPath, windowsPathExecutable);
+        });
+
         test('prefers valid configured default path over PATH', async () => {
             const setConfiguredPath = sinon.stub().resolves();
 
             const deps = createMockDeps({
                 getConfiguredPath: () => bundlePath,
-                isOnPath: async () => true,
+                findOnPath: async () => 'aspire',
                 tryExecute: async (p) => p === bundlePath,
                 setConfiguredPath,
             });
@@ -186,7 +202,7 @@ suite('utils/cliPath tests', () => {
                     'C:\\Users\\user\\.dotnet\\tools\\aspire.exe',
                     windowsGlobalToolCmdPath,
                 ],
-                isOnPath: async () => true,
+                findOnPath: async () => 'C:\\Users\\user\\.dotnet\\tools\\aspire.exe',
                 tryExecute: async (p) => p === windowsGlobalToolCmdPath,
                 setConfiguredPath,
             });
@@ -200,7 +216,7 @@ suite('utils/cliPath tests', () => {
 
         test('returns not-found when CLI is not on PATH and not at any default path', async () => {
             const deps = createMockDeps({
-                isOnPath: async () => false,
+                findOnPath: async () => undefined,
                 findAtDefaultPath: async () => undefined,
             });
 
@@ -229,7 +245,7 @@ suite('utils/cliPath tests', () => {
             const deps = createMockDeps({
                 getConfiguredPath: () => '/bad/path/aspire',
                 tryExecute: async () => false,
-                isOnPath: async () => true,
+                findOnPath: async () => 'aspire',
             });
 
             const result = await resolveCliPath(deps);
@@ -244,7 +260,7 @@ suite('utils/cliPath tests', () => {
             const deps = createMockDeps({
                 getConfiguredPath: () => '/bad/path/aspire',
                 tryExecute: async () => false,
-                isOnPath: async () => false,
+                findOnPath: async () => undefined,
                 findAtDefaultPath: async () => bundlePath,
                 setConfiguredPath,
             });
@@ -261,7 +277,7 @@ suite('utils/cliPath tests', () => {
 
             const deps = createMockDeps({
                 getConfiguredPath: () => bundlePath,
-                isOnPath: async () => false,
+                findOnPath: async () => undefined,
                 findAtDefaultPath: async () => bundlePath,
                 tryExecute: async (p) => p === bundlePath,
                 setConfiguredPath,
@@ -276,6 +292,85 @@ suite('utils/cliPath tests', () => {
     });
 
     suite('tryExecuteCli', () => {
+        test('routes Windows PATH lookup through cmd.exe', () => {
+            const platformStub = sinon.stub(process, 'platform').value('win32');
+            const originalComSpec = process.env.ComSpec;
+            process.env.ComSpec = 'C:\\Windows\\System32\\cmd.exe';
+
+            try {
+                const result = getCliExecutionCommand('aspire', ['--version']);
+
+                assert.strictEqual(result.file, process.env.ComSpec);
+                assert.deepStrictEqual(result.args, ['/d', '/c', 'call', 'aspire', '"--version"']);
+                assert.strictEqual(result.windowsVerbatimArguments, true);
+            }
+            finally {
+                platformStub.restore();
+
+                if (originalComSpec === undefined) {
+                    delete process.env.ComSpec;
+                }
+                else {
+                    process.env.ComSpec = originalComSpec;
+                }
+            }
+        });
+
+        test('uses direct execution for non-Windows PATH lookup', () => {
+            const platformStub = sinon.stub(process, 'platform').value('darwin');
+
+            try {
+                const result = getCliExecutionCommand('aspire', ['--version']);
+
+                assert.strictEqual(result.file, 'aspire');
+                assert.deepStrictEqual(result.args, ['--version']);
+                assert.strictEqual(result.windowsVerbatimArguments, false);
+            }
+            finally {
+                platformStub.restore();
+            }
+        });
+
+        test('uses direct execution for Windows exe paths', () => {
+            const platformStub = sinon.stub(process, 'platform').value('win32');
+
+            try {
+                const result = getCliExecutionCommand('C:\\Users\\user\\.aspire\\bin\\aspire.exe', ['--version']);
+
+                assert.strictEqual(result.file, 'C:\\Users\\user\\.aspire\\bin\\aspire.exe');
+                assert.deepStrictEqual(result.args, ['--version']);
+                assert.strictEqual(result.windowsVerbatimArguments, false);
+            }
+            finally {
+                platformStub.restore();
+            }
+        });
+
+        test('routes explicit Windows cmd shim paths with spaces through cmd.exe', () => {
+            const platformStub = sinon.stub(process, 'platform').value('win32');
+            const originalComSpec = process.env.ComSpec;
+            process.env.ComSpec = 'C:\\Windows\\System32\\cmd.exe';
+
+            try {
+                const shimPath = 'C:\\Users\\user\\cli tools & shims\\aspire.cmd';
+                const result = getCliExecutionCommand(shimPath, ['--version']);
+
+                assert.strictEqual(result.file, process.env.ComSpec);
+                assert.deepStrictEqual(result.args, ['/d', '/c', 'call', `"${shimPath}"`, '"--version"']);
+                assert.strictEqual(result.windowsVerbatimArguments, true);
+            }
+            finally {
+                platformStub.restore();
+
+                if (originalComSpec === undefined) {
+                    delete process.env.ComSpec;
+                }
+                else {
+                    process.env.ComSpec = originalComSpec;
+                }
+            }
+        });
+
         test('validates Windows cmd wrappers', async function () {
             if (process.platform !== 'win32') {
                 this.skip();

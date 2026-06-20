@@ -4,6 +4,7 @@ import { extensionLogOutputChannel } from "../../utils/logging";
 import { AspireTerminalProvider } from "../../utils/AspireTerminalProvider";
 import * as readline from 'readline';
 import * as vscode from 'vscode';
+import { getCliExecutionCommand } from "../../utils/cliExecution";
 
 export interface SpawnProcessOptions {
     stdoutCallback?: (data: string) => void;
@@ -18,15 +19,14 @@ export interface SpawnProcessOptions {
     noExtensionVariables?: boolean;
 }
 
-export function getCliSpawnCommand(command: string, args?: string[]): { command: string; args: string[] } {
-    if (process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(command)) {
-        return {
-            command: process.env.ComSpec ?? 'cmd.exe',
-            args: ['/d', '/c', 'call', command, ...args ?? []],
-        };
-    }
+export function getCliSpawnCommand(command: string, args?: string[]): { command: string; args: string[]; windowsVerbatimArguments: boolean } {
+    const executionCommand = getCliExecutionCommand(command, args ?? []);
 
-    return { command, args: args ?? [] };
+    return {
+        command: executionCommand.file,
+        args: executionCommand.args,
+        windowsVerbatimArguments: executionCommand.windowsVerbatimArguments,
+    };
 }
 
 export function spawnCliProcess(terminalProvider: AspireTerminalProvider, command: string, args?: string[], options?: SpawnProcessOptions): ChildProcessWithoutNullStreams {
@@ -42,7 +42,8 @@ export function spawnCliProcess(terminalProvider: AspireTerminalProvider, comman
     const child = spawn(spawnCommand.command, spawnCommand.args, {
         cwd: workingDirectory,
         env: env,
-        shell: false
+        shell: false,
+        windowsVerbatimArguments: spawnCommand.windowsVerbatimArguments
     });
 
     // Set UTF-8 encoding so Node reassembles multi-byte characters across chunk boundaries instead of yielding broken bytes.

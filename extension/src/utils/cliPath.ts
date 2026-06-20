@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { extensionLogOutputChannel } from './logging';
+import { getCliExecutionCommand } from './cliExecution';
 
 const execFileAsync = promisify(execFile);
 const fsAccessAsync = promisify(fs.access);
@@ -62,15 +63,8 @@ async function fileExists(filePath: string): Promise<boolean> {
  */
 export async function tryExecuteCli(cliPath: string): Promise<boolean> {
     try {
-        if (shouldUseCmdForCliPath(cliPath)) {
-            // .cmd/.bat files are interpreted by cmd.exe. Passing the wrapper path as a
-            // separate argument lets Node quote paths with spaces instead of relying on
-            // fragile hand-built cmd.exe command strings.
-            await execFileAsync(process.env.ComSpec ?? 'cmd.exe', ['/d', '/c', 'call', cliPath, '--version'], { timeout: 5000 });
-        }
-        else {
-            await execFileAsync(cliPath, ['--version'], { timeout: 5000 });
-        }
+        const command = getCliExecutionCommand(cliPath, ['--version']);
+        await execFileAsync(command.file, command.args, { timeout: 5000, windowsVerbatimArguments: command.windowsVerbatimArguments });
 
         return true;
     }
@@ -79,15 +73,30 @@ export async function tryExecuteCli(cliPath: string): Promise<boolean> {
     }
 }
 
-function shouldUseCmdForCliPath(cliPath: string): boolean {
-    return process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(cliPath);
-}
-
 /**
- * Checks if the Aspire CLI is available on the system PATH.
+ * Finds the Aspire CLI on the system PATH.
  */
-export async function isCliOnPath(): Promise<boolean> {
-    return await tryExecuteCli('aspire');
+export async function findCliOnPath(): Promise<string | undefined> {
+    if (process.platform !== 'win32') {
+        return await tryExecuteCli('aspire') ? 'aspire' : undefined;
+    }
+
+    let candidates: string[] = [];
+    try {
+        const { stdout } = await execFileAsync('where.exe', ['aspire'], { timeout: 5000 });
+        candidates = stdout.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    }
+    catch {
+        return undefined;
+    }
+
+    for (const candidate of candidates) {
+        if (await tryExecuteCli(candidate)) {
+            return candidate;
+        }
+    }
+
+    return undefined;
 }
 
 /**
@@ -143,7 +152,7 @@ export interface CliPathResolutionResult {
 export interface CliPathDependencies {
     getConfiguredPath: () => string;
     getDefaultPaths: () => string[];
-    isOnPath: () => Promise<boolean>;
+    findOnPath: () => Promise<string | undefined>;
     findAtDefaultPath: () => Promise<string | undefined>;
     tryExecute: (cliPath: string) => Promise<boolean>;
     setConfiguredPath: (cliPath: string) => Promise<void>;
@@ -152,7 +161,7 @@ export interface CliPathDependencies {
 const defaultDependencies: CliPathDependencies = {
     getConfiguredPath: getConfiguredCliPath,
     getDefaultPaths: getDefaultCliInstallPaths,
-    isOnPath: isCliOnPath,
+    findOnPath: findCliOnPath,
     findAtDefaultPath: findCliAtDefaultPath,
     tryExecute: tryExecuteCli,
     setConfiguredPath: setConfiguredCliPath,
@@ -195,9 +204,9 @@ export async function resolveCliPath(deps: CliPathDependencies = defaultDependen
     }
 
     // 2. Check if CLI is on PATH
-    const onPath = await deps.isOnPath();
-    if (onPath) {
-        return { cliPath: 'aspire', available: true, source: 'path' };
+    const pathCli = await deps.findOnPath();
+    if (pathCli) {
+        return { cliPath: pathCli, available: true, source: 'path' };
     }
 
     // 3. Check default installation paths (~/.aspire/bin first, then ~/.dotnet/tools)
