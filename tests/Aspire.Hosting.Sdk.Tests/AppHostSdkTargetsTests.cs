@@ -203,6 +203,69 @@ public class AppHostSdkTargetsTests
             await File.ReadAllLinesAsync(captureFile));
     }
 
+    [Theory]
+    [InlineData("13.4.0")]
+    [InlineData("13.4.1")]
+    [InlineData("13.4.5")]
+    public async Task ComputeRunArgumentsDoesNotUsesAspireCliWhenCliVersionIsBelowMinimum(string cliVersion)
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var project = await CreateRunHookProjectAsync(tempDirectory.Path, aspireUseCliBundle: true);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "fake-cli"));
+        var cliPath = Path.Combine(fakeCliDirectory.FullName, OperatingSystem.IsWindows() ? "aspire.cmd" : "aspire");
+        await CreateFakeAspireCliWithVersionAsync(fakeCliDirectory.FullName, cliVersion);
+
+        var properties = await GetComputeRunArgumentsPropertiesAsync(
+            project,
+            [$"-p:AspireCliPath={cliPath}", "-p:RunArguments=--custom foo"]);
+
+        // When CLI version is < 13.5.0, the hook should NOT delegate and should return normal dotnet run arguments
+        Assert.NotEqual(GetExpectedAspireRunCommand(), properties["RunCommand"]);
+        Assert.NotEqual(GetExpectedAspireRunArguments(project, "--custom foo"), properties["RunArguments"]);
+    }
+
+    [Theory]
+    [InlineData("13.5.0-preview.1.26319.9")]
+    [InlineData("13.5.0")]
+    [InlineData("13.6.0")]
+    [InlineData("14.0.0")]
+    public async Task ComputeRunArgumentsUsesAspireCliWhenCliVersionIsAtOrAboveMinimum(string cliVersion)
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var project = await CreateRunHookProjectAsync(tempDirectory.Path, aspireUseCliBundle: true);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "fake-cli"));
+        var cliPath = Path.Combine(fakeCliDirectory.FullName, OperatingSystem.IsWindows() ? "aspire.cmd" : "aspire");
+        await CreateFakeAspireCliWithVersionAsync(fakeCliDirectory.FullName, cliVersion);
+
+        var properties = await GetComputeRunArgumentsPropertiesAsync(
+            project,
+            [$"-p:AspireCliPath={cliPath}", "-p:RunArguments=--custom foo"]);
+
+        // When CLI version is >= 13.5.0, the hook should delegate to aspire run
+        Assert.Equal(cliPath, properties["RunCommand"]);
+        // When using an explicit CLI path, the arguments don't include the /C aspire prefix
+        var expectedArguments = $"run --project \"{project.ProjectFile}\" --no-build -- --custom foo";
+        Assert.Equal(expectedArguments, properties["RunArguments"]);
+    }
+
+    [Fact]
+    public async Task ComputeRunArgumentsDoesNotUsesAspireCliWhenCliVersionCannotBeDetermined()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var project = await CreateRunHookProjectAsync(tempDirectory.Path, aspireUseCliBundle: true);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "fake-cli"));
+        var cliPath = Path.Combine(fakeCliDirectory.FullName, OperatingSystem.IsWindows() ? "aspire.cmd" : "aspire");
+        await CreateFakeAspireCliThatFailsVersionAsync(fakeCliDirectory.FullName);
+
+        var properties = await GetComputeRunArgumentsPropertiesAsync(
+            project,
+            [$"-p:AspireCliPath={cliPath}", "-p:RunArguments=--custom foo"]);
+
+        // When CLI version cannot be determined, the hook should NOT delegate
+        Assert.NotEqual(GetExpectedAspireRunCommand(), properties["RunCommand"]);
+        Assert.NotEqual(GetExpectedAspireRunArguments(project, "--custom foo"), properties["RunArguments"]);
+    }
+
     private static async Task<string[]> RunAddReferenceToDashboardAndDcpAsync(string? extraProjectXml)
     {
         var repoRoot = GetRepoRoot();
@@ -254,6 +317,7 @@ public class AppHostSdkTargetsTests
         Directory.CreateDirectory(projectDirectory);
 
         var appHostTargetsPath = SecurityElement.Escape(Path.Combine(repoRoot, "src", "Aspire.Hosting.AppHost", "build", "Aspire.Hosting.AppHost.in.targets"));
+        var tasksAssemblyPath = SecurityElement.Escape(Path.Combine(repoRoot, "artifacts", "bin", "Aspire.Hosting.Tasks", "Release", "net8.0", "Aspire.Hosting.Tasks.dll"));
         var projectFile = Path.Combine(projectDirectory, "AppHost.csproj");
 
         await File.WriteAllTextAsync(projectFile,
@@ -270,6 +334,8 @@ public class AppHostSdkTargetsTests
                 <DcpDir>$(MSBuildProjectDirectory)</DcpDir>
                 <SkipAspireWorkloadManifest>true</SkipAspireWorkloadManifest>
                 <SkipValidateAspireHostProjectResources>true</SkipValidateAspireHostProjectResources>
+                <!-- Provide the correct path to the Aspire.Hosting.Tasks assembly for test execution -->
+                <_AspireTasksAssembly>{{tasksAssemblyPath}}</_AspireTasksAssembly>
               </PropertyGroup>
 
             {{extraProjectXml}}
@@ -342,6 +408,70 @@ public class AppHostSdkTargetsTests
             printf '%s\n' "$@" > "$ASPIRE_TEST_CAPTURE_PATH"
             """);
         File.SetUnixFileMode(aspirePath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+    }
+
+    private static async Task CreateFakeAspireCliWithVersionAsync(string fakeCliDirectory, string version)
+    {
+       if (OperatingSystem.IsWindows())
+       {
+           await File.WriteAllTextAsync(Path.Combine(fakeCliDirectory, "aspire.cmd"), $$"""
+               @echo off
+               if "%~1"=="--version" (
+                   echo aspire version {{version}}
+                   exit /b 0
+               )
+               type nul > "%ASPIRE_TEST_CAPTURE_PATH%"
+               :loop
+               if "%~1"=="" exit /b 0
+               >> "%ASPIRE_TEST_CAPTURE_PATH%" echo %~1
+               shift
+               goto loop
+               """);
+
+           return;
+       }
+
+       var aspirePath = Path.Combine(fakeCliDirectory, "aspire");
+       await File.WriteAllTextAsync(aspirePath, $$"""
+           #!/bin/sh
+           if [ "$1" = "--version" ]; then
+               echo "aspire version {{version}}"
+               exit 0
+           fi
+           printf '%s\n' "$@" > "$ASPIRE_TEST_CAPTURE_PATH"
+           """);
+       File.SetUnixFileMode(aspirePath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+    }
+
+    private static async Task CreateFakeAspireCliThatFailsVersionAsync(string fakeCliDirectory)
+    {
+       if (OperatingSystem.IsWindows())
+       {
+           await File.WriteAllTextAsync(Path.Combine(fakeCliDirectory, "aspire.cmd"), """
+               @echo off
+               if "%~1"=="--version" (
+                   exit /b 1
+               )
+               type nul > "%ASPIRE_TEST_CAPTURE_PATH%"
+               :loop
+               if "%~1"=="" exit /b 0
+               >> "%ASPIRE_TEST_CAPTURE_PATH%" echo %~1
+               shift
+               goto loop
+               """);
+
+           return;
+       }
+
+       var aspirePath = Path.Combine(fakeCliDirectory, "aspire");
+       await File.WriteAllTextAsync(aspirePath, """
+           #!/bin/sh
+           if [ "$1" = "--version" ]; then
+               exit 1
+           fi
+           printf '%s\n' "$@" > "$ASPIRE_TEST_CAPTURE_PATH"
+           """);
+       File.SetUnixFileMode(aspirePath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
     }
 
     private static void AssertDashboardAndOrchestrationReferences(string[] packageReferences)
