@@ -58,7 +58,7 @@ export const processExceptionOccurred = (error: string, command: string) => vsco
 export const pidDescription = (pid: number) => vscode.l10n.t('PID: {0}', pid);
 export const dashboardLabel = vscode.l10n.t('Dashboard');
 export const errorFetchingAppHosts = (error: string) => vscode.l10n.t('Error fetching running AppHosts: {0}', error);
-export const appHostsGenericErrorWelcome = vscode.l10n.t('The Aspire panel couldn\'t load AppHost data right now.');
+export const appHostsGenericErrorWelcome = vscode.l10n.t('The Aspire panel couldn\'t load AppHost data right now. See Aspire Extension output for details.');
 export const aspireCliCommandFailed = (command: string, exitCode: string, output: string) => vscode.l10n.t('{0} exited with code {1}{2}', command, exitCode, output);
 export const aspireCliCommandTimedOut = (timeoutMs: number) => vscode.l10n.t('timed out after {0}ms', timeoutMs);
 export const aspireCliOutputParseFailed = (command: string, error: string) => vscode.l10n.t('Failed to parse {0} output: {1}', command, error);
