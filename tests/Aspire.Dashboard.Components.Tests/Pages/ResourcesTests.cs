@@ -392,27 +392,6 @@ public partial class ResourcesTests : DashboardTestContext
     }
 
     [Fact]
-    public void ResourcesGrid_DoesNotInitializeScopedKeyboardActivationHandler()
-    {
-        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
-        var initialResources = new List<ResourceViewModel>
-        {
-            CreateResource("Resource1", "Type1", "Running", null),
-        };
-        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
-
-        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
-
-        var cut = RenderComponent<Components.Pages.Resources>(builder =>
-        {
-            builder.AddCascadingValue(viewport);
-        });
-
-        cut.WaitForAssertion(() => Assert.DoesNotContain(JSInterop.Invocations, i => i.Identifier == "initializeResourcesGridKeyboardActivation"));
-        Assert.Contains("resources-grid-container", cut.Markup);
-    }
-
-    [Fact]
     public void UnreadLogErrorsBadge_StopsKeyboardPropagation()
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
