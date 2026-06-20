@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The VS Code extension no longer shows CLI upgrade guidance for generic fetch or runtime errors. Upgrade prompts now only appear when a genuine CLI compatibility or version mismatch is detected, reducing false-positive noise in the Aspire panel.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔔",
+  "firstMergedAt": "2026-06-20T05:12:44Z",
+  "lastMergedAt": "2026-06-20T05:12:44Z",
+  "name": "Fix false CLI upgrade warning in VS Code extension",
+  "owner": "ellahathaway",
+  "prs": [
+    18358
+  ]
+}

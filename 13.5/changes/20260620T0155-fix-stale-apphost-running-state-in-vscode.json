@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Stopped AppHosts are now reliably cleared from the VS Code extension running state after debug sessions end. Stop-state transitions are command-aware, so only run command terminations trigger stop state; non-run commands like publish no longer incorrectly mark AppHosts as stopping.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔧",
+  "firstMergedAt": "2026-06-20T01:55:12Z",
+  "lastMergedAt": "2026-06-20T01:55:12Z",
+  "name": "Fix stale AppHost running state in VS Code extension",
+  "owner": "ellahathaway",
+  "prs": [
+    17965
+  ]
+}

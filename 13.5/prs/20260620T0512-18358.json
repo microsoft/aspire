@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Bug fix: false CLI upgrade warning shown for generic fetch errors in VS Code extension",
+  "mergedAt": "2026-06-20T05:12:44Z",
+  "number": 18358,
+  "runDate": "2026-06-20T07:16:09Z",
+  "status": "included",
+  "title": "Stop false Aspire CLI upgrade warning in VS Code Extension"
+}

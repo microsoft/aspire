@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Bug fix: stale AppHost running state in VS Code extension after debug session ends",
+  "mergedAt": "2026-06-20T01:55:12Z",
+  "number": 17965,
+  "runDate": "2026-06-20T07:16:09Z",
+  "status": "included",
+  "title": "Fix stale AppHost running state after debug session ends"
+}

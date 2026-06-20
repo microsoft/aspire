@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Aspire MAUI resources are now debuggable from the VS Code extension using the MAUI debugger. Supports iOS simulator, Mac Catalyst, Windows, and Android emulator/device targets when the ms-dotnettools.dotnet-maui extension is installed; falls back to process launch on IDEs without MAUI debug support.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "📱",
+  "firstMergedAt": "2026-06-20T03:31:47Z",
+  "lastMergedAt": "2026-06-20T03:31:47Z",
+  "name": "MAUI platform debugging in VS Code extension",
+  "owner": "adamint",
+  "prs": [
+    17857
+  ]
+}

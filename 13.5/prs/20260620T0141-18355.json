@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Trivial one-line refactoring (IDE0200 analyzer fix), no behavior change",
+  "mergedAt": "2026-06-20T01:41:15Z",
+  "number": 18355,
+  "runDate": "2026-06-20T07:16:09Z",
+  "status": "excluded",
+  "title": "Simplify lambda to method group in OtlpResource.AddMetrics (IDE0200)"
+}

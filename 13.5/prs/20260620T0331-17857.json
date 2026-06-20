@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "New feature: MAUI platform debugging support in VS Code extension",
+  "mergedAt": "2026-06-20T03:31:47Z",
+  "number": 17857,
+  "runDate": "2026-06-20T07:16:09Z",
+  "status": "included",
+  "title": "Fix MAUI iOS simulator launch in VS Code"
+}
