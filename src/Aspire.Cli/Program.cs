@@ -12,6 +12,7 @@ using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Agents.CopilotCli;
 using Aspire.Cli.Agents.OpenCode;
+using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Agents.VsCode;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Bundles;
@@ -28,6 +29,7 @@ using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Mcp;
+using Aspire.Cli.Npm;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Processes;
@@ -427,13 +429,7 @@ public class Program
         builder.Services.AddSingleton<ITemplateVersionPrompter>(sp => (ITemplateVersionPrompter)sp.GetRequiredService<INewCommandPrompter>());
         builder.Services.AddSingleton<IAddCommandPrompter, AddCommandPrompter>();
         builder.Services.AddSingleton<IPublishCommandPrompter, PublishCommandPrompter>();
-        builder.Services.AddSingleton<ICertificateService>(sp => new CertificateService(
-            sp.GetRequiredService<ICertificateToolRunner>(),
-            sp.GetRequiredService<IInteractionService>(),
-            sp.GetRequiredService<AspireCliTelemetry>(),
-            sp.GetRequiredService<ICliHostEnvironment>(),
-            sp.GetRequiredService<CliExecutionContext>(),
-            OperatingSystem.IsLinux));
+        builder.Services.AddSingleton<ICertificateService, CertificateService>();
         builder.Services.AddSingleton(BuildConfigurationService);
         builder.Services.AddSingleton<IFeatures, Features>();
         builder.Services.AddTelemetryServices();
@@ -444,9 +440,7 @@ public class Program
 
         // Register certificate tool runner - uses native CertificateManager directly (no subprocess needed)
         builder.Services.AddSingleton(sp => CertificateManager.Create(sp.GetRequiredService<ILogger<NativeCertificateToolRunner>>()));
-        builder.Services.AddSingleton<ICertificateToolRunner>(sp => new NativeCertificateToolRunner(
-            sp.GetRequiredService<CertificateManager>(),
-            OperatingSystem.IsLinux));
+        builder.Services.AddSingleton<ICertificateToolRunner, NativeCertificateToolRunner>();
 
         builder.Services.AddTransient<IDotNetCliRunner, DotNetCliRunner>();
         builder.Services.AddSingleton<IDiskCache, DiskCache>();
@@ -522,13 +516,13 @@ public class Program
         builder.Services.AddSingleton<ICopilotCliRunner, CopilotCliRunner>();
 
         // Npm and Playwright CLI operations.
-        builder.Services.AddSingleton<Aspire.Cli.Npm.INpmRunner, Aspire.Cli.Npm.NpmRunner>();
-        builder.Services.AddHttpClient<Aspire.Cli.Npm.INpmProvenanceChecker, Aspire.Cli.Npm.SigstoreNpmProvenanceChecker>();
+        builder.Services.AddSingleton<INpmRunner, NpmRunner>();
+        builder.Services.AddHttpClient<INpmProvenanceChecker, SigstoreNpmProvenanceChecker>();
         builder.Services.AddHttpClient<IGitHubArtifactAttestationVerifier, GitHubArtifactAttestationVerifier>();
         builder.Services.AddSingleton<IEmbeddedAspireSkillsBundleProvider, EmbeddedAspireSkillsBundleProvider>();
         builder.Services.AddSingleton<IAspireSkillsInstaller, AspireSkillsInstaller>();
-        builder.Services.AddSingleton<Aspire.Cli.Agents.Playwright.IPlaywrightCliRunner, Aspire.Cli.Agents.Playwright.PlaywrightCliRunner>();
-        builder.Services.AddSingleton<Aspire.Cli.Agents.Playwright.PlaywrightCliInstaller>();
+        builder.Services.AddSingleton<IPlaywrightCliRunner, PlaywrightCliRunner>();
+        builder.Services.AddSingleton<PlaywrightCliInstaller>();
 
         // Agent environment detection.
         builder.Services.AddSingleton<IAgentEnvironmentDetector, AgentEnvironmentDetector>();

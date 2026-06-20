@@ -183,6 +183,7 @@ internal static class CliTestHelper
         // IdentityChannelReader for AspireVersionCheck (doctor) — uses the same
         // pattern as production wiring in Program.cs.
         services.AddSingleton<IIdentityChannelReader>(_ => new IdentityChannelReader(typeof(Program).Assembly));
+        services.AddSingleton<IEnvironment, TestEnvironment>();
         services.AddSingleton<ProfileCaptureService>();
 
         // AppHost project handlers - must match Program.cs registration pattern
@@ -486,7 +487,7 @@ internal sealed class CliServiceCollectionTestOptions
         var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
         var hostEnvironment = serviceProvider.GetRequiredService<ICliHostEnvironment>();
         var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
-        return new CertificateService(certificateToolRunner, interactiveService, telemetry, hostEnvironment, executionContext, OperatingSystem.IsLinux);
+        return new CertificateService(certificateToolRunner, interactiveService, telemetry, hostEnvironment, executionContext, serviceProvider.GetRequiredService<IEnvironment>());
     };
 
     public Func<IServiceProvider, IScaffoldingService> ScaffoldingServiceFactory { get; set; } = (IServiceProvider serviceProvider) =>

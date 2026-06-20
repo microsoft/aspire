@@ -21,9 +21,9 @@ internal sealed class TestEnvironment : IEnvironment
         return Variables.TryGetValue(variable, out var value) ? value : null;
     }
 
-    public bool IsWindows => OperatingSystem.IsWindows();
+    public bool IsWindows { get; init; } = OperatingSystem.IsWindows();
 
-    public bool IsLinux => OperatingSystem.IsLinux();
+    public bool IsLinux { get; init; } = OperatingSystem.IsLinux();
 
-    public bool IsMacOS => OperatingSystem.IsMacOS();
+    public bool IsMacOS { get; init; } = OperatingSystem.IsMacOS();
 }
