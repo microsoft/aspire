@@ -1,6 +1,7 @@
 import * as assert from 'assert';
 import * as sinon from 'sinon';
-import { getCliSpawnCommand } from '../debugger/languages/cli';
+import { getCliSpawnCommand, getCliSpawnDiagnostics } from '../debugger/languages/cli';
+import { EnvironmentVariables } from '../utils/environment';
 
 suite('spawnCliProcess tests', () => {
     test('runs Windows cmd wrappers through cmd.exe', () => {
@@ -24,5 +25,23 @@ suite('spawnCliProcess tests', () => {
                 process.env.ComSpec = originalComSpec;
             }
         }
+    });
+
+    test('formats final startup timeout when spawning CLI process', () => {
+        const message = getCliSpawnDiagnostics(
+            '/usr/local/bin/aspire',
+            ['run', '--apphost', '/workspace/AppHost.csproj'],
+            '/workspace',
+            false,
+            'debug-session-id',
+            {
+                [EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT]: '86400',
+                ASPIRE_EXTENSION_TOKEN: 'secret-token',
+            });
+
+        assert.strictEqual(
+            message,
+            'Spawning Aspire CLI process: /usr/local/bin/aspire run --apphost /workspace/AppHost.csproj; cwd=/workspace; noDebug=false; debugSessionId=debug-session-id; ASPIRE_CLI_START_TIMEOUT=86400');
+        assert.strictEqual(message.includes('secret-token'), false);
     });
 });

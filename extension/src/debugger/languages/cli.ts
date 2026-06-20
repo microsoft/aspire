@@ -4,6 +4,7 @@ import { extensionLogOutputChannel } from "../../utils/logging";
 import { AspireTerminalProvider } from "../../utils/AspireTerminalProvider";
 import * as readline from 'readline';
 import * as vscode from 'vscode';
+import { EnvironmentVariables } from "../../utils/environment";
 
 export interface SpawnProcessOptions {
     stdoutCallback?: (data: string) => void;
@@ -29,15 +30,21 @@ export function getCliSpawnCommand(command: string, args?: string[]): { command:
     return { command, args: args ?? [] };
 }
 
+export function getCliSpawnDiagnostics(command: string, args: string[] | undefined, workingDirectory: string, noDebug: boolean | undefined, debugSessionId: string | undefined, env: Record<string, string | undefined>): string {
+    return `Spawning Aspire CLI process: ${[command, ...args ?? []].join(' ')}; cwd=${workingDirectory}; noDebug=${noDebug}; debugSessionId=${debugSessionId}; ${EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT}=${env[EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT]}`;
+}
+
 export function spawnCliProcess(terminalProvider: AspireTerminalProvider, command: string, args?: string[], options?: SpawnProcessOptions): ChildProcessWithoutNullStreams {
     const workingDirectory = options?.workingDirectory ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
-    const env = {};
+    const env: Record<string, string | undefined> = {};
     const spawnCommand = getCliSpawnCommand(command, args);
 
     Object.assign(env, terminalProvider.createEnvironment(options?.debugSessionId, options?.noDebug, options?.noExtensionVariables));
     if (options?.env) {
         Object.assign(env, Object.fromEntries(options.env.map(e => [e.name, e.value])));
     }
+
+    extensionLogOutputChannel.info(getCliSpawnDiagnostics(spawnCommand.command, spawnCommand.args, workingDirectory, options?.noDebug, options?.debugSessionId, env));
 
     const child = spawn(spawnCommand.command, spawnCommand.args, {
         cwd: workingDirectory,
