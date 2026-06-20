@@ -286,6 +286,24 @@ public class AppHostSdkTargetsTests
     }
 
     [Fact]
+    public async Task ComputeRunArgumentsDoesNotUseAspireCliWhenCliVersionOutputDoesNotDrain()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var project = await CreateRunHookProjectAsync(tempDirectory.Path, aspireUseCliBundle: true);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "fake-cli"));
+        var cliPath = Path.Combine(fakeCliDirectory.FullName, OperatingSystem.IsWindows() ? "aspire.cmd" : "aspire");
+        await CreateFakeAspireCliWithVersionAndLingeringChildAsync(fakeCliDirectory.FullName, "13.5.0");
+
+        var stopwatch = Stopwatch.StartNew();
+        var properties = await GetComputeRunArgumentsPropertiesAsync(
+            project,
+            [$"-p:AspireCliPath={cliPath}", "-p:RunArguments=--custom foo"]);
+
+        AssertUsesDotNetRun(properties, project, "--custom foo");
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(30), $"Expected version probe to time out quickly, but it took {stopwatch.Elapsed}.");
+    }
+
+    [Fact]
     public async Task ComputeRunArgumentsDoesNotUseAspireCliWhenCliVersionCommandTimesOut()
     {
         using var tempDirectory = new TestTempDirectory();
@@ -583,6 +601,36 @@ public class AppHostSdkTargetsTests
                     i=$((i + 1))
                 done
                 echo "{{version}}"
+                exit 0
+            fi
+            exit 0
+            """);
+        File.SetUnixFileMode(aspirePath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+    }
+
+    private static async Task CreateFakeAspireCliWithVersionAndLingeringChildAsync(string fakeCliDirectory, string version)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            await File.WriteAllTextAsync(Path.Combine(fakeCliDirectory, "aspire.cmd"), $$"""
+                @echo off
+                if "%~1"=="--version" (
+                    echo {{version}}
+                    start "" /B cmd /D /C "ping -n 6 127.0.0.1 > nul"
+                    exit /b 0
+                )
+                exit /b 0
+                """);
+
+            return;
+        }
+
+        var aspirePath = Path.Combine(fakeCliDirectory, "aspire");
+        await File.WriteAllTextAsync(aspirePath, $$"""
+            #!/bin/sh
+            if [ "$1" = "--version" ]; then
+                echo "{{version}}"
+                sleep 5 &
                 exit 0
             fi
             exit 0

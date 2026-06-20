@@ -75,8 +75,10 @@ public sealed class GetAspireCliVersion : Microsoft.Build.Utilities.Task
             return null;
         }
 
-        var output = outputTask.GetAwaiter().GetResult().Trim();
-        _ = errorTask.GetAwaiter().GetResult();
+        if (!TryReadOutput(outputTask, errorTask, out var output))
+        {
+            return null;
+        }
 
         if (process.ExitCode != 0)
         {
@@ -97,7 +99,7 @@ public sealed class GetAspireCliVersion : Microsoft.Build.Utilities.Task
         if (string.IsNullOrWhiteSpace(cliPath))
         {
             return IsWindows()
-                ? CreateStartInfo(GetCommandPromptPath(), "/C aspire --version")
+                ? CreateStartInfo(GetCommandPromptPath(), "/D /C aspire --version")
                 : CreateStartInfo("aspire", "--version");
         }
 
@@ -155,6 +157,32 @@ public sealed class GetAspireCliVersion : Microsoft.Build.Utilities.Task
         }
         catch (Exception ex) when (IsVersionQueryException(ex))
         {
+        }
+    }
+
+    private static bool TryReadOutput(Task<string> outputTask, Task<string> errorTask, out string output)
+    {
+        output = string.Empty;
+
+        try
+        {
+            if (!Task.WaitAll(new[] { outputTask, errorTask }, 1000))
+            {
+                ObserveDrainTasks(outputTask, errorTask);
+                return false;
+            }
+
+            output = outputTask.GetAwaiter().GetResult().Trim();
+            _ = errorTask.GetAwaiter().GetResult();
+            return true;
+        }
+        catch (AggregateException ex) when (ex.InnerExceptions.All(IsVersionQueryException))
+        {
+            return false;
+        }
+        catch (Exception ex) when (IsVersionQueryException(ex))
+        {
+            return false;
         }
     }
 
