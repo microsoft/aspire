@@ -5,7 +5,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { getDefaultCliInstallPaths, resolveCliPath, CliPathDependencies, tryExecuteCli } from '../utils/cliPath';
+import { getDefaultCliInstallPaths, getWindowsPathCliCandidates, resolveCliPath, CliPathDependencies, tryExecuteCli } from '../utils/cliPath';
 import { getCliExecutionCommand } from '../utils/cliExecution';
 
 const bundlePath = '/home/user/.aspire/bin/aspire';
@@ -287,6 +287,20 @@ suite('utils/cliPath tests', () => {
     });
 
     suite('tryExecuteCli', () => {
+        test('builds Windows PATH candidates without current directory entries', () => {
+            const candidates = getWindowsPathCliCandidates({
+                Path: 'C:\\Tools; ;C:\\Users\\user\\.dotnet\\tools;',
+                PATHEXT: '.EXE;.CMD',
+            });
+
+            assert.deepStrictEqual(candidates, [
+                'C:\\Tools\\aspire.EXE',
+                'C:\\Tools\\aspire.CMD',
+                'C:\\Users\\user\\.dotnet\\tools\\aspire.EXE',
+                'C:\\Users\\user\\.dotnet\\tools\\aspire.CMD',
+            ]);
+        });
+
         test('routes Windows PATH lookup through cmd.exe', () => {
             const platformStub = sinon.stub(process, 'platform').value('win32');
             const originalComSpec = process.env.ComSpec;

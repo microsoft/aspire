@@ -73,6 +73,38 @@ export async function tryExecuteCli(cliPath: string): Promise<boolean> {
     }
 }
 
+export function getWindowsPathCliCandidates(env: NodeJS.ProcessEnv = process.env): string[] {
+    // Avoid `where.exe aspire` here because bare patterns include the current directory,
+    // which could make a workspace-local aspire.cmd look like the user's global CLI.
+    // See: https://learn.microsoft.com/windows-server/administration/windows-commands/where
+    const pathValue = env.Path ?? env.PATH ?? '';
+    const pathExtensions = (env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD')
+        .split(';')
+        .map(extension => extension.trim())
+        .filter(Boolean);
+    const candidates: string[] = [];
+    const seenCandidates = new Set<string>();
+
+    for (const pathEntry of pathValue.split(';')) {
+        const directory = pathEntry.trim().replace(/^"(.*)"$/, '$1');
+        if (!directory) {
+            continue;
+        }
+
+        for (const extension of pathExtensions) {
+            const candidate = path.win32.join(directory, `aspire${extension}`);
+            const normalizedCandidate = candidate.toLowerCase();
+
+            if (!seenCandidates.has(normalizedCandidate)) {
+                candidates.push(candidate);
+                seenCandidates.add(normalizedCandidate);
+            }
+        }
+    }
+
+    return candidates;
+}
+
 /**
  * Finds the Aspire CLI on the system PATH.
  */
@@ -81,17 +113,8 @@ export async function findCliOnPath(): Promise<string | undefined> {
         return await tryExecuteCli('aspire') ? 'aspire' : undefined;
     }
 
-    let candidates: string[] = [];
-    try {
-        const { stdout } = await execFileAsync('where.exe', ['aspire'], { timeout: 5000 });
-        candidates = stdout.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
-    }
-    catch {
-        return undefined;
-    }
-
-    for (const candidate of candidates) {
-        if (await tryExecuteCli(candidate)) {
+    for (const candidate of getWindowsPathCliCandidates()) {
+        if (await fileExists(candidate) && await tryExecuteCli(candidate)) {
             return candidate;
         }
     }
