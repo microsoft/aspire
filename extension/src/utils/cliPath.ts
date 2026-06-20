@@ -74,8 +74,9 @@ export async function tryExecuteCli(cliPath: string): Promise<boolean> {
 }
 
 export function getWindowsPathCliCandidates(env: NodeJS.ProcessEnv = process.env): string[] {
-    // Avoid `where.exe aspire` here because bare patterns include the current directory,
-    // which could make a workspace-local aspire.cmd look like the user's global CLI.
+    // Avoid `where.exe aspire` and relative PATH entries here because they include the
+    // current directory, which could make a workspace-local aspire.cmd look like the user's
+    // global CLI.
     // See: https://learn.microsoft.com/windows-server/administration/windows-commands/where
     const pathValue = env.Path ?? env.PATH ?? '';
     const pathExtensions = (env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD')
@@ -87,7 +88,7 @@ export function getWindowsPathCliCandidates(env: NodeJS.ProcessEnv = process.env
 
     for (const pathEntry of pathValue.split(';')) {
         const directory = pathEntry.trim().replace(/^"(.*)"$/, '$1');
-        if (!directory) {
+        if (!path.win32.isAbsolute(directory)) {
             continue;
         }
 
@@ -145,19 +146,6 @@ export function getConfiguredCliPath(): string {
 }
 
 /**
- * Updates the VS Code configuration setting for the Aspire CLI path.
- * Uses ConfigurationTarget.Global to set it at the user level.
- */
-export async function setConfiguredCliPath(cliPath: string): Promise<void> {
-    extensionLogOutputChannel.info(`Setting aspire.aspireCliExecutablePath to: ${cliPath || '(empty)'}`);
-    await vscode.workspace.getConfiguration('aspire').update(
-        'aspireCliExecutablePath',
-        cliPath || undefined, // Use undefined to remove the setting
-        vscode.ConfigurationTarget.Global
-    );
-}
-
-/**
  * Result of checking CLI availability.
  */
 export interface CliPathResolutionResult {
@@ -177,7 +165,6 @@ export interface CliPathDependencies {
     findOnPath: () => Promise<string | undefined>;
     findAtDefaultPath: () => Promise<string | undefined>;
     tryExecute: (cliPath: string) => Promise<boolean>;
-    setConfiguredPath: (cliPath: string) => Promise<void>;
 }
 
 const defaultDependencies: CliPathDependencies = {
@@ -185,7 +172,6 @@ const defaultDependencies: CliPathDependencies = {
     findOnPath: findCliOnPath,
     findAtDefaultPath: findCliAtDefaultPath,
     tryExecute: tryExecuteCli,
-    setConfiguredPath: setConfiguredCliPath,
 };
 
 /**
@@ -196,7 +182,7 @@ const defaultDependencies: CliPathDependencies = {
  * 4. Default installation directories (~/.aspire/bin, ~/.dotnet/tools)
  *
  * If the CLI is found at a default installation path but not on PATH,
- * the VS Code setting is updated to use that path.
+ * use it for this resolution without rewriting the user's configured path.
  *
  * If a setting is configured, it is treated as authoritative when valid because users can
  * intentionally pin a default-location shim while PATH resolves a different CLI.
@@ -233,12 +219,6 @@ export async function resolveCliPath(deps: CliPathDependencies = defaultDependen
     // 3. Check default installation paths (~/.aspire/bin first, then ~/.dotnet/tools)
     const foundPath = await deps.findAtDefaultPath();
     if (foundPath) {
-        // Update the setting so future invocations use this path
-        if (configuredPath !== foundPath) {
-            extensionLogOutputChannel.info('Updating aspireCliExecutablePath setting to use default install location');
-            await deps.setConfiguredPath(foundPath);
-        }
-
         return { cliPath: foundPath, available: true, source: 'default-install' };
     }
 

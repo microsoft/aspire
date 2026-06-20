@@ -18,7 +18,6 @@ function createMockDeps(overrides: Partial<CliPathDependencies> = {}): CliPathDe
         findOnPath: async () => undefined,
         findAtDefaultPath: async () => undefined,
         tryExecute: async () => false,
-        setConfiguredPath: async () => {},
         ...overrides,
     };
 }
@@ -92,13 +91,11 @@ suite('utils/cliPath tests', () => {
         test('prefers E2E-provided CLI path over settings and PATH', async () => {
             const e2ePath = '/tmp/e2e/aspire';
             process.env.ASPIRE_EXTENSION_E2E_CLI_PATH = e2ePath;
-            const setConfiguredPath = sinon.stub().resolves();
 
             const deps = createMockDeps({
                 getConfiguredPath: () => '/configured/path/aspire',
                 findOnPath: async () => 'aspire',
                 tryExecute: async (p) => p === e2ePath,
-                setConfiguredPath,
             });
 
             const result = await resolveCliPath(deps);
@@ -106,16 +103,12 @@ suite('utils/cliPath tests', () => {
             assert.strictEqual(result.available, true);
             assert.strictEqual(result.source, 'configured');
             assert.strictEqual(result.cliPath, e2ePath);
-            assert.ok(setConfiguredPath.notCalled, 'should not rewrite settings for the E2E override path');
         });
 
         test('falls back to default install path when CLI is not on PATH', async () => {
-            const setConfiguredPath = sinon.stub().resolves();
-
             const deps = createMockDeps({
                 findOnPath: async () => undefined,
                 findAtDefaultPath: async () => bundlePath,
-                setConfiguredPath,
             });
 
             const result = await resolveCliPath(deps);
@@ -123,32 +116,25 @@ suite('utils/cliPath tests', () => {
             assert.strictEqual(result.available, true);
             assert.strictEqual(result.source, 'default-install');
             assert.strictEqual(result.cliPath, bundlePath);
-            assert.ok(setConfiguredPath.calledOnceWith(bundlePath), 'should update the VS Code setting to the found path');
         });
 
-        test('updates VS Code setting when CLI found at default path but not on PATH', async () => {
-            const setConfiguredPath = sinon.stub().resolves();
-
+        test('resolves default install path without a settings writer', async () => {
             const deps = createMockDeps({
                 getConfiguredPath: () => '',
                 findOnPath: async () => undefined,
                 findAtDefaultPath: async () => bundlePath,
-                setConfiguredPath,
             });
 
-            await resolveCliPath(deps);
+            const result = await resolveCliPath(deps);
 
-            assert.ok(setConfiguredPath.calledOnce, 'setConfiguredPath should be called once');
-            assert.strictEqual(setConfiguredPath.firstCall.args[0], bundlePath, 'should set the path to the found install location');
+            assert.strictEqual(result.source, 'default-install');
+            assert.strictEqual(result.cliPath, bundlePath);
         });
 
         test('prefers PATH over default install path', async () => {
-            const setConfiguredPath = sinon.stub().resolves();
-
             const deps = createMockDeps({
                 findOnPath: async () => 'aspire',
                 findAtDefaultPath: async () => bundlePath,
-                setConfiguredPath,
             });
 
             const result = await resolveCliPath(deps);
@@ -156,7 +142,6 @@ suite('utils/cliPath tests', () => {
             assert.strictEqual(result.available, true);
             assert.strictEqual(result.source, 'path');
             assert.strictEqual(result.cliPath, 'aspire');
-            assert.ok(setConfiguredPath.notCalled, 'should not update settings when CLI is on PATH');
         });
 
         test('uses concrete Windows PATH executable returned by path discovery', async () => {
@@ -175,38 +160,31 @@ suite('utils/cliPath tests', () => {
         });
 
         test('prefers valid configured default path over PATH', async () => {
-            const setConfiguredPath = sinon.stub().resolves();
-
             const deps = createMockDeps({
                 getConfiguredPath: () => bundlePath,
                 findOnPath: async () => 'aspire',
                 tryExecute: async (p) => p === bundlePath,
-                setConfiguredPath,
             });
 
             const result = await resolveCliPath(deps);
 
             assert.strictEqual(result.source, 'configured');
             assert.strictEqual(result.cliPath, bundlePath);
-            assert.ok(setConfiguredPath.notCalled, 'should not clear an explicit configured path');
         });
 
         test('prefers configured Windows cmd shim path over PATH', async () => {
-            const setConfiguredPath = sinon.stub().resolves();
             const windowsGlobalToolCmdPath = 'C:\\Users\\user\\.dotnet\\tools\\aspire.cmd';
 
             const deps = createMockDeps({
                 getConfiguredPath: () => windowsGlobalToolCmdPath,
                 findOnPath: async () => 'C:\\Users\\user\\.dotnet\\tools\\aspire.exe',
                 tryExecute: async (p) => p === windowsGlobalToolCmdPath,
-                setConfiguredPath,
             });
 
             const result = await resolveCliPath(deps);
 
             assert.strictEqual(result.source, 'configured');
             assert.strictEqual(result.cliPath, windowsGlobalToolCmdPath);
-            assert.ok(setConfiguredPath.notCalled, 'should not clear an explicit configured .cmd path');
         });
 
         test('returns not-found when CLI is not on PATH and not at any default path', async () => {
@@ -250,46 +228,38 @@ suite('utils/cliPath tests', () => {
         });
 
         test('falls through to default path when custom configured path is invalid and not on PATH', async () => {
-            const setConfiguredPath = sinon.stub().resolves();
-
             const deps = createMockDeps({
                 getConfiguredPath: () => '/bad/path/aspire',
                 tryExecute: async () => false,
                 findOnPath: async () => undefined,
                 findAtDefaultPath: async () => bundlePath,
-                setConfiguredPath,
             });
 
             const result = await resolveCliPath(deps);
 
             assert.strictEqual(result.source, 'default-install');
             assert.strictEqual(result.cliPath, bundlePath);
-            assert.ok(setConfiguredPath.calledOnceWith(bundlePath));
         });
 
-        test('does not update setting when already set to the found default path', async () => {
-            const setConfiguredPath = sinon.stub().resolves();
-
+        test('uses configured default path when it is valid', async () => {
             const deps = createMockDeps({
                 getConfiguredPath: () => bundlePath,
                 findOnPath: async () => undefined,
                 findAtDefaultPath: async () => bundlePath,
                 tryExecute: async (p) => p === bundlePath,
-                setConfiguredPath,
             });
 
             const result = await resolveCliPath(deps);
 
             assert.strictEqual(result.source, 'configured');
             assert.strictEqual(result.cliPath, bundlePath);
-            assert.ok(setConfiguredPath.notCalled, 'should not re-set the path if it already matches');
         });
     });
 
     suite('tryExecuteCli', () => {
         test('builds Windows PATH candidates without current directory entries', () => {
             const candidates = getWindowsPathCliCandidates({
-                Path: 'C:\\Tools; ;C:\\Users\\user\\.dotnet\\tools;',
+                Path: '.;.\\tools;tools;C:relative;C:\\Tools; ;C:\\Users\\user\\.dotnet\\tools;',
                 PATHEXT: '.EXE;.CMD',
             });
 
