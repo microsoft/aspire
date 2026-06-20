@@ -1,0 +1,48 @@
+@namespace Aspire.Dashboard.Components
+
+<FluentOverflow Class="dimension-overflow" OnOverflowRaised="@(items => HandleOverflowChanged(items))">
+    <ChildContent>
+        @{
+            var i = 0;
+        }
+        @foreach (var item in Filter.Values.OrderBy(v => v.Order))
+        {
+            var isIncludedInFilters = Filter.SelectedValues.Contains(item);
+            var isIncludedInFiltersClass = isIncludedInFilters ? "included-in-filters" : "";
+            var additionalAttributes = new Dictionary<string, object>()
+            {
+                [KeyForDimensionValue] = item,
+                [KeyForIsIncludedInFilters] = isIncludedInFilters,
+            };
+
+            // Always display the first item by setting a fixed value.
+            <FluentOverflowItem Fixed="@((i == 0) ? OverflowItemFixed.Ellipsis : OverflowItemFixed.None)" AdditionalAttributes="additionalAttributes">
+                <span class="dimension-tag filter-value-tag @isIncludedInFiltersClass"
+                      role="button"
+                      tabindex="0"
+                      @onclick="@(() => OnTagSelectionChangedAsync(item, !Filter.SelectedValues.Contains(item)))"
+                      @onkeydown="@(args => OnTagKeyDownAsync(args, item, !Filter.SelectedValues.Contains(item)))">
+                    @item.Text
+                </span>
+            </FluentOverflowItem>
+            i++;
+        }
+    </ChildContent>
+    <MoreButtonTemplate Context="overflow">
+        @{
+            var isIncludedInFiltersClass = overflow.ItemsOverflow.Any(item => (bool)item.AdditionalAttributes![KeyForIsIncludedInFilters]) ? "included-in-filters" : "";
+        }
+        @* Display must be inline block so the width is correctly calculated. *@
+        <span class="dimension-tag filter-value-tag @isIncludedInFiltersClass"
+              role="button"
+              tabindex="0"
+              style="display:inline-block;"
+              @onclick="@(() => Filter.PopupVisible = true)"
+              @onkeydown="@(args => OnOverflowTagKeyDownAsync(args))">
+            @($"+{overflow.ItemsOverflow.Count()}")
+        </span>
+    </MoreButtonTemplate>
+    <OverflowTemplate Context="overflow">
+        @* Intentionally empty. Don't display an overflow template here. *@
+    </OverflowTemplate>
+</FluentOverflow>

@@ -16,53 +16,7 @@
                 <ChildContent>
                     <AspirePropertyColumn Tooltip="true" TooltipText="@(c => c.Name)" Property="@(c => c.Name)"/>
                     <AspireTemplateColumn Tooltip="true" TooltipText="@(c => c.AreAllValuesSelected is true ? Loc[nameof(ControlsStrings.LabelAll)] : string.Join(", ", c.SelectedValues.OrderBy(v => v.Text).Select(v => v.Text)))">
-                        <FluentOverflow Class="dimension-overflow" OnOverflowRaised="@(items => HandleOverflowChanged(context, items))">
-                            <ChildContent>
-                                @{
-                                    var i = 0;
-                                }
-                                @foreach (var item in context.Values.OrderBy(v => v.Order))
-                                {
-                                    var isIncludedInFilters = context.SelectedValues.Contains(item);
-                                    var isIncludedInFiltersClass = isIncludedInFilters ? "included-in-filters" : "";
-                                    var additionalAttributes = new Dictionary<string, object>()
-                                    {
-                                        [KeyForDimensionValue] = item,
-                                        [KeyForIsIncludedInFilters] = isIncludedInFilters,
-                                    };
-
-                                    // Always display the first item by setting a fixed value.
-                                    <FluentOverflowItem Fixed="@((i == 0) ? OverflowItemFixed.Ellipsis : OverflowItemFixed.None)" AdditionalAttributes="additionalAttributes">
-                                        <span class="dimension-tag filter-value-tag @isIncludedInFiltersClass"
-                                              role="button"
-                                              tabindex="0"
-                                              aria-pressed="@isIncludedInFilters"
-                                              @onclick="@(() => OnTagSelectionChangedAsync(context, item, !context.SelectedValues.Contains(item)))"
-                                              @onkeydown="@(args => OnTagKeyDownAsync(args, context, item, !context.SelectedValues.Contains(item)))">
-                                            @item.Text
-                                        </span>
-                                    </FluentOverflowItem>
-                                    i++;
-                                }
-                            </ChildContent>
-                            <MoreButtonTemplate Context="overflow">
-                                @{
-                                    var isIncludedInFiltersClass = overflow.ItemsOverflow.Any(item => (bool)item.AdditionalAttributes![KeyForIsIncludedInFilters]) ? "included-in-filters" : "";
-                                }
-                                @* Display must be inline block so the width is correctly calculated. *@
-                                <span class="dimension-tag filter-value-tag @isIncludedInFiltersClass"
-                                      role="button"
-                                      tabindex="0"
-                                      style="display:inline-block;"
-                                      @onclick="@(() => context.PopupVisible = true)"
-                                      @onkeydown="@(args => OnOverflowTagKeyDownAsync(args, context))">
-                                    @($"+{overflow.ItemsOverflow.Count()}")
-                                </span>
-                            </MoreButtonTemplate>
-                            <OverflowTemplate Context="overflow">
-                                @* Intentionally empty. Don't display an overflow template here. *@
-                            </OverflowTemplate>
-                        </FluentOverflow>
+                        <ChartFilterTags @key="context" Filter="context" OnSelectionChanged="OnDimensionValuesChanged" />
                     </AspireTemplateColumn>
                     <AspireTemplateColumn>
                         @{
@@ -91,7 +45,7 @@
                                                         title="@tag.Text"
                                                         @key=tag
                                                         @bind-Value:get="isChecked"
-                                                        @bind-Value:set="c => OnTagSelectionChangedAsync(context, tag, c)"/>
+                                                        @bind-Value:set="c => OnPopoverTagSelectionChangedAsync(context, tag, c)"/>
                                     }
                                 </FluentStack>
                             </Body>

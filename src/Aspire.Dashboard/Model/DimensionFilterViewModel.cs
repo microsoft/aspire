@@ -17,6 +17,12 @@ public class DimensionFilterViewModel
     public DimensionValueViewModel[] OverflowedValues { get; set; } = [];
     public bool PopupVisible { get; set; }
 
+    /// <summary>
+    /// Invoked when the filter state is modified externally (e.g., from the popover)
+    /// so that subscribed components can re-render.
+    /// </summary>
+    public Action? NotifyStateChanged { get; set; }
+
     public bool? AreAllValuesSelected
     {
         get
