@@ -113,7 +113,7 @@
   "aspire-vscode.strings.dashboardLaunchEdgeDescription": "Launch Microsoft Edge as a child debug session.",
   "aspire-vscode.strings.dashboardLaunchFirefoxLabel": "Debug with Firefox",
   "aspire-vscode.strings.dashboardLaunchFirefoxDescription": "Launch Firefox as a child debug session.",
-  "aspire-vscode.strings.dashboardLaunchBehaviorChanged": "The Aspire Dashboard no longer opens automatically. Open it from the Aspire panel anytime, or configure a launch behavior.",
+  "aspire-vscode.strings.dashboardLaunchBehaviorChanged": "The Aspire Dashboard does not open automatically. Open it from the Aspire panel anytime, or configure a launch behavior.",
   "aspire-vscode.strings.changelogLabel": "Changelog",
   "aspire-vscode.strings.processExceptionOccurred": "Encountered an exception ({0}) while running the following command: {1}.",
   "aspire-vscode.strings.failedToStartDebugSession": "Failed to start debug session.",

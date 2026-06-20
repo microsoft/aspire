@@ -67,7 +67,7 @@ export const dashboardLaunchEdgeLabel = vscode.l10n.t('Debug with Microsoft Edge
 export const dashboardLaunchEdgeDescription = vscode.l10n.t('Launch Microsoft Edge as a child debug session.');
 export const dashboardLaunchFirefoxLabel = vscode.l10n.t('Debug with Firefox');
 export const dashboardLaunchFirefoxDescription = vscode.l10n.t('Launch Firefox as a child debug session.');
-export const dashboardLaunchBehaviorChanged = vscode.l10n.t('Aspire no longer opens the Dashboard automatically by default.');
+export const dashboardLaunchBehaviorChanged = vscode.l10n.t('The Aspire Dashboard does not open automatically. Open it from the Aspire panel anytime, or configure a launch behavior.');
 export const changelogLabel = vscode.l10n.t('Changelog');
 export const processExceptionOccurred = (error: string, command: string) => vscode.l10n.t('Encountered an exception ({0}) while running the following command: {1}.', error, command);
 
