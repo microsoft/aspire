@@ -514,7 +514,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 var telemetry = sp.GetRequiredService<AspireCliTelemetry>();
                 var hostEnvironment = sp.GetRequiredService<ICliHostEnvironment>();
                 var executionContext = sp.GetRequiredService<CliExecutionContext>();
-                return new CertificateService(toolRunner, interactiveService, telemetry, hostEnvironment, executionContext, isLinux);
+                return new CertificateService(toolRunner, interactiveService, telemetry, hostEnvironment, executionContext, isLinux ?? OperatingSystem.IsLinux);
             };
         });
 
