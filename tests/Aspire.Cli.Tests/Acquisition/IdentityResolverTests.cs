@@ -25,10 +25,8 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","channel":"staging"}""");
 
-        var resolver = new IdentityResolver(
-            CliTestHelper.CreateSidecarReader(outputHelper),
-            BuildAssembly("EnvWins", channel: "stable", informationalVersion: "13.4.0+abc"),
-            workspace.WorkspaceRoot.FullName,
+        var resolver = CreateResolver(workspace,
+            channel: "stable",
             envReader: name => name == IdentityResolver.ChannelEnvVar ? "pr-12345" : null);
 
         var resolved = resolver.ResolveChannel();
@@ -42,11 +40,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","channel":"staging"}""");
 
-        var resolver = new IdentityResolver(
-            CliTestHelper.CreateSidecarReader(outputHelper),
-            BuildAssembly("SidecarWins", channel: "stable", informationalVersion: "13.4.0+abc"),
-            workspace.WorkspaceRoot.FullName,
-            envReader: _ => null);
+        var resolver = CreateResolver(workspace, channel: "stable");
 
         var resolved = resolver.ResolveChannel();
         Assert.Equal("staging", resolved.Value);
@@ -59,11 +53,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         // No sidecar file written — resolver should skip the sidecar layer.
 
-        var resolver = new IdentityResolver(
-            CliTestHelper.CreateSidecarReader(outputHelper),
-            BuildAssembly("AsmFallback", channel: "daily", informationalVersion: "13.4.0+abc"),
-            workspace.WorkspaceRoot.FullName,
-            envReader: _ => null);
+        var resolver = CreateResolver(workspace, channel: "daily");
 
         var resolved = resolver.ResolveChannel();
         Assert.Equal("daily", resolved.Value);
@@ -75,13 +65,9 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var resolver = new IdentityResolver(
-            CliTestHelper.CreateSidecarReader(outputHelper),
-            // Assembly without channel metadata throws inside IdentityChannelReader;
-            // the resolver swallows that and falls through to the terminal default.
-            BuildAssembly("NoChannel", channel: null, informationalVersion: "13.4.0+abc"),
-            workspace.WorkspaceRoot.FullName,
-            envReader: _ => null);
+        // Assembly without channel metadata throws inside IdentityChannelReader;
+        // the resolver swallows that and falls through to the terminal default.
+        var resolver = CreateResolver(workspace, channel: null);
 
         var resolved = resolver.ResolveChannel();
         Assert.Equal(PackageChannelNames.Local, resolved.Value);
@@ -97,10 +83,8 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","channel":"staging"}""");
 
-        var resolver = new IdentityResolver(
-            CliTestHelper.CreateSidecarReader(outputHelper),
-            BuildAssembly("EmptyEnv", channel: "stable", informationalVersion: "13.4.0+abc"),
-            workspace.WorkspaceRoot.FullName,
+        var resolver = CreateResolver(workspace,
+            channel: "stable",
             envReader: name => name == IdentityResolver.ChannelEnvVar ? string.Empty : null);
 
         var resolved = resolver.ResolveChannel();
@@ -112,11 +96,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     public void ResolveVersion_SplitsInformationalVersionAtPlus()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var resolver = new IdentityResolver(
-            CliTestHelper.CreateSidecarReader(outputHelper),
-            BuildAssembly("VersionSplit", channel: "local", informationalVersion: "13.4.0-preview.1.25366.3+abcdef0"),
-            workspace.WorkspaceRoot.FullName,
-            envReader: _ => null);
+        var resolver = CreateResolver(workspace, informationalVersion: "13.4.0-preview.1.25366.3+abcdef0");
 
         var version = resolver.ResolveVersion();
         var commit = resolver.ResolveCommit();
@@ -130,11 +110,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     public void ResolveCommit_EmptyWhenInformationalVersionHasNoPlus()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var resolver = new IdentityResolver(
-            CliTestHelper.CreateSidecarReader(outputHelper),
-            BuildAssembly("NoCommit", channel: "local", informationalVersion: "13.4.0"),
-            workspace.WorkspaceRoot.FullName,
-            envReader: _ => null);
+        var resolver = CreateResolver(workspace, informationalVersion: "13.4.0");
 
         Assert.Equal(string.Empty, resolver.ResolveCommit().Value);
         Assert.Equal("13.4.0", resolver.ResolveVersion().Value);
@@ -144,10 +120,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     public void ResolveVersion_EnvOverridesAssembly()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var resolver = new IdentityResolver(
-            CliTestHelper.CreateSidecarReader(outputHelper),
-            BuildAssembly("VerEnv", channel: "local", informationalVersion: "13.4.0+abc"),
-            workspace.WorkspaceRoot.FullName,
+        var resolver = CreateResolver(workspace,
             envReader: name => name == IdentityResolver.VersionEnvVar ? "99.0.0-test" : null);
 
         var resolved = resolver.ResolveVersion();
@@ -162,10 +135,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     public void ResolveVersion_AcceptsValidSemVer(string version)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var resolver = new IdentityResolver(
-            CliTestHelper.CreateSidecarReader(outputHelper),
-            BuildAssembly("VerValid", channel: "local", informationalVersion: "13.4.0+abc"),
-            workspace.WorkspaceRoot.FullName,
+        var resolver = CreateResolver(workspace,
             envReader: name => name == IdentityResolver.VersionEnvVar ? version : null);
 
         var resolved = resolver.ResolveVersion();
@@ -184,10 +154,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         // immediately with a message naming the env var, not silently corrupt downstream
         // version-keyed decisions.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var resolver = new IdentityResolver(
-            CliTestHelper.CreateSidecarReader(outputHelper),
-            BuildAssembly("VerBad", channel: "local", informationalVersion: "13.4.0+abc"),
-            workspace.WorkspaceRoot.FullName,
+        var resolver = CreateResolver(workspace,
             envReader: name => name == IdentityResolver.VersionEnvVar ? version : null);
 
         var ex = Assert.Throws<InvalidOperationException>(() => resolver.ResolveVersion());
@@ -200,11 +167,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","version":"garbage"}""");
-        var resolver = new IdentityResolver(
-            CliTestHelper.CreateSidecarReader(outputHelper),
-            BuildAssembly("VerScBad", channel: "local", informationalVersion: "13.4.0+abc"),
-            workspace.WorkspaceRoot.FullName,
-            envReader: _ => null);
+        var resolver = CreateResolver(workspace);
 
         var ex = Assert.Throws<InvalidOperationException>(() => resolver.ResolveVersion());
         Assert.Contains(InstallSidecarReader.SidecarFileName, ex.Message);
@@ -218,10 +181,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     public void ResolveCommit_AcceptsHexSha(string commit)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var resolver = new IdentityResolver(
-            CliTestHelper.CreateSidecarReader(outputHelper),
-            BuildAssembly("CommitOk", channel: "local", informationalVersion: "13.4.0+abc"),
-            workspace.WorkspaceRoot.FullName,
+        var resolver = CreateResolver(workspace,
             envReader: name => name == IdentityResolver.CommitEnvVar ? commit : null);
 
         var resolved = resolver.ResolveCommit();
@@ -237,10 +197,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     public void ResolveCommit_FromEnv_FailsFast_WhenNotHex(string commit)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var resolver = new IdentityResolver(
-            CliTestHelper.CreateSidecarReader(outputHelper),
-            BuildAssembly("CommitBad", channel: "local", informationalVersion: "13.4.0+abc"),
-            workspace.WorkspaceRoot.FullName,
+        var resolver = CreateResolver(workspace,
             envReader: name => name == IdentityResolver.CommitEnvVar ? commit : null);
 
         var ex = Assert.Throws<InvalidOperationException>(() => resolver.ResolveCommit());
@@ -253,10 +210,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     public void ResolveNuGetServiceIndexOverride_AcceptsAbsoluteHttpUrl(string url)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var resolver = new IdentityResolver(
-            CliTestHelper.CreateSidecarReader(outputHelper),
-            BuildAssembly("NuGetOk", channel: "local", informationalVersion: "13.4.0+abc"),
-            workspace.WorkspaceRoot.FullName,
+        var resolver = CreateResolver(workspace,
             envReader: name => name == IdentityResolver.NuGetServiceIndexEnvVar ? url : null);
 
         var resolved = resolver.ResolveNuGetServiceIndexOverride();
@@ -271,10 +225,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     public void ResolveNuGetServiceIndexOverride_FromEnv_FailsFast_WhenNotHttpUrl(string url)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var resolver = new IdentityResolver(
-            CliTestHelper.CreateSidecarReader(outputHelper),
-            BuildAssembly("NuGetBad", channel: "local", informationalVersion: "13.4.0+abc"),
-            workspace.WorkspaceRoot.FullName,
+        var resolver = CreateResolver(workspace,
             envReader: name => name == IdentityResolver.NuGetServiceIndexEnvVar ? url : null);
 
         var ex = Assert.Throws<InvalidOperationException>(() => resolver.ResolveNuGetServiceIndexOverride());
@@ -288,11 +239,10 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         // "pr-17580" are legitimate overrides. This pins that decision so a future "tighten
         // validation" change can't silently break the override's primary use case.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var resolver = new IdentityResolver(
-            CliTestHelper.CreateSidecarReader(outputHelper),
-            BuildAssembly("ChannelBespoke", channel: "stable", informationalVersion: "13.4.0+abc"),
-            workspace.WorkspaceRoot.FullName,
-            envReader: name => name == IdentityResolver.ChannelEnvVar ? "totally-made-up" : null);
+        var resolver = CreateResolver(workspace,
+            envReader: name => name == IdentityResolver.ChannelEnvVar ? "totally-made-up" : null,
+            channel: "stable",
+            assemblyName: "ChannelBespoke");
 
         var resolved = resolver.ResolveChannel();
         Assert.Equal("totally-made-up", resolved.Value);
@@ -305,11 +255,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         // No sidecar field, no env var — the override must remain null so
         // callers fall back to PackageSources.NuGetOrg via the `?? canonical` pattern.
-        var resolver = new IdentityResolver(
-            CliTestHelper.CreateSidecarReader(outputHelper),
-            BuildAssembly("OverrideNull", channel: "local", informationalVersion: "13.4.0+abc"),
-            workspace.WorkspaceRoot.FullName,
-            envReader: _ => null);
+        var resolver = CreateResolver(workspace, assemblyName: "OverrideNull");
 
         var resolved = resolver.ResolveNuGetServiceIndexOverride();
         Assert.Null(resolved.Value);
@@ -322,13 +268,11 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","nugetServiceIndexOverride":"http://sidecar/v3/index.json"}""");
 
-        var resolver = new IdentityResolver(
-            CliTestHelper.CreateSidecarReader(outputHelper),
-            BuildAssembly("OverrideEnv", channel: "local", informationalVersion: "13.4.0+abc"),
-            workspace.WorkspaceRoot.FullName,
+        var resolver = CreateResolver(workspace,
             envReader: name => name == IdentityResolver.NuGetServiceIndexEnvVar
                 ? "http://env/v3/index.json"
-                : null);
+                : null,
+            assemblyName: "OverrideEnv");
 
         var resolved = resolver.ResolveNuGetServiceIndexOverride();
         Assert.Equal("http://env/v3/index.json", resolved.Value);
@@ -341,11 +285,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","nugetServiceIndexOverride":"http://proxy.local/v3/index.json"}""");
 
-        var resolver = new IdentityResolver(
-            CliTestHelper.CreateSidecarReader(outputHelper),
-            BuildAssembly("OverrideSc", channel: "local", informationalVersion: "13.4.0+abc"),
-            workspace.WorkspaceRoot.FullName,
-            envReader: _ => null);
+        var resolver = CreateResolver(workspace, assemblyName: "OverrideSc");
 
         var resolved = resolver.ResolveNuGetServiceIndexOverride();
         Assert.Equal("http://proxy.local/v3/index.json", resolved.Value);
@@ -358,11 +298,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         // No sidecar field, no env var — the override must remain null so the
         // packaging service does not synthesize an override channel.
-        var resolver = new IdentityResolver(
-            CliTestHelper.CreateSidecarReader(outputHelper),
-            BuildAssembly("PackagesNull", channel: "local", informationalVersion: "13.4.0+abc"),
-            workspace.WorkspaceRoot.FullName,
-            envReader: _ => null);
+        var resolver = CreateResolver(workspace, assemblyName: "PackagesNull");
 
         var resolved = resolver.ResolvePackagesDirectory();
         Assert.Null(resolved.Value);
@@ -375,13 +311,11 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","packages":"/sidecar/packages"}""");
 
-        var resolver = new IdentityResolver(
-            CliTestHelper.CreateSidecarReader(outputHelper),
-            BuildAssembly("PackagesEnv", channel: "local", informationalVersion: "13.4.0+abc"),
-            workspace.WorkspaceRoot.FullName,
+        var resolver = CreateResolver(workspace,
             envReader: name => name == IdentityResolver.PackagesEnvVar
                 ? "/env/packages"
-                : null);
+                : null,
+            assemblyName: "PackagesEnv");
 
         var resolved = resolver.ResolvePackagesDirectory();
         Assert.Equal("/env/packages", resolved.Value);
@@ -394,11 +328,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","packages":"/sidecar/packages"}""");
 
-        var resolver = new IdentityResolver(
-            CliTestHelper.CreateSidecarReader(outputHelper),
-            BuildAssembly("PackagesSc", channel: "local", informationalVersion: "13.4.0+abc"),
-            workspace.WorkspaceRoot.FullName,
-            envReader: _ => null);
+        var resolver = CreateResolver(workspace, assemblyName: "PackagesSc");
 
         var resolved = resolver.ResolvePackagesDirectory();
         Assert.Equal("/sidecar/packages", resolved.Value);
@@ -410,11 +340,10 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     {
         // ASPIRE_CLI_VERSION emulation must light up the override notice and feed IdentityVersion.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var resolver = new IdentityResolver(
-            CliTestHelper.CreateSidecarReader(outputHelper),
-            BuildAssembly("EnvVersionOverride", channel: "local", informationalVersion: "13.5.0-dev+local"),
-            workspace.WorkspaceRoot.FullName,
-            envReader: name => name == IdentityResolver.VersionEnvVar ? "13.4.2" : null);
+        var resolver = CreateResolver(workspace,
+            envReader: name => name == IdentityResolver.VersionEnvVar ? "13.4.2" : null,
+            informationalVersion: "13.5.0-dev+local",
+            assemblyName: "EnvVersionOverride");
 
         var context = Program.BuildCliExecutionContext(
             debugMode: false,
@@ -431,11 +360,9 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","channel":"staging"}""");
-        var resolver = new IdentityResolver(
-            CliTestHelper.CreateSidecarReader(outputHelper),
-            BuildAssembly("SidecarChannelOverride", channel: "local", informationalVersion: "13.5.0-dev+local"),
-            workspace.WorkspaceRoot.FullName,
-            envReader: _ => null);
+        var resolver = CreateResolver(workspace,
+            informationalVersion: "13.5.0-dev+local",
+            assemblyName: "SidecarChannelOverride");
 
         var context = Program.BuildCliExecutionContext(
             debugMode: false,
@@ -453,11 +380,10 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         // No env vars and no sidecar — a real install reads its own assembly stamp, so the
         // notice must stay silent.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var resolver = new IdentityResolver(
-            CliTestHelper.CreateSidecarReader(outputHelper),
-            BuildAssembly("AssemblyOnly", channel: "daily", informationalVersion: "13.5.0-preview.1.25366.3+abcdef0"),
-            workspace.WorkspaceRoot.FullName,
-            envReader: _ => null);
+        var resolver = CreateResolver(workspace,
+            channel: "daily",
+            informationalVersion: "13.5.0-preview.1.25366.3+abcdef0",
+            assemblyName: "AssemblyOnly");
 
         var context = Program.BuildCliExecutionContext(
             debugMode: false,
@@ -475,11 +401,10 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         // so PackagingService can synthesize an override channel from it.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var packagesDir = Path.Combine(workspace.WorkspaceRoot.FullName, "shipping");
-        var resolver = new IdentityResolver(
-            CliTestHelper.CreateSidecarReader(outputHelper),
-            BuildAssembly("EnvPackagesOverride", channel: "local", informationalVersion: "13.5.0-dev+local"),
-            workspace.WorkspaceRoot.FullName,
-            envReader: name => name == IdentityResolver.PackagesEnvVar ? packagesDir : null);
+        var resolver = CreateResolver(workspace,
+            envReader: name => name == IdentityResolver.PackagesEnvVar ? packagesDir : null,
+            informationalVersion: "13.5.0-dev+local",
+            assemblyName: "EnvPackagesOverride");
 
         var context = Program.BuildCliExecutionContext(
             debugMode: false,
@@ -514,6 +439,20 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
 
     private static void WriteSidecar(string directory, string json)
         => File.WriteAllText(Path.Combine(directory, InstallSidecarReader.SidecarFileName), json);
+
+    private IdentityResolver CreateResolver(
+        TemporaryWorkspace workspace,
+        Func<string, string?>? envReader = null,
+        string? channel = "local",
+        string informationalVersion = "13.4.0+abc",
+        string assemblyName = "Test")
+    {
+        return new IdentityResolver(
+            CliTestHelper.CreateSidecarReader(outputHelper),
+            BuildAssembly(assemblyName, channel, informationalVersion),
+            workspace.WorkspaceRoot.FullName,
+            envReader ?? (_ => null));
+    }
 
     private static Assembly BuildAssembly(string assemblyName, string? channel, string informationalVersion)
     {
