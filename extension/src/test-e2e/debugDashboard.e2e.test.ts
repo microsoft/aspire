@@ -9,10 +9,6 @@ import { openAspireView, waitForEditorTitle, waitForTreeItem, waitForWorkbenchTe
 suite('Aspire debug dashboard E2E', function () {
     this.timeout(240000);
 
-    setup(() => {
-        writeWorkspaceSetting('aspire.dashboardBrowser', 'integratedBrowser');
-    });
-
     teardown(async () => {
         await runE2eTeardown([
             () => setCliUnavailableForE2E(false),
@@ -27,6 +23,8 @@ suite('Aspire debug dashboard E2E', function () {
     });
 
     test('debugs the AppHost and opens the dashboard in the integrated browser', async () => {
+        writeWorkspaceSetting('aspire.dashboardBrowser', 'integratedBrowser');
+
         await openAspireView();
         await waitForRepositoryIdle();
         const discovered = await waitForWorkspaceAppHost();
