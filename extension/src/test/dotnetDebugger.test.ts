@@ -268,6 +268,34 @@ suite('Dotnet Debugger Extension Tests', () => {
         assert.strictEqual(dotNetService.buildDotNetProjectStub.notCalled, true);
     });
 
+    test('does not use dotnet run when ordinary project launch configuration requests NoDebug', async () => {
+        const outputPath = '/tmp/bin/Debug/net10.0/Worker.dll';
+        const { extension } = createDebuggerExtension(outputPath, null, true, true);
+
+        const projectPath = '/tmp/Worker.csproj';
+        const launchConfig: ProjectLaunchConfiguration = {
+            type: 'project',
+            mode: 'NoDebug',
+            project_path: projectPath
+        };
+
+        const debugConfig: AspireResourceExtendedDebugConfiguration = {
+            runId: '1',
+            debugSessionId: '1',
+            type: 'coreclr',
+            name: 'Test Debug Config',
+            request: 'launch',
+            noDebug: true
+        };
+
+        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+
+        await extension.createDebugSessionConfigurationCallback!(launchConfig, [], [], { debug: false, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
+
+        assert.strictEqual(debugConfig.program, outputPath);
+        assert.strictEqual(debugConfig.noDebug, true);
+    });
+
     test('uses dotnet CLI when project runtimeconfig has no runnable framework', async () => {
         const fs = require('fs');
         const path = require('path');

@@ -7,8 +7,14 @@ import { AppHostLaunchService } from '../services/AppHostLaunchService';
 suite('AppHostLaunchService', () => {
     let service: AppHostLaunchService;
     let startDebuggingStub: sinon.SinonStub;
+    let onDidTerminateDebugSessionStub: sinon.SinonStub;
+    let onDidTerminateDebugSessionCallback: ((session: vscode.DebugSession) => void) | undefined;
 
     setup(() => {
+        onDidTerminateDebugSessionStub = sinon.stub(vscode.debug, 'onDidTerminateDebugSession').callsFake(callback => {
+            onDidTerminateDebugSessionCallback = callback;
+            return new vscode.Disposable(() => { });
+        });
         service = new AppHostLaunchService();
         startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
     });
@@ -16,6 +22,8 @@ suite('AppHostLaunchService', () => {
     teardown(() => {
         service.dispose();
         startDebuggingStub.restore();
+        onDidTerminateDebugSessionStub.restore();
+        onDidTerminateDebugSessionCallback = undefined;
     });
 
     test('isLaunching returns false before launch', () => {
@@ -135,5 +143,92 @@ suite('AppHostLaunchService', () => {
         await assert.rejects(service.launch('/repo/AppHost.csproj', 'run', true), /boom/);
 
         assert.strictEqual(service.isLaunching('/repo/AppHost.csproj'), false);
+    });
+
+    test('terminated run sessions include appHostPath and stop refresh semantics', () => {
+        let terminationEvent: { appHostPath: string; command?: string; shouldRequestStopRefresh: boolean } | undefined;
+        service.onDidTerminateAppHostDebugSession(event => {
+            terminationEvent = event;
+        });
+
+        assert.ok(onDidTerminateDebugSessionCallback);
+        onDidTerminateDebugSessionCallback({
+            configuration: {
+                type: 'aspire',
+                program: '/repo/AppHost.csproj',
+                command: 'run',
+            },
+        } as unknown as vscode.DebugSession);
+
+        assert.deepStrictEqual(terminationEvent, {
+            appHostPath: '/repo/AppHost.csproj',
+            command: 'run',
+            shouldRequestStopRefresh: true,
+        });
+    });
+
+    test('terminated non-run sessions do not request stop refresh', () => {
+        let terminationEvent: { appHostPath: string; command?: string; shouldRequestStopRefresh: boolean } | undefined;
+        service.onDidTerminateAppHostDebugSession(event => {
+            terminationEvent = event;
+        });
+
+        assert.ok(onDidTerminateDebugSessionCallback);
+        onDidTerminateDebugSessionCallback({
+            configuration: {
+                type: 'aspire',
+                program: '/repo/AppHost.csproj',
+                command: 'publish',
+            },
+        } as unknown as vscode.DebugSession);
+
+        assert.deepStrictEqual(terminationEvent, {
+            appHostPath: '/repo/AppHost.csproj',
+            command: 'publish',
+            shouldRequestStopRefresh: false,
+        });
+    });
+
+    test('terminated Aspire sessions default missing command to run and request stop refresh', () => {
+        let terminationEvent: { appHostPath: string; command?: string; shouldRequestStopRefresh: boolean } | undefined;
+        service.onDidTerminateAppHostDebugSession(event => {
+            terminationEvent = event;
+        });
+
+        assert.ok(onDidTerminateDebugSessionCallback);
+        onDidTerminateDebugSessionCallback({
+            configuration: {
+                type: 'aspire',
+                program: '/repo/AppHost.csproj',
+            },
+        } as unknown as vscode.DebugSession);
+
+        assert.deepStrictEqual(terminationEvent, {
+            appHostPath: '/repo/AppHost.csproj',
+            command: 'run',
+            shouldRequestStopRefresh: true,
+        });
+    });
+
+    test('terminated Aspire sessions drop invalid command values and do not request stop refresh', () => {
+        let terminationEvent: { appHostPath: string; command?: string; shouldRequestStopRefresh: boolean } | undefined;
+        service.onDidTerminateAppHostDebugSession(event => {
+            terminationEvent = event;
+        });
+
+        assert.ok(onDidTerminateDebugSessionCallback);
+        onDidTerminateDebugSessionCallback({
+            configuration: {
+                type: 'aspire',
+                program: '/repo/AppHost.csproj',
+                command: 'invalid',
+            },
+        } as unknown as vscode.DebugSession);
+
+        assert.deepStrictEqual(terminationEvent, {
+            appHostPath: '/repo/AppHost.csproj',
+            command: undefined,
+            shouldRequestStopRefresh: false,
+        });
     });
 });

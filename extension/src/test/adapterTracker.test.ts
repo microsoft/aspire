@@ -308,10 +308,32 @@ suite('Debug Adapter Tracker Tests', () => {
         const factory = registerFactoryStub.lastCall.args[1];
         const tracker = factory.createDebugAdapterTracker(invalidSession);
 
-        // Call onExit
-        tracker.onExit(0);
+        assert.strictEqual(tracker, undefined);
 
         // Verify notification was NOT sent
+        assert.strictEqual(dcpServer.sendNotification.called, false);
+
+        disposable.dispose();
+    });
+
+    test('does not track leased parent debug session without runId', async () => {
+        const leasedParentSession = {
+            ...debugSession,
+            configuration: {
+                type: 'coreclr',
+                name: 'Aspire test run',
+                request: 'launch',
+                env: {
+                    DCP_INSTANCE_ID_PREFIX: 'aspire-extension-test-run-123-'
+                }
+            }
+        };
+
+        const disposable = createDebugAdapterTracker(dcpServer as any, 'coreclr');
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker(leasedParentSession);
+
+        assert.strictEqual(tracker, undefined);
         assert.strictEqual(dcpServer.sendNotification.called, false);
 
         disposable.dispose();

@@ -562,6 +562,39 @@ suite('AspireTerminalProvider tests', () => {
             assert.strictEqual(env.ASPIRE_NON_INTERACTIVE, 'true');
         });
 
+        test('creates DCP run-session environment without extension backchannel stop hook', () => {
+            const previousEndpoint = process.env.ASPIRE_EXTENSION_ENDPOINT;
+            const previousToken = process.env.ASPIRE_EXTENSION_TOKEN;
+            const previousCert = process.env.ASPIRE_EXTENSION_CERT;
+            process.env.ASPIRE_EXTENSION_ENDPOINT = 'inherited-endpoint';
+            process.env.ASPIRE_EXTENSION_TOKEN = 'inherited-token';
+            process.env.ASPIRE_EXTENSION_CERT = 'inherited-cert';
+
+            let env: any;
+            try {
+                env = terminalProvider.createDcpRunSessionEnvironment('debug-session-id', false);
+            } finally {
+                restoreEnvironmentVariable('ASPIRE_EXTENSION_ENDPOINT', previousEndpoint);
+                restoreEnvironmentVariable('ASPIRE_EXTENSION_TOKEN', previousToken);
+                restoreEnvironmentVariable('ASPIRE_EXTENSION_CERT', previousCert);
+            }
+
+            assert.strictEqual(env.ASPIRE_EXTENSION_ENDPOINT, undefined);
+            assert.strictEqual(env.ASPIRE_EXTENSION_TOKEN, undefined);
+            assert.strictEqual(env.ASPIRE_EXTENSION_CERT, undefined);
+            assert.strictEqual(env.ASPIRE_EXTENSION_DEBUG_SESSION_ID, 'debug-session-id');
+            assert.strictEqual(env.DCP_INSTANCE_ID_PREFIX, 'debug-session-id-');
+            assert.strictEqual(env.DEBUG_SESSION_RUN_MODE, 'Debug');
+            assert.strictEqual(env.DEBUG_SESSION_PORT, 'http://localhost:5678');
+            assert.strictEqual(env.DEBUG_SESSION_TOKEN, 'dcp-token');
+            assert.strictEqual(env.DEBUG_SESSION_SERVER_CERTIFICATE, 'dcp-cert');
+            const debugSessionInfo = JSON.parse(env.DEBUG_SESSION_INFO);
+            assert.deepStrictEqual(debugSessionInfo.protocols_supported, ['2024-03-03', '2024-04-23', '2025-10-01']);
+            assert.ok(debugSessionInfo.supported_launch_configurations.includes('baseline.v1'));
+            assert.ok(debugSessionInfo.supported_launch_configurations.includes('node'));
+            assert.ok(debugSessionInfo.supported_launch_configurations.includes('browser'));
+        });
+
         test('does not mark user terminal commands as non-interactive', () => {
             const env = terminalProvider.createEnvironment();
 
