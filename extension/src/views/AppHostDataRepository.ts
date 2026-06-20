@@ -137,6 +137,11 @@ interface GlobalDescribeStream {
     version: number;
 }
 
+interface DescribeNoDataError {
+    message: string | undefined;
+    isCompatibilityError: boolean;
+}
+
 /**
  * Central data repository for app host and resource information.
  *
@@ -226,8 +231,11 @@ export class AppHostDataRepository {
 
     // ── Error state ──
     private _describeErrorMessage: string | undefined;
+    private _describeErrorIsCompatibility = false;
     private _psErrorMessage: string | undefined;
+    private _psErrorIsCompatibility = false;
     private _errorMessage: string | undefined;
+    private _errorIsCompatibility = false;
 
     // ── Loading state ──
     private _loadingWorkspace = true;
@@ -747,7 +755,8 @@ export class AppHostDataRepository {
 
                         extensionLogOutputChannel.warn(`aspire describe --follow exited (code ${code}) without producing data; not auto-restarting.`);
                         this._workspaceResources.clear();
-                        this._setDescribeError(this._getDescribeNoDataError(code, describeNonJsonLines, describeStderr));
+                        const noDataError = this._getDescribeNoDataError(code, describeNonJsonLines, describeStderr);
+                        this._setDescribeError(noDataError.message, { compatibility: noDataError.isCompatibilityError });
                         this._updateWorkspaceContext({ clearLoading: true });
                         return;
                     }
@@ -871,19 +880,28 @@ export class AppHostDataRepository {
         return false;
     }
 
-    private _getDescribeNoDataError(exitCode: number | null, nonJsonLines: readonly string[], stderr: string): string | undefined {
+    private _getDescribeNoDataError(exitCode: number | null, nonJsonLines: readonly string[], stderr: string): DescribeNoDataError {
         if (isDescribeUnsupportedOutput(nonJsonLines, stderr)) {
-            return aspireCliDescribeNotSupported(aspireDescribeMinimumVersion);
+            return {
+                message: aspireCliDescribeNotSupported(aspireDescribeMinimumVersion),
+                isCompatibilityError: true,
+            };
         }
 
         // A clean exit before `ps` observes the AppHost can happen while the app is still starting.
         // Once `ps` reports the workspace AppHost as running, an empty describe stream means the
         // AppHost cannot serve workspace resources even if the CLI process exits successfully.
         if (this._workspaceAppHostPath && (exitCode !== 0 || this._workspaceAppHost !== undefined)) {
-            return appHostDescribeMayNotBeSupported(aspireDescribeMinimumVersion);
+            return {
+                message: appHostDescribeMayNotBeSupported(aspireDescribeMinimumVersion),
+                isCompatibilityError: true,
+            };
         }
 
-        return undefined;
+        return {
+            message: undefined,
+            isCompatibilityError: false,
+        };
     }
 
     // ── Global mode: per-AppHost describe fan-out ──
@@ -1365,35 +1383,49 @@ export class AppHostDataRepository {
 
     private _clearErrors(): void {
         this._describeErrorMessage = undefined;
+        this._describeErrorIsCompatibility = false;
         this._psErrorMessage = undefined;
+        this._psErrorIsCompatibility = false;
         this._updateErrorMessage();
     }
 
-    private _setDescribeError(message: string | undefined): void {
-        if (this._describeErrorMessage !== message) {
+    private _setDescribeError(message: string | undefined, options?: { compatibility?: boolean }): void {
+        const compatibility = message !== undefined && (options?.compatibility ?? false);
+        if (this._describeErrorMessage !== message || this._describeErrorIsCompatibility !== compatibility) {
             this._describeErrorMessage = message;
+            this._describeErrorIsCompatibility = compatibility;
             this._updateErrorMessage();
         }
     }
 
-    private _setPsError(message: string | undefined): void {
-        if (this._psErrorMessage !== message) {
+    private _setPsError(message: string | undefined, options?: { compatibility?: boolean }): void {
+        const compatibility = message !== undefined && (options?.compatibility ?? false);
+        if (this._psErrorMessage !== message || this._psErrorIsCompatibility !== compatibility) {
             this._psErrorMessage = message;
+            this._psErrorIsCompatibility = compatibility;
             this._updateErrorMessage();
         }
     }
 
     private _updateErrorMessage(): void {
-        const message = this._viewMode === 'workspace'
+        const workspaceMode = this._viewMode === 'workspace';
+        const message = workspaceMode
             ? this._describeErrorMessage ?? this._psErrorMessage
             : this._psErrorMessage;
+        const isCompatibilityError = workspaceMode
+            ? (this._describeErrorMessage !== undefined
+                ? this._describeErrorIsCompatibility
+                : this._psErrorIsCompatibility)
+            : this._psErrorIsCompatibility;
         const hasError = message !== undefined;
-        if (this._errorMessage !== message) {
+        if (this._errorMessage !== message || this._errorIsCompatibility !== isCompatibilityError) {
             this._errorMessage = message;
+            this._errorIsCompatibility = isCompatibilityError;
             if (message) {
                 extensionLogOutputChannel.warn(message);
             }
             vscode.commands.executeCommand('setContext', 'aspire.fetchAppHostsError', hasError);
+            vscode.commands.executeCommand('setContext', 'aspire.fetchAppHostsCompatibilityError', hasError && isCompatibilityError);
             this._onDidChangeData.fire();
         }
     }

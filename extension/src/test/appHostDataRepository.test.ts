@@ -459,24 +459,32 @@ suite('AppHostDataRepository', () => {
     });
 
     test('describe watch reports minimum CLI version when command help is returned', async () => {
+        const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
         const repository = new AppHostDataRepository(terminalProvider);
 
-        repository.activate();
-        repository.setPanelVisible(true);
-        await waitForMicrotasks();
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
 
-        const lineCallback = spawnStub.firstCall.args[3].lineCallback;
-        const exitCallback = spawnStub.firstCall.args[3].exitCallback;
-        lineCallback('Description:');
-        lineCallback('Usage:');
-        lineCallback('aspire [command] [options]');
-        lineCallback('Commands:');
-        exitCallback(1);
+            const lineCallback = spawnStub.firstCall.args[3].lineCallback;
+            const exitCallback = spawnStub.firstCall.args[3].exitCallback;
+            lineCallback('Description:');
+            lineCallback('Usage:');
+            lineCallback('aspire [command] [options]');
+            lineCallback('Commands:');
+            exitCallback(1);
 
-        assert.strictEqual(repository.hasError, true);
-        assert.ok(repository.errorMessage?.includes('Aspire CLI 13.2.0'), repository.errorMessage);
+            assert.strictEqual(repository.hasError, true);
+            assert.ok(repository.errorMessage?.includes('Aspire CLI 13.2.0'), repository.errorMessage);
 
-        repository.dispose();
+            const compatibilityContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.fetchAppHostsCompatibilityError');
+            assert.strictEqual(compatibilityContextCalls.at(-1)?.args[2], true);
+        } finally {
+            repository.dispose();
+            executeCommandStub.restore();
+        }
     });
 
     test('describe watch does not report compatibility error when workspace AppHost returns no data successfully', async () => {
@@ -1741,6 +1749,10 @@ suite('AppHostDataRepository', () => {
             const errorContextCalls = executeCommandStub.getCalls().filter(call =>
                 call.args[0] === 'setContext' && call.args[1] === 'aspire.fetchAppHostsError');
             assert.strictEqual(errorContextCalls.at(-1)?.args[2], true);
+
+            const compatibilityContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.fetchAppHostsCompatibilityError');
+            assert.strictEqual(compatibilityContextCalls.at(-1)?.args[2], false);
         } finally {
             repository.dispose();
             executeCommandStub.restore();
@@ -1786,6 +1798,10 @@ suite('AppHostDataRepository', () => {
             const errorContextCalls = executeCommandStub.getCalls().filter(call =>
                 call.args[0] === 'setContext' && call.args[1] === 'aspire.fetchAppHostsError');
             assert.strictEqual(errorContextCalls.at(-1)?.args[2], true);
+
+            const compatibilityContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.fetchAppHostsCompatibilityError');
+            assert.strictEqual(compatibilityContextCalls.at(-1)?.args[2], false);
         } finally {
             repository.dispose();
             executeCommandStub.restore();
@@ -1820,6 +1836,10 @@ suite('AppHostDataRepository', () => {
             const errorContextCalls = executeCommandStub.getCalls().filter(call =>
                 call.args[0] === 'setContext' && call.args[1] === 'aspire.fetchAppHostsError');
             assert.strictEqual(errorContextCalls.at(-1)?.args[2], true);
+
+            const compatibilityContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.fetchAppHostsCompatibilityError');
+            assert.strictEqual(compatibilityContextCalls.at(-1)?.args[2], false);
         } finally {
             repository.dispose();
             executeCommandStub.restore();

@@ -152,6 +152,7 @@
   "views.appHosts.welcome": "No Aspire AppHosts detected in this workspace.\n[Refresh](command:aspire-vscode.refreshAppHosts)",
   "views.appHosts.globalWelcome": "No running Aspire AppHosts detected on this machine.\n[Refresh](command:aspire-vscode.globalRefreshAppHosts)",
   "views.appHosts.errorWelcome": "The Aspire panel workspace view requires Aspire CLI 13.2.0 or newer and an AppHost that references Aspire.Hosting 13.2.0 or newer. Install or update the Aspire CLI and update your AppHost package to get started.\n[Update Aspire CLI](command:aspire-vscode.updateSelf)\n[Refresh](command:aspire-vscode.globalRefreshAppHosts)",
+  "views.appHosts.genericErrorWelcome": "The Aspire panel couldn't load AppHost data right now.\n[Refresh](command:aspire-vscode.globalRefreshAppHosts)",
   "command.refreshAppHosts": "Refresh AppHosts",
   "command.globalRefreshAppHosts": "Refresh running AppHosts",
   "command.openDashboard": "Open Aspire Dashboard",
