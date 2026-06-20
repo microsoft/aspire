@@ -31,7 +31,8 @@ export function getCliSpawnCommand(command: string, args?: string[]): { command:
 }
 
 export function getCliSpawnDiagnostics(command: string, args: string[] | undefined, workingDirectory: string, noDebug: boolean | undefined, debugSessionId: string | undefined, env: Record<string, string | undefined>): string {
-    return `Spawning Aspire CLI process: ${[command, ...redactCliSpawnArgs(args)].join(' ')}; cwd=${workingDirectory}; noDebug=${noDebug}; debugSessionId=${debugSessionId}; ${EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT}=${env[EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT]}`;
+    const startupTimeout = getEnvironmentValue(env, EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT);
+    return `Spawning Aspire CLI process: ${[command, ...redactCliSpawnArgs(args)].join(' ')}; cwd=${workingDirectory}; noDebug=${noDebug}; debugSessionId=${debugSessionId}; ${EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT}=${startupTimeout}`;
 }
 
 export function mergeCliSpawnEnvironment(env: Record<string, string | undefined>, envVars?: EnvVar[]): void {
@@ -112,4 +113,13 @@ function redactCliSpawnArgs(args: string[] | undefined): string[] {
     // Keep the stable command shape that helps diagnose debug launches, but do not persist
     // user-provided command values in the extension log.
     return [...args.slice(0, delimiterIndex + 1), '<redacted>'];
+}
+
+function getEnvironmentValue(env: Record<string, string | undefined>, key: string): string | undefined {
+    if (process.platform !== 'win32' || env[key] !== undefined) {
+        return env[key];
+    }
+
+    const matchingKey = Object.keys(env).find(k => k.toLowerCase() === key.toLowerCase());
+    return matchingKey ? env[matchingKey] : undefined;
 }

@@ -76,4 +76,27 @@ suite('spawnCliProcess tests', () => {
             platformStub.restore();
         }
     });
+
+    test('formats startup timeout diagnostics case-insensitively on Windows', () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+
+        try {
+            const message = getCliSpawnDiagnostics(
+                'C:\\Tools\\aspire.exe',
+                ['run'],
+                'C:\\workspace',
+                false,
+                'debug-session-id',
+                {
+                    aspire_cli_start_timeout: '300',
+                });
+
+            assert.strictEqual(
+                message,
+                'Spawning Aspire CLI process: C:\\Tools\\aspire.exe run; cwd=C:\\workspace; noDebug=false; debugSessionId=debug-session-id; ASPIRE_CLI_START_TIMEOUT=300');
+        }
+        finally {
+            platformStub.restore();
+        }
+    });
 });
