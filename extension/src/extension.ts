@@ -933,6 +933,11 @@ async function executeE2eControlCommand(
         ...appHostTreeProvider.appHosts.map(appHost => appHost.appHostPath),
         appHostTreeProvider.workspaceAppHost?.appHostPath,
       ]);
+      // In E2E, VS Code's active debug session can be a child session. Dispose the
+      // tracked Aspire sessions directly so AppHost child sessions are stopped too.
+      for (const debugSession of aspireExtensionContext.aspireDebugSessions) {
+        debugSession.dispose();
+      }
       await vscode.debug.stopDebugging();
       for (const appHostPath of runningAppHostPaths) {
         appHostTreeProvider.notifyAppHostStopping(appHostPath);
