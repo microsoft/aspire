@@ -53,7 +53,7 @@ const defaultForwardableCliPathDeps: ForwardableCliPathDependencies = {
 };
 
 const defaultDeps: CliPathEnvironmentDependencies = {
-    getConfiguredPath: getConfiguredCliPath,
+    getConfiguredPath: () => getConfiguredCliPath(),
     ...defaultForwardableCliPathDeps,
     log: (message) => extensionLogOutputChannel.info(message),
     warn: (message) => extensionLogOutputChannel.warn(message),
@@ -64,6 +64,11 @@ export function isForwardableAspireCliPath(
     deps: ForwardableCliPathDependencies = defaultForwardableCliPathDeps,
 ): boolean {
     return configuredPath.length > 0 && deps.isAbsolute(configuredPath) && deps.fileExists(configuredPath);
+}
+
+export function getForwardableAspireCliPath(deps: CliPathEnvironmentDependencies = defaultDeps): string | undefined {
+    const configuredPath = deps.getConfiguredPath();
+    return isForwardableAspireCliPath(configuredPath, deps) ? configuredPath : undefined;
 }
 
 function fileExists(filePath: string): boolean {
@@ -95,28 +100,25 @@ export function syncAspireCliPathEnvironment(
     deps: CliPathEnvironmentDependencies = defaultDeps,
 ): string | undefined {
     const configuredPath = deps.getConfiguredPath();
+    const forwardablePath = getForwardableAspireCliPath({
+        ...deps,
+        getConfiguredPath: () => configuredPath,
+    });
 
     // Only forward paths that `ResolveAspireCliBundle` can consume. Relative,
     // shell-resolved, or stale absolute values fail the task's File.Exists guard
     // and make it stop before its PATH/ASPIRE_HOME fallback logic runs.
-    if (!configuredPath || !deps.isAbsolute(configuredPath)) {
+    if (forwardablePath === undefined) {
         collection.description = undefined;
         collection.delete(ASPIRE_CLI_PATH_ENV_VAR);
-        deps.log?.(`Not forwarding ${ASPIRE_CLI_PATH_ENV_VAR}: no absolute aspireCliExecutablePath is configured (current: ${configuredPath || '(empty)'}).`);
-        return undefined;
-    }
-
-    if (!deps.fileExists(configuredPath)) {
-        collection.description = undefined;
-        collection.delete(ASPIRE_CLI_PATH_ENV_VAR);
-        deps.warn?.(`Not forwarding ${ASPIRE_CLI_PATH_ENV_VAR}: configured aspireCliExecutablePath does not exist (${configuredPath}).`);
+        deps.log?.(`Not forwarding ${ASPIRE_CLI_PATH_ENV_VAR}: aspireCliExecutablePath must be an existing absolute path (current: ${configuredPath || '(empty)'}).`);
         return undefined;
     }
 
     collection.description = aspireCliPathEnvironmentDescription;
-    collection.replace(ASPIRE_CLI_PATH_ENV_VAR, configuredPath);
-    deps.log?.(`Forwarding ${ASPIRE_CLI_PATH_ENV_VAR}=${configuredPath} to terminals, tasks, and debug processes.`);
-    return configuredPath;
+    collection.replace(ASPIRE_CLI_PATH_ENV_VAR, forwardablePath);
+    deps.log?.(`Forwarding ${ASPIRE_CLI_PATH_ENV_VAR}=${forwardablePath} to terminals, tasks, and debug processes.`);
+    return forwardablePath;
 }
 
 /**

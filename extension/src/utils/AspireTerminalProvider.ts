@@ -6,8 +6,8 @@ import { RpcServerConnectionInfo } from '../server/AspireRpcServer';
 import { DcpServerConnectionInfo } from '../dcp/types';
 import { getRunSessionInfo, getSupportedCapabilities } from '../capabilities';
 import { EnvironmentVariables, getEnvironmentWithoutE2EBridgeVariables } from './environment';
-import { getConfiguredCliPath, resolveCliPath } from './cliPath';
-import { ASPIRE_CLI_PATH_ENV_VAR, isForwardableAspireCliPath } from './cliPathEnvironment';
+import { resolveCliPath } from './cliPath';
+import { ASPIRE_CLI_PATH_ENV_VAR, getForwardableAspireCliPath } from './cliPathEnvironment';
 import path from 'path';
 
 export const enum AnsiColors {
@@ -287,8 +287,8 @@ export class AspireTerminalProvider implements vscode.Disposable {
         // dev-loop CLI swap (see https://github.com/microsoft/aspire/issues/18073).
         // Only forward values that pass the task's File.Exists guard; stale
         // absolute paths trigger an ASPIRE009-style warning and suppress fallback.
-        const configuredCliPath = getConfiguredCliPath();
-        if (isForwardableAspireCliPath(configuredCliPath)) {
+        const configuredCliPath = getForwardableAspireCliPath();
+        if (configuredCliPath) {
             env[ASPIRE_CLI_PATH_ENV_VAR] = configuredCliPath;
         }
 

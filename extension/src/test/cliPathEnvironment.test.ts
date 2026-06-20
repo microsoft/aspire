@@ -5,6 +5,7 @@ import {
     ASPIRE_CLI_PATH_ENV_VAR,
     CliPathEnvironmentCollection,
     CliPathEnvironmentDependencies,
+    getForwardableAspireCliPath,
     registerCliPathEnvironmentSync,
     syncAspireCliPathEnvironment,
 } from '../utils/cliPathEnvironment';
@@ -33,6 +34,27 @@ function makeDeps(overrides: Partial<CliPathEnvironmentDependencies> = {}): CliP
         ...overrides,
     };
 }
+
+suite('cliPathEnvironment.getForwardableAspireCliPath tests', () => {
+    test('returns the configured path when it is absolute and exists', () => {
+        assert.strictEqual(getForwardableAspireCliPath(makeDeps({
+            getConfiguredPath: () => '/work/aspire/artifacts/bin/Aspire.Cli/Debug/net10.0/aspire',
+        })), '/work/aspire/artifacts/bin/Aspire.Cli/Debug/net10.0/aspire');
+    });
+
+    test('returns undefined when the configured path is a bare command name', () => {
+        assert.strictEqual(getForwardableAspireCliPath(makeDeps({
+            getConfiguredPath: () => 'aspire',
+        })), undefined);
+    });
+
+    test('returns undefined when the configured absolute path does not exist', () => {
+        assert.strictEqual(getForwardableAspireCliPath(makeDeps({
+            getConfiguredPath: () => '/missing/aspire',
+            fileExists: () => false,
+        })), undefined);
+    });
+});
 
 suite('cliPathEnvironment.syncAspireCliPathEnvironment tests', () => {
     test('sets AspireCliPath when the configured path is an absolute Unix path', () => {
