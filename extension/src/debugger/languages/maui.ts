@@ -462,7 +462,6 @@ async function resolveDefaultDevice(platform: string | undefined, targetKind: Ma
 
     const devices = await mauiDeviceListProvider();
     let candidates = devices.filter(device => hasPlatform(device, platform));
-    let usingRunningCandidates = false;
     if (targetKind === 'device') {
         candidates = candidates.filter(device => !device.isEmulator);
     } else {
@@ -470,7 +469,6 @@ async function resolveDefaultDevice(platform: string | undefined, targetKind: Ma
         const runningCandidates = candidates.filter(device => device.isRunning);
         if (runningCandidates.length > 0) {
             candidates = runningCandidates;
-            usingRunningCandidates = true;
         }
     }
 
