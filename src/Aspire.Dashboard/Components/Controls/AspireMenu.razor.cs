@@ -12,7 +12,6 @@ namespace Aspire.Dashboard.Components;
 public partial class AspireMenu : FluentComponentBase
 {
     private FluentMenu? _menu;
-    private readonly string _menuId = Identifier.NewId();
 
     [Parameter]
     public string? Anchor { get; set; }
