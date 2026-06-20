@@ -28,7 +28,7 @@
   "configuration.aspire.aspireCliExecutablePath": "The path to the Aspire CLI executable. If not set, the extension will attempt to use 'aspire' from the system PATH.",
   "configuration.aspire.enableAspireCliDebugLogging": "Enable console debug logging for Aspire CLI commands executed by the extension.",
   "configuration.aspire.enableAspireDcpDebugLogging": "Enable Developer Control Plane (DCP) debug logging for Aspire applications. Logs will be stored in the workspace's .aspire/dcp/logs-{debugSessionId} folder.",
-  "configuration.aspire.enableAspireDashboardAutoLaunch": "Legacy setting for Aspire Dashboard launch behavior. Use Aspire: Dashboard Browser instead. Explicit notification or off values still override Aspire: Dashboard Browser; launch uses Aspire: Dashboard Browser, falling back to VS Code's integrated browser for compatibility.",
+  "configuration.aspire.enableAspireDashboardAutoLaunch": "Legacy setting for Aspire Dashboard launch behavior. Use Aspire: Dashboard Browser instead. Explicit Aspire: Dashboard Browser none or notification values win. Otherwise, legacy notification or off values override browser-opening choices; launch uses Aspire: Dashboard Browser, falling back to VS Code's integrated browser for compatibility.",
   "configuration.aspire.enableAspireDashboardAutoLaunch.launch": "Use the configured dashboard browser behavior, falling back to VS Code's integrated browser for compatibility.",
   "configuration.aspire.enableAspireDashboardAutoLaunch.notification": "Show a notification with a link to open the dashboard.",
   "configuration.aspire.enableAspireDashboardAutoLaunch.off": "Do nothing \u2014 the dashboard URL is still printed in the terminal.",
