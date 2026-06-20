@@ -100,7 +100,9 @@ public sealed class GetAspireCliVersion : Microsoft.Build.Utilities.Task
                 : CreateStartInfo("aspire", "--version");
         }
 
-        return CreateStartInfo(cliPath, "--version");
+        return IsWindowsCommandScript(cliPath)
+            ? CreateStartInfo(GetCommandPromptPath(), $"/D /C \"\"{cliPath}\" --version\"")
+            : CreateStartInfo(cliPath, "--version");
     }
 
     private static ProcessStartInfo CreateStartInfo(string fileName, string arguments) => new()
@@ -118,6 +120,15 @@ public sealed class GetAspireCliVersion : Microsoft.Build.Utilities.Task
         var comSpec = Environment.GetEnvironmentVariable("ComSpec");
 
         return string.IsNullOrWhiteSpace(comSpec) ? "cmd" : comSpec;
+    }
+
+    private static bool IsWindowsCommandScript(string path)
+    {
+        var extension = Path.GetExtension(path);
+
+        return IsWindows()
+            && (string.Equals(extension, ".cmd", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(extension, ".bat", StringComparison.OrdinalIgnoreCase));
     }
 
     private static void TryKill(Process process)
