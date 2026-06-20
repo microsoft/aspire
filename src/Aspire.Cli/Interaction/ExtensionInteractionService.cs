@@ -52,28 +52,39 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
 
         _ = Task.Run(async () =>
         {
-            while (await _extensionTaskChannel.Reader.WaitToReadAsync(_cancellationToken).ConfigureAwait(false))
+            try
             {
-                try
-                {
-                    var taskFunction = await _extensionTaskChannel.Reader.ReadAsync().ConfigureAwait(false);
-                    await taskFunction.Invoke();
-                }
-                catch (Exception ex) when (ex is not ExtensionOperationCanceledException)
+                while (await _extensionTaskChannel.Reader.WaitToReadAsync(_cancellationToken).ConfigureAwait(false))
                 {
                     try
                     {
-                        await Backchannel.DisplayErrorAsync(StringUtils.RemoveMarkup(ex.Message), _cancellationToken);
+                        var taskFunction = await _extensionTaskChannel.Reader.ReadAsync().ConfigureAwait(false);
+                        await taskFunction.Invoke();
                     }
-                    catch (Exception displayErrorException)
+                    catch (Exception ex) when (ex is not ExtensionOperationCanceledException)
                     {
-                        // Keep the single-reader pump alive even when the extension connection is
-                        // already broken; otherwise the final flush sentinel can never be processed.
-                        _logger.LogDebug(displayErrorException, "Failed to display an extension operation error through the extension backchannel.");
-                    }
+                        try
+                        {
+                            await Backchannel.DisplayErrorAsync(StringUtils.RemoveMarkup(ex.Message), _cancellationToken);
+                        }
+                        catch (Exception displayErrorException)
+                        {
+                            // Keep the single-reader pump alive even when the extension connection is
+                            // already broken; otherwise the final flush sentinel can never be processed.
+                            _logger.LogDebug(displayErrorException, "Failed to display an extension operation error through the extension backchannel.");
+                        }
 
-                    _consoleInteractionService.DisplayError(ex.Message);
+                        _consoleInteractionService.DisplayError(ex.Message);
+                    }
                 }
+            }
+            catch (OperationCanceledException) when (_cancellationToken.IsCancellationRequested)
+            {
+                // Expected during disposal — the channel was completed and/or the token cancelled.
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error in extension task channel processing loop.");
             }
         }, _cancellationToken);
     }
