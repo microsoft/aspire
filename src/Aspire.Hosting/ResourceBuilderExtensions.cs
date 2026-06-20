@@ -2823,24 +2823,6 @@ public static class ResourceBuilderExtensions
 
         var endpointName = endpoint.EndpointName;
 
-        builder.OnResourceEndpointsAllocated((_, @event, ct) =>
-        {
-            if (!endpoint.Exists)
-            {
-                throw new DistributedApplicationException($"The endpoint '{endpointName}' does not exist on the resource '{builder.Resource.Name}'.");
-            }
-
-            return Task.CompletedTask;
-        });
-
-        Uri? uri = null;
-        builder.OnBeforeResourceStarted((_, @event, ct) =>
-        {
-            var baseUri = new Uri(endpoint.Url, UriKind.Absolute);
-            uri = new Uri(baseUri, path);
-            return Task.CompletedTask;
-        });
-
         var healthCheckKey = $"{builder.Resource.Name}_{endpointName}_{path}_{statusCode}_check";
 
         builder.ApplicationBuilder.Services.AddHttpClient();
@@ -2848,8 +2830,9 @@ public static class ResourceBuilderExtensions
 
         builder.ApplicationBuilder.Services.AddHealthChecks().Add(new HealthCheckRegistration(
             healthCheckKey,
-            serviceProvider => new DeferredUriHealthCheck(
-                () => uri,
+            serviceProvider => new EndpointUriHealthCheck(
+                endpoint,
+                path,
                 statusCode.Value,
                 () => serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(healthCheckKey)),
             failureStatus: default,
