@@ -2823,6 +2823,17 @@ public static class ResourceBuilderExtensions
 
         var endpointName = endpoint.EndpointName;
 
+        // Validate that the endpoint exists during allocation to fail fast on misconfiguration.
+        builder.OnResourceEndpointsAllocated((_, @event, ct) =>
+        {
+            if (!endpoint.Exists)
+            {
+                throw new DistributedApplicationException($"The endpoint '{endpointName}' does not exist on the resource '{builder.Resource.Name}'.");
+            }
+
+            return Task.CompletedTask;
+        });
+
         var healthCheckKey = $"{builder.Resource.Name}_{endpointName}_{path}_{statusCode}_check";
 
         builder.ApplicationBuilder.Services.AddHttpClient();
