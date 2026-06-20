@@ -78,13 +78,11 @@
                            FixedPlacement="true"
                            Class="resources-filter-popup">
                 <Body>
-                    <AspirePopupFocusNavigation AnchorId="resourceFilterButton" @bind-Open="_isFilterPopupVisible">
-                        <ResourceFilters ResourceStates="@PageViewModel.ResourceStatesToVisibility"
-                                         ResourceTypes="@PageViewModel.ResourceTypesToVisibility"
-                                         ResourceHealthStates="@PageViewModel.ResourceHealthStatusesToVisibility"
-                                         OnAllFilterVisibilityCheckedChangedAsync="@OnAllFilterVisibilityCheckedChangedAsync"
-                                         OnResourceFilterVisibilityChangedAsync="@OnResourceFilterVisibilityChangedAsync" />
-                    </AspirePopupFocusNavigation>
+                    <ResourceFilters ResourceStates="@PageViewModel.ResourceStatesToVisibility"
+                                     ResourceTypes="@PageViewModel.ResourceTypesToVisibility"
+                                     ResourceHealthStates="@PageViewModel.ResourceHealthStatusesToVisibility"
+                                     OnAllFilterVisibilityCheckedChangedAsync="@OnAllFilterVisibilityCheckedChangedAsync"
+                                     OnResourceFilterVisibilityChangedAsync="@OnResourceFilterVisibilityChangedAsync" />
                 </Body>
             </FluentPopover>
 

@@ -9,12 +9,10 @@ using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components;
 
-public partial class AspireMenu : FluentComponentBase, IAsyncDisposable
+public partial class AspireMenu : FluentComponentBase
 {
     private FluentMenu? _menu;
     private readonly string _menuId = Identifier.NewId();
-    private DotNetObjectReference<AspireMenu>? _menuReference;
-    private string? _registeredAnchorId;
 
     [Parameter]
     public string? Anchor { get; set; }
@@ -56,31 +54,12 @@ public partial class AspireMenu : FluentComponentBase, IAsyncDisposable
 
     private int CalculatedVerticalThreshold => VerticalThreshold ?? (Items.Count * EstimatedItemHeight + MenuVerticalPadding);
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (_registeredAnchorId is not null && (!Open || _registeredAnchorId != Anchor))
-        {
-            await DisposeKeyboardNavigationAsync();
-        }
-
-        if (Open && Anchored && _registeredAnchorId is null && !string.IsNullOrEmpty(Anchor))
-        {
-            var anchor = Anchor;
-            _registeredAnchorId = anchor;
-            _menuReference ??= DotNetObjectReference.Create(this);
-            // Fluent UI's menu keyboard helper currently listens from the popup element after the
-            // fluent-menu web component can stop bubbling Tab events. Use Aspire's capture-phase
-            // mitigation until Fluent UI exposes equivalent behavior we can adopt directly.
-            // See: https://github.com/microsoft/fluentui-blazor/blob/49346cfc358677b46bc7737aa2db1a548202dd6f/src/Core/Components/AnchoredRegion/FluentAnchoredRegion.razor.js
-            await JS.InvokeVoidAsync("initializeAspirePopupKeyboardNavigation", anchor, _menuId, _menuReference, new { tabExitsAlways = true });
-        }
-    }
-
-    [JSInvokable]
     public async Task CloseAsync()
     {
-        await SetOpenAsync(false);
-        StateHasChanged();
+        if (_menu is { } menu)
+        {
+            await menu.CloseAsync();
+        }
     }
 
     public async Task OpenAsync(int screenWidth, int screenHeight, int clientX, int clientY)
@@ -152,39 +131,11 @@ public partial class AspireMenu : FluentComponentBase, IAsyncDisposable
 
     private async Task SetOpenAsync(bool open)
     {
-        if (!open)
-        {
-            await DisposeKeyboardNavigationAsync();
-        }
-
         Open = open;
 
         if (OpenChanged.HasDelegate)
         {
             await OpenChanged.InvokeAsync(open);
         }
-    }
-
-    private async ValueTask DisposeKeyboardNavigationAsync()
-    {
-        if (_registeredAnchorId is not null)
-        {
-            var registeredAnchorId = _registeredAnchorId;
-            _registeredAnchorId = null;
-            try
-            {
-                await JS.InvokeVoidAsync("disposeAspirePopupKeyboardNavigation", registeredAnchorId, _menuId);
-            }
-            catch (JSDisconnectedException)
-            {
-                // Disposal can run while the Blazor circuit is disconnecting; the browser will drop the listener with the page.
-            }
-        }
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        await DisposeKeyboardNavigationAsync();
-        _menuReference?.Dispose();
     }
 }
