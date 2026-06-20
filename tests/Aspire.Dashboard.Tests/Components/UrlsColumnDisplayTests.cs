@@ -5,7 +5,7 @@ using Aspire.Dashboard.Components;
 using Aspire.Dashboard.Model;
 using Xunit;
 
-namespace Aspire.Dashboard.Tests;
+namespace Aspire.Dashboard.Tests.Components;
 
 public sealed class UrlsColumnDisplayTests
 {
