@@ -1,0 +1,9 @@
+{
+  "author": "aspire-repo-bot",
+  "comment": "Bot-authored PR updating PackageValidationBaselineVersion to 13.4.6. Engineering systems change with no user-facing impact.",
+  "mergedAt": "2026-06-20T17:50:53Z",
+  "number": 18357,
+  "runDate": "2026-06-20T18:26:53Z",
+  "status": "excluded",
+  "title": "Update PackageValidationBaselineVersion to 13.4.6"
+}
