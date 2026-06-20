@@ -424,6 +424,31 @@ suite('InteractionService endpoints', () => {
 		}
 	});
 
+	test("displayDashboardUrls shows default changed notification once for unconfigured users", async () => {
+		const sandbox = sinon.createSandbox();
+
+		try {
+			sandbox.stub(extensionLogOutputChannel, 'info');
+			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves();
+			sandbox.stub(vscode.workspace, 'getConfiguration').returns(createAspireConfiguration());
+			const globalState = createTestMemento();
+			const testInfo = await createTestRpcServer(null, undefined, globalState);
+
+			await testInfo.interactionService.displayDashboardUrls({
+				BaseUrlWithLoginToken: 'http://localhost/login?t=base-secret'
+			});
+			await testInfo.interactionService.displayDashboardUrls({
+				BaseUrlWithLoginToken: 'http://localhost/login?t=base-secret'
+			});
+
+			assert.strictEqual(showInformationMessageStub.callCount, 1);
+			assert.strictEqual(globalState.get('aspire.dashboardBrowser.defaultChangedNotification.v1'), true);
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
 	test("displayDashboardUrls opens the configured dashboard browser", async () => {
 		const sandbox = sinon.createSandbox();
 
@@ -535,6 +560,67 @@ suite('InteractionService endpoints', () => {
 
 			assert.strictEqual(openDashboardStub.callCount, 0);
 			assert.strictEqual(showInformationMessageStub.callCount, 0);
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	test("displayDashboardUrls opens launch configuration when notification comes from debug configuration", async () => {
+		const sandbox = sinon.createSandbox();
+
+		try {
+			sandbox.stub(extensionLogOutputChannel, 'info');
+			sandbox.stub(vscode.workspace, 'getConfiguration').returns(createAspireConfiguration({
+				dashboardBrowser: 'openExternalBrowser'
+			}));
+			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').callsFake(async (_message: string, ...args: unknown[]) => {
+				return args.find((arg): arg is vscode.MessageItem => typeof arg === 'object' && arg !== null && 'title' in arg && arg.title === 'Settings');
+			});
+			const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand');
+			const mockDebugSession = {
+				configuration: {
+					dashboardBrowser: 'notification'
+				},
+				sendMessage: () => {}
+			} as unknown as AspireDebugSession;
+			const testInfo = await createTestRpcServer(null, () => mockDebugSession);
+
+			await testInfo.interactionService.displayDashboardUrls({
+				BaseUrlWithLoginToken: 'http://localhost/login?t=base-secret'
+			});
+			await new Promise(resolve => setTimeout(resolve, 2000));
+
+			assert.strictEqual(showInformationMessageStub.callCount, 1);
+			assert.ok(executeCommandStub.calledWith('workbench.action.debug.configure'));
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	test("displayDashboardUrls does not show default changed notification when launch configuration opts out", async () => {
+		const sandbox = sinon.createSandbox();
+
+		try {
+			sandbox.stub(extensionLogOutputChannel, 'info');
+			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves();
+			sandbox.stub(vscode.workspace, 'getConfiguration').returns(createAspireConfiguration());
+			const mockDebugSession = {
+				configuration: {
+					dashboardBrowser: 'none'
+				},
+				sendMessage: () => {}
+			} as unknown as AspireDebugSession;
+			const globalState = createTestMemento();
+			const testInfo = await createTestRpcServer(null, () => mockDebugSession, globalState);
+
+			await testInfo.interactionService.displayDashboardUrls({
+				BaseUrlWithLoginToken: 'http://localhost/login?t=base-secret'
+			});
+
+			assert.strictEqual(showInformationMessageStub.callCount, 0);
+			assert.strictEqual(globalState.get('aspire.dashboardBrowser.defaultChangedNotification.v1'), undefined);
 		}
 		finally {
 			sandbox.restore();
@@ -687,6 +773,23 @@ function createAspireConfiguration(values: Record<string, unknown> = {}): vscode
 	} as vscode.WorkspaceConfiguration;
 }
 
+function createTestMemento(): vscode.Memento {
+	const values = new Map<string, unknown>();
+
+	return {
+		keys: () => [...values.keys()],
+		get: <T>(key: string, defaultValue?: T) => values.has(key) ? values.get(key) as T : defaultValue as T,
+		update: async (key: string, value: unknown) => {
+			if (value === undefined) {
+				values.delete(key);
+				return;
+			}
+
+			values.set(key, value);
+		},
+	} as vscode.Memento;
+}
+
 function restoreEnvironmentVariable(name: string, value: string | undefined): void {
 	if (value === undefined) {
 		delete process.env[name];
@@ -700,9 +803,9 @@ class TestCliRpcClient implements ICliRpcClient {
     debugSessionId: string | null;
     interactionService: IInteractionService;
 
-    constructor(debugSessionId: string | null, getAspireDebugSession: () => AspireDebugSession | null) {
+    constructor(debugSessionId: string | null, getAspireDebugSession: () => AspireDebugSession | null, globalState?: vscode.Memento) {
         this.debugSessionId = debugSessionId;
-        this.interactionService = new InteractionService(getAspireDebugSession, this);
+        this.interactionService = new InteractionService(getAspireDebugSession, this, undefined, globalState);
     }
 
 	stopCli(): Promise<void> {
@@ -730,12 +833,12 @@ class TestCliRpcClient implements ICliRpcClient {
 	}
 }
 
-async function createTestRpcServer(debugSessionId?: string | null, getAspireDebugSession?: () => AspireDebugSession | null): Promise<RpcServerTestInfo> {
+async function createTestRpcServer(debugSessionId?: string | null, getAspireDebugSession?: () => AspireDebugSession | null, globalState?: vscode.Memento): Promise<RpcServerTestInfo> {
     getAspireDebugSession ??= () => {
         return null;
     };
 
-	const rpcClient = new TestCliRpcClient(debugSessionId ?? null, getAspireDebugSession);
+	const rpcClient = new TestCliRpcClient(debugSessionId ?? null, getAspireDebugSession, globalState);
 
 	const rpcServer = await AspireRpcServer.create(() => rpcClient);
 

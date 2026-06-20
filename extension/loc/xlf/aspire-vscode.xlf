@@ -611,7 +611,7 @@
       <source xml:lang="en">Start</source>
     </trans-unit>
     <trans-unit id="walkthrough.getStarted.runApp.description">
-      <source xml:lang="en">Start your Aspire app to launch all services and open the real-time dashboard.&#10;&#10;[Run AppHost](command:aspire-vscode.runAppHostCommand)&#10;&#10;[Debug AppHost](command:aspire-vscode.debugAppHostCommand)</source>
+      <source xml:lang="en">Start your Aspire app to launch all services. The dashboard stays available from the Aspire panel when you need it.&#10;&#10;[Run AppHost](command:aspire-vscode.runAppHostCommand)&#10;&#10;[Debug AppHost](command:aspire-vscode.debugAppHostCommand)</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostStartingDescription">
       <source xml:lang="en">Starting...</source>

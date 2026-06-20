@@ -5,7 +5,7 @@ import type { AspireExtensionE2EControlCommand } from '../types/extensionApi';
 import { getCommandInvocationCount, getDebugLaunchCount, isSamePath, waitForCommandOutcome, waitForDebugLaunch, waitForExtensionState, waitForRepositoryIdle, waitForWorkspaceAppHost } from './helpers/assertions';
 import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setDebugLaunchSuppressedForE2E, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
-import { openAspireView } from './helpers/vscode';
+import { chooseActiveQuickPick, openAspireView } from './helpers/vscode';
 
 suite('Aspire extension edge case E2E', function () {
     this.timeout(180000);
@@ -61,12 +61,13 @@ suite('Aspire extension edge case E2E', function () {
         await waitForCommandOutcome('aspire-vscode.settings', 'success', 60000, settingsBefore);
 
         const configureBefore = getCommandInvocationCount('aspire-vscode.configureLaunchJson');
-        await executeE2eControlCommand({ name: 'executeAspireCommand', commandId: 'aspire-vscode.configureLaunchJson' });
+        await executeE2eControlCommand({ name: 'executeAspireCommand', commandId: 'aspire-vscode.configureLaunchJson' }, { waitFor: 'started' });
+        await chooseActiveQuickPick('Do not open the dashboard');
         await waitForCommandOutcome('aspire-vscode.configureLaunchJson', 'success', 60000, configureBefore);
 
         const launchJsonPath = path.join(getWorkspaceRoot(), '.vscode', 'launch.json');
-        const launchJson = JSON.parse(fs.readFileSync(launchJsonPath, 'utf8')) as { configurations?: Array<{ type?: string }> };
-        assert.ok(launchJson.configurations?.some(configuration => configuration.type === 'aspire'));
+        const launchJson = JSON.parse(fs.readFileSync(launchJsonPath, 'utf8')) as { configurations?: Array<{ type?: string; dashboardBrowser?: string }> };
+        assert.ok(launchJson.configurations?.some(configuration => configuration.type === 'aspire' && configuration.dashboardBrowser === 'none'));
     });
 
     test('clears launch state after suppressed debug launch requests', async () => {

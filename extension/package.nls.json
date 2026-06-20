@@ -212,7 +212,7 @@
   "walkthrough.getStarted.createProject.title": "Create a new project",
   "walkthrough.getStarted.createProject.description": "Scaffold a new Aspire project from a starter template. The template includes an AppHost orchestrator, a sample API, and a web frontend.\n\n[Create new project](command:aspire-vscode.new)",
   "walkthrough.getStarted.runApp.title": "Run your app",
-  "walkthrough.getStarted.runApp.description": "Start your Aspire app to launch all services and open the real-time dashboard.\n\n[Run AppHost](command:aspire-vscode.runAppHostCommand)\n\n[Debug AppHost](command:aspire-vscode.debugAppHostCommand)",
+  "walkthrough.getStarted.runApp.description": "Start your Aspire app to launch all services. The dashboard stays available from the Aspire panel when you need it.\n\n[Run AppHost](command:aspire-vscode.runAppHostCommand)\n\n[Debug AppHost](command:aspire-vscode.debugAppHostCommand)",
   "walkthrough.getStarted.dashboard.title": "Explore the dashboard",
   "walkthrough.getStarted.dashboard.description": "The Aspire Dashboard shows your resources, endpoints, logs, traces, and metrics \u2014 all in one place.\n\n[Open dashboard](command:aspire-vscode.openDashboard)",
   "walkthrough.getStarted.nextSteps.title": "Next steps",
