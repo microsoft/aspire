@@ -22,29 +22,6 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task ViewOptionsMenu_TabMovesFocusToNextLogicalControl()
-    {
-        await RunTestAsync(async page =>
-        {
-            await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
-
-            var viewOptions = page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = Dashboard.Resources.Resources.ResourcesChangeViewOptions });
-            await viewOptions.ClickAsync();
-            await Assertions.Expect(page.GetByRole(AriaRole.Menu)).ToBeVisibleAsync();
-
-            await page.Keyboard.PressAsync("Tab");
-            await Assertions.Expect(page.GetByRole(AriaRole.Menu)).ToBeVisibleAsync();
-            Assert.Equal(Dashboard.Resources.Resources.ResourceCollapseAllChildren, await GetActiveElementNameAsync(page));
-
-            await page.Keyboard.PressAsync("Tab");
-
-            await Assertions.Expect(page.GetByRole(AriaRole.Menu)).ToBeHiddenAsync();
-            Assert.Equal(Layout.NavMenuResourcesTab, await GetActiveElementNameAsync(page));
-        });
-    }
-
-    [Fact]
-    [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task ResourceViewTabs_RemainVisibleAtNarrowViewport()
     {
         await RunTestAsync(async page =>
@@ -61,19 +38,6 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             Assert.True(tabBounds.X >= 0);
             Assert.True(tabBounds.X + tabBounds.Width <= 320);
         });
-    }
-
-    private static Task<string?> GetActiveElementNameAsync(IPage page)
-    {
-        return page.EvaluateAsync<string?>(
-            """
-            () => {
-                const activeElement = document.activeElement;
-                return activeElement?.getAttribute('aria-label')
-                    ?? activeElement?.getAttribute('title')
-                    ?? activeElement?.textContent?.trim().replace(/\s+/g, ' ');
-            }
-            """);
     }
 
     public sealed class ResourcesDashboardServerFixture : DashboardServerFixture

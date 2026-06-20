@@ -173,9 +173,6 @@ internal static class FluentUISetupHelpers
         context.Services.AddScoped<SpanMenuBuilder>();
         context.Services.AddScoped<TraceMenuBuilder>();
         context.Services.AddSingleton<IOptions<DashboardOptions>>(Options.Create(new DashboardOptions()));
-
-        context.JSInterop.SetupVoid("initializeAspirePopupKeyboardNavigation", _ => true);
-        context.JSInterop.SetupVoid("disposeAspirePopupKeyboardNavigation", _ => true);
     }
 
     public static void SetupFluentUIComponents(TestContext context)

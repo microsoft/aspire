@@ -17,8 +17,6 @@ public class AspireMenuButtonTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
         FluentUISetupHelpers.SetupFluentButton(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
-        JSInterop.SetupVoid("initializeAspirePopupKeyboardNavigation", _ => true);
-        JSInterop.SetupVoid("disposeAspirePopupKeyboardNavigation", _ => true);
 
         var cut = Render(builder =>
         {
