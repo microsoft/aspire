@@ -233,7 +233,6 @@ export class AppHostDataRepository {
     private _describeErrorMessage: string | undefined;
     private _describeErrorIsCompatibility = false;
     private _psErrorMessage: string | undefined;
-    private _psErrorIsCompatibility = false;
     private _errorMessage: string | undefined;
     private _errorIsCompatibility = false;
 
@@ -1385,7 +1384,6 @@ export class AppHostDataRepository {
         this._describeErrorMessage = undefined;
         this._describeErrorIsCompatibility = false;
         this._psErrorMessage = undefined;
-        this._psErrorIsCompatibility = false;
         this._updateErrorMessage();
     }
 
@@ -1398,11 +1396,9 @@ export class AppHostDataRepository {
         }
     }
 
-    private _setPsError(message: string | undefined, options?: { compatibility?: boolean }): void {
-        const compatibility = message !== undefined && (options?.compatibility ?? false);
-        if (this._psErrorMessage !== message || this._psErrorIsCompatibility !== compatibility) {
+    private _setPsError(message: string | undefined): void {
+        if (this._psErrorMessage !== message) {
             this._psErrorMessage = message;
-            this._psErrorIsCompatibility = compatibility;
             this._updateErrorMessage();
         }
     }
@@ -1415,8 +1411,8 @@ export class AppHostDataRepository {
         const isCompatibilityError = workspaceMode
             ? (this._describeErrorMessage !== undefined
                 ? this._describeErrorIsCompatibility
-                : this._psErrorIsCompatibility)
-            : this._psErrorIsCompatibility;
+                : false)
+            : false;
         const hasError = message !== undefined;
         if (this._errorMessage !== message || this._errorIsCompatibility !== isCompatibilityError) {
             this._errorMessage = message;
