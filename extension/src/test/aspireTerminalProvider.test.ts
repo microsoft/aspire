@@ -645,6 +645,17 @@ suite('AspireTerminalProvider tests', () => {
             }
         });
 
+        test('forwards AspireCliPath even when extension backchannel variables are suppressed', () => {
+            const getConfiguredCliPathStub = sinon.stub(cliPathModule, 'getConfiguredCliPath').returns(__filename);
+            try {
+                const env = terminalProvider.createEnvironment(undefined, undefined, true);
+                assert.strictEqual(env.AspireCliPath, __filename);
+                assert.strictEqual(env.ASPIRE_EXTENSION_ENDPOINT, undefined);
+            } finally {
+                getConfiguredCliPathStub.restore();
+            }
+        });
+
         test('omits AspireCliPath when the configured path is empty', () => {
             const getConfiguredCliPathStub = sinon.stub(cliPathModule, 'getConfiguredCliPath').returns('');
             try {

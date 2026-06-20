@@ -255,26 +255,8 @@ export class AspireTerminalProvider implements vscode.Disposable {
     }
 
     createEnvironment(debugSessionId?: string, noDebug?: boolean, noExtensionVariables?: boolean): any {
-        if (noExtensionVariables) {
-            return getEnvironmentWithoutE2EBridgeVariables();
-        }
-
         const env: any = {
             ...getEnvironmentWithoutE2EBridgeVariables(),
-
-            // Extension connection information
-            ASPIRE_EXTENSION_ENDPOINT: this.rpcServerConnectionInfo.address,
-            ASPIRE_EXTENSION_TOKEN: this.rpcServerConnectionInfo.token,
-            ASPIRE_EXTENSION_CERT: Buffer.from(this.rpcServerConnectionInfo.cert, 'utf-8').toString('base64'),
-            ASPIRE_EXTENSION_PROMPT_ENABLED: 'true',
-
-            // Use the current locale in the CLI
-            ASPIRE_LOCALE_OVERRIDE: vscode.env.language,
-
-            // Include DCP server info
-            DEBUG_SESSION_PORT: this.dcpServerConnectionInfo.address,
-            DEBUG_SESSION_TOKEN: this.dcpServerConnectionInfo.token,
-            DEBUG_SESSION_SERVER_CERTIFICATE: this.dcpServerConnectionInfo.certificate,
         };
 
         // Forward aspire.aspireCliExecutablePath as AspireCliPath so MSBuild's
@@ -291,6 +273,26 @@ export class AspireTerminalProvider implements vscode.Disposable {
         if (configuredCliPath) {
             env[ASPIRE_CLI_PATH_ENV_VAR] = configuredCliPath;
         }
+
+        if (noExtensionVariables) {
+            return env;
+        }
+
+        Object.assign(env, {
+            // Extension connection information
+            ASPIRE_EXTENSION_ENDPOINT: this.rpcServerConnectionInfo.address,
+            ASPIRE_EXTENSION_TOKEN: this.rpcServerConnectionInfo.token,
+            ASPIRE_EXTENSION_CERT: Buffer.from(this.rpcServerConnectionInfo.cert, 'utf-8').toString('base64'),
+            ASPIRE_EXTENSION_PROMPT_ENABLED: 'true',
+
+            // Use the current locale in the CLI
+            ASPIRE_LOCALE_OVERRIDE: vscode.env.language,
+
+            // Include DCP server info
+            DEBUG_SESSION_PORT: this.dcpServerConnectionInfo.address,
+            DEBUG_SESSION_TOKEN: this.dcpServerConnectionInfo.token,
+            DEBUG_SESSION_SERVER_CERTIFICATE: this.dcpServerConnectionInfo.certificate,
+        });
 
         if (debugSessionId) {
             this.addDcpRunSessionEnvironment(env, debugSessionId, noDebug);
