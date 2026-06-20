@@ -50,7 +50,7 @@ internal static class CliTestHelper
 {
     public static InstallSidecarReader CreateSidecarReader(ITestOutputHelper outputHelper)
     {
-        using var loggerFactory = LoggerFactory.Create(builder => builder.AddXunit(outputHelper));
+        var loggerFactory = LoggerFactory.Create(builder => builder.AddXunit(outputHelper));
         return new InstallSidecarReader(loggerFactory.CreateLogger<InstallSidecarReader>());
     }
 

@@ -439,33 +439,17 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     }
 
     /// <summary>
-    /// Resolves identity from the resolver and constructs a <see cref="CliExecutionContext"/>
-    /// with those values — mirroring what <c>Program.BuildCliExecutionContext(resolver)</c> does.
+    /// Exercises the real <c>Program.BuildCliExecutionContext(resolver)</c> production path
+    /// so that the identity-override OR-computation and directory derivation are tested
+    /// against the actual implementation rather than a local copy.
     /// </summary>
     private static CliExecutionContext BuildContextFromResolver(TemporaryWorkspace workspace, IIdentityResolver resolver)
     {
-        var channel = resolver.ResolveChannel();
-        var version = resolver.ResolveVersion();
-        var commit = resolver.ResolveCommit();
-        var nugetOverride = resolver.ResolveNuGetServiceIndexOverride();
-        var packagesOverride = resolver.ResolvePackagesDirectory();
-
-        static bool IsOverride(IdentitySource source) => source is IdentitySource.Environment or IdentitySource.Sidecar;
-        var overridden = IsOverride(channel.Source) || IsOverride(version.Source) || IsOverride(commit.Source) || IsOverride(nugetOverride.Source) || IsOverride(packagesOverride.Source);
-
-        return new CliExecutionContext(
-            workingDirectory: workspace.WorkspaceRoot,
-            hivesDirectory: new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "hives")),
-            cacheDirectory: new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "cache")),
-            sdksDirectory: new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "sdks")),
-            logsDirectory: new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "logs")),
+        return Program.BuildCliExecutionContext(
+            debugMode: false,
+            logsDirectory: Path.Combine(workspace.WorkspaceRoot.FullName, "logs"),
             logFilePath: Path.Combine(workspace.WorkspaceRoot.FullName, "logs", "test.log"),
-            identityChannel: channel.Value,
-            identityVersion: version.Value,
-            identityCommit: commit.Value,
-            nugetServiceIndexOverride: nugetOverride.Value,
-            identityOverridden: overridden,
-            identityPackagesDirectory: string.IsNullOrWhiteSpace(packagesOverride.Value) ? null : new DirectoryInfo(packagesOverride.Value));
+            identityResolver: resolver);
     }
 
     private static Assembly BuildAssembly(string assemblyName, string? channel, string informationalVersion)
