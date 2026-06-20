@@ -100,7 +100,8 @@ public class SqlServerServerResource : ContainerResource, IResourceWithConnectio
     /// <remarks>
     /// <para>Format: <c>jdbc:sqlserver://{Host}:{Port}[;databaseName={Database}][;trustServerCertificate=true]</c>.</para>
     /// <para>User and password credentials are not included in the JDBC connection string.
-    /// Use the <c>Username</c> and <c>Password</c> connection properties to access credentials.</para>    /// </remarks>
+    /// Use the <c>Username</c> and <c>Password</c> connection properties to access credentials.</para>
+    /// </remarks>
     public ReferenceExpression JdbcConnectionString => BuildJdbcConnectionString();
 
     /// <summary>
