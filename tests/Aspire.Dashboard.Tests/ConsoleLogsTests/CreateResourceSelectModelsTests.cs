@@ -200,4 +200,3 @@ public class CreateResourceSelectModelsTests
         Assert.Equal(allResourceViewModel, viewModels[0]);
     }
 }
-
