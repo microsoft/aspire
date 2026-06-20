@@ -28,7 +28,7 @@
   <ItemGroup>
     <!-- Expose the built RID tool path to tests via assembly metadata so the older-SDK fallback can be exercised. -->
     <AssemblyMetadata Include="AspireRuntimeIdentifierToolPath" Value="$(ArtifactsBinDir)Aspire.RuntimeIdentifier.Tool\$(Configuration)\$(DefaultTargetFramework)\Aspire.RuntimeIdentifier.Tool.dll" />
-    <AssemblyMetadata Include="AspireHostingTasksAssemblyPath" Value="$(ArtifactsBinDir)Aspire.Hosting.Tasks\$(Configuration)\net8.0\Aspire.Hosting.Tasks.dll" />
+    <AssemblyMetadata Include="AspireHostingTasksAssemblyPath" Value="$(ArtifactsBinDir)Aspire.Hosting.Tasks\$(Configuration)\$(TargetFramework)\Aspire.Hosting.Tasks.dll" />
   </ItemGroup>
 
   <ItemGroup>
