@@ -230,47 +230,36 @@ namespace Projects%3B
   <PropertyGroup>
     <_AspireCliRunHookSuppressed Condition="'$(_AspireSuppressCliRunHook)' == 'true' or '$(_AspireSuppressCliRunHook)' == '1'">true</_AspireCliRunHookSuppressed>
     <_AspireCliRunHookSuppressed Condition="'$(ASPIRE_SUPPRESS_CLI_RUN_HOOK)' == 'true' or '$(ASPIRE_SUPPRESS_CLI_RUN_HOOK)' == '1'">true</_AspireCliRunHookSuppressed>
-    <!-- The minimum Aspire CLI version required for the run hook to work correctly -->
     <_AspireMinimumCliVersion>13.5.0</_AspireMinimumCliVersion>
-    <!-- By default, allow the hook unless we explicitly find an unsupported version -->
-    <_AspireCliVersionSupportsRunHook>true</_AspireCliVersionSupportsRunHook>
+    <_AspireCliVersionSupportsRunHook>false</_AspireCliVersionSupportsRunHook>
   </PropertyGroup>
 
-  <!-- Determines if the resolved CLI version is sufficient for the run hook delegation -->
+  <!-- Determines if the resolved CLI version is sufficient for the run hook delegation. -->
   <Target Name="_AspireCheckCliVersion"
-          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(_AspireCliRunHookSuppressed)' != 'true' and '$(AspireCliPath)' != ''">
-    <!-- Only check the version if an explicit CLI path is provided -->
-    <PropertyGroup>
-      <_AspireEffectiveCliPath>$(AspireCliPath)</_AspireEffectiveCliPath>
-    </PropertyGroup>
-
-    <!-- Get the CLI version to determine if delegation should occur -->
-    <GetAspireCliVersion AspireCliPath="$(_AspireEffectiveCliPath)">
+          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(_AspireCliRunHookSuppressed)' != 'true'">
+    <GetAspireCliVersion AspireCliPath="$(AspireCliPath)">
       <Output TaskParameter="AspireCliVersion" PropertyName="_AspireResolvedCliVersion" />
     </GetAspireCliVersion>
 
     <PropertyGroup>
-      <!-- Check if CLI version is >= 13.5.0 by comparing versions -->
-      <!-- If version is empty/unparseable, treat as unsupported and suppress the hook -->
       <_AspireCliVersionSupportsRunHook Condition="'$(_AspireResolvedCliVersion)' != '' and $([MSBuild]::VersionGreaterThanOrEquals('$(_AspireResolvedCliVersion)', '$(_AspireMinimumCliVersion)'))">true</_AspireCliVersionSupportsRunHook>
-      <_AspireCliVersionSupportsRunHook Condition="'$(_AspireResolvedCliVersion)' == ''">false</_AspireCliVersionSupportsRunHook>
     </PropertyGroup>
 
-    <Message Text="Aspire CLI version check: $_AspireResolvedCliVersion (minimum required: $(_AspireMinimumCliVersion), supported: $(_AspireCliVersionSupportsRunHook))" Importance="Low" />
+    <Message Text="Aspire CLI version check: $(_AspireResolvedCliVersion) (minimum required: $(_AspireMinimumCliVersion), supported: $(_AspireCliVersionSupportsRunHook))" Importance="Low" />
   </Target>
 
   <Target Name="_AspireComputeRunArguments"
           BeforeTargets="ComputeRunArguments"
           DependsOnTargets="_AspireCheckCliVersion"
-          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(_AspireCliRunHookSuppressed)' != 'true' and '$(_AspireCliVersionSupportsRunHook)' != 'false'">
-    <ItemGroup Condition="'$(FileBasedProgram)' == 'true'">
+          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(_AspireCliRunHookSuppressed)' != 'true'">
+    <ItemGroup Condition="'$(_AspireCliVersionSupportsRunHook)' == 'true' and '$(FileBasedProgram)' == 'true'">
       <_AspireFileBasedAppHostPath Include="%(RuntimeHostConfigurationOption.Value)"
                                    Condition="'%(RuntimeHostConfigurationOption.Identity)' == 'EntryPointFilePath'" />
       <_AspireFileBasedAppHostDirectory Include="%(RuntimeHostConfigurationOption.Value)"
                                         Condition="'%(RuntimeHostConfigurationOption.Identity)' == 'EntryPointFileDirectoryPath'" />
     </ItemGroup>
 
-    <PropertyGroup>
+    <PropertyGroup Condition="'$(_AspireCliVersionSupportsRunHook)' == 'true'">
       <_AspireOriginalRunArguments>$(RunArguments)</_AspireOriginalRunArguments>
       <_AspireRunProject>$(MSBuildProjectFullPath)</_AspireRunProject>
       <!-- File-based dotnet run uses a synthetic apphost.csproj for MSBuild, but the Aspire CLI needs the original .cs file. -->

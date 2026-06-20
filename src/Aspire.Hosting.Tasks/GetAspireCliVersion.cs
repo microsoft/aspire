@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 using Microsoft.Build.Framework;
@@ -13,13 +14,12 @@ namespace Aspire.Hosting.Tasks;
 public sealed class GetAspireCliVersion : Microsoft.Build.Utilities.Task
 {
     /// <summary>
-    /// Path to the Aspire CLI executable.
+    /// Optional path to the Aspire CLI executable. When unset, the Aspire CLI is resolved from PATH.
     /// </summary>
-    [Required]
     public string? AspireCliPath { get; set; }
 
     /// <summary>
-    /// The resolved Aspire CLI version (e.g., "13.5.0" or "13.5.0-preview.1.26319.9").
+    /// The resolved Aspire CLI version (e.g., "13.5.0").
     /// Empty string if the version cannot be determined.
     /// </summary>
     [Output]
@@ -27,12 +27,6 @@ public sealed class GetAspireCliVersion : Microsoft.Build.Utilities.Task
 
     public override bool Execute()
     {
-        if (string.IsNullOrWhiteSpace(AspireCliPath) || !File.Exists(AspireCliPath))
-        {
-            Log.LogMessage(MessageImportance.Low, "Aspire CLI path is empty or does not exist.");
-            return true;
-        }
-
         try
         {
             var version = GetCliVersion(AspireCliPath);
@@ -49,76 +43,98 @@ public sealed class GetAspireCliVersion : Microsoft.Build.Utilities.Task
 
             return true;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (IsVersionQueryException(ex))
         {
             Log.LogMessage(MessageImportance.Low, $"Error getting Aspire CLI version: {ex.Message}");
             return true;
         }
     }
 
-    private static string? GetCliVersion(string cliPath)
+    private static string? GetCliVersion(string? cliPath)
     {
-        try
-        {
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = cliPath,
-                Arguments = "--version",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-
-            using var process = Process.Start(startInfo);
-            if (process is null)
-            {
-                return null;
-            }
-
-            // Use a compatible approach for both net472 and net8.0+
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-#if NET8_0_OR_GREATER
-            try
-            {
-                var waitTask = process.WaitForExitAsync(cts.Token);
-                waitTask.Wait();
-            }
-            catch (OperationCanceledException)
-            {
-                return null;
-            }
-#else
-            try
-            {
-                if (!process.WaitForExit(5000))
-                {
-                    process.Kill();
-                    return null;
-                }
-            }
-            catch (Exception)
-            {
-                return null;
-            }
-#endif
-
-            if (process.ExitCode != 0)
-            {
-                return null;
-            }
-
-            var output = process.StandardOutput.ReadToEnd().Trim();
-
-            // Parse version from output like "aspire version 13.5.0" or just "13.5.0"
-            // Handle both "aspire version 13.5.0-preview.1.26319.9" and "13.5.0"
-            var versionMatch = Regex.Match(output, @"(\d+\.\d+\.\d+(?:-[a-zA-Z0-9.]+)?)");
-            return versionMatch.Success ? versionMatch.Groups[1].Value : null;
-        }
-        catch (Exception)
+        if (!string.IsNullOrWhiteSpace(cliPath) && !File.Exists(cliPath))
         {
             return null;
         }
+
+        using var process = Process.Start(CreateStartInfo(cliPath));
+        if (process is null)
+        {
+            return null;
+        }
+
+        if (!process.WaitForExit(5000))
+        {
+            TryKill(process);
+            return null;
+        }
+
+        if (process.ExitCode != 0)
+        {
+            return null;
+        }
+
+        var output = process.StandardOutput.ReadToEnd().Trim();
+
+        // Aspire CLI version output is either a bare informational version or prefixed text, for example:
+        //   13.5.0-preview.1.26319.9+gabcdef
+        //   aspire version 13.5.0
+        // The run-hook gate only needs the numeric floor so 13.5.0 previews satisfy the 13.5.0 minimum.
+        var versionMatch = Regex.Match(output, @"(?<version>\d+\.\d+\.\d+)");
+        return versionMatch.Success ? versionMatch.Groups["version"].Value : null;
+    }
+
+    private static ProcessStartInfo CreateStartInfo(string? cliPath)
+    {
+        if (string.IsNullOrWhiteSpace(cliPath))
+        {
+            return IsWindows()
+                ? CreateStartInfo(GetCommandPromptPath(), "/C aspire --version")
+                : CreateStartInfo("aspire", "--version");
+        }
+
+        return CreateStartInfo(cliPath, "--version");
+    }
+
+    private static ProcessStartInfo CreateStartInfo(string fileName, string arguments) => new()
+    {
+        FileName = fileName,
+        Arguments = arguments,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        UseShellExecute = false,
+        CreateNoWindow = true,
+    };
+
+    private static string GetCommandPromptPath()
+    {
+        var comSpec = Environment.GetEnvironmentVariable("ComSpec");
+
+        return string.IsNullOrWhiteSpace(comSpec) ? "cmd" : comSpec;
+    }
+
+    private static void TryKill(Process process)
+    {
+        try
+        {
+            process.Kill();
+        }
+        catch (Exception ex) when (IsVersionQueryException(ex))
+        {
+        }
+    }
+
+    private static bool IsWindows() => Path.DirectorySeparatorChar == '\\';
+
+    private static bool IsVersionQueryException(Exception ex)
+    {
+        return ex is IOException
+            or UnauthorizedAccessException
+            or ArgumentException
+            or NotSupportedException
+            or PathTooLongException
+            or System.Security.SecurityException
+            or Win32Exception
+            or InvalidOperationException;
     }
 }
-
