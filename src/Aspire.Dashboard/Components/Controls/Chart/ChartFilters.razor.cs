@@ -5,6 +5,7 @@ using System.Collections.Immutable;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Microsoft.AspNetCore.Components;
+using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 
 namespace Aspire.Dashboard.Components;
@@ -25,12 +26,16 @@ public partial class ChartFilters
 
     public bool ShowCounts { get; set; }
 
-    // when some filter value is selected which is not visible (overflowed)
+    // When some filter value is selected which is not visible (overflowed)
     // we reorder it to the top of the list. For doing so we use this counter
     // to assign decremental negative number to the Order property of
     // DimensionValueViewModel
     private int _reOrderingCounter;
     private readonly Dictionary<DimensionValueViewModel, int> _originalOrdersByTag = [];
+
+    // Prevent magic string for dictionary keys
+    public const string KeyForDimentionValue = "dimentionValue";
+    public const string KeyForIsIncludedInFilters = "isIncludedInFilters";
 
     protected override void OnInitialized()
     {
@@ -113,5 +118,14 @@ public partial class ChartFilters
         {
             tag.Order = originalOrder;
         }
+    }
+
+    public void HandleOverflowChanged(DimensionFilterViewModel context, IEnumerable<FluentOverflowItem> overflowItems)
+    {
+        var overflowedValues = overflowItems
+            .Select(i => (DimensionValueViewModel)i.AdditionalAttributes![KeyForDimentionValue])
+            .ToArray();
+
+        context.OverflowedValues = overflowedValues;
     }
 }

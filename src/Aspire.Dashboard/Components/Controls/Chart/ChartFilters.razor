@@ -30,8 +30,8 @@
                                     var isIncludedInFiltersClass = !areAllValuesSelected && isIncludedInFilters ? "included-in-filters" : "";
                                     var additionalAttributes = new Dictionary<string, object>()
                                     {
-                                        ["item"] = item,
-                                        ["isIncludedInFilters"] = isIncludedInFilters,
+                                        [KeyForDimentionValue] = item,
+                                        [KeyForIsIncludedInFilters] = isIncludedInFilters,
                                     };
 
                                     // Always display the first item by setting a fixed value.
@@ -49,7 +49,7 @@
                             </ChildContent>
                             <MoreButtonTemplate Context="overflow">
                                 @{
-                                    var isIncludedInFiltersClass = !areAllValuesSelected && overflow.ItemsOverflow.Any(item => (bool)item.AdditionalAttributes!["isIncludedInFilters"]) ? "included-in-filters" : "";
+                                    var isIncludedInFiltersClass = !areAllValuesSelected && overflow.ItemsOverflow.Any(item => (bool)item.AdditionalAttributes![KeyForIsIncludedInFilters]) ? "included-in-filters" : "";
                                 }
                                 @* Display must be inline block so the width is correctly calculated. *@
                                 <span class="dimension-tag filter-value-tag @isIncludedInFiltersClass"
@@ -117,14 +117,3 @@
         </div>
     }
 </div>
-
-@code {
-    private void HandleOverflowChanged(DimensionFilterViewModel context, IEnumerable<FluentOverflowItem> overflowItems)
-    {
-        var overflowedValues = overflowItems
-            .Select(i => (DimensionValueViewModel)i.AdditionalAttributes!["item"])
-            .ToArray();
-
-        context.OverflowedValues = overflowedValues;
-    }
-}
