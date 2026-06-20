@@ -35,7 +35,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
                 await page.Keyboard.PressAsync("Enter");
             });
 
-            Assert.StartsWith("https://example.com", popup.Url);
+            await popup.WaitForURLAsync(url => url.StartsWith("https://example.com", StringComparison.Ordinal)).DefaultTimeout();
             await popup.CloseAsync();
             await Assertions.Expect(page.Locator(".details-header-title")).ToHaveCountAsync(0);
         });
