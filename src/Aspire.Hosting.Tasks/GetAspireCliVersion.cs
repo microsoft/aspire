@@ -87,9 +87,9 @@ public sealed class GetAspireCliVersion : Microsoft.Build.Utilities.Task
 
         // Aspire CLI version output is a bare informational version, for example:
         //   13.5.0-preview.1.26319.9+gabcdef
-        // Strip the prerelease suffix because System.Version only accepts numeric version components.
-        var prereleaseIndex = output.IndexOf('-');
-        var version = prereleaseIndex >= 0 ? output.Substring(0, prereleaseIndex) : output;
+        // Strip prerelease and build metadata suffixes because System.Version only accepts numeric version components.
+        var suffixIndex = output.IndexOfAny(['-', '+']);
+        var version = suffixIndex >= 0 ? output.Substring(0, suffixIndex) : output;
 
         return Version.TryParse(version, out _) ? version : null;
     }

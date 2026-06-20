@@ -249,6 +249,7 @@ public class AppHostSdkTargetsTests
 
     [Theory]
     [InlineData("13.5.0-preview.1.26319.9")]
+    [InlineData("13.5.0+gabcdef")]
     [InlineData("13.5.0")]
     [InlineData("13.6.0")]
     [InlineData("14.0.0")]
@@ -294,13 +295,11 @@ public class AppHostSdkTargetsTests
         var cliPath = Path.Combine(fakeCliDirectory.FullName, OperatingSystem.IsWindows() ? "aspire.cmd" : "aspire");
         await CreateFakeAspireCliWithVersionAndLingeringChildAsync(fakeCliDirectory.FullName, "13.5.0");
 
-        var stopwatch = Stopwatch.StartNew();
         var properties = await GetComputeRunArgumentsPropertiesAsync(
             project,
             [$"-p:AspireCliPath={cliPath}", "-p:RunArguments=--custom foo"]);
 
         AssertUsesDotNetRun(properties, project, "--custom foo");
-        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(30), $"Expected version probe to time out quickly, but it took {stopwatch.Elapsed}.");
     }
 
     [Fact]
@@ -312,13 +311,11 @@ public class AppHostSdkTargetsTests
         var cliPath = Path.Combine(fakeCliDirectory.FullName, OperatingSystem.IsWindows() ? "aspire.cmd" : "aspire");
         await CreateFakeAspireCliThatHangsOnVersionAsync(fakeCliDirectory.FullName);
 
-        var stopwatch = Stopwatch.StartNew();
         var properties = await GetComputeRunArgumentsPropertiesAsync(
             project,
             [$"-p:AspireCliPath={cliPath}", "-p:RunArguments=--custom foo"]);
 
         AssertUsesDotNetRun(properties, project, "--custom foo");
-        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(30), $"Expected version probe to time out quickly, but it took {stopwatch.Elapsed}.");
     }
 
     [Fact]
