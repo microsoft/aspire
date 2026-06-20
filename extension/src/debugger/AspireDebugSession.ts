@@ -12,6 +12,7 @@ import { AnsiColors } from "../utils/AspireTerminalProvider";
 import { applyTextStyle } from "../utils/strings";
 import { nodeDebuggerExtension } from "./languages/node";
 import { cleanupRun } from "./runCleanupRegistry";
+import { runWithRunStartWrappers } from "./runStartRegistry";
 import AspireRpcServer from "../server/AspireRpcServer";
 import { createDebugSessionConfiguration } from "./debuggerExtensions";
 import { AspireTerminalProvider } from "../utils/AspireTerminalProvider";
@@ -26,7 +27,29 @@ import type { AspireDebugConsoleOutputEvent } from "../types/extensionApi";
 export type DashboardLaunchBehavior = 'none' | 'notification' | DashboardBrowserType;
 export type DashboardBrowserType = 'openExternalBrowser' | 'integratedBrowser' | 'debugChrome' | 'debugEdge' | 'debugFirefox';
 
+export function getLoggableDebugConfiguration(debugConfig: AspireResourceExtendedDebugConfiguration, includeEnvironment: boolean): vscode.DebugConfiguration {
+  if (includeEnvironment && debugConfig.type !== 'maui') {
+    return debugConfig;
+  }
+
+  if (includeEnvironment) {
+    return {
+      ...debugConfig,
+      environmentVariables: debugConfig.environmentVariables ? '<redacted>' : undefined,
+    };
+  }
+
+  return {
+    ...debugConfig,
+    env: debugConfig.env ? '<redacted>' : undefined,
+    environmentVariables: debugConfig.environmentVariables ? '<redacted>' : undefined,
+    msbuildProperties: debugConfig.msbuildProperties instanceof Map ? Object.fromEntries(debugConfig.msbuildProperties) : debugConfig.msbuildProperties,
+  };
+}
+
 export class AspireDebugSession implements vscode.DebugAdapter {
+  private static readonly _mauiDebugStartMaxAttempts = 3;
+  private static readonly _mauiDebugStartRetryDelayMs = 5000;
   private readonly _onDidSendMessage = new EventEmitter<any>();
   private readonly _onDidSendDebugConsoleOutput = new EventEmitter<AspireDebugConsoleOutputEvent>();
   private _messageSeq = 1;
@@ -204,6 +227,31 @@ export class AspireDebugSession implements vscode.DebugAdapter {
         command: message.command,
         body: {}
       });
+    }
+    else if (message.command === 'setBreakpoints') {
+      const breakpoints = Array.isArray(message.arguments?.breakpoints)
+        ? message.arguments.breakpoints
+        : [];
+
+      this.sendResponse(message, {
+        // The Aspire adapter does not bind user breakpoints itself, but VS Code still
+        // sends breakpoint requests to every active debug session. The DAP response
+        // must include a breakpoint array; otherwise newer VS Code builds throw while
+        // reading the missing body.breakpoints field and can prevent child sessions
+        // from receiving the same source breakpoints.
+        breakpoints: breakpoints.map((breakpoint: { line?: number; column?: number }, index: number) => ({
+          id: index + 1,
+          verified: false,
+          line: breakpoint.line,
+          column: breakpoint.column,
+        }))
+      });
+    }
+    else if (message.command === 'setFunctionBreakpoints' || message.command === 'setDataBreakpoints') {
+      this.sendResponse(message, { breakpoints: [] });
+    }
+    else if (message.command === 'setExceptionBreakpoints') {
+      this.sendResponse(message, { breakpoints: [] });
     }
     else if (message.command) {
       // Respond to all other requests with a generic success
@@ -441,16 +489,24 @@ export class AspireDebugSession implements vscode.DebugAdapter {
 
   async startAndGetDebugSession(debugConfig: AspireResourceExtendedDebugConfiguration): Promise<AspireResourceDebugSession | undefined> {
     return new Promise(async (resolve) => {
-      const logConfig = this._terminalProvider.isDebugConfigEnvironmentLoggingEnabled()
-        ? debugConfig
-        : { ...debugConfig, env: debugConfig.env ? '<redacted>' : undefined };
+      const logConfig = getLoggableDebugConfiguration(debugConfig, this._terminalProvider.isDebugConfigEnvironmentLoggingEnabled());
       extensionLogOutputChannel.info(`Starting debug session with configuration: ${JSON.stringify(logConfig)}`);
       this.createDebugAdapterTrackerCore(debugConfig.type);
 
+      let resolved = false;
       const disposable = vscode.debug.onDidStartDebugSession(session => {
         if (session.configuration.runId === debugConfig.runId) {
           extensionLogOutputChannel.info(`Debug session started: ${session.name} (run id: ${session.configuration.runId})`);
           disposable.dispose();
+
+          if (this._disposed) {
+            extensionLogOutputChannel.info(`Stopping debug session that started after Aspire session disposal: ${session.name} (run id: ${session.configuration.runId})`);
+            vscode.debug.stopDebugging(session);
+            cleanupRun(debugConfig.runId);
+            resolved = true;
+            resolve(undefined);
+            return;
+          }
 
           const disposalFunction = () => {
             extensionLogOutputChannel.info(`Stopping debug session: ${session.name} (run id: ${session.configuration.runId})`);
@@ -471,21 +527,72 @@ export class AspireDebugSession implements vscode.DebugAdapter {
             dispose: disposalFunction
           });
 
+          resolved = true;
           resolve(vsCodeDebugSession);
         }
       });
 
-      const started = await vscode.debug.startDebugging(undefined, debugConfig, this._session);
+      let started = false;
+      try {
+        const workspaceFolder = this.getDebugSessionWorkspaceFolder(debugConfig);
+        const maxAttempts = debugConfig.type === 'maui' ? AspireDebugSession._mauiDebugStartMaxAttempts : 1;
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+          if (this._disposed) {
+            break;
+          }
+
+          started = await runWithRunStartWrappers(debugConfig.runId, () => this.startDebugging(workspaceFolder, debugConfig));
+          if (started) {
+            break;
+          }
+
+          if (attempt < maxAttempts && !this._disposed) {
+            extensionLogOutputChannel.warn(`Debug session did not start for run ID ${debugConfig.runId}; retrying (${attempt}/${maxAttempts}).`);
+            await delay(AspireDebugSession._mauiDebugStartRetryDelayMs);
+          }
+        }
+      } catch (error) {
+        disposable.dispose();
+        cleanupRun(debugConfig.runId);
+        extensionLogOutputChannel.error(`Failed to start debug session: ${error instanceof Error ? error.stack ?? error.message : String(error)}`);
+        resolved = true;
+        resolve(undefined);
+        return;
+      }
+
       if (!started) {
         disposable.dispose();
+        cleanupRun(debugConfig.runId);
+        resolved = true;
         resolve(undefined);
       }
 
       setTimeout(() => {
-        disposable.dispose();
-        resolve(undefined);
+        if (!resolved) {
+          disposable.dispose();
+          cleanupRun(debugConfig.runId);
+          resolved = true;
+          resolve(undefined);
+        }
       }, 10000);
     });
+  }
+
+  private async startDebugging(workspaceFolder: vscode.WorkspaceFolder | undefined, debugConfig: AspireResourceExtendedDebugConfiguration): Promise<boolean> {
+    // VS Code terminates the parent debug session when the MAUI extension cancels
+    // a parented child launch before the MAUI project system is ready. We still
+    // track and stop the MAUI session ourselves once it starts, so leave it
+    // unparented to keep the AppHost alive across bounded start retries.
+    const parentSession = debugConfig.type === 'maui' ? undefined : this._session;
+    return await vscode.debug.startDebugging(workspaceFolder, debugConfig, parentSession);
+  }
+
+  private getDebugSessionWorkspaceFolder(debugConfig: AspireResourceExtendedDebugConfiguration): vscode.WorkspaceFolder | undefined {
+    const resourcePath = typeof debugConfig.cwd === 'string'
+      ? debugConfig.cwd
+      : typeof debugConfig.program === 'string' ? debugConfig.program : undefined;
+
+    return resourcePath ? vscode.workspace.getWorkspaceFolder(vscode.Uri.file(resourcePath)) : undefined;
   }
 
   /**
@@ -701,6 +808,10 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     this._onDidChangeState.fire();
     extensionLogOutputChannel.info(`AppHost startup completed and dashboard is running.`);
   }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 export function buildAspireCommandArgs(command: string, commandArgs: string[], extensionArgs: string[]): string[] {

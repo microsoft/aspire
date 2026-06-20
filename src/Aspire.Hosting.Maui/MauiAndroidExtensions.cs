@@ -19,7 +19,7 @@ public static class MauiAndroidExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// This method creates a new Android device platform resource that will run the MAUI application
-    /// targeting the Android platform using <c>dotnet run</c>. The resource does not auto-start 
+    /// targeting the Android platform using <c>dotnet run</c>. The resource does not auto-start
     /// and must be explicitly started from the dashboard by clicking the start button.
     /// <para>
     /// The resource name will default to "{projectName}-android-device".
@@ -38,10 +38,10 @@ public static class MauiAndroidExtensions
     /// Add an Android device to a MAUI project:
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
-    /// 
+    ///
     /// var maui = builder.AddMauiProject("mauiapp", "../MyMauiApp/MyMauiApp.csproj");
     /// var androidDevice = maui.AddAndroidDevice();
-    /// 
+    ///
     /// builder.Build().Run();
     /// </code>
     /// </example>
@@ -63,7 +63,7 @@ public static class MauiAndroidExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// This method creates a new Android device platform resource that will run the MAUI application
-    /// targeting the Android platform using <c>dotnet run</c>. The resource does not auto-start 
+    /// targeting the Android platform using <c>dotnet run</c>. The resource does not auto-start
     /// and must be explicitly started from the dashboard by clicking the start button.
     /// <para>
     /// Multiple Android device resources can be added to the same MAUI project if needed, each with
@@ -83,11 +83,11 @@ public static class MauiAndroidExtensions
     /// Add multiple Android devices to a MAUI project:
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
-    /// 
+    ///
     /// var maui = builder.AddMauiProject("mauiapp", "../MyMauiApp/MyMauiApp.csproj");
     /// var device1 = maui.AddAndroidDevice("android-device-1");
     /// var device2 = maui.AddAndroidDevice("android-device-2");
-    /// 
+    ///
     /// builder.Build().Run();
     /// </code>
     /// </example>
@@ -109,7 +109,7 @@ public static class MauiAndroidExtensions
     /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method creates a new Android device platform resource that will run the MAUI application
-    /// targeting the Android platform using <c>dotnet run</c>. The resource does not auto-start 
+    /// targeting the Android platform using <c>dotnet run</c>. The resource does not auto-start
     /// and must be explicitly started from the dashboard by clicking the start button.
     /// <para>
     /// Multiple Android device resources can be added to the same MAUI project if needed, each with
@@ -128,18 +128,18 @@ public static class MauiAndroidExtensions
     /// Add multiple Android devices to a MAUI project:
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
-    /// 
+    ///
     /// var maui = builder.AddMauiProject("mauiapp", "../MyMauiApp/MyMauiApp.csproj");
-    /// 
+    ///
     /// // Default device (only one attached)
     /// var device1 = maui.AddAndroidDevice("android-device-default");
-    /// 
+    ///
     /// // Specific device by serial number
     /// var device2 = maui.AddAndroidDevice("android-device-pixel", "abc12345");
-    /// 
+    ///
     /// // WiFi debugging device
     /// var device3 = maui.AddAndroidDevice("android-device-wifi", "192.168.1.100:5555");
-    /// 
+    ///
     /// builder.Build().Run();
     /// </code>
     /// </example>
@@ -172,22 +172,24 @@ public static class MauiAndroidExtensions
         // Valid formats:
         //   -p:AdbTarget=-d               (run on only attached device)
         //   -p:AdbTarget=-s abc12345      (run on specific device by serial)
+        var msBuildProperties = new Dictionary<string, string>();
         var additionalArgs = new List<string>();
         if (!string.IsNullOrWhiteSpace(deviceId))
         {
             // Specific device - use -s prefix (no quotes around the value)
-            additionalArgs.Add($"-p:AdbTarget=-s {deviceId}");
+            msBuildProperties["AdbTarget"] = $"-s {deviceId}";
         }
         else
         {
             // No specific device ID - use -d to target the only attached device
-            additionalArgs.Add("-p:AdbTarget=-d");
+            msBuildProperties["AdbTarget"] = "-d";
         }
+        additionalArgs.Add($"-p:AdbTarget={msBuildProperties["AdbTarget"]}");
 
         // Configure the platform resource with common settings
         // Android runs on Windows, macOS, and Linux - check for Android SDK/tooling availability is complex
         // For now, allow on all platforms and let dotnet run fail gracefully if Android SDK is not available
-        MauiPlatformHelper.ConfigurePlatformResource(
+        var targetFramework = MauiPlatformHelper.ConfigurePlatformResource(
             resourceBuilder,
             projectPath,
             "android",
@@ -196,6 +198,14 @@ public static class MauiAndroidExtensions
             () => true, // Allow on all platforms, validation happens at dotnet run time
             "PhoneTablet",
             additionalArgs.ToArray());
+
+        resourceBuilder.WithMauiIdeLaunchConfiguration(
+            projectPath,
+            targetFramework,
+            "android",
+            "device",
+            deviceId,
+            msBuildProperties: msBuildProperties);
 
         return resourceBuilder;
     }
@@ -207,7 +217,7 @@ public static class MauiAndroidExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// This method creates a new Android emulator platform resource that will run the MAUI application
-    /// targeting the Android platform using <c>dotnet run</c>. The resource does not auto-start 
+    /// targeting the Android platform using <c>dotnet run</c>. The resource does not auto-start
     /// and must be explicitly started from the dashboard by clicking the start button.
     /// <para>
     /// The resource name will default to "{projectName}-android-emulator".
@@ -228,12 +238,12 @@ public static class MauiAndroidExtensions
     /// Add an Android emulator to a MAUI project:
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
-    /// 
+    ///
     /// var maui = builder.AddMauiProject("mauiapp", "../MyMauiApp/MyMauiApp.csproj");
-    /// 
+    ///
     /// // Uses default/running emulator
     /// var defaultEmulator = maui.AddAndroidEmulator();
-    /// 
+    ///
     /// builder.Build().Run();
     /// </code>
     /// </example>
@@ -255,7 +265,7 @@ public static class MauiAndroidExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// This method creates a new Android emulator platform resource that will run the MAUI application
-    /// targeting the Android platform using <c>dotnet run</c>. The resource does not auto-start 
+    /// targeting the Android platform using <c>dotnet run</c>. The resource does not auto-start
     /// and must be explicitly started from the dashboard by clicking the start button.
     /// <para>
     /// Multiple Android emulator resources can be added to the same MAUI project if needed, each with
@@ -277,11 +287,11 @@ public static class MauiAndroidExtensions
     /// Add multiple Android emulators to a MAUI project:
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
-    /// 
+    ///
     /// var maui = builder.AddMauiProject("mauiapp", "../MyMauiApp/MyMauiApp.csproj");
     /// var emulator1 = maui.AddAndroidEmulator("android-emulator-1");
     /// var emulator2 = maui.AddAndroidEmulator("android-emulator-2");
-    /// 
+    ///
     /// builder.Build().Run();
     /// </code>
     /// </example>
@@ -303,7 +313,7 @@ public static class MauiAndroidExtensions
     /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method creates a new Android emulator platform resource that will run the MAUI application
-    /// targeting the Android platform using <c>dotnet run</c>. The resource does not auto-start 
+    /// targeting the Android platform using <c>dotnet run</c>. The resource does not auto-start
     /// and must be explicitly started from the dashboard by clicking the start button.
     /// <para>
     /// Multiple Android emulator resources can be added to the same MAUI project if needed, each with
@@ -323,18 +333,18 @@ public static class MauiAndroidExtensions
     /// Add multiple Android emulators to a MAUI project:
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
-    /// 
+    ///
     /// var maui = builder.AddMauiProject("mauiapp", "../MyMauiApp/MyMauiApp.csproj");
-    /// 
+    ///
     /// // Default emulator
     /// var emulator1 = maui.AddAndroidEmulator("android-emulator-default");
-    /// 
+    ///
     /// // Specific Pixel 5 emulator
     /// var emulator2 = maui.AddAndroidEmulator("android-emulator-pixel5", "Pixel_5_API_33");
-    /// 
+    ///
     /// // Specific emulator by serial
     /// var emulator3 = maui.AddAndroidEmulator("android-emulator-5554", "emulator-5554");
-    /// 
+    ///
     /// builder.Build().Run();
     /// </code>
     /// </example>
@@ -367,22 +377,24 @@ public static class MauiAndroidExtensions
         // Valid formats:
         //   -p:AdbTarget=-e               (run on only running emulator)
         //   -p:AdbTarget=-s emulator-5554 (run on specific emulator/device by serial)
+        var msBuildProperties = new Dictionary<string, string>();
         var additionalArgs = new List<string>();
         if (!string.IsNullOrWhiteSpace(emulatorId))
         {
             // Specific emulator - use -s prefix (no quotes around the value)
-            additionalArgs.Add($"-p:AdbTarget=-s {emulatorId}");
+            msBuildProperties["AdbTarget"] = $"-s {emulatorId}";
         }
         else
         {
             // No specific emulator ID - use -e to target the only running emulator
-            additionalArgs.Add("-p:AdbTarget=-e");
+            msBuildProperties["AdbTarget"] = "-e";
         }
+        additionalArgs.Add($"-p:AdbTarget={msBuildProperties["AdbTarget"]}");
 
         // Configure the platform resource with common settings
         // Android runs on Windows, macOS, and Linux - check for Android SDK/tooling availability is complex
         // For now, allow on all platforms and let dotnet run fail gracefully if Android SDK is not available
-        MauiPlatformHelper.ConfigurePlatformResource(
+        var targetFramework = MauiPlatformHelper.ConfigurePlatformResource(
             resourceBuilder,
             projectPath,
             "android",
@@ -391,6 +403,14 @@ public static class MauiAndroidExtensions
             () => true, // Allow on all platforms, validation happens at dotnet run time
             "PhoneTablet",
             additionalArgs.ToArray());
+
+        resourceBuilder.WithMauiIdeLaunchConfiguration(
+            projectPath,
+            targetFramework,
+            "android",
+            "emulator",
+            emulatorId,
+            msBuildProperties: msBuildProperties);
 
         return resourceBuilder;
     }
