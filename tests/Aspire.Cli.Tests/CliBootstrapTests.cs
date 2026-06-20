@@ -8,7 +8,6 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests;
 
@@ -158,7 +157,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         // Regression guard: this source was previously omitted from the identityOverridden computation.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var resolver = new IdentityResolver(
-            new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance),
+            CliTestHelper.CreateSidecarReader(outputHelper),
             typeof(Program).Assembly,
             binaryDir: null,
             envReader: name => name == IdentityResolver.NuGetServiceIndexEnvVar ? "http://localhost:5000/v3/index.json" : null);
@@ -178,7 +177,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var resolver = new IdentityResolver(
-            new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance),
+            CliTestHelper.CreateSidecarReader(outputHelper),
             typeof(Program).Assembly,
             binaryDir: null,
             envReader: _ => null);

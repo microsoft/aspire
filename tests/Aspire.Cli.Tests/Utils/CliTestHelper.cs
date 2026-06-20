@@ -48,6 +48,12 @@ namespace Aspire.Cli.Tests.Utils;
 
 internal static class CliTestHelper
 {
+    public static InstallSidecarReader CreateSidecarReader(ITestOutputHelper outputHelper)
+    {
+        using var loggerFactory = LoggerFactory.Create(builder => builder.AddXunit(outputHelper));
+        return new InstallSidecarReader(loggerFactory.CreateLogger<InstallSidecarReader>());
+    }
+
     public static IServiceCollection CreateServiceCollection(TemporaryWorkspace workspace, ITestOutputHelper outputHelper, Action<CliServiceCollectionTestOptions>? configure = null)
     {
         var options = new CliServiceCollectionTestOptions(outputHelper, workspace.WorkspaceRoot);
