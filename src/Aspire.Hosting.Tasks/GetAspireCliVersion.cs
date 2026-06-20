@@ -63,18 +63,23 @@ public sealed class GetAspireCliVersion : Microsoft.Build.Utilities.Task
             return null;
         }
 
+        // Read both streams concurrently to avoid deadlock when a pipe buffer fills.
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+
         if (!process.WaitForExit(5000))
         {
             TryKill(process);
             return null;
         }
 
+        var output = outputTask.GetAwaiter().GetResult().Trim();
+        _ = errorTask.GetAwaiter().GetResult();
+
         if (process.ExitCode != 0)
         {
             return null;
         }
-
-        var output = process.StandardOutput.ReadToEnd().Trim();
 
         // Aspire CLI version output is either a bare informational version or prefixed text, for example:
         //   13.5.0-preview.1.26319.9+gabcdef

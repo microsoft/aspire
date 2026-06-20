@@ -269,6 +269,23 @@ public class AppHostSdkTargetsTests
     }
 
     [Fact]
+    public async Task ComputeRunArgumentsUsesAspireCliWhenCliVersionWritesLargeStdErr()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var project = await CreateRunHookProjectAsync(tempDirectory.Path, aspireUseCliBundle: true);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "fake-cli"));
+        var cliPath = Path.Combine(fakeCliDirectory.FullName, OperatingSystem.IsWindows() ? "aspire.cmd" : "aspire");
+        await CreateFakeAspireCliWithVersionAndLargeStdErrAsync(fakeCliDirectory.FullName, "13.5.0");
+
+        var properties = await GetComputeRunArgumentsPropertiesAsync(
+            project,
+            [$"-p:AspireCliPath={cliPath}", "-p:RunArguments=--custom foo"]);
+
+        Assert.Equal(cliPath, properties["RunCommand"]);
+        Assert.Equal(GetExpectedExplicitAspireRunArguments(project, "--custom foo"), properties["RunArguments"]);
+    }
+
+    [Fact]
     public async Task ComputeRunArgumentsDoesNotUseAspireCliWhenCliVersionCannotBeDetermined()
     {
         using var tempDirectory = new TestTempDirectory();
@@ -501,6 +518,40 @@ public class AppHostSdkTargetsTests
                 exit 0
             fi
             printf '%s\n' "$@" > "$ASPIRE_TEST_CAPTURE_PATH"
+            """);
+        File.SetUnixFileMode(aspirePath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+    }
+
+    private static async Task CreateFakeAspireCliWithVersionAndLargeStdErrAsync(string fakeCliDirectory, string version)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            await File.WriteAllTextAsync(Path.Combine(fakeCliDirectory, "aspire.cmd"), $$"""
+                @echo off
+                if "%~1"=="--version" (
+                    for /L %%i in (1,1,4096) do echo stderr-padding-abcdefghijklmnopqrstuvwxyz-0123456789 1>&2
+                    echo aspire version {{version}}
+                    exit /b 0
+                )
+                exit /b 0
+                """);
+
+            return;
+        }
+
+        var aspirePath = Path.Combine(fakeCliDirectory, "aspire");
+        await File.WriteAllTextAsync(aspirePath, $$"""
+            #!/bin/sh
+            if [ "$1" = "--version" ]; then
+                i=0
+                while [ "$i" -lt 4096 ]; do
+                    echo "stderr-padding-abcdefghijklmnopqrstuvwxyz-0123456789" >&2
+                    i=$((i + 1))
+                done
+                echo "aspire version {{version}}"
+                exit 0
+            fi
+            exit 0
             """);
         File.SetUnixFileMode(aspirePath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
     }
