@@ -289,6 +289,10 @@ export class AspireTerminalProvider implements vscode.Disposable {
             // such as the first-run banner and spinners.
             env.ASPIRE_NON_INTERACTIVE = 'true';
 
+            // While debugging, the developer can pause on a breakpoint (e.g. before builder.Build())
+            // for an arbitrarily long time. Use a very long startup timeout (86400s = 24h) so the parent
+            // Aspire CLI doesn't hit its normal ~120s startup timeout and tear down the debug session.
+            // An explicitly configured ASPIRE_CLI_START_TIMEOUT still wins.
             if (noDebug === false && !env[EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT]) {
                 env[EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT] = '86400';
             }
