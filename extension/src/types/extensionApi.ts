@@ -153,6 +153,7 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'stopAppHost'; appHostPath?: string }
     | { name: 'openDashboard'; appHostPath?: string }
     | { name: 'debugAppHost'; appHostPath?: string }
+    | { name: 'publishAppHost'; appHostPath?: string }
     | { name: 'openAppHostSource'; appHostPath?: string }
     | { name: 'viewAppHostSource'; appHostPath?: string }
     | { name: 'copyAppHostPath'; appHostPath?: string }
