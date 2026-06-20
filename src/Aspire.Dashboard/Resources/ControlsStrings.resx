@@ -127,12 +127,21 @@
     <value>Graph</value>
   </data>
   <data name="ChartContainerTableTab" xml:space="preserve">
+    <value>Table</value>
+  </data>
+  <data name="ResourcesContainerTableTab" xml:space="preserve">
     <value>Resources</value>
   </data>
-  <data name="ChartContainerParametersTab" xml:space="preserve">
+  <data name="ResourcesContainerParametersTab" xml:space="preserve">
     <value>Parameters</value>
   </data>
+  <data name="ResourcesContainerGraphTab" xml:space="preserve">
+    <value>Graph</value>
+  </data>
   <data name="ChartContainerGraphAccessibleLabel" xml:space="preserve">
+    <value>Graph. For an accessible view please navigate to the Table tab</value>
+  </data>
+  <data name="ResourcesContainerGraphAccessibleLabel" xml:space="preserve">
     <value>Graph. For an accessible view please navigate to the Resources tab</value>
   </data>
   <data name="EnvironmentVariablesFilterToggleShowSpecOnly" xml:space="preserve">
@@ -520,8 +529,8 @@
   <data name="SpanTypeCloud" xml:space="preserve">
     <value>Cloud</value>
   </data>
-  <data name="ExportJson" xml:space="preserve">
-    <value>Export JSON</value>
+  <data name="ViewJson" xml:space="preserve">
+    <value>View JSON</value>
   </data>
   <data name="ExportEnv" xml:space="preserve">
     <value>Export .env</value>

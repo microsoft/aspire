@@ -92,7 +92,7 @@ public sealed class StructuredLogMenuBuilder
 
         menuItems.Add(new MenuButtonItem
         {
-            Text = _controlsLoc[nameof(ControlsStrings.ExportJson)],
+            Text = _controlsLoc[nameof(ControlsStrings.ViewJson)],
             Icon = s_bracesIcon,
             OnClick = async () =>
             {

@@ -7,6 +7,8 @@ description: |
   generated notes match the tone, section layout, headings, and emoji usage
   of recent stable releases — this workflow does not invent a new format.
 
+max-daily-ai-credits: -1
+
 on:
   release:
     types: [published]

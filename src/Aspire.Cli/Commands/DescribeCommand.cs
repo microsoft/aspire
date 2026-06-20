@@ -8,13 +8,11 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Dashboard.Utils;
 using Aspire.Shared;
 using Aspire.Shared.Model.Serialization;
-using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
@@ -102,16 +100,14 @@ internal sealed class DescribeCommand : BaseCommand
     };
 
     public DescribeCommand(
-        IAuxiliaryBackchannelMonitor backchannelMonitor,
-        IProjectLocator projectLocator,
+        AppHostConnectionResolver connectionResolver,
         ResourceColorMap resourceColorMap,
-        ILogger<DescribeCommand> logger,
         CommonCommandServices services)
         : base("describe", DescribeCommandStrings.Description, services)
     {
         Aliases.Add("resources");
         _resourceColorMap = resourceColorMap;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, services.ExecutionContext, logger);
+        _connectionResolver = connectionResolver;
 
         Arguments.Add(s_resourceArgument);
         Options.Add(s_appHostOption);
