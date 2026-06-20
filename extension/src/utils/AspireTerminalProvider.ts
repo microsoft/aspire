@@ -366,6 +366,10 @@ export class AspireTerminalProvider implements vscode.Disposable {
 
     async getAspireCliExecutablePath(): Promise<string> {
         const result = await resolveCliPath();
+        if (!result.available) {
+            throw new Error('Aspire CLI is not available.');
+        }
+
         return result.cliPath;
     }
 

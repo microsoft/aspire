@@ -148,9 +148,9 @@ export function getConfiguredCliPath(): string {
 function isDefaultCliInstallPath(cliPath: string): boolean {
     const defaultPaths = getDefaultCliInstallPaths();
     if (process.platform === 'win32') {
-        const normalizedPath = cliPath.toLowerCase();
+        const normalizedPath = path.win32.normalize(cliPath).toLowerCase();
 
-        return defaultPaths.some(defaultPath => defaultPath.toLowerCase() === normalizedPath);
+        return defaultPaths.some(defaultPath => path.win32.normalize(defaultPath).toLowerCase() === normalizedPath);
     }
 
     return defaultPaths.includes(cliPath);

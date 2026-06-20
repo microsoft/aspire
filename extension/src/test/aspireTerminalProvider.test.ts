@@ -45,11 +45,12 @@ suite('AspireTerminalProvider tests', () => {
             assert.strictEqual(result, '/usr/local/bin/aspire');
         });
 
-        test('returns "aspire" when CLI is not found', async () => {
+        test('throws when CLI is not found', async () => {
             resolveCliPathStub.resolves({ cliPath: 'aspire', available: false, source: 'not-found' });
 
-            const result = await terminalProvider.getAspireCliExecutablePath();
-            assert.strictEqual(result, 'aspire');
+            await assert.rejects(
+                terminalProvider.getAspireCliExecutablePath(),
+                /Aspire CLI is not available/);
         });
 
         test('handles Windows-style paths', async () => {

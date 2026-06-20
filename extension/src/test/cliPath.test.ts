@@ -173,6 +173,29 @@ suite('utils/cliPath tests', () => {
             assert.strictEqual(result.cliPath, 'aspire');
         });
 
+        test('prefers PATH over configured Windows default path with alternate separators', async () => {
+            const platformStub = sinon.stub(process, 'platform').value('win32');
+
+            try {
+                const windowsGlobalToolCmdPath = getDefaultCliInstallPaths()
+                    .find(p => p.endsWith('aspire.cmd'))!
+                    .replaceAll('/', '\\');
+                const deps = createMockDeps({
+                    getConfiguredPath: () => windowsGlobalToolCmdPath,
+                    findOnPath: async () => 'C:\\Tools\\aspire.exe',
+                    tryExecute: async (p) => p === windowsGlobalToolCmdPath,
+                });
+
+                const result = await resolveCliPath(deps);
+
+                assert.strictEqual(result.source, 'path');
+                assert.strictEqual(result.cliPath, 'C:\\Tools\\aspire.exe');
+            }
+            finally {
+                platformStub.restore();
+            }
+        });
+
         test('prefers configured custom Windows cmd shim path over PATH', async () => {
             const windowsGlobalToolCmdPath = 'D:\\Cli Shims\\aspire.cmd';
 
