@@ -168,7 +168,11 @@ export async function activate(context: vscode.ExtensionContext) {
   appHostTreeView.onDidChangeVisibility(e => {
     dataRepository.setPanelVisible(e.visible);
   });
-  const debugSessionRefreshRegistration = appHostLaunchService.onDidTerminateAppHostDebugSession(() => dataRepository.refresh());
+  const debugSessionRefreshRegistration = appHostLaunchService.onDidTerminateAppHostDebugSession(event => {
+    if (event.shouldRequestStopRefresh) {
+      appHostTreeProvider.notifyAppHostStopping(event.appHostPath);
+    }
+  });
 
   // Also drive data sources based on whether an AppHost file is currently visible in any editor.
   // This makes resource code-lens decorations on a fresh AppHost file work without first opening the panel.
@@ -644,7 +648,7 @@ function createE2eStateFileBridge(
               }
             };
 
-            const result = await executeE2eControlCommand(context, appHostTreeProvider, payload.command, markCommandStarted);
+            const result = await executeE2eControlCommand(context, appHostTreeProvider, appHostLaunchService, payload.command, markCommandStarted);
             controlStatus = { revision, status: 'applied', result };
           }
           else {
@@ -744,6 +748,7 @@ function getE2eErrorMessage(error: unknown): string {
 async function executeE2eControlCommand(
   context: vscode.ExtensionContext,
   appHostTreeProvider: AspireAppHostTreeProvider,
+  appHostLaunchService: AppHostLaunchService,
   command: AspireExtensionE2EControlCommand,
   markStarted: () => void
 ): Promise<unknown> {
@@ -789,6 +794,14 @@ async function executeE2eControlCommand(
     case 'debugAppHost': {
       const element = getAppHostElement(appHostTreeProvider, command.appHostPath);
       const commandPromise = vscode.commands.executeCommand('aspire-vscode.debugAppHost', element);
+      markStarted();
+      return await commandPromise;
+    }
+    case 'publishAppHost': {
+      if (!command.appHostPath) {
+        throw new Error('Aspire extension E2E publishAppHost requires appHostPath.');
+      }
+      const commandPromise = appHostLaunchService.launch(command.appHostPath, 'publish', true);
       markStarted();
       return await commandPromise;
     }
@@ -916,7 +929,14 @@ async function executeE2eControlCommand(
     }
     case 'stopDebugging': {
       markStarted();
+      const runningAppHostPaths = getUniqueAppHostPaths([
+        ...appHostTreeProvider.appHosts.map(appHost => appHost.appHostPath),
+        appHostTreeProvider.workspaceAppHost?.appHostPath,
+      ]);
       await vscode.debug.stopDebugging();
+      for (const appHostPath of runningAppHostPaths) {
+        appHostTreeProvider.notifyAppHostStopping(appHostPath);
+      }
       return undefined;
     }
     case 'closeAllEditors': {
@@ -1298,4 +1318,15 @@ function isSamePath(left: string, right: string): boolean {
   return process.platform === 'win32'
     ? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
     : normalizedLeft === normalizedRight;
+}
+
+function getUniqueAppHostPaths(paths: readonly (string | undefined)[]): string[] {
+  const result: string[] = [];
+  for (const candidate of paths) {
+    if (candidate && !result.some(existing => isSamePath(existing, candidate))) {
+      result.push(candidate);
+    }
+  }
+
+  return result;
 }
