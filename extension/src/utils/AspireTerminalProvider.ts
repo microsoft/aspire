@@ -268,7 +268,8 @@ export class AspireTerminalProvider implements vscode.Disposable {
         // [AssemblyMetadata("aspireterminalhostpath", …)] and can outlive a
         // dev-loop CLI swap (see https://github.com/microsoft/aspire/issues/18073).
         // Only forward values that pass the task's File.Exists guard; stale
-        // absolute paths trigger an ASPIRE009-style warning and suppress fallback.
+        // absolute paths make the task produce no bundle outputs instead of
+        // falling back, and the AppHost targets can then fail with ASPIRE009.
         const configuredCliPath = getForwardableAspireCliPath();
         if (configuredCliPath) {
             env[ASPIRE_CLI_PATH_ENV_VAR] = configuredCliPath;
