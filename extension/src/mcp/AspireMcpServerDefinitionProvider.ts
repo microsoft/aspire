@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import { resolveCliPath } from '../utils/cliPath';
-import { getCliExecutionCommand } from '../utils/cliExecution';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { getRegisterMcpServerInWorkspace, registerMcpServerInWorkspaceSetting } from '../utils/settings';
 
@@ -59,8 +58,7 @@ export class AspireMcpServerDefinitionProvider implements vscode.McpServerDefini
             return [];
         }
 
-        const command = getCliExecutionCommand(this._cliPath, ['agent', 'mcp']);
-        return [new vscode.McpStdioServerDefinition('Aspire', command.file, command.args)];
+        return [new vscode.McpStdioServerDefinition('Aspire', this._cliPath, ['agent', 'mcp'])];
     }
 
     dispose(): void {
