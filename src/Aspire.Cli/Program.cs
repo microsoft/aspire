@@ -348,8 +348,18 @@ public class Program
         // CliStartupContext so the channel can be logged at startup before DI is fully wired, and it
         // continues to power that early startup log. `IIdentityResolver` is the richer reader that
         // also resolves sidecar/env overrides for version, commit, and the NuGet service index; it
-        // powers `CliExecutionContext` construction.
+        // powers `CliExecutionContext` identity population.
         builder.Services.AddSingleton<IIdentityChannelReader>(startupContext.IdentityChannelReader);
+        builder.Services.AddSingleton<IEnvironment, HostEnvironment>();
+        if (OperatingSystem.IsWindows())
+        {
+            builder.Services.AddSingleton<IWindowsRegistryReader, WindowsRegistryReader>();
+        }
+        else
+        {
+            builder.Services.AddSingleton<IWindowsRegistryReader, NullWindowsRegistryReader>();
+        }
+        builder.Services.AddSingleton<WingetFirstRunProbe>();
         builder.Services.AddSingleton<IIdentityResolver>(sp =>
         {
             // Binary dir is the directory containing the running executable.
@@ -380,17 +390,8 @@ public class Program
                 sp.GetRequiredService<IInstallSidecarReader>(),
                 typeof(Program).Assembly,
                 binaryDir,
-                Environment.GetEnvironmentVariable);
+                sp.GetRequiredService<IEnvironment>());
         });
-        if (OperatingSystem.IsWindows())
-        {
-            builder.Services.AddSingleton<IWindowsRegistryReader, WindowsRegistryReader>();
-        }
-        else
-        {
-            builder.Services.AddSingleton<IWindowsRegistryReader, NullWindowsRegistryReader>();
-        }
-        builder.Services.AddSingleton<WingetFirstRunProbe>();
         builder.Services.AddSingleton(sp =>
         {
             // Use the resolver overload so env/sidecar overrides apply to
@@ -666,17 +667,6 @@ public class Program
         var homeDirectory = GetUsersAspirePath(processPath);
         var sdksPath = Path.Combine(homeDirectory, "sdks");
         return new DirectoryInfo(sdksPath);
-    }
-
-    internal static CliExecutionContext BuildCliExecutionContext(bool debugMode, string logsDirectory, string logFilePath, string channel, string? processPath = null)
-    {
-        var workingDirectory = new DirectoryInfo(Environment.CurrentDirectory);
-        var hivesDirectory = GetHivesDirectory(processPath);
-        var cacheDirectory = GetCacheDirectory(processPath);
-        var sdksDirectory = GetSdksDirectory(processPath);
-        var packagesDirectory = GetPackagesDirectory(processPath);
-        var aspireHomeDirectory = new DirectoryInfo(GetUsersAspirePath(processPath));
-        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, new DirectoryInfo(logsDirectory), logFilePath, identityChannel: channel, debugMode: debugMode, packagesDirectory: packagesDirectory, aspireHomeDirectory: aspireHomeDirectory);
     }
 
     internal static CliExecutionContext BuildCliExecutionContext(bool debugMode, string logsDirectory, string logFilePath, IIdentityResolver identityResolver, string? processPath = null)

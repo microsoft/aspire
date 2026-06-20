@@ -450,7 +450,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 return new CliHostEnvironment(configuration, nonInteractive: true);
             };
             options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
-                workspace.WorkspaceRoot, environmentVariables: envVars);
+                workspace.WorkspaceRoot, environment: new TestEnvironment(envVars));
             options.InteractionServiceFactory = _ => new TestInteractionService();
         });
 

@@ -24,11 +24,10 @@ namespace Aspire.Cli.Acquisition;
 /// than throwing during DI construction.
 /// </para>
 /// <para>
-/// The env-reader is injected as a delegate rather than read straight from
-/// <see cref="Environment.GetEnvironmentVariable(string)"/> so tests can run
-/// in parallel without racing against a shared process-environment.
-/// Production wiring in <c>Program.cs</c> passes
-/// <c>Environment.GetEnvironmentVariable</c> directly.
+/// Environment variables are read via <see cref="IEnvironment.GetEnvironmentVariable"/>
+/// so the resolver is decoupled from <see cref="CliExecutionContext"/> — both
+/// depend on <see cref="IEnvironment"/> independently, avoiding a circular
+/// dependency.
 /// </para>
 /// </remarks>
 internal sealed class IdentityResolver : IIdentityResolver
@@ -61,7 +60,7 @@ internal sealed class IdentityResolver : IIdentityResolver
     private readonly IInstallSidecarReader _sidecarReader;
     private readonly Assembly _assembly;
     private readonly string? _binaryDir;
-    private readonly Func<string, string?> _envReader;
+    private readonly IEnvironment _environment;
 
     // A single Lazy resolves every identity field together on first use; see the type remarks
     // for why per-field caching is unnecessary and why laziness is still retained.
@@ -71,16 +70,16 @@ internal sealed class IdentityResolver : IIdentityResolver
         IInstallSidecarReader sidecarReader,
         Assembly assembly,
         string? binaryDir,
-        Func<string, string?> envReader)
+        IEnvironment environment)
     {
         ArgumentNullException.ThrowIfNull(sidecarReader);
         ArgumentNullException.ThrowIfNull(assembly);
-        ArgumentNullException.ThrowIfNull(envReader);
+        ArgumentNullException.ThrowIfNull(environment);
 
         _sidecarReader = sidecarReader;
         _assembly = assembly;
         _binaryDir = binaryDir;
-        _envReader = envReader;
+        _environment = environment;
 
         _identity = new Lazy<ResolvedIdentity>(ResolveIdentity, LazyThreadSafetyMode.ExecutionAndPublication);
     }
@@ -301,7 +300,7 @@ internal sealed class IdentityResolver : IIdentityResolver
 
     private bool TryGetEnv(string name, [NotNullWhen(true)] out string? value)
     {
-        var raw = _envReader(name);
+        var raw = _environment.GetEnvironmentVariable(name);
         if (string.IsNullOrEmpty(raw))
         {
             value = null;
