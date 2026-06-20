@@ -2,6 +2,46 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="fr" original="../AgentCommandStrings.resx">
     <body>
+      <trans-unit id="AspireSkillsInstaller_ArchiveHashVerificationFailed">
+        <source>Embedded Aspire skills archive failed SHA-256 verification. Expected '{0}', got '{1}'.</source>
+        <target state="new">Embedded Aspire skills archive failed SHA-256 verification. Expected '{0}', got '{1}'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AspireSkillsInstaller_GitHubUnavailable">
+        <source>Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</source>
+        <target state="new">Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AspireSkillsInstaller_InvalidMetadata">
+        <source>Embedded Aspire skills bundle metadata is invalid: {0}</source>
+        <target state="new">Embedded Aspire skills bundle metadata is invalid: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AspireSkillsInstaller_MetadataRepositoryMismatch">
+        <source>Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'.</source>
+        <target state="new">Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AspireSkillsInstaller_MissingMetadataAssetName">
+        <source>Embedded Aspire skills metadata must specify a release asset name.</source>
+        <target state="new">Embedded Aspire skills metadata must specify a release asset name.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AspireSkillsInstaller_MissingMetadataSha256">
+        <source>Embedded Aspire skills metadata must specify the release asset SHA-256 hash.</source>
+        <target state="new">Embedded Aspire skills metadata must specify the release asset SHA-256 hash.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AspireSkillsInstaller_MissingMetadataTag">
+        <source>Embedded Aspire skills metadata must specify a GitHub release tag.</source>
+        <target state="new">Embedded Aspire skills metadata must specify a GitHub release tag.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AspireSkillsInstaller_MissingMetadataVersion">
+        <source>Embedded Aspire skills metadata must specify a version.</source>
+        <target state="new">Embedded Aspire skills metadata must specify a version.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ConfigUpdatesSelectPrompt">
         <source>The following agent configurations use the deprecated 'mcp start' command. Update them?</source>
         <target state="translated">Les configurations d’agent suivantes utilisent la commande « mcp start » obsolète. Voulez-vous les mettre à jour ?</target>
@@ -52,9 +92,19 @@
         <target state="new">Installed Playwright CLI.</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_InstalledSkill">
-        <source>Installed {0} skill ({1}).</source>
-        <target state="new">Installed {0} skill ({1}).</target>
+      <trans-unit id="InitCommand_InstalledSkillsSummary">
+        <source>Installed Aspire agent skills:</source>
+        <target state="new">Installed Aspire agent skills:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_InstalledSkillsSummaryLocations">
+        <source>Locations: {0}</source>
+        <target state="new">Locations: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_InstalledSkillsSummarySkills">
+        <source>Skills: {0}</source>
+        <target state="new">Skills: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_PlaywrightCliSkipped">
@@ -68,13 +118,23 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillsOptionDescription">
-        <source>Comma-separated list of skills to install (e.g. {0}), '{1}', or '{2}'</source>
-        <target state="new">Comma-separated list of skills to install (e.g. {0}), '{1}', or '{2}'</target>
+        <source>Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include {0}. Use '{1}' or '{2}'</source>
+        <target state="new">Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include {0}. Use '{1}' or '{2}'</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_WorkspaceRootOptionDescription">
         <source>Path to the workspace root directory</source>
         <target state="new">Path to the workspace root directory</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AspireSkillsInstaller_InstallingStatus">
+        <source>Installing Aspire skills...</source>
+        <target state="new">Installing Aspire skills...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AspireSkillsInstaller_InvalidBundle">
+        <source>The Aspire skills bundle is invalid: {0}</source>
+        <target state="new">The Aspire skills bundle is invalid: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_FailedToDownload">
@@ -110,6 +170,11 @@
       <trans-unit id="PlaywrightCliInstaller_IntegrityVerificationFailed">
         <source>Integrity verification failed for {0}. The downloaded package may have been tampered with.</source>
         <target state="new">Integrity verification failed for {0}. The downloaded package may have been tampered with.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PlaywrightCliInstaller_InvalidVersionOverride">
+        <source>The value of configuration setting '{0}' ('{1}') is not a valid SemVer 2.0 version.</source>
+        <target state="new">The value of configuration setting '{0}' ('{1}') is not a valid SemVer 2.0 version.</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_ProvenanceVerificationFailed">

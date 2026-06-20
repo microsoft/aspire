@@ -79,7 +79,7 @@ public class AddJavaScriptAppTests
     }
 
     [Fact]
-    public async Task VerifyDockerfileWhenPublishedAsNpmScript()
+    public async Task VerifyDockerfileWhenPublishedAsPackageScript()
     {
         using var tempDir = new TestTempDirectory();
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
@@ -90,7 +90,7 @@ public class AddJavaScriptAppTests
         var yarnApp = builder.AddJavaScriptApp("js", appDir)
             .WithYarn(installArgs: ["--immutable"])
             .WithBuildScript("do", ["--build"])
-            .PublishAsNpmScript("start", "-- --port $PORT");
+            .PublishAsPackageScript("start", "-- --port $PORT");
 
         await ManifestUtils.GetManifest(yarnApp.Resource, tempDir.Path);
 
@@ -118,6 +118,35 @@ public class AddJavaScriptAppTests
         var pnpmApp = builder.AddJavaScriptApp("js", appDir)
             .WithPnpm(installArgs: ["--prefer-frozen-lockfile"])
             .WithBuildScript("mybuild");
+
+        await ManifestUtils.GetManifest(pnpmApp.Resource, tempDir.Path);
+
+        var dockerfilePath = Path.Combine(tempDir.Path, "js.Dockerfile");
+        var dockerfileContents = File.ReadAllText(dockerfilePath);
+
+        await Verify(dockerfileContents);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task VerifyPnpmDockerfileWhenPublishedAsPackageScript(bool hasLockFile)
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(tempDir.Path, "js");
+        Directory.CreateDirectory(appDir);
+
+        if (hasLockFile)
+        {
+            File.WriteAllText(Path.Combine(appDir, "pnpm-lock.yaml"), string.Empty);
+        }
+
+        var pnpmApp = builder.AddJavaScriptApp("js", appDir)
+            .WithPnpm(installArgs: ["--prefer-frozen-lockfile"])
+            .WithBuildScript("mybuild")
+            .PublishAsPackageScript("start");
 
         await ManifestUtils.GetManifest(pnpmApp.Resource, tempDir.Path);
 
@@ -399,6 +428,86 @@ public class AddJavaScriptAppTests
 
         // Assert the build succeeded
         Assert.True(process.ExitCode == 0, $"Docker build failed with exit code {process.ExitCode}.\nStdout: {stdout}\nStderr: {stderr}");
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    [OuterloopTest("Builds and runs a Docker image to verify the generated pnpm PublishAsPackageScript Dockerfile works")]
+    public async Task VerifyPnpmDockerfileWhenPublishedAsPackageScriptRunsWithoutNetwork()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(tempDir.Path, "pnpm-app");
+        Directory.CreateDirectory(appDir);
+
+        var packageJson = """
+            {
+              "name": "pnpm-runtime-test-app",
+              "version": "1.0.0",
+              "scripts": {
+                "build": "echo 'build completed'",
+                "start": "node -e \"console.log('runtime ok')\""
+              }
+            }
+            """;
+        await File.WriteAllTextAsync(Path.Combine(appDir, "package.json"), packageJson);
+
+        var pnpmApp = builder.AddJavaScriptApp("pnpm-app", appDir)
+            .WithPnpm()
+            .WithBuildScript("build")
+            .PublishAsPackageScript("start");
+
+        await ManifestUtils.GetManifest(pnpmApp.Resource, tempDir.Path);
+
+        var dockerfilePath = Path.Combine(tempDir.Path, "pnpm-app.Dockerfile");
+        Assert.True(File.Exists(dockerfilePath), $"Dockerfile should exist at {dockerfilePath}");
+
+        var dockerfileContent = await File.ReadAllTextAsync(dockerfilePath);
+        Assert.Contains("RUN corepack enable pnpm && pnpm --version", dockerfileContent);
+
+        var dockerfileInContext = Path.Combine(appDir, "Dockerfile");
+        await File.WriteAllTextAsync(dockerfileInContext, dockerfileContent);
+
+        var imageName = $"aspire-pnpm-runtime-test-{Guid.NewGuid():N}";
+
+        try
+        {
+            var buildResult = await RunDockerCommandAsync($"build --network=host -t {imageName} -f Dockerfile .", appDir);
+            Assert.True(buildResult.ExitCode == 0, $"Docker build failed with exit code {buildResult.ExitCode}.\nStdout: {buildResult.Stdout}\nStderr: {buildResult.Stderr}");
+
+            var runResult = await RunDockerCommandAsync($"run --rm --network=none {imageName}", appDir);
+            Assert.True(runResult.ExitCode == 0, $"Docker run failed with exit code {runResult.ExitCode}.\nStdout: {runResult.Stdout}\nStderr: {runResult.Stderr}");
+            Assert.Contains("runtime ok", runResult.Stdout);
+        }
+        finally
+        {
+            await RunDockerCommandAsync($"rmi {imageName}", appDir);
+        }
+    }
+
+    private static async Task<(int ExitCode, string Stdout, string Stderr)> RunDockerCommandAsync(string arguments, string workingDirectory)
+    {
+        var processStartInfo = new ProcessStartInfo
+        {
+            FileName = "docker",
+            Arguments = arguments,
+            WorkingDirectory = workingDirectory,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(processStartInfo);
+        Assert.NotNull(process);
+
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+
+        await process.WaitForExitAsync(TestContext.Current.CancellationToken);
+
+        return (process.ExitCode, await stdoutTask, await stderrTask);
     }
 
     private static string CreateJavaScriptAppWithDockerfile(string rootDirectory)

@@ -12,12 +12,11 @@ using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.Markdown;
 using Aspire.Hosting;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Spectre.Console;
 using StreamJsonRpc;
 
@@ -25,6 +24,8 @@ namespace Aspire.Cli.Commands;
 
 internal abstract class PipelineCommandBase : BaseCommand
 {
+    protected override bool UpdateNotificationsEnabled => true;
+
     private const string CustomChoiceValue = "__CUSTOM_CHOICE";
 
     protected readonly IDotNetCliRunner _runner;
@@ -40,9 +41,8 @@ internal abstract class PipelineCommandBase : BaseCommand
     protected static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", PublishCommandStrings.ProjectArgumentDescription);
 
     private readonly Option<string?> _outputPathOption;
-    private readonly Option<bool>? _startDebugSessionOption;
 
-    protected static readonly Option<string?> s_logLevelOption = new("--log-level")
+    protected static readonly Option<string?> s_pipelineLogLevelOption = new("--pipeline-log-level")
     {
         Description = SharedCommandStrings.PipelineLogLevelOptionDescription
     };
@@ -79,8 +79,8 @@ internal abstract class PipelineCommandBase : BaseCommand
     private static bool IsCompletionStateWarning(string completionState) =>
         completionState == CompletionStates.CompletedWithWarning;
 
-    protected PipelineCommandBase(string name, string description, IDotNetCliRunner runner, IInteractionService interactionService, IProjectLocator projectLocator, AspireCliTelemetry telemetry, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfiguration configuration, ILogger logger, IAnsiConsole ansiConsole)
-        : base(name, description, features, updateNotifier, executionContext, interactionService, telemetry)
+    protected PipelineCommandBase(string name, string description, IDotNetCliRunner runner, IProjectLocator projectLocator, IFeatures features, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfiguration configuration, ILogger logger, IAnsiConsole ansiConsole, CommonCommandServices services)
+        : base(name, description, services)
     {
         _runner = runner;
         _projectLocator = projectLocator;
@@ -98,20 +98,11 @@ internal abstract class PipelineCommandBase : BaseCommand
 
         Options.Add(s_appHostOption);
         Options.Add(_outputPathOption);
-        Options.Add(s_logLevelOption);
+        Options.Add(s_pipelineLogLevelOption);
         Options.Add(s_environmentOption);
         Options.Add(s_includeExceptionDetailsOption);
         Options.Add(s_noBuildOption);
         Options.Add(s_listStepsOption);
-
-        if (ExtensionHelper.IsExtensionHost(interactionService, out _, out _))
-        {
-            _startDebugSessionOption = new Option<bool>("--start-debug-session")
-            {
-                Description = RunCommandStrings.StartDebugSessionArgumentDescription
-            };
-            Options.Add(_startDebugSessionOption);
-        }
 
         // In the publish and deploy commands we forward all unrecognized tokens
         // through to the underlying tooling when we launch the app host.
@@ -167,7 +158,7 @@ internal abstract class PipelineCommandBase : BaseCommand
         var debugMode = parseResult.GetValue(RootCommand.DebugOption);
         var waitForDebugger = parseResult.GetValue(RootCommand.WaitForDebuggerOption);
         var noBuild = parseResult.GetValue(s_noBuildOption);
-        var startDebugSession = _startDebugSessionOption is not null && parseResult.GetValue(_startDebugSessionOption);
+        var startDebugSession = ExtensionHelper.IsExtensionHost(InteractionService, out _, out _) && parseResult.GetValue(RootCommand.StartDebugSessionOption);
 
         Task<int>? pendingRun = null;
         PublishContext? publishContext = null;
@@ -291,7 +282,7 @@ internal abstract class PipelineCommandBase : BaseCommand
             var publishingActivities = backchannel.GetPublishingActivitiesAsync(cancellationToken);
 
             // Check if debug or trace logging is enabled
-            var logLevel = parseResult.GetValue(s_logLevelOption);
+            var logLevel = parseResult.GetValue(s_pipelineLogLevelOption);
             var isDebugOrTraceLoggingEnabled = logLevel?.Equals("debug", StringComparison.OrdinalIgnoreCase) == true ||
                                                  logLevel?.Equals("trace", StringComparison.OrdinalIgnoreCase) == true;
 

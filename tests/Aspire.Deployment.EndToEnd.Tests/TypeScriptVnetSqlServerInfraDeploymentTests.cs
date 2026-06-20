@@ -174,10 +174,10 @@ public sealed class TypeScriptVnetSqlServerInfraDeploymentTests(ITestOutputHelpe
                 await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
             }
 
-            // Step 5: Modify apphost.ts to add VNet + PE + SQL infrastructure
+            // Step 5: Modify apphost.mts to add VNet + PE + SQL infrastructure
             {
-                var appHostFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
-                output.WriteLine($"Looking for apphost.ts at: {appHostFilePath}");
+                var appHostFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts");
+                output.WriteLine($"Looking for apphost.mts at: {appHostFilePath}");
 
                 var content = File.ReadAllText(appHostFilePath);
 
@@ -206,7 +206,7 @@ await builder.build().run();
 
                 File.WriteAllText(appHostFilePath, content);
 
-                output.WriteLine($"Modified apphost.ts with VNet + SQL Server PE + deployment script subnet infrastructure");
+                output.WriteLine($"Modified apphost.mts with VNet + SQL Server PE + deployment script subnet infrastructure");
                 output.WriteLine($"New content:\n{content}");
             }
 

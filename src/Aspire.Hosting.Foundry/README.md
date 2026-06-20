@@ -1,6 +1,6 @@
-# Aspire.Hosting.Foundry library
+# Microsoft Foundry hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure Microsoft Foundry.
+Use this integration to model, configure, and orchestrate Microsoft Foundry in an Aspire solution.
 
 ## Getting started
 
@@ -8,34 +8,31 @@ Provides extension methods and resource definitions for an Aspire AppHost to con
 
 - Azure subscription - [create one for free](https://azure.microsoft.com/free/)
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire Microsoft Foundry Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.Foundry` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Foundry
+```bash
+aspire add Aspire.Hosting.Foundry
 ```
 
 ## Configure Azure Provisioning for local development
 
-Adding Azure resources to the Aspire application model will automatically enable development-time provisioning
+Adding Azure resources to the AppHost model will automatically enable development-time provisioning
 for Azure resources so that you don't need to configure them manually. Provisioning requires a number of settings
-to be available via .NET configuration. Set these values in user secrets in order to allow resources to be configured
-automatically.
+to be available via AppHost configuration. From your AppHost directory, set these values with `aspire secret set`:
 
-```json
-{
-    "Azure": {
-      "SubscriptionId": "<your subscription id>",
-      "ResourceGroupPrefix": "<prefix for the resource group>",
-      "Location": "<azure location>"
-    }
-}
+```bash
+aspire secret set Azure:SubscriptionId "<your subscription id>"
+aspire secret set Azure:ResourceGroupPrefix "<prefix for the resource group>"
+aspire secret set Azure:Location "<azure location>"
 ```
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add a Microsoft Foundry deployment and consume the connection using the following methods:
+In the AppHost, add a Microsoft Foundry deployment and reference it from another resource with either C# or TypeScript:
+
+**C#**
 
 ```csharp
 var chat = builder.AddFoundry("foundry")
@@ -45,51 +42,15 @@ var myService = builder.AddProject<Projects.MyService>()
                        .WithReference(chat);
 ```
 
-The `WithReference` method passes that connection information into a connection string named `chat` in the `MyService` project.
+**TypeScript**
 
-### Configuring deployment rate limits
+```typescript
+const chat = await builder.addFoundry("foundry")
+                  .addDeployment("chat", "Phi-4", "1", "Microsoft");
 
-The `SkuCapacity` property controls the rate limit in thousands of tokens per minute (TPM). For example, a value of `10` means 10,000 TPM. The default is `1` (1,000 TPM). Use `WithProperties` to configure it:
-
-```csharp
-var chat = builder.AddFoundry("foundry")
-                  .AddDeployment("chat", "gpt-4", "1", "OpenAI")
-                  .WithProperties(d => d.SkuCapacity = 10);
+const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
+                       .withReference(chat);
 ```
-
-See the [Azure AI quota management](https://learn.microsoft.com/azure/ai-foundry/openai/how-to/quota) documentation for available quota limits per model and region.
-
-In the _Program.cs_ file of `MyService`, the connection can be consumed using a client library like [Aspire.Azure.AI.Inference](https://www.nuget.org/packages/Aspire.Azure.AI.Inference) or [Aspire.OpenAI](https://www.nuget.org/packages/Aspire.OpenAI) if the model is compatible with the OpenAI API:
-
-Note: The `format` parameter of the `AddDeployment()` method can be found in the Microsoft Foundry portal in the details
-page of the model, right after the `Quick facts` text.
-
-#### Inference client usage
-```csharp
-builder.AddAzureChatCompletionsClient("chat")
-       .AddChatClient();
-```
-
-#### OpenAI client usage
-```csharp
-builder.AddOpenAIClient("chat")
-       .AddChatClient();
-```
-
-### Emulator usage
-
-Aspire supports the usage of Foundry Local. Add the following to your AppHost project:
-
-```csharp
-// AppHost
-var chat = builder.AddFoundry("foundry")
-                  .RunAsFoundryLocal()
-                  .AddDeployment("chat", "phi-3.5-mini", "1", "Microsoft");
-```
-
-When the AppHost starts up, the local Foundry service will also be started.
-
-This requires the local machine to have [Foundry Local](https://learn.microsoft.com/azure/ai-foundry/foundry-local/get-started) installed and running.
 
 ## Connection Properties
 
@@ -102,7 +63,10 @@ The Microsoft Foundry resource exposes the following connection properties:
 | Property Name | Description |
 |---------------|-------------|
 | `Uri` | The endpoint URI for the Microsoft Foundry resource, with the format `https://<resource_name>.services.ai.azure.com/` or the emulator service URI when running Foundry Local (e.g., `http://127.0.0.1:61799/v1`) |
+| `AIInferenceUri` | The AI inference endpoint URI, with the format `https://<resource_name>.services.ai.azure.com/models` when targeting Azure or the emulator service URI when running Foundry Local (e.g., `http://127.0.0.1:61799/v1`) |
 | `Key` | The API key when using Foundry Local |
+
+See [Migrate from Azure AI Inference to Azure OpenAI in Azure AI Foundry Models](https://learn.microsoft.com/azure/foundry/how-to/model-inference-to-openai-migration?tabs=openai) for guidance on which URI to use based on the SDK used by your application.
 
 ### Microsoft Foundry deployment
 
@@ -160,7 +124,7 @@ var foundry = builder.AddFoundry("foundry");
 var project = foundry.AddProject("my-project");
 
 builder.AddPythonApp("agent", "./app", "main:app")
-       .PublishAsHostedAgent(project);
+       .AsHostedAgent(project);
 ```
 
 In run mode, the agent runs locally with health check endpoints and OpenTelemetry instrumentation. In publish mode, the agent is deployed as a hosted agent in Microsoft Foundry.
@@ -255,9 +219,10 @@ var agent2 = project.AddPromptAgent(chat, "agent-2").WithTool(codeInterp);
 
 ## Additional documentation
 
+* https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/cloud/azure/azure-ai-foundry/azure-ai-foundry-host/
 * https://learn.microsoft.com/azure/ai-foundry/what-is-azure-ai-foundry
 * https://learn.microsoft.com/azure/ai-foundry/foundry-local/
-* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
 
 ## Feedback & contributing
 

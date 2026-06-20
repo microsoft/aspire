@@ -32,6 +32,11 @@
         <target state="translated">AppHost</target>
         <note />
       </trans-unit>
+      <trans-unit id="AppHostConnectionLostWaitingForExit">
+        <source>The connection to the child AppHost was lost. Waiting for the AppHost process to exit. Press Ctrl+C to stop waiting.</source>
+        <target state="new">The connection to the child AppHost was lost. Waiting for the AppHost process to exit. Press Ctrl+C to stop waiting.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AppHostExitedWithCode">
         <source>AppHost process exited with code {0}.</source>
         <target state="needs-review-translation">AppHost 程序以返回碼 {0} 結束。</target>
@@ -106,6 +111,11 @@
         <source>The health of the resource, eg Healthy</source>
         <target state="translated">資源的健康狀況，例如：健康</target>
         <note />
+      </trans-unit>
+      <trans-unit id="InvalidAppHostStartupTimeoutEnvironmentVariable">
+        <source>The {0} environment variable must be a positive number of seconds.</source>
+        <target state="new">The {0} environment variable must be a positive number of seconds.</target>
+        <note>Do not localize the {0} placeholder. It is an environment variable name.</note>
       </trans-unit>
       <trans-unit id="IsCompatibleAppHostIsNull">
         <source>IsCompatibleAppHost is null</source>
@@ -198,8 +208,13 @@
         <note />
       </trans-unit>
       <trans-unit id="StartingDebugSessionInExtension">
-        <source>Detected aspire run inside the Aspire extension, starting a debug session in VS Code...</source>
-        <target state="translated">偵測到 Aspire 在 Aspire 擴充功能中執行，正在 VS Code 中啟動偵錯工作階段...</target>
+        <source>Detected aspire {0} inside the Aspire extension, starting a debug session in VS Code...</source>
+        <target state="new">Detected aspire {0} inside the Aspire extension, starting a debug session in VS Code...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StartingRunSessionInExtension">
+        <source>Detected aspire {0} inside the Aspire extension, running app in VS Code. To start a debug session, add --start-debug-session.</source>
+        <target state="new">Detected aspire {0} inside the Aspire extension, running app in VS Code. To start a debug session, add --start-debug-session.</target>
         <note />
       </trans-unit>
       <trans-unit id="State">
@@ -208,9 +223,9 @@
         <note>The state of the resource, eg Running</note>
       </trans-unit>
       <trans-unit id="TimeoutWaitingForAppHost">
-        <source>Timeout waiting for AppHost to start.</source>
-        <target state="needs-review-translation">等候 AppHost 啟動時發生逾時。</target>
-        <note />
+        <source>Timed out waiting {0}s for AppHost to start. If the AppHost is still building or starting, set {1} to a higher value and try again.</source>
+        <target state="new">Timed out waiting {0}s for AppHost to start. If the AppHost is still building or starting, set {1} to a higher value and try again.</target>
+        <note>Do not localize the {1} placeholder. It is an environment variable name.</note>
       </trans-unit>
       <trans-unit id="Type">
         <source>Type</source>

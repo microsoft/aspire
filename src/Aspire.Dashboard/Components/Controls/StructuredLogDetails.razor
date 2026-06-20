@@ -7,11 +7,11 @@
 <div class="structured-log-details-layout">
     <FluentToolbar Orientation="Orientation.Horizontal">
         <div>
-            @((MarkupString)string.Format(ControlsStrings.StructuredLogsDetailsResource, ViewModel.LogEntry.ResourceView.Resource.ResourceName))
+            @Loc[nameof(ControlsStrings.StructuredLogsDetailsResourceLabel)] <strong>@ViewModel.LogEntry.ResourceView.Resource.ResourceName</strong>
         </div>
         <FluentDivider Role="DividerRole.Presentation" Orientation="Orientation.Vertical" />
         <div title="@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, ViewModel.LogEntry.TimeStamp, MillisecondsDisplay.Full)">
-            @((MarkupString)string.Format(ControlsStrings.StructuredLogsDetailsTimestamp, FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, ViewModel.LogEntry.TimeStamp, MillisecondsDisplay.Truncated)))
+            @Loc[nameof(ControlsStrings.StructuredLogsDetailsTimestampLabel)] <strong>@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, ViewModel.LogEntry.TimeStamp, MillisecondsDisplay.Truncated)</strong>
         </div>
         <FluentSearch Placeholder="@Loc[nameof(ControlsStrings.FilterPlaceholder)]"
                       Immediate="true"

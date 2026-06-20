@@ -12,6 +12,11 @@
         <target state="new">The destroy operation was canceled.</target>
         <note />
       </trans-unit>
+      <trans-unit id="NonInteractiveRequiresYes">
+        <source>The destroy command requires --yes when the --non-interactive option is specified.</source>
+        <target state="new">The destroy command requires --yes when the --non-interactive option is specified.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="OperationCompletedPrefix">
         <source>Destroy completed</source>
         <target state="new">Destroy completed</target>

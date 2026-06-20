@@ -4,7 +4,6 @@
 #pragma warning disable ASPIREAZURE001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
@@ -21,7 +20,6 @@ using Aspire.Hosting.Testing;
 using Aspire.Hosting.Tests;
 using Aspire.Hosting.Tests.Publishing;
 using Aspire.Hosting.Utils;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -1284,7 +1282,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         var acaEnv = builder.AddAzureContainerAppEnvironment("aca-env");
 
         builder.AddProject<Project>("agent", launchProfileName: null)
-            .PublishAsHostedAgent(foundryProject);
+            .AsHostedAgent(foundryProject);
 
         builder.AddProject<Project>("api", launchProfileName: null)
             .WithExternalHttpEndpoints()
@@ -1489,7 +1487,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
 
     private sealed class NoOpBicepProvisioner : IBicepProvisioner
     {
-        public Task<bool> ConfigureResourceAsync(IConfiguration configuration, AzureBicepResource resource, CancellationToken cancellationToken)
+        public Task<bool> ConfigureResourceAsync(AzureBicepResource resource, CancellationToken cancellationToken)
         {
             return Task.FromResult(true);
         }
@@ -1502,7 +1500,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
 
     private sealed class FailingBicepProvisioner : IBicepProvisioner
     {
-        public Task<bool> ConfigureResourceAsync(IConfiguration configuration, AzureBicepResource resource, CancellationToken cancellationToken)
+        public Task<bool> ConfigureResourceAsync(AzureBicepResource resource, CancellationToken cancellationToken)
         {
             return Task.FromResult(false);
         }

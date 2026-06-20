@@ -38,7 +38,10 @@ internal sealed class GitRepository(CliExecutionContext executionContext, ILogge
 
             process.Start();
             activity.SetProcessId(process.Id);
+            using var cancellationRegistration = RegisterProcessKillOnCancellation(process, cancellationToken);
 
+            // Read both streams concurrently so a verbose git failure cannot block on a full stderr
+            // pipe while the CLI is waiting for stdout or process exit.
             var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
             var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
 
@@ -121,7 +124,10 @@ internal sealed class GitRepository(CliExecutionContext executionContext, ILogge
 
             process.Start();
             activity.SetProcessId(process.Id);
+            using var cancellationRegistration = RegisterProcessKillOnCancellation(process, cancellationToken);
 
+            // Read both streams concurrently so a verbose git failure cannot block on a full stderr
+            // pipe while the CLI is waiting for stdout or process exit.
             var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
             var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
 
@@ -145,9 +151,12 @@ internal sealed class GitRepository(CliExecutionContext executionContext, ILogge
             var includedFiles = new HashSet<string>(pathComparer);
 
             var rootFullName = searchRoot.FullName;
+
+            // `git ls-files -z` emits NUL-delimited paths relative to searchRoot, for example:
+            // `src/AppHost/AppHost.csproj\0playground/apphost.ts\0`. Git always uses '/' as the
+            // separator in this output, and the trailing NUL produces an empty split entry.
             foreach (var rawPath in output.Split('\0', StringSplitOptions.RemoveEmptyEntries))
             {
-                // git always emits paths with '/' separators; normalize to the OS separator.
                 var relativePath = Path.DirectorySeparatorChar == '/'
                     ? rawPath
                     : rawPath.Replace('/', Path.DirectorySeparatorChar);
@@ -166,5 +175,38 @@ internal sealed class GitRepository(CliExecutionContext executionContext, ILogge
             logger.LogDebug(ex, "Git is not installed or not found in PATH");
             return null;
         }
+    }
+
+    private static CancellationTokenRegistration RegisterProcessKillOnCancellation(Process process, CancellationToken cancellationToken)
+    {
+        // Process.WaitForExitAsync(cancellationToken) cancels the wait but does not terminate the
+        // child process. These are short-lived git commands owned by the CLI, so Ctrl+C should stop
+        // the git process tree instead of leaving `git ls-files` walking a large repo after exit.
+        if (!cancellationToken.CanBeCanceled)
+        {
+            return default;
+        }
+
+        return cancellationToken.Register(static state =>
+        {
+            var process = (Process)state!;
+            try
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                // The process can exit between HasExited and Kill. Cancellation already won, so
+                // cleanup is best effort.
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                // Process termination can race with OS teardown or permission checks. Treat that
+                // the same as an already-exited process rather than surfacing a secondary error.
+            }
+        }, process);
     }
 }

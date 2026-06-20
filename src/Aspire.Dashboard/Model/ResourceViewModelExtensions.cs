@@ -3,6 +3,7 @@
 
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using Aspire.Dashboard.Utils;
 
 namespace Aspire.Dashboard.Model;
@@ -99,6 +100,55 @@ internal static class ResourceViewModelExtensions
         return resource.TryGetCustomDataBoolArray(KnownProperties.Resource.AppArgsSensitivity, out argParams);
     }
 
+    /// <summary>
+    /// Returns <c>true</c> if the resource has an interactive terminal session available.
+    /// </summary>
+    public static bool HasTerminal(this ResourceViewModel resource)
+    {
+        return resource.Properties.ContainsKey(KnownProperties.Terminal.Enabled);
+    }
+
+    /// <summary>
+    /// Tries to get the per-replica terminal info: the stable replica index and the
+    /// total replica count for the parent resource. Both values are stamped onto
+    /// each replica snapshot by the AppHost when the resource has
+    /// <c>WithTerminal()</c> applied. The pair is sufficient for the dashboard to
+    /// build a <c>?resource=&lt;name&gt;&amp;replica=&lt;index&gt;</c> URL that the
+    /// terminal WebSocket proxy can resolve to a per-replica HMP v1 producer
+    /// socket without exposing the socket path to the browser.
+    /// </summary>
+    public static bool TryGetTerminalReplicaInfo(this ResourceViewModel resource, out int replicaIndex, out int replicaCount)
+    {
+        replicaIndex = 0;
+        replicaCount = 0;
+
+        if (!resource.TryGetCustomDataString(KnownProperties.Terminal.ReplicaIndex, out var indexString) ||
+            !int.TryParse(indexString, NumberStyles.Integer, CultureInfo.InvariantCulture, out replicaIndex))
+        {
+            return false;
+        }
+
+        if (!resource.TryGetCustomDataString(KnownProperties.Terminal.ReplicaCount, out var countString) ||
+            !int.TryParse(countString, NumberStyles.Integer, CultureInfo.InvariantCulture, out replicaCount))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Tries to get the per-replica consumer UDS path stamped onto the snapshot
+    /// by the AppHost. Used by the dashboard's terminal WebSocket proxy to
+    /// connect a local HMP v1 client to the terminal host. Returns <c>false</c>
+    /// for resources that don't have a terminal or for snapshots from older
+    /// AppHost builds that don't stamp this property.
+    /// </summary>
+    public static bool TryGetTerminalConsumerUdsPath(this ResourceViewModel resource, [NotNullWhen(returnValue: true)] out string? consumerUdsPath)
+    {
+        return resource.TryGetCustomDataString(KnownProperties.Terminal.ConsumerUdsPath, out consumerUdsPath);
+    }
+    
     public static bool TryGetWaitingForDependencies(this ResourceViewModel resource, out ImmutableArray<string> dependencies)
     {
         return resource.TryGetCustomDataStringArray(KnownProperties.Resource.WaitingFor, out dependencies) && dependencies.Length > 0;
@@ -115,30 +165,21 @@ internal static class ResourceViewModelExtensions
             return false;
         }
 
-        var resources = allResources.ToArray();
-        var builder = ImmutableArray.CreateBuilder<string>();
+        var builder = ImmutableArray.CreateBuilder<string>(waitingForDependencies.Length);
         var seenDependencies = new HashSet<string>(StringComparers.ResourceName);
 
         foreach (var dependency in waitingForDependencies)
         {
             var resolvedDependency = dependency;
-            var matchingResource = resources.FirstOrDefault(r => string.Equals(r.Name, dependency, StringComparisons.ResourceName));
+            var matchingResource = FindResourceByName(dependency, allResources);
             if (matchingResource is null)
             {
-                var matchingResources = resources
-                    .Where(r => string.Equals(r.DisplayName, dependency, StringComparisons.ResourceName))
-                    .Take(2)
-                    .ToArray();
-
-                if (matchingResources.Length == 1)
-                {
-                    matchingResource = matchingResources[0];
-                }
+                matchingResource = FindSingleResourceByDisplayName(dependency, allResources);
             }
 
             if (matchingResource is not null)
             {
-                resolvedDependency = ResourceViewModel.GetResourceName(matchingResource, resources);
+                resolvedDependency = ResourceViewModel.GetResourceName(matchingResource, allResources);
             }
 
             if (seenDependencies.Add(resolvedDependency))
@@ -149,6 +190,43 @@ internal static class ResourceViewModelExtensions
 
         dependencies = builder.ToImmutable();
         return dependencies.Length > 0;
+    }
+
+    private static ResourceViewModel? FindResourceByName(string name, IEnumerable<ResourceViewModel> allResources)
+    {
+        foreach (var resource in allResources)
+        {
+            if (string.Equals(resource.Name, name, StringComparisons.ResourceName))
+            {
+                return resource;
+            }
+        }
+
+        return null;
+    }
+
+    private static ResourceViewModel? FindSingleResourceByDisplayName(string displayName, IEnumerable<ResourceViewModel> allResources)
+    {
+        ResourceViewModel? matchingResource = null;
+        var matchCount = 0;
+
+        foreach (var resource in allResources)
+        {
+            if (!string.Equals(resource.DisplayName, displayName, StringComparisons.ResourceName))
+            {
+                continue;
+            }
+
+            matchCount++;
+            if (matchCount > 1)
+            {
+                return null;
+            }
+
+            matchingResource = resource;
+        }
+
+        return matchCount == 1 ? matchingResource : null;
     }
 
     private static bool TryGetCustomDataString(this ResourceViewModel resource, string key, [NotNullWhen(returnValue: true)] out string? s)

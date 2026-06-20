@@ -53,11 +53,11 @@ builder.AddParameter("testParameterResource", () => "value", secret: true);
 var apiKeyParam = builder.AddParameter("api-key", secret: true);
 var connectionStringParam = builder.AddParameter("db-connection-string");
 builder.AddContainer("hiddenContainer", "alpine")
+    .WithHidden()
     .WithInitialState(new CustomResourceSnapshot
     {
         ResourceType = "CustomHiddenContainerType",
-        Properties = [],
-        IsHidden = true
+        Properties = []
     });
 
 // TODO: OTEL env var can be removed when OTEL libraries are updated to 1.9.0
@@ -122,5 +122,6 @@ builder.AddProject<Projects.Stress_Empty>("empty-profile-2", launchProfileName: 
     .WithArgs("arg_from_apphost");
 
 builder.AddNoStatusResource("no-status-resource");
+builder.AddPropertyStressResource("property-stress-resource");
 
 builder.Build().Run();

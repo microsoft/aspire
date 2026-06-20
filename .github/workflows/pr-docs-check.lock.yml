@@ -1,5 +1,7 @@
-# gh-aw-metadata: {"schema_version":"v3","frontmatter_hash":"3af66f1fd653245278baa8211a0584123c6fb4862729e4b304396a4d63d3ae83","compiler_version":"v0.72.0","strict":true,"agent_id":"copilot"}
-# gh-aw-manifest: {"version":1,"secrets":["ASPIRE_BOT_APP_ID","ASPIRE_BOT_PRIVATE_KEY","COPILOT_GITHUB_TOKEN","GH_AW_CI_TRIGGER_TOKEN","GH_AW_GITHUB_MCP_SERVER_TOKEN","GH_AW_GITHUB_TOKEN","GITHUB_TOKEN"],"actions":[{"repo":"actions/checkout","sha":"de0fac2e4500dabe0009e67214ff5f5447ce83dd","version":"v6.0.2"},{"repo":"actions/create-github-app-token","sha":"1b10c78c7865c340bc4f6099eb2f838309f1e8c3","version":"v3.1.1"},{"repo":"actions/download-artifact","sha":"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c","version":"v8.0.1"},{"repo":"actions/github-script","sha":"373c709c69115d41ff229c7e5df9f8788daa9553","version":"v9"},{"repo":"actions/github-script","sha":"3a2844b7e9c422d3c10d287c895573f7108da1b3","version":"v9.0.0"},{"repo":"actions/setup-node","sha":"48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e","version":"v6.4.0"},{"repo":"actions/upload-artifact","sha":"043fb46d1a93c77aae656e7c1c64a875d1fc6a0a","version":"v7.0.1"},{"repo":"github/gh-aw-actions/setup","sha":"ff0525b685481744f490a0d362753d8001e4b39d","version":"v0.72.0"}],"containers":[{"image":"ghcr.io/github/gh-aw-firewall/agent:0.25.41"},{"image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.25.41"},{"image":"ghcr.io/github/gh-aw-firewall/squid:0.25.41"},{"image":"ghcr.io/github/gh-aw-mcpg:v0.3.6","digest":"sha256:2bb8eef86006a4c5963c55616a9c51c32f27bfdecb023b8aa6f91f6718d9171c","pinned_image":"ghcr.io/github/gh-aw-mcpg:v0.3.6@sha256:2bb8eef86006a4c5963c55616a9c51c32f27bfdecb023b8aa6f91f6718d9171c"},{"image":"ghcr.io/github/github-mcp-server:v1.0.3","digest":"sha256:2ac27ef03461ef2b877031b838a7d1fd7f12b12d4ace7796d8cad91446d55959","pinned_image":"ghcr.io/github/github-mcp-server:v1.0.3@sha256:2ac27ef03461ef2b877031b838a7d1fd7f12b12d4ace7796d8cad91446d55959"},{"image":"node:lts-alpine","digest":"sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f","pinned_image":"node:lts-alpine@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f"}]}
+# gh-aw-metadata: {"schema_version":"v4","frontmatter_hash":"cfe0bb13e1bb66b377cccd9406d6fa162ae1f43b23ba2f0005400914e35ef2e2","body_hash":"aa68f21b74d7d74011551d3ac173f771c350b3a4fe3298eb5d0981af26c200d1","compiler_version":"v0.79.8","strict":true,"agent_id":"copilot","engine_versions":{"copilot":"1.0.60"}}
+# gh-aw-manifest: {"version":1,"secrets":["ASPIRE_BOT_APP_ID","ASPIRE_BOT_PRIVATE_KEY","GH_AW_CI_TRIGGER_TOKEN","GH_AW_GITHUB_MCP_SERVER_TOKEN","GH_AW_GITHUB_TOKEN","GITHUB_TOKEN"],"actions":[{"repo":"actions/checkout","sha":"de0fac2e4500dabe0009e67214ff5f5447ce83dd","version":"de0fac2e4500dabe0009e67214ff5f5447ce83dd"},{"repo":"actions/checkout","sha":"df4cb1c069e1874edd31b4311f1884172cec0e10","version":"v6.0.3"},{"repo":"actions/create-github-app-token","sha":"1b10c78c7865c340bc4f6099eb2f838309f1e8c3","version":"v3.1.1"},{"repo":"actions/create-github-app-token","sha":"bcd2ba49218906704ab6c1aa796996da409d3eb1","version":"v3.2.0"},{"repo":"actions/download-artifact","sha":"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c","version":"v8.0.1"},{"repo":"actions/github-script","sha":"373c709c69115d41ff229c7e5df9f8788daa9553","version":"v9"},{"repo":"actions/github-script","sha":"3a2844b7e9c422d3c10d287c895573f7108da1b3","version":"v9.0.0"},{"repo":"actions/setup-node","sha":"48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e","version":"v6.4.0"},{"repo":"actions/upload-artifact","sha":"043fb46d1a93c77aae656e7c1c64a875d1fc6a0a","version":"v7.0.1"},{"repo":"github/gh-aw-actions/setup","sha":"c0338fef4749d08c21f8f975fb0e37efa17dda47","version":"v0.79.8"}],"containers":[{"image":"ghcr.io/github/gh-aw-firewall/agent:0.27.2","digest":"sha256:f88e5b17b6b7a600117bc121114d6ce2155c88c983c0c939c5df884f730fa1d6","pinned_image":"ghcr.io/github/gh-aw-firewall/agent:0.27.2@sha256:f88e5b17b6b7a600117bc121114d6ce2155c88c983c0c939c5df884f730fa1d6"},{"image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.27.2","digest":"sha256:ee39841d980878ebbb87592903b06d31a1af500c71525c9616f7e8e2a27041a4","pinned_image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.27.2@sha256:ee39841d980878ebbb87592903b06d31a1af500c71525c9616f7e8e2a27041a4"},{"image":"ghcr.io/github/gh-aw-firewall/squid:0.27.2","digest":"sha256:2e3a717e5f19a654cd9a2263beb52012b56bcb68562ec5ae2e42f9d156b49591","pinned_image":"ghcr.io/github/gh-aw-firewall/squid:0.27.2@sha256:2e3a717e5f19a654cd9a2263beb52012b56bcb68562ec5ae2e42f9d156b49591"},{"image":"ghcr.io/github/gh-aw-mcpg:v0.3.25","digest":"sha256:c10331ad17668ef89f38f5e356678788a40b0cd5fef96e8f92e1d9c1de47cbaa","pinned_image":"ghcr.io/github/gh-aw-mcpg:v0.3.25@sha256:c10331ad17668ef89f38f5e356678788a40b0cd5fef96e8f92e1d9c1de47cbaa"},{"image":"ghcr.io/github/github-mcp-server:v1.1.2","digest":"sha256:30197479d8036c7811892bc07e06f9a05c9ef3cdd79bc59f256d50647f95788c","pinned_image":"ghcr.io/github/github-mcp-server:v1.1.2@sha256:30197479d8036c7811892bc07e06f9a05c9ef3cdd79bc59f256d50647f95788c"}]}
+# This file was automatically generated by gh-aw (v0.79.8). DO NOT EDIT. To debug this workflow, load the skill at https://github.com/github/gh-aw/blob/main/debug.md
+#
 #    ___                   _   _      
 #   / _ \                 | | (_)     
 #  | |_| | __ _  ___ _ __ | |_ _  ___ 
@@ -14,7 +16,6 @@
 # \  /\  / (_) | | | | ( | | | | (_) \ V  V /\__ \
 #  \/  \/ \___/|_| |_|\_\|_| |_|\___/ \_/\_/ |___/
 #
-# This file was automatically generated by gh-aw (v0.72.0). DO NOT EDIT.
 #
 # To update this file, edit the corresponding .md file and run:
 #   gh aw compile
@@ -36,32 +37,33 @@
 # Secrets used:
 #   - ASPIRE_BOT_APP_ID
 #   - ASPIRE_BOT_PRIVATE_KEY
-#   - COPILOT_GITHUB_TOKEN
 #   - GH_AW_CI_TRIGGER_TOKEN
 #   - GH_AW_GITHUB_MCP_SERVER_TOKEN
 #   - GH_AW_GITHUB_TOKEN
 #   - GITHUB_TOKEN
 #
 # Custom actions used:
+#   - actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # de0fac2e4500dabe0009e67214ff5f5447ce83dd
 #   - actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+#   - actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 #   - actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+#   - actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
 #   - actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
 #   - actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
 #   - actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
 #   - actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
 #   - actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-#   - github/gh-aw-actions/setup@ff0525b685481744f490a0d362753d8001e4b39d # v0.72.0
+#   - github/gh-aw-actions/setup@c0338fef4749d08c21f8f975fb0e37efa17dda47 # v0.79.8
 #
 # Container images used:
-#   - ghcr.io/github/gh-aw-firewall/agent:0.25.41
-#   - ghcr.io/github/gh-aw-firewall/api-proxy:0.25.41
-#   - ghcr.io/github/gh-aw-firewall/squid:0.25.41
-#   - ghcr.io/github/gh-aw-mcpg:v0.3.6@sha256:2bb8eef86006a4c5963c55616a9c51c32f27bfdecb023b8aa6f91f6718d9171c
-#   - ghcr.io/github/github-mcp-server:v1.0.3@sha256:2ac27ef03461ef2b877031b838a7d1fd7f12b12d4ace7796d8cad91446d55959
-#   - node:lts-alpine@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f
+#   - ghcr.io/github/gh-aw-firewall/agent:0.27.2@sha256:f88e5b17b6b7a600117bc121114d6ce2155c88c983c0c939c5df884f730fa1d6
+#   - ghcr.io/github/gh-aw-firewall/api-proxy:0.27.2@sha256:ee39841d980878ebbb87592903b06d31a1af500c71525c9616f7e8e2a27041a4
+#   - ghcr.io/github/gh-aw-firewall/squid:0.27.2@sha256:2e3a717e5f19a654cd9a2263beb52012b56bcb68562ec5ae2e42f9d156b49591
+#   - ghcr.io/github/gh-aw-mcpg:v0.3.25@sha256:c10331ad17668ef89f38f5e356678788a40b0cd5fef96e8f92e1d9c1de47cbaa
+#   - ghcr.io/github/github-mcp-server:v1.1.2@sha256:30197479d8036c7811892bc07e06f9a05c9ef3cdd79bc59f256d50647f95788c
 
 name: "PR Documentation Check"
-"on":
+on:
   pull_request:
     branches:
     - main
@@ -73,7 +75,7 @@ name: "PR Documentation Check"
     inputs:
       aw_context:
         default: ""
-        description: Agent caller context (used internally by Agentic Workflows).
+        description: "Agent caller context (used internally by Agentic Workflows)."
         required: false
         type: string
       pr_number:
@@ -105,38 +107,42 @@ jobs:
       engine_id: ${{ steps.generate_aw_info.outputs.engine_id }}
       lockdown_check_failed: ${{ steps.generate_aw_info.outputs.lockdown_check_failed == 'true' }}
       model: ${{ steps.generate_aw_info.outputs.model }}
-      secret_verification_result: ${{ steps.validate-secret.outputs.verification_result }}
+      setup-parent-span-id: ${{ steps.setup.outputs.parent-span-id || steps.setup.outputs.span-id }}
+      setup-span-id: ${{ steps.setup.outputs.span-id }}
       setup-trace-id: ${{ steps.setup.outputs.trace-id }}
       text: ${{ steps.sanitized.outputs.text }}
       title: ${{ steps.sanitized.outputs.title }}
     steps:
       - name: Setup Scripts
         id: setup
-        uses: github/gh-aw-actions/setup@ff0525b685481744f490a0d362753d8001e4b39d # v0.72.0
+        uses: github/gh-aw-actions/setup@c0338fef4749d08c21f8f975fb0e37efa17dda47 # v0.79.8
         with:
           destination: ${{ runner.temp }}/gh-aw/actions
           job-name: ${{ github.job }}
           trace-id: ${{ needs.pre_activation.outputs.setup-trace-id }}
+          parent-span-id: ${{ needs.pre_activation.outputs.setup-parent-span-id || needs.pre_activation.outputs.setup-span-id }}
         env:
           GH_AW_SETUP_WORKFLOW_NAME: "PR Documentation Check"
           GH_AW_CURRENT_WORKFLOW_REF: ${{ github.repository }}/.github/workflows/pr-docs-check.lock.yml@${{ github.ref }}
-          GH_AW_INFO_VERSION: "1.0.40"
+          GH_AW_INFO_VERSION: "1.0.60"
+          GH_AW_INFO_AWF_VERSION: "v0.27.2"
+          GH_AW_INFO_ENGINE_ID: "copilot"
       - name: Generate agentic run info
         id: generate_aw_info
         env:
           GH_AW_INFO_ENGINE_ID: "copilot"
           GH_AW_INFO_ENGINE_NAME: "GitHub Copilot CLI"
-          GH_AW_INFO_MODEL: ${{ vars.GH_AW_MODEL_AGENT_COPILOT || 'claude-sonnet-4.6' }}
-          GH_AW_INFO_VERSION: "1.0.40"
-          GH_AW_INFO_AGENT_VERSION: "1.0.40"
-          GH_AW_INFO_CLI_VERSION: "v0.72.0"
+          GH_AW_INFO_MODEL: ${{ vars.GH_AW_MODEL_AGENT_COPILOT || vars.GH_AW_DEFAULT_MODEL_COPILOT || 'claude-sonnet-4.6' }}
+          GH_AW_INFO_VERSION: "1.0.60"
+          GH_AW_INFO_AGENT_VERSION: "1.0.60"
+          GH_AW_INFO_CLI_VERSION: "v0.79.8"
           GH_AW_INFO_WORKFLOW_NAME: "PR Documentation Check"
           GH_AW_INFO_EXPERIMENTAL: "false"
           GH_AW_INFO_SUPPORTS_TOOLS_ALLOWLIST: "true"
           GH_AW_INFO_STAGED: "false"
           GH_AW_INFO_ALLOWED_DOMAINS: '["defaults","github"]'
           GH_AW_INFO_FIREWALL_ENABLED: "true"
-          GH_AW_INFO_AWF_VERSION: "v0.25.41"
+          GH_AW_INFO_AWF_VERSION: "v0.27.2"
           GH_AW_INFO_AWMG_VERSION: ""
           GH_AW_INFO_FIREWALL_TYPE: "squid"
           GH_AW_COMPILED_STRICT: "true"
@@ -147,18 +153,14 @@ jobs:
             setupGlobals(core, github, context, exec, io, getOctokit);
             const { main } = require('${{ runner.temp }}/gh-aw/actions/generate_aw_info.cjs');
             await main(core, context);
-      - name: Validate COPILOT_GITHUB_TOKEN secret
-        id: validate-secret
-        run: bash "${RUNNER_TEMP}/gh-aw/actions/validate_multi_secret.sh" COPILOT_GITHUB_TOKEN 'GitHub Copilot CLI' https://github.github.com/gh-aw/reference/engines/#github-copilot-default
-        env:
-          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
       - name: Checkout .github and .agents folders
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
           sparse-checkout: |
             .github
             .agents
+            .antigravity
             .claude
             .codex
             .crush
@@ -169,14 +171,14 @@ jobs:
           fetch-depth: 1
       - name: Save agent config folders for base branch restoration
         env:
-          GH_AW_AGENT_FOLDERS: ".agents .claude .codex .crush .gemini .github .opencode .pi"
-          GH_AW_AGENT_FILES: ".crush.json AGENTS.md CLAUDE.md GEMINI.md PI.md opencode.jsonc"
+          GH_AW_AGENT_FOLDERS: ".agents .antigravity .claude .codex .crush .gemini .github .opencode .pi"
+          GH_AW_AGENT_FILES: ".crush.json AGENTS.md ANTIGRAVITY.md CLAUDE.md GEMINI.md PI.md opencode.jsonc"
         # poutine:ignore untrusted_checkout_exec
         run: bash "${RUNNER_TEMP}/gh-aw/actions/save_base_github_folders.sh"
       - name: Check compile-agentic version
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
-          GH_AW_COMPILED_VERSION: "v0.72.0"
+          GH_AW_COMPILED_VERSION: "v0.79.8"
         with:
           script: |
             const { setupGlobals } = require('${{ runner.temp }}/gh-aw/actions/setup_globals.cjs');
@@ -187,7 +189,7 @@ jobs:
         id: sanitized
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
-          GH_AW_ALLOWED_DOMAINS: "*.githubusercontent.com,api.business.githubcopilot.com,api.enterprise.githubcopilot.com,api.github.com,api.githubcopilot.com,api.individual.githubcopilot.com,api.snapcraft.io,archive.ubuntu.com,azure.archive.ubuntu.com,codeload.github.com,crl.geotrust.com,crl.globalsign.com,crl.identrust.com,crl.sectigo.com,crl.thawte.com,crl.usertrust.com,crl.verisign.com,crl3.digicert.com,crl4.digicert.com,crls.ssl.com,docs.github.com,github-cloud.githubusercontent.com,github-cloud.s3.amazonaws.com,github.blog,github.com,github.githubassets.com,host.docker.internal,json-schema.org,json.schemastore.org,keyserver.ubuntu.com,lfs.github.com,objects.githubusercontent.com,ocsp.digicert.com,ocsp.geotrust.com,ocsp.globalsign.com,ocsp.identrust.com,ocsp.sectigo.com,ocsp.ssl.com,ocsp.thawte.com,ocsp.usertrust.com,ocsp.verisign.com,packagecloud.io,packages.cloud.google.com,packages.microsoft.com,ppa.launchpad.net,raw.githubusercontent.com,registry.npmjs.org,s.symcb.com,s.symcd.com,security.ubuntu.com,telemetry.enterprise.githubcopilot.com,ts-crl.ws.symantec.com,ts-ocsp.ws.symantec.com,www.googleapis.com"
+          GH_AW_ALLOWED_DOMAINS: "*.githubusercontent.com,api.business.githubcopilot.com,api.enterprise.githubcopilot.com,api.github.com,api.githubcopilot.com,api.individual.githubcopilot.com,api.snapcraft.io,archive.ubuntu.com,azure.archive.ubuntu.com,codeload.github.com,crl.geotrust.com,crl.globalsign.com,crl.identrust.com,crl.sectigo.com,crl.thawte.com,crl.usertrust.com,crl.verisign.com,crl3.digicert.com,crl4.digicert.com,crls.ssl.com,docs.github.com,github-cloud.githubusercontent.com,github-cloud.s3.amazonaws.com,github.blog,github.com,github.githubassets.com,host.docker.internal,json-schema.org,json.schemastore.org,keyserver.ubuntu.com,lfs.github.com,objects.githubusercontent.com,ocsp.digicert.com,ocsp.geotrust.com,ocsp.globalsign.com,ocsp.identrust.com,ocsp.sectigo.com,ocsp.ssl.com,ocsp.thawte.com,ocsp.usertrust.com,ocsp.verisign.com,packagecloud.io,packages.cloud.google.com,packages.microsoft.com,patch-diff.githubusercontent.com,ppa.launchpad.net,raw.githubusercontent.com,registry.npmjs.org,s.symcb.com,s.symcd.com,security.ubuntu.com,telemetry.enterprise.githubcopilot.com,ts-crl.ws.symantec.com,ts-ocsp.ws.symantec.com,www.googleapis.com"
         with:
           script: |
             const { setupGlobals } = require('${{ runner.temp }}/gh-aw/actions/setup_globals.cjs');
@@ -198,12 +200,12 @@ jobs:
         env:
           GH_AW_PROMPT: /tmp/gh-aw/aw-prompts/prompt.txt
           GH_AW_SAFE_OUTPUTS: ${{ runner.temp }}/gh-aw/safeoutputs/outputs.jsonl
+          GH_AW_EXPR_1A3A194A: ${{ github.event.discussion.number || (fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_type == 'discussion' && fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_number) }}
           GH_AW_EXPR_2697560F: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+          GH_AW_EXPR_463A214A: ${{ github.event.pull_request.number || (fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_type == 'pull_request' && fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_number) }}
+          GH_AW_EXPR_802A9F6A: ${{ github.event.issue.number || (fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_type == 'issue' && fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_number) }}
+          GH_AW_EXPR_FF1D34CE: ${{ github.event.comment.id || fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').comment_id }}
           GH_AW_GITHUB_ACTOR: ${{ github.actor }}
-          GH_AW_GITHUB_EVENT_COMMENT_ID: ${{ github.event.comment.id }}
-          GH_AW_GITHUB_EVENT_DISCUSSION_NUMBER: ${{ github.event.discussion.number }}
-          GH_AW_GITHUB_EVENT_ISSUE_NUMBER: ${{ github.event.issue.number }}
-          GH_AW_GITHUB_EVENT_PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
           GH_AW_GITHUB_EVENT_PULL_REQUEST_TITLE: ${{ github.event.pull_request.title }}
           GH_AW_GITHUB_REPOSITORY: ${{ github.repository }}
           GH_AW_GITHUB_RUN_ID: ${{ github.run_id }}
@@ -212,61 +214,71 @@ jobs:
         run: |
           bash "${RUNNER_TEMP}/gh-aw/actions/create_prompt_first.sh"
           {
-          cat << 'GH_AW_PROMPT_9a91f417cffa3f44_EOF'
+          cat << 'GH_AW_PROMPT_c4f67f40e97428fe_EOF'
           <system>
-          GH_AW_PROMPT_9a91f417cffa3f44_EOF
+          GH_AW_PROMPT_c4f67f40e97428fe_EOF
           cat "${RUNNER_TEMP}/gh-aw/prompts/xpia.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/temp_folder_prompt.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/markdown.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/safe_outputs_prompt.md"
-          cat << 'GH_AW_PROMPT_9a91f417cffa3f44_EOF'
+          cat << 'GH_AW_PROMPT_c4f67f40e97428fe_EOF'
           <safe-output-tools>
           Tools: create_pull_request, missing_tool, missing_data, noop, notify_source_pr
-          GH_AW_PROMPT_9a91f417cffa3f44_EOF
+          GH_AW_PROMPT_c4f67f40e97428fe_EOF
           cat "${RUNNER_TEMP}/gh-aw/prompts/safe_outputs_create_pull_request.md"
-          cat << 'GH_AW_PROMPT_9a91f417cffa3f44_EOF'
+          cat << 'GH_AW_PROMPT_c4f67f40e97428fe_EOF'
           </safe-output-tools>
-          GH_AW_PROMPT_9a91f417cffa3f44_EOF
+          GH_AW_PROMPT_c4f67f40e97428fe_EOF
           cat "${RUNNER_TEMP}/gh-aw/prompts/mcp_cli_tools_prompt.md"
-          cat << 'GH_AW_PROMPT_9a91f417cffa3f44_EOF'
+          cat << 'GH_AW_PROMPT_c4f67f40e97428fe_EOF'
           <github-context>
           The following GitHub context information is available for this workflow:
-          {{#if __GH_AW_GITHUB_ACTOR__ }}
+          {{#if github.actor}}
           - **actor**: __GH_AW_GITHUB_ACTOR__
           {{/if}}
-          {{#if __GH_AW_GITHUB_REPOSITORY__ }}
+          {{#if github.repository}}
           - **repository**: __GH_AW_GITHUB_REPOSITORY__
           {{/if}}
-          {{#if __GH_AW_GITHUB_WORKSPACE__ }}
+          {{#if github.workspace}}
           - **workspace**: __GH_AW_GITHUB_WORKSPACE__
           {{/if}}
-          {{#if __GH_AW_GITHUB_EVENT_ISSUE_NUMBER__ }}
-          - **issue-number**: #__GH_AW_GITHUB_EVENT_ISSUE_NUMBER__
+          {{#if github.event.issue.number || (github.aw.context.item_type == 'issue' && github.aw.context.item_number)}}
+          - **issue-number**: #__GH_AW_EXPR_802A9F6A__
           {{/if}}
-          {{#if __GH_AW_GITHUB_EVENT_DISCUSSION_NUMBER__ }}
-          - **discussion-number**: #__GH_AW_GITHUB_EVENT_DISCUSSION_NUMBER__
+          {{#if github.event.discussion.number || (github.aw.context.item_type == 'discussion' && github.aw.context.item_number)}}
+          - **discussion-number**: #__GH_AW_EXPR_1A3A194A__
           {{/if}}
-          {{#if __GH_AW_GITHUB_EVENT_PULL_REQUEST_NUMBER__ }}
-          - **pull-request-number**: #__GH_AW_GITHUB_EVENT_PULL_REQUEST_NUMBER__
+          {{#if github.event.pull_request.number || (github.aw.context.item_type == 'pull_request' && github.aw.context.item_number)}}
+          - **pull-request-number**: #__GH_AW_EXPR_463A214A__
           {{/if}}
-          {{#if __GH_AW_GITHUB_EVENT_COMMENT_ID__ }}
-          - **comment-id**: __GH_AW_GITHUB_EVENT_COMMENT_ID__
+          {{#if github.event.comment.id || github.aw.context.comment_id}}
+          - **comment-id**: __GH_AW_EXPR_FF1D34CE__
           {{/if}}
-          {{#if __GH_AW_GITHUB_RUN_ID__ }}
+          {{#if github.run_id}}
           - **workflow-run-id**: __GH_AW_GITHUB_RUN_ID__
           {{/if}}
           - **checkouts**: The following repositories have been checked out and are available in the workspace:
-            - `$GITHUB_WORKSPACE` → `microsoft/aspire.dev` (cwd) (**current** - this is the repository you are working on; use this as the target for all GitHub operations unless otherwise specified) [shallow clone, fetch-depth=1 (default)] [additional refs fetched: release/*]
-            - `$GITHUB_WORKSPACE/_repos/aspire.dev` → `microsoft/aspire.dev` [shallow clone, fetch-depth=1 (default)]
-            - **Note**: If a branch you need is not in the list above and is not listed as an additional fetched ref, it has NOT been checked out. For private repositories you cannot fetch it without proper authentication. If the branch is required and not available, exit with an error and ask the user to add it to the `fetch:` option of the `checkout:` configuration (e.g., `fetch: ["refs/pulls/open/*"]` for all open PR refs, or `fetch: ["main", "feature/my-branch"]` for specific branches).
+            - repo `microsoft/aspire.dev` → `$GITHUB_WORKSPACE` (cwd) (**current** - this is the repository you are working on; use this as the target for all GitHub operations unless otherwise specified) [shallow clone, fetch-depth=1 (default)] [additional refs fetched: release/*]
+            - repo `microsoft/aspire.dev` → `$GITHUB_WORKSPACE/_repos/aspire.dev` [shallow clone, fetch-depth=1 (default)]
+            - **Note**: If a branch you need is not in the list above and is not listed as an additional fetched ref, it has NOT been checked out. For private repositories you cannot fetch it. If the branch is required and not available, exit with an error and ask the user to add it to the `fetch:` option of the `checkout:` configuration (e.g., `fetch: ["refs/pulls/open/*"]` for all open PR refs, or `fetch: ["main", "feature/my-branch"]` for specific branches).
+            - **Warning: No git credentials are available to the agent.** Credentials are
+              intentionally removed after the checkout step for security. This means any git
+              operation that needs to authenticate to the remote will fail. In private repositories, that includes:
+              - `git fetch`, `git pull`, `git clone`, and `git push` (direct push, not via safe-output tools)
+              - Checking out or switching to a remote branch that is not already fetched
+              - Deepening a shallow clone (`git fetch --unshallow`)
+              - On-demand blob fetches in partial/blobless clones (operations on files not in the initial checkout)
+              Do NOT attempt to configure credentials, run `git credential fill`, or modify `.gitconfig` —
+              authentication will not succeed. If you encounter credential prompts or authentication errors,
+              stop immediately and report the limitation rather than spending turns trying to work around it.
           </github-context>
           
-          GH_AW_PROMPT_9a91f417cffa3f44_EOF
+          GH_AW_PROMPT_c4f67f40e97428fe_EOF
           cat "${RUNNER_TEMP}/gh-aw/prompts/github_mcp_tools_with_safeoutputs_prompt.md"
-          cat << 'GH_AW_PROMPT_9a91f417cffa3f44_EOF'
+          cat << 'GH_AW_PROMPT_c4f67f40e97428fe_EOF'
           </system>
           {{#runtime-import .github/workflows/pr-docs-check.md}}
-          GH_AW_PROMPT_9a91f417cffa3f44_EOF
+          GH_AW_PROMPT_c4f67f40e97428fe_EOF
           } > "$GH_AW_PROMPT"
       - name: Interpolate variables and render templates
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -285,12 +297,12 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GH_AW_PROMPT: /tmp/gh-aw/aw-prompts/prompt.txt
+          GH_AW_EXPR_1A3A194A: ${{ github.event.discussion.number || (fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_type == 'discussion' && fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_number) }}
           GH_AW_EXPR_2697560F: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+          GH_AW_EXPR_463A214A: ${{ github.event.pull_request.number || (fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_type == 'pull_request' && fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_number) }}
+          GH_AW_EXPR_802A9F6A: ${{ github.event.issue.number || (fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_type == 'issue' && fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_number) }}
+          GH_AW_EXPR_FF1D34CE: ${{ github.event.comment.id || fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').comment_id }}
           GH_AW_GITHUB_ACTOR: ${{ github.actor }}
-          GH_AW_GITHUB_EVENT_COMMENT_ID: ${{ github.event.comment.id }}
-          GH_AW_GITHUB_EVENT_DISCUSSION_NUMBER: ${{ github.event.discussion.number }}
-          GH_AW_GITHUB_EVENT_ISSUE_NUMBER: ${{ github.event.issue.number }}
-          GH_AW_GITHUB_EVENT_PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
           GH_AW_GITHUB_EVENT_PULL_REQUEST_TITLE: ${{ github.event.pull_request.title }}
           GH_AW_GITHUB_REPOSITORY: ${{ github.repository }}
           GH_AW_GITHUB_RUN_ID: ${{ github.run_id }}
@@ -308,12 +320,12 @@ jobs:
             return await substitutePlaceholders({
               file: process.env.GH_AW_PROMPT,
               substitutions: {
+                GH_AW_EXPR_1A3A194A: process.env.GH_AW_EXPR_1A3A194A,
                 GH_AW_EXPR_2697560F: process.env.GH_AW_EXPR_2697560F,
+                GH_AW_EXPR_463A214A: process.env.GH_AW_EXPR_463A214A,
+                GH_AW_EXPR_802A9F6A: process.env.GH_AW_EXPR_802A9F6A,
+                GH_AW_EXPR_FF1D34CE: process.env.GH_AW_EXPR_FF1D34CE,
                 GH_AW_GITHUB_ACTOR: process.env.GH_AW_GITHUB_ACTOR,
-                GH_AW_GITHUB_EVENT_COMMENT_ID: process.env.GH_AW_GITHUB_EVENT_COMMENT_ID,
-                GH_AW_GITHUB_EVENT_DISCUSSION_NUMBER: process.env.GH_AW_GITHUB_EVENT_DISCUSSION_NUMBER,
-                GH_AW_GITHUB_EVENT_ISSUE_NUMBER: process.env.GH_AW_GITHUB_EVENT_ISSUE_NUMBER,
-                GH_AW_GITHUB_EVENT_PULL_REQUEST_NUMBER: process.env.GH_AW_GITHUB_EVENT_PULL_REQUEST_NUMBER,
                 GH_AW_GITHUB_EVENT_PULL_REQUEST_TITLE: process.env.GH_AW_GITHUB_EVENT_PULL_REQUEST_TITLE,
                 GH_AW_GITHUB_REPOSITORY: process.env.GH_AW_GITHUB_REPOSITORY,
                 GH_AW_GITHUB_RUN_ID: process.env.GH_AW_GITHUB_RUN_ID,
@@ -340,12 +352,14 @@ jobs:
           include-hidden-files: true
           path: |
             /tmp/gh-aw/aw_info.json
+            /tmp/gh-aw/models.json
             /tmp/gh-aw/aw-prompts/prompt.txt
             /tmp/gh-aw/aw-prompts/prompt-template.txt
             /tmp/gh-aw/aw-prompts/prompt-import-tree.json
             /tmp/gh-aw/github_rate_limits.jsonl
             /tmp/gh-aw/base
             /tmp/gh-aw/.github/agents
+            /tmp/gh-aw/.github/skills
           if-no-files-found: ignore
           retention-days: 1
 
@@ -354,6 +368,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      copilot-requests: write
       issues: read
       pull-requests: read
     env:
@@ -364,29 +379,38 @@ jobs:
       GH_AW_MCP_LOG_DIR: /tmp/gh-aw/mcp-logs/safeoutputs
       GH_AW_WORKFLOW_ID_SANITIZED: prdocscheck
     outputs:
-      agentic_engine_timeout: ${{ steps.detect-copilot-errors.outputs.agentic_engine_timeout || 'false' }}
+      agentic_engine_timeout: ${{ steps.detect-agent-errors.outputs.agentic_engine_timeout || 'false' }}
+      ai_credits_rate_limit_error: ${{ steps.parse-mcp-gateway.outputs.ai_credits_rate_limit_error || 'false' }}
+      aic: ${{ steps.parse-mcp-gateway.outputs.aic }}
+      ambient_context: ${{ steps.parse-mcp-gateway.outputs.ambient_context }}
       checkout_pr_success: ${{ steps.checkout-pr.outputs.checkout_pr_success || 'true' }}
       effective_tokens: ${{ steps.parse-mcp-gateway.outputs.effective_tokens }}
       has_patch: ${{ steps.collect_output.outputs.has_patch }}
-      inference_access_error: ${{ steps.detect-copilot-errors.outputs.inference_access_error || 'false' }}
-      mcp_policy_error: ${{ steps.detect-copilot-errors.outputs.mcp_policy_error || 'false' }}
+      inference_access_error: ${{ steps.detect-agent-errors.outputs.inference_access_error || 'false' }}
+      mcp_policy_error: ${{ steps.detect-agent-errors.outputs.mcp_policy_error || 'false' }}
       model: ${{ needs.activation.outputs.model }}
-      model_not_supported_error: ${{ steps.detect-copilot-errors.outputs.model_not_supported_error || 'false' }}
+      model_not_supported_error: ${{ steps.detect-agent-errors.outputs.model_not_supported_error || 'false' }}
       output: ${{ steps.collect_output.outputs.output }}
       output_types: ${{ steps.collect_output.outputs.output_types }}
+      setup-parent-span-id: ${{ steps.setup.outputs.parent-span-id || steps.setup.outputs.span-id }}
+      setup-span-id: ${{ steps.setup.outputs.span-id }}
       setup-trace-id: ${{ steps.setup.outputs.trace-id }}
+      unknown_model_ai_credits: ${{ steps.parse-mcp-gateway.outputs.unknown_model_ai_credits || 'false' }}
     steps:
       - name: Setup Scripts
         id: setup
-        uses: github/gh-aw-actions/setup@ff0525b685481744f490a0d362753d8001e4b39d # v0.72.0
+        uses: github/gh-aw-actions/setup@c0338fef4749d08c21f8f975fb0e37efa17dda47 # v0.79.8
         with:
           destination: ${{ runner.temp }}/gh-aw/actions
           job-name: ${{ github.job }}
           trace-id: ${{ needs.activation.outputs.setup-trace-id }}
+          parent-span-id: ${{ needs.activation.outputs.setup-parent-span-id || needs.activation.outputs.setup-span-id }}
         env:
           GH_AW_SETUP_WORKFLOW_NAME: "PR Documentation Check"
           GH_AW_CURRENT_WORKFLOW_REF: ${{ github.repository }}/.github/workflows/pr-docs-check.lock.yml@${{ github.ref }}
-          GH_AW_INFO_VERSION: "1.0.40"
+          GH_AW_INFO_VERSION: "1.0.60"
+          GH_AW_INFO_AWF_VERSION: "v0.27.2"
+          GH_AW_INFO_ENGINE_ID: "copilot"
       - name: Set runtime paths
         id: set-runtime-paths
         run: |
@@ -397,7 +421,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
       - name: Generate GitHub App token for checkout (0)
         id: checkout-app-token-0
-        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
@@ -409,7 +433,7 @@ jobs:
           permission-pull-requests: read
       - name: Generate GitHub App token for checkout (1)
         id: checkout-app-token-1
-        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
@@ -420,11 +444,11 @@ jobs:
           permission-issues: read
           permission-pull-requests: read
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
       - name: Checkout microsoft/aspire.dev
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
           repository: microsoft/aspire.dev
@@ -434,14 +458,29 @@ jobs:
           GH_AW_FETCH_TOKEN: ${{ steps.checkout-app-token-0.outputs.token }}
         run: |
           header=$(printf "x-access-token:%s" "${GH_AW_FETCH_TOKEN}" | base64 -w 0)
-          git -c "http.extraheader=Authorization: Basic ${header}" fetch origin '+refs/heads/release/*:refs/remotes/origin/release/*'
+          git -c "http.extraheader=Authorization: Basic ${header}" fetch origin --depth=1 '+refs/heads/release/*:refs/remotes/origin/release/*'
       - name: Checkout microsoft/aspire.dev into _repos/aspire.dev
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
           repository: microsoft/aspire.dev
           path: _repos/aspire.dev
           token: ${{ steps.checkout-app-token-1.outputs.token }}
+      - name: Build checkout manifest for safe-outputs handlers
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          GH_TOKEN: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_AW_CHECKOUT_MANIFEST_COUNT: "2"
+          GH_AW_CHECKOUT_REPO_0: "microsoft/aspire.dev"
+          GH_AW_CHECKOUT_PATH_0: ""
+          GH_AW_CHECKOUT_TOKEN_0: ${{ steps.checkout-app-token-0.outputs.token }}
+          GH_AW_CHECKOUT_REPO_1: "microsoft/aspire.dev"
+          GH_AW_CHECKOUT_PATH_1: "_repos/aspire.dev"
+          GH_AW_CHECKOUT_TOKEN_1: ${{ steps.checkout-app-token-1.outputs.token }}
+        with:
+          script: |
+            const { main } = require('${{ runner.temp }}/gh-aw/actions/build_checkout_manifest.cjs');
+            await main();
       - name: Create gh-aw temp directory
         run: bash "${RUNNER_TEMP}/gh-aw/actions/create_gh_aw_tmp_dir.sh"
       - name: Configure gh CLI for GitHub Enterprise
@@ -464,7 +503,7 @@ jobs:
       - name: Checkout PR branch
         id: checkout-pr
         if: |
-          github.event.pull_request || github.event.issue.pull_request
+          github.event.pull_request || github.event.issue.pull_request || github.event_name == 'workflow_dispatch' && fromJSON(github.event.inputs.aw_context || '{}').item_type == 'pull_request'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GH_TOKEN: ${{ secrets.GH_AW_GITHUB_MCP_SERVER_TOKEN || secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
@@ -476,14 +515,14 @@ jobs:
             const { main } = require('${{ runner.temp }}/gh-aw/actions/checkout_pr_branch.cjs');
             await main();
       - name: Install GitHub Copilot CLI
-        run: bash "${RUNNER_TEMP}/gh-aw/actions/install_copilot_cli.sh" 1.0.40
+        run: bash "${RUNNER_TEMP}/gh-aw/actions/install_copilot_cli.sh" 1.0.60
         env:
           GH_HOST: github.com
       - name: Install AWF binary
-        run: bash "${RUNNER_TEMP}/gh-aw/actions/install_awf_binary.sh" v0.25.41
+        run: bash "${RUNNER_TEMP}/gh-aw/actions/install_awf_binary.sh" v0.27.2
       - name: Generate GitHub App token
         id: github-mcp-app-token
-        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
@@ -510,14 +549,18 @@ jobs:
       - name: Restore agent config folders from base branch
         if: steps.checkout-pr.outcome == 'success'
         env:
-          GH_AW_AGENT_FOLDERS: ".agents .claude .codex .crush .gemini .github .opencode .pi"
-          GH_AW_AGENT_FILES: ".crush.json AGENTS.md CLAUDE.md GEMINI.md PI.md opencode.jsonc"
+          GH_AW_AGENT_FOLDERS: ".agents .antigravity .claude .codex .crush .gemini .github .opencode .pi"
+          GH_AW_AGENT_FILES: ".crush.json AGENTS.md ANTIGRAVITY.md CLAUDE.md GEMINI.md PI.md opencode.jsonc"
         run: bash "${RUNNER_TEMP}/gh-aw/actions/restore_base_github_folders.sh"
       - name: Restore inline sub-agents from activation artifact
         env:
           GH_AW_SUB_AGENT_DIR: ".github/agents"
           GH_AW_SUB_AGENT_EXT: ".agent.md"
         run: bash "${RUNNER_TEMP}/gh-aw/actions/restore_inline_sub_agents.sh"
+      - name: Restore inline skills from activation artifact
+        env:
+          GH_AW_SKILL_DIR: ".github/skills"
+        run: bash "${RUNNER_TEMP}/gh-aw/actions/restore_inline_skills.sh"
       - id: resolve-target-app-token
         name: Mint app token for target-branch resolver
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
@@ -534,7 +577,7 @@ jobs:
         name: Resolve target aspire.dev branch
         run: "set -euo pipefail\n\nmkdir -p .pr-docs-check\nOUT=.pr-docs-check/target.json\n\nif [ -z \"${PR_NUMBER}\" ]; then\n  echo \"ERROR: PR_NUMBER is empty; cannot resolve target branch.\" >&2\n  exit 1\nfi\n# PR_NUMBER reaches this script either from `github.event.pull_request.number`\n# (already an integer at the GitHub Actions layer) or from the\n# `workflow_dispatch` `pr_number` string input (free-form, supplied by a\n# maintainer). Reject anything that isn't a positive integer up front so\n# downstream `jq --argjson` and `gh api` calls produce a clear error\n# instead of an opaque parse failure.\nif ! [[ \"${PR_NUMBER}\" =~ ^[1-9][0-9]*$ ]]; then\n  echo \"ERROR: PR_NUMBER '${PR_NUMBER}' is not a positive integer.\" >&2\n  exit 1\nfi\n\necho \"Resolving target microsoft/aspire.dev branch for microsoft/aspire#${PR_NUMBER}\"\n# --- 1. Fetch source PR metadata from microsoft/aspire ---------------\n# We need the PR's own milestone, base branch, and body. The body is\n# later scanned for `Closes/Fixes/Resolves #N` linked-issue refs.\nPR_JSON=\"$(mktemp)\"\ngh api \"/repos/microsoft/aspire/pulls/${PR_NUMBER}\" > \"${PR_JSON}\"\n\nPR_MILESTONE_TITLE=\"$(jq -r '.milestone.title // empty' \"${PR_JSON}\")\"\nPR_BASE_REF=\"$(jq -r '.base.ref // empty' \"${PR_JSON}\")\"\nPR_BODY=\"$(jq -r '.body // \"\"' \"${PR_JSON}\")\"\n\necho \"PR milestone : '${PR_MILESTONE_TITLE}'\"\necho \"PR base ref  : '${PR_BASE_REF}'\"\n\n# --- 2. Extract linked issue numbers from the PR body ----------------\n# GitHub recognizes these closing keywords (case-insensitive), with an\n# optional `:` after the keyword, optional `owner/repo`, and a `#N`:\n#\n#   close, closes, closed,\n#   fix,   fixes,  fixed,\n#   resolve, resolves, resolved\n#\n# Examples it must accept:\n#   Fixes #123\n#   Fixes: #123\n#   Closes microsoft/aspire#456\n#   Resolves: microsoft/aspire#789\n#\n# See:\n# https://docs.github.com/en/issues/tracking-your-work-with-issues/linking-a-pull-request-to-an-issue#linking-a-pull-request-to-an-issue-using-a-keyword\n#\n# Only same-repo refs (no owner/repo, or `microsoft/aspire`) are kept;\n# cross-repo references in linked issues don't help us pick a docs\n# release branch.\n#\n# Implemented in python3 (preinstalled on ubuntu-latest) because POSIX\n# grep -E lacks reliable case-insensitive multiline matching with the\n# exact keyword set we need. We deliberately do NOT swallow parser\n# errors with `|| true`: if python3 fails (e.g., missing on the runner,\n# body too large to pass as argv), the resolver should fail loudly\n# rather than silently pick the wrong branch from an empty linked-issue\n# set.\nLINKED_FILE=\"$(mktemp)\"\n: > \"${LINKED_FILE}\"\npython3 - \"${PR_BODY}\" > \"${LINKED_FILE}\" <<'PY'\nimport re, sys\nbody = sys.argv[1] if len(sys.argv) > 1 else \"\"\npat = re.compile(\n    r'\\b(close[sd]?|fix(?:es|ed)?|resolve[sd]?)\\s*:?\\s+'\n    r'(?:([A-Za-z0-9._-]+/[A-Za-z0-9._-]+))?#(\\d+)\\b',\n    re.IGNORECASE,\n)\nseen = set()\nfor m in pat.finditer(body):\n    repo = (m.group(2) or \"microsoft/aspire\").lower()\n    if repo != \"microsoft/aspire\":\n        continue\n    n = m.group(3)\n    if n in seen:\n        continue\n    seen.add(n)\n    print(n)\nPY\n\nLINKED_ISSUES=()\nwhile IFS= read -r n; do\n  [ -n \"${n}\" ] && LINKED_ISSUES+=(\"${n}\")\ndone < \"${LINKED_FILE}\"\nrm -f \"${LINKED_FILE}\"\n\nif [ \"${#LINKED_ISSUES[@]}\" -gt 0 ]; then\n  echo \"Linked issues : ${LINKED_ISSUES[*]}\"\nelse\n  echo \"Linked issues : <none>\"\nfi\n\n# --- 3. Fetch milestone for each linked issue ------------------------\n# Stop at the first non-empty milestone for the priority resolution\n# below, but record every issue's milestone (or null) for observability.\nLINKED_ISSUE_MILESTONE_TITLE=\"\"\nLINKED_ARR=()\nfor n in \"${LINKED_ISSUES[@]:-}\"; do\n  [ -z \"${n}\" ] && continue\n  ISSUE_JSON=\"$(mktemp)\"\n  # A linked-issue ref may be deleted, transferred, or otherwise\n  # unreadable. Treat fetch failure as \"no milestone\" rather than\n  # aborting the entire workflow.\n  if gh api \"/repos/microsoft/aspire/issues/${n}\" > \"${ISSUE_JSON}\" 2>/dev/null; then\n    m=\"$(jq -r '.milestone.title // empty' \"${ISSUE_JSON}\")\"\n  else\n    m=\"\"\n    echo \"  WARN: could not fetch microsoft/aspire#${n}; treating milestone as empty\"\n  fi\n  rm -f \"${ISSUE_JSON}\"\n  LINKED_ARR+=(\"$(jq -n --arg num \"${n}\" --arg ms \"${m}\" \\\n    '{number: ($num|tonumber), milestone: (if ($ms|length)>0 then $ms else null end)}')\")\n  if [ -z \"${LINKED_ISSUE_MILESTONE_TITLE}\" ] && [ -n \"${m}\" ]; then\n    LINKED_ISSUE_MILESTONE_TITLE=\"${m}\"\n  fi\ndone\n\nif [ \"${#LINKED_ARR[@]}\" -gt 0 ]; then\n  LINKED_ISSUES_JSON=\"$(printf '%s\\n' \"${LINKED_ARR[@]}\" | jq -s '.')\"\nelse\n  LINKED_ISSUES_JSON=\"[]\"\nfi\n\n# --- 4. Pick a candidate target branch -------------------------------\n# Priority (first match wins):\n#   1. PR milestone title (normalized)\n#   2. Linked-issue milestone title (normalized)\n#   3. PR base branch if it matches release/X.Y[.Z]\n#   4. main\n#\n# Milestone normalization: `^v?(\\d+)\\.(\\d+)(?:\\.(\\d+))?` matched as a\n# prefix, so titles like \"13.3\", \"v13.3\", \"13.3 - Preview 1\" all map\n# to release/13.3, and \"13.2.1\" maps to release/13.2.1.\nnormalize_milestone() {\n  local title=\"$1\"\n  local m\n  m=\"$(printf '%s' \"${title}\" | grep -oE '^v?[0-9]+\\.[0-9]+(\\.[0-9]+)?' | head -n1 || true)\"\n  if [ -z \"${m}\" ]; then\n    return 1\n  fi\n  m=\"${m#v}\"\n  printf 'release/%s' \"${m}\"\n}\n\nCANDIDATE=\"\"\nCANDIDATE_SOURCE=\"\"\nCANDIDATE_SOURCE_DETAIL=\"\"\n\nif [ -z \"${CANDIDATE}\" ] && [ -n \"${PR_MILESTONE_TITLE}\" ]; then\n  if c=\"$(normalize_milestone \"${PR_MILESTONE_TITLE}\")\"; then\n    CANDIDATE=\"${c}\"\n    CANDIDATE_SOURCE=\"pr_milestone\"\n    CANDIDATE_SOURCE_DETAIL=\"${PR_MILESTONE_TITLE}\"\n  fi\nfi\n\nif [ -z \"${CANDIDATE}\" ] && [ -n \"${LINKED_ISSUE_MILESTONE_TITLE}\" ]; then\n  if c=\"$(normalize_milestone \"${LINKED_ISSUE_MILESTONE_TITLE}\")\"; then\n    CANDIDATE=\"${c}\"\n    CANDIDATE_SOURCE=\"linked_issue_milestone\"\n    CANDIDATE_SOURCE_DETAIL=\"${LINKED_ISSUE_MILESTONE_TITLE}\"\n  fi\nfi\n\nif [ -z \"${CANDIDATE}\" ] && [[ \"${PR_BASE_REF}\" =~ ^release/[0-9]+\\.[0-9]+(\\.[0-9]+)?$ ]]; then\n  CANDIDATE=\"${PR_BASE_REF}\"\n  CANDIDATE_SOURCE=\"pr_base\"\n  CANDIDATE_SOURCE_DETAIL=\"${PR_BASE_REF}\"\nfi\n\nif [ -z \"${CANDIDATE}\" ]; then\n  CANDIDATE=\"main\"\n  CANDIDATE_SOURCE=\"fallback_main\"\n  CANDIDATE_SOURCE_DETAIL=\"no milestone, linked-issue milestone, or release/* base ref resolved\"\nfi\n\necho \"Candidate     : ${CANDIDATE} (source: ${CANDIDATE_SOURCE})\"\n\n# --- 5. Enumerate release/* branches on microsoft/aspire.dev ---------\n# Primary: local git on the current workspace, which is checked out at\n# microsoft/aspire.dev with `release/*` refs fetched into\n# `refs/remotes/origin/release/*` via the workflow `checkout:` block.\n#\n# Fallback: `gh api /repos/microsoft/aspire.dev/branches` paginated.\n# Used if the local fetch produced nothing (e.g., no release branches\n# have been pushed yet, or the fetch silently failed). The GH_TOKEN\n# used here is the aspire-bot installation token minted at the top of\n# `pre-agent-steps`, which has explicit `contents: read` on both\n# microsoft/aspire and microsoft/aspire.dev — the default GITHUB_TOKEN\n# is scoped only to the workflow's own repo and cannot read aspire.dev's\n# branch list reliably.\nENUMERATION_SOURCE=\"\"\nRELEASE_BRANCHES_FILE=\"$(mktemp)\"\n: > \"${RELEASE_BRANCHES_FILE}\"\n\nif git -C \"${GITHUB_WORKSPACE}\" rev-parse --is-inside-work-tree >/dev/null 2>&1; then\n  git -C \"${GITHUB_WORKSPACE}\" for-each-ref \\\n    --format='%(refname:short)' 'refs/remotes/origin/release/*' \\\n    | sed 's|^origin/||' > \"${RELEASE_BRANCHES_FILE}\" || true\nfi\n\nif [ -s \"${RELEASE_BRANCHES_FILE}\" ]; then\n  ENUMERATION_SOURCE=\"git\"\nelse\n  echo \"Local git enumeration returned no release/* branches; falling back to gh api\"\n  if gh api --paginate \"/repos/microsoft/aspire.dev/branches?per_page=100\" \\\n      | jq -r '.[].name | select(startswith(\"release/\"))' \\\n      > \"${RELEASE_BRANCHES_FILE}\" 2>/dev/null; then\n    ENUMERATION_SOURCE=\"gh_api\"\n  else\n    echo \"  WARN: gh api fallback for aspire.dev branches failed; treating list as empty\"\n    : > \"${RELEASE_BRANCHES_FILE}\"\n    ENUMERATION_SOURCE=\"empty\"\n  fi\nfi\n\n# De-duplicate and sort so the JSON output is deterministic across runs.\nsort -u -o \"${RELEASE_BRANCHES_FILE}\" \"${RELEASE_BRANCHES_FILE}\"\n\nAVAILABLE_BRANCHES_JSON=\"$(jq -R -s 'split(\"\\n\") | map(select(length > 0))' \"${RELEASE_BRANCHES_FILE}\")\"\necho \"Release branches on aspire.dev (source=${ENUMERATION_SOURCE}):\"\nif [ -s \"${RELEASE_BRANCHES_FILE}\" ]; then\n  sed 's/^/  - /' \"${RELEASE_BRANCHES_FILE}\"\nelse\n  echo \"  <none>\"\nfi\n\n# --- 6. Compute the effective target branch --------------------------\n# Policy (in priority order):\n#   1. exact_match: CANDIDATE is a release/* branch that exists on\n#      aspire.dev → use it as-is.\n#   2. latest_release_fallback: aspire.dev has at least one release/*\n#      branch → use the highest-versioned one. This covers both:\n#        - CANDIDATE was `main` (no milestone/linked-issue/base-ref\n#          signal) — docs for upcoming-release work should still land\n#          on the staged release/* branch, not on aspire.dev's main.\n#        - CANDIDATE was a release/* (e.g. release/13.3) that no\n#          longer exists on aspire.dev (already shipped, branch\n#          deleted). The docs site only keeps a release/* branch for\n#          the upcoming release; older release-branch content is\n#          merged into main on aspire.dev as those releases ship.\n#   3. main_fallback: aspire.dev has no release/* at all → use main.\n#\n# Sort release branches with sort -V *after* stripping the\n# \"release/\" prefix so the numeric version compares cleanly:\n# \"release/13.4\" beats \"release/9.5\" (without -V, lexicographic\n# ordering would put 9.5 last; with -V on the bare versions, 13.4\n# comes last).\nLATEST_RELEASE=\"\"\nif [ -s \"${RELEASE_BRANCHES_FILE}\" ]; then\n  LATEST_RELEASE=\"$(\n    sed -n 's|^release/||p' \"${RELEASE_BRANCHES_FILE}\" \\\n      | sort -V \\\n      | tail -n1 \\\n      | sed 's|^|release/|'\n  )\"\nfi\n\nEFFECTIVE=\"\"\nRESOLUTION=\"\"\nif [ \"${CANDIDATE}\" != \"main\" ] && grep -Fxq \"${CANDIDATE}\" \"${RELEASE_BRANCHES_FILE}\"; then\n  EFFECTIVE=\"${CANDIDATE}\"\n  RESOLUTION=\"exact_match\"\nelif [ -n \"${LATEST_RELEASE}\" ]; then\n  EFFECTIVE=\"${LATEST_RELEASE}\"\n  RESOLUTION=\"latest_release_fallback\"\n  if [ \"${CANDIDATE}\" = \"main\" ]; then\n    echo \"Candidate was main; using latest aspire.dev release branch ${EFFECTIVE}\"\n  else\n    echo \"Candidate ${CANDIDATE} not present on microsoft/aspire.dev; using latest release branch ${EFFECTIVE} instead\"\n  fi\nelse\n  EFFECTIVE=\"main\"\n  RESOLUTION=\"main_fallback\"\n  echo \"No release/* branches on microsoft/aspire.dev; falling back to main\"\nfi\n\nrm -f \"${RELEASE_BRANCHES_FILE}\" \"${PR_JSON}\"\n\necho \"Effective     : ${EFFECTIVE} (resolution=${RESOLUTION})\"\n\n# --- 7. Emit target.json ---------------------------------------------\njq -n \\\n  --argjson pr_number \"${PR_NUMBER}\" \\\n  --arg pr_base_ref \"${PR_BASE_REF}\" \\\n  --arg candidate \"${CANDIDATE}\" \\\n  --arg candidate_source \"${CANDIDATE_SOURCE}\" \\\n  --arg candidate_source_detail \"${CANDIDATE_SOURCE_DETAIL}\" \\\n  --arg effective \"${EFFECTIVE}\" \\\n  --arg resolution \"${RESOLUTION}\" \\\n  --argjson available \"${AVAILABLE_BRANCHES_JSON}\" \\\n  --arg enumeration_source \"${ENUMERATION_SOURCE}\" \\\n  --argjson linked_issues \"${LINKED_ISSUES_JSON}\" \\\n  '{\n     source_pr_number: $pr_number,\n     source_pr_base_ref: $pr_base_ref,\n     candidate_target_branch: $candidate,\n     candidate_source: $candidate_source,\n     candidate_source_detail: $candidate_source_detail,\n     effective_target_branch: $effective,\n     target_resolution: $resolution,\n     available_release_branches: $available,\n     enumeration_source: $enumeration_source,\n     linked_issues: $linked_issues\n   }' > \"${OUT}\"\n\necho \"--- ${OUT} ---\"\ncat \"${OUT}\"\n"
       - name: Check out signal-computation script
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           path: _repos/aspire
           repository: microsoft/aspire
@@ -548,15 +591,15 @@ jobs:
         run: "set -euo pipefail\n\nmkdir -p .pr-docs-check\nOUT=.pr-docs-check/signals.json\n\nif [ -z \"${PR_NUMBER}\" ]; then\n  echo \"ERROR: PR_NUMBER is empty; cannot compute signals.\" >&2\n  exit 1\nfi\n# Same input validation as the target-branch resolver above — reject\n# anything that isn't a positive integer so a bad `workflow_dispatch`\n# input fails loudly here rather than producing an opaque gh api error.\nif ! [[ \"${PR_NUMBER}\" =~ ^[1-9][0-9]*$ ]]; then\n  echo \"ERROR: PR_NUMBER '${PR_NUMBER}' is not a positive integer.\" >&2\n  exit 1\nfi\n\necho \"Computing user-facing signals for microsoft/aspire#${PR_NUMBER}\"\n\n# --- 1. Fetch PR metadata (body) and changed files (paths + patches) -\n# The files endpoint returns at most 30 files per page and is capped\n# at 300 files / 3000 lines total per the GitHub API; that's fine\n# for our purposes because signal detection only needs path patterns\n# and patch hunks, and any change large enough to overflow that cap\n# is almost certainly user-facing on path patterns alone. The\n# script also emits `diff_scan_skipped_due_to_missing_patch` when\n# the API omits a `patch` for a file matched by a diff trigger,\n# so very-large diffs gate conservatively.\n#\n# https://docs.github.com/en/rest/pulls/pulls#list-pull-requests-files\nPR_JSON=\"$(mktemp)\"\nFILES_JSON=\"$(mktemp)\"\ngh api \"/repos/microsoft/aspire/pulls/${PR_NUMBER}\" > \"${PR_JSON}\"\ngh api --paginate \"/repos/microsoft/aspire/pulls/${PR_NUMBER}/files?per_page=100\" \\\n  | jq -s 'add // []' > \"${FILES_JSON}\"\n\nFILE_COUNT=\"$(jq 'length' \"${FILES_JSON}\")\"\necho \"Files in PR  : ${FILE_COUNT}\"\n\n# --- 2. Run signal detection ----------------------------------------\n# The signal catalog lives in a standalone Python script (preinstalled\n# on ubuntu-latest) so a malformed regex fails the step loudly instead\n# of being silently absorbed by a shell pipeline, the catalog can be\n# reviewed with syntax highlighting, and it has its own unittest suite.\npython3 _repos/aspire/.github/workflows/pr-docs-check/compute_signals.py \\\n  \"${PR_JSON}\" \"${FILES_JSON}\" \"${OUT}\"\n\nrm -f \"${PR_JSON}\" \"${FILES_JSON}\"\n\necho \"--- ${OUT} ---\"\ncat \"${OUT}\"\n"
 
       - name: Download container images
-        run: bash "${RUNNER_TEMP}/gh-aw/actions/download_docker_images.sh" ghcr.io/github/gh-aw-firewall/agent:0.25.41 ghcr.io/github/gh-aw-firewall/api-proxy:0.25.41 ghcr.io/github/gh-aw-firewall/squid:0.25.41 ghcr.io/github/gh-aw-mcpg:v0.3.6@sha256:2bb8eef86006a4c5963c55616a9c51c32f27bfdecb023b8aa6f91f6718d9171c ghcr.io/github/github-mcp-server:v1.0.3@sha256:2ac27ef03461ef2b877031b838a7d1fd7f12b12d4ace7796d8cad91446d55959 node:lts-alpine@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f
+        run: bash "${RUNNER_TEMP}/gh-aw/actions/download_docker_images.sh" ghcr.io/github/gh-aw-firewall/agent:0.27.2@sha256:f88e5b17b6b7a600117bc121114d6ce2155c88c983c0c939c5df884f730fa1d6 ghcr.io/github/gh-aw-firewall/api-proxy:0.27.2@sha256:ee39841d980878ebbb87592903b06d31a1af500c71525c9616f7e8e2a27041a4 ghcr.io/github/gh-aw-firewall/squid:0.27.2@sha256:2e3a717e5f19a654cd9a2263beb52012b56bcb68562ec5ae2e42f9d156b49591 ghcr.io/github/gh-aw-mcpg:v0.3.25@sha256:c10331ad17668ef89f38f5e356678788a40b0cd5fef96e8f92e1d9c1de47cbaa ghcr.io/github/github-mcp-server:v1.1.2@sha256:30197479d8036c7811892bc07e06f9a05c9ef3cdd79bc59f256d50647f95788c
       - name: Generate Safe Outputs Config
         run: |
           mkdir -p "${RUNNER_TEMP}/gh-aw/safeoutputs"
           mkdir -p /tmp/gh-aw/safeoutputs
           mkdir -p /tmp/gh-aw/mcp-logs/safeoutputs
-          cat > "${RUNNER_TEMP}/gh-aw/safeoutputs/config.json" << 'GH_AW_SAFE_OUTPUTS_CONFIG_9fe4e8b345f8b35b_EOF'
+          cat > "${RUNNER_TEMP}/gh-aw/safeoutputs/config.json" << 'GH_AW_SAFE_OUTPUTS_CONFIG_4ce27bb68b55050c_EOF'
           {"create_pull_request":{"allowed_base_branches":["main","release/*"],"base_branch":"main","draft":true,"fallback_as_issue":true,"labels":["docs-from-code"],"max":1,"max_patch_files":100,"max_patch_size":1024,"protect_top_level_dot_folders":true,"protected_files":["package.json","bun.lockb","bunfig.toml","deno.json","deno.jsonc","deno.lock","global.json","NuGet.Config","Directory.Packages.props","mix.exs","mix.lock","go.mod","go.sum","stack.yaml","stack.yaml.lock","pom.xml","build.gradle","build.gradle.kts","settings.gradle","settings.gradle.kts","gradle.properties","package-lock.json","yarn.lock","pnpm-lock.yaml","npm-shrinkwrap.json","requirements.txt","Pipfile","Pipfile.lock","pyproject.toml","setup.py","setup.cfg","Gemfile","Gemfile.lock","uv.lock","CODEOWNERS","DESIGN.md","README.md","CONTRIBUTING.md","CHANGELOG.md","SECURITY.md","CODE_OF_CONDUCT.md","AGENTS.md","CLAUDE.md","GEMINI.md"],"protected_files_policy":"blocked","target-repo":"microsoft/aspire.dev","title_prefix":"[docs] "},"create_report_incomplete_issue":{},"missing_data":{},"missing_tool":{},"noop":{"max":1,"report-as-issue":"true"},"notify-source-pr":{"description":"Post the documentation analysis result as a comment on the source\nmicrosoft/aspire pull request and (when a draft documentation PR was\nopened on microsoft/aspire.dev) request a review from the SME\nidentified from the source PR.\n\nEmit exactly one `notify_source_pr` item per run, after you've finished\nany `create_pull_request` or no-docs-needed reasoning. Use `result:\n\"drafted\"` when you just emitted a `create_pull_request`; use `result:\n\"skipped\"` when no docs PR is needed. DO NOT try to embed the drafted\nPR's URL or number in the `summary` text — the workflow knows them\nfrom the safe-outputs handler and will substitute the real values.\n","inputs":{"result":{"default":null,"description":"'drafted' if a docs PR was opened on microsoft/aspire.dev, or 'skipped' if no docs PR was needed.","required":true,"type":"string"},"sme_login":{"default":null,"description":"GitHub login of the SME from the source PR (preferred reviewer for the drafted docs PR). Empty string if no SME was identified.","required":false,"type":"string"},"source_pr_number":{"default":null,"description":"PR number on microsoft/aspire that triggered this run.","required":true,"type":"number"},"summary":{"default":null,"description":"Short markdown summary of the documentation changes (when drafted) or rationale (when skipped). 1-3 sentences plus optional bullet list. DO NOT include the drafted PR URL or number — the workflow injects those automatically.","required":true,"type":"string"},"target_branch":{"default":null,"description":"Effective target branch on microsoft/aspire.dev (only meaningful when result is 'drafted').","required":false,"type":"string"}}},"report_incomplete":{}}
-          GH_AW_SAFE_OUTPUTS_CONFIG_9fe4e8b345f8b35b_EOF
+          GH_AW_SAFE_OUTPUTS_CONFIG_4ce27bb68b55050c_EOF
       - name: Generate Safe Outputs Tools
         env:
           GH_AW_TOOLS_META_JSON: |
@@ -793,17 +836,22 @@ jobs:
           export GH_AW_ENGINE="copilot"
           MCP_GATEWAY_UID=$(id -u 2>/dev/null || echo '0')
           MCP_GATEWAY_GID=$(id -g 2>/dev/null || echo '0')
-          DOCKER_SOCK_GID=$(stat -c '%g' /var/run/docker.sock 2>/dev/null || echo '0')
-          export MCP_GATEWAY_DOCKER_COMMAND='docker run -i --rm --network host --add-host host.docker.internal:127.0.0.1 --user '"${MCP_GATEWAY_UID}"':'"${MCP_GATEWAY_GID}"' --group-add '"${DOCKER_SOCK_GID}"' -v /var/run/docker.sock:/var/run/docker.sock -e MCP_GATEWAY_PORT -e MCP_GATEWAY_DOMAIN -e MCP_GATEWAY_API_KEY -e MCP_GATEWAY_PAYLOAD_DIR -e MCP_GATEWAY_PAYLOAD_SIZE_THRESHOLD -e DEBUG -e MCP_GATEWAY_LOG_DIR -e GH_AW_MCP_LOG_DIR -e GH_AW_SAFE_OUTPUTS -e GH_AW_SAFE_OUTPUTS_CONFIG_PATH -e GH_AW_SAFE_OUTPUTS_TOOLS_PATH -e GH_AW_ASSETS_BRANCH -e GH_AW_ASSETS_MAX_SIZE_KB -e GH_AW_ASSETS_ALLOWED_EXTS -e DEFAULT_BRANCH -e GITHUB_MCP_SERVER_TOKEN -e GITHUB_MCP_GUARD_MIN_INTEGRITY -e GITHUB_MCP_GUARD_REPOS -e GITHUB_REPOSITORY -e GITHUB_SERVER_URL -e GITHUB_SHA -e GITHUB_WORKSPACE -e GITHUB_TOKEN -e GITHUB_RUN_ID -e GITHUB_RUN_NUMBER -e GITHUB_RUN_ATTEMPT -e GITHUB_JOB -e GITHUB_ACTION -e GITHUB_EVENT_NAME -e GITHUB_EVENT_PATH -e GITHUB_ACTOR -e GITHUB_ACTOR_ID -e GITHUB_TRIGGERING_ACTOR -e GITHUB_WORKFLOW -e GITHUB_WORKFLOW_REF -e GITHUB_WORKFLOW_SHA -e GITHUB_REF -e GITHUB_REF_NAME -e GITHUB_REF_TYPE -e GITHUB_HEAD_REF -e GITHUB_BASE_REF -e GH_AW_SAFE_OUTPUTS_PORT -e GH_AW_SAFE_OUTPUTS_API_KEY -v /tmp/gh-aw/mcp-payloads:/tmp/gh-aw/mcp-payloads:rw -v /opt:/opt:ro -v /tmp:/tmp:rw -v '"${GITHUB_WORKSPACE}"':'"${GITHUB_WORKSPACE}"':rw ghcr.io/github/gh-aw-mcpg:v0.3.6'
+          case "${DOCKER_HOST:-}" in
+            unix://* ) DOCKER_SOCK_PATH="${DOCKER_HOST#unix://}" ;;
+            /* ) DOCKER_SOCK_PATH="$DOCKER_HOST" ;;
+            * ) DOCKER_SOCK_PATH=/var/run/docker.sock ;;
+          esac
+          DOCKER_SOCK_GID=$(stat -c '%g' "$DOCKER_SOCK_PATH" 2>/dev/null || echo '0')
+          export MCP_GATEWAY_DOCKER_COMMAND='docker run -i --rm --network host --add-host host.docker.internal:127.0.0.1 --user '"${MCP_GATEWAY_UID}"':'"${MCP_GATEWAY_GID}"' --group-add '"${DOCKER_SOCK_GID}"' -v '"${DOCKER_SOCK_PATH}"':/var/run/docker.sock -e MCP_GATEWAY_PORT -e MCP_GATEWAY_DOMAIN -e MCP_GATEWAY_API_KEY -e MCP_GATEWAY_PAYLOAD_DIR -e MCP_GATEWAY_PAYLOAD_SIZE_THRESHOLD -e DOCKER_HOST=unix:///var/run/docker.sock -e DEBUG -e MCP_GATEWAY_LOG_DIR -e GH_AW_MCP_LOG_DIR -e GH_AW_SAFE_OUTPUTS -e GH_AW_SAFE_OUTPUTS_CONFIG_PATH -e GH_AW_SAFE_OUTPUTS_TOOLS_PATH -e GH_AW_ASSETS_BRANCH -e GH_AW_ASSETS_MAX_SIZE_KB -e GH_AW_ASSETS_ALLOWED_EXTS -e DEFAULT_BRANCH -e GITHUB_MCP_SERVER_TOKEN -e GITHUB_MCP_GUARD_MIN_INTEGRITY -e GITHUB_MCP_GUARD_REPOS -e GITHUB_REPOSITORY -e GITHUB_SERVER_URL -e GITHUB_SHA -e GITHUB_WORKSPACE -e GITHUB_TOKEN -e GITHUB_RUN_ID -e GITHUB_RUN_NUMBER -e GITHUB_RUN_ATTEMPT -e GITHUB_JOB -e GITHUB_ACTION -e GITHUB_EVENT_NAME -e GITHUB_EVENT_PATH -e GITHUB_ACTOR -e GITHUB_ACTOR_ID -e GITHUB_TRIGGERING_ACTOR -e GITHUB_WORKFLOW -e GITHUB_WORKFLOW_REF -e GITHUB_WORKFLOW_SHA -e GITHUB_REF -e GITHUB_REF_NAME -e GITHUB_REF_TYPE -e GITHUB_HEAD_REF -e GITHUB_BASE_REF -e GH_AW_SAFE_OUTPUTS_PORT -e GH_AW_SAFE_OUTPUTS_API_KEY -v /tmp/gh-aw/mcp-payloads:/tmp/gh-aw/mcp-payloads:rw -v /opt:/opt:ro -v /tmp:/tmp:rw -v '"${GITHUB_WORKSPACE}"':'"${GITHUB_WORKSPACE}"':rw ghcr.io/github/gh-aw-mcpg:v0.3.25'
           
-          mkdir -p /home/runner/.copilot
+          mkdir -p "$HOME/.copilot"
           GH_AW_NODE=$(which node 2>/dev/null || command -v node 2>/dev/null || echo node)
-          cat << GH_AW_MCP_CONFIG_82c3ebce7c1f546e_EOF | "$GH_AW_NODE" "${RUNNER_TEMP}/gh-aw/actions/start_mcp_gateway.cjs"
+          cat << GH_AW_MCP_CONFIG_83ab20c76af0a648_EOF | "$GH_AW_NODE" "${RUNNER_TEMP}/gh-aw/actions/start_mcp_gateway.cjs"
           {
             "mcpServers": {
               "github": {
                 "type": "stdio",
-                "container": "ghcr.io/github/github-mcp-server:v1.0.3",
+                "container": "ghcr.io/github/github-mcp-server:v1.1.2",
                 "env": {
                   "GITHUB_HOST": "\${GITHUB_SERVER_URL}",
                   "GITHUB_PERSONAL_ACCESS_TOKEN": "\${GITHUB_MCP_SERVER_TOKEN}",
@@ -844,7 +892,7 @@ jobs:
               "payloadDir": "${MCP_GATEWAY_PAYLOAD_DIR}"
             }
           }
-          GH_AW_MCP_CONFIG_82c3ebce7c1f546e_EOF
+          GH_AW_MCP_CONFIG_83ab20c76af0a648_EOF
       - name: Mount MCP servers as CLIs
         id: mount-mcp-clis
         continue-on-error: true
@@ -872,24 +920,49 @@ jobs:
         timeout-minutes: 20
         run: |
           set -o pipefail
+          printf '%s' "$(date +%s%3N)" > /tmp/gh-aw/agent_cli_start_ms.txt
+          trap 'rm -f "$HOME/.copilot/settings.json"' EXIT
+          mkdir -p "$HOME/.copilot"
+          printf '%s' '{"builtInAgents":{"rubberDuck":false}}' > "$HOME/.copilot/settings.json"
+          export XDG_CONFIG_HOME="$HOME"
+          export GH_AW_MCP_CONFIG="$HOME/.copilot/mcp-config.json"
           touch /tmp/gh-aw/agent-step-summary.md
           GH_AW_NODE_BIN=$(command -v node 2>/dev/null || true)
           export GH_AW_NODE_BIN
+          export COPILOT_API_KEY="$COPILOT_DUMMY_BYOK"
           (umask 177 && touch /tmp/gh-aw/agent-stdio.log)
-          printf '%s\n' '{"$schema":"https://github.com/github/gh-aw-firewall/releases/download/v0.25.41/awf-config.schema.json","network":{"allowDomains":["*.githubusercontent.com","api.business.githubcopilot.com","api.enterprise.githubcopilot.com","api.github.com","api.githubcopilot.com","api.individual.githubcopilot.com","api.snapcraft.io","archive.ubuntu.com","azure.archive.ubuntu.com","codeload.github.com","crl.geotrust.com","crl.globalsign.com","crl.identrust.com","crl.sectigo.com","crl.thawte.com","crl.usertrust.com","crl.verisign.com","crl3.digicert.com","crl4.digicert.com","crls.ssl.com","docs.github.com","github-cloud.githubusercontent.com","github-cloud.s3.amazonaws.com","github.blog","github.com","github.githubassets.com","host.docker.internal","json-schema.org","json.schemastore.org","keyserver.ubuntu.com","lfs.github.com","objects.githubusercontent.com","ocsp.digicert.com","ocsp.geotrust.com","ocsp.globalsign.com","ocsp.identrust.com","ocsp.sectigo.com","ocsp.ssl.com","ocsp.thawte.com","ocsp.usertrust.com","ocsp.verisign.com","packagecloud.io","packages.cloud.google.com","packages.microsoft.com","ppa.launchpad.net","raw.githubusercontent.com","registry.npmjs.org","s.symcb.com","s.symcd.com","security.ubuntu.com","telemetry.enterprise.githubcopilot.com","ts-crl.ws.symantec.com","ts-ocsp.ws.symantec.com","www.googleapis.com"]},"apiProxy":{"enabled":true,"models":{"auto":["large"],"deep-research":["copilot/deep-research*","google/deep-research*"],"gemini-flash":["copilot/gemini-*flash*","google/gemini-*flash*"],"gemini-pro":["copilot/gemini-*pro*","google/gemini-*pro*"],"gpt-4.1":["copilot/gpt-4.1*","openai/gpt-4.1*"],"gpt-5":["copilot/gpt-5*","openai/gpt-5*"],"gpt-5-codex":["copilot/gpt-5*codex*","openai/gpt-5*codex*"],"gpt-5-mini":["copilot/gpt-5*mini*","openai/gpt-5*mini*"],"gpt-5-nano":["copilot/gpt-5*nano*","openai/gpt-5*nano*"],"gpt-5-pro":["copilot/gpt-5*pro*","openai/gpt-5*pro*"],"haiku":["copilot/*haiku*","anthropic/*haiku*"],"large":["sonnet","gpt-5-pro","gpt-5","gemini-pro"],"mini":["haiku","gpt-5-mini","gpt-5-nano","gemini-flash"],"opus":["copilot/*opus*","anthropic/*opus*"],"reasoning":["copilot/o1*","copilot/o3*","copilot/o4*","openai/o1*","openai/o3*","openai/o4*"],"small":["mini"],"sonnet":["copilot/*sonnet*","anthropic/*sonnet*"]}},"container":{"imageTag":"0.25.41"}}' > "${RUNNER_TEMP}/gh-aw/awf-config.json" && cp "${RUNNER_TEMP}/gh-aw/awf-config.json" /tmp/gh-aw/awf-config.json
+          GH_AW_MAX_AI_CREDITS="${{ vars.GH_AW_DEFAULT_MAX_AI_CREDITS || '1000' }}"
+          printf '%s\n' "{\"\$schema\":\"https://github.com/github/gh-aw-firewall/releases/download/v0.27.2/awf-config.schema.json\",\"network\":{\"allowDomains\":[\"*.githubusercontent.com\",\"api.business.githubcopilot.com\",\"api.enterprise.githubcopilot.com\",\"api.github.com\",\"api.githubcopilot.com\",\"api.individual.githubcopilot.com\",\"api.snapcraft.io\",\"archive.ubuntu.com\",\"azure.archive.ubuntu.com\",\"codeload.github.com\",\"crl.geotrust.com\",\"crl.globalsign.com\",\"crl.identrust.com\",\"crl.sectigo.com\",\"crl.thawte.com\",\"crl.usertrust.com\",\"crl.verisign.com\",\"crl3.digicert.com\",\"crl4.digicert.com\",\"crls.ssl.com\",\"docs.github.com\",\"github-cloud.githubusercontent.com\",\"github-cloud.s3.amazonaws.com\",\"github.blog\",\"github.com\",\"github.githubassets.com\",\"host.docker.internal\",\"json-schema.org\",\"json.schemastore.org\",\"keyserver.ubuntu.com\",\"lfs.github.com\",\"objects.githubusercontent.com\",\"ocsp.digicert.com\",\"ocsp.geotrust.com\",\"ocsp.globalsign.com\",\"ocsp.identrust.com\",\"ocsp.sectigo.com\",\"ocsp.ssl.com\",\"ocsp.thawte.com\",\"ocsp.usertrust.com\",\"ocsp.verisign.com\",\"packagecloud.io\",\"packages.cloud.google.com\",\"packages.microsoft.com\",\"patch-diff.githubusercontent.com\",\"ppa.launchpad.net\",\"raw.githubusercontent.com\",\"registry.npmjs.org\",\"s.symcb.com\",\"s.symcd.com\",\"security.ubuntu.com\",\"telemetry.enterprise.githubcopilot.com\",\"ts-crl.ws.symantec.com\",\"ts-ocsp.ws.symantec.com\",\"www.googleapis.com\"]},\"apiProxy\":{\"enabled\":true,\"enableTokenSteering\":true,\"maxRuns\":500,\"maxAiCredits\":${GH_AW_MAX_AI_CREDITS},\"models\":{\"agent\":[\"sonnet-6x\",\"gpt-5.4\",\"gpt-5.3\",\"gemini-pro\",\"any\"],\"antigravity\":[\"copilot/antigravity*\",\"google/antigravity*\",\"gemini/antigravity*\"],\"any\":[\"copilot/*\",\"anthropic/*\",\"openai/*\",\"google/*\",\"gemini/*\"],\"claude\":[\"agent\"],\"codex\":[\"agent\"],\"coding\":[\"copilot/gpt-5*codex*\",\"openai/gpt-5*codex*\",\"gpt-5-codex\"],\"computer-use\":[\"copilot/*computer-use*\",\"google/*computer-use*\",\"gemini/*computer-use*\",\"openai/*computer-use*\"],\"copilot\":[\"agent\"],\"deep-research\":[\"copilot/deep-research*\",\"copilot/o3-deep-research*\",\"copilot/o4-mini-deep-research*\",\"google/deep-research*\",\"gemini/deep-research*\",\"openai/o3-deep-research*\",\"openai/o4-mini-deep-research*\"],\"gemini\":[\"agent\"],\"gemini-3-flash\":[\"copilot/gemini-3*flash*\",\"google/gemini-3*flash*\",\"gemini/gemini-3*flash*\"],\"gemini-3-pro\":[\"copilot/gemini-3*pro*\",\"google/gemini-3*pro*\",\"google/nano-banana*\",\"gemini/gemini-3*pro*\"],\"gemini-3.1-flash\":[\"copilot/gemini-3.1*flash*\",\"google/gemini-3.1*flash*\",\"gemini/gemini-3.1*flash*\"],\"gemini-3.1-pro\":[\"copilot/gemini-3.1*pro*\",\"google/gemini-3.1*pro*\",\"gemini/gemini-3.1*pro*\"],\"gemini-3.5-flash\":[\"copilot/gemini-3.5*flash*\",\"google/gemini-3.5*flash*\",\"gemini/gemini-3.5*flash*\"],\"gemini-flash\":[\"copilot/gemini-*flash*\",\"google/gemini-*flash*\",\"gemini/gemini-*flash*\"],\"gemini-flash-lite\":[\"copilot/gemini-*flash*lite*\",\"google/gemini-*flash*lite*\",\"gemini/gemini-*flash*lite*\"],\"gemini-pro\":[\"copilot/gemini-*pro*\",\"google/gemini-*pro*\",\"gemini/gemini-*pro*\"],\"gemma\":[\"copilot/gemma*\",\"google/gemma*\",\"gemini/gemma*\"],\"gpt-5\":[\"copilot/gpt-5*\",\"openai/gpt-5*\"],\"gpt-5-codex\":[\"copilot/gpt-5*codex*\",\"openai/gpt-5*codex*\"],\"gpt-5-mini\":[\"copilot/gpt-5*mini*\",\"openai/gpt-5*mini*\"],\"gpt-5-nano\":[\"copilot/gpt-5*nano*\",\"openai/gpt-5*nano*\"],\"gpt-5-pro\":[\"copilot/gpt-5*pro*\",\"openai/gpt-5*pro*\"],\"gpt-5.2\":[\"copilot/gpt-5.2*\",\"openai/gpt-5.2*\"],\"gpt-5.3\":[\"copilot/gpt-5.3*\",\"openai/gpt-5.3*\"],\"gpt-5.4\":[\"copilot/gpt-5.4*\",\"openai/gpt-5.4*\"],\"gpt-5.5\":[\"copilot/gpt-5.5*\",\"openai/gpt-5.5*\"],\"haiku\":[\"copilot/*haiku*\",\"anthropic/*haiku*\"],\"large\":[\"sonnet\",\"gpt-5-pro\",\"gpt-5\",\"gemini-pro\"],\"mai-code\":[\"copilot/MAI-Code*\",\"copilot/mai-code*\",\"openai/MAI-Code*\"],\"mini\":[\"haiku\",\"gpt-5-mini\",\"gpt-5-nano\",\"gemini-flash-lite\"],\"nano-banana\":[\"copilot/nano-banana*\",\"google/nano-banana*\",\"gemini/nano-banana*\"],\"opus\":[\"copilot/*opus*\",\"anthropic/*opus*\"],\"opusplan\":[\"opus?effort=high\"],\"reasoning\":[\"copilot/o1*\",\"copilot/o3*\",\"copilot/o4*\",\"openai/o1*\",\"openai/o3*\",\"openai/o4*\"],\"robotics\":[\"copilot/*robotics*\",\"google/*robotics*\",\"gemini/*robotics*\"],\"small\":[\"mini\"],\"small-agent\":[\"haiku\",\"gpt-5-mini\",\"gemini-flash\"],\"sonnet\":[\"copilot/*sonnet*\",\"anthropic/*sonnet*\"],\"sonnet-6x\":[\"copilot/*sonnet-4.5*\",\"copilot/*sonnet-4.6*\",\"copilot/*sonnet-4-5-*\",\"anthropic/*sonnet-4-5-*\",\"copilot/*sonnet-4-6*\",\"anthropic/*sonnet-4-6*\"],\"summarization\":[\"haiku\",\"gpt-5-mini\",\"gemini-flash-lite\",\"mini\"],\"vision\":[\"copilot/gemini-*image*\",\"gemini/gemini-*image*\",\"copilot/gemini-*flash*\",\"gemini/gemini-*flash*\"]}},\"container\":{\"imageTag\":\"0.27.2,squid=sha256:2e3a717e5f19a654cd9a2263beb52012b56bcb68562ec5ae2e42f9d156b49591,agent=sha256:f88e5b17b6b7a600117bc121114d6ce2155c88c983c0c939c5df884f730fa1d6,api-proxy=sha256:ee39841d980878ebbb87592903b06d31a1af500c71525c9616f7e8e2a27041a4,cli-proxy=sha256:02f3ec08f32dc26c5427920c6a2e2f3036238fce44802f2f11ef49ed8621b5d0\"}}" > "${RUNNER_TEMP}/gh-aw/awf-config.json"
+          cp "${RUNNER_TEMP}/gh-aw/awf-config.json" /tmp/gh-aw/awf-config.json
+          export GH_AW_MODELS_JSON_PATH="/tmp/gh-aw/models.json"
+          GH_AW_DOCKER_HOST_PATH_PREFIX_ARGS=""
+          if [[ "${DOCKER_HOST:-}" =~ ^tcp:// ]]; then
+            GH_AW_DOCKER_HOST_PATH_PREFIX_ARGS="--docker-host-path-prefix /tmp/gh-aw"
+          fi
+          GH_AW_TOOL_CACHE_MOUNT=""
+          GH_AW_TOOL_CACHE="${RUNNER_TOOL_CACHE:-/opt/hostedtoolcache}"
+          if [ -d "$GH_AW_TOOL_CACHE" ]; then
+            if [[ "$GH_AW_TOOL_CACHE" != /opt/* ]]; then
+              GH_AW_TOOL_CACHE_MOUNT="$GH_AW_TOOL_CACHE:$GH_AW_TOOL_CACHE:ro"
+            fi
+          elif [ -d "/home/runner/work/_tool" ]; then
+            GH_AW_TOOL_CACHE_MOUNT="/home/runner/work/_tool:/home/runner/work/_tool:ro"
+          fi
           # shellcheck disable=SC1003
-          sudo -E awf --config "${RUNNER_TEMP}/gh-aw/awf-config.json" --container-workdir "${GITHUB_WORKSPACE}" --mount "${RUNNER_TEMP}/gh-aw:${RUNNER_TEMP}/gh-aw:ro" --mount "${RUNNER_TEMP}/gh-aw:/host${RUNNER_TEMP}/gh-aw:ro" --env-all --exclude-env COPILOT_GITHUB_TOKEN --exclude-env GITHUB_MCP_SERVER_TOKEN --exclude-env MCP_GATEWAY_API_KEY --log-level info --proxy-logs-dir /tmp/gh-aw/sandbox/firewall/logs --audit-dir /tmp/gh-aw/sandbox/firewall/audit --enable-host-access --allow-host-ports 80,443,8080 --skip-pull \
-            -- /bin/bash -c 'export PATH="${RUNNER_TEMP}/gh-aw/mcp-cli/bin:$PATH" && export PATH="$(find /opt/hostedtoolcache /home/runner/work/_tool -maxdepth 4 -type d -name bin 2>/dev/null | tr '\''\n'\'' '\'':'\'')$PATH"; [ -n "$GOROOT" ] && export PATH="$GOROOT/bin:$PATH" || true && GH_AW_NODE_EXEC="${GH_AW_NODE_BIN:-}"; if [ -z "$GH_AW_NODE_EXEC" ] || [ ! -x "$GH_AW_NODE_EXEC" ]; then GH_AW_NODE_EXEC="$(command -v node 2>/dev/null || echo node)"; fi; "$GH_AW_NODE_EXEC" ${RUNNER_TEMP}/gh-aw/actions/copilot_harness.cjs /usr/local/bin/copilot --add-dir /tmp/gh-aw/ --log-level all --log-dir /tmp/gh-aw/sandbox/agent/logs/ --disable-builtin-mcps --no-ask-user --allow-all-tools --allow-all-paths --add-dir "${GITHUB_WORKSPACE}" --prompt-file /tmp/gh-aw/aw-prompts/prompt.txt' 2>&1 | tee -a /tmp/gh-aw/agent-stdio.log
+          sudo -E awf --config "${RUNNER_TEMP}/gh-aw/awf-config.json" --container-workdir "${GITHUB_WORKSPACE}" --mount "${RUNNER_TEMP}/gh-aw:${RUNNER_TEMP}/gh-aw:ro" --mount "${RUNNER_TEMP}/gh-aw:/host${RUNNER_TEMP}/gh-aw:ro" ${GH_AW_TOOL_CACHE_MOUNT:+--mount "$GH_AW_TOOL_CACHE_MOUNT"} ${GH_AW_DOCKER_HOST_PATH_PREFIX_ARGS} --env-all --exclude-env COPILOT_GITHUB_TOKEN --exclude-env GITHUB_MCP_SERVER_TOKEN --exclude-env MCP_GATEWAY_API_KEY --log-level info --proxy-logs-dir /tmp/gh-aw/sandbox/firewall/logs --audit-dir /tmp/gh-aw/sandbox/firewall/audit --enable-host-access --allow-host-ports 80,443,8080 --skip-pull \
+            -- /bin/bash -c 'set +o histexpand; export PATH="${RUNNER_TEMP}/gh-aw/mcp-cli/bin:$PATH" && GH_AW_TOOL_CACHE="${RUNNER_TOOL_CACHE:-/opt/hostedtoolcache}"; export PATH="$(find "$GH_AW_TOOL_CACHE" /opt/hostedtoolcache /home/runner/work/_tool -maxdepth 5 -type d -name bin 2>/dev/null | tr '\''\n'\'' '\'':'\'')$PATH"; [ -n "$GOROOT" ] && export PATH="$GOROOT/bin:$PATH" || true && GH_AW_NODE_EXEC="${GH_AW_NODE_BIN:-}"; if [ -z "$GH_AW_NODE_EXEC" ] || [ ! -x "$GH_AW_NODE_EXEC" ]; then GH_AW_NODE_EXEC="$(command -v node 2>/dev/null || true)"; fi; if [ -z "$GH_AW_NODE_EXEC" ]; then echo "node runtime missing on this runner — check runtimes.node in workflow YAML" >&2; exit 127; fi; GH_AW_NPM_GLOBAL_ROOT="$(npm root -g 2>/dev/null || true)"; if [ -n "$GH_AW_NPM_GLOBAL_ROOT" ]; then export NODE_PATH="${GH_AW_NPM_GLOBAL_ROOT}${NODE_PATH:+:${NODE_PATH}}"; fi; "$GH_AW_NODE_EXEC" ${RUNNER_TEMP}/gh-aw/actions/copilot_harness.cjs /usr/local/bin/copilot --add-dir /tmp/gh-aw/ --log-level all --log-dir /tmp/gh-aw/sandbox/agent/logs/ --disable-builtin-mcps --no-ask-user --allow-all-tools --allow-all-paths --add-dir "${GITHUB_WORKSPACE}" --prompt-file /tmp/gh-aw/aw-prompts/prompt.txt' 2>&1 | tee -a /tmp/gh-aw/agent-stdio.log
         env:
+          AWF_REFLECT_ENABLED: 1
           COPILOT_AGENT_RUNNER_TYPE: STANDALONE
-          COPILOT_API_KEY: dummy-byok-key-for-offline-mode
-          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
-          COPILOT_MODEL: ${{ vars.GH_AW_MODEL_AGENT_COPILOT || 'claude-sonnet-4.6' }}
-          GH_AW_MCP_CONFIG: /home/runner/.copilot/mcp-config.json
+          COPILOT_DUMMY_BYOK: dummy-byok-key-for-offline-mode
+          COPILOT_GITHUB_TOKEN: ${{ github.token }}
+          COPILOT_MODEL: ${{ vars.GH_AW_MODEL_AGENT_COPILOT || vars.GH_AW_DEFAULT_MODEL_COPILOT || 'claude-sonnet-4.6' }}
+          GH_AW_MAX_TURNS: ${{ vars.GH_AW_DEFAULT_MAX_TURNS || '' }}
           GH_AW_PHASE: agent
           GH_AW_PROMPT: /tmp/gh-aw/aw-prompts/prompt.txt
           GH_AW_SAFE_OUTPUTS: ${{ steps.set-runtime-paths.outputs.GH_AW_SAFE_OUTPUTS }}
-          GH_AW_VERSION: v0.72.0
+          GH_AW_TIMEOUT_MINUTES: 20
+          GH_AW_VERSION: v0.79.8
           GITHUB_API_URL: ${{ github.api_url }}
           GITHUB_AW: true
           GITHUB_COPILOT_INTEGRATION_ID: agentic-workflows
@@ -903,12 +976,13 @@ jobs:
           GIT_AUTHOR_NAME: github-actions[bot]
           GIT_COMMITTER_EMAIL: github-actions[bot]@users.noreply.github.com
           GIT_COMMITTER_NAME: github-actions[bot]
-          XDG_CONFIG_HOME: /home/runner
-      - name: Detect Copilot errors
-        id: detect-copilot-errors
+          RUNNER_TEMP: ${{ runner.temp }}
+          S2STOKENS: true
+      - name: Detect agent errors
         if: always()
+        id: detect-agent-errors
         continue-on-error: true
-        run: node "${RUNNER_TEMP}/gh-aw/actions/detect_copilot_errors.cjs"
+        run: node "${RUNNER_TEMP}/gh-aw/actions/detect_agent_errors.cjs"
       - name: Configure Git credentials
         env:
           REPO_NAME: ${{ github.repository }}
@@ -945,10 +1019,9 @@ jobs:
             const { main } = require('${{ runner.temp }}/gh-aw/actions/redact_secrets.cjs');
             await main();
         env:
-          GH_AW_SECRET_NAMES: 'ASPIRE_BOT_APP_ID,ASPIRE_BOT_PRIVATE_KEY,COPILOT_GITHUB_TOKEN,GH_AW_GITHUB_MCP_SERVER_TOKEN,GH_AW_GITHUB_TOKEN,GITHUB_TOKEN'
+          GH_AW_SECRET_NAMES: 'ASPIRE_BOT_APP_ID,ASPIRE_BOT_PRIVATE_KEY,GH_AW_GITHUB_MCP_SERVER_TOKEN,GH_AW_GITHUB_TOKEN,GITHUB_TOKEN'
           SECRET_ASPIRE_BOT_APP_ID: ${{ secrets.ASPIRE_BOT_APP_ID }}
           SECRET_ASPIRE_BOT_PRIVATE_KEY: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
-          SECRET_COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
           SECRET_GH_AW_GITHUB_MCP_SERVER_TOKEN: ${{ secrets.GH_AW_GITHUB_MCP_SERVER_TOKEN }}
           SECRET_GH_AW_GITHUB_TOKEN: ${{ secrets.GH_AW_GITHUB_TOKEN }}
           SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -968,7 +1041,7 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GH_AW_SAFE_OUTPUTS: ${{ steps.set-runtime-paths.outputs.GH_AW_SAFE_OUTPUTS }}
-          GH_AW_ALLOWED_DOMAINS: "*.githubusercontent.com,api.business.githubcopilot.com,api.enterprise.githubcopilot.com,api.github.com,api.githubcopilot.com,api.individual.githubcopilot.com,api.snapcraft.io,archive.ubuntu.com,azure.archive.ubuntu.com,codeload.github.com,crl.geotrust.com,crl.globalsign.com,crl.identrust.com,crl.sectigo.com,crl.thawte.com,crl.usertrust.com,crl.verisign.com,crl3.digicert.com,crl4.digicert.com,crls.ssl.com,docs.github.com,github-cloud.githubusercontent.com,github-cloud.s3.amazonaws.com,github.blog,github.com,github.githubassets.com,host.docker.internal,json-schema.org,json.schemastore.org,keyserver.ubuntu.com,lfs.github.com,objects.githubusercontent.com,ocsp.digicert.com,ocsp.geotrust.com,ocsp.globalsign.com,ocsp.identrust.com,ocsp.sectigo.com,ocsp.ssl.com,ocsp.thawte.com,ocsp.usertrust.com,ocsp.verisign.com,packagecloud.io,packages.cloud.google.com,packages.microsoft.com,ppa.launchpad.net,raw.githubusercontent.com,registry.npmjs.org,s.symcb.com,s.symcd.com,security.ubuntu.com,telemetry.enterprise.githubcopilot.com,ts-crl.ws.symantec.com,ts-ocsp.ws.symantec.com,www.googleapis.com"
+          GH_AW_ALLOWED_DOMAINS: "*.githubusercontent.com,api.business.githubcopilot.com,api.enterprise.githubcopilot.com,api.github.com,api.githubcopilot.com,api.individual.githubcopilot.com,api.snapcraft.io,archive.ubuntu.com,azure.archive.ubuntu.com,codeload.github.com,crl.geotrust.com,crl.globalsign.com,crl.identrust.com,crl.sectigo.com,crl.thawte.com,crl.usertrust.com,crl.verisign.com,crl3.digicert.com,crl4.digicert.com,crls.ssl.com,docs.github.com,github-cloud.githubusercontent.com,github-cloud.s3.amazonaws.com,github.blog,github.com,github.githubassets.com,host.docker.internal,json-schema.org,json.schemastore.org,keyserver.ubuntu.com,lfs.github.com,objects.githubusercontent.com,ocsp.digicert.com,ocsp.geotrust.com,ocsp.globalsign.com,ocsp.identrust.com,ocsp.sectigo.com,ocsp.ssl.com,ocsp.thawte.com,ocsp.usertrust.com,ocsp.verisign.com,packagecloud.io,packages.cloud.google.com,packages.microsoft.com,patch-diff.githubusercontent.com,ppa.launchpad.net,raw.githubusercontent.com,registry.npmjs.org,s.symcb.com,s.symcd.com,security.ubuntu.com,telemetry.enterprise.githubcopilot.com,ts-crl.ws.symantec.com,ts-ocsp.ws.symantec.com,www.googleapis.com"
           GITHUB_SERVER_URL: ${{ github.server_url }}
           GITHUB_API_URL: ${{ github.api_url }}
         with:
@@ -1066,45 +1139,6 @@ jobs:
             /tmp/gh-aw/sandbox/firewall/audit/
             /tmp/gh-aw/sandbox/firewall/awf-reflect.json
           if-no-files-found: ignore
-      - name: Invalidate GitHub App token
-        if: always() && steps.github-mcp-app-token.outputs.token != ''
-        env:
-          TOKEN: ${{ steps.github-mcp-app-token.outputs.token }}
-        run: |
-          echo "Revoking GitHub App installation token..."
-          # GitHub CLI will auth with the token being revoked.
-          gh api \
-            --method DELETE \
-            -H "Authorization: token $TOKEN" \
-            /installation/token || echo "Token revoke may already be expired."
-          
-          echo "Token invalidation step complete."
-      - name: Invalidate checkout app token (0)
-        if: always() && steps.checkout-app-token-0.outputs.token != ''
-        env:
-          TOKEN: ${{ steps.checkout-app-token-0.outputs.token }}
-        run: |
-          echo "Revoking GitHub App installation token..."
-          # GitHub CLI will auth with the token being revoked.
-          gh api \
-            --method DELETE \
-            -H "Authorization: token $TOKEN" \
-            /installation/token || echo "Token revoke may already be expired."
-          
-          echo "Token invalidation step complete."
-      - name: Invalidate checkout app token (1)
-        if: always() && steps.checkout-app-token-1.outputs.token != ''
-        env:
-          TOKEN: ${{ steps.checkout-app-token-1.outputs.token }}
-        run: |
-          echo "Revoking GitHub App installation token..."
-          # GitHub CLI will auth with the token being revoked.
-          gh api \
-            --method DELETE \
-            -H "Authorization: token $TOKEN" \
-            /installation/token || echo "Token revoke may already be expired."
-          
-          echo "Token invalidation step complete."
 
   conclusion:
     needs:
@@ -1124,6 +1158,7 @@ jobs:
     concurrency:
       group: "gh-aw-conclusion-pr-docs-check"
       cancel-in-progress: false
+      queue: max
     outputs:
       incomplete_count: ${{ steps.report_incomplete.outputs.incomplete_count }}
       noop_message: ${{ steps.noop.outputs.noop_message }}
@@ -1132,18 +1167,21 @@ jobs:
     steps:
       - name: Setup Scripts
         id: setup
-        uses: github/gh-aw-actions/setup@ff0525b685481744f490a0d362753d8001e4b39d # v0.72.0
+        uses: github/gh-aw-actions/setup@c0338fef4749d08c21f8f975fb0e37efa17dda47 # v0.79.8
         with:
           destination: ${{ runner.temp }}/gh-aw/actions
           job-name: ${{ github.job }}
           trace-id: ${{ needs.activation.outputs.setup-trace-id }}
+          parent-span-id: ${{ needs.activation.outputs.setup-parent-span-id || needs.activation.outputs.setup-span-id }}
         env:
           GH_AW_SETUP_WORKFLOW_NAME: "PR Documentation Check"
           GH_AW_CURRENT_WORKFLOW_REF: ${{ github.repository }}/.github/workflows/pr-docs-check.lock.yml@${{ github.ref }}
-          GH_AW_INFO_VERSION: "1.0.40"
+          GH_AW_INFO_VERSION: "1.0.60"
+          GH_AW_INFO_AWF_VERSION: "v0.27.2"
+          GH_AW_INFO_ENGINE_ID: "copilot"
       - name: Generate GitHub App token
         id: safe-outputs-app-token
-        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
@@ -1169,6 +1207,40 @@ jobs:
           mkdir -p /tmp/gh-aw/
           find "/tmp/gh-aw/" -type f -print
           echo "GH_AW_AGENT_OUTPUT=/tmp/gh-aw/agent_output.json" >> "$GITHUB_OUTPUT"
+      - name: Collect usage artifact files
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p /tmp/gh-aw/usage/agent /tmp/gh-aw/usage/detection
+          echo "Usage artifact source file status:"
+          for file in /tmp/gh-aw/aw-info.jsonl /tmp/gh-aw/agent_usage.jsonl /tmp/gh-aw/detection_usage.jsonl /tmp/gh-aw/sandbox/firewall-audit-logs/api-proxy-logs/token-usage.jsonl /tmp/gh-aw/sandbox/firewall/logs/api-proxy-logs/token-usage.jsonl /tmp/gh-aw/sandbox/firewall/audit/api-proxy-logs/token-usage.jsonl /tmp/gh-aw/threat-detection/sandbox/firewall-audit-logs/api-proxy-logs/token-usage.jsonl /tmp/gh-aw/threat-detection/sandbox/firewall/logs/api-proxy-logs/token-usage.jsonl /tmp/gh-aw/threat-detection/sandbox/firewall/audit/api-proxy-logs/token-usage.jsonl; do
+            [ -f "$file" ] && echo "FOUND: $file" || echo "MISSING: $file"
+          done
+          [ -f /tmp/gh-aw/aw-info.jsonl ] && cp /tmp/gh-aw/aw-info.jsonl /tmp/gh-aw/usage/aw-info.jsonl || true
+          [ -f /tmp/gh-aw/agent_usage.jsonl ] && cp /tmp/gh-aw/agent_usage.jsonl /tmp/gh-aw/usage/agent_usage.jsonl || true
+          [ -f /tmp/gh-aw/detection_usage.jsonl ] && cp /tmp/gh-aw/detection_usage.jsonl /tmp/gh-aw/usage/detection_usage.jsonl || true
+          [ -f /tmp/gh-aw/sandbox/firewall-audit-logs/api-proxy-logs/token-usage.jsonl ] && cp /tmp/gh-aw/sandbox/firewall-audit-logs/api-proxy-logs/token-usage.jsonl /tmp/gh-aw/usage/agent/token_usage.jsonl || true
+          [ -f /tmp/gh-aw/sandbox/firewall/logs/api-proxy-logs/token-usage.jsonl ] && cp /tmp/gh-aw/sandbox/firewall/logs/api-proxy-logs/token-usage.jsonl /tmp/gh-aw/usage/agent/token_usage.jsonl || true
+          [ -f /tmp/gh-aw/sandbox/firewall/audit/api-proxy-logs/token-usage.jsonl ] && cp /tmp/gh-aw/sandbox/firewall/audit/api-proxy-logs/token-usage.jsonl /tmp/gh-aw/usage/agent/token_usage.jsonl || true
+          [ -f /tmp/gh-aw/threat-detection/sandbox/firewall-audit-logs/api-proxy-logs/token-usage.jsonl ] && cp /tmp/gh-aw/threat-detection/sandbox/firewall-audit-logs/api-proxy-logs/token-usage.jsonl /tmp/gh-aw/usage/detection/token_usage.jsonl || true
+          [ -f /tmp/gh-aw/threat-detection/sandbox/firewall/logs/api-proxy-logs/token-usage.jsonl ] && cp /tmp/gh-aw/threat-detection/sandbox/firewall/logs/api-proxy-logs/token-usage.jsonl /tmp/gh-aw/usage/detection/token_usage.jsonl || true
+          [ -f /tmp/gh-aw/threat-detection/sandbox/firewall/audit/api-proxy-logs/token-usage.jsonl ] && cp /tmp/gh-aw/threat-detection/sandbox/firewall/audit/api-proxy-logs/token-usage.jsonl /tmp/gh-aw/usage/detection/token_usage.jsonl || true
+          [ -f /tmp/gh-aw/usage/agent/token_usage.jsonl ] || : > /tmp/gh-aw/usage/agent/token_usage.jsonl
+          [ -f /tmp/gh-aw/usage/detection/token_usage.jsonl ] || : > /tmp/gh-aw/usage/detection/token_usage.jsonl
+          find /tmp/gh-aw/usage -type f -print | sort
+      - name: Upload usage artifact
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: usage
+          path: |
+            /tmp/gh-aw/usage/aw-info.jsonl
+            /tmp/gh-aw/usage/agent_usage.jsonl
+            /tmp/gh-aw/usage/detection_usage.jsonl
+            /tmp/gh-aw/usage/agent/token_usage.jsonl
+            /tmp/gh-aw/usage/detection/token_usage.jsonl
+          if-no-files-found: ignore
       - name: Process no-op messages
         id: noop
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -1176,9 +1248,14 @@ jobs:
           GH_AW_AGENT_OUTPUT: ${{ steps.setup-agent-output-env.outputs.GH_AW_AGENT_OUTPUT }}
           GH_AW_NOOP_MAX: "1"
           GH_AW_WORKFLOW_NAME: "PR Documentation Check"
+          GH_AW_WORKFLOW_SOURCE_URL: "${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/.github/workflows/pr-docs-check.md"
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_AW_AGENT_CONCLUSION: ${{ needs.agent.result }}
           GH_AW_NOOP_REPORT_AS_ISSUE: "true"
+          GH_AW_AIC: ${{ needs.agent.outputs.aic }}
+          GH_AW_THREAT_DETECTION_AIC: ${{ needs.detection.outputs.aic }}
+          GH_AW_AMBIENT_CONTEXT: ${{ needs.agent.outputs.ambient_context }}
+          GH_AW_WORKFLOW_ID: "pr-docs-check"
         with:
           github-token: ${{ steps.safe-outputs-app-token.outputs.token }}
           script: |
@@ -1192,6 +1269,7 @@ jobs:
         env:
           GH_AW_AGENT_OUTPUT: ${{ steps.setup-agent-output-env.outputs.GH_AW_AGENT_OUTPUT }}
           GH_AW_WORKFLOW_NAME: "PR Documentation Check"
+          GH_AW_WORKFLOW_SOURCE_URL: "${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/.github/workflows/pr-docs-check.md"
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_AW_DETECTION_CONCLUSION: ${{ needs.detection.outputs.detection_conclusion }}
           GH_AW_DETECTION_REASON: ${{ needs.detection.outputs.detection_reason }}
@@ -1209,6 +1287,7 @@ jobs:
           GH_AW_AGENT_OUTPUT: ${{ steps.setup-agent-output-env.outputs.GH_AW_AGENT_OUTPUT }}
           GH_AW_MISSING_TOOL_CREATE_ISSUE: "true"
           GH_AW_WORKFLOW_NAME: "PR Documentation Check"
+          GH_AW_WORKFLOW_SOURCE_URL: "${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/.github/workflows/pr-docs-check.md"
         with:
           github-token: ${{ steps.safe-outputs-app-token.outputs.token }}
           script: |
@@ -1223,6 +1302,7 @@ jobs:
           GH_AW_AGENT_OUTPUT: ${{ steps.setup-agent-output-env.outputs.GH_AW_AGENT_OUTPUT }}
           GH_AW_REPORT_INCOMPLETE_CREATE_ISSUE: "true"
           GH_AW_WORKFLOW_NAME: "PR Documentation Check"
+          GH_AW_WORKFLOW_SOURCE_URL: "${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/.github/workflows/pr-docs-check.md"
         with:
           github-token: ${{ steps.safe-outputs-app-token.outputs.token }}
           script: |
@@ -1237,13 +1317,19 @@ jobs:
         env:
           GH_AW_AGENT_OUTPUT: ${{ steps.setup-agent-output-env.outputs.GH_AW_AGENT_OUTPUT }}
           GH_AW_WORKFLOW_NAME: "PR Documentation Check"
+          GH_AW_WORKFLOW_SOURCE_URL: "${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/.github/workflows/pr-docs-check.md"
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_AW_AGENT_CONCLUSION: ${{ needs.agent.result }}
           GH_AW_WORKFLOW_ID: "pr-docs-check"
           GH_AW_ACTION_FAILURE_ISSUE_EXPIRES_HOURS: "168"
           GH_AW_ENGINE_ID: "copilot"
-          GH_AW_SECRET_VERIFICATION_RESULT: ${{ needs.activation.outputs.secret_verification_result }}
           GH_AW_CHECKOUT_PR_SUCCESS: ${{ needs.agent.outputs.checkout_pr_success }}
+          GH_AW_EFFECTIVE_TOKENS: ${{ needs.agent.outputs.effective_tokens || '' }}
+          GH_AW_AI_CREDITS_RATE_LIMIT_ERROR: ${{ needs.agent.outputs.ai_credits_rate_limit_error || 'false' }}
+          GH_AW_UNKNOWN_MODEL_AI_CREDITS: ${{ needs.agent.outputs.unknown_model_ai_credits || 'false' }}
+          GH_AW_AIC: ${{ needs.agent.outputs.aic }}
+          GH_AW_THREAT_DETECTION_AIC: ${{ needs.detection.outputs.aic }}
+          GH_AW_MAX_AI_CREDITS: ${{ vars.GH_AW_DEFAULT_MAX_AI_CREDITS || '1000' }}
           GH_AW_INFERENCE_ACCESS_ERROR: ${{ needs.agent.outputs.inference_access_error }}
           GH_AW_MCP_POLICY_ERROR: ${{ needs.agent.outputs.mcp_policy_error }}
           GH_AW_AGENTIC_ENGINE_TIMEOUT: ${{ needs.agent.outputs.agentic_engine_timeout }}
@@ -1267,19 +1353,6 @@ jobs:
             setupGlobals(core, github, context, exec, io, getOctokit);
             const { main } = require('${{ runner.temp }}/gh-aw/actions/handle_agent_failure.cjs');
             await main();
-      - name: Invalidate GitHub App token
-        if: always() && steps.safe-outputs-app-token.outputs.token != ''
-        env:
-          TOKEN: ${{ steps.safe-outputs-app-token.outputs.token }}
-        run: |
-          echo "Revoking GitHub App installation token..."
-          # GitHub CLI will auth with the token being revoked.
-          gh api \
-            --method DELETE \
-            -H "Authorization: token $TOKEN" \
-            /installation/token || echo "Token revoke may already be expired."
-          
-          echo "Token invalidation step complete."
 
   detection:
     needs:
@@ -1290,22 +1363,27 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      copilot-requests: write
     outputs:
+      aic: ${{ steps.parse_detection_token_usage.outputs.aic }}
       detection_conclusion: ${{ steps.detection_conclusion.outputs.conclusion }}
       detection_reason: ${{ steps.detection_conclusion.outputs.reason }}
       detection_success: ${{ steps.detection_conclusion.outputs.success }}
     steps:
       - name: Setup Scripts
         id: setup
-        uses: github/gh-aw-actions/setup@ff0525b685481744f490a0d362753d8001e4b39d # v0.72.0
+        uses: github/gh-aw-actions/setup@c0338fef4749d08c21f8f975fb0e37efa17dda47 # v0.79.8
         with:
           destination: ${{ runner.temp }}/gh-aw/actions
           job-name: ${{ github.job }}
           trace-id: ${{ needs.activation.outputs.setup-trace-id }}
+          parent-span-id: ${{ needs.activation.outputs.setup-parent-span-id || needs.activation.outputs.setup-span-id }}
         env:
           GH_AW_SETUP_WORKFLOW_NAME: "PR Documentation Check"
           GH_AW_CURRENT_WORKFLOW_REF: ${{ github.repository }}/.github/workflows/pr-docs-check.lock.yml@${{ github.ref }}
-          GH_AW_INFO_VERSION: "1.0.40"
+          GH_AW_INFO_VERSION: "1.0.60"
+          GH_AW_INFO_AWF_VERSION: "v0.27.2"
+          GH_AW_INFO_ENGINE_ID: "copilot"
       - name: Download agent output artifact
         id: download-agent-output
         continue-on-error: true
@@ -1322,7 +1400,7 @@ jobs:
           echo "GH_AW_AGENT_OUTPUT=/tmp/gh-aw/agent_output.json" >> "$GITHUB_OUTPUT"
       - name: Checkout repository for patch context
         if: needs.agent.outputs.has_patch == 'true'
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
       # --- Threat Detection ---
@@ -1331,7 +1409,7 @@ jobs:
           rm -rf /tmp/gh-aw/sandbox/firewall/logs
           rm -rf /tmp/gh-aw/sandbox/firewall/audit
       - name: Download container images
-        run: bash "${RUNNER_TEMP}/gh-aw/actions/download_docker_images.sh" ghcr.io/github/gh-aw-firewall/agent:0.25.41 ghcr.io/github/gh-aw-firewall/api-proxy:0.25.41 ghcr.io/github/gh-aw-firewall/squid:0.25.41
+        run: bash "${RUNNER_TEMP}/gh-aw/actions/download_docker_images.sh" ghcr.io/github/gh-aw-firewall/agent:0.27.2@sha256:f88e5b17b6b7a600117bc121114d6ce2155c88c983c0c939c5df884f730fa1d6 ghcr.io/github/gh-aw-firewall/api-proxy:0.27.2@sha256:ee39841d980878ebbb87592903b06d31a1af500c71525c9616f7e8e2a27041a4 ghcr.io/github/gh-aw-firewall/squid:0.27.2@sha256:2e3a717e5f19a654cd9a2263beb52012b56bcb68562ec5ae2e42f9d156b49591
       - name: Check if detection needed
         id: detection_guard
         if: always()
@@ -1350,13 +1428,17 @@ jobs:
         if: always() && steps.detection_guard.outputs.run_detection == 'true'
         run: |
           rm -f "${RUNNER_TEMP}/gh-aw/mcp-config/mcp-servers.json"
-          rm -f /home/runner/.copilot/mcp-config.json
+          rm -f "$HOME/.copilot/mcp-config.json"
           rm -f "$GITHUB_WORKSPACE/.gemini/settings.json"
       - name: Prepare threat detection files
         if: always() && steps.detection_guard.outputs.run_detection == 'true'
         run: |
           mkdir -p /tmp/gh-aw/threat-detection/aw-prompts
+          rm -f /tmp/gh-aw/agent_usage.json
           cp /tmp/gh-aw/aw-prompts/prompt.txt /tmp/gh-aw/threat-detection/aw-prompts/prompt.txt 2>/dev/null || true
+          if [ ! -s /tmp/gh-aw/threat-detection/aw-prompts/prompt.txt ]; then
+            echo "::warning::ERR_VALIDATION: Missing or empty detection context prompt at /tmp/gh-aw/threat-detection/aw-prompts/prompt.txt. Ensure the agent artifact includes /tmp/gh-aw/aw-prompts/prompt.txt. Detection will continue with fallback workflow context."
+          fi
           cp /tmp/gh-aw/agent_output.json /tmp/gh-aw/threat-detection/agent_output.json 2>/dev/null || true
           for f in /tmp/gh-aw/aw-*.patch; do
             [ -f "$f" ] && cp "$f" /tmp/gh-aw/threat-detection/ 2>/dev/null || true
@@ -1390,11 +1472,11 @@ jobs:
           node-version: '24'
           package-manager-cache: false
       - name: Install GitHub Copilot CLI
-        run: bash "${RUNNER_TEMP}/gh-aw/actions/install_copilot_cli.sh" 1.0.40
+        run: bash "${RUNNER_TEMP}/gh-aw/actions/install_copilot_cli.sh" 1.0.60
         env:
           GH_HOST: github.com
       - name: Install AWF binary
-        run: bash "${RUNNER_TEMP}/gh-aw/actions/install_awf_binary.sh" v0.25.41
+        run: bash "${RUNNER_TEMP}/gh-aw/actions/install_awf_binary.sh" v0.27.2
       - name: Execute GitHub Copilot CLI
         if: always() && steps.detection_guard.outputs.run_detection == 'true'
         continue-on-error: true
@@ -1403,22 +1485,47 @@ jobs:
         timeout-minutes: 20
         run: |
           set -o pipefail
+          printf '%s' "$(date +%s%3N)" > /tmp/gh-aw/agent_cli_start_ms.txt
+          trap 'rm -f "$HOME/.copilot/settings.json"' EXIT
+          mkdir -p "$HOME/.copilot"
+          printf '%s' '{"builtInAgents":{"rubberDuck":false}}' > "$HOME/.copilot/settings.json"
+          export XDG_CONFIG_HOME="$HOME"
           touch /tmp/gh-aw/agent-step-summary.md
           GH_AW_NODE_BIN=$(command -v node 2>/dev/null || true)
           export GH_AW_NODE_BIN
+          export COPILOT_API_KEY="$COPILOT_DUMMY_BYOK"
           (umask 177 && touch /tmp/gh-aw/threat-detection/detection.log)
-          printf '%s\n' '{"$schema":"https://github.com/github/gh-aw-firewall/releases/download/v0.25.41/awf-config.schema.json","network":{"allowDomains":["api.business.githubcopilot.com","api.enterprise.githubcopilot.com","api.github.com","api.githubcopilot.com","api.individual.githubcopilot.com","github.com","host.docker.internal","telemetry.enterprise.githubcopilot.com"]},"apiProxy":{"enabled":true},"container":{"imageTag":"0.25.41"}}' > "${RUNNER_TEMP}/gh-aw/awf-config.json" && cp "${RUNNER_TEMP}/gh-aw/awf-config.json" /tmp/gh-aw/awf-config.json
+          GH_AW_MAX_AI_CREDITS="${{ vars.GH_AW_DEFAULT_DETECTION_MAX_AI_CREDITS || '400' }}"
+          printf '%s\n' "{\"\$schema\":\"https://github.com/github/gh-aw-firewall/releases/download/v0.27.2/awf-config.schema.json\",\"network\":{\"allowDomains\":[\"api.business.githubcopilot.com\",\"api.enterprise.githubcopilot.com\",\"api.github.com\",\"api.githubcopilot.com\",\"api.individual.githubcopilot.com\",\"github.com\",\"host.docker.internal\",\"registry.npmjs.org\",\"telemetry.enterprise.githubcopilot.com\"]},\"apiProxy\":{\"enabled\":true,\"enableTokenSteering\":true,\"maxRuns\":500,\"maxAiCredits\":${GH_AW_MAX_AI_CREDITS}},\"container\":{\"imageTag\":\"0.27.2,squid=sha256:2e3a717e5f19a654cd9a2263beb52012b56bcb68562ec5ae2e42f9d156b49591,agent=sha256:f88e5b17b6b7a600117bc121114d6ce2155c88c983c0c939c5df884f730fa1d6,api-proxy=sha256:ee39841d980878ebbb87592903b06d31a1af500c71525c9616f7e8e2a27041a4,cli-proxy=sha256:02f3ec08f32dc26c5427920c6a2e2f3036238fce44802f2f11ef49ed8621b5d0\"}}" > "${RUNNER_TEMP}/gh-aw/awf-config.json"
+          cp "${RUNNER_TEMP}/gh-aw/awf-config.json" /tmp/gh-aw/awf-config.json
+          export GH_AW_MODELS_JSON_PATH="/tmp/gh-aw/models.json"
+          GH_AW_DOCKER_HOST_PATH_PREFIX_ARGS=""
+          if [[ "${DOCKER_HOST:-}" =~ ^tcp:// ]]; then
+            GH_AW_DOCKER_HOST_PATH_PREFIX_ARGS="--docker-host-path-prefix /tmp/gh-aw"
+          fi
+          GH_AW_TOOL_CACHE_MOUNT=""
+          GH_AW_TOOL_CACHE="${RUNNER_TOOL_CACHE:-/opt/hostedtoolcache}"
+          if [ -d "$GH_AW_TOOL_CACHE" ]; then
+            if [[ "$GH_AW_TOOL_CACHE" != /opt/* ]]; then
+              GH_AW_TOOL_CACHE_MOUNT="$GH_AW_TOOL_CACHE:$GH_AW_TOOL_CACHE:ro"
+            fi
+          elif [ -d "/home/runner/work/_tool" ]; then
+            GH_AW_TOOL_CACHE_MOUNT="/home/runner/work/_tool:/home/runner/work/_tool:ro"
+          fi
           # shellcheck disable=SC1003
-          sudo -E awf --config "${RUNNER_TEMP}/gh-aw/awf-config.json" --container-workdir "${GITHUB_WORKSPACE}" --mount "${RUNNER_TEMP}/gh-aw:${RUNNER_TEMP}/gh-aw:ro" --mount "${RUNNER_TEMP}/gh-aw:/host${RUNNER_TEMP}/gh-aw:ro" --env-all --exclude-env COPILOT_GITHUB_TOKEN --log-level info --proxy-logs-dir /tmp/gh-aw/sandbox/firewall/logs --audit-dir /tmp/gh-aw/sandbox/firewall/audit --enable-host-access --allow-host-ports 80,443,8080 --skip-pull \
-            -- /bin/bash -c 'export PATH="$(find /opt/hostedtoolcache /home/runner/work/_tool -maxdepth 4 -type d -name bin 2>/dev/null | tr '\''\n'\'' '\'':'\'')$PATH"; [ -n "$GOROOT" ] && export PATH="$GOROOT/bin:$PATH" || true && GH_AW_NODE_EXEC="${GH_AW_NODE_BIN:-}"; if [ -z "$GH_AW_NODE_EXEC" ] || [ ! -x "$GH_AW_NODE_EXEC" ]; then GH_AW_NODE_EXEC="$(command -v node 2>/dev/null || echo node)"; fi; "$GH_AW_NODE_EXEC" ${RUNNER_TEMP}/gh-aw/actions/copilot_harness.cjs /usr/local/bin/copilot --add-dir /tmp/gh-aw/ --log-level all --log-dir /tmp/gh-aw/sandbox/agent/logs/ --disable-builtin-mcps --no-ask-user --allow-all-tools --add-dir "${GITHUB_WORKSPACE}" --prompt-file /tmp/gh-aw/aw-prompts/prompt.txt' 2>&1 | tee -a /tmp/gh-aw/threat-detection/detection.log
+          sudo -E awf --config "${RUNNER_TEMP}/gh-aw/awf-config.json" --container-workdir "${GITHUB_WORKSPACE}" --mount "${RUNNER_TEMP}/gh-aw:${RUNNER_TEMP}/gh-aw:ro" --mount "${RUNNER_TEMP}/gh-aw:/host${RUNNER_TEMP}/gh-aw:ro" ${GH_AW_TOOL_CACHE_MOUNT:+--mount "$GH_AW_TOOL_CACHE_MOUNT"} ${GH_AW_DOCKER_HOST_PATH_PREFIX_ARGS} --env-all --exclude-env COPILOT_GITHUB_TOKEN --log-level info --proxy-logs-dir /tmp/gh-aw/sandbox/firewall/logs --audit-dir /tmp/gh-aw/sandbox/firewall/audit --enable-host-access --allow-host-ports 80,443,8080 --skip-pull \
+            -- /bin/bash -c 'set +o histexpand; GH_AW_TOOL_CACHE="${RUNNER_TOOL_CACHE:-/opt/hostedtoolcache}"; export PATH="$(find "$GH_AW_TOOL_CACHE" /opt/hostedtoolcache /home/runner/work/_tool -maxdepth 5 -type d -name bin 2>/dev/null | tr '\''\n'\'' '\'':'\'')$PATH"; [ -n "$GOROOT" ] && export PATH="$GOROOT/bin:$PATH" || true && GH_AW_NODE_EXEC="${GH_AW_NODE_BIN:-}"; if [ -z "$GH_AW_NODE_EXEC" ] || [ ! -x "$GH_AW_NODE_EXEC" ]; then GH_AW_NODE_EXEC="$(command -v node 2>/dev/null || true)"; fi; if [ -z "$GH_AW_NODE_EXEC" ]; then echo "node runtime missing on this runner — check runtimes.node in workflow YAML" >&2; exit 127; fi; GH_AW_NPM_GLOBAL_ROOT="$(npm root -g 2>/dev/null || true)"; if [ -n "$GH_AW_NPM_GLOBAL_ROOT" ]; then export NODE_PATH="${GH_AW_NPM_GLOBAL_ROOT}${NODE_PATH:+:${NODE_PATH}}"; fi; "$GH_AW_NODE_EXEC" ${RUNNER_TEMP}/gh-aw/actions/copilot_harness.cjs /usr/local/bin/copilot --add-dir /tmp/gh-aw/ --log-level all --log-dir /tmp/gh-aw/sandbox/agent/logs/ --disable-builtin-mcps --no-ask-user --allow-all-tools --add-dir "${GITHUB_WORKSPACE}" --prompt-file /tmp/gh-aw/aw-prompts/prompt.txt' 2>&1 | tee -a /tmp/gh-aw/threat-detection/detection.log
         env:
+          AWF_REFLECT_ENABLED: 1
           COPILOT_AGENT_RUNNER_TYPE: STANDALONE
-          COPILOT_API_KEY: dummy-byok-key-for-offline-mode
-          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
-          COPILOT_MODEL: ${{ vars.GH_AW_MODEL_DETECTION_COPILOT || 'claude-sonnet-4.6' }}
+          COPILOT_DUMMY_BYOK: dummy-byok-key-for-offline-mode
+          COPILOT_GITHUB_TOKEN: ${{ github.token }}
+          COPILOT_MODEL: ${{ vars.GH_AW_MODEL_DETECTION_COPILOT || vars.GH_AW_DEFAULT_MODEL_COPILOT || 'claude-sonnet-4.6' }}
+          GH_AW_MAX_TURNS: ${{ vars.GH_AW_DEFAULT_MAX_TURNS || '' }}
           GH_AW_PHASE: detection
           GH_AW_PROMPT: /tmp/gh-aw/aw-prompts/prompt.txt
-          GH_AW_VERSION: v0.72.0
+          GH_AW_TIMEOUT_MINUTES: 20
+          GH_AW_VERSION: v0.79.8
           GITHUB_API_URL: ${{ github.api_url }}
           GITHUB_AW: true
           GITHUB_COPILOT_INTEGRATION_ID: agentic-workflows
@@ -1431,7 +1538,21 @@ jobs:
           GIT_AUTHOR_NAME: github-actions[bot]
           GIT_COMMITTER_EMAIL: github-actions[bot]@users.noreply.github.com
           GIT_COMMITTER_NAME: github-actions[bot]
-          XDG_CONFIG_HOME: /home/runner
+          RUNNER_TEMP: ${{ runner.temp }}
+          S2STOKENS: true
+      - name: Parse threat detection token usage for step summary
+        id: parse_detection_token_usage
+        if: always()
+        continue-on-error: true
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          GH_AW_TOKEN_USAGE_SUMMARY_TITLE: Threat Detection Token Usage
+        with:
+          script: |
+            const { setupGlobals } = require('${{ runner.temp }}/gh-aw/actions/setup_globals.cjs');
+            setupGlobals(core, github, context, exec, io, getOctokit);
+            const { main } = require('${{ runner.temp }}/gh-aw/actions/parse_token_usage.cjs');
+            await main();
       - name: Upload threat detection log
         if: always() && steps.detection_guard.outputs.run_detection == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -1446,6 +1567,7 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           RUN_DETECTION: ${{ steps.detection_guard.outputs.run_detection }}
+          DETECTION_AGENTIC_EXECUTION_OUTCOME: ${{ steps.detection_agentic_execution.outcome }}
           GH_AW_DETECTION_CONTINUE_ON_ERROR: "true"
         with:
           script: |
@@ -1456,10 +1578,11 @@ jobs:
               await main();
             } catch (loadErr) {
               const continueOnError = process.env.GH_AW_DETECTION_CONTINUE_ON_ERROR !== 'false';
+              const detectionExecutionFailed = process.env.DETECTION_AGENTIC_EXECUTION_OUTCOME === 'failure';
               const msg = 'ERR_SYSTEM: \u274C Unexpected error loading threat detection module: ' + (loadErr && loadErr.message ? loadErr.message : String(loadErr));
               core.error(msg);
               core.setOutput('reason', 'parse_error');
-              if (continueOnError) {
+              if (continueOnError && !detectionExecutionFailed) {
                 core.warning('\u26A0\uFE0F ' + msg);
                 core.setOutput('conclusion', 'warning');
                 core.setOutput('success', 'false');
@@ -1487,16 +1610,11 @@ jobs:
         with:
           name: agent
           path: ${{ runner.temp }}/gh-aw/safe-jobs/
-      - name: Configure Safe Outputs Job Environment Variables
-        id: setup-safe-job-env
-        run: |
-          find "${RUNNER_TEMP}/gh-aw/safe-jobs/" -type f -print
-          echo "GH_AW_AGENT_OUTPUT=${RUNNER_TEMP}/gh-aw/safe-jobs/agent_output.json" >> "$GITHUB_OUTPUT"
       - name: Mint aspire-bot token (microsoft/aspire)
         id: aspire-token
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
         env:
-          GH_AW_AGENT_OUTPUT: ${{ steps.setup-safe-job-env.outputs.GH_AW_AGENT_OUTPUT }}
+          GH_AW_AGENT_OUTPUT: ${{ runner.temp }}/gh-aw/safe-jobs/agent_output.json
         with:
           app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           owner: microsoft
@@ -1507,7 +1625,7 @@ jobs:
         if: needs.safe_outputs.outputs.created_pr_url != ''
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
         env:
-          GH_AW_AGENT_OUTPUT: ${{ steps.setup-safe-job-env.outputs.GH_AW_AGENT_OUTPUT }}
+          GH_AW_AGENT_OUTPUT: ${{ runner.temp }}/gh-aw/safe-jobs/agent_output.json
         with:
           app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           owner: microsoft
@@ -1518,7 +1636,7 @@ jobs:
         env:
           DRAFT_PR_NUMBER: ${{ needs.safe_outputs.outputs.created_pr_number }}
           DRAFT_PR_URL: ${{ needs.safe_outputs.outputs.created_pr_url }}
-          GH_AW_AGENT_OUTPUT: ${{ steps.setup-safe-job-env.outputs.GH_AW_AGENT_OUTPUT }}
+          GH_AW_AGENT_OUTPUT: ${{ runner.temp }}/gh-aw/safe-jobs/agent_output.json
         with:
           github-token: ${{ steps.aspire-token.outputs.token }}
           script: |
@@ -1639,7 +1757,7 @@ jobs:
         uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
         env:
           DRAFT_PR_NUMBER: ${{ needs.safe_outputs.outputs.created_pr_number }}
-          GH_AW_AGENT_OUTPUT: ${{ steps.setup-safe-job-env.outputs.GH_AW_AGENT_OUTPUT }}
+          GH_AW_AGENT_OUTPUT: ${{ runner.temp }}/gh-aw/safe-jobs/agent_output.json
         with:
           github-token: ${{ steps.aspire-dev-token.outputs.token }}
           script: |
@@ -1696,18 +1814,22 @@ jobs:
     outputs:
       activated: ${{ steps.check_membership.outputs.is_team_member == 'true' }}
       matched_command: ''
+      setup-parent-span-id: ${{ steps.setup.outputs.parent-span-id || steps.setup.outputs.span-id }}
+      setup-span-id: ${{ steps.setup.outputs.span-id }}
       setup-trace-id: ${{ steps.setup.outputs.trace-id }}
     steps:
       - name: Setup Scripts
         id: setup
-        uses: github/gh-aw-actions/setup@ff0525b685481744f490a0d362753d8001e4b39d # v0.72.0
+        uses: github/gh-aw-actions/setup@c0338fef4749d08c21f8f975fb0e37efa17dda47 # v0.79.8
         with:
           destination: ${{ runner.temp }}/gh-aw/actions
           job-name: ${{ github.job }}
         env:
           GH_AW_SETUP_WORKFLOW_NAME: "PR Documentation Check"
           GH_AW_CURRENT_WORKFLOW_REF: ${{ github.repository }}/.github/workflows/pr-docs-check.lock.yml@${{ github.ref }}
-          GH_AW_INFO_VERSION: "1.0.40"
+          GH_AW_INFO_VERSION: "1.0.60"
+          GH_AW_INFO_AWF_VERSION: "v0.27.2"
+          GH_AW_INFO_ENGINE_ID: "copilot"
       - name: Check team membership for workflow
         id: check_membership
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -1732,17 +1854,22 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
-    timeout-minutes: 15
+    timeout-minutes: 45
     env:
+      GH_AW_AGENT_AIC: ${{ needs.agent.outputs.aic }}
+      GH_AW_AIC: ${{ needs.agent.outputs.aic }}
+      GH_AW_AMBIENT_CONTEXT: ${{ needs.agent.outputs.ambient_context }}
       GH_AW_CALLER_WORKFLOW_ID: "${{ github.repository }}/pr-docs-check"
       GH_AW_DETECTION_CONCLUSION: ${{ needs.detection.outputs.detection_conclusion }}
       GH_AW_DETECTION_REASON: ${{ needs.detection.outputs.detection_reason }}
       GH_AW_EFFECTIVE_TOKENS: ${{ needs.agent.outputs.effective_tokens }}
       GH_AW_ENGINE_ID: "copilot"
       GH_AW_ENGINE_MODEL: ${{ needs.agent.outputs.model }}
-      GH_AW_ENGINE_VERSION: "1.0.40"
+      GH_AW_ENGINE_VERSION: "1.0.60"
+      GH_AW_THREAT_DETECTION_AIC: ${{ needs.detection.outputs.aic }}
       GH_AW_WORKFLOW_ID: "pr-docs-check"
       GH_AW_WORKFLOW_NAME: "PR Documentation Check"
+      GH_AW_WORKFLOW_SOURCE_URL: "${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/.github/workflows/pr-docs-check.md"
     outputs:
       app_token_minting_failed: ${{ steps.safe-outputs-app-token.outcome == 'failure' }}
       code_push_failure_count: ${{ steps.process_safe_outputs.outputs.code_push_failure_count }}
@@ -1756,15 +1883,18 @@ jobs:
     steps:
       - name: Setup Scripts
         id: setup
-        uses: github/gh-aw-actions/setup@ff0525b685481744f490a0d362753d8001e4b39d # v0.72.0
+        uses: github/gh-aw-actions/setup@c0338fef4749d08c21f8f975fb0e37efa17dda47 # v0.79.8
         with:
           destination: ${{ runner.temp }}/gh-aw/actions
           job-name: ${{ github.job }}
           trace-id: ${{ needs.activation.outputs.setup-trace-id }}
+          parent-span-id: ${{ needs.activation.outputs.setup-parent-span-id || needs.activation.outputs.setup-span-id }}
         env:
           GH_AW_SETUP_WORKFLOW_NAME: "PR Documentation Check"
           GH_AW_CURRENT_WORKFLOW_REF: ${{ github.repository }}/.github/workflows/pr-docs-check.lock.yml@${{ github.ref }}
-          GH_AW_INFO_VERSION: "1.0.40"
+          GH_AW_INFO_VERSION: "1.0.60"
+          GH_AW_INFO_AWF_VERSION: "v0.27.2"
+          GH_AW_INFO_ENGINE_ID: "copilot"
       - name: Download agent output artifact
         id: download-agent-output
         continue-on-error: true
@@ -1787,7 +1917,7 @@ jobs:
           path: /tmp/gh-aw/
       - name: Generate GitHub App token
         id: safe-outputs-app-token
-        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
@@ -1802,29 +1932,16 @@ jobs:
       - name: Extract base branch from agent output
         id: extract-base-branch
         if: steps.download-agent-output.outcome == 'success'
-        shell: bash
-        run: |
-          if [ -f "/tmp/gh-aw/agent_output.json" ]; then
-            GH_AW_NODE=$(which node 2>/dev/null || command -v node 2>/dev/null || echo node)
-            BASE_BRANCH=$("$GH_AW_NODE" -e "
-              try {
-                const data = JSON.parse(require('fs').readFileSync('/tmp/gh-aw/agent_output.json', 'utf8'));
-                const item = (data.items || []).find(i =>
-                  (i.type === 'create_pull_request' || i.type === 'push_to_pull_request_branch') &&
-                  i.base_branch
-                );
-                if (item) process.stdout.write(item.base_branch);
-              } catch(e) {}
-            " 2>/dev/null || true)
-            # Validate: only allow safe git branch name characters
-            if [[ "$BASE_BRANCH" =~ ^[a-zA-Z0-9/_.-]+$ ]] && [ ${#BASE_BRANCH} -le 255 ]; then
-              printf 'base-branch=%s\n' "$BASE_BRANCH" >> "$GITHUB_OUTPUT"
-              echo "Extracted base branch from safe output: $BASE_BRANCH"
-            fi
-          fi
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const { setupGlobals } = require('${{ runner.temp }}/gh-aw/actions/setup_globals.cjs');
+            setupGlobals(core, github, context, exec, io, getOctokit);
+            const { main } = require('${{ runner.temp }}/gh-aw/actions/extract_base_branch_from_agent_output.cjs');
+            await main();
       - name: Checkout repository
         if: (!cancelled()) && needs.agent.result != 'skipped' && contains(needs.agent.outputs.output_types, 'create_pull_request')
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: microsoft/aspire.dev
           ref: main
@@ -1845,9 +1962,17 @@ jobs:
           SERVER_URL_STRIPPED="${SERVER_URL#https://}"
           git remote set-url origin "https://x-access-token:${GIT_TOKEN}@${SERVER_URL_STRIPPED}/${REPO_NAME}.git"
           echo "Git configured with standard GitHub Actions identity"
+      - name: Fetch additional refs for microsoft/aspire.dev
+        if: (!cancelled()) && needs.agent.result != 'skipped' && contains(needs.agent.outputs.output_types, 'create_pull_request')
+        env:
+          GH_AW_FETCH_TOKEN: ${{ steps.safe-outputs-app-token.outputs.token }}
+        run: |
+          header=$(printf "x-access-token:%s" "${GH_AW_FETCH_TOKEN}" | base64 -w 0)
+          git -c "http.extraheader=Authorization: Basic ${header}" fetch origin --depth=1 '+refs/heads/release/*:refs/remotes/origin/release/*'
       - name: Configure GH_HOST for enterprise compatibility
         id: ghes-host-config
         shell: bash
+        # zizmor: ignore[github-env] - GITHUB_SERVER_URL is set by GitHub Actions, not user input.
         run: |
           # Derive GH_HOST from GITHUB_SERVER_URL so the gh CLI targets the correct
           # GitHub instance (GHES/GHEC). On github.com this is a harmless no-op.
@@ -1883,7 +2008,8 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GH_AW_AGENT_OUTPUT: ${{ steps.setup-agent-output-env.outputs.GH_AW_AGENT_OUTPUT }}
-          GH_AW_ALLOWED_DOMAINS: "*.githubusercontent.com,api.business.githubcopilot.com,api.enterprise.githubcopilot.com,api.github.com,api.githubcopilot.com,api.individual.githubcopilot.com,api.snapcraft.io,archive.ubuntu.com,azure.archive.ubuntu.com,codeload.github.com,crl.geotrust.com,crl.globalsign.com,crl.identrust.com,crl.sectigo.com,crl.thawte.com,crl.usertrust.com,crl.verisign.com,crl3.digicert.com,crl4.digicert.com,crls.ssl.com,docs.github.com,github-cloud.githubusercontent.com,github-cloud.s3.amazonaws.com,github.blog,github.com,github.githubassets.com,host.docker.internal,json-schema.org,json.schemastore.org,keyserver.ubuntu.com,lfs.github.com,objects.githubusercontent.com,ocsp.digicert.com,ocsp.geotrust.com,ocsp.globalsign.com,ocsp.identrust.com,ocsp.sectigo.com,ocsp.ssl.com,ocsp.thawte.com,ocsp.usertrust.com,ocsp.verisign.com,packagecloud.io,packages.cloud.google.com,packages.microsoft.com,ppa.launchpad.net,raw.githubusercontent.com,registry.npmjs.org,s.symcb.com,s.symcd.com,security.ubuntu.com,telemetry.enterprise.githubcopilot.com,ts-crl.ws.symantec.com,ts-ocsp.ws.symantec.com,www.googleapis.com"
+          GH_AW_COMMENT_ID: ${{ needs.activation.outputs.comment_id }}
+          GH_AW_ALLOWED_DOMAINS: "*.githubusercontent.com,api.business.githubcopilot.com,api.enterprise.githubcopilot.com,api.github.com,api.githubcopilot.com,api.individual.githubcopilot.com,api.snapcraft.io,archive.ubuntu.com,azure.archive.ubuntu.com,codeload.github.com,crl.geotrust.com,crl.globalsign.com,crl.identrust.com,crl.sectigo.com,crl.thawte.com,crl.usertrust.com,crl.verisign.com,crl3.digicert.com,crl4.digicert.com,crls.ssl.com,docs.github.com,github-cloud.githubusercontent.com,github-cloud.s3.amazonaws.com,github.blog,github.com,github.githubassets.com,host.docker.internal,json-schema.org,json.schemastore.org,keyserver.ubuntu.com,lfs.github.com,objects.githubusercontent.com,ocsp.digicert.com,ocsp.geotrust.com,ocsp.globalsign.com,ocsp.identrust.com,ocsp.sectigo.com,ocsp.ssl.com,ocsp.thawte.com,ocsp.usertrust.com,ocsp.verisign.com,packagecloud.io,packages.cloud.google.com,packages.microsoft.com,patch-diff.githubusercontent.com,ppa.launchpad.net,raw.githubusercontent.com,registry.npmjs.org,s.symcb.com,s.symcd.com,security.ubuntu.com,telemetry.enterprise.githubcopilot.com,ts-crl.ws.symantec.com,ts-ocsp.ws.symantec.com,www.googleapis.com"
           GITHUB_SERVER_URL: ${{ github.server_url }}
           GITHUB_API_URL: ${{ github.api_url }}
           GH_AW_SAFE_OUTPUT_JOBS: "{\"notify_source_pr\":\"\"}"
@@ -1897,19 +2023,6 @@ jobs:
             setupGlobals(core, github, context, exec, io, getOctokit);
             const { main } = require('${{ runner.temp }}/gh-aw/actions/safe_output_handler_manager.cjs');
             await main();
-      - name: Invalidate GitHub App token
-        if: always() && steps.safe-outputs-app-token.outputs.token != ''
-        env:
-          TOKEN: ${{ steps.safe-outputs-app-token.outputs.token }}
-        run: |
-          echo "Revoking GitHub App installation token..."
-          # GitHub CLI will auth with the token being revoked.
-          gh api \
-            --method DELETE \
-            -H "Authorization: token $TOKEN" \
-            /installation/token || echo "Token revoke may already be expired."
-          
-          echo "Token invalidation step complete."
       - name: Upload Safe Outputs Items
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

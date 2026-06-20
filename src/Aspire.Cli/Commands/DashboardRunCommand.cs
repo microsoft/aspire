@@ -4,13 +4,11 @@
 using System.CommandLine;
 using System.Globalization;
 using Aspire.Cli.Bundles;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Microsoft.Extensions.Logging;
@@ -25,7 +23,8 @@ internal sealed class DashboardRunCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.Monitoring;
 
-    private readonly IInteractionService _interactionService;
+    protected override bool UpdateNotificationsEnabled => true;
+
     private readonly IBundleService _bundleService;
     private readonly LayoutProcessRunner _layoutProcessRunner;
     private readonly FileLoggerProvider _fileLoggerProvider;
@@ -57,18 +56,13 @@ internal sealed class DashboardRunCommand : BaseCommand
     };
 
     public DashboardRunCommand(
-        IInteractionService interactionService,
         IBundleService bundleService,
         LayoutProcessRunner layoutProcessRunner,
         FileLoggerProvider fileLoggerProvider,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
         ILogger<DashboardRunCommand> logger,
-        AspireCliTelemetry telemetry)
-        : base("run", DashboardCommandStrings.RunDescription, features, updateNotifier, executionContext, interactionService, telemetry)
+        CommonCommandServices services)
+        : base("run", DashboardCommandStrings.RunDescription, services)
     {
-        _interactionService = interactionService;
         _bundleService = bundleService;
         _layoutProcessRunner = layoutProcessRunner;
         _fileLoggerProvider = fileLoggerProvider;
@@ -84,7 +78,8 @@ internal sealed class DashboardRunCommand : BaseCommand
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
-        var layout = await _bundleService.EnsureExtractedAndGetLayoutAsync(cancellationToken).ConfigureAwait(false);
+        using var layoutLease = await _bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "dashboard", cancellationToken).ConfigureAwait(false);
+        var layout = layoutLease?.Layout;
         if (layout is null)
         {
             return CommandResult.Failure(CliExitCodes.DashboardFailure, DashboardCommandStrings.BundleLayoutNotFound);
@@ -109,6 +104,7 @@ internal sealed class DashboardRunCommand : BaseCommand
         // to avoid exposing them in process listings (e.g. ps, Task Manager).
         string? browserToken = null;
         var environmentVariables = new Dictionary<string, string>();
+        layoutLease?.AddEnvironment(environmentVariables);
         if (!allowAnonymous && !ConfigSettingHasValue(unmatchedTokens, ExecutionContext, KnownConfigNames.DashboardUnsecuredAllowAnonymous))
         {
             if (!ConfigSettingHasValue(unmatchedTokens, ExecutionContext, DashboardConfigNames.DashboardFrontendBrowserTokenName.EnvVarName))
@@ -369,10 +365,7 @@ internal sealed class DashboardRunCommand : BaseCommand
                     readyTcs.TrySetResult();
                 }
             },
-            StandardErrorCallback = line =>
-            {
-                outputCollector.AppendError(line);
-            },
+            StandardErrorCallback = outputCollector.AppendError,
         };
 
         IProcessExecution process;
@@ -383,7 +376,7 @@ internal sealed class DashboardRunCommand : BaseCommand
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to start dashboard process: {ManagedPath}", managedPath);
-            _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, DashboardCommandStrings.DashboardFailedToStart, ex.Message));
+            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, DashboardCommandStrings.DashboardFailedToStart, ex.Message));
             return CommandResult.Failure(CliExitCodes.DashboardFailure);
         }
 
@@ -393,7 +386,7 @@ internal sealed class DashboardRunCommand : BaseCommand
         var processExitTask = process.WaitForExitAsync(cancellationToken);
         var readyOrFailed = Task.WhenAny(readyTcs.Task, processExitTask);
 
-        var completedTask = await _interactionService.ShowStatusAsync(
+        var completedTask = await InteractionService.ShowStatusAsync(
             DashboardCommandStrings.StartingDashboard,
             async () =>
             {
@@ -413,7 +406,7 @@ internal sealed class DashboardRunCommand : BaseCommand
 
         if (cancellationToken.IsCancellationRequested)
         {
-            _interactionService.DisplayMessage(KnownEmojis.StopSign, $"[teal bold]{DashboardCommandStrings.StoppingDashboard}[/]", allowMarkup: true);
+            InteractionService.DisplayMessage(KnownEmojis.StopSign, $"[teal bold]{DashboardCommandStrings.StoppingDashboard}[/]", allowMarkup: true);
 
             if (!process.HasExited)
             {
@@ -445,7 +438,7 @@ internal sealed class DashboardRunCommand : BaseCommand
                 ? GetExitCodeMessage(process.ExitCode)
                 : DashboardCommandStrings.DashboardStartTimedOut;
 
-            _interactionService.DisplayError(exitMessage);
+            InteractionService.DisplayError(exitMessage);
 
             if (!process.HasExited)
             {
@@ -456,8 +449,8 @@ internal sealed class DashboardRunCommand : BaseCommand
         }
 
         // Dashboard is ready.
-        RenderDashboardSummary(_interactionService, dashboardInfo, ExecutionContext.LogFilePath);
-        _interactionService.DisplayEmptyLine();
+        RenderDashboardSummary(InteractionService, dashboardInfo, ExecutionContext.LogFilePath);
+        InteractionService.DisplayEmptyLine();
 
         try
         {
@@ -465,7 +458,7 @@ internal sealed class DashboardRunCommand : BaseCommand
         }
         catch (OperationCanceledException)
         {
-            _interactionService.DisplayMessage(KnownEmojis.StopSign, $"[teal bold]{DashboardCommandStrings.StoppingDashboard}[/]", allowMarkup: true);
+            InteractionService.DisplayMessage(KnownEmojis.StopSign, $"[teal bold]{DashboardCommandStrings.StoppingDashboard}[/]", allowMarkup: true);
 
             if (!process.HasExited)
             {
@@ -477,7 +470,7 @@ internal sealed class DashboardRunCommand : BaseCommand
 
         if (process.ExitCode != 0)
         {
-            _interactionService.DisplayError(GetExitCodeMessage(process.ExitCode));
+            InteractionService.DisplayError(GetExitCodeMessage(process.ExitCode));
         }
 
         return process.ExitCode == 0 ? CommandResult.Success() : CommandResult.Failure(CliExitCodes.DashboardFailure);

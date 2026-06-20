@@ -91,30 +91,21 @@ public sealed class FrontDoorDeploymentTests(ITestOutputHelper output)
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 
-            // Step 5: Add Azure Container Apps and Front Door hosting packages
+            // Step 5: Add Azure Container Apps and Front Door hosting packages.
+            // Use WaitForAspireAddCompletionAsync because `aspire add` only prompts for a
+            // version when multiple candidates are found; when the package is resolved from
+            // the local bundle (the typical CI case) the command installs directly with no
+            // prompt, so a hard-coded WaitUntilText for the legacy "(based on NuGet.config)"
+            // prompt times out. The helper covers both code paths.
             output.WriteLine("Step 5: Adding Azure Container Apps hosting package...");
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.AppContainers");
             await auto.EnterAsync();
-
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync();
-            }
-
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromMinutes(3));
 
             output.WriteLine("Step 5b: Adding Azure Front Door hosting package...");
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.FrontDoor");
             await auto.EnterAsync();
-
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync();
-            }
-
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromMinutes(3));
 
             // Step 6: Modify AppHost.cs to add Azure Container App Environment and Front Door
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);

@@ -170,6 +170,12 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("StartingDebugSessionInExtension", resourceCulture);
             }
         }
+
+        public static string StartingRunSessionInExtension {
+            get {
+                return ResourceManager.GetString("StartingRunSessionInExtension", resourceCulture);
+            }
+        }
         
         public static string AgentConfigurationPrompt {
             get {
@@ -260,6 +266,12 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TimeoutWaitingForAppHost", resourceCulture);
             }
         }
+
+        public static string InvalidAppHostStartupTimeoutEnvironmentVariable {
+            get {
+                return ResourceManager.GetString("InvalidAppHostStartupTimeoutEnvironmentVariable", resourceCulture);
+            }
+        }
         
         public static string CheckLogsForDetails {
             get {
@@ -270,6 +282,12 @@ namespace Aspire.Cli.Resources {
         public static string RecentAppHostStartupOutput {
             get {
                 return ResourceManager.GetString("RecentAppHostStartupOutput", resourceCulture);
+            }
+        }
+
+        public static string AppHostConnectionLostWaitingForExit {
+            get {
+                return ResourceManager.GetString("AppHostConnectionLostWaitingForExit", resourceCulture);
             }
         }
 

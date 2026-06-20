@@ -117,7 +117,7 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
 
     internal IQueryable<DisplayedResourcePropertyViewModel> FilteredResourceProperties =>
         GetResourceProperties(ordered: true)
-            .Where(vm => (_showAll || vm.KnownProperty != null) && vm.MatchesFilter(_filter))
+            .Where(vm => (_showAll || vm.KnownProperty != null || vm.IsHighlighted) && vm.MatchesFilter(_filter))
             .AsQueryable();
 
     private bool _isVolumesExpanded;
@@ -164,12 +164,20 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
                 var displayedProperty = property;
 
                 // An unresolved secret parameter has no value to hide, so keep the placeholder visible
-                // in the details grid instead of routing it through masking behavior.
+                // in the details grid instead of routing it through masking behavior. Preserve the
+                // display/highlight metadata so the placeholder keeps the original property behavior.
                 if (_resource.HasMissingParameterValueState() &&
-                    property.KnownProperty?.Key == KnownProperties.Parameter.Value &&
+                    string.Equals(property.Name, KnownProperties.Parameter.Value, StringComparisons.ResourcePropertyName) &&
                     property.IsValueSensitive)
                 {
-                    displayedProperty = new ResourcePropertyViewModel(property.Name, property.Value, isValueSensitive: false, property.KnownProperty, property.Priority);
+                    displayedProperty = new ResourcePropertyViewModel(
+                        name: property.Name,
+                        value: property.Value,
+                        isValueSensitive: false,
+                        knownProperty: property.KnownProperty,
+                        sortOrder: property.SortOrder,
+                        displayName: property.DisplayName,
+                        isHighlighted: property.IsHighlighted);
                 }
 
                 _displayedResourcePropertyViewModels.Add(new DisplayedResourcePropertyViewModel(displayedProperty, Loc, TimeProvider));
@@ -219,7 +227,7 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
             // as the parameters grid so the details panel stays consistent with the grid.
             if (_resource.HasMissingParameterValueState())
             {
-                _valueComponents[KnownProperties.Parameter.Value] = new ComponentMetadata
+                var metadata = new ComponentMetadata
                 {
                     Type = typeof(ParameterValueDisplayCell),
                     Parameters =
@@ -229,6 +237,12 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
                         ["IsCommandExecuting"] = IsCommandExecuting,
                     }
                 };
+
+                // Parameter value is producer metadata for new resource servers, but legacy
+                // fallback metadata exposes the same property as an unknown property key.
+                // Register both keys so the unset-value renderer works in both cases.
+                _valueComponents[KnownProperties.Parameter.Value] = metadata;
+                _valueComponents[DisplayedResourcePropertyViewModel.GetUnknownKey(KnownProperties.Parameter.Value)] = metadata;
             }
 
             UpdateResourceActionsMenu();
@@ -307,8 +321,7 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
             IsCommandExecuting,
             showViewDetails: false,
             showConsoleLogsItem: true,
-            showUrls: true,
-            showStartCommand: false);
+            showUrls: true);
     }
 
     private async Task ExecuteResourceCommandAsync(ResourceViewModel resource, CommandViewModel command)
@@ -389,7 +402,11 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
                 value: Value.ForString(stateDescription),
                 isValueSensitive: false,
                 knownProperty: new KnownProperty(StateDescriptionPropertyKey, _ => ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsStateDescriptionHeader)]),
-                priority: 1),
+                // The description explains the current state, so keep it in the same generic
+                // sort group as State rather than treating it as producer-defined metadata.
+                sortOrder: KnownResourcePropertySortOrder.State,
+                displayName: null,
+                isHighlighted: false),
             Loc,
             TimeProvider));
     }
@@ -403,7 +420,7 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
                 || string.Equals(vm.KnownProperty?.Key, KnownProperties.Resource.State, StringComparisons.ResourcePropertyName));
 
         return ordered
-            ? vms.OrderBy(vm => vm.Priority).ThenBy(vm => vm.DisplayName)
+            ? vms.OrderBy(vm => vm.SortOrder).ThenBy(vm => vm.DisplayName)
             : vms;
     }
 

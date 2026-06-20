@@ -126,5 +126,6 @@ public class DocsCacheTests(ITestOutputHelper outputHelper)
             new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cache")),
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")),
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")),
-            "test.log");
+            "test.log",
+            identityChannel: "local");
 }

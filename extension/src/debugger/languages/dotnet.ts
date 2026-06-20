@@ -1,13 +1,14 @@
 import * as vscode from 'vscode';
 import { extensionLogOutputChannel } from '../../utils/logging';
-import { noCsharpBuildTask, buildFailedWithExitCode, noOutputFromMsbuild, failedToGetTargetPath, invalidLaunchConfiguration, buildFailedForProjectWithError, processExitedWithCode, lookingForDevkitBuildTask, csharpDevKitNotInstalled } from '../../loc/strings';
+import { noCsharpBuildTask, buildFailedWithExitCode, noOutputFromMsbuild, failedToGetTargetPath, invalidLaunchConfiguration, buildFailedForProjectWithError, processExitedWithCode, lookingForDevkitBuildTask, csharpDevKitNotInstalled, failedToInspectRuntimeConfig, dotNetRunFallbackDisablesDebugger } from '../../loc/strings';
 import { ChildProcessWithoutNullStreams, execFile, spawn } from 'child_process';
 import * as util from 'util';
 import * as path from 'path';
 import * as readline from 'readline';
 import * as os from 'os';
+import * as fs from 'fs';
 import { doesFileExist } from '../../utils/io';
-import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, isProjectLaunchConfiguration, ProjectLaunchConfiguration } from '../../dcp/types';
+import { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfiguration, isProjectLaunchConfiguration, ProjectLaunchConfiguration } from '../../dcp/types';
 import { ResourceDebuggerExtension } from '../debuggerExtensions';
 import {
     readLaunchSettings,
@@ -199,6 +200,81 @@ function createErrorWithStreamedDebugConsoleOutput(message: string): Error {
     return error;
 }
 
+async function shouldLaunchProjectWithDotNetRun(outputPath: string): Promise<boolean> {
+    if (path.extname(outputPath).toLowerCase() !== '.dll') {
+        return false;
+    }
+
+    const runtimeConfigPath = outputPath.slice(0, -path.extname(outputPath).length) + '.runtimeconfig.json';
+    try {
+        const runtimeConfig = JSON.parse(await fs.promises.readFile(runtimeConfigPath, 'utf8'));
+        const runtimeOptions = runtimeConfig?.runtimeOptions;
+
+        // Blazor WebAssembly build output has a runtimeconfig.json without a
+        // framework/frameworks entry, for example:
+        //   { "runtimeOptions": { "tfm": "net10.0" } }
+        // Launching that DLL directly makes the dotnet host treat it as a
+        // self-contained app and fail before Aspire can observe the resource.
+        return runtimeOptions !== undefined
+            && runtimeOptions !== null
+            && runtimeOptions.framework === undefined
+            && runtimeOptions.frameworks === undefined;
+    } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+            return false;
+        }
+
+        throw new Error(failedToInspectRuntimeConfig(outputPath, String(err)));
+    }
+}
+
+function quoteCommandLineArgument(argument: string): string {
+    return `"${argument.replace(/"/g, '\\"')}"`;
+}
+
+function createDotNetRunBaseArguments(projectPath: string): string[] {
+    return ['run', '--project', projectPath, '--no-launch-profile'];
+}
+
+function createDotNetRunArguments(projectPath: string, baseProfileArgs: string | undefined, runSessionArgs: string[] | undefined): string[] | string {
+    const dotnetRunArgs = createDotNetRunBaseArguments(projectPath);
+    if (runSessionArgs !== undefined) {
+        if (runSessionArgs.length > 0) {
+            dotnetRunArgs.push('--', ...runSessionArgs);
+        }
+
+        return dotnetRunArgs;
+    }
+
+    if (baseProfileArgs) {
+        // launchSettings.json stores application arguments as a command-line string, for example:
+        //   --path "value with spaces" --flag
+        // Preserve that string instead of reparsing it here so debugger command-line parsing
+        // handles escaping consistently with normal project launches.
+        return `run --project ${quoteCommandLineArgument(projectPath)} --no-launch-profile -- ${baseProfileArgs}`;
+    }
+
+    return dotnetRunArgs;
+}
+
+function configureDotNetRunDebugConfiguration(
+    debugConfiguration: AspireResourceExtendedDebugConfiguration,
+    projectPath: string,
+    args: string[] | string,
+    baseProfileEnvironmentVariables: { [key: string]: string } | undefined,
+    runSessionEnvironmentVariables: EnvVar[]): void {
+    debugConfiguration.program = 'dotnet';
+    debugConfiguration.args = args;
+    debugConfiguration.cwd = path.dirname(projectPath);
+    debugConfiguration.executablePath = undefined;
+    debugConfiguration.noDebug = true;
+    debugConfiguration.env = Object.fromEntries(mergeEnvironmentVariables(
+        baseProfileEnvironmentVariables,
+        debugConfiguration.env,
+        runSessionEnvironmentVariables
+    ));
+}
+
 export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSession: AspireDebugSession) => IDotNetService): ResourceDebuggerExtension {
     return {
         resourceType: 'project',
@@ -214,8 +290,6 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
             throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
         },
         createDebugSessionConfigurationCallback: async (launchConfig, args, env, launchOptions, debugConfiguration: AspireResourceExtendedDebugConfiguration): Promise<void> => {
-            const dotNetService: IDotNetService = dotNetServiceProducer(launchOptions.debugSession);
-
             if (!isProjectLaunchConfiguration(launchConfig)) {
                 extensionLogOutputChannel.info(`The resource type was not project for ${JSON.stringify(launchConfig)}`);
                 throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
@@ -255,7 +329,7 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
             // The apphost's application URL is the Aspire dashboard URL. We already get the dashboard login URL later on,
             // so we should just avoid setting up serverReadyAction and manually open the browser ourselves.
             if (!launchOptions.isApphost) {
-                debugConfiguration.serverReadyAction = determineServerReadyAction(baseProfile?.launchBrowser, baseProfile?.applicationUrl);
+                debugConfiguration.serverReadyAction = determineServerReadyAction(baseProfile?.launchBrowser, baseProfile?.applicationUrl, baseProfile?.launchUrl);
             }
 
             // Temporarily disable GH Copilot on the dashboard before the extension implementation is approved
@@ -264,6 +338,8 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
             }
 
             if (baseProfile?.commandName?.toLowerCase() === LaunchProfileCommandName.executable && baseProfile.executablePath) {
+                const dotNetService: IDotNetService = dotNetServiceProducer(launchOptions.debugSession);
+
                 // For Executable command profiles (e.g., class library integrations), the launch profile
                 // specifies an external executable to run instead of the project output.
                 // Build the project to ensure dependencies are compiled, then launch
@@ -286,19 +362,32 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                 ));
             }
             else if (!isFileBasedApp(projectPath)) {
+                const dotNetService: IDotNetService = dotNetServiceProducer(launchOptions.debugSession);
                 const outputPath = await dotNetService.getDotNetTargetPath(projectPath);
                 if ((!(await doesFileExist(outputPath)) || launchOptions.forceBuild)) {
                     await dotNetService.buildDotNetProject(projectPath);
                 }
 
-                debugConfiguration.program = outputPath;
-                debugConfiguration.env = Object.fromEntries(mergeEnvironmentVariables(
-                    baseProfile?.environmentVariables,
-                    debugConfiguration.env,
-                    env
-                ));
+                if (await shouldLaunchProjectWithDotNetRun(outputPath)) {
+                    const fallbackMessage = dotNetRunFallbackDisablesDebugger(outputPath, projectPath);
+                    extensionLogOutputChannel.warn(fallbackMessage);
+                    if (launchOptions.debug) {
+                        vscode.window.showInformationMessage(fallbackMessage);
+                    }
+
+                    configureDotNetRunDebugConfiguration(debugConfiguration, projectPath, createDotNetRunArguments(projectPath, baseProfile?.commandLineArgs, args), baseProfile?.environmentVariables, env);
+                } else {
+                    debugConfiguration.program = outputPath;
+                    debugConfiguration.env = Object.fromEntries(mergeEnvironmentVariables(
+                        baseProfile?.environmentVariables,
+                        debugConfiguration.env,
+                        env
+                    ));
+                }
             }
             else {
+                const dotNetService: IDotNetService = dotNetServiceProducer(launchOptions.debugSession);
+
                 // For file-based apps, get the dotnet run-api output first to determine the executable path
                 const runApiOutput = await dotNetService.getDotNetRunApiOutput(projectPath);
                 const runApiConfig = getRunApiConfigFromOutput(runApiOutput);

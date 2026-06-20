@@ -14,13 +14,14 @@ namespace Aspire.Hosting.Kubernetes;
 /// <remarks>
 /// <para>
 /// Create an ingress using <see cref="KubernetesIngressExtensions.AddIngress"/> and configure
-/// routes using <see cref="KubernetesIngressExtensions.WithRoute(IResourceBuilder{KubernetesIngressResource}, string, EndpointReference, IngressPathType)"/>.
+/// path rules using <see cref="KubernetesIngressExtensions.WithPath(IResourceBuilder{KubernetesIngressResource}, string, EndpointReference, IngressPathType)"/>.
 /// </para>
 /// <para>
 /// At publish time, the ingress generates a Kubernetes <c>networking.k8s.io/v1 Ingress</c> resource
-/// in the Helm chart output with rules derived from the configured routes.
+/// in the Helm chart output with rules derived from the configured paths.
 /// </para>
 /// </remarks>
+/// <ats-remarks />
 /// <example>
 /// <code>
 /// var k8s = builder.AddKubernetesEnvironment("k8s");
@@ -28,7 +29,7 @@ namespace Aspire.Hosting.Kubernetes;
 ///     .WithIngressClass("nginx");
 ///
 /// var api = builder.AddProject&lt;MyApi&gt;("api");
-/// ingress.WithRoute("/api", api.GetEndpoint("http"));
+/// ingress.WithPath("/api", api.GetEndpoint("http"));
 /// </code>
 /// </example>
 [AspireExport]
@@ -57,9 +58,10 @@ public class KubernetesIngressResource(
     internal List<ReferenceExpression> Hostnames { get; } = [];
 
     /// <summary>
-    /// Gets the list of routing rules configured for this ingress.
+    /// Gets the list of path rules configured for this ingress. Each entry maps to a
+    /// <c>spec.rules[].http.paths[]</c> entry in the generated Kubernetes Ingress resource.
     /// </summary>
-    internal List<IngressRouteConfig> Routes { get; } = [];
+    internal List<IngressPathConfig> Paths { get; } = [];
 
     /// <summary>
     /// Gets the list of TLS configurations for this ingress.
@@ -109,9 +111,11 @@ public enum IngressPathType
 }
 
 /// <summary>
-/// Stores a single routing rule for a <see cref="KubernetesIngressResource"/>.
+/// Stores a single path rule for a <see cref="KubernetesIngressResource"/>. Each entry
+/// becomes one <c>spec.rules[].http.paths[]</c> entry in the generated Ingress YAML, grouped
+/// by <see cref="Host"/> into the parent <c>rules[]</c> entry.
 /// </summary>
-internal sealed record IngressRouteConfig(
+internal sealed record IngressPathConfig(
     string? Host,
     string Path,
     IngressPathType PathType,

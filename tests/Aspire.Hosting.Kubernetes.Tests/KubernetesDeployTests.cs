@@ -533,6 +533,87 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task HelmUninstallStep_DependsOnCheckHelmPrereqs()
+    {
+        // Regression coverage for PR #17491 review feedback: direct uninstall
+        // invokes `helm`, so it must gate on the same prereq check as deploy.
+        // `destroy-helm-{env}` defers the check until saved state exists so the
+        // no-state path can still report "Nothing to destroy" without Helm.
+        using var tempDir = new TestTempDirectory();
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            tempDir.Path,
+            step: WellKnownPipelineSteps.Diagnostics);
+        var mockActivityReporter = new TestPipelineActivityReporter(output);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+
+        builder.AddKubernetesEnvironment("env");
+        builder.AddContainer("api", "myimage");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var logs = mockActivityReporter.LoggedMessages
+            .Where(s => s.StepTitle == "diagnostics")
+            .Select(s => s.Message)
+            .ToList();
+
+        var diagnosticLines = string.Join('\n', logs)
+            .Split('\n')
+            .Select(l => l.Trim())
+            .ToList();
+
+        var destroyTargetLine = diagnosticLines.IndexOf("If targeting 'destroy-helm-env':");
+        Assert.InRange(destroyTargetLine, 0, diagnosticLines.Count - 2);
+        Assert.Equal("Direct dependencies: destroy-prereq", diagnosticLines[destroyTargetLine + 1]);
+
+        var uninstallTargetLine = diagnosticLines.IndexOf("If targeting 'helm-uninstall-env':");
+        Assert.InRange(uninstallTargetLine, 0, diagnosticLines.Count - 2);
+        Assert.Equal("Direct dependencies: check-helm-prereqs-env", diagnosticLines[uninstallTargetLine + 1]);
+    }
+
+    [Fact]
+    public async Task PerChartHelmUninstallStep_DependsOnCheckHelmPrereqs()
+    {
+        // Regression coverage for PR #17491 review feedback: per-chart
+        // `helm-uninstall-{name}` steps created by `AddHelmChart(...).WithDestroy()`
+        // must depend on `check-helm-prereqs-{env}`. The install side is covered
+        // transitively (via `helm-deploy-{env}`), but the uninstall side previously
+        // only set `DependsOnSteps = [DestroyPrereq]`, so a missing or too-old
+        // Helm during chart teardown would bypass the validator and surface as
+        // the cryptic spawn / unknown-flag error this PR exists to prevent.
+        using var tempDir = new TestTempDirectory();
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            tempDir.Path,
+            step: WellKnownPipelineSteps.Diagnostics);
+        var mockActivityReporter = new TestPipelineActivityReporter(output);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        k8s.AddHelmChart("podinfo", "oci://ghcr.io/stefanprodan/charts/podinfo", "6.7.1")
+            .WithDestroy();
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var logs = mockActivityReporter.LoggedMessages
+            .Where(s => s.StepTitle == "diagnostics")
+            .Select(s => s.Message)
+            .ToList();
+
+        var chartUninstallLines = logs.Where(l => l.Contains("helm-uninstall-podinfo")).ToList();
+        Assert.NotEmpty(chartUninstallLines);
+        Assert.Contains(chartUninstallLines, msg => msg.Contains("check-helm-prereqs-env"));
+    }
+
+    [Fact]
     public async Task MultipleContainersGenerateMultiplePrintSummarySteps()
     {
         using var tempDir = new TestTempDirectory();
@@ -1657,7 +1738,7 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     {
         using var tempDir = new TestTempDirectory();
 
-        var fakeHelm = new FakeHelmRunner();
+        var fakeHelm = new FakeHelmRunner { ThrowOnVersion = true };
         var stateManager = new InMemoryDeploymentStateManager();
         var mockActivityReporter = new TestPipelineActivityReporter(output);
 
@@ -1679,33 +1760,12 @@ public class KubernetesDeployTests(ITestOutputHelper output)
         await app.RunAsync();
 
         // Verify helm was NOT called
+        Assert.False(fakeHelm.WasVersionCalled);
         Assert.False(fakeHelm.WasUninstallCalled);
 
         // Verify it reported nothing to destroy
         var completedSteps = mockActivityReporter.CompletedSteps;
         Assert.Contains(completedSteps, s => s.CompletionText.Contains("Nothing to destroy", StringComparison.OrdinalIgnoreCase));
-    }
-
-    private sealed class FakeHelmRunner : IHelmRunner
-    {
-        public bool WasUninstallCalled { get; private set; }
-        public string? LastArguments { get; private set; }
-        public int ExitCode { get; set; }
-
-        public Task<int> RunAsync(
-            string arguments,
-            string? workingDirectory = null,
-            Action<string>? onOutputData = null,
-            Action<string>? onErrorData = null,
-            CancellationToken cancellationToken = default)
-        {
-            LastArguments = arguments;
-            if (arguments.StartsWith("uninstall", StringComparison.OrdinalIgnoreCase))
-            {
-                WasUninstallCalled = true;
-            }
-            return Task.FromResult(ExitCode);
-        }
     }
 
     [Fact]

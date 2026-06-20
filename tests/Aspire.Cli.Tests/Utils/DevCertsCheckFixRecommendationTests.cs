@@ -103,7 +103,7 @@ public class DevCertsCheckFixRecommendationTests
 
         // Should have two results: pass for trust status, warning for old version
         Assert.Equal(2, results.Count);
-        var versionWarning = results.First(r => r.Name == "dev-certs-version");
+        var versionWarning = results.First(r => r.Name == DevCertsCheck.VersionCheckName);
         Assert.Equal(EnvironmentCheckStatus.Warning, versionWarning.Status);
         Assert.NotNull(versionWarning.Fix);
         Assert.Contains("aspire certs clean", versionWarning.Fix);

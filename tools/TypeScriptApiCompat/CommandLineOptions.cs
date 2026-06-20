@@ -8,5 +8,6 @@ internal sealed record CommandLineOptions(
     string CurrentPath,
     string SuppressionsRoot,
     string? BaselineSuppressionsRoot,
+    string? ExcludedPackagesFile,
     string? ReportPath,
     bool GitHubAnnotations);

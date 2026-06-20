@@ -177,7 +177,7 @@ builder.Build().Run();
             // Step 13: Verify deployed endpoints with retry
             // Retry each endpoint for up to 3 minutes (18 attempts * 10 seconds)
             output.WriteLine("Step 13: Verifying deployed endpoints...");
-            await auto.RunCommandFailFastAsync(
+            await auto.RunCommandAsync(
                 $"RG_NAME=\"{resourceGroupName}\" && " +
                 "echo \"Resource group: $RG_NAME\" && " +
                 "if ! az group show -n \"$RG_NAME\" &>/dev/null; then echo \"❌ Resource group not found\"; exit 1; fi && " +
@@ -200,7 +200,7 @@ builder.Build().Run();
 
             // Step 14: Verify /api/weatherforecast returns valid JSON (exercises Redis output cache)
             output.WriteLine("Step 14: Verifying /api/weatherforecast returns valid JSON...");
-            await auto.RunCommandFailFastAsync(
+            await auto.RunCommandAsync(
                 $"RG_NAME=\"{resourceGroupName}\" && " +
                 "SERVER_FQDN=$(az containerapp list -g \"$RG_NAME\" --query \"[?contains(name,'server')].properties.configuration.ingress.fqdn\" -o tsv 2>/dev/null | head -1) && " +
                 "if [ -z \"$SERVER_FQDN\" ]; then echo \"❌ Server container app not found\"; exit 1; fi && " +

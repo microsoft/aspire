@@ -17,24 +17,13 @@ public sealed class InputViewModel
 
     public void SetInput(InteractionInput input)
     {
-        string value;
-        if (Input == null)
-        {
-            value = input.Value;
-        }
-        else
-        {
-            // Only overwrite the local value if the input was loading and is no longer loading (update could have come from server)
-            // This avoids changes in local values being overwritten by a dynamic server update.
-            if (Input.Loading && !input.Loading)
-            {
-                value = input.Value;
-            }
-            else
-            {
-                value = Input.Value;
-            }
-        }
+        // Interaction updates carry a full server-side snapshot even when only one input changed. Keep
+        // local values by default so an update for a dependent choice does not clobber text the user is
+        // typing elsewhere in the dialog. ShouldUseIncomingValue captures the cases where the server is
+        // authoritative because the field is being dynamically loaded or is not currently editable.
+        var value = Input is null || ShouldUseIncomingValue(Input, input)
+            ? input.Value
+            : Input.Value;
         input.Value = value;
 
         Input = input;
@@ -136,5 +125,16 @@ public sealed class InputViewModel
         }
 
         return true;
+    }
+
+    private static bool ShouldUseIncomingValue(InteractionInput current, InteractionInput incoming)
+    {
+        // Dynamic loading can replace both the option list and the selected value. When loading
+        // completes, the server value is the one validated against the freshly loaded options.
+        //
+        // Disabled inputs are also server-owned because the user could not have made a meaningful local
+        // edit while the control was unavailable. This includes disabled -> enabled transitions, such as
+        // Azure Subscription ID becoming editable after tenant-specific subscriptions are loaded.
+        return (current.Loading && !incoming.Loading) || current.Disabled || incoming.Disabled;
     }
 }

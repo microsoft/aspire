@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIREAZURE001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES004 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Diagnostics.CodeAnalysis;
@@ -90,23 +89,6 @@ public sealed class AzureEnvironmentResource : Resource
                 RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
             };
             steps.Add(prepareResourcesStep);
-
-            if (factoryContext.PipelineContext.ExecutionContext.IsRunMode)
-            {
-                var runModeProvisionStep = new PipelineStep
-                {
-                    Name = "run-mode-azure-provision",
-                    Description = $"Provisions the Azure resources for {Name}.",
-                    Action = static async context =>
-                    {
-                        var provisioner = context.Services.GetRequiredService<AzureProvisioner>();
-                        await provisioner.ProvisionResourcesAsync(context.Model, context.CancellationToken).ConfigureAwait(false);
-                    },
-                    RequiredBySteps = [WellKnownPipelineSteps.BeforeStart],
-                    DependsOnSteps = [prepareResourcesStep.Name]
-                };
-                steps.Add(runModeProvisionStep);
-            }
 
             var publishStep = new PipelineStep
             {

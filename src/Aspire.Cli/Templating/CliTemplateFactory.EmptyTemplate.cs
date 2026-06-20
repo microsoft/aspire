@@ -4,7 +4,6 @@
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
-using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -57,7 +56,10 @@ internal sealed partial class CliTemplateFactory
             if (isCsharp)
             {
                 // Do this first so there is no prompt while status is displayed for creating project.
-                await _templateNuGetConfigService.PromptToCreateOrUpdateNuGetConfigAsync(inputs.Channel, outputPath, cancellationToken);
+                if (!await _templateNuGetConfigService.CreateOrUpdateNuGetConfigForSourceOverrideAsync(inputs.Source, inputs.Channel, outputPath, cancellationToken))
+                {
+                    await _templateNuGetConfigService.PromptToCreateOrUpdateNuGetConfigAsync(inputs.Channel, outputPath, cancellationToken);
+                }
             }
 
             templateResult = await _interactionService.ShowStatusAsync(
@@ -77,7 +79,8 @@ internal sealed partial class CliTemplateFactory
                             new DirectoryInfo(outputPath),
                             projectName,
                             SdkVersion: inputs.Version,
-                            Channel: inputs.Channel);
+                            Channel: inputs.Channel,
+                            PackageSourceOverride: inputs.Source);
                         if (!await _scaffoldingService.ScaffoldAsync(context, cancellationToken))
                         {
                             return new TemplateResult((int)CliExitCodes.FailedToCreateNewProject);
@@ -95,6 +98,11 @@ internal sealed partial class CliTemplateFactory
             if (templateResult.ExitCode != CliExitCodes.Success)
             {
                 return templateResult;
+            }
+
+            if (!isCsharp)
+            {
+                await _templateNuGetConfigService.CreateOrUpdateNuGetConfigForSourceOverrideAsync(inputs.Source, inputs.Channel, outputPath, cancellationToken);
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -148,7 +156,7 @@ internal sealed partial class CliTemplateFactory
     private async Task WriteCSharpEmptyAppHostAsync(string? templateVersion, string outputPath, string projectName, bool useLocalhostTld, CancellationToken cancellationToken)
     {
         var aspireVersion = string.IsNullOrWhiteSpace(templateVersion)
-            ? VersionHelper.GetDefaultTemplateVersion()
+            ? _executionContext.IdentitySdkVersion
             : templateVersion;
         var projectNameLower = projectName.ToLowerInvariant();
         var ports = GenerateRandomPorts();

@@ -12,13 +12,13 @@ namespace Aspire.Deployment.EndToEnd.Tests;
 /// TypeScript-AppHost variant of the AKS cert-manager E2E test. Mirrors
 /// <see cref="AksAzureKubernetesEnvironmentCertManagerDeploymentTests"/> but uses the
 /// TypeScript Express/React starter (<c>aspire new</c> --&gt; <c>Starter App (Express/React, TypeScript AppHost)</c>)
-/// and patches <c>apphost.ts</c> to wire <c>addAzureKubernetesEnvironment</c> +
+/// and patches <c>apphost.mts</c> to wire <c>addAzureKubernetesEnvironment</c> +
 /// <c>addCertManager</c> + <c>addIssuer().withLetsEncryptProductionParam(acmeEmail).withHttp01Solver()</c>
 /// + <c>gateway.withGatewayTlsIssuer(letsEncrypt)</c> around the Express API.
 ///
 /// Proves that the cert-manager API surface generated for TypeScript via <c>[AspireExport]</c>
 /// works end-to-end against a real AKS cluster (this complements the polyglot type-check
-/// validation in <c>tests/PolyglotAppHosts/Aspire.Hosting.Kubernetes/TypeScript/apphost.ts</c>).
+/// validation in <c>tests/PolyglotAppHosts/Aspire.Hosting.Kubernetes/TypeScript/apphost.mts</c>).
 ///
 /// Uses Let's Encrypt <em>production</em> so the served cert chains to a publicly-trusted root
 /// (mirrors a realistic deployment). Production is rate-limited (50 certs / registered
@@ -117,7 +117,7 @@ public sealed class AksAzureKubernetesEnvironmentCertManagerTypeScriptDeployment
                 await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
             }
 
-            // Patch apphost.ts. The Express/React starter creates an Express API at ./api
+            // Patch apphost.mts. The Express/React starter creates an Express API at ./api
             // exposing an HTTP endpoint, plus a Vite frontend bundled in for publish. We
             // replace the trailing `await builder.build().run();` with the AKS + cert-manager
             // wiring that puts the API behind a Gateway with TLS issued by Let's Encrypt production.
@@ -127,10 +127,13 @@ public sealed class AksAzureKubernetesEnvironmentCertManagerTypeScriptDeployment
             //   addLoadBalancer
             //   addCertManager / addIssuer / withLetsEncryptProductionParam / withHttp01Solver
             //   addGateway / withLoadBalancer / withRoute / withGatewayTlsIssuer
+            //   publishAsKubernetesService / addManifest
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
-            var appHostFilePath = Path.Combine(projectDir, "apphost.ts");
+            // The TypeScript starter templates (including Express/React) emit apphost.mts
+            // since PR #16984. Reading apphost.ts here would fail with FileNotFoundException.
+            var appHostFilePath = Path.Combine(projectDir, "apphost.mts");
 
-            output.WriteLine($"Step 6: Modifying apphost.ts at: {appHostFilePath}");
+            output.WriteLine($"Step 6: Modifying apphost.mts at: {appHostFilePath}");
 
             var content = File.ReadAllText(appHostFilePath);
 
@@ -168,12 +171,28 @@ await gateway.withLoadBalancer(publicLb);
 await gateway.withGatewayPathRoute("/", app.getEndpoint("http"));
 await gateway.withGatewayTlsIssuer(letsEncrypt);
 
+// A second resource validates the generic Kubernetes service/custom-manifest publish
+// surface from TypeScript without adding another full AKS deployment test.
+const serviceContainer = await builder.addContainer("kube-service", "redis:alpine");
+await serviceContainer.withEndpoint({ name: "tcp", targetPort: 6379 });
+await serviceContainer.withComputeEnvironment(aks);
+await serviceContainer.publishAsKubernetesService(async (service) => {
+    await service.addManifest("v1", "ConfigMap", "kube-service-config", {
+        configure: async (manifest) => {
+            await manifest
+                .withLabel("example.com/source", "typescript")
+                .withAnnotation("example.com/coverage", "deployment-e2e")
+                .withField("data.coverage", "typescript-kubernetes-service");
+        },
+    });
+});
+
 await builder.build().run();
 """;
 
             content = content.Replace(buildRunPattern, replacement);
             File.WriteAllText(appHostFilePath, content);
-            output.WriteLine("Modified apphost.ts with addCertManager + addIssuer + withGatewayTlsIssuer");
+            output.WriteLine("Modified apphost.mts with addCertManager + addIssuer + withGatewayTlsIssuer");
 
             output.WriteLine("Step 7: Setting deployment environment variables...");
             await auto.TypeAsync(
@@ -230,7 +249,18 @@ await builder.build().run();
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
-            output.WriteLine("Step 13: Waiting for AGC to assign gateway FQDN (up to 15 min)...");
+            output.WriteLine("Step 13: Verifying TypeScript publishAsKubernetesService custom manifest...");
+            await auto.TypeAsync(
+                "SVC_NS=$(kubectl get svc --all-namespaces -o jsonpath='{range .items[?(@.metadata.name==\"kube-service-service\")]}{.metadata.namespace}{end}') && " +
+                "[ -n \"$SVC_NS\" ] || { echo 'FAIL: kube-service-service service was not created'; kubectl get svc --all-namespaces; exit 1; } && " +
+                "echo \"Service namespace: $SVC_NS\" && " +
+                "kubectl get svc kube-service-service -n $SVC_NS && " +
+                "COVERAGE=$(kubectl get configmap kube-service-config -n $SVC_NS -o jsonpath='{.data.coverage}' 2>/dev/null) && " +
+                "[ \"$COVERAGE\" = \"typescript-kubernetes-service\" ] || { echo \"FAIL: kube-service-config coverage was '$COVERAGE'\"; kubectl get configmap -n $SVC_NS; exit 1; }");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+            output.WriteLine("Step 14: Waiting for AGC to assign gateway FQDN (up to 15 min)...");
             await auto.TypeAsync(
                 "OK=0; for i in $(seq 1 90); do " +
                 "FQDN=$(kubectl get gateway api-gw -n $NS -o jsonpath='{.status.addresses[0].value}' 2>/dev/null); " +
@@ -240,7 +270,7 @@ await builder.build().run();
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(16));
 
-            output.WriteLine("Step 14: Waiting for cert-manager to issue the certificate (up to 10 min)...");
+            output.WriteLine("Step 15: Waiting for cert-manager to issue the certificate (up to 10 min)...");
             await auto.TypeAsync(
                 "OK=0; for i in $(seq 1 60); do " +
                 "READY=$(kubectl get certificate -n $NS api-gw-tls -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}' 2>/dev/null); " +
@@ -259,7 +289,7 @@ await builder.build().run();
             // production certs, but openssl gives us issuer-string asserts without depending
             // on system trust store configuration. AGC takes a few seconds to load the new
             // cert into the data plane after the secret is updated, so we retry the probe.
-            output.WriteLine("Step 15: Verifying served cert is from Let's Encrypt...");
+            output.WriteLine("Step 16: Verifying served cert is from Let's Encrypt...");
             await auto.TypeAsync(
                 "FQDN=$(kubectl get gateway api-gw -n $NS -o jsonpath='{.status.addresses[0].value}') && " +
                 "echo \"Probing https://$FQDN\" && " +
@@ -279,7 +309,7 @@ await builder.build().run();
             // transient trust-store quirks on the runner; the previous step already proved
             // cryptographic identity (issuer == Let's Encrypt). The Express API serves at
             // "/" — any 2xx response is a pass.
-            output.WriteLine("Step 16: Verifying https://<fqdn>/ returns 2xx from the Express API...");
+            output.WriteLine("Step 17: Verifying https://<fqdn>/ returns 2xx from the Express API...");
             await auto.TypeAsync(
                 "FQDN=$(kubectl get gateway api-gw -n $NS -o jsonpath='{.status.addresses[0].value}') && " +
                 "OK=0; for i in $(seq 1 30); do sleep 5; " +
@@ -297,13 +327,13 @@ await builder.build().run();
             // following --force-conflicts as its value during install and then fail every
             // subsequent upgrade with "invalid/unknown release server-side apply method:
             // --force-conflicts"). The first deploy alone would not catch this.
-            output.WriteLine("Step 17: Re-deploying to validate helm upgrade idempotency...");
+            output.WriteLine("Step 18: Re-deploying to validate helm upgrade idempotency...");
             await auto.TypeAsync("aspire deploy");
             await auto.EnterAsync();
             await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(20));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
-            output.WriteLine("Step 18: Destroying deployment...");
+            output.WriteLine("Step 19: Destroying deployment...");
             await auto.AspireDestroyAsync(counter);
 
             await auto.TypeAsync("exit");

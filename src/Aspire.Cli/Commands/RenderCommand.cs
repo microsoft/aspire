@@ -11,7 +11,6 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.Markdown;
 using Microsoft.Extensions.Configuration;
@@ -45,10 +44,12 @@ internal sealed class RenderCommand : BaseCommand
         ["choice"] = "Selection prompt with formatted choices",
         ["choice-simple"] = "Selection prompt without formatter",
         ["mixed"] = "Mixed interaction service methods",
+        ["buffered-logging"] = "Background logging during interactive prompt (buffer demo)",
         ["markdown-interactive"] = "Render markdown with DisplayMarkdown (interactive)",
         ["markdown-plain"] = "Render markdown as plain text with DisplayRawText (non-interactive)",
         ["markdown-renderable"] = "Render markdown via ConvertToRenderable with ANSI disabled",
         ["links"] = "Render terminal links with SafeLink and SafeFileLink",
+        ["incompatible-version-error"] = "Display incompatible version error (borderless table)",
         ["debug-activities"] = "Debug pipeline activities (calls ProcessPublishingActivitiesDebugAsync)",
         ["pipeline-activities"] = "Pipeline activities with spinner (calls ProcessAndDisplayPublishingActivitiesAsync)",
         ["publish-summary-all"] = "Publish summary timeline (stress scenarios)",
@@ -89,15 +90,11 @@ internal sealed class RenderCommand : BaseCommand
     private readonly IServiceProvider _serviceProvider;
 
     public RenderCommand(
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        IInteractionService interactionService,
-        AspireCliTelemetry telemetry,
         IAnsiConsole ansiConsole,
         ICliHostEnvironment hostEnvironment,
-        IServiceProvider serviceProvider)
-        : base("render", "Smoke test CLI rendering", features, updateNotifier, executionContext, interactionService, telemetry)
+        IServiceProvider serviceProvider,
+        CommonCommandServices services)
+        : base("render", "Smoke test CLI rendering", services)
     {
         _ansiConsole = ansiConsole;
         _hostEnvironment = hostEnvironment;
@@ -108,8 +105,6 @@ internal sealed class RenderCommand : BaseCommand
         Options.Add(s_listScenariosOption);
         Hidden = true;
     }
-
-    protected override bool UpdateNotificationsEnabled => false;
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
@@ -179,6 +174,8 @@ internal sealed class RenderCommand : BaseCommand
                 case "mixed":
                     await TestMixedMethodsAsync(cancellationToken);
                     return CliExitCodes.Success;
+                case "buffered-logging":
+                    return await TestBufferedLoggingAsync(cancellationToken);
                 case "markdown-interactive":
                     return TestMarkdownRenderInteractive();
                 case "markdown-plain":
@@ -187,6 +184,8 @@ internal sealed class RenderCommand : BaseCommand
                     return TestMarkdownRenderRenderable();
                 case "links":
                     return await TestLinksAsync(cancellationToken);
+                case "incompatible-version-error":
+                    return TestIncompatibleVersionError();
                 case "debug-activities":
                     return await RenderDebugActivitiesAsync(cancellationToken);
                 case "pipeline-activities":
@@ -391,6 +390,55 @@ internal sealed class RenderCommand : BaseCommand
         InteractionService.DisplayMessage(KnownEmojis.StopSign, "Mixed methods test complete.");
     }
 
+    private async Task<int> TestBufferedLoggingAsync(CancellationToken cancellationToken)
+    {
+        // Create a dedicated LoggerFactory with SpectreConsoleLoggerProvider so log messages
+        // are always visible on stderr without requiring --debug. Uses the shared buffer
+        // context from DI so buffering during interactive prompts still works.
+        var logBufferContext = _serviceProvider.GetRequiredService<ConsoleLogBufferContext>();
+        using var loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.SetMinimumLevel(LogLevel.Debug);
+            builder.AddProvider(new SpectreConsoleLoggerProvider(Console.Error, logBufferContext));
+        });
+        var logger = loggerFactory.CreateLogger<RenderCommand>();
+
+        InteractionService.DisplayMessage(KnownEmojis.Information, "This demo fires background log messages while a prompt is active.");
+        InteractionService.DisplayMessage(KnownEmojis.Information, "Logs are buffered and flushed after the prompt completes.");
+        InteractionService.DisplayEmptyLine();
+
+        // Start a background task that writes log messages every 200ms.
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var loggingTask = Task.Run(async () =>
+        {
+            var counter = 0;
+            while (!cts.Token.IsCancellationRequested)
+            {
+                counter++;
+                logger.LogDebug("Background log #{Counter} written while prompt is active", counter);
+                await Task.Delay(200, cts.Token).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+            }
+        }, cancellationToken);
+
+        await Task.Delay(500, cancellationToken); // Let a few logs accumulate before starting the prompt
+
+        // Show an interactive prompt — background logs should be buffered during this.
+        var answer = await InteractionService.PromptForStringAsync(
+            "Type something (background logs are buffering)",
+            binding: PromptBinding.CreateDefault<string?>("hello"),
+            cancellationToken: cancellationToken);
+
+        // Stop background logging and let buffered messages flush.
+        cts.Cancel();
+        await loggingTask;
+
+        InteractionService.DisplayEmptyLine();
+        InteractionService.DisplaySuccess($"You entered: {answer}");
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "Buffered log lines should appear above this message.");
+
+        return CliExitCodes.Success;
+    }
+
     private async Task<int> TestLinksAsync(CancellationToken cancellationToken)
     {
         var tempDirectory = Directory.CreateTempSubdirectory("aspire-render-links-");
@@ -403,6 +451,15 @@ internal sealed class RenderCommand : BaseCommand
         InteractionService.DisplayMarkupLine($"SafeFileLink: {MarkupHelpers.SafeFileLink(InteractionService, filePath)}");
 
         return CliExitCodes.Success;
+    }
+
+    private int TestIncompatibleVersionError()
+    {
+        var ex = new AppHostIncompatibleException(
+            "The AppHost is not compatible with this version of the Aspire CLI.",
+            requiredCapability: "baseline.v2",
+            aspireHostingVersion: "9.2.0");
+        return InteractionService.DisplayIncompatibleVersionError(ex, ex.AspireHostingVersion ?? ex.RequiredCapability);
     }
 
     private int RenderPublishSummaryScenarios(IEnumerable<string> scenarioKeys)
@@ -502,17 +559,14 @@ internal sealed class RenderCommand : BaseCommand
 
     private TestPipelineCommand CreateTestPipelineCommand() => new(
         _serviceProvider.GetRequiredService<IDotNetCliRunner>(),
-        InteractionService,
         _serviceProvider.GetRequiredService<IProjectLocator>(),
-        Telemetry,
         _serviceProvider.GetRequiredService<IFeatures>(),
-        _serviceProvider.GetRequiredService<ICliUpdateNotifier>(),
-        ExecutionContext,
         _hostEnvironment,
         _serviceProvider.GetRequiredService<IAppHostProjectFactory>(),
         _serviceProvider.GetRequiredService<IConfiguration>(),
         _serviceProvider.GetRequiredService<ILogger<RenderCommand>>(),
-        _ansiConsole);
+        _ansiConsole,
+        _serviceProvider.GetRequiredService<CommonCommandServices>());
 
     private async Task<int> RenderDebugActivitiesAsync(CancellationToken cancellationToken)
     {
@@ -753,18 +807,15 @@ internal sealed class RenderCommand : BaseCommand
     /// </summary>
     private sealed class TestPipelineCommand(
         IDotNetCliRunner runner,
-        IInteractionService interactionService,
         IProjectLocator projectLocator,
-        AspireCliTelemetry telemetry,
         IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
         ICliHostEnvironment hostEnvironment,
         IAppHostProjectFactory projectFactory,
         IConfiguration configuration,
         ILogger logger,
-        IAnsiConsole ansiConsole)
-        : PipelineCommandBase("test-render", "Test rendering", runner, interactionService, projectLocator, telemetry, features, updateNotifier, executionContext, hostEnvironment, projectFactory, configuration, logger, ansiConsole)
+        IAnsiConsole ansiConsole,
+        CommonCommandServices services)
+        : PipelineCommandBase("test-render", "Test rendering", runner, projectLocator, features, hostEnvironment, projectFactory, configuration, logger, ansiConsole, services)
     {
         protected override string OperationCompletedPrefix => "Publish";
         protected override string OperationFailedPrefix => "Publish failed";

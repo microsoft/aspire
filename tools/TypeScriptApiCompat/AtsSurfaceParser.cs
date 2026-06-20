@@ -5,8 +5,9 @@ namespace TypeScriptApiCompat;
 
 internal static class AtsSurfaceParser
 {
-    public static AtsSurface Parse(string packageName, string content)
+    public static AtsSurface Parse(string packageName, string content, IReadOnlyCollection<string>? knownPackageNames = null)
     {
+        var packageNames = GetKnownPackageNames(packageName, knownPackageNames);
         var handleTypes = new Dictionary<string, AtsHandleType>(StringComparer.Ordinal);
         var dtoTypes = new Dictionary<string, AtsDtoTypeBuilder>(StringComparer.Ordinal);
         var enumTypes = new Dictionary<string, AtsEnumType>(StringComparer.Ordinal);
@@ -15,6 +16,7 @@ internal static class AtsSurfaceParser
 
         var section = AtsSection.None;
         AtsDtoTypeBuilder? currentDto = null;
+        var skippingDto = false;
 
         foreach (var rawLine in content.ReplaceLineEndings("\n").Split('\n'))
         {
@@ -36,6 +38,7 @@ internal static class AtsSurfaceParser
                     _ => AtsSection.None
                 };
                 currentDto = null;
+                skippingDto = false;
                 continue;
             }
 
@@ -43,7 +46,10 @@ internal static class AtsSurfaceParser
             {
                 case AtsSection.HandleTypes:
                     var handle = ParseHandleType(trimmed);
-                    handleTypes.Add(handle.TypeId, handle);
+                    if (IsOwnedByPackage(handle.TypeId, packageName, packageNames))
+                    {
+                        handleTypes.Add(handle.TypeId, handle);
+                    }
                     break;
 
                 case AtsSection.DtoTypes:
@@ -51,6 +57,11 @@ internal static class AtsSurfaceParser
                     {
                         if (currentDto is null)
                         {
+                            if (skippingDto)
+                            {
+                                continue;
+                            }
+
                             throw new InvalidDataException($"DTO property '{rawLine}' appeared before a DTO type.");
                         }
 
@@ -60,13 +71,25 @@ internal static class AtsSurfaceParser
                     else
                     {
                         currentDto = new AtsDtoTypeBuilder(StripDescription(trimmed));
-                        dtoTypes.Add(currentDto.TypeId, currentDto);
+                        if (IsOwnedByPackage(currentDto.TypeId, packageName, packageNames))
+                        {
+                            dtoTypes.Add(currentDto.TypeId, currentDto);
+                            skippingDto = false;
+                        }
+                        else
+                        {
+                            currentDto = null;
+                            skippingDto = true;
+                        }
                     }
                     break;
 
                 case AtsSection.EnumTypes:
                     var enumType = ParseEnumType(trimmed);
-                    enumTypes.Add(enumType.TypeId, enumType);
+                    if (IsOwnedByPackage(enumType.TypeId, packageName, packageNames))
+                    {
+                        enumTypes.Add(enumType.TypeId, enumType);
+                    }
                     break;
 
                 case AtsSection.ExportedValues:
@@ -76,7 +99,10 @@ internal static class AtsSurfaceParser
 
                 case AtsSection.Capabilities:
                     var capability = ParseCapability(trimmed);
-                    capabilities.Add(capability.CapabilityId, capability);
+                    if (IsOwnedByPackage(capability.CapabilityId, packageName, packageNames))
+                    {
+                        capabilities.Add(capability.CapabilityId, capability);
+                    }
                     break;
             }
         }
@@ -204,6 +230,69 @@ internal static class AtsSurfaceParser
     {
         var descriptionIndex = value.IndexOf(" # ", StringComparison.Ordinal);
         return descriptionIndex < 0 ? value : value[..descriptionIndex];
+    }
+
+    private static HashSet<string> GetKnownPackageNames(string packageName, IReadOnlyCollection<string>? knownPackageNames)
+    {
+        var packageNames = new HashSet<string>(StringComparer.Ordinal)
+        {
+            packageName
+        };
+
+        if (knownPackageNames is not null)
+        {
+            foreach (var knownPackageName in knownPackageNames)
+            {
+                if (!string.IsNullOrWhiteSpace(knownPackageName))
+                {
+                    packageNames.Add(knownPackageName);
+                }
+            }
+        }
+
+        return packageNames;
+    }
+
+    private static bool IsOwnedByPackage(string symbolId, string packageName, IReadOnlySet<string> knownPackageNames)
+    {
+        var normalizedSymbolId = symbolId.StartsWith("enum:", StringComparison.Ordinal)
+            ? symbolId["enum:".Length..]
+            : symbolId;
+
+        if (normalizedSymbolId.StartsWith($"{packageName}/", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (!normalizedSymbolId.StartsWith($"{packageName}.", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return !TryGetMostSpecificDottedOwner(normalizedSymbolId, knownPackageNames, out var ownerPackageName) ||
+            string.Equals(ownerPackageName, packageName, StringComparison.Ordinal);
+    }
+
+    private static bool TryGetMostSpecificDottedOwner(string symbolId, IReadOnlySet<string> knownPackageNames, out string packageName)
+    {
+        packageName = string.Empty;
+
+        foreach (var knownPackageName in knownPackageNames)
+        {
+            if (symbolId.Length <= knownPackageName.Length ||
+                symbolId[knownPackageName.Length] != '.' ||
+                !symbolId.StartsWith(knownPackageName, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (knownPackageName.Length > packageName.Length)
+            {
+                packageName = knownPackageName;
+            }
+        }
+
+        return packageName.Length > 0;
     }
 
     private sealed class AtsDtoTypeBuilder(string typeId)

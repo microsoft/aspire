@@ -2,6 +2,8 @@ using Aspire.Hosting.Yarp.Transforms;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+
 var builder = DistributedApplication.CreateBuilder(args);
 
 var catalogDb = builder.AddPostgres("postgres")
@@ -74,7 +76,7 @@ var catalogService = builder.AddProject<Projects.CatalogService>("catalogservice
 
 var messaging = builder.AddRabbitMQ("messaging")
                        .WithDataVolume()
-                       .WithLifetime(ContainerLifetime.Persistent)
+                       .WithPersistentLifetime()
                        .WithManagementPlugin()
                        .PublishAsContainer();
 
@@ -82,8 +84,7 @@ var basketService = builder.AddProject("basketservice", @"..\BasketService\Baske
                            .WithReference(basketCache)
                            .WaitFor(basketCache)
                            .WithReference(messaging)
-                           .WaitFor(messaging)
-                           .WithHttpHealthCheck("/health", endpointName: "http");
+                           .WaitFor(messaging);
 
 var frontend = builder.AddProject<Projects.MyFrontend>("frontend")
     .WithExternalHttpEndpoints()

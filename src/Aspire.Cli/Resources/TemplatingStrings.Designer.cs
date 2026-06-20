@@ -484,6 +484,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to [yellow]--source was used for the initial scaffold restore only and is not persisted. Later 'aspire restore' / 'aspire add' will use the channel feeds configured for this project.[/].
+        /// </summary>
+        public static string SourceOverrideNotPersistedWarning {
+            get {
+                return ResourceManager.GetString("SourceOverrideNotPersistedWarning", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Yes.
         /// </summary>
         public static string Yes {

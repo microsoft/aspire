@@ -119,6 +119,11 @@ public class DistributedApplicationEventing : IDistributedApplicationEventing
     /// <inheritdoc cref="IDistributedApplicationEventing.Subscribe{T}(Func{T, CancellationToken, Task})" />
     public DistributedApplicationEventSubscription Subscribe<T>(Func<T, CancellationToken, Task> callback) where T : IDistributedApplicationEvent
     {
+        if (typeof(T).IsInterface || typeof(T).IsAbstract)
+        {
+            throw new ArgumentException($"Cannot subscribe to interface or abstract type '{typeof(T).Name}'. Subscribe to a concrete event type instead.");
+        }
+
         var subscription = new DistributedApplicationEventSubscription(async (@event, ct) =>
         {
             var typedEvent = (T)@event;
@@ -143,6 +148,11 @@ public class DistributedApplicationEventing : IDistributedApplicationEventing
         _subscriptionEventTypeLookup[subscription] = typeof(T);
 
         return subscription;
+    }
+
+    internal bool HasSubscriptions<T>() where T : IDistributedApplicationEvent
+    {
+        return _eventSubscriptionListLookup.TryGetValue(typeof(T), out var subscriptions) && subscriptions.Count > 0;
     }
 
     /// <inheritdoc cref="IDistributedApplicationEventing.Subscribe{T}(Func{T, CancellationToken, Task})" />

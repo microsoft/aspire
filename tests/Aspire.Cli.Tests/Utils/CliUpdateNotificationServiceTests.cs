@@ -332,6 +332,48 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NotifyIfUpdateAvailable_UsesNpmCommandForNpmInstall()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var processPathScope = DotNetToolDetection.UseProcessPathForTesting("/home/test/.aspire/bin/aspire");
+        using var npmScope = NpmInstallDetection.UseEnvironmentForTesting(CreateNpmInstallEnvironment());
+        TestInteractionService? interactionService = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
+        {
+            configure.NuGetPackageCacheFactory = _ => new FakeNuGetPackageCache
+            {
+                GetCliPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([
+                    new NuGetPackage { Id = "Aspire.Cli", Version = "9.5.0", Source = "nuget.org" }
+                ])
+            };
+
+            configure.InteractionServiceFactory = _ =>
+            {
+                interactionService = new TestInteractionService();
+                return interactionService;
+            };
+
+            configure.CliUpdateNotifierFactory = sp =>
+            {
+                var logger = sp.GetRequiredService<ILogger<CliUpdateNotifier>>();
+                var nuGetPackageCache = sp.GetRequiredService<INuGetPackageCache>();
+                var service = sp.GetRequiredService<IInteractionService>();
+                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, service);
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var notifier = provider.GetRequiredService<ICliUpdateNotifier>();
+
+        await notifier.CheckForCliUpdatesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
+        notifier.NotifyIfUpdateAvailable();
+
+        Assert.NotNull(interactionService);
+        Assert.Equal("npm install -g @microsoft/aspire-cli@latest", interactionService.LastVersionUpdateCommand);
+    }
+
+    [Fact]
     public async Task StableWillNotRecommendUpdatingToPreview()
     {
         var currentVersion = VersionHelper.GetDefaultTemplateVersion();
@@ -446,6 +488,16 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
     private static string GetAspireExecutableName()
     {
         return OperatingSystem.IsWindows() ? "aspire.exe" : "aspire";
+    }
+
+    private static IReadOnlyDictionary<string, string?> CreateNpmInstallEnvironment()
+    {
+        return new Dictionary<string, string?>
+        {
+            [NpmInstallDetection.PackageEnvironmentVariableName] = NpmInstallDetection.ExpectedPackageName,
+            [NpmInstallDetection.PackageVersionEnvironmentVariableName] = "9.4.0",
+            [NpmInstallDetection.PackageRidEnvironmentVariableName] = "linux-x64"
+        };
     }
 }
 

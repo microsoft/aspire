@@ -40,11 +40,9 @@ public sealed class SingleFileAppHostInitDotnetRunTests(ITestOutputHelper output
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: false, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -93,24 +91,16 @@ public sealed class SingleFileAppHostInitDotnetRunTests(ITestOutputHelper output
         Assert.False(string.IsNullOrWhiteSpace(httpsEnv["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]?.GetValue<string>()));
         Assert.False(string.IsNullOrWhiteSpace(httpsEnv["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]?.GetValue<string>()));
 
-        // `dotnet run apphost.cs` should print "Distributed application started." once the
-        // AppHost is fully up. 1 minute is plenty — even a cold dotnet build of the bare
-        // single-file AppHost completes well inside that budget; if it hasn't started by
-        // then something is wrong (build failure, missing env var, hang) and we should
-        // fail fast rather than wait several minutes.
+        // `dotnet run apphost.cs` is intercepted by the Aspire CLI run hook when the CLI
+        // bundle is active; the CLI run summary is the AppHost-ready signal.
         await auto.TypeAsync("dotnet run apphost.cs");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync(
-            "Distributed application started.",
+            "Press CTRL+C to stop the AppHost and exit.",
             timeout: TimeSpan.FromMinutes(1));
 
         // Stop the running AppHost with Ctrl+C and wait for the shell prompt.
         await auto.Ctrl().KeyAsync(Hex1bKey.C);
         await auto.WaitForAnyPromptAsync(counter, TimeSpan.FromMinutes(1));
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-        await pendingRun;
     }
 }
-

@@ -43,7 +43,12 @@ internal sealed class AtsSurfaceSet
 
         var surfaces = new Dictionary<string, AtsSurface>(StringComparer.Ordinal);
 
-        foreach (var file in Directory.EnumerateFiles(rootPath, "*.ats.txt", SearchOption.AllDirectories).Order(StringComparer.Ordinal))
+        var files = Directory.EnumerateFiles(rootPath, "*.ats.txt", SearchOption.AllDirectories)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+        var packageNames = files.Select(GetPackageName).ToArray();
+
+        foreach (var file in files)
         {
             var packageName = GetPackageName(file);
             if (surfaces.ContainsKey(packageName))
@@ -51,7 +56,7 @@ internal sealed class AtsSurfaceSet
                 throw new InvalidOperationException($"Duplicate ATS surface for package '{packageName}' under '{rootPath}'.");
             }
 
-            surfaces.Add(packageName, AtsSurfaceParser.Parse(packageName, File.ReadAllText(file)));
+            surfaces.Add(packageName, AtsSurfaceParser.Parse(packageName, File.ReadAllText(file), packageNames));
         }
 
         return new AtsSurfaceSet(surfaces);

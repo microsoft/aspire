@@ -186,7 +186,8 @@ public class ProjectResource : Resource, IResourceWithEnvironment, IResourceWith
             var context = await this.ProcessContainerBuildOptionsCallbackAsync(
                 ctx.Services,
                 logger,
-                cancellationToken: ctx.CancellationToken).ConfigureAwait(false);
+                ctx.ExecutionContext,
+                ctx.CancellationToken).ConfigureAwait(false);
 
             var buildOptions = new ContainerImageBuildOptions
             {

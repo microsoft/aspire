@@ -574,6 +574,14 @@ internal sealed class CapabilityDispatcher
                 registration.Capability?.TargetParameterName,
                 errorCode: AtsErrorCodes.TypeMismatch).ToCapabilityException();
         }
+        catch (ArgumentException ex)
+        {
+            activity.SetError(ex);
+            throw CapabilityException.InvalidArgument(
+                capabilityId,
+                ex.ParamName ?? registration.Capability?.TargetParameterName ?? "unknown",
+                ex.Message);
+        }
         catch (InvalidCastException ex)
         {
             activity.SetError(ex);
@@ -617,24 +625,17 @@ internal sealed class CapabilityDispatcher
         return InvokeAsync(capabilityId, args).GetAwaiter().GetResult();
     }
 
-    private static async Task<object?> InvokeMethodAsync(MethodInfo method, object? target, object?[] methodArgs, bool runSyncOnBackgroundThread)
+    private static async Task<object?> InvokeMethodAsync(MethodInfo method, object? target, object?[] methodArgs, bool runInvocationOnBackgroundThread)
     {
-        if (runSyncOnBackgroundThread && !IsAsyncReturnType(method.ReturnType))
+        if (runInvocationOnBackgroundThread)
         {
+            // Async-returning exports can execute substantial synchronous setup before returning
+            // their Task or ValueTask. Run that invocation path off the JSON-RPC synchronization context so
+            // sync-over-async callback proxies can still receive nested RPC responses.
             return await Task.Run(() => InvokeMethodCore(method, target, methodArgs)).ConfigureAwait(false);
         }
 
         return InvokeMethodCore(method, target, methodArgs);
-    }
-
-    private static bool IsAsyncReturnType(Type returnType)
-    {
-        if (typeof(Task).IsAssignableFrom(returnType) || returnType == typeof(ValueTask))
-        {
-            return true;
-        }
-
-        return returnType.IsGenericType && returnType.GetGenericTypeDefinition() == typeof(ValueTask<>);
     }
 
     private static async Task<object?> UnwrapAsyncResultAsync(object? result, Type returnType)
@@ -686,14 +687,7 @@ internal sealed class CapabilityDispatcher
 
     private static object? InvokeMethodCore(MethodInfo method, object? target, object?[] methodArgs)
     {
-        try
-        {
-            return method.Invoke(target, methodArgs);
-        }
-        catch (TargetInvocationException tie) when (tie.InnerException is not null)
-        {
-            throw tie.InnerException;
-        }
+        return method.Invoke(target, methodArgs);
     }
 
     /// <summary>
@@ -854,6 +848,13 @@ internal sealed class CapabilityDispatcher
             {
                 continue;
             }
+            catch (ArgumentException) when (IsRejectedEnumString(argNode, unionMemberType))
+            {
+                // Enum.Parse rejects unknown string values with ArgumentException. In a union,
+                // that only means this enum member did not match, so later members such as
+                // string still need a chance to accept the same JSON value.
+                continue;
+            }
         }
 
         throw CapabilityException.TypeMismatch(
@@ -925,6 +926,21 @@ internal sealed class CapabilityDispatcher
     private static string DescribeUnionTypes(IReadOnlyList<Type> unionMemberTypes)
     {
         return string.Join(" | ", unionMemberTypes.Select(static type => type.Name));
+    }
+
+    /// <summary>
+    /// Determines if the given JSON node represents a rejected enum string for the specified union member type.
+    /// A rejected enum string occurs when the union member type is an enum, but the JSON node is a string that does not match any of the enum's defined names. In this case, the value may still be valid for another union member type (e.g., string), so it should not cause an immediate type mismatch failure for the entire union parameter.
+    /// </summary>
+    /// <param name="node">The JSON node to check.</param>
+    /// <param name="unionMemberType">The union member type to check against.</param>
+    /// <returns>True if the JSON node is a rejected enum string; otherwise, false.</returns>
+    private static bool IsRejectedEnumString(JsonNode? node, Type unionMemberType)
+    {
+        var underlyingType = Nullable.GetUnderlyingType(unionMemberType) ?? unionMemberType;
+        return underlyingType.IsEnum &&
+            node is JsonValue value &&
+            value.TryGetValue<string>(out _);
     }
 
     private static string DescribeJsonNode(JsonNode? node)

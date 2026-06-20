@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
@@ -30,15 +31,15 @@ internal static partial class ProcessSignaler
         }
     }
 
-    public static void ForceKill(int pid, DateTimeOffset? expectedStartTime, ILogger logger)
+    public static void ForceKill(int pid, DateTimeOffset? expectedStartTime, ILogger logger, bool killEntireProcessTree = false)
     {
         using var process = TryGetRunningProcess(pid, expectedStartTime, logger);
         if (process is { })
         {
-            logger.LogDebug("Killing process {Pid}...", pid);
+            logger.LogDebug("Killing process {Pid} (entireProcessTree={EntireProcessTree})...", pid, killEntireProcessTree);
             try
             {
-                process.Kill(entireProcessTree: false);
+                process.Kill(entireProcessTree: killEntireProcessTree);
             }
             catch (InvalidOperationException)
             {
@@ -49,20 +50,31 @@ internal static partial class ProcessSignaler
 
     public static Process? TryGetRunningProcess(int pid, DateTimeOffset? expectedStartTime, ILogger logger)
     {
+        Process? process = null;
         try
         {
-            var process = Process.GetProcessById(pid);
-            if (expectedStartTime is not null && !AreClose(expectedStartTime, process.StartTime))
-            {
-                logger.LogDebug("Process {Pid} start time {ProcessStartTime} does not match expected start time {ExpectedStartTime}", pid, process.StartTime, expectedStartTime);
-                process.Dispose();
-                return null; // Do not return processes that do not match the expected start time
-            }
-
+            process = Process.GetProcessById(pid);
             if (process.HasExited)
             {
                 process.Dispose();
                 return null;
+            }
+
+            if (expectedStartTime is not null)
+            {
+                var processStartTime = process.StartTime;
+                if (!AreClose(expectedStartTime, processStartTime))
+                {
+                    logger.LogDebug("Process {Pid} start time {ProcessStartTime} does not match expected start time {ExpectedStartTime}", pid, processStartTime, expectedStartTime);
+                    process.Dispose();
+                    return null; // Do not return processes that do not match the expected start time
+                }
+
+                if (process.HasExited)
+                {
+                    process.Dispose();
+                    return null;
+                }
             }
 
             return process;
@@ -70,24 +82,42 @@ internal static partial class ProcessSignaler
         catch (ArgumentException)
         {
             // Process doesn't exist - already terminated.
+            process?.Dispose();
             return null;
         }
         catch (InvalidOperationException)
         {
             // Process has already exited.
+            process?.Dispose();
+            return null;
+        }
+        catch (Win32Exception ex)
+        {
+            // Process inspection can race with process exit. On macOS, StartTime can throw:
+            //   Win32Exception (3): Unable to retrieve the specified information about the process or thread. It may have exited or may be privileged.
+            // If we cannot inspect the process enough to prove it is the expected target, do
+            // not signal or kill it.
+            logger.LogDebug(ex, "Could not inspect process {Pid}. Treating it as not running.", pid);
+            process?.Dispose();
             return null;
         }
     }
 
-    private static bool AreClose(DateTimeOffset? expectedStartTime, DateTime processStartTime, TimeSpan? tolerance = default)
+    internal static bool AreClose(DateTimeOffset? expectedStartTime, DateTime processStartTime, TimeSpan? tolerance = default)
     {
         if (expectedStartTime is null)
         {
             return true;
         }
 
+        // Truncate both sides to whole seconds before comparing. The expected start time
+        // may already be at second granularity (e.g. from the orphan detector via ToUnixTimeSeconds()),
+        // and the OS-reported start time has sub-second precision that would cause false mismatches.
+        var processStartTruncated = new DateTimeOffset(processStartTime).ToUnixTimeSeconds();
+        var expectedSeconds = ((DateTimeOffset)expectedStartTime).ToUnixTimeSeconds();
+
         tolerance ??= TimeSpan.FromSeconds(1);
-        return ((DateTimeOffset)expectedStartTime - new DateTimeOffset(processStartTime)).Duration() <= tolerance;
+        return Math.Abs(expectedSeconds - processStartTruncated) <= (long)tolerance.Value.TotalSeconds;
     }
 
     private const int SigTerm = 15;

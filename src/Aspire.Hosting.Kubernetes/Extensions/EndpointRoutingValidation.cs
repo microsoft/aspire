@@ -14,9 +14,9 @@ namespace Aspire.Hosting.Kubernetes.Extensions;
 /// originates outside the cluster, so it is a privacy/security footgun to
 /// route an <see cref="EndpointReference"/> that the resource owner never
 /// flagged as external. The check is performed during publish (when the
-/// Helm chart is materialized) rather than at <c>WithRoute</c> call time
+/// Helm chart is materialized) rather than at <c>WithPath</c> / <c>WithRoute</c> call time
 /// because authoring order is not significant: a user may legitimately
-/// register the route before calling
+/// register the path/route before calling
 /// <see cref="ResourceBuilderExtensions.WithExternalHttpEndpoints{T}"/> or
 /// setting <see cref="EndpointAnnotation.IsExternal"/> directly.
 /// </remarks>

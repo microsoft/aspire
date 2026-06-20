@@ -179,6 +179,10 @@ public class BuildEnvironment
         // in the tests
         EnvVars["_MSBUILDTLENABLED"] = "0";
         EnvVars["SkipAspireWorkloadManifest"] = "true";
+        // Template tests build generated apps from repo-built packages, not from an installed
+        // Aspire CLI bundle layout, so keep bundle resolution disabled for these test builds.
+        EnvVars["AspireUseCliBundle"] = "false";
+        EnvVars["NoWarn"] = "ASPIRE010";
 
         if (OperatingSystem.IsMacOS())
         {

@@ -71,6 +71,14 @@ internal sealed class ListConsoleLogsTool(IAuxiliaryBackchannelMonitor auxiliary
             throw new McpProtocolException(McpErrorMessages.NoAppHostRunning, McpErrorCode.InternalError);
         }
 
+        // Check if the resource is excluded from MCP before fetching logs.
+        // This is the only check needed because the resource name is required for this tool.
+        var excludedResult = await McpToolHelpers.CheckResourceExcludedAsync(connection, resourceName, cancellationToken).ConfigureAwait(false);
+        if (excludedResult is not null)
+        {
+            return excludedResult;
+        }
+
         try
         {
             var logParser = new LogParser(ConsoleColor.Black);
@@ -84,13 +92,23 @@ internal sealed class ListConsoleLogsTool(IAuxiliaryBackchannelMonitor auxiliary
 
             var entries = logEntries.GetEntries().ToList();
 
-            // Apply full-text search filter on log content
+            // Console logs have no structured attributes, so all search text is treated as
+            // free-text fragments matched against the log content and resource name.
             if (!string.IsNullOrEmpty(search))
             {
-                entries = entries.Where(e =>
-                    (e.Content is not null && e.Content.Contains(search, StringComparisons.FullTextSearch)) ||
-                    (e.RawContent is not null && e.RawContent.Contains(search, StringComparisons.FullTextSearch)))
-                    .ToList();
+                var fragments = SearchTextParser.ParseFragments(search);
+                if (fragments.Length > 0)
+                {
+                    entries = entries.Where(e =>
+                        SearchTextParser.MatchesAllFragments(
+                            fragments,
+                            (e.Content ?? string.Empty, e.RawContent ?? string.Empty, e.ResourcePrefix ?? string.Empty),
+                            static (state, fragment) =>
+                                state.Item1.Contains(fragment, StringComparisons.FullTextSearch) ||
+                                state.Item2.Contains(fragment, StringComparisons.FullTextSearch) ||
+                                state.Item3.Contains(fragment, StringComparisons.FullTextSearch)))
+                        .ToList();
+                }
             }
 
             // When search is applied, total reflects matching entries. Otherwise, use the

@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only
 #pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
 
 using System.Collections.Immutable;
@@ -76,6 +75,7 @@ public static class BrowserLogsBuilderExtensions
     /// <c>Aspire:Hosting:BrowserLogs</c> and otherwise defaults to <see cref="BrowserUserDataMode.Shared"/>.
     /// </param>
     /// <returns>A reference to the original <see cref="IResourceBuilder{T}"/> for further chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This method adds a child browser logs resource beneath the parent resource represented by <paramref name="builder"/>.
@@ -111,7 +111,7 @@ public static class BrowserLogsBuilderExtensions
     /// </code>
     /// </example>
     [Experimental("ASPIREBROWSERLOGS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExport(Description = "Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.")]
+    [AspireExport]
     public static IResourceBuilder<T> WithBrowserLogs<T>(
         this IResourceBuilder<T> builder,
         string? browser = null,
@@ -155,11 +155,11 @@ public static class BrowserLogsBuilderExtensions
                 {
                     try
                     {
-                        var configuration = context.ServiceProvider.GetRequiredService<IConfiguration>();
-                        var configurationStore = context.ServiceProvider.GetRequiredService<BrowserLogsConfigurationStore>();
+                        var configuration = context.Services.GetRequiredService<IConfiguration>();
+                        var configurationStore = context.Services.GetRequiredService<BrowserLogsConfigurationStore>();
                         var currentConfiguration = browserLogsResource.ResolveCurrentConfiguration(configuration, configurationStore);
                         var url = ResolveBrowserUrl(parentResource);
-                        var sessionManager = context.ServiceProvider.GetRequiredService<IBrowserLogsSessionManager>();
+                        var sessionManager = context.Services.GetRequiredService<IBrowserLogsSessionManager>();
                         await sessionManager.StartSessionAsync(browserLogsResource, currentConfiguration, context.ResourceName, url, context.CancellationToken).ConfigureAwait(false);
                         return CommandResults.Success();
                     }
@@ -182,7 +182,7 @@ public static class BrowserLogsBuilderExtensions
                             return ResourceCommandState.Disabled;
                         }
 
-                        var resourceNotifications = context.ServiceProvider.GetRequiredService<ResourceNotificationService>();
+                        var resourceNotifications = context.Services.GetRequiredService<ResourceNotificationService>();
                         if (resourceNotifications.TryGetCurrentState(parentResource.Name, out var resourceEvent))
                         {
                             var parentState = resourceEvent.Snapshot.State?.Text;
@@ -202,7 +202,7 @@ public static class BrowserLogsBuilderExtensions
                 {
                     try
                     {
-                        var configurationManager = context.ServiceProvider.GetRequiredService<BrowserLogsConfigurationManager>();
+                        var configurationManager = context.Services.GetRequiredService<BrowserLogsConfigurationManager>();
                         return await configurationManager.ConfigureAsync(browserLogsResource, context.Arguments, context.CancellationToken).ConfigureAwait(false);
                     }
                     catch (Exception ex)
@@ -223,7 +223,7 @@ public static class BrowserLogsBuilderExtensions
                     },
                     UpdateState = context =>
                     {
-                        var interactionService = context.ServiceProvider.GetRequiredService<IInteractionService>();
+                        var interactionService = context.Services.GetRequiredService<IInteractionService>();
                         return interactionService.IsAvailable
                             ? ResourceCommandState.Enabled
                             : ResourceCommandState.Disabled;
@@ -236,7 +236,7 @@ public static class BrowserLogsBuilderExtensions
                 {
                     try
                     {
-                        var sessionManager = context.ServiceProvider.GetRequiredService<IBrowserLogsSessionManager>();
+                        var sessionManager = context.Services.GetRequiredService<IBrowserLogsSessionManager>();
                         var result = await sessionManager.CaptureScreenshotAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
                         var resultJson = JsonSerializer.Serialize(
                             new BrowserLogsScreenshotCommandResult(

@@ -9,14 +9,15 @@ internal static class TypeScriptApiCompatRunner
     {
         try
         {
+            var excludedPackages = ExcludedPackageLoader.Load(options.ExcludedPackagesFile);
             var baseline = AtsSurfaceSet.Load(options.BaselinePath);
             var current = AtsSurfaceSet.Load(options.CurrentPath);
-            var diagnostics = AtsCompatibilityComparer.Compare(baseline, current);
+            var diagnostics = AtsCompatibilityComparer.Compare(baseline, current, excludedPackages);
             var suppressionLoadResult = ApiCompatSuppressionLoader.Load(options.SuppressionsRoot);
             var baselineSuppressionLoadResult = options.BaselineSuppressionsRoot is null
                 ? null
                 : ApiCompatSuppressionLoader.Load(options.BaselineSuppressionsRoot);
-            var result = ApiCompatSuppressor.ApplySuppressions(diagnostics, suppressionLoadResult, baselineSuppressionLoadResult);
+            var result = ApiCompatSuppressor.ApplySuppressions(diagnostics, suppressionLoadResult, baselineSuppressionLoadResult, excludedPackages);
             var report = ApiCompatReport.Create(result);
 
             if (!string.IsNullOrWhiteSpace(options.ReportPath))

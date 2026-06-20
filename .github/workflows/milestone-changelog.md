@@ -6,6 +6,8 @@ description: |
   of new features, improvements, and notable bug fixes. A companion GitHub issue collects
   editorial feedback (e.g., exclude a change, rename an entry, merge entries).
 
+max-daily-ai-credits: -1
+
 # ──────────────────────────────────────────────────────────
 # Architecture
 #
@@ -39,15 +41,15 @@ env:
   PRODUCT: "Aspire"
   REPO: "microsoft/aspire"
   DOCS_REPO: "microsoft/aspire.dev"
-  MILESTONE_START: "2026-05-08"
-  MILESTONE: "13.4"
-  PREVIOUS_MILESTONE: "13.3"
+  MILESTONE_START: "2026-06-02"
+  MILESTONE: "13.5"
+  PREVIOUS_MILESTONE: "13.4"
   RELEASE_NOTES_URL: "https://aka.ms/aspire/update-latest"
   BATCH_SIZE: "20"
 
 on:
   schedule:
-    - cron: '0 */2 * * *' # every 2 hours
+    - cron: '0 */6 * * *' # every 6 hours
   workflow_dispatch:
 
 jobs:
@@ -322,6 +324,7 @@ permissions:
   contents: read
   issues: read
   pull-requests: read
+  copilot-requests: write
 
 network: defaults
 
@@ -462,8 +465,9 @@ Generate and maintain a changelog for the **${PRODUCT} ${MILESTONE} milestone** 
 Each run appends newly merged changes to the existing content while preserving
 previous entries. A companion feedback issue collects editorial comments.
 
+<!-- Keep the hardcoded values below in sync with the env block above. -->
 > **Note:** `${PRODUCT}`, `${REPO}`, `${DOCS_REPO}`, `${MILESTONE_START}`, `${MILESTONE}`, `${PREVIOUS_MILESTONE}`, `${RELEASE_NOTES_URL}`, and `${BATCH_SIZE}` refer to values set in the workflow's
-> `env` block (currently **`Aspire`**, **`microsoft/aspire`**, **`microsoft/aspire.dev`**, **`2026-05-08`**, **`13.4`**, **`13.3`**, **`https://aka.ms/aspire/update-latest`**, and **`20`**). All file names,
+> `env` block (currently **`Aspire`**, **`microsoft/aspire`**, **`microsoft/aspire.dev`**, **`2026-06-02`**, **`13.5`**, **`13.4`**, **`https://aka.ms/aspire/update-latest`**, and **`20`**). All file names,
 > titles, and references below derive from those values.
 
 ## Important: available tools
@@ -838,15 +842,25 @@ rather than creating a new one:
 
 ### 5f. Filtering rules
 
+Apply a strict user-facing filter before creating or updating a changelog entry.
+A change is user-facing only when someone using Aspire can observe it in product
+behavior, supported APIs, CLI commands, dashboard/extension UX, templates,
+integrations, documented configuration, security posture, or meaningful
+compatibility/performance behavior. Do not create entries for issues or PRs that
+only affect repository operation or the engineering process.
+
 - **Include**: new features, notable bug fixes, breaking changes, performance
-  improvements, new integrations, new resource types, and notable engineering or
-  workflow changes that have clear developer or release impact.
+  improvements, new integrations, new resource types, and security or
+  compatibility changes that have clear user or application-developer impact.
 - **Exclude**:
   - Internal refactoring, test-only changes, trivial fixes.
   - Dependency version bumps, documentation-only changes.
   - Routine CI/build maintenance with no meaningful user or developer impact.
-- When in doubt about whether a change is notable, include it — it can always be
-  removed via a comment later.
+  - Agentic workflow, automation, release-engineering, changelog-generation, and
+    repository maintenance changes unless the change has a direct user-visible
+    effect in a released Aspire product.
+- When in doubt about whether a change is user-facing, exclude it and record the
+  reason in the PR tracker. It can be restored via editorial feedback later.
 
 ### 5g. Match documentation PRs
 

@@ -17,6 +17,8 @@ namespace Aspire.Hosting.Azure;
 /// <remarks>
 /// Use <see cref="AzureProvisioningResourceExtensions.ConfigureInfrastructure{T}(ApplicationModel.IResourceBuilder{T}, Action{AzureResourceInfrastructure})"/> to configure specific <see cref="Azure.Provisioning"/> properties.
 /// </remarks>
+/// <ats-remarks />
+/// <ats-summary>Represents an Azure Event Hub. Initializes a new instance of the <ats-see cref="!:type:AzureEventHubResource" /> class.</ats-summary>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Hub = {HubName}")]
 [AspireExport(ExposeProperties = true)]
 public class AzureEventHubResource(string name, string hubName, AzureEventHubsResource parent)

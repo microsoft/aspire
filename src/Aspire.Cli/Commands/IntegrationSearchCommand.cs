@@ -4,12 +4,10 @@
 using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Spectre.Console;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
@@ -29,20 +27,14 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
         string name,
         string description,
         IntegrationPackageSearchService integrationPackageSearchService,
-        IInteractionService interactionService,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        AspireCliTelemetry telemetry)
-        : base(name, description, features, updateNotifier, executionContext, interactionService, telemetry)
+        CommonCommandServices services)
+        : base(name, description, services)
     {
         _integrationPackageSearchService = integrationPackageSearchService;
 
         Options.Add(_appHostOption);
         Options.Add(_formatOption);
     }
-
-    protected override bool UpdateNotificationsEnabled => false;
 
     protected abstract string? GetSearchTerm(ParseResult parseResult);
 
@@ -163,12 +155,8 @@ internal sealed class IntegrationListCommand : IntegrationDiscoveryCommand
 {
     public IntegrationListCommand(
         IntegrationPackageSearchService integrationPackageSearchService,
-        IInteractionService interactionService,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        AspireCliTelemetry telemetry)
-        : base("list", AddCommandStrings.IntegrationListDescription, integrationPackageSearchService, interactionService, features, updateNotifier, executionContext, telemetry)
+        CommonCommandServices services)
+        : base("list", AddCommandStrings.IntegrationListDescription, integrationPackageSearchService, services)
     {
     }
 
@@ -185,12 +173,8 @@ internal sealed class IntegrationSearchCommand : IntegrationDiscoveryCommand
 
     public IntegrationSearchCommand(
         IntegrationPackageSearchService integrationPackageSearchService,
-        IInteractionService interactionService,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        AspireCliTelemetry telemetry)
-        : base("search", AddCommandStrings.IntegrationSearchDescription, integrationPackageSearchService, interactionService, features, updateNotifier, executionContext, telemetry)
+        CommonCommandServices services)
+        : base("search", AddCommandStrings.IntegrationSearchDescription, integrationPackageSearchService, services)
     {
         Arguments.Add(_queryArgument);
     }
@@ -198,6 +182,8 @@ internal sealed class IntegrationSearchCommand : IntegrationDiscoveryCommand
     protected override string? GetSearchTerm(ParseResult parseResult) => parseResult.GetValue(_queryArgument);
 }
 
+// `aspire integration list --format json` and `aspire integration search --format json`
+// use this shape; keep docs/specs/cli-output-formats.md in sync when changing it.
 internal sealed class IntegrationSearchResult
 {
     public required string Name { get; init; }

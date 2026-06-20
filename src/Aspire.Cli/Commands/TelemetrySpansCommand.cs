@@ -4,11 +4,8 @@
 using System.CommandLine;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Utils;
@@ -24,7 +21,6 @@ namespace Aspire.Cli.Commands;
 /// </summary>
 internal sealed class TelemetrySpansCommand : BaseCommand
 {
-    private readonly IInteractionService _interactionService;
     private readonly AppHostConnectionResolver _connectionResolver;
     private readonly ILogger<TelemetrySpansCommand> _logger;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -44,25 +40,19 @@ internal sealed class TelemetrySpansCommand : BaseCommand
     private static readonly Option<string?> s_searchOption = TelemetryCommandHelpers.CreateSearchOption();
 
     public TelemetrySpansCommand(
-        IInteractionService interactionService,
-        IAuxiliaryBackchannelMonitor backchannelMonitor,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        IProjectLocator projectLocator,
-        AspireCliTelemetry telemetry,
+        AppHostConnectionResolver connectionResolver,
         IHttpClientFactory httpClientFactory,
         ResourceColorMap resourceColorMap,
         TimeProvider timeProvider,
-        ILogger<TelemetrySpansCommand> logger)
-        : base("spans", TelemetryCommandStrings.SpansDescription, features, updateNotifier, executionContext, interactionService, telemetry)
+        ILogger<TelemetrySpansCommand> logger,
+        CommonCommandServices services)
+        : base("spans", TelemetryCommandStrings.SpansDescription, services)
     {
-        _interactionService = interactionService;
         _httpClientFactory = httpClientFactory;
         _resourceColorMap = resourceColorMap;
         _timeProvider = timeProvider;
         _logger = logger;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, executionContext, logger);
+        _connectionResolver = connectionResolver;
 
         Arguments.Add(s_resourceArgument);
         Options.Add(s_appHostOption);
@@ -98,7 +88,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
         }
 
         var dashboardApi = await TelemetryCommandHelpers.GetDashboardApiAsync(
-            _connectionResolver, _interactionService, _httpClientFactory, _logger, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: true, cancellationToken);
+            _connectionResolver, InteractionService, _httpClientFactory, _logger, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: true, cancellationToken);
 
         if (!dashboardApi.Success)
         {
@@ -136,7 +126,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
             // If a resource was specified but not found, return error
             if (!TelemetryCommandHelpers.TryResolveResourceNames(resource, resources, out var resolvedResources))
             {
-                _interactionService.DisplayError($"Resource '{resource}' not found.");
+                InteractionService.DisplayError($"Resource '{resource}' not found.");
                 return CliExitCodes.InvalidCommand;
             }
 
@@ -160,7 +150,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
         {
             _logger.LogError(ex, "Failed to fetch spans from Dashboard API");
             var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, baseUrl, dashboardOnly, _httpClientFactory, _logger, cancellationToken);
-            TelemetryCommandHelpers.DisplayTelemetryError(_interactionService, errorInfo);
+            TelemetryCommandHelpers.DisplayTelemetryError(InteractionService, errorInfo);
             return CliExitCodes.DashboardFailure;
         }
     }
@@ -177,7 +167,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
             var apiResponse = JsonSerializer.Deserialize(json, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
             var resourceSpans = apiResponse?.Data?.ResourceSpans;
             Func<IOtlpResource, string> getResourceName = s => OtlpHelpers.GetResourceName(s, allResources);
-            _interactionService.DisplayRawText(SharedAIHelpers.SerializeSpansToJson(resourceSpans, getResourceName, dashboardUrl), ConsoleOutput.Standard);
+            InteractionService.DisplayRawText(SharedAIHelpers.SerializeSpansToJson(resourceSpans, getResourceName, dashboardUrl), ConsoleOutput.Standard);
         }
         else
         {
@@ -202,7 +192,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
                 var request = JsonSerializer.Deserialize(line, OtlpJsonSerializerContext.Default.OtlpExportTraceServiceRequestJson);
                 var resourceSpans = request?.ResourceSpans;
                 Func<IOtlpResource, string> getResourceName = s => OtlpHelpers.GetResourceName(s, allResources);
-                _interactionService.DisplayRawText(SharedAIHelpers.SerializeSpansToJson(resourceSpans, getResourceName, dashboardUrl), ConsoleOutput.Standard);
+                InteractionService.DisplayRawText(SharedAIHelpers.SerializeSpansToJson(resourceSpans, getResourceName, dashboardUrl), ConsoleOutput.Standard);
             }
             else
             {
@@ -220,7 +210,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
 
         if (resourceSpans is null or { Length: 0 })
         {
-            TelemetryCommandHelpers.DisplayNoData(_interactionService, "spans");
+            TelemetryCommandHelpers.DisplayNoData(InteractionService, "spans");
             return;
         }
 
@@ -273,11 +263,11 @@ internal sealed class TelemetrySpansCommand : BaseCommand
             ? FormatHelpers.FormatConsoleTime(_timeProvider, OtlpHelpers.UnixNanoSecondsToDateTime(span.StartTimeUnixNano.Value))
             : "";
         var shortSpanId = OtlpHelpers.ToShortenedId(spanId);
-        var spanIdLink = TelemetryCommandHelpers.FormatTraceLink(_interactionService, dashboardUrl, traceId, shortSpanId, spanId: spanId);
+        var spanIdLink = TelemetryCommandHelpers.FormatTraceLink(InteractionService, dashboardUrl, traceId, shortSpanId, spanId: spanId);
         var durationStr = TelemetryCommandHelpers.FormatDuration(duration);
         var resourceColor = _resourceColorMap.GetColor(resourceName);
 
         var escapedName = name.EscapeMarkup();
-        _interactionService.DisplayMarkupLine($"[grey]{timestamp}[/] [{statusColor}]{statusText}[/] [white]{durationStr,8}[/] [{resourceColor}]{resourceName.EscapeMarkup()}[/]: {escapedName} [grey]{spanIdLink}[/]");
+        InteractionService.DisplayMarkupLine($"[grey]{timestamp}[/] [{statusColor}]{statusText}[/] [white]{durationStr,8}[/] [{resourceColor}]{resourceName.EscapeMarkup()}[/]: {escapedName} [grey]{spanIdLink}[/]");
     }
 }

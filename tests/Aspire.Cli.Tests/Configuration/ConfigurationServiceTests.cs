@@ -208,6 +208,84 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetConfigurationFromDirectoryAsync_WithContinueSearchWhenKeyMissing_WalksUpWhenNearestConfigDoesNotContainKey()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var (service, _) = CreateService(
+            workspace,
+            """
+            {
+              "sdk": {
+                "version": "10.0.0-preview.5.26311.1"
+              }
+            }
+            """);
+
+        var srcDirectory = workspace.WorkspaceRoot.CreateSubdirectory("src");
+        await File.WriteAllTextAsync(
+            Path.Combine(srcDirectory.FullName, AspireConfigFile.FileName),
+            """
+            {
+              "packages": {
+                "Aspire.Hosting.Redis": ""
+              }
+            }
+            """);
+
+        var value = await service.GetConfigurationFromDirectoryAsync("sdk.version", srcDirectory, continueSearchWhenKeyMissing: true);
+
+        Assert.Equal("10.0.0-preview.5.26311.1", value);
+    }
+
+    [Fact]
+    public async Task GetConfigurationFromDirectoryAsync_WhenNearestConfigDoesNotContainKey_DoesNotReadParentConfig()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var (service, _) = CreateService(
+            workspace,
+            """
+            {
+              "channel": "daily"
+            }
+            """);
+
+        var srcDirectory = workspace.WorkspaceRoot.CreateSubdirectory("src");
+        await File.WriteAllTextAsync(
+            Path.Combine(srcDirectory.FullName, AspireConfigFile.FileName),
+            """
+            {
+              "language": "csharp"
+            }
+            """);
+
+        var value = await service.GetConfigurationFromDirectoryAsync("channel", srcDirectory);
+
+        Assert.Null(value);
+    }
+
+    [Fact]
+    public async Task GetConfigurationFromDirectoryAsync_FindsNearestParentConfigWhenStartDirectoryHasNoConfig()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var (service, _) = CreateService(
+            workspace,
+            """
+            {
+              "channel": "daily"
+            }
+            """);
+
+        var srcDirectory = workspace.WorkspaceRoot.CreateSubdirectory("src");
+
+        var value = await service.GetConfigurationFromDirectoryAsync("channel", srcDirectory);
+
+        Assert.Equal("daily", value);
+    }
+
+    [Fact]
     public async Task SetConfigurationAsync_SetsNestedValues()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

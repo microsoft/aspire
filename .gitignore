@@ -56,6 +56,9 @@ _ReSharper*/
 # DotCover is a Code Coverage Tool
 *.dotCover
 
+# Generated blazor.web.js files (copied from NuGet packages at build time by BlazorAssets.targets)
+src/Aspire.Dashboard/wwwroot/framework/blazor.web.*.js
+
 # NuGet Packages
 *.nuget.props
 *.nuget.targets
@@ -131,9 +134,6 @@ config.ps1
 # Node.js modules
 node_modules/
 
-# Generated Aspire polyglot modules
-.modules/
-
 # Maven build outputs
 target/
 dependency-reduced-pom.xml
@@ -189,6 +189,7 @@ tests/PolyglotAppHosts/**/Go/apphost.exe
 
 #Aspire CLI
 .aspire/
+.modules/
 
 # Release notes automation output
 tools/ReleaseNotes/analysis-output/
@@ -198,9 +199,20 @@ tools/ReleaseNotes/release-notes-*.md
 extension/dist/
 extension/.localization/
 extension/out/
+extension/.test-artifacts/
+extension/.test-extensions/
+extension/.test-results/
+extension/.test-storage/
+extension/.test-workspace/
+extension/.test-workspaces/
 extension/node_modules/
+extension/.corepack-cache/
 **/.vscode-test/
 extension/.version
+extension/.vscode-test-short.mjs
+extension/local-shortpath.vscode-test.mjs
+extension/v/
+extension/x/
 
 # Generated extension localization files (regenerated from XLF during build)
 extension/l10n/bundle.l10n.json

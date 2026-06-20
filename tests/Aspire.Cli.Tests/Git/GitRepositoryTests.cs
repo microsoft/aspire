@@ -6,6 +6,7 @@ using System.Diagnostics;
 using Aspire.Cli.Git;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Tests;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -110,11 +111,15 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
         await GitTestHelper.RunGitAsync(workspace.WorkspaceRoot.FullName, "add", "AppHost.csproj");
         await GitTestHelper.RunGitAsync(workspace.WorkspaceRoot.FullName, "commit", "-m", "init");
 
+        // ActivitySource listeners are process-wide, so this test can observe profiling spans
+        // from other tests running in parallel. Use a unique session id and filter by it instead
+        // of assuming every observed activity belongs to this git invocation.
+        var sessionId = $"git-{Guid.NewGuid():N}";
         var startedActivities = new ConcurrentBag<Activity>();
-        using var listener = CreateProfilingActivityListener(startedActivities.Add);
         using var profilingTelemetry = CreateProfilingTelemetry(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
-            (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1"));
+            (ProfilingTelemetry.EnvironmentVariables.SessionId, sessionId));
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStarted: startedActivities.Add);
         var executionContext = workspace.CreateExecutionContext();
         var repo = new GitRepository(executionContext, NullLogger<GitRepository>.Instance, profilingTelemetry);
 
@@ -122,7 +127,7 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
 
         Assert.NotNull(result);
         var startedActivity = Assert.Single(startedActivities, activity =>
-            activity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId) as string == "session-1" &&
+            IsActivityFromSession(activity, ProfilingTelemetry.Activities.Process, sessionId) &&
             activity.GetTagItem(ProfilingTelemetry.Tags.GitCommand) as string == "ls-files");
         Assert.Equal(ProfilingTelemetry.Activities.Process, startedActivity.OperationName);
         Assert.Equal("process git", startedActivity.DisplayName);
@@ -135,7 +140,13 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, startedActivity.GetTagItem(TelemetryConstants.Tags.ProcessExitCode));
         Assert.True((int)startedActivity.GetTagItem(TelemetryConstants.Tags.ProcessPid)! > 0);
         Assert.True((int)startedActivity.GetTagItem(ProfilingTelemetry.Tags.GitStdoutLength)! > 0);
-        Assert.Equal("session-1", startedActivity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId));
+        Assert.Equal(sessionId, startedActivity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId));
+    }
+
+    private static bool IsActivityFromSession(Activity activity, string operationName, string sessionId)
+    {
+        return activity.OperationName == operationName &&
+            Equals(sessionId, activity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId));
     }
 
     private static ProfilingTelemetry CreateProfilingTelemetry(params (string Key, string? Value)[] values)
@@ -144,18 +155,6 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
             .AddInMemoryCollection(values.Select(value => new KeyValuePair<string, string?>(value.Key, value.Value)))
             .Build();
         return new ProfilingTelemetry(configuration);
-    }
-
-    private static ActivityListener CreateProfilingActivityListener(Action<Activity> activityStarted)
-    {
-        var listener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == ProfilingTelemetry.ActivitySourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStarted = activityStarted
-        };
-        ActivitySource.AddActivityListener(listener);
-        return listener;
     }
 
 }

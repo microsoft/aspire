@@ -38,7 +38,7 @@ internal class HttpsCertificateExecutionConfigurationGatherer : IExecutionConfig
         X509Certificate2? certificate = effectiveAnnotation.Certificate;
         if (certificate is null)
         {
-            var developerCertificateService = executionContext.ServiceProvider.GetRequiredService<IDeveloperCertificateService>();
+            var developerCertificateService = executionContext.Services.GetRequiredService<IDeveloperCertificateService>();
             if (effectiveAnnotation.UseDeveloperCertificate.GetValueOrDefault(developerCertificateService.UseForHttps))
             {
                 certificate = developerCertificateService.Certificates.FirstOrDefault();
@@ -57,6 +57,7 @@ internal class HttpsCertificateExecutionConfigurationGatherer : IExecutionConfig
             Certificate = certificate,
             KeyPathReference = configurationContext.KeyPath,
             PfxPathReference = configurationContext.PfxPath,
+            CertificateWithKeyPathReference = configurationContext.CertificateWithKeyPath,
             Password = effectiveAnnotation.Password is not null ? await effectiveAnnotation.Password.GetValueAsync(cancellationToken).ConfigureAwait(false) : null,
         };
         context.AddAdditionalData(additionalData);
@@ -71,6 +72,7 @@ internal class HttpsCertificateExecutionConfigurationGatherer : IExecutionConfig
             // Must use the metadata references to ensure proper tracking of usage
             KeyPath = additionalData.KeyPathReference,
             PfxPath = additionalData.PfxPathReference,
+            CertificateWithKeyPath = additionalData.CertificateWithKeyPathReference,
             Password = effectiveAnnotation.Password,
             CancellationToken = cancellationToken,
         };
@@ -91,6 +93,9 @@ public class HttpsCertificateExecutionConfigurationData : IExecutionConfiguratio
 {
     private ReferenceExpression? _keyPathReference;
     private TrackedReference? _trackedKeyPathReference;
+
+    private ReferenceExpression? _certificateWithKeyPathReference;
+    private TrackedReference? _trackedCertificateWithKeyPathReference;
 
     private ReferenceExpression? _pfxPathReference;
     private TrackedReference? _trackedPfxPathReference;
@@ -120,6 +125,27 @@ public class HttpsCertificateExecutionConfigurationData : IExecutionConfiguratio
     /// Indicates whether the key path was actually referenced in the resource configuration.
     /// </summary>
     public bool IsKeyPathReferenced => _trackedKeyPathReference?.WasResolved ?? false;
+
+    /// <summary>
+    /// Reference expression that will resolve to the path of the server authentication certificate in PFX format.
+    /// </summary>
+    public required ReferenceExpression CertificateWithKeyPathReference
+    {
+        get
+        {
+            return _certificateWithKeyPathReference!;
+        }
+        set
+        {
+            _trackedCertificateWithKeyPathReference = new TrackedReference(value);
+            _certificateWithKeyPathReference = ReferenceExpression.Create($"{_trackedCertificateWithKeyPathReference}");
+        }
+    }
+
+    /// <summary>
+    /// Indicates whether the certificate-with-key path was actually referenced in the resource configuration.
+    /// </summary>
+    public bool IsCertificateWithKeyPathReferenced => _trackedCertificateWithKeyPathReference?.WasResolved ?? false;
 
     /// <summary>
     /// Reference expression that will resolve to the path of the server authentication certificate in PFX format.
@@ -187,6 +213,12 @@ public class HttpsCertificateExecutionConfigurationContext
     /// For containers this will be a path inside the container.
     /// </summary>
     public required ReferenceExpression KeyPath { get; init; }
+
+    /// <summary>
+    /// Expression that will resolve to the path of the server authentication certificate and key in a combined PEM file.
+    /// For containers this will be a path inside the container.
+    /// </summary>
+    public required ReferenceExpression CertificateWithKeyPath { get; init; }
 
     /// <summary>
     /// Expression that will resolve to the path of the server authentication certificate in PFX format.

@@ -227,7 +227,7 @@ internal static class TestNuGetPrefetcher
 // Test command implementations
 internal sealed class TestCommand : BaseCommand
 {
-    public TestCommand(string name = "test") : base(name, "Test command", null!, null!, null!, null!, null!)
+    public TestCommand(string name = "test") : base(name, "Test command", new CommonCommandServices(null!, null!, null!, null!, null!, null!, null!, null!))
     {
     }
 
@@ -239,7 +239,7 @@ internal sealed class TestCommand : BaseCommand
 
 internal sealed class TestCommandWithInterface : BaseCommand, IPackageMetaPrefetchingCommand
 {
-    public TestCommandWithInterface() : base("test-interface", "Test command with interface", null!, null!, null!, null!, null!)
+    public TestCommandWithInterface() : base("test-interface", "Test command with interface", new CommonCommandServices(null!, null!, null!, null!, null!, null!, null!, null!))
     {
     }
 

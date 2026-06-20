@@ -6,7 +6,9 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Diagnostics;
 
 namespace Aspire.Cli.Tests.Scaffolding;
 
@@ -46,7 +48,7 @@ public class ChannelReseedTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var scaffoldingService = CreateScaffoldingService();
+        var scaffoldingService = CreateScaffoldingService(workspace);
 
         var ctx = new ScaffoldContext(
             Language: s_testLanguage,
@@ -70,6 +72,38 @@ public class ChannelReseedTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedPersistedChannel, reloaded.Channel);
     }
 
+    [Fact]
+    public async Task ScaffoldAsync_PassesPackageSourceOverrideToPrepareAsync()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string packageSourceOverride = "/tmp/aspire-pr-hive/packages";
+        var language = s_testLanguage with { PackageName = "Aspire.Hosting.CodeGeneration.TypeScript" };
+        var appHostServerProject = new CapturingAppHostServerProject(workspace.WorkspaceRoot.FullName);
+
+        var scaffoldingService = new ScaffoldingService(
+            appHostServerProjectFactory: new TestAppHostServerProjectFactory
+            {
+                CreateAsyncCallback = (_, _) => Task.FromResult<IAppHostServerProject>(appHostServerProject)
+            },
+            appHostServerSessionFactory: new TestAppHostServerSessionFactory(),
+            languageDiscovery: new TestLanguageDiscovery(language),
+            interactionService: new TestInteractionService(),
+            logger: NullLogger<ScaffoldingService>.Instance,
+            executionContext: workspace.CreateExecutionContext());
+
+        var context = new ScaffoldContext(
+            Language: language,
+            TargetDirectory: workspace.WorkspaceRoot,
+            ProjectName: "test",
+            SdkVersion: "13.4.0-pr.17141.gf142085f",
+            PackageSourceOverride: packageSourceOverride);
+
+        var result = await scaffoldingService.ScaffoldAsync(context, CancellationToken.None);
+
+        Assert.False(result);
+        Assert.Equal(packageSourceOverride, appHostServerProject.PackageSourceOverride);
+    }
+
     private static readonly LanguageInfo s_testLanguage = new(
         LanguageId: new LanguageId(KnownLanguageId.TypeScript),
         DisplayName: "TypeScript",
@@ -78,13 +112,41 @@ public class ChannelReseedTests(ITestOutputHelper outputHelper)
         CodeGenerator: "TypeScript",
         AppHostFileName: "apphost.ts");
 
-    private static ScaffoldingService CreateScaffoldingService()
+    private static ScaffoldingService CreateScaffoldingService(TemporaryWorkspace workspace)
     {
         return new ScaffoldingService(
             appHostServerProjectFactory: new TestAppHostServerProjectFactory(),
+            appHostServerSessionFactory: new TestAppHostServerSessionFactory(),
             languageDiscovery: new TestLanguageDiscovery(s_testLanguage),
             interactionService: new TestInteractionService(),
-            logger: NullLogger<ScaffoldingService>.Instance);
+            logger: NullLogger<ScaffoldingService>.Instance,
+            executionContext: workspace.CreateExecutionContext());
+    }
+
+    private sealed class CapturingAppHostServerProject(string appDirectoryPath) : IAppHostServerProject
+    {
+        public string AppDirectoryPath { get; } = appDirectoryPath;
+
+        public string? PackageSourceOverride { get; private set; }
+
+        public string GetInstanceIdentifier() => AppDirectoryPath;
+
+        public Task<AppHostServerPrepareResult> PrepareAsync(
+            string sdkVersion,
+            IEnumerable<IntegrationReference> integrations,
+            string? requestedChannel = null,
+            string? packageSourceOverride = null,
+            CancellationToken cancellationToken = default)
+        {
+            PackageSourceOverride = packageSourceOverride;
+            return Task.FromResult(new AppHostServerPrepareResult(Success: false, Output: null));
+        }
+
+        public (string SocketPath, Process Process, OutputCollector OutputCollector) Run(
+            int hostPid,
+            IReadOnlyDictionary<string, string>? environmentVariables = null,
+            string[]? additionalArgs = null,
+            bool debug = false) =>
+            throw new NotSupportedException("Run should not be invoked when PrepareAsync fails.");
     }
 }
-

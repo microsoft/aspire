@@ -464,7 +464,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(1, backchannel.ExecuteResourceCommandCallCount);
-        Assert.Contains("Executing command 'Start' on resource 'myresource'...", statuses);
+        Assert.Contains("Validating and executing command 'Start' on resource 'myresource'...", statuses);
     }
 
     [Fact]
@@ -1115,6 +1115,8 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.FailedToExecuteResourceCommand, exitCode);
         var error = Assert.Single(interactionService.DisplayedErrors);
+        Assert.Contains("Failed to validate command arguments for command 'configure' on resource 'web-browser-automation'", error);
+        Assert.DoesNotContain("Command argument validation failed.", error);
         Assert.Contains("--timeout-seconds: Value must be greater than 0.", error);
         Assert.DoesNotContain("timeoutSeconds:", error);
     }
@@ -1634,6 +1636,208 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ResourceCommand_LoadArgumentsWritesLoadedArgumentInputsAsJson()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var output = new StringWriter();
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
+            {
+                Success = false,
+                Message = "Command argument validation failed.",
+                ArgumentInputs =
+                [
+                    CreateArgument("browser", inputType: "Choice", value: "Chrome"),
+                    CreateArgument(
+                        "profile",
+                        inputType: "Choice",
+                        options: new Dictionary<string, string?>
+                        {
+                            ["Default"] = "Default"
+                        })
+                ]
+            },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "web-browser-automation",
+                    CreateCommand(
+                        "configure",
+                        CreateArgument("browser", inputType: "Choice")))
+            ]
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("""resource web-browser-automation configure --load-arguments -- --browser Chrome""");
+
+        var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = output }).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(backchannel.ExecuteResourceCommandOptions?.ValidateOnly);
+        Assert.True(backchannel.ExecuteResourceCommandOptions?.ReturnArgumentInputs);
+        AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("browser", "Chrome"));
+
+        var json = JsonNode.Parse(output.ToString());
+        var argumentInputs = Assert.IsType<JsonArray>(json);
+        Assert.Equal(2, argumentInputs.Count);
+        Assert.Equal("browser", argumentInputs[0]!["name"]!.GetValue<string>());
+        Assert.Equal("Chrome", argumentInputs[0]!["value"]!.GetValue<string>());
+        Assert.Equal("profile", argumentInputs[1]!["name"]!.GetValue<string>());
+        Assert.Equal("Default", argumentInputs[1]!["options"]!["Default"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task ResourceCommand_LoadArgumentsDoesNotWriteJsonWhenArgumentInputsAreMissing()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var output = new StringWriter();
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
+            {
+                Success = false,
+                Message = "Loaded argument inputs were not returned."
+            },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "web-browser-automation",
+                    CreateCommand(
+                        "configure",
+                        CreateArgument("browser", inputType: "Choice")))
+            ]
+        };
+        var interactionService = new TestInteractionService();
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel, interactionService);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("""resource web-browser-automation configure --load-arguments -- --browser Chrome""");
+
+        var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = output }).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToExecuteResourceCommand, exitCode);
+        Assert.True(backchannel.ExecuteResourceCommandOptions?.ValidateOnly);
+        Assert.True(backchannel.ExecuteResourceCommandOptions?.ReturnArgumentInputs);
+        Assert.DoesNotContain("[]", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Loaded argument inputs were not returned.", interactionService.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task ResourceCommand_LoadArgumentsReportsFallbackErrorWhenArgumentInputsAndMessageAreMissing()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var output = new StringWriter();
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
+            {
+                Success = false
+            },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "web-browser-automation",
+                    CreateCommand(
+                        "configure",
+                        CreateArgument("browser", inputType: "Choice")))
+            ]
+        };
+        var interactionService = new TestInteractionService();
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel, interactionService);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("""resource web-browser-automation configure --load-arguments -- --browser Chrome""");
+
+        var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = output }).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToExecuteResourceCommand, exitCode);
+        Assert.Contains("AppHost returned no loaded argument inputs.", interactionService.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task ResourceCommand_LoadArgumentsAllowsPartialDynamicArguments()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var output = new StringWriter();
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
+            {
+                Success = false,
+                Message = "Command argument validation failed.",
+                ArgumentInputs =
+                [
+                    CreateArgument("category", inputType: "Choice", required: true, value: "fruit"),
+                    CreateArgument("item", inputType: "Choice", required: true, options: new Dictionary<string, string?> { ["banana"] = "Banana" }),
+                ]
+            },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "argument-commands",
+                    CreateCommand(
+                        "dependent-arguments",
+                        CreateArgument("category", inputType: "Choice", required: true, options: new Dictionary<string, string?> { ["fruit"] = "Fruit" }),
+                        CreateArgument("item", inputType: "Choice", required: true, disabled: true, dynamicLoading: new ResourceSnapshotCommandArgumentDynamicLoading { DependsOnInputs = ["category"] })))
+            ]
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("""resource argument-commands dependent-arguments --load-arguments -- --category fruit""");
+
+        var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = output }).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(backchannel.ExecuteResourceCommandOptions?.ValidateOnly);
+        Assert.True(backchannel.ExecuteResourceCommandOptions?.ReturnArgumentInputs);
+        AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("category", "fruit"));
+        Assert.DoesNotContain("Required option '--item'", output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ResourceCommand_ExecuteAllowsDynamicallyEnabledArguments()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "argument-commands",
+                    CreateCommand(
+                        "dependent-arguments",
+                        CreateArgument("category", inputType: "Choice", required: true, options: new Dictionary<string, string?> { ["fruit"] = "Fruit" }),
+                        CreateArgument("item", inputType: "Choice", required: true, disabled: true, dynamicLoading: new ResourceSnapshotCommandArgumentDynamicLoading { DependsOnInputs = ["category"] }),
+                        CreateArgument("quantity", inputType: "Number", required: true),
+                        CreateArgument("priority", inputType: "Choice", disabled: true, dynamicLoading: new ResourceSnapshotCommandArgumentDynamicLoading { DependsOnInputs = ["item"] })))
+            ]
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("""resource argument-commands dependent-arguments -- --category=fruit --item=banana --quantity=2 --priority=express""");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        AssertJsonObject(
+            backchannel.ExecuteResourceCommandArguments,
+            ("category", "fruit"),
+            ("item", "banana"),
+            ("quantity", "2"),
+            ("priority", "express"));
+    }
+
+    [Fact]
     public async Task ResourceCommand_DoesNotSynthesizeNegatedBooleanArgument()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -2080,7 +2284,8 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         string? value = null,
         Dictionary<string, string?>? options = null,
         bool allowCustomChoice = false,
-        bool disabled = false)
+        bool disabled = false,
+        ResourceSnapshotCommandArgumentDynamicLoading? dynamicLoading = null)
     {
         return new ResourceSnapshotCommandArgument
         {
@@ -2091,7 +2296,8 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
             Value = value,
             Options = options,
             AllowCustomChoice = allowCustomChoice,
-            Disabled = disabled
+            Disabled = disabled,
+            DynamicLoading = dynamicLoading
         };
     }
 }
