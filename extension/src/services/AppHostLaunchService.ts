@@ -159,9 +159,13 @@ export class AppHostLaunchService implements vscode.Disposable {
             const started = await vscode.debug.startDebugging(undefined, config);
             if (!started) {
                 // A false result means VS Code declined the launch before the
-                // debug session started (for example, a provider gate canceled).
-                // Report it separately from real launch errors.
-                throw new vscode.CancellationError();
+                // debug session started (for example, no provider matched or
+                // an adapter gate rejected it). Surface it as an error so the
+                // tree command path does not silently swallow a real launch
+                // failure while still clearing the temporary "Starting..." state.
+                const error = new Error(`VS Code did not start the Aspire ${command} session for ${vscode.workspace.asRelativePath(appHostPath)}.`);
+                error.name = 'StartDebuggingDeclined';
+                throw error;
             }
             sendTelemetryEvent('apphost/launch/result', {
                 ...telemetryProperties,

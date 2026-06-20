@@ -138,30 +138,30 @@ suite('AppHostLaunchService', () => {
         assert.strictEqual(service.isLaunching('/repo/AppHost2.csproj'), true);
     });
 
-    test('launch clears launching state and throws cancellation when startDebugging returns false', async () => {
+    test('launch clears launching state and throws when startDebugging returns false', async () => {
         // vscode.debug.startDebugging returns Promise<boolean> and resolves false when
         // the debug adapter rejects or no provider matches — no terminate event is
         // emitted in that case. Without explicit cleanup the tree item would be stuck
         // showing the "Starting..." spinner forever.
         startDebuggingStub.resolves(false);
 
-        await assert.rejects(service.launch('/repo/AppHost.csproj', 'run', true), vscode.CancellationError);
+        await assert.rejects(service.launch('/repo/AppHost.csproj', 'run', true), /did not start the Aspire run session/);
 
         assert.strictEqual(service.isLaunching('/repo/AppHost.csproj'), false);
     });
 
-    test('launch reports canceled telemetry when startDebugging returns false', async () => {
+    test('launch reports error telemetry when startDebugging returns false', async () => {
         startDebuggingStub.resolves(false);
         const fake = new FakeTelemetryReporter();
         const restore = __setReporterForTests(fake as unknown as Parameters<typeof __setReporterForTests>[0]);
         try {
-            await assert.rejects(service.launch('/repo/AppHost.csproj', 'run', true), vscode.CancellationError);
+            await assert.rejects(service.launch('/repo/AppHost.csproj', 'run', true), /did not start the Aspire run session/);
 
             assert.strictEqual(fake.events.length, 1);
             const event = fake.events[0];
             assert.strictEqual(event.name, 'apphost/launch/result');
-            assert.strictEqual(event.properties?.outcome, 'canceled');
-            assert.strictEqual(event.properties?.error_kind, undefined);
+            assert.strictEqual(event.properties?.outcome, 'error');
+            assert.strictEqual(event.properties?.error_kind, 'StartDebuggingDeclined');
             assert.ok(typeof event.measurements?.duration_ms === 'number');
         }
         finally {
