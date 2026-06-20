@@ -318,7 +318,6 @@ export class AspireTerminalProvider implements vscode.Disposable {
             try {
                 aspireTerminal.terminal.dispose();
             }
-
             catch (err) {
                 extensionLogOutputChannel.error(`Failed to dispose Aspire terminal for session ${debugSessionId}: ${err}`);
             }
