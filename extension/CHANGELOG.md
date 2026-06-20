@@ -4,6 +4,7 @@
 
 ### Features
 
+- Stop opening the Aspire Dashboard automatically by default. Use the Aspire: Dashboard Browser setting or a launch.json `dashboardBrowser` value to opt into notifications, an external browser, the integrated browser, or browser debugging ([#17923](https://github.com/microsoft/aspire/issues/17923)).
 - Add Bun debugging support for Bun services running under Aspire ([#17848](https://github.com/microsoft/aspire/pull/17848)).
 - Improve parameter display in the resource tree and AppHost CodeLens: secrets are masked, long values are truncated, and missing parameter values are shown explicitly ([#17193](https://github.com/microsoft/aspire/issues/17193), [#17881](https://github.com/microsoft/aspire/pull/17881)).
 

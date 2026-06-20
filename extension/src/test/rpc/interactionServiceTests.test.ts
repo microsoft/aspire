@@ -366,9 +366,9 @@ suite('InteractionService endpoints', () => {
 		try {
 			const stub = sandbox.stub(extensionLogOutputChannel, 'info');
 			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves();
-			sandbox.stub(vscode.workspace, 'getConfiguration').returns({
-				get: (key: string, defaultValue?: any) => key === 'enableAspireDashboardAutoLaunch' ? 'notification' : defaultValue
-			} as any);
+			sandbox.stub(vscode.workspace, 'getConfiguration').returns(createAspireConfiguration({
+				enableAspireDashboardAutoLaunch: 'notification'
+			}));
 			const testInfo = await createTestRpcServer();
 
 			const baseUrl = 'http://localhost/login?t=base-secret';
@@ -394,15 +394,13 @@ suite('InteractionService endpoints', () => {
 		}
 	});
 
-	test("displayDashboardUrls writes URLs but does not show info message when autoLaunch is launch", async () => {
+	test("displayDashboardUrls writes URLs but does not show info message or open browser by default", async () => {
 		const sandbox = sinon.createSandbox();
 
 		try {
 			const stub = sandbox.stub(extensionLogOutputChannel, 'info');
 			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves();
-			sandbox.stub(vscode.workspace, 'getConfiguration').returns({
-				get: (key: string, defaultValue?: any) => key === 'enableAspireDashboardAutoLaunch' ? 'launch' : defaultValue
-			} as any);
+			sandbox.stub(vscode.workspace, 'getConfiguration').returns(createAspireConfiguration());
 			const testInfo = await createTestRpcServer();
 
 			const baseUrl = 'http://localhost/login?t=base-secret';
@@ -419,7 +417,185 @@ suite('InteractionService endpoints', () => {
 			assert.ok(outputLines.some(line => line.includes('http://codespaces')), 'Output should contain sanitized codespaces URL origin');
 			assert.ok(outputLines.every(line => !line.includes('base-secret')), 'Output should not contain base URL login token');
 			assert.ok(outputLines.every(line => !line.includes('codespaces-secret')), 'Output should not contain codespaces URL login token');
-			assert.equal(showInformationMessageStub.callCount, 0, 'Should not show info message when autoLaunch is launch');
+			assert.equal(showInformationMessageStub.callCount, 0, 'Should not show info message by default');
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	test("displayDashboardUrls opens the configured dashboard browser", async () => {
+		const sandbox = sinon.createSandbox();
+
+		try {
+			sandbox.stub(extensionLogOutputChannel, 'info');
+			sandbox.stub(vscode.workspace, 'getConfiguration').returns(createAspireConfiguration({
+				dashboardBrowser: 'openExternalBrowser'
+			}));
+			const openDashboardStub = sandbox.stub().resolves();
+			const mockDebugSession = {
+				configuration: {},
+				openDashboard: openDashboardStub,
+				sendMessage: () => {}
+			} as unknown as AspireDebugSession;
+			const testInfo = await createTestRpcServer(null, () => mockDebugSession);
+
+			await testInfo.interactionService.displayDashboardUrls({
+				BaseUrlWithLoginToken: 'http://localhost/login?t=base-secret',
+				CodespacesUrlWithLoginToken: 'http://codespaces/login?t=codespaces-secret'
+			});
+
+			assert.strictEqual(openDashboardStub.callCount, 1);
+			assert.deepStrictEqual(openDashboardStub.getCall(0).args, ['http://codespaces/login?t=codespaces-secret', 'openExternalBrowser']);
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	test("displayDashboardUrls uses debug configuration dashboard browser before global setting", async () => {
+		const sandbox = sinon.createSandbox();
+
+		try {
+			sandbox.stub(extensionLogOutputChannel, 'info');
+			sandbox.stub(vscode.workspace, 'getConfiguration').returns(createAspireConfiguration({
+				dashboardBrowser: 'openExternalBrowser'
+			}));
+			const openDashboardStub = sandbox.stub().resolves();
+			const mockDebugSession = {
+				configuration: {
+					dashboardBrowser: 'integratedBrowser'
+				},
+				openDashboard: openDashboardStub,
+				sendMessage: () => {}
+			} as unknown as AspireDebugSession;
+			const testInfo = await createTestRpcServer(null, () => mockDebugSession);
+
+			await testInfo.interactionService.displayDashboardUrls({
+				BaseUrlWithLoginToken: 'http://localhost/login?t=base-secret'
+			});
+
+			assert.strictEqual(openDashboardStub.callCount, 1);
+			assert.deepStrictEqual(openDashboardStub.getCall(0).args, ['http://localhost/login?t=base-secret', 'integratedBrowser']);
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	test("displayDashboardUrls keeps explicit legacy launch setting compatible", async () => {
+		const sandbox = sinon.createSandbox();
+
+		try {
+			sandbox.stub(extensionLogOutputChannel, 'info');
+			sandbox.stub(vscode.workspace, 'getConfiguration').returns(createAspireConfiguration({
+				enableAspireDashboardAutoLaunch: 'launch'
+			}));
+			const openDashboardStub = sandbox.stub().resolves();
+			const mockDebugSession = {
+				configuration: {},
+				openDashboard: openDashboardStub,
+				sendMessage: () => {}
+			} as unknown as AspireDebugSession;
+			const testInfo = await createTestRpcServer(null, () => mockDebugSession);
+
+			await testInfo.interactionService.displayDashboardUrls({
+				BaseUrlWithLoginToken: 'http://localhost/login?t=base-secret'
+			});
+
+			assert.strictEqual(openDashboardStub.callCount, 1);
+			assert.deepStrictEqual(openDashboardStub.getCall(0).args, ['http://localhost/login?t=base-secret', 'integratedBrowser']);
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	test("displayDashboardUrls lets the configured dashboard browser override legacy launch setting", async () => {
+		const sandbox = sinon.createSandbox();
+
+		try {
+			sandbox.stub(extensionLogOutputChannel, 'info');
+			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves();
+			const openDashboardStub = sandbox.stub().resolves();
+			sandbox.stub(vscode.workspace, 'getConfiguration').returns(createAspireConfiguration({
+				dashboardBrowser: 'none',
+				enableAspireDashboardAutoLaunch: 'launch'
+			}));
+			const mockDebugSession = {
+				configuration: {},
+				openDashboard: openDashboardStub,
+				sendMessage: () => {}
+			} as unknown as AspireDebugSession;
+			const testInfo = await createTestRpcServer(null, () => mockDebugSession);
+
+			await testInfo.interactionService.displayDashboardUrls({
+				BaseUrlWithLoginToken: 'http://localhost/login?t=base-secret'
+			});
+
+			assert.strictEqual(openDashboardStub.callCount, 0);
+			assert.strictEqual(showInformationMessageStub.callCount, 0);
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	test("displayDashboardUrls keeps legacy notification setting when a browser preference is configured", async () => {
+		const sandbox = sinon.createSandbox();
+
+		try {
+			sandbox.stub(extensionLogOutputChannel, 'info');
+			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves();
+			const openDashboardStub = sandbox.stub().resolves();
+			sandbox.stub(vscode.workspace, 'getConfiguration').returns(createAspireConfiguration({
+				dashboardBrowser: 'integratedBrowser',
+				enableAspireDashboardAutoLaunch: 'notification'
+			}));
+			const mockDebugSession = {
+				configuration: {},
+				openDashboard: openDashboardStub,
+				sendMessage: () => {}
+			} as unknown as AspireDebugSession;
+			const testInfo = await createTestRpcServer(null, () => mockDebugSession);
+
+			await testInfo.interactionService.displayDashboardUrls({
+				BaseUrlWithLoginToken: 'http://localhost/login?t=base-secret'
+			});
+			await new Promise(resolve => setTimeout(resolve, 2000));
+
+			assert.strictEqual(openDashboardStub.callCount, 0);
+			assert.strictEqual(showInformationMessageStub.callCount, 1);
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	test("displayDashboardUrls keeps legacy off setting when a browser preference is configured", async () => {
+		const sandbox = sinon.createSandbox();
+
+		try {
+			sandbox.stub(extensionLogOutputChannel, 'info');
+			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves();
+			const openDashboardStub = sandbox.stub().resolves();
+			sandbox.stub(vscode.workspace, 'getConfiguration').returns(createAspireConfiguration({
+				dashboardBrowser: 'integratedBrowser',
+				enableAspireDashboardAutoLaunch: 'off'
+			}));
+			const mockDebugSession = {
+				configuration: {},
+				openDashboard: openDashboardStub,
+				sendMessage: () => {}
+			} as unknown as AspireDebugSession;
+			const testInfo = await createTestRpcServer(null, () => mockDebugSession);
+
+			await testInfo.interactionService.displayDashboardUrls({
+				BaseUrlWithLoginToken: 'http://localhost/login?t=base-secret'
+			});
+
+			assert.strictEqual(openDashboardStub.callCount, 0);
+			assert.strictEqual(showInformationMessageStub.callCount, 0);
 		}
 		finally {
 			sandbox.restore();
@@ -502,6 +678,13 @@ function normalizePathForComparison(value: string) {
 	const normalized = path.normalize(value);
 
 	return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+}
+
+function createAspireConfiguration(values: Record<string, unknown> = {}): vscode.WorkspaceConfiguration {
+	return {
+		get: (key: string, defaultValue?: unknown) => key in values ? values[key] : defaultValue,
+		inspect: (key: string) => key in values ? { key: `aspire.${key}`, globalValue: values[key] } : undefined,
+	} as vscode.WorkspaceConfiguration;
 }
 
 function restoreEnvironmentVariable(name: string, value: string | undefined): void {

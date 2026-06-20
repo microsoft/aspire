@@ -49,6 +49,9 @@
     <trans-unit id="aspire-vscode.strings.aspireConfigExists">
       <source xml:lang="en">Aspire launch configuration already exists in launch.json.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.dashboardLaunchBehaviorChanged">
+      <source xml:lang="en">Aspire no longer opens the Dashboard automatically by default.</source>
+    </trans-unit>
     <trans-unit id="command.codeLensResourceAction">
       <source xml:lang="en">Aspire resource action</source>
     </trans-unit>
@@ -85,9 +88,6 @@
     <trans-unit id="aspire-vscode.strings.authorizationHeaderMustStartWithBearer">
       <source xml:lang="en">Authorization header must start with &apos;Bearer &apos;.</source>
     </trans-unit>
-    <trans-unit id="configuration.aspire.enableAspireDashboardAutoLaunch.launch">
-      <source xml:lang="en">Automatically open the dashboard in the browser.</source>
-    </trans-unit>
     <trans-unit id="configuration.aspire.enableAutoRestore">
       <source xml:lang="en">Automatically run &apos;aspire restore&apos; when the workspace opens and whenever aspire.config.json changes (e.g. after switching git branches). Keeps integration packages in sync and prevents editor errors.</source>
     </trans-unit>
@@ -105,6 +105,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.csharpSupportNotEnabled">
       <source xml:lang="en">C# support is not enabled in this workspace. This project should have started through the Aspire CLI.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.changelogLabel">
+      <source xml:lang="en">Changelog</source>
     </trans-unit>
     <trans-unit id="configuration.aspire.closeDashboardOnDebugEnd">
       <source xml:lang="en">Close the dashboard browser when the debug session ends. Works with debug browser options (Chrome, Edge, Firefox).</source>
@@ -127,8 +130,11 @@
     <trans-unit id="aspire-vscode.strings.resourceCommandContinue">
       <source xml:lang="en">Continue</source>
     </trans-unit>
-    <trans-unit id="configuration.aspire.enableAspireDashboardAutoLaunch">
+    <trans-unit id="configuration.aspire.dashboardBrowser">
       <source xml:lang="en">Controls what happens with the Aspire Dashboard when debugging starts.</source>
+    </trans-unit>
+    <trans-unit id="extension.debug.dashboardBrowser">
+      <source xml:lang="en">Controls what happens with the Aspire Dashboard when this debug configuration starts. If not set, the global Aspire: Dashboard Browser setting is used.</source>
     </trans-unit>
     <trans-unit id="command.copyAppHostPath">
       <source xml:lang="en">Copy AppHost path</source>
@@ -169,6 +175,15 @@
     <trans-unit id="command.codeLensDebugPipelineStep">
       <source xml:lang="en">Debug Aspire pipeline step</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.dashboardLaunchChromeLabel">
+      <source xml:lang="en">Debug with Chrome</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.dashboardLaunchFirefoxLabel">
+      <source xml:lang="en">Debug with Firefox</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.dashboardLaunchEdgeLabel">
+      <source xml:lang="en">Debug with Microsoft Edge</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.debugProject">
       <source xml:lang="en">Debug {0}</source>
     </trans-unit>
@@ -183,6 +198,12 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.dismissLabel">
       <source xml:lang="en">Dismiss</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.dashboardLaunchNoneLabel">
+      <source xml:lang="en">Do not open the dashboard</source>
+    </trans-unit>
+    <trans-unit id="configuration.aspire.dashboardBrowser.none">
+      <source xml:lang="en">Do nothing — the dashboard URL is still printed in the terminal and available from the Aspire panel.</source>
     </trans-unit>
     <trans-unit id="configuration.aspire.enableAspireDashboardAutoLaunch.off">
       <source xml:lang="en">Do nothing — the dashboard URL is still printed in the terminal.</source>
@@ -328,11 +349,20 @@
     <trans-unit id="aspire-vscode.strings.openAspireDashboard">
       <source xml:lang="en">Launch Aspire Dashboard</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.dashboardLaunchChromeDescription">
+      <source xml:lang="en">Launch Chrome as a child debug session.</source>
+    </trans-unit>
     <trans-unit id="configuration.aspire.dashboardBrowser.debugChrome">
       <source xml:lang="en">Launch Chrome as a debug session (auto-closes when debugging ends).</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.dashboardLaunchFirefoxDescription">
+      <source xml:lang="en">Launch Firefox as a child debug session.</source>
+    </trans-unit>
     <trans-unit id="configuration.aspire.dashboardBrowser.debugFirefox">
       <source xml:lang="en">Launch Firefox as a debug session (requires Firefox Debugger extension).</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.dashboardLaunchEdgeDescription">
+      <source xml:lang="en">Launch Microsoft Edge as a child debug session.</source>
     </trans-unit>
     <trans-unit id="configuration.aspire.dashboardBrowser.debugEdge">
       <source xml:lang="en">Launch Microsoft Edge as a debug session (auto-closes when debugging ends).</source>
@@ -348,6 +378,9 @@
     </trans-unit>
     <trans-unit id="walkthrough.getStarted.description">
       <source xml:lang="en">Learn how to create, run, and monitor distributed applications with Aspire.</source>
+    </trans-unit>
+    <trans-unit id="configuration.aspire.enableAspireDashboardAutoLaunch">
+      <source xml:lang="en">Legacy setting for Aspire Dashboard launch behavior. Use Aspire: Dashboard Browser instead.</source>
     </trans-unit>
     <trans-unit id="command.new">
       <source xml:lang="en">New Aspire project</source>
@@ -430,17 +463,29 @@
     <trans-unit id="command.openInIntegratedBrowser">
       <source xml:lang="en">Open in VS Code</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.dashboardLaunchIntegratedBrowserLabel">
+      <source xml:lang="en">Open in VS Code</source>
+    </trans-unit>
     <trans-unit id="configuration.aspire.dashboardBrowser.integratedBrowser">
       <source xml:lang="en">Open in VS Code&apos;s integrated browser (does not auto-close).</source>
     </trans-unit>
     <trans-unit id="command.openInExternalBrowser">
       <source xml:lang="en">Open in browser</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.dashboardLaunchExternalBrowserLabel">
+      <source xml:lang="en">Open in external browser</source>
+    </trans-unit>
     <trans-unit id="command.openLocalSettings">
       <source xml:lang="en">Open local Aspire settings</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.directLink">
       <source xml:lang="en">Open local URL</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.dashboardLaunchIntegratedBrowserDescription">
+      <source xml:lang="en">Open the dashboard in VS Code&apos;s integrated browser.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.dashboardLaunchExternalBrowserDescription">
+      <source xml:lang="en">Open the dashboard in the system default browser.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostPathLabel">
       <source xml:lang="en">Path</source>
@@ -535,8 +580,20 @@
     <trans-unit id="aspire-vscode.strings.selectDefaultLaunchApphost">
       <source xml:lang="en">Select the default AppHost to launch when starting an Aspire debug session</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.selectDashboardLaunchBehavior">
+      <source xml:lang="en">Select what should happen with the Aspire Dashboard when this launch configuration starts</source>
+    </trans-unit>
     <trans-unit id="configuration.aspire.enableCodeLens">
       <source xml:lang="en">Show CodeLens actions (state, restart, stop, logs) inline above resource declarations in AppHost files.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.dashboardLaunchNotificationLabel">
+      <source xml:lang="en">Show a notification</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.dashboardLaunchNotificationDescription">
+      <source xml:lang="en">Show a notification with a link to open the dashboard.</source>
+    </trans-unit>
+    <trans-unit id="configuration.aspire.dashboardBrowser.notification">
+      <source xml:lang="en">Show a notification with a link to open the dashboard.</source>
     </trans-unit>
     <trans-unit id="configuration.aspire.enableAspireDashboardAutoLaunch.notification">
       <source xml:lang="en">Show a notification with a link to open the dashboard.</source>
@@ -589,8 +646,8 @@
     <trans-unit id="views.appHosts.errorWelcome">
       <source xml:lang="en">The Aspire panel workspace view requires Aspire CLI 13.2.0 or newer and an AppHost that references Aspire.Hosting 13.2.0 or newer. Install or update the Aspire CLI and update your AppHost package to get started.&#10;[Update Aspire CLI](command:aspire-vscode.updateSelf)&#10;[Refresh](command:aspire-vscode.globalRefreshAppHosts)</source>
     </trans-unit>
-    <trans-unit id="configuration.aspire.dashboardBrowser">
-      <source xml:lang="en">The browser to use when auto-launching the Aspire Dashboard.</source>
+    <trans-unit id="aspire-vscode.strings.dashboardLaunchNoneDescription">
+      <source xml:lang="en">The dashboard URL is still printed in the terminal and available from the Aspire panel.</source>
     </trans-unit>
     <trans-unit id="configuration.aspire.aspireCliExecutablePath">
       <source xml:lang="en">The path to the Aspire CLI executable. If not set, the extension will attempt to use &apos;aspire&apos; from the system PATH.</source>
@@ -624,6 +681,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.resourceCommandCustomChoice">
       <source xml:lang="en">Use &quot;{0}&quot;</source>
+    </trans-unit>
+    <trans-unit id="configuration.aspire.enableAspireDashboardAutoLaunch.launch">
+      <source xml:lang="en">Use the configured dashboard browser behavior, falling back to VS Code&apos;s integrated browser for compatibility.</source>
     </trans-unit>
     <trans-unit id="configuration.aspire.dashboardBrowser.openExternalBrowser">
       <source xml:lang="en">Use the system default browser (cannot auto-close).</source>

@@ -23,6 +23,7 @@ import { sendTelemetryEvent } from "../utils/telemetry";
 import { classifyAppHostPath, classifyAppHostDirectory } from "../utils/appHostLanguage";
 import type { AspireDebugConsoleOutputEvent } from "../types/extensionApi";
 
+export type DashboardLaunchBehavior = 'none' | 'notification' | DashboardBrowserType;
 export type DashboardBrowserType = 'openExternalBrowser' | 'integratedBrowser' | 'debugChrome' | 'debugEdge' | 'debugFirefox';
 
 export class AspireDebugSession implements vscode.DebugAdapter {

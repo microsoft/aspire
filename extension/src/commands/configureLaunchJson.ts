@@ -1,30 +1,19 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { noWorkspaceFolder, aspireConfigExists, failedToConfigureLaunchJson, defaultConfigurationName } from '../loc/strings';
+import { aspireConfigExists, failedToConfigureLaunchJson, defaultConfigurationName, selectDashboardLaunchBehavior, dashboardLaunchNoneLabel, dashboardLaunchNoneDescription, dashboardLaunchNotificationLabel, dashboardLaunchNotificationDescription, dashboardLaunchExternalBrowserLabel, dashboardLaunchExternalBrowserDescription, dashboardLaunchIntegratedBrowserLabel, dashboardLaunchIntegratedBrowserDescription, dashboardLaunchChromeLabel, dashboardLaunchChromeDescription, dashboardLaunchEdgeLabel, dashboardLaunchEdgeDescription, dashboardLaunchFirefoxLabel, dashboardLaunchFirefoxDescription } from '../loc/strings';
+import type { DashboardLaunchBehavior } from '../debugger/AspireDebugSession';
+
+type DashboardLaunchBehaviorQuickPickItem = vscode.QuickPickItem & {
+    value: DashboardLaunchBehavior;
+};
 
 export async function configureLaunchJsonCommand() {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0]!;
     const launchJsonPath = path.join(workspaceFolder.uri.fsPath, '.vscode', 'launch.json');
 
     try {
-        const defaultConfig = {
-            type: 'aspire',
-            request: 'launch',
-            name: defaultConfigurationName,
-            program: '${workspaceFolder}'
-        };
-
-        // Check if .vscode directory exists, create if not
         const vscodeDir = path.join(workspaceFolder.uri.fsPath, '.vscode');
         const vscodeUri = vscode.Uri.file(vscodeDir);
-
-        try {
-            await vscode.workspace.fs.stat(vscodeUri);
-        } catch {
-            // Directory doesn't exist, create it
-            await vscode.workspace.fs.createDirectory(vscodeUri);
-        }
-
         const launchUri = vscode.Uri.file(launchJsonPath);
         let launchConfig: any = {
             version: '0.2.0',
@@ -51,6 +40,27 @@ export async function configureLaunchJsonCommand() {
             // File doesn't exist or is invalid JSON, we'll create/overwrite it
         }
 
+        const dashboardBrowser = await promptForDashboardLaunchBehavior();
+        if (!dashboardBrowser) {
+            return;
+        }
+
+        const defaultConfig = {
+            type: 'aspire',
+            request: 'launch',
+            name: defaultConfigurationName,
+            program: '${workspaceFolder}',
+            dashboardBrowser
+        };
+
+        // Check if .vscode directory exists, create if not
+        try {
+            await vscode.workspace.fs.stat(vscodeUri);
+        } catch {
+            // Directory doesn't exist, create it
+            await vscode.workspace.fs.createDirectory(vscodeUri);
+        }
+
         // Ensure configurations array exists
         if (!launchConfig.configurations) {
             launchConfig.configurations = [];
@@ -70,4 +80,50 @@ export async function configureLaunchJsonCommand() {
     } catch (error) {
         vscode.window.showErrorMessage(failedToConfigureLaunchJson(error));
     }
+}
+
+async function promptForDashboardLaunchBehavior(): Promise<DashboardLaunchBehavior | undefined> {
+    const items: DashboardLaunchBehaviorQuickPickItem[] = [
+        {
+            label: dashboardLaunchNoneLabel,
+            description: dashboardLaunchNoneDescription,
+            value: 'none',
+        },
+        {
+            label: dashboardLaunchNotificationLabel,
+            description: dashboardLaunchNotificationDescription,
+            value: 'notification',
+        },
+        {
+            label: dashboardLaunchExternalBrowserLabel,
+            description: dashboardLaunchExternalBrowserDescription,
+            value: 'openExternalBrowser',
+        },
+        {
+            label: dashboardLaunchIntegratedBrowserLabel,
+            description: dashboardLaunchIntegratedBrowserDescription,
+            value: 'integratedBrowser',
+        },
+        {
+            label: dashboardLaunchChromeLabel,
+            description: dashboardLaunchChromeDescription,
+            value: 'debugChrome',
+        },
+        {
+            label: dashboardLaunchEdgeLabel,
+            description: dashboardLaunchEdgeDescription,
+            value: 'debugEdge',
+        },
+        {
+            label: dashboardLaunchFirefoxLabel,
+            description: dashboardLaunchFirefoxDescription,
+            value: 'debugFirefox',
+        },
+    ];
+
+    const selected = await vscode.window.showQuickPick(items, {
+        placeHolder: selectDashboardLaunchBehavior,
+    });
+
+    return selected?.value;
 }

@@ -52,6 +52,23 @@ export const aspireConfigExists = vscode.l10n.t('Aspire launch configuration alr
 export const failedToConfigureLaunchJson = (error: any) => vscode.l10n.t('Failed to configure launch.json: {0}.', error);
 export const defaultConfigurationName = vscode.l10n.t('Aspire: Launch default AppHost');
 export const debugSessionAlreadyExists = (id: string) => vscode.l10n.t('A debug session is already active for id {0}.', id);
+export const selectDashboardLaunchBehavior = vscode.l10n.t('Select what should happen with the Aspire Dashboard when this launch configuration starts');
+export const dashboardLaunchNoneLabel = vscode.l10n.t('Do not open the dashboard');
+export const dashboardLaunchNoneDescription = vscode.l10n.t('The dashboard URL is still printed in the terminal and available from the Aspire panel.');
+export const dashboardLaunchNotificationLabel = vscode.l10n.t('Show a notification');
+export const dashboardLaunchNotificationDescription = vscode.l10n.t('Show a notification with a link to open the dashboard.');
+export const dashboardLaunchExternalBrowserLabel = vscode.l10n.t('Open in external browser');
+export const dashboardLaunchExternalBrowserDescription = vscode.l10n.t('Open the dashboard in the system default browser.');
+export const dashboardLaunchIntegratedBrowserLabel = vscode.l10n.t('Open in VS Code');
+export const dashboardLaunchIntegratedBrowserDescription = vscode.l10n.t("Open the dashboard in VS Code's integrated browser.");
+export const dashboardLaunchChromeLabel = vscode.l10n.t('Debug with Chrome');
+export const dashboardLaunchChromeDescription = vscode.l10n.t('Launch Chrome as a child debug session.');
+export const dashboardLaunchEdgeLabel = vscode.l10n.t('Debug with Microsoft Edge');
+export const dashboardLaunchEdgeDescription = vscode.l10n.t('Launch Microsoft Edge as a child debug session.');
+export const dashboardLaunchFirefoxLabel = vscode.l10n.t('Debug with Firefox');
+export const dashboardLaunchFirefoxDescription = vscode.l10n.t('Launch Firefox as a child debug session.');
+export const dashboardLaunchBehaviorChanged = vscode.l10n.t('Aspire no longer opens the Dashboard automatically by default.');
+export const changelogLabel = vscode.l10n.t('Changelog');
 export const processExceptionOccurred = (error: string, command: string) => vscode.l10n.t('Encountered an exception ({0}) while running the following command: {1}.', error, command);
 
 // Aspire panel strings

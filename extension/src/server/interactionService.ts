@@ -2,14 +2,15 @@ import { MessageConnection } from 'vscode-jsonrpc';
 import * as vscode from 'vscode';
 import * as fs from 'fs/promises';
 import { getRelativePathToWorkspace, isFolderOpenInWorkspace } from '../utils/workspace';
-import { yesLabel, noLabel, directLink, codespacesLink, openAspireDashboard, settingsLabel, failedToShowPromptEmpty, incompatibleAppHostError, aspireHostingSdkVersion, aspireCliVersion, requiredCapability, fieldRequired, aspireDebugSessionNotInitialized, errorMessage, failedToStartDebugSession, dashboard, codespaces, selectDirectoryTitle, selectFileTitle, unableToAddFolderToWorkspace } from '../loc/strings';
+import { yesLabel, noLabel, directLink, codespacesLink, openAspireDashboard, settingsLabel, failedToShowPromptEmpty, incompatibleAppHostError, aspireHostingSdkVersion, aspireCliVersion, requiredCapability, fieldRequired, aspireDebugSessionNotInitialized, errorMessage, failedToStartDebugSession, dashboard, codespaces, selectDirectoryTitle, selectFileTitle, unableToAddFolderToWorkspace, dashboardLaunchBehaviorChanged, changelogLabel } from '../loc/strings';
 import { ICliRpcClient } from './rpcClient';
 import { ProgressNotifier } from './progressNotifier';
 import { applyTextStyle, formatText } from '../utils/strings';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { AspireExtendedDebugConfiguration, EnvVar } from '../dcp/types';
 import { AnsiColors, AspireTerminal } from '../utils/AspireTerminalProvider';
-import { AspireDebugSession, DashboardBrowserType } from '../debugger/AspireDebugSession';
+import { AspireDebugSession } from '../debugger/AspireDebugSession';
+import type { DashboardBrowserType, DashboardLaunchBehavior } from '../debugger/AspireDebugSession';
 import { isDirectory } from '../utils/io';
 
 export interface IInteractionService {
@@ -42,6 +43,7 @@ export interface IInteractionService {
 }
 
 type CSLogLevel = 'Trace' | 'Debug' | 'Information' | 'Warn' | 'Error' | 'Critical';
+const dashboardDefaultChangedNotificationKey = 'aspire.dashboardBrowser.defaultChangedNotification.v1';
 
 // Support both PascalCase (old) and camelCase (new) for backwards compatibility
 // with different versions of the CLI/AppHost.
@@ -84,6 +86,61 @@ function sanitizeDashboardUrlForLog(url: string): string {
     }
 }
 
+function normalizeDashboardLaunchBehavior(value: unknown): DashboardLaunchBehavior | undefined {
+    return value === 'none'
+        || value === 'notification'
+        || value === 'openExternalBrowser'
+        || value === 'integratedBrowser'
+        || value === 'debugChrome'
+        || value === 'debugEdge'
+        || value === 'debugFirefox'
+        ? value
+        : undefined;
+}
+
+function getConfiguredLegacyDashboardLaunchBehavior(aspireConfig: vscode.WorkspaceConfiguration): 'launch' | 'notification' | 'none' | undefined {
+    const inspection = aspireConfig.inspect<unknown>('enableAspireDashboardAutoLaunch');
+    const configuredValue = inspection?.workspaceFolderValue
+        ?? inspection?.workspaceValue
+        ?? inspection?.globalValue;
+
+    if (configuredValue === undefined) {
+        return undefined;
+    }
+
+    if (configuredValue === true || configuredValue === 'launch') {
+        return 'launch';
+    }
+
+    if (configuredValue === false || configuredValue === 'notification') {
+        return 'notification';
+    }
+
+    if (configuredValue === 'off') {
+        return 'none';
+    }
+
+    return undefined;
+}
+
+function getConfiguredDashboardLaunchBehavior(aspireConfig: vscode.WorkspaceConfiguration): DashboardLaunchBehavior | undefined {
+    const inspection = aspireConfig.inspect<unknown>('dashboardBrowser');
+    const configuredValue = inspection?.workspaceFolderValue
+        ?? inspection?.workspaceValue
+        ?? inspection?.globalValue;
+
+    return normalizeDashboardLaunchBehavior(configuredValue);
+}
+
+function hasConfiguredDashboardLaunchBehavior(aspireConfig: vscode.WorkspaceConfiguration): boolean {
+    const dashboardBrowserInspection = aspireConfig.inspect<unknown>('dashboardBrowser');
+    const dashboardBrowserConfigured = dashboardBrowserInspection?.workspaceFolderValue !== undefined
+        || dashboardBrowserInspection?.workspaceValue !== undefined
+        || dashboardBrowserInspection?.globalValue !== undefined;
+
+    return dashboardBrowserConfigured || getConfiguredLegacyDashboardLaunchBehavior(aspireConfig) !== undefined;
+}
+
 // Support both PascalCase (old) and camelCase (new) for backwards compatibility.
 // DisplayLineState is serialized with ModelContextProtocol.McpJsonUtilities.DefaultOptions
 // which changed to camelCase in version 0.2.0+
@@ -114,7 +171,7 @@ export class InteractionService implements IInteractionService {
     private _rpcClient?: ICliRpcClient;
     private _progressNotifier: ProgressNotifier;
 
-    constructor(getAspireDebugSession: () => AspireDebugSession | null, rpcClient: ICliRpcClient, getAspireTerminal?: () => AspireTerminal) {
+    constructor(getAspireDebugSession: () => AspireDebugSession | null, rpcClient: ICliRpcClient, getAspireTerminal?: () => AspireTerminal, private readonly _globalState?: vscode.Memento) {
         this._getAspireDebugSession = getAspireDebugSession;
         this._getAspireTerminal = getAspireTerminal;
         this._rpcClient = rpcClient;
@@ -352,35 +409,21 @@ export class InteractionService implements IInteractionService {
         // Refresh the Aspire panel so it picks up dashboard URLs for the running app host
         vscode.commands.executeCommand('aspire-vscode.refreshAppHosts');
 
-        //  If aspire.enableAspireDashboardAutoLaunch is 'launch', the dashboard will be launched automatically.
-        //  If 'notification', a notification is shown with a link. If 'off', do nothing.
         const aspireConfig = vscode.workspace.getConfiguration('aspire');
-        const rawDashboardAutoLaunch = aspireConfig.get<unknown>('enableAspireDashboardAutoLaunch', 'launch');
+        const dashboardLaunchBehavior = this.getDashboardLaunchBehavior(aspireConfig);
 
-        // Handle legacy boolean values from before this setting was changed to an enum
-        let dashboardAutoLaunch: 'launch' | 'notification' | 'off';
-        if (rawDashboardAutoLaunch === true) {
-            dashboardAutoLaunch = 'launch';
-        } else if (rawDashboardAutoLaunch === false) {
-            dashboardAutoLaunch = 'notification';
-        } else if (rawDashboardAutoLaunch === 'launch' || rawDashboardAutoLaunch === 'notification' || rawDashboardAutoLaunch === 'off') {
-            dashboardAutoLaunch = rawDashboardAutoLaunch;
-        } else {
-            dashboardAutoLaunch = 'launch';
+        if (dashboardLaunchBehavior === 'none') {
+            await this.showDashboardDefaultChangedNotificationIfNeeded(aspireConfig);
+            return;
         }
 
-        if (dashboardAutoLaunch === 'launch') {
+        if (dashboardLaunchBehavior !== 'notification') {
             // Open the dashboard URL in the configured browser. Prefer codespaces URL if available.
             const urlToOpen = codespacesUrl || baseUrl;
             const debugSession = this._getAspireDebugSession();
             if (debugSession) {
-                const browserType = aspireConfig.get<DashboardBrowserType>('dashboardBrowser', 'openExternalBrowser');
-                await debugSession.openDashboard(urlToOpen, browserType);
+                await debugSession.openDashboard(urlToOpen, dashboardLaunchBehavior);
             }
-            return;
-        }
-
-        if (dashboardAutoLaunch === 'off') {
             return;
         }
 
@@ -414,10 +457,59 @@ export class InteractionService implements IInteractionService {
                     vscode.env.openExternal(vscode.Uri.parse(codespacesUrl));
                 }
                 else if (selected.title === settingsLabel) {
-                    vscode.commands.executeCommand('workbench.action.openSettings', 'aspire.enableAspireDashboardAutoLaunch');
+                    vscode.commands.executeCommand('workbench.action.openSettings', 'aspire.dashboardBrowser');
                 }
             });
         }, 1000);
+    }
+
+    private getDashboardLaunchBehavior(aspireConfig: vscode.WorkspaceConfiguration): DashboardLaunchBehavior {
+        const debugSession = this._getAspireDebugSession();
+        const debugConfigurationBehavior = normalizeDashboardLaunchBehavior(debugSession?.configuration.dashboardBrowser);
+        if (debugConfigurationBehavior) {
+            return debugConfigurationBehavior;
+        }
+
+        const configuredGlobalBehavior = getConfiguredDashboardLaunchBehavior(aspireConfig);
+        if (configuredGlobalBehavior === 'none' || configuredGlobalBehavior === 'notification') {
+            return configuredGlobalBehavior;
+        }
+
+        const legacyBehavior = getConfiguredLegacyDashboardLaunchBehavior(aspireConfig);
+
+        if (legacyBehavior) {
+            if (legacyBehavior === 'notification' || legacyBehavior === 'none') {
+                return legacyBehavior;
+            }
+
+            return configuredGlobalBehavior ?? 'integratedBrowser';
+        }
+
+        if (configuredGlobalBehavior) {
+            return configuredGlobalBehavior;
+        }
+
+        return normalizeDashboardLaunchBehavior(aspireConfig.get<unknown>('dashboardBrowser', 'none')) ?? 'none';
+    }
+
+    private async showDashboardDefaultChangedNotificationIfNeeded(aspireConfig: vscode.WorkspaceConfiguration): Promise<void> {
+        if (!this._globalState || this._globalState.get<boolean>(dashboardDefaultChangedNotificationKey, false)) {
+            return;
+        }
+
+        if (hasConfiguredDashboardLaunchBehavior(aspireConfig)) {
+            return;
+        }
+
+        await this._globalState.update(dashboardDefaultChangedNotificationKey, true);
+        vscode.window.showInformationMessage(dashboardLaunchBehaviorChanged, settingsLabel, changelogLabel).then(selected => {
+            if (selected === settingsLabel) {
+                vscode.commands.executeCommand('workbench.action.openSettings', 'aspire.dashboardBrowser');
+            }
+            else if (selected === changelogLabel) {
+                vscode.env.openExternal(vscode.Uri.parse('https://github.com/microsoft/aspire/blob/main/extension/CHANGELOG.md'));
+            }
+        });
     }
 
     async displayLines(lines: ConsoleLine[]) {
