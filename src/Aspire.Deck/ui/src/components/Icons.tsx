@@ -211,6 +211,8 @@ export const LinkIcon = (p: IconProps) =>
     p,
   );
 
+export const ChevronIcon = (p: IconProps) => svg(<path d="m9 18 6-6-6-6" />, p);
+
 // Maps a resource type to a representative icon.
 export function ResourceTypeIcon({ type, ...rest }: { type: string } & IconProps) {
   const lower = type.toLowerCase();

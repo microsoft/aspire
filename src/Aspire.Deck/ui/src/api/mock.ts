@@ -330,6 +330,11 @@ class MockBackend {
     }
     this.started = true;
 
+    // Seed a few traces/logs so the pages aren't empty on first paint.
+    for (let i = 0; i < 4; i++) {
+      this.tickTelemetry();
+    }
+
     // Telemetry grows steadily so charts and tables animate.
     this.timers.push(setInterval(() => this.tickTelemetry(), 1500));
     // Occasional resource state flips to exercise live deltas.
@@ -615,33 +620,44 @@ class MockBackend {
     this.telemetry.recentLogs = [log, ...this.telemetry.recentLogs].slice(0, 200);
     this.telemetry.logCount += 1;
 
-    // Append a small trace with one parent and one or two children.
+    // Append a nested trace: a server root span with a few staggered child spans
+    // (and one grandchild) so the waterfall shows a realistic call timeline.
+    const t0 = Date.now() - 220;
+    const at = (offsetMs: number) => String(BigInt(t0 + offsetMs) * 1_000_000n);
+    const durNanos = (ms: number) => String(Math.floor(ms * 1_000_000));
+    const pick = <T,>(items: T[]) => items[Math.floor(Math.random() * items.length)]!;
+
     const parentId = randomHex(16);
-    const baseStart = nowNano(-50);
-    const parent: SpanSummary = {
+    const dbChildId = randomHex(16);
+    const segments: {
+      spanId: string;
+      parentSpanId: string | null;
+      name: string;
+      kind: string;
+      resource: string;
+      start: number;
+      dur: number;
+      error?: boolean;
+    }[] = [
+      { spanId: parentId, parentSpanId: null, name: pick(spanNames), kind: "Server", resource: resourceName, start: 0, dur: 200 },
+      { spanId: randomHex(16), parentSpanId: parentId, name: "redis GET", kind: "Client", resource: "cache", start: 12, dur: 18 },
+      { spanId: dbChildId, parentSpanId: parentId, name: "products.query", kind: "Client", resource: "apiservice", start: 40, dur: 130, error: isErr },
+      { spanId: randomHex(16), parentSpanId: dbChildId, name: "npgsql SELECT", kind: "Client", resource: "catalogdb", start: 55, dur: 95 },
+      { spanId: randomHex(16), parentSpanId: parentId, name: "serialize", kind: "Internal", resource: resourceName, start: 178, dur: 18 },
+    ];
+    const newSpans: SpanSummary[] = segments.map((s) => ({
       traceId,
-      spanId: parentId,
-      parentSpanId: null,
-      name: spanNames[Math.floor(Math.random() * spanNames.length)]!,
-      kind: "Server",
-      resourceName,
-      startUnixNano: baseStart,
-      durationNanos: String(Math.floor((20 + Math.random() * 120) * 1_000_000)),
-      statusCode: isErr ? "Error" : "Ok",
-    };
-    const child: SpanSummary = {
-      traceId,
-      spanId: randomHex(16),
-      parentSpanId: parentId,
-      name: spanNames[Math.floor(Math.random() * spanNames.length)]!,
-      kind: "Client",
-      resourceName: this.resources[Math.floor(Math.random() * this.resources.length)]?.name ?? null,
-      startUnixNano: nowNano(-30),
-      durationNanos: String(Math.floor((5 + Math.random() * 40) * 1_000_000)),
-      statusCode: "Ok",
-    };
-    this.telemetry.recentSpans = [parent, child, ...this.telemetry.recentSpans].slice(0, 200);
-    this.telemetry.spanCount += 2;
+      spanId: s.spanId,
+      parentSpanId: s.parentSpanId,
+      name: s.name,
+      kind: s.kind,
+      resourceName: s.resource,
+      startUnixNano: at(s.start),
+      durationNanos: durNanos(s.dur),
+      statusCode: s.error ? "Error" : "Ok",
+    }));
+    this.telemetry.recentSpans = [...newSpans, ...this.telemetry.recentSpans].slice(0, 200);
+    this.telemetry.spanCount += newSpans.length;
 
     // Advance each metric's last value with bounded jitter.
     this.telemetry.metrics = this.telemetry.metrics.map((metric, i) => {

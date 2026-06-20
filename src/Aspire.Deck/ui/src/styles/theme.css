@@ -42,6 +42,22 @@
   --shadow-drawer: -24px 0 60px rgba(0, 0, 0, 0.55);
   --shadow-pop: 0 16px 48px rgba(0, 0, 0, 0.5);
 
+  /* Qualitative palette for per-resource trace bars (tuned for dark surfaces). */
+  --trace-color-1: #5eead4;
+  --trace-color-2: #fbbf24;
+  --trace-color-3: #f0abfc;
+  --trace-color-4: #60a5fa;
+  --trace-color-5: #fb923c;
+  --trace-color-6: #a3e635;
+  --trace-color-7: #f472b6;
+  --trace-color-8: #38bdf8;
+  --trace-color-9: #c084fc;
+  --trace-color-10: #4ade80;
+  --trace-color-11: #facc15;
+  --trace-color-12: #fca5a5;
+  --trace-color-13: #2dd4bf;
+  --trace-color-14: #818cf8;
+
   --radius-sm: 6px;
   --radius: 10px;
   --radius-lg: 14px;
@@ -94,4 +110,20 @@
 
   --shadow-drawer: -24px 0 60px rgba(15, 15, 25, 0.12);
   --shadow-pop: 0 16px 48px rgba(15, 15, 25, 0.16);
+
+  /* Qualitative palette for per-resource trace bars (deeper for contrast on white). */
+  --trace-color-1: #0d9488;
+  --trace-color-2: #d97706;
+  --trace-color-3: #c026d3;
+  --trace-color-4: #2563eb;
+  --trace-color-5: #ea580c;
+  --trace-color-6: #65a30d;
+  --trace-color-7: #db2777;
+  --trace-color-8: #0284c7;
+  --trace-color-9: #9333ea;
+  --trace-color-10: #16a34a;
+  --trace-color-11: #ca8a04;
+  --trace-color-12: #e11d48;
+  --trace-color-13: #0891b2;
+  --trace-color-14: #4f46e5;
 }
