@@ -9,6 +9,10 @@ import { openAspireView, waitForEditorTitle, waitForTreeItem, waitForWorkbenchTe
 suite('Aspire debug dashboard E2E', function () {
     this.timeout(240000);
 
+    setup(() => {
+        writeWorkspaceSetting('aspire.dashboardBrowser', 'none');
+    });
+
     teardown(async () => {
         await runE2eTeardown([
             () => setCliUnavailableForE2E(false),
