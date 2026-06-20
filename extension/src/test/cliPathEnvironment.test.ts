@@ -133,13 +133,15 @@ suite('cliPathEnvironment.registerCliPathEnvironmentSync tests', () => {
     test('applies current setting on registration and re-applies when aspireCliExecutablePath changes', () => {
         const collection = createFakeCollection();
         let configured = '/abs/aspire';
+        const onForwardedPathChanged = sinon.stub();
 
         registerCliPathEnvironmentSync(collection, subscriptions, makeDeps({
             getConfiguredPath: () => configured,
-        }));
+        }), onForwardedPathChanged);
 
         assert.strictEqual(collection.entries.get(ASPIRE_CLI_PATH_ENV_VAR), '/abs/aspire', 'should sync on registration');
         assert.ok(configChangeHandler, 'should register an onDidChangeConfiguration handler');
+        assert.strictEqual(onForwardedPathChanged.callCount, 0, 'initial sync should not recreate existing terminals');
 
         configured = '';
         const fakeEvent: vscode.ConfigurationChangeEvent = {
@@ -148,6 +150,27 @@ suite('cliPathEnvironment.registerCliPathEnvironmentSync tests', () => {
         configChangeHandler!(fakeEvent);
 
         assert.strictEqual(collection.entries.has(ASPIRE_CLI_PATH_ENV_VAR), false, 'should clear when setting is removed');
+        assert.deepStrictEqual(onForwardedPathChanged.firstCall.args, ['/abs/aspire', undefined]);
+    });
+
+    test('does not notify when aspireCliExecutablePath changes but the forwarded value stays unchanged', () => {
+        const collection = createFakeCollection();
+        let configured = '/missing/aspire';
+        const onForwardedPathChanged = sinon.stub();
+
+        registerCliPathEnvironmentSync(collection, subscriptions, makeDeps({
+            getConfiguredPath: () => configured,
+            fileExists: () => false,
+        }), onForwardedPathChanged);
+
+        configured = '/another-missing/aspire';
+        const fakeEvent: vscode.ConfigurationChangeEvent = {
+            affectsConfiguration: (section) => section === 'aspire.aspireCliExecutablePath',
+        };
+        configChangeHandler!(fakeEvent);
+
+        assert.strictEqual(collection.entries.has(ASPIRE_CLI_PATH_ENV_VAR), false);
+        assert.strictEqual(onForwardedPathChanged.callCount, 0);
     });
 
     test('ignores configuration changes that do not touch aspireCliExecutablePath', () => {

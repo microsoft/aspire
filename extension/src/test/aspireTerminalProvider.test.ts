@@ -147,6 +147,38 @@ suite('AspireTerminalProvider tests', () => {
                 platformStub.restore();
             }
         });
+
+        test('recreates terminal after all Aspire terminals are closed for an environment change', () => {
+            const createEnvironmentStub = sinon.stub(terminalProvider, 'createEnvironment').returns({});
+            const firstTerminal = {
+                name: 'Aspire terminal',
+                dispose: sinon.stub(),
+            } as unknown as vscode.Terminal;
+            const secondTerminal = {
+                name: 'Aspire terminal',
+                dispose: sinon.stub(),
+            } as unknown as vscode.Terminal;
+            const createTerminalStub = sinon.stub(vscode.window, 'createTerminal');
+            createTerminalStub.onFirstCall().returns(firstTerminal);
+            createTerminalStub.onSecondCall().returns(secondTerminal);
+            const terminalsStub = sinon.stub(vscode.window, 'terminals').value([firstTerminal]);
+
+            try {
+                assert.strictEqual(terminalProvider.getAspireTerminal().terminal, firstTerminal);
+
+                terminalProvider.closeAllOpenAspireTerminals();
+
+                assert.strictEqual((firstTerminal.dispose as sinon.SinonStub).called, true);
+                assert.strictEqual(terminalProvider.getAspireTerminal().terminal, secondTerminal);
+                assert.strictEqual(createTerminalStub.callCount, 2);
+            }
+            finally {
+                terminalProvider.dispose();
+                createTerminalStub.restore();
+                createEnvironmentStub.restore();
+                terminalsStub.restore();
+            }
+        });
     });
 
     suite('sendAspireCommandToAspireTerminal', () => {

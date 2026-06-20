@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as vscode from 'vscode';
 import { getConfiguredCliPath } from './cliPath';
 import { extensionLogOutputChannel } from './logging';
+import { aspireCliPathEnvironmentDescription } from '../loc/strings';
 
 /**
  * Name of the MSBuild property/env var read by the Aspire SDK's
@@ -20,17 +21,6 @@ export const ASPIRE_CLI_PATH_ENV_VAR = 'AspireCliPath';
  * "Aspire Cli Executable Path" setting writes into.
  */
 const ASPIRE_CLI_EXECUTABLE_PATH_SETTING = 'aspireCliExecutablePath';
-
-/**
- * Description prefixed onto the `AspireCliPath` value in
- * VS Code's terminal contributed-environment UI ("View > Terminal > Environment
- * Contributions"). Surfaces the dev-loop intent so contributors can see *why*
- * the variable is being injected.
- *
- * VS Code exposes the description via `environmentVariableCollection.description`,
- * not per-variable, so this string covers the whole collection.
- */
-const ENVIRONMENT_COLLECTION_DESCRIPTION = 'Forwards aspire.aspireCliExecutablePath as AspireCliPath so MSBuild bundle resolution and integrated terminals use the configured Aspire CLI.';
 
 /**
  * Wraps the platform `EnvironmentVariableCollection` API so tests can drive the
@@ -123,7 +113,7 @@ export function syncAspireCliPathEnvironment(
         return undefined;
     }
 
-    collection.description = ENVIRONMENT_COLLECTION_DESCRIPTION;
+    collection.description = aspireCliPathEnvironmentDescription;
     collection.replace(ASPIRE_CLI_PATH_ENV_VAR, configuredPath);
     deps.log?.(`Forwarding ${ASPIRE_CLI_PATH_ENV_VAR}=${configuredPath} to terminals, tasks, and debug processes.`);
     return configuredPath;
@@ -143,12 +133,17 @@ export function registerCliPathEnvironmentSync(
     collection: CliPathEnvironmentCollection,
     subscriptions: vscode.Disposable[],
     deps: CliPathEnvironmentDependencies = defaultDeps,
+    onForwardedPathChanged?: (previousPath: string | undefined, currentPath: string | undefined) => void,
 ): vscode.Disposable {
-    syncAspireCliPathEnvironment(collection, deps);
+    let forwardedPath = syncAspireCliPathEnvironment(collection, deps);
 
     const disposable = vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration(`aspire.${ASPIRE_CLI_EXECUTABLE_PATH_SETTING}`)) {
-            syncAspireCliPathEnvironment(collection, deps);
+            const previousPath = forwardedPath;
+            forwardedPath = syncAspireCliPathEnvironment(collection, deps);
+            if (previousPath !== forwardedPath) {
+                onForwardedPathChanged?.(previousPath, forwardedPath);
+            }
         }
     });
 

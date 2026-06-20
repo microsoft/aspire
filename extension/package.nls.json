@@ -64,6 +64,7 @@
   "aspire-vscode.strings.aspireCliVersion": "Aspire CLI Version: {0}.",
   "aspire-vscode.strings.requiredCapability": "Required capability: {0}.",
   "aspire-vscode.strings.aspireTerminalName": "Aspire terminal",
+  "aspire-vscode.strings.aspireCliPathEnvironmentDescription": "Forwards aspire.aspireCliExecutablePath as AspireCliPath so MSBuild bundle resolution and integrated terminals use the configured Aspire CLI.",
   "aspire-vscode.strings.terminalCommandArgumentControlCharacters": "Aspire terminal command arguments cannot contain control characters.",
   "aspire-vscode.strings.terminalCommandUnsafeLiteral": "Aspire terminal command syntax can only contain command names and flags.",
   "aspire-vscode.strings.rpcServerError": "RPC server error: {0}.",
