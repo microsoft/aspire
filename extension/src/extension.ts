@@ -10,7 +10,7 @@ import { publishCommand } from './commands/publish';
 import { doCommand } from './commands/do';
 import { cliNotAvailable, dismissLabel, errorMessage, openCliInstallInstructions } from './loc/strings';
 import { extensionLogOutputChannel } from './utils/logging';
-import { CommandInvocationEvent, initializeTelemetry, isCommandCancellation, onDidInvokeCommand, sendTelemetryEvent, withCommandTelemetry } from './utils/telemetry';
+import { initializeTelemetry, isCommandCancellation, sendTelemetryEvent, withCommandTelemetry } from './utils/telemetry';
 import { MeaningfulEngagementReporter } from './utils/meaningfulEngagement';
 import { AspireDebugAdapterDescriptorFactory } from './debugger/AspireDebugAdapterDescriptorFactory';
 import { AspireDebugConfigurationProvider } from './debugger/AspireDebugConfigurationProvider';

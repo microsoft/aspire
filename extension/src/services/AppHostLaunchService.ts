@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as vscode from 'vscode';
 import { AspireCommandType, AspireExtendedDebugConfiguration } from '../dcp/types';
 import { classifyAppHostDirectory, classifyAppHostPath } from '../utils/appHostLanguage';
-import { isCommandCancellation, sendTelemetryEvent, type EventProperties } from '../utils/telemetry';
+import { classifyError, isCommandCancellation, sendTelemetryEvent, type EventProperties } from '../utils/telemetry';
 import { bucketAspireCommand } from '../utils/telemetryBuckets';
 
 function getComparisonKey(value: string): string {
@@ -205,7 +205,7 @@ export class AppHostLaunchService implements vscode.Disposable {
                 outcome: canceled ? 'canceled' : 'error',
             };
             if (!canceled) {
-                properties.error_kind = classifyLaunchError(err);
+                properties.error_kind = classifyError(err);
             }
             sendTelemetryEvent('apphost/launch/result', properties, {
                 duration_ms: Date.now() - startTime,
@@ -232,14 +232,6 @@ function isDirectoryForTelemetry(appHostPath: string): boolean {
     catch {
         return false;
     }
-}
-
-function classifyLaunchError(error: unknown): string {
-    if (error instanceof Error) {
-        return error.name || error.constructor.name || 'Error';
-    }
-
-    return typeof error;
 }
 
 function isE2eDebugLaunchSuppressed(): boolean {
