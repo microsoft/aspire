@@ -49,11 +49,11 @@ public class SqlServerServerResource : ContainerResource, IResourceWithConnectio
     {
         var builder = new ReferenceExpressionBuilder();
 
-        builder.Append($"Server={PrimaryEndpoint.Property(EndpointProperty.IPV4Host)},{PrimaryEndpoint.Property(EndpointProperty.Port)};");
+        builder.Append($"Server={PrimaryEndpoint.Property(EndpointProperty.IPV4Host)},{PrimaryEndpoint.Property(EndpointProperty.Port)}");
         builder.Append($";User ID={UserNameReference}");
         builder.Append($";Password={PasswordParameter}");
         builder.Append($"{PrimaryEndpoint.GetTlsValue(
-            enabledValue: ReferenceExpression.Empty,
+            enabledValue: ReferenceExpression.Create($";Encrypt=true"),
             disabledValue: ReferenceExpression.Create($";TrustServerCertificate=true"))}");
 
         return builder.Build();
@@ -88,7 +88,7 @@ public class SqlServerServerResource : ContainerResource, IResourceWithConnectio
         }
 
         builder.Append($"{PrimaryEndpoint.GetTlsValue(
-            enabledValue: ReferenceExpression.Empty,
+            enabledValue: ReferenceExpression.Create($";encrypt=true"),
             disabledValue: ReferenceExpression.Create($";trustServerCertificate=true"))}");
 
         return builder.Build();

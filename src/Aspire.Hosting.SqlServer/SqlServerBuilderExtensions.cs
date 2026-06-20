@@ -98,21 +98,26 @@ public static partial class SqlServerBuilderExtensions
             .SubscribeHttpsEndpointsUpdate(ctx => 
             {
                 var executionContext = ctx.Services.GetRequiredService<DistributedApplicationExecutionContext>();
+                var devCertService = ctx.Services.GetRequiredService<IDeveloperCertificateService>();
+                ctx.Resource.TryGetLastAnnotation<HttpsCertificateAnnotation>(out var certAnnotation);
 
-                // Dev cert versions prior to 6 don't include "127.0.0.1" in the SAN, and so won't be trusted
-                // So only enable TLS if we have a custom cert, or a dev cert with version 6 or higher.
-                if (executionContext.IsRunMode)
+                var useDeveloperCertificate = certAnnotation?.UseDeveloperCertificate.GetValueOrDefault(devCertService.UseForHttps) ?? devCertService.UseForHttps;
+                var useCustomCertificate = certAnnotation?.Certificate is not null;
+
+                if (!useDeveloperCertificate && !useCustomCertificate)
                 {
-                    ctx.Resource.TryGetLastAnnotation<HttpsCertificateAnnotation>(out var certAnnotation);
+                    return;
+                }
 
-                    if (certAnnotation == null || certAnnotation.UseDeveloperCertificate == true)
+                if (executionContext.IsRunMode && useDeveloperCertificate)
+                {
+                    var cert = devCertService.Certificates.First();
+                    if (cert.GetCertificateVersion() < 6)
                     {
-                        var devCertService = ctx.Services.GetRequiredService<IDeveloperCertificateService>();
-                        var cert = devCertService.Certificates.First();
-                        if (cert.GetCertificateVersion() < 6)
-                        {
-                            return;
-                        }
+                        // Older dev certs are injected into SQL Server but do not include 127.0.0.1 in the SAN,
+                        // so client connections fall back to TrustServerCertificate.
+                        sqlBuilder.WithEndpoint(SqlServerServerResource.PrimaryEndpointName, x => x.TlsEnabled = false);
+                        return;
                     }
                 }
 
@@ -127,11 +132,13 @@ public static partial class SqlServerBuilderExtensions
                     return [];
                 }
 
+                var forceEncryption = sqlBuilder.Resource.PrimaryEndpoint.TlsEnabled ? 1 : 0;
+
                 var config = $"""
                     [network]
                     tlscert = {await certContext.CertificatePath.GetValueAsync(ct).ConfigureAwait(false)}
                     tlskey = {await certContext.KeyPath.GetValueAsync(ct).ConfigureAwait(false)}
-                    forceencryption = 1
+                    forceencryption = {forceEncryption}
                     """;
 
                 return [
