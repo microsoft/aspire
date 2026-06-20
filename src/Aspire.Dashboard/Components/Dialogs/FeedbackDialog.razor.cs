@@ -79,7 +79,6 @@ public partial class FeedbackDialog : IDisposable
             {
                 var context = await FeedbackDiagnosticProvider.CaptureBugContextAsync(_captureCts.Token).ConfigureAwait(true);
                 _aspireDoctorOutput = context.AspireDoctorOutput;
-                _additionalContext = context.AdditionalContext;
             }
             catch (OperationCanceledException) when (_captureCts.IsCancellationRequested)
             {

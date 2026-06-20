@@ -382,6 +382,53 @@ public partial class MainLayoutTests : DashboardTestContext
         }
     }
 
+    [Fact]
+    public async Task FeedbackDialog_ReportBug_PreservesAdditionalContextEditedWhileLoading()
+    {
+        var diagnosticProvider = new WaitingDashboardFeedbackDiagnosticProvider();
+        SetupMainLayoutServices(feedbackDiagnosticProvider: diagnosticProvider);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentInputLabel(this);
+        FluentUISetupHelpers.SetupFluentTextField(this);
+        JSInterop.SetupVoid("open", _ => true);
+
+        var cut = FluentUISetupHelpers.RenderDialogProvider(this);
+        var dialogService = Services.GetRequiredService<IDialogService>();
+        await dialogService.ShowDialogAsync<FeedbackDialog>(
+            new FeedbackDialogViewModel(nameof(FeedbackIssueKind.Bug), "Report a bug"),
+            new DialogParameters
+            {
+                Title = "Report a bug",
+                PrimaryAction = null,
+                SecondaryAction = null
+            });
+
+        try
+        {
+            cut.WaitForAssertion(() => Assert.True(cut.Find($"#{FeedbackDialog.DoctorOutputInputId}").HasAttribute("readonly")));
+
+            cut.Find($"#{FeedbackDialog.TitleInputId}").Change("Bug title");
+            cut.Find($"#{FeedbackDialog.MainTextInputId}").Input("Bug details");
+            cut.Find($"#{FeedbackDialog.AdditionalContextInputId}").Input("Edited while loading");
+            diagnosticProvider.SetResult();
+
+            cut.WaitForAssertion(() =>
+            {
+                Assert.False(cut.Find($"#{FeedbackDialog.DoctorOutputInputId}").HasAttribute("readonly"));
+            });
+            await cut.InvokeAsync(() => cut.FindAll("fluent-button").Single(button => button.TextContent.Contains("Open issue", StringComparison.OrdinalIgnoreCase)).Click());
+
+            Assert.Contains(JSInterop.Invocations, invocation =>
+                invocation.Identifier == "open" &&
+                TryGetOpenArguments(invocation.Arguments, out var url, out _) &&
+                url.Contains("additional-context=Edited%20while%20loading", StringComparison.Ordinal));
+        }
+        finally
+        {
+            diagnosticProvider.SetResult();
+        }
+    }
+
     [Theory]
     [InlineData(true, false, "dashboard-help-button", "HelpDialog", "dashboard-navigation-button")]
     [InlineData(true, false, "dashboard-settings-button", "SettingsDialog", "dashboard-navigation-button")]
