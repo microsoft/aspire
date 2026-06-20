@@ -77,6 +77,14 @@ export interface TelemetryEventSchema {
         properties: 'resource_type' | 'mode' | 'exit_code_bucket' | 'end_reason' | 'error_kind';
         measurements: 'duration_ms' | 'exit_code';
     };
+    'dashboard/launch/resolved': {
+        properties: 'behavior' | 'source';
+        measurements: never;
+    };
+    'dashboard/launch/migration': {
+        properties: 'action';
+        measurements: never;
+    };
 
     // ── Dashboard passthrough events ────────────────────────────────────────
     // The Aspire dashboard sends arbitrary telemetry over HTTP. Rather than

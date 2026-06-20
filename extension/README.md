@@ -56,7 +56,7 @@ VS Code 1.98 or later is required.
 
 ## Getting Started
 
-Open your Aspire project in VS Code, or create one with **Aspire: New Aspire project** from the Command Palette. Run **Aspire: Configure launch.json file** to set up the debug configuration, then press **F5**. The extension will build your apphost, start your services, attach debuggers, and open the dashboard.
+Open your Aspire project in VS Code, or create one with **Aspire: New Aspire project** from the Command Palette. Run **Aspire: Configure launch.json file** to set up the debug configuration, then press **F5**. The extension will build your apphost, start your services, attach debuggers, and print the dashboard URL. Open the dashboard from the Aspire panel when you need it, or opt into auto-launch with the `aspire.dashboardBrowser` setting.
 
 There's also a built-in walkthrough at **Help → Get Started → Get started with Aspire** that covers the basics step by step.
 
@@ -77,7 +77,7 @@ Add an entry to `.vscode/launch.json` pointing at your apphost project:
 }
 ```
 
-When you hit **F5**, the extension builds the apphost, starts all the resources (services, containers, databases) in the right order, hooks up debuggers based on each service's language, and opens the dashboard.
+When you hit **F5**, the extension builds the apphost, starts all the resources (services, containers, databases) in the right order, hooks up debuggers based on each service's language, and prints the dashboard URL.
 
 You can also right-click an `apphost.cs`, `apphost.ts`, or `apphost.js` file in the Explorer and pick **Run Aspire apphost** or **Debug Aspire apphost**.
 
@@ -137,7 +137,7 @@ The dashboard gives you a live view of your running app — all your resources a
 
 ![Aspire Dashboard showing running resources](https://raw.githubusercontent.com/microsoft/aspire/main/extension/resources/aspire-dashboard-dark.png)
 
-It opens automatically when you start your app. You can pick which browser it uses with the `aspire.dashboardBrowser` setting — system default browser, or Chrome, Edge, or Firefox as a debug session. When using a debug browser, the `aspire.closeDashboardOnDebugEnd` setting controls whether it closes automatically when you stop debugging. Firefox also requires the [Firefox Debugger](https://marketplace.visualstudio.com/items?itemName=firefox-devtools.vscode-firefox-debug) extension.
+By default, the dashboard URL is printed when your app starts and stays available from the Aspire panel. If you want the dashboard to open automatically, set `aspire.dashboardBrowser` to a notification, the system default browser, VS Code's integrated browser, or Chrome, Edge, or Firefox as a debug session. You can also set `dashboardBrowser` on a single `launch.json` configuration when only one debug profile should opt in. When using a debug browser, the `aspire.closeDashboardOnDebugEnd` setting controls whether it closes automatically when you stop debugging. Firefox also requires the [Firefox Debugger](https://marketplace.visualstudio.com/items?itemName=firefox-devtools.vscode-firefox-debug) extension.
 
 ---
 
@@ -189,8 +189,8 @@ You can configure the extension under **Settings → Aspire**, or jump there wit
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `aspire.aspireCliExecutablePath` | `""` | Path to the Aspire CLI. Leave empty to use `aspire` from PATH. |
-| `aspire.dashboardBrowser` | `openExternalBrowser` | Which browser to open the dashboard in — system default, or Chrome/Edge/Firefox as a debug session |
-| `aspire.enableAspireDashboardAutoLaunch` | `launch` | Controls what happens with the dashboard when debugging starts: `launch` (auto-open), `notification` (show link), or `off` |
+| `aspire.dashboardBrowser` | `none` | Controls what happens with the dashboard when debugging starts: `none`, `notification`, `openExternalBrowser`, `integratedBrowser`, `debugChrome`, `debugEdge`, or `debugFirefox` |
+| `aspire.enableAspireDashboardAutoLaunch` | `off` | Legacy dashboard launch setting. Use `aspire.dashboardBrowser` instead; when this legacy setting is set, it still overrides the new setting. |
 | `aspire.registerMcpServerInWorkspace` | `false` | Register the Aspire MCP server (see [below](#mcp-server-integration)) |
 
 There are more settings for things like verbose logging, startup prompts, and polling intervals — run **Aspire: Extension settings** from the Command Palette to see them all.

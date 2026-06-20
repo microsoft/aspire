@@ -478,6 +478,36 @@ suite('InteractionService endpoints', () => {
 		}
 	});
 
+	test("displayDashboardUrls shows notification when dashboardBrowser is notification", async () => {
+		const sandbox = sinon.createSandbox();
+
+		try {
+			sandbox.stub(extensionLogOutputChannel, 'info');
+			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves();
+			const openDashboardStub = sandbox.stub().resolves();
+			sandbox.stub(vscode.workspace, 'getConfiguration').returns(createAspireConfiguration({
+				dashboardBrowser: 'notification'
+			}));
+			const mockDebugSession = {
+				configuration: {},
+				openDashboard: openDashboardStub,
+				sendMessage: () => {}
+			} as unknown as AspireDebugSession;
+			const testInfo = await createTestRpcServer(null, () => mockDebugSession);
+
+			await testInfo.interactionService.displayDashboardUrls({
+				BaseUrlWithLoginToken: 'http://localhost/login?t=base-secret'
+			});
+			await new Promise(resolve => setTimeout(resolve, 2000));
+
+			assert.strictEqual(openDashboardStub.callCount, 0);
+			assert.strictEqual(showInformationMessageStub.callCount, 1);
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
 	test("displayDashboardUrls uses debug configuration dashboard browser before global setting", async () => {
 		const sandbox = sinon.createSandbox();
 
@@ -769,7 +799,13 @@ function normalizePathForComparison(value: string) {
 function createAspireConfiguration(values: Record<string, unknown> = {}): vscode.WorkspaceConfiguration {
 	return {
 		get: (key: string, defaultValue?: unknown) => key in values ? values[key] : defaultValue,
-		inspect: (key: string) => key in values ? { key: `aspire.${key}`, globalValue: values[key] } : undefined,
+		inspect: (key: string) => ({
+			key: `aspire.${key}`,
+			defaultValue: undefined,
+			globalValue: key in values ? values[key] : undefined,
+			workspaceValue: undefined,
+			workspaceFolderValue: undefined,
+		}),
 	} as vscode.WorkspaceConfiguration;
 }
 

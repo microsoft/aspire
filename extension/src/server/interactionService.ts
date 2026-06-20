@@ -12,6 +12,7 @@ import { AnsiColors, AspireTerminal } from '../utils/AspireTerminalProvider';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
 import type { DashboardLaunchBehavior } from '../debugger/AspireDebugSession';
 import { isDirectory } from '../utils/io';
+import { sendTelemetryEvent } from '../utils/telemetry';
 
 export interface IInteractionService {
     showStatus: (statusText: string | null) => void;
@@ -44,6 +45,7 @@ export interface IInteractionService {
 
 type CSLogLevel = 'Trace' | 'Debug' | 'Information' | 'Warn' | 'Error' | 'Critical';
 const dashboardDefaultChangedNotificationKey = 'aspire.dashboardBrowser.defaultChangedNotification.v1';
+const preOptInDefaultDashboardBrowser: DashboardLaunchBehavior = 'integratedBrowser';
 type DashboardLaunchBehaviorSource = 'debugConfiguration' | 'globalConfiguration' | 'legacyConfiguration' | 'default';
 type ResolvedDashboardLaunchBehavior = {
     behavior: DashboardLaunchBehavior;
@@ -407,6 +409,10 @@ export class InteractionService implements IInteractionService {
 
         const aspireConfig = vscode.workspace.getConfiguration('aspire');
         const dashboardLaunchBehavior = this.getDashboardLaunchBehavior(aspireConfig);
+        sendTelemetryEvent('dashboard/launch/resolved', {
+            behavior: dashboardLaunchBehavior.behavior,
+            source: dashboardLaunchBehavior.source,
+        });
 
         if (dashboardLaunchBehavior.behavior === 'none') {
             await this.showDashboardDefaultChangedNotificationIfNeeded(dashboardLaunchBehavior.source);
@@ -471,6 +477,13 @@ export class InteractionService implements IInteractionService {
             return { behavior: configuredGlobalBehavior, source: 'globalConfiguration' };
         }
 
+        // Migration precedence is intentionally conservative:
+        // - per-launch `dashboardBrowser` always wins because it only affects this debug run;
+        // - explicit global `none`/`notification` always wins so users can opt out or opt into the toast;
+        // - legacy `notification`/`off` keeps the less intrusive historical behavior even if a new
+        //   browser preference is also configured;
+        // - legacy `launch` falls through to the new browser preference, or to the pinned pre-opt-in
+        //   integrated-browser default when no new preference exists.
         const legacyBehavior = getConfiguredLegacyDashboardLaunchBehavior(aspireConfig);
 
         if (legacyBehavior) {
@@ -479,7 +492,7 @@ export class InteractionService implements IInteractionService {
             }
 
             return {
-                behavior: configuredGlobalBehavior ?? 'integratedBrowser',
+                behavior: configuredGlobalBehavior ?? preOptInDefaultDashboardBrowser,
                 source: configuredGlobalBehavior ? 'globalConfiguration' : 'legacyConfiguration'
             };
         }
@@ -504,12 +517,18 @@ export class InteractionService implements IInteractionService {
         }
 
         await this._globalState.update(dashboardDefaultChangedNotificationKey, true);
+        sendTelemetryEvent('dashboard/launch/migration', { action: 'shown' });
         vscode.window.showInformationMessage(dashboardLaunchBehaviorChanged, settingsLabel, changelogLabel).then(selected => {
             if (selected === settingsLabel) {
+                sendTelemetryEvent('dashboard/launch/migration', { action: 'settings' });
                 this.openDashboardLaunchBehaviorSettings(source);
             }
             else if (selected === changelogLabel) {
+                sendTelemetryEvent('dashboard/launch/migration', { action: 'changelog' });
                 vscode.env.openExternal(vscode.Uri.parse('https://github.com/microsoft/aspire/blob/main/extension/CHANGELOG.md'));
+            }
+            else {
+                sendTelemetryEvent('dashboard/launch/migration', { action: 'dismissed' });
             }
         });
     }
