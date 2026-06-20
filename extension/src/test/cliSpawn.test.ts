@@ -36,11 +36,11 @@ suite('spawnCliProcess tests', () => {
         process.env.ComSpec = 'C:\\Windows\\System32\\cmd.exe';
 
         try {
-            const result = getCliSpawnCommand('C:\\R&D\\aspire.cmd', ['config', 'set', 'features.x', 'a&b']);
+            const result = getCliSpawnCommand('C:\\R&D\\team%20files\\aspire.cmd', ['config', 'set', 'features.x', 'a&b', '100%']);
 
             assert.strictEqual(result.command, process.env.ComSpec);
             assert.strictEqual('windowsVerbatimArguments' in result ? result.windowsVerbatimArguments : undefined, true);
-            assert.deepStrictEqual(result.args, ['/d', '/s', '/c', 'call "C:\\R&D\\aspire.cmd" "config" "set" "features.x" "a&b"']);
+            assert.deepStrictEqual(result.args, ['/d', '/s', '/c', 'call "C:\\R&D\\team%20files\\aspire.cmd" "config" "set" "features.x" "a&b" "100%"']);
         }
         finally {
             platformStub.restore();

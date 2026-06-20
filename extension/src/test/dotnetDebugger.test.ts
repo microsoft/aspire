@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 import { createProjectDebuggerExtension, projectDebuggerExtension } from '../debugger/languages/dotnet';
 import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, ProjectLaunchConfiguration } from '../dcp/types';
 import * as io from '../utils/io';
-import { ResourceDebuggerExtension } from '../debugger/debuggerExtensions';
+import { createDebugSessionConfiguration, ResourceDebuggerExtension } from '../debugger/debuggerExtensions';
 import { AppHostParentOutputFilter, AspireDebugSession } from '../debugger/AspireDebugSession';
 
 class TestDotNetService {
@@ -137,13 +137,6 @@ suite('Dotnet Debugger Extension Tests', () => {
             type: 'project',
             project_path: projectPath
         };
-        const debugConfig: AspireResourceExtendedDebugConfiguration = {
-            runId: '1',
-            debugSessionId: '1',
-            type: 'coreclr',
-            name: 'Test Debug Config',
-            request: 'launch'
-        };
         const env = [
             { name: 'AspireCliPath', value: 'C:\\repo\\artifacts\\bin\\Aspire.Cli\\Debug\\net10.0\\aspire.exe' },
             { name: 'Configuration', value: 'Release' },
@@ -152,7 +145,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         const helperEnv = [{ name: 'AspireCliPath', value: 'C:\\repo\\artifacts\\bin\\Aspire.Cli\\Debug\\net10.0\\aspire.exe' }];
         const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
 
-        await extension.createDebugSessionConfigurationCallback!(launchConfig, [], env, { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession }, debugConfig);
+        const debugConfig = await createDebugSessionConfiguration({ type: 'aspire', request: 'launch', name: 'Aspire', program: projectPath }, launchConfig, [], env, { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession, msBuildEnv: helperEnv }, extension);
 
         assert.deepStrictEqual(dotNetService.getDotNetTargetPathStub.firstCall.args, [projectPath, helperEnv]);
         assert.deepStrictEqual(dotNetService.buildDotNetProjectStub.firstCall.args, [projectPath, helperEnv]);
@@ -169,13 +162,6 @@ suite('Dotnet Debugger Extension Tests', () => {
             type: 'project',
             project_path: projectPath
         };
-        const debugConfig: AspireResourceExtendedDebugConfiguration = {
-            runId: '1',
-            debugSessionId: '1',
-            type: 'coreclr',
-            name: 'Test Debug Config',
-            request: 'launch'
-        };
         const env = [
             { name: 'AspireCliPath', value: 'C:\\repo\\artifacts\\bin\\Aspire.Cli\\Debug\\net10.0\\aspire.exe' },
             { name: 'TargetFramework', value: 'net8.0' },
@@ -183,7 +169,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         const helperEnv = [{ name: 'AspireCliPath', value: 'C:\\repo\\artifacts\\bin\\Aspire.Cli\\Debug\\net10.0\\aspire.exe' }];
         const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
 
-        await extension.createDebugSessionConfigurationCallback!(launchConfig, [], env, { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession }, debugConfig);
+        const debugConfig = await createDebugSessionConfiguration({ type: 'aspire', request: 'launch', name: 'Aspire', program: projectPath }, launchConfig, [], env, { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession, msBuildEnv: helperEnv }, extension);
 
         assert.deepStrictEqual(dotNetService.getDotNetRunApiOutputStub.firstCall.args, [projectPath, helperEnv]);
         assert.deepStrictEqual(dotNetService.buildDotNetProjectStub.firstCall.args, [projectPath, helperEnv]);

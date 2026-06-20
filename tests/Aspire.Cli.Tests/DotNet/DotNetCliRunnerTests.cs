@@ -8,6 +8,7 @@ using Aspire.Cli.Backchannel;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Telemetry;
+using Aspire.Cli.Tests.Acquisition;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Hosting;
@@ -20,6 +21,10 @@ using System.Net.Sockets;
 
 namespace Aspire.Cli.Tests.DotNet;
 
+// BuildAsyncPassesInheritedAspireCliPathToMSBuild mutates the process-wide AspireCliPath variable.
+// xUnit runs test classes in parallel by default, so join EnvVarMutatingTestCollection to serialize
+// with other suites that mutate or read environment variables while launching CLI/dotnet processes.
+[Collection(EnvVarMutatingTestCollection.Name)]
 public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
 {
     private static Aspire.Cli.CliExecutionContext CreateExecutionContext(DirectoryInfo workingDirectory)

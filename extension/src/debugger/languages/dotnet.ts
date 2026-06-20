@@ -10,7 +10,7 @@ import * as fs from 'fs';
 import { doesFileExist } from '../../utils/io';
 import { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfiguration, isProjectLaunchConfiguration, ProjectLaunchConfiguration } from '../../dcp/types';
 import { ResourceDebuggerExtension } from '../debuggerExtensions';
-import { aspireCliPathEnvironmentVariableName, mergeEnvs, withoutAspireCliPathForMSBuild } from '../../utils/environment';
+import { mergeEnvs, withoutAspireCliPathForMSBuild } from '../../utils/environment';
 import {
     readLaunchSettings,
     determineBaseLaunchProfile,
@@ -258,14 +258,6 @@ function createDotNetRunArguments(projectPath: string, baseProfileArgs: string |
     return dotnetRunArgs;
 }
 
-function getDotNetHelperEnvironment(env: EnvVar[]): EnvVar[] | undefined {
-    const aspireCliPath = env.find(variable => variable.name.toLowerCase() === aspireCliPathEnvironmentVariableName.toLowerCase());
-
-    return aspireCliPath
-        ? [{ name: aspireCliPathEnvironmentVariableName, value: aspireCliPath.value }]
-        : undefined;
-}
-
 function configureDotNetRunDebugConfiguration(
     debugConfiguration: AspireResourceExtendedDebugConfiguration,
     projectPath: string,
@@ -348,7 +340,7 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                 runtimeEnv.push({ name: "ASPIRE_DASHBOARD_AI_DISABLED", value: "true" });
             }
 
-            const dotNetHelperEnv = launchOptions.msBuildEnv ?? getDotNetHelperEnvironment(env);
+            const dotNetHelperEnv = launchOptions.msBuildEnv;
 
             if (baseProfile?.commandName?.toLowerCase() === LaunchProfileCommandName.executable && baseProfile.executablePath) {
                 const dotNetService: IDotNetService = dotNetServiceProducer(launchOptions.debugSession);

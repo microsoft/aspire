@@ -23,5 +23,8 @@ function createWindowsCommandShimCommandLine(command: string, args: readonly str
 }
 
 function quoteWindowsCommandArgument(value: string): string {
-    return `"${value.replace(/"/g, '""').replace(/%/g, '%%')}"`;
+    // This string is parsed by cmd.exe directly after /c, not read from a batch file.
+    // Do not use batch-file percent escaping here: paths like C:\team%20files\aspire.cmd
+    // need to reach cmd unchanged.
+    return `"${value.replace(/"/g, '""')}"`;
 }
