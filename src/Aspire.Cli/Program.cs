@@ -379,7 +379,8 @@ public class Program
             return new IdentityResolver(
                 sp.GetRequiredService<IInstallSidecarReader>(),
                 typeof(Program).Assembly,
-                binaryDir);
+                binaryDir,
+                Environment.GetEnvironmentVariable);
         });
         if (OperatingSystem.IsWindows())
         {
@@ -425,7 +426,13 @@ public class Program
         builder.Services.AddSingleton<ITemplateVersionPrompter>(sp => (ITemplateVersionPrompter)sp.GetRequiredService<INewCommandPrompter>());
         builder.Services.AddSingleton<IAddCommandPrompter, AddCommandPrompter>();
         builder.Services.AddSingleton<IPublishCommandPrompter, PublishCommandPrompter>();
-        builder.Services.AddSingleton<ICertificateService, CertificateService>();
+        builder.Services.AddSingleton<ICertificateService>(sp => new CertificateService(
+            sp.GetRequiredService<ICertificateToolRunner>(),
+            sp.GetRequiredService<IInteractionService>(),
+            sp.GetRequiredService<AspireCliTelemetry>(),
+            sp.GetRequiredService<ICliHostEnvironment>(),
+            sp.GetRequiredService<CliExecutionContext>(),
+            OperatingSystem.IsLinux));
         builder.Services.AddSingleton(BuildConfigurationService);
         builder.Services.AddSingleton<IFeatures, Features>();
         builder.Services.AddTelemetryServices();
@@ -436,7 +443,9 @@ public class Program
 
         // Register certificate tool runner - uses native CertificateManager directly (no subprocess needed)
         builder.Services.AddSingleton(sp => CertificateManager.Create(sp.GetRequiredService<ILogger<NativeCertificateToolRunner>>()));
-        builder.Services.AddSingleton<ICertificateToolRunner, NativeCertificateToolRunner>();
+        builder.Services.AddSingleton<ICertificateToolRunner>(sp => new NativeCertificateToolRunner(
+            sp.GetRequiredService<CertificateManager>(),
+            OperatingSystem.IsLinux));
 
         builder.Services.AddTransient<IDotNetCliRunner, DotNetCliRunner>();
         builder.Services.AddSingleton<IDiskCache, DiskCache>();
@@ -1140,7 +1149,8 @@ public class Program
                 return new ExtensionInteractionService(consoleInteractionService,
                     provider.GetRequiredService<IExtensionBackchannel>(),
                     extensionPromptEnabled,
-                    logger: provider.GetRequiredService<ILogger<ExtensionInteractionService>>());
+                    logger: provider.GetRequiredService<ILogger<ExtensionInteractionService>>(),
+                    cancellationToken: CancellationToken.None);
             });
         }
         else

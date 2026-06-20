@@ -71,15 +71,16 @@ internal sealed class IdentityResolver : IIdentityResolver
         IInstallSidecarReader sidecarReader,
         Assembly assembly,
         string? binaryDir,
-        Func<string, string?>? envReader = null)
+        Func<string, string?> envReader)
     {
         ArgumentNullException.ThrowIfNull(sidecarReader);
         ArgumentNullException.ThrowIfNull(assembly);
+        ArgumentNullException.ThrowIfNull(envReader);
 
         _sidecarReader = sidecarReader;
         _assembly = assembly;
         _binaryDir = binaryDir;
-        _envReader = envReader ?? Environment.GetEnvironmentVariable;
+        _envReader = envReader;
 
         _identity = new Lazy<ResolvedIdentity>(ResolveIdentity, LazyThreadSafetyMode.ExecutionAndPublication);
     }

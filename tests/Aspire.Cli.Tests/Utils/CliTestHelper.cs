@@ -480,7 +480,7 @@ internal sealed class CliServiceCollectionTestOptions
         var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
         var hostEnvironment = serviceProvider.GetRequiredService<ICliHostEnvironment>();
         var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
-        return new CertificateService(certificateToolRunner, interactiveService, telemetry, hostEnvironment, executionContext);
+        return new CertificateService(certificateToolRunner, interactiveService, telemetry, hostEnvironment, executionContext, OperatingSystem.IsLinux);
     };
 
     public Func<IServiceProvider, IScaffoldingService> ScaffoldingServiceFactory { get; set; } = (IServiceProvider serviceProvider) =>
@@ -491,7 +491,7 @@ internal sealed class CliServiceCollectionTestOptions
         var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
         var logger = serviceProvider.GetRequiredService<ILogger<ScaffoldingService>>();
         var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
-        return new ScaffoldingService(appHostServerProjectFactory, appHostServerSessionFactory, languageDiscovery, interactionService, logger, executionContext);
+        return new ScaffoldingService(appHostServerProjectFactory, appHostServerSessionFactory, languageDiscovery, interactionService, logger, executionContext, serviceProvider.GetRequiredService<ProfilingTelemetry>());
     };
 
     public Func<IServiceProvider, IProcessExecutionFactory> DotNetCliExecutionFactoryFactory { get; set; } = (IServiceProvider serviceProvider) =>

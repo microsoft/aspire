@@ -181,7 +181,7 @@ internal sealed class OpenCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
         CancellationToken cancellationToken)
     {
         var configFilePath = Path.Combine(configDirectory.FullName, OpenCodeConfigFileName);
-        var config = await McpConfigFileHelper.ReadConfigAsync(configFilePath, cancellationToken, RemoveJsonComments);
+        var config = await McpConfigFileHelper.ReadConfigAsync(configFilePath, RemoveJsonComments, cancellationToken);
 
         // Ensure schema is set for new configs
         if (!config.ContainsKey("$schema"))

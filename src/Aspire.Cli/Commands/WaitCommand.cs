@@ -42,12 +42,12 @@ internal sealed class WaitCommand : BaseCommand
         AppHostConnectionResolver connectionResolver,
         ILogger<WaitCommand> logger,
         CommonCommandServices services,
-        TimeProvider? timeProvider = null)
+        TimeProvider timeProvider)
         : base("wait", WaitCommandStrings.Description, services)
     {
         _connectionResolver = connectionResolver;
         _logger = logger;
-        _timeProvider = timeProvider ?? TimeProvider.System;
+        _timeProvider = timeProvider;
 
         Arguments.Add(s_resourceArgument);
         Options.Add(s_statusOption);

@@ -26,8 +26,8 @@ internal sealed class SigstoreNpmProvenanceChecker(HttpClient httpClient, ILogge
         string expectedWorkflowPath,
         string expectedBuildType,
         Func<WorkflowRefInfo, bool>? validateWorkflowRef,
-        CancellationToken cancellationToken,
-        string? sriIntegrity = null)
+        string? sriIntegrity = null,
+        CancellationToken cancellationToken = default)
     {
         logger.LogDebug("Verifying provenance for {PackageSpecifier} from {ExpectedSourceRepository}", NpmPackageInfo.FormatPackageSpecifier(packageName, version), expectedSourceRepository);
 

@@ -1079,7 +1079,7 @@ public class PlaywrightCliInstallerTests
         public bool ProvenanceCalled { get; private set; }
         public Func<WorkflowRefInfo, bool>? CapturedValidateWorkflowRef { get; private set; }
 
-        public Task<ProvenanceVerificationResult> VerifyProvenanceAsync(string packageName, string version, string expectedSourceRepository, string expectedWorkflowPath, string expectedBuildType, Func<WorkflowRefInfo, bool>? validateWorkflowRef, CancellationToken cancellationToken, string? sriIntegrity = null)
+        public Task<ProvenanceVerificationResult> VerifyProvenanceAsync(string packageName, string version, string expectedSourceRepository, string expectedWorkflowPath, string expectedBuildType, Func<WorkflowRefInfo, bool>? validateWorkflowRef, string? sriIntegrity = null, CancellationToken cancellationToken = default)
         {
             ProvenanceCalled = true;
             CapturedValidateWorkflowRef = validateWorkflowRef;

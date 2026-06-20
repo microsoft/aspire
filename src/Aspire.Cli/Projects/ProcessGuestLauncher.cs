@@ -19,12 +19,12 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
     private readonly FileLoggerProvider? _fileLoggerProvider;
     private readonly Func<string, string?> _commandResolver;
 
-    public ProcessGuestLauncher(string language, ILogger logger, FileLoggerProvider? fileLoggerProvider = null, Func<string, string?>? commandResolver = null)
+    public ProcessGuestLauncher(string language, ILogger logger, Func<string, string?> commandResolver, FileLoggerProvider? fileLoggerProvider = null)
     {
         _language = language;
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;
-        _commandResolver = commandResolver ?? PathLookupHelper.FindFullPathFromPath;
+        _commandResolver = commandResolver;
     }
 
     public async Task<(int ExitCode, OutputCollector? Output)> LaunchAsync(

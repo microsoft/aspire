@@ -50,10 +50,10 @@ internal sealed class CertificateService(
     AspireCliTelemetry telemetry,
     ICliHostEnvironment hostEnvironment,
     CliExecutionContext executionContext,
-    Func<bool>? isLinux = null) : ICertificateService
+    Func<bool> isLinux) : ICertificateService
 {
     private const string SslCertDirEnvVar = "SSL_CERT_DIR";
-    private readonly Func<bool> _isLinux = isLinux ?? OperatingSystem.IsLinux;
+    private readonly Func<bool> _isLinux = isLinux;
 
     public async Task<EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(CancellationToken cancellationToken)
     {

@@ -32,16 +32,16 @@ internal class ExtensionInteractionService : IExtensionInteractionService
     private readonly bool _extensionPromptEnabled;
     private readonly CancellationToken _cancellationToken;
     private readonly Channel<Func<Task>> _extensionTaskChannel;
-    private readonly ILogger<ExtensionInteractionService>? _logger;
+    private readonly ILogger<ExtensionInteractionService> _logger;
 
     public IExtensionBackchannel Backchannel { get; }
 
-    public ExtensionInteractionService(ConsoleInteractionService consoleInteractionService, IExtensionBackchannel backchannel, bool extensionPromptEnabled, CancellationToken? cancellationToken = null, ILogger<ExtensionInteractionService>? logger = null)
+    public ExtensionInteractionService(ConsoleInteractionService consoleInteractionService, IExtensionBackchannel backchannel, bool extensionPromptEnabled, ILogger<ExtensionInteractionService> logger, CancellationToken cancellationToken)
     {
         _consoleInteractionService = consoleInteractionService;
         Backchannel = backchannel;
         _extensionPromptEnabled = extensionPromptEnabled;
-        _cancellationToken = cancellationToken ?? CancellationToken.None;
+        _cancellationToken = cancellationToken;
         _logger = logger;
         _extensionTaskChannel = Channel.CreateUnbounded<Func<Task>>(new UnboundedChannelOptions
         {
@@ -51,7 +51,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
 
         _ = Task.Run(async () =>
         {
-            while (await _extensionTaskChannel.Reader.WaitToReadAsync().ConfigureAwait(false))
+            while (await _extensionTaskChannel.Reader.WaitToReadAsync(_cancellationToken).ConfigureAwait(false))
             {
                 try
                 {
@@ -68,13 +68,13 @@ internal class ExtensionInteractionService : IExtensionInteractionService
                     {
                         // Keep the single-reader pump alive even when the extension connection is
                         // already broken; otherwise the final flush sentinel can never be processed.
-                        _logger?.LogDebug(displayErrorException, "Failed to display an extension operation error through the extension backchannel.");
+                        _logger.LogDebug(displayErrorException, "Failed to display an extension operation error through the extension backchannel.");
                     }
 
                     _consoleInteractionService.DisplayError(ex.Message);
                 }
             }
-        });
+        }, _cancellationToken);
     }
 
     public async Task FlushAsync(CancellationToken cancellationToken = default)

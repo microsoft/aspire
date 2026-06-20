@@ -10,9 +10,9 @@ namespace Aspire.Cli.Certificates;
 /// <summary>
 /// Certificate tool runner that uses the native CertificateManager directly (no subprocess needed).
 /// </summary>
-internal sealed class NativeCertificateToolRunner(CertificateManager certificateManager, Func<bool>? isLinux = null) : ICertificateToolRunner
+internal sealed class NativeCertificateToolRunner(CertificateManager certificateManager, Func<bool> isLinux) : ICertificateToolRunner
 {
-    private readonly Func<bool> _isLinux = isLinux ?? OperatingSystem.IsLinux;
+    private readonly Func<bool> _isLinux = isLinux;
 
     public CertificateTrustResult CheckHttpCertificate()
     {

@@ -6,6 +6,7 @@ using System.Reflection.Emit;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Tests.Utils;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Acquisition;
 
@@ -26,7 +27,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","channel":"staging"}""");
 
         var resolver = new IdentityResolver(
-            new InstallSidecarReader(),
+            new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance),
             BuildAssembly("EnvWins", channel: "stable", informationalVersion: "13.4.0+abc"),
             workspace.WorkspaceRoot.FullName,
             envReader: name => name == IdentityResolver.ChannelEnvVar ? "pr-12345" : null);
@@ -43,7 +44,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","channel":"staging"}""");
 
         var resolver = new IdentityResolver(
-            new InstallSidecarReader(),
+            new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance),
             BuildAssembly("SidecarWins", channel: "stable", informationalVersion: "13.4.0+abc"),
             workspace.WorkspaceRoot.FullName,
             envReader: _ => null);
@@ -60,7 +61,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         // No sidecar file written — resolver should skip the sidecar layer.
 
         var resolver = new IdentityResolver(
-            new InstallSidecarReader(),
+            new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance),
             BuildAssembly("AsmFallback", channel: "daily", informationalVersion: "13.4.0+abc"),
             workspace.WorkspaceRoot.FullName,
             envReader: _ => null);
@@ -76,7 +77,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var resolver = new IdentityResolver(
-            new InstallSidecarReader(),
+            new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance),
             // Assembly without channel metadata throws inside IdentityChannelReader;
             // the resolver swallows that and falls through to the terminal default.
             BuildAssembly("NoChannel", channel: null, informationalVersion: "13.4.0+abc"),
@@ -98,7 +99,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","channel":"staging"}""");
 
         var resolver = new IdentityResolver(
-            new InstallSidecarReader(),
+            new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance),
             BuildAssembly("EmptyEnv", channel: "stable", informationalVersion: "13.4.0+abc"),
             workspace.WorkspaceRoot.FullName,
             envReader: name => name == IdentityResolver.ChannelEnvVar ? string.Empty : null);
@@ -113,7 +114,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var resolver = new IdentityResolver(
-            new InstallSidecarReader(),
+            new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance),
             BuildAssembly("VersionSplit", channel: "local", informationalVersion: "13.4.0-preview.1.25366.3+abcdef0"),
             workspace.WorkspaceRoot.FullName,
             envReader: _ => null);
@@ -131,7 +132,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var resolver = new IdentityResolver(
-            new InstallSidecarReader(),
+            new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance),
             BuildAssembly("NoCommit", channel: "local", informationalVersion: "13.4.0"),
             workspace.WorkspaceRoot.FullName,
             envReader: _ => null);
@@ -145,7 +146,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var resolver = new IdentityResolver(
-            new InstallSidecarReader(),
+            new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance),
             BuildAssembly("VerEnv", channel: "local", informationalVersion: "13.4.0+abc"),
             workspace.WorkspaceRoot.FullName,
             envReader: name => name == IdentityResolver.VersionEnvVar ? "99.0.0-test" : null);
@@ -163,7 +164,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var resolver = new IdentityResolver(
-            new InstallSidecarReader(),
+            new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance),
             BuildAssembly("VerValid", channel: "local", informationalVersion: "13.4.0+abc"),
             workspace.WorkspaceRoot.FullName,
             envReader: name => name == IdentityResolver.VersionEnvVar ? version : null);
@@ -185,7 +186,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         // version-keyed decisions.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var resolver = new IdentityResolver(
-            new InstallSidecarReader(),
+            new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance),
             BuildAssembly("VerBad", channel: "local", informationalVersion: "13.4.0+abc"),
             workspace.WorkspaceRoot.FullName,
             envReader: name => name == IdentityResolver.VersionEnvVar ? version : null);
@@ -201,7 +202,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","version":"garbage"}""");
         var resolver = new IdentityResolver(
-            new InstallSidecarReader(),
+            new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance),
             BuildAssembly("VerScBad", channel: "local", informationalVersion: "13.4.0+abc"),
             workspace.WorkspaceRoot.FullName,
             envReader: _ => null);
@@ -219,7 +220,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var resolver = new IdentityResolver(
-            new InstallSidecarReader(),
+            new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance),
             BuildAssembly("CommitOk", channel: "local", informationalVersion: "13.4.0+abc"),
             workspace.WorkspaceRoot.FullName,
             envReader: name => name == IdentityResolver.CommitEnvVar ? commit : null);
@@ -238,7 +239,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var resolver = new IdentityResolver(
-            new InstallSidecarReader(),
+            new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance),
             BuildAssembly("CommitBad", channel: "local", informationalVersion: "13.4.0+abc"),
             workspace.WorkspaceRoot.FullName,
             envReader: name => name == IdentityResolver.CommitEnvVar ? commit : null);
@@ -254,7 +255,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var resolver = new IdentityResolver(
-            new InstallSidecarReader(),
+            new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance),
             BuildAssembly("NuGetOk", channel: "local", informationalVersion: "13.4.0+abc"),
             workspace.WorkspaceRoot.FullName,
             envReader: name => name == IdentityResolver.NuGetServiceIndexEnvVar ? url : null);
@@ -272,7 +273,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var resolver = new IdentityResolver(
-            new InstallSidecarReader(),
+            new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance),
             BuildAssembly("NuGetBad", channel: "local", informationalVersion: "13.4.0+abc"),
             workspace.WorkspaceRoot.FullName,
             envReader: name => name == IdentityResolver.NuGetServiceIndexEnvVar ? url : null);
@@ -289,7 +290,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         // validation" change can't silently break the override's primary use case.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var resolver = new IdentityResolver(
-            new InstallSidecarReader(),
+            new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance),
             BuildAssembly("ChannelBespoke", channel: "stable", informationalVersion: "13.4.0+abc"),
             workspace.WorkspaceRoot.FullName,
             envReader: name => name == IdentityResolver.ChannelEnvVar ? "totally-made-up" : null);
@@ -306,7 +307,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         // No sidecar field, no env var — the override must remain null so
         // callers fall back to PackageSources.NuGetOrg via the `?? canonical` pattern.
         var resolver = new IdentityResolver(
-            new InstallSidecarReader(),
+            new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance),
             BuildAssembly("OverrideNull", channel: "local", informationalVersion: "13.4.0+abc"),
             workspace.WorkspaceRoot.FullName,
             envReader: _ => null);
@@ -323,7 +324,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","nugetServiceIndexOverride":"http://sidecar/v3/index.json"}""");
 
         var resolver = new IdentityResolver(
-            new InstallSidecarReader(),
+            new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance),
             BuildAssembly("OverrideEnv", channel: "local", informationalVersion: "13.4.0+abc"),
             workspace.WorkspaceRoot.FullName,
             envReader: name => name == IdentityResolver.NuGetServiceIndexEnvVar
@@ -342,7 +343,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","nugetServiceIndexOverride":"http://proxy.local/v3/index.json"}""");
 
         var resolver = new IdentityResolver(
-            new InstallSidecarReader(),
+            new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance),
             BuildAssembly("OverrideSc", channel: "local", informationalVersion: "13.4.0+abc"),
             workspace.WorkspaceRoot.FullName,
             envReader: _ => null);
@@ -359,7 +360,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         // No sidecar field, no env var — the override must remain null so the
         // packaging service does not synthesize an override channel.
         var resolver = new IdentityResolver(
-            new InstallSidecarReader(),
+            new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance),
             BuildAssembly("PackagesNull", channel: "local", informationalVersion: "13.4.0+abc"),
             workspace.WorkspaceRoot.FullName,
             envReader: _ => null);
@@ -376,7 +377,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","packages":"/sidecar/packages"}""");
 
         var resolver = new IdentityResolver(
-            new InstallSidecarReader(),
+            new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance),
             BuildAssembly("PackagesEnv", channel: "local", informationalVersion: "13.4.0+abc"),
             workspace.WorkspaceRoot.FullName,
             envReader: name => name == IdentityResolver.PackagesEnvVar
@@ -395,7 +396,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","packages":"/sidecar/packages"}""");
 
         var resolver = new IdentityResolver(
-            new InstallSidecarReader(),
+            new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance),
             BuildAssembly("PackagesSc", channel: "local", informationalVersion: "13.4.0+abc"),
             workspace.WorkspaceRoot.FullName,
             envReader: _ => null);
@@ -411,7 +412,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         // ASPIRE_CLI_VERSION emulation must light up the override notice and feed IdentityVersion.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var resolver = new IdentityResolver(
-            new InstallSidecarReader(),
+            new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance),
             BuildAssembly("EnvVersionOverride", channel: "local", informationalVersion: "13.5.0-dev+local"),
             workspace.WorkspaceRoot.FullName,
             envReader: name => name == IdentityResolver.VersionEnvVar ? "13.4.2" : null);
@@ -432,7 +433,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","channel":"staging"}""");
         var resolver = new IdentityResolver(
-            new InstallSidecarReader(),
+            new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance),
             BuildAssembly("SidecarChannelOverride", channel: "local", informationalVersion: "13.5.0-dev+local"),
             workspace.WorkspaceRoot.FullName,
             envReader: _ => null);
@@ -454,7 +455,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         // notice must stay silent.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var resolver = new IdentityResolver(
-            new InstallSidecarReader(),
+            new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance),
             BuildAssembly("AssemblyOnly", channel: "daily", informationalVersion: "13.5.0-preview.1.25366.3+abcdef0"),
             workspace.WorkspaceRoot.FullName,
             envReader: _ => null);
@@ -476,7 +477,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var packagesDir = Path.Combine(workspace.WorkspaceRoot.FullName, "shipping");
         var resolver = new IdentityResolver(
-            new InstallSidecarReader(),
+            new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance),
             BuildAssembly("EnvPackagesOverride", channel: "local", informationalVersion: "13.5.0-dev+local"),
             workspace.WorkspaceRoot.FullName,
             envReader: name => name == IdentityResolver.PackagesEnvVar ? packagesDir : null);

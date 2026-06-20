@@ -7,6 +7,7 @@ using System.Xml;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Packaging;
 
@@ -26,7 +27,7 @@ public class NuGetConfigMergerTests
         return new FileInfo(path);
     }
 
-    private static PackageChannel CreateChannel(PackageMapping[] mappings) => PackageChannel.CreateExplicitChannel("test", PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures());
+    private static PackageChannel CreateChannel(PackageMapping[] mappings) => PackageChannel.CreateExplicitChannel("test", PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
 
     [Fact]
     public async Task CreateOrUpdateAsync_CreatesConfigFromMappings_WhenNoExistingConfig()
@@ -191,7 +192,7 @@ public class NuGetConfigMergerTests
             new PackageMapping("Aspire.*", stableSource)
         };
 
-        var channel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures());
+        var channel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
         await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
 
         var xml = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));

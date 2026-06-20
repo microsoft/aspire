@@ -8,6 +8,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
@@ -43,6 +44,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
     private readonly IInteractionService _interactionService;
     private readonly ILogger<ScaffoldingService> _logger;
     private readonly CliExecutionContext _executionContext;
+    private readonly ProfilingTelemetry _profilingTelemetry;
 
     public ScaffoldingService(
         IAppHostServerProjectFactory appHostServerProjectFactory,
@@ -50,7 +52,8 @@ internal sealed class ScaffoldingService : IScaffoldingService
         ILanguageDiscovery languageDiscovery,
         IInteractionService interactionService,
         ILogger<ScaffoldingService> logger,
-        CliExecutionContext executionContext)
+        CliExecutionContext executionContext,
+        ProfilingTelemetry profilingTelemetry)
     {
         _appHostServerProjectFactory = appHostServerProjectFactory;
         _appHostServerSessionFactory = appHostServerSessionFactory;
@@ -58,6 +61,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
         _interactionService = interactionService;
         _logger = logger;
         _executionContext = executionContext;
+        _profilingTelemetry = profilingTelemetry;
     }
 
     /// <inheritdoc />
@@ -411,7 +415,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
             runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(runtimeSpec, toolchain);
         }
 
-        var runtime = new GuestRuntime(runtimeSpec, _logger);
+        var runtime = new GuestRuntime(runtimeSpec, _logger, PathLookupHelper.FindFullPathFromPath, _profilingTelemetry);
 
         var (initResult, initOutput) = await runtime.InitializeAsync(directory, cancellationToken);
         if (initResult != 0)

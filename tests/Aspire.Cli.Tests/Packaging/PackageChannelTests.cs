@@ -7,6 +7,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Packaging;
 
@@ -19,7 +20,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
         var cache = new FakeNuGetPackageCache();
 
         // Act
-        var channel = PackageChannel.CreateImplicitChannel(cache, new TestFeatures());
+        var channel = PackageChannel.CreateImplicitChannel(cache, new TestFeatures(), NullLogger.Instance);
 
         // Assert
         Assert.Equal(PackagingStrings.BasedOnNuGetConfig, channel.SourceDetails);
@@ -39,7 +40,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
         };
 
         // Act
-        var channel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Prerelease, mappings, cache, new TestFeatures());
+        var channel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Prerelease, mappings, cache, new TestFeatures(), NullLogger.Instance);
 
         // Assert
         Assert.Equal(aspireSource, channel.SourceDetails);
@@ -59,7 +60,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
         };
 
         // Act
-        var channel = PackageChannel.CreateExplicitChannel("pr-10981", PackageChannelQuality.Prerelease, mappings, cache, new TestFeatures());
+        var channel = PackageChannel.CreateExplicitChannel("pr-10981", PackageChannelQuality.Prerelease, mappings, cache, new TestFeatures(), NullLogger.Instance);
 
         // Assert
         Assert.Equal(prHivePath, channel.SourceDetails);
@@ -79,7 +80,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
         };
 
         // Act
-        var channel = PackageChannel.CreateExplicitChannel("staging", PackageChannelQuality.Stable, mappings, cache, new TestFeatures(), configureGlobalPackagesFolder: true);
+        var channel = PackageChannel.CreateExplicitChannel("staging", PackageChannelQuality.Stable, mappings, cache, new TestFeatures(), NullLogger.Instance, configureGlobalPackagesFolder: true);
 
         // Assert
         Assert.Equal(stagingUrl, channel.SourceDetails);
@@ -95,7 +96,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
         var mappings = Array.Empty<PackageMapping>();
 
         // Act
-        var channel = PackageChannel.CreateExplicitChannel("empty", PackageChannelQuality.Stable, mappings, cache, new TestFeatures());
+        var channel = PackageChannel.CreateExplicitChannel("empty", PackageChannelQuality.Stable, mappings, cache, new TestFeatures(), NullLogger.Instance);
 
         // Assert
         Assert.Equal(PackagingStrings.BasedOnNuGetConfig, channel.SourceDetails);
@@ -145,7 +146,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
             new PackageMapping("Aspire*", packageSource),
             new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
         };
-        var channel = PackageChannel.CreateExplicitChannel("local", PackageChannelQuality.Both, mappings, cache, new TestFeatures(), pinnedVersion: pinnedVersion);
+        var channel = PackageChannel.CreateExplicitChannel("local", PackageChannelQuality.Both, mappings, cache, new TestFeatures(), NullLogger.Instance, pinnedVersion: pinnedVersion);
 
         var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).ToArray();
 
@@ -263,7 +264,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
             new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
         };
 
-        var channel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Stable, mappings, cache, new TestFeatures());
+        var channel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Stable, mappings, cache, new TestFeatures(), NullLogger.Instance);
 
         Assert.False(channel.ShouldPersistChannelName());
         Assert.False(channel.ShouldCreateNuGetConfig());
@@ -279,7 +280,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
             new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
         };
 
-        var channel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Prerelease, mappings, cache, new TestFeatures());
+        var channel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Prerelease, mappings, cache, new TestFeatures(), NullLogger.Instance);
 
         Assert.True(channel.ShouldPersistChannelName());
         Assert.True(channel.ShouldCreateNuGetConfig());
@@ -295,7 +296,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
             new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
         };
 
-        var channel = PackageChannel.CreateExplicitChannel("staging", PackageChannelQuality.Stable, mappings, cache, new TestFeatures());
+        var channel = PackageChannel.CreateExplicitChannel("staging", PackageChannelQuality.Stable, mappings, cache, new TestFeatures(), NullLogger.Instance);
 
         Assert.True(channel.ShouldPersistChannelName());
         Assert.True(channel.ShouldCreateNuGetConfig());
@@ -311,7 +312,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
             new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
         };
 
-        var channel = PackageChannel.CreateExplicitChannel("pr-12345", PackageChannelQuality.Prerelease, mappings, cache, new TestFeatures());
+        var channel = PackageChannel.CreateExplicitChannel("pr-12345", PackageChannelQuality.Prerelease, mappings, cache, new TestFeatures(), NullLogger.Instance);
 
         Assert.True(channel.ShouldPersistChannelName());
         Assert.True(channel.ShouldCreateNuGetConfig());
@@ -322,7 +323,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
     {
         var cache = new FakeNuGetPackageCache();
 
-        var channel = PackageChannel.CreateImplicitChannel(cache, new TestFeatures());
+        var channel = PackageChannel.CreateImplicitChannel(cache, new TestFeatures(), NullLogger.Instance);
 
         Assert.False(channel.ShouldPersistChannelName());
         Assert.False(channel.ShouldCreateNuGetConfig());
@@ -336,7 +337,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
         // otherwise be persisted.
         var cache = new FakeNuGetPackageCache();
 
-        var channel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Prerelease, [], cache, new TestFeatures());
+        var channel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Prerelease, [], cache, new TestFeatures(), NullLogger.Instance);
 
         Assert.True(channel.ShouldPersistChannelName());
         Assert.False(channel.ShouldCreateNuGetConfig());
@@ -359,7 +360,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
             new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
         };
 
-        var channel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Both, mappings, cache, new TestFeatures());
+        var channel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Both, mappings, cache, new TestFeatures(), NullLogger.Instance);
 
         Assert.True(channel.IsBackedByLocalPackageDirectory);
     }
@@ -374,7 +375,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
             new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
         };
 
-        var channel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Stable, mappings, cache, new TestFeatures());
+        var channel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Stable, mappings, cache, new TestFeatures(), NullLogger.Instance);
 
         Assert.False(channel.IsBackedByLocalPackageDirectory);
     }
@@ -390,7 +391,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
             new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
         };
 
-        var channel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Prerelease, mappings, cache, new TestFeatures());
+        var channel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Prerelease, mappings, cache, new TestFeatures(), NullLogger.Instance);
 
         Assert.False(channel.IsBackedByLocalPackageDirectory);
     }
@@ -409,7 +410,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
             new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
         };
 
-        var channel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Both, mappings, cache, new TestFeatures());
+        var channel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Both, mappings, cache, new TestFeatures(), NullLogger.Instance);
 
         Assert.False(channel.IsBackedByLocalPackageDirectory);
     }
@@ -419,7 +420,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
     {
         var cache = new FakeNuGetPackageCache();
 
-        var channel = PackageChannel.CreateImplicitChannel(cache, new TestFeatures());
+        var channel = PackageChannel.CreateImplicitChannel(cache, new TestFeatures(), NullLogger.Instance);
 
         Assert.False(channel.IsBackedByLocalPackageDirectory);
     }
@@ -437,6 +438,6 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
             new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
         };
 
-        return PackageChannel.CreateExplicitChannel("local", quality, mappings, cache, features ?? new TestFeatures());
+        return PackageChannel.CreateExplicitChannel("local", quality, mappings, cache, features ?? new TestFeatures(), NullLogger.Instance);
     }
 }

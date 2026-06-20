@@ -144,7 +144,7 @@ internal sealed class UpdateCommand : BaseCommand
 
             try
             {
-                return await ExecuteSelfUpdateAsync(parseResult, cancellationToken);
+                return await ExecuteSelfUpdateAsync(parseResult, cancellationToken: cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -360,7 +360,7 @@ internal sealed class UpdateCommand : BaseCommand
                     }
 
                     // Use the same channel that was selected for the project update
-                    return await ExecuteSelfUpdateAsync(parseResult, cancellationToken, channel.Name);
+                    return await ExecuteSelfUpdateAsync(parseResult, channel.Name, cancellationToken);
                 }
             }
         }
@@ -394,7 +394,7 @@ internal sealed class UpdateCommand : BaseCommand
 
                     if (shouldUpdateCli)
                     {
-                        return await ExecuteSelfUpdateAsync(parseResult, cancellationToken);
+                        return await ExecuteSelfUpdateAsync(parseResult, cancellationToken: cancellationToken);
                     }
                 }
             }
@@ -461,7 +461,7 @@ internal sealed class UpdateCommand : BaseCommand
             return CommandResult.Success();
         }
 
-        var selfUpdateResult = await ExecuteSelfUpdateAsync(parseResult, cancellationToken, channel.Name);
+        var selfUpdateResult = await ExecuteSelfUpdateAsync(parseResult, channel.Name, cancellationToken);
         if (selfUpdateResult.ExitCode == CliExitCodes.Success)
         {
             InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.ProjectUpdateSkippedAfterCliUpdateMessage);
@@ -496,7 +496,7 @@ internal sealed class UpdateCommand : BaseCommand
             || string.Equals(ExecutionContext.IdentityChannel, PackageChannelNames.Staging, StringComparisons.ChannelName);
     }
 
-    private async Task<CommandResult> ExecuteSelfUpdateAsync(ParseResult parseResult, CancellationToken cancellationToken, string? selectedChannel = null)
+    private async Task<CommandResult> ExecuteSelfUpdateAsync(ParseResult parseResult, string? selectedChannel = null, CancellationToken cancellationToken = default)
     {
         var channel = selectedChannel ?? parseResult.GetValue(_channelOption) ?? parseResult.GetValue(_qualityOption);
 

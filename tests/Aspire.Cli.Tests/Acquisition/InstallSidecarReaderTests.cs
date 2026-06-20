@@ -4,6 +4,7 @@
 using System.Text;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Tests.Utils;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Acquisition;
 
@@ -29,7 +30,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, $"{{\"source\":\"{wireValue}\"}}");
 
-        var reader = new InstallSidecarReader();
+        var reader = new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance);
         var result = reader.TryRead(workspace.WorkspaceRoot.FullName);
 
         var ok = Assert.IsType<InstallSidecarReadResult.Ok>(result);
@@ -43,7 +44,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var expectedPath = Path.Combine(workspace.WorkspaceRoot.FullName, InstallSidecarReader.SidecarFileName);
 
-        var reader = new InstallSidecarReader();
+        var reader = new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance);
         var result = reader.TryRead(workspace.WorkspaceRoot.FullName);
 
         var notFound = Assert.IsType<InstallSidecarReadResult.NotFound>(result);
@@ -53,7 +54,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
     [Fact]
     public void TryRead_ReturnsNotFoundForEmptyBinaryDir()
     {
-        var reader = new InstallSidecarReader();
+        var reader = new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance);
 
         var empty = Assert.IsType<InstallSidecarReadResult.NotFound>(reader.TryRead(string.Empty));
         Assert.Equal(string.Empty, empty.SidecarPath);
@@ -79,7 +80,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
         {
             File.SetUnixFileMode(sidecarPath, UnixFileMode.None);
 
-            var reader = new InstallSidecarReader();
+            var reader = new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance);
             var result = reader.TryRead(workspace.WorkspaceRoot.FullName);
 
             var invalid = Assert.IsType<InstallSidecarReadResult.Invalid>(result);
@@ -98,7 +99,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var sidecarPath = WriteSidecar(workspace.WorkspaceRoot.FullName, "{not valid json");
 
-        var reader = new InstallSidecarReader();
+        var reader = new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance);
         var result = reader.TryRead(workspace.WorkspaceRoot.FullName);
 
         var invalid = Assert.IsType<InstallSidecarReadResult.Invalid>(result);
@@ -121,7 +122,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, sidecarBody);
 
-        var reader = new InstallSidecarReader();
+        var reader = new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance);
         var result = reader.TryRead(workspace.WorkspaceRoot.FullName);
 
         var ok = Assert.IsType<InstallSidecarReadResult.Ok>(result);
@@ -135,7 +136,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, "{\"source\":\"script\"}");
 
-        var reader = new InstallSidecarReader();
+        var reader = new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance);
         var result = reader.TryRead(workspace.WorkspaceRoot.FullName);
 
         var ok = Assert.IsType<InstallSidecarReadResult.Ok>(result);
@@ -234,7 +235,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
         var oversized = new string('a', (int)InstallSidecarReader.MaxSidecarBytes + 1);
         File.WriteAllText(sidecarPath, $"{{\"source\":\"{oversized}\"}}");
 
-        var reader = new InstallSidecarReader();
+        var reader = new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance);
         var result = reader.TryRead(workspace.WorkspaceRoot.FullName);
 
         var invalid = Assert.IsType<InstallSidecarReadResult.Invalid>(result);
@@ -266,7 +267,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
         var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes("{\"source\":\"script\"}")).ToArray();
         File.WriteAllBytes(sidecarPath, bytes);
 
-        var reader = new InstallSidecarReader();
+        var reader = new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance);
         var result = reader.TryRead(workspace.WorkspaceRoot.FullName);
 
         var ok = Assert.IsType<InstallSidecarReadResult.Ok>(result);
@@ -297,7 +298,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, "{\"source\":\"script\",\"futureField\":\"value\",\"nested\":{\"a\":1,\"b\":[1,2]}}");
 
-        var reader = new InstallSidecarReader();
+        var reader = new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance);
         var result = reader.TryRead(workspace.WorkspaceRoot.FullName);
 
         var ok = Assert.IsType<InstallSidecarReadResult.Ok>(result);
@@ -326,7 +327,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
             }
             """);
 
-        var reader = new InstallSidecarReader();
+        var reader = new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance);
         var ok = Assert.IsType<InstallSidecarReadResult.Ok>(reader.TryRead(workspace.WorkspaceRoot.FullName));
 
         Assert.Equal(InstallSource.Script, ok.Info.Source);
@@ -346,7 +347,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, "{\"source\":\"script\"}");
 
-        var reader = new InstallSidecarReader();
+        var reader = new InstallSidecarReader(NullLogger<InstallSidecarReader>.Instance);
         var ok = Assert.IsType<InstallSidecarReadResult.Ok>(reader.TryRead(workspace.WorkspaceRoot.FullName));
 
         Assert.Equal(InstallSource.Script, ok.Info.Source);
