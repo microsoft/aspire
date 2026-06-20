@@ -66,13 +66,12 @@
                     <AspireTemplateColumn>
                         @{
                             var id = $"typeFilterButton-{context.SanitizedHtmlId}-{Guid.NewGuid()}";
-                            var isBold = context.AreAllValuesSelected is true || context.SelectedValues.Count is 0;
                         }
                         <FluentButton id="@id"
                                       IconEnd="@(new Icons.Regular.Size20.Filter())"
-                                      Appearance="@(isBold ? Appearance.Stealth : Appearance.Accent)"
+                                      Appearance="@(context.AreAllValuesSelected is true ? Appearance.Stealth : Appearance.Accent)"
                                       @onclick="() => context.PopupVisible = !context.PopupVisible"
-                                      aria-label="@(isBold ? Loc[nameof(ControlsStrings.ChartContainerAllTags)] : Loc[nameof(ControlsStrings.ChartContainerFilteredTags)])" />
+                                      aria-label="@(context.AreAllValuesSelected is true ? Loc[nameof(ControlsStrings.ChartContainerAllTags)] : Loc[nameof(ControlsStrings.ChartContainerFilteredTags)])" />
                         @* Each item is approximately 36px tall, plus 48px for the header and container padding. Include the always-rendered "All" checkbox row. The popover body has a CSS max-height of 300px. *@
                         <FluentPopover AnchorId="@id" @bind-Open="context.PopupVisible" VerticalThreshold="@(Math.Min((context.Values.Count + 1) * 36 + 48, 300))" AutoFocus="false">
                             <Header>@context.Name</Header>
