@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Projects;
+using Aspire.Cli.Bundles;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -115,6 +116,43 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.True(nonAppHostValidation.IsNotEvaluated);
         Assert.Equal(2, resolver.NoEvaluateCallCount);
         Assert.Equal(0, resolver.EvaluateCallCount);
+    }
+
+    [Fact]
+    public async Task ValidateAppHostAsync_NoEvaluate_DoesNotAcquireCliBundleLayout()
+    {
+        var appHostFile = CreateProjectAppHost();
+        var runner = new TestDotNetCliRunner();
+        var resolver = new TestAppHostInfoResolver
+        {
+            GetAppHostInfoAsyncCallback = (_, noEvaluate, _) =>
+            {
+                Assert.True(noEvaluate);
+                return Task.FromResult(new AppHostProjectInfo(
+                    ExitCode: 0,
+                    IsAspireHost: null,
+                    AspireHostingVersion: null,
+                    IsUsingCliBundle: false,
+                    UserSecretsId: null,
+                    RunCommand: null,
+                    TargetPath: null,
+                    RunWorkingDirectory: null,
+                    RunArguments: null,
+                    TargetFramework: null,
+                    TargetFrameworks: null));
+            }
+        };
+        var bundleService = new CountingBundleService();
+        var project = CreateDotNetAppHostProject(
+            runner,
+            appHostInfoResolver: resolver,
+            configureServices: options => options.BundleServiceFactory = _ => bundleService);
+
+        var validation = await project.ValidateAppHostAsync(appHostFile, noEvaluate: true, CancellationToken.None);
+
+        Assert.True(validation.IsValid);
+        Assert.True(validation.IsNotEvaluated);
+        Assert.Equal(0, bundleService.AcquireCallCount);
     }
 
     [Fact]
@@ -1900,5 +1938,25 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
 
             throw new InvalidOperationException("GetAppHostInfoAsync should not be called in this test.");
         }
+    }
+
+    private sealed class CountingBundleService : IBundleService
+    {
+        public bool IsBundle => false;
+
+        public int AcquireCallCount { get; private set; }
+
+        public Task EnsureExtractedAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task<BundleExtractResult> ExtractAsync(string destinationPath, bool force = false, CancellationToken cancellationToken = default)
+            => Task.FromResult(BundleExtractResult.NoPayload);
+
+        public Task<BundleLayoutLease?> EnsureExtractedAndAcquireLayoutAsync(string holderKind, string? commandName = null, CancellationToken cancellationToken = default)
+        {
+            AcquireCallCount++;
+            return Task.FromResult<BundleLayoutLease?>(null);
+        }
+
+        public string? GetDefaultExtractDir(string processPath) => null;
     }
 }

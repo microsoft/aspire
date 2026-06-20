@@ -16,13 +16,13 @@ internal interface IAppHostInfoResolver
 
 internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoDiskCache diskCache) : IAppHostInfoResolver
 {
-    private readonly ConcurrentDictionary<(string Path, DateTime LastWriteUtc), Task<AppHostProjectInfo>> _cache = new();
+    private readonly ConcurrentDictionary<(string Path, DateTime LastWriteUtc, bool NoEvaluate), Task<AppHostProjectInfo>> _cache = new();
 
     public async Task<AppHostProjectInfo> GetAppHostInfoAsync(FileInfo projectFile, bool noEvaluate, CancellationToken cancellationToken)
     {
         // Refresh so FileInfo reflects the on-disk mtime even when callers pass a long-lived instance.
         projectFile.Refresh();
-        var key = (projectFile.FullName, projectFile.LastWriteTimeUtc);
+        var key = (projectFile.FullName, projectFile.LastWriteTimeUtc, noEvaluate);
         var task = GetOrAddSharedFetch(key, projectFile, noEvaluate);
 
         try
@@ -51,7 +51,7 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
         }
     }
 
-    private Task<AppHostProjectInfo> GetOrAddSharedFetch((string Path, DateTime LastWriteUtc) key, FileInfo projectFile, bool noEvaluate)
+    private Task<AppHostProjectInfo> GetOrAddSharedFetch((string Path, DateTime LastWriteUtc, bool NoEvaluate) key, FileInfo projectFile, bool noEvaluate)
     {
         while (true)
         {
@@ -72,7 +72,7 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
         }
     }
 
-    private async Task CompleteSharedFetchAsync((string Path, DateTime LastWriteUtc) key, FileInfo projectFile, TaskCompletionSource<AppHostProjectInfo> completion, bool noEvaluate)
+    private async Task CompleteSharedFetchAsync((string Path, DateTime LastWriteUtc, bool NoEvaluate) key, FileInfo projectFile, TaskCompletionSource<AppHostProjectInfo> completion, bool noEvaluate)
     {
         try
         {
@@ -194,11 +194,7 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
 
     private static AppHostProjectInfo CreateHeuristicInfo(FileInfo projectFile)
     {
-        var fileNameSuggestsAppHost = projectFile.Name.EndsWith("AppHost.csproj", StringComparison.OrdinalIgnoreCase);
-        var folderContainsAppHostCSharpFile = projectFile.Directory?
-            .EnumerateFiles("*", SearchOption.TopDirectoryOnly)
-            .Any(f => f.Name.Equals("AppHost.cs", StringComparison.OrdinalIgnoreCase)) ?? false;
-        var isLikelyAppHost = fileNameSuggestsAppHost || folderContainsAppHostCSharpFile;
+        var isLikelyAppHost = IsLikelyAppHost(projectFile);
 
         return new AppHostProjectInfo(
             ExitCode: isLikelyAppHost ? 0 : 1,
@@ -212,6 +208,16 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
             RunArguments: null,
             TargetFramework: null,
             TargetFrameworks: null);
+    }
+
+    internal static bool IsLikelyAppHost(FileInfo projectFile)
+    {
+        var fileNameSuggestsAppHost = projectFile.Name.EndsWith("AppHost.csproj", StringComparison.OrdinalIgnoreCase);
+        var folderContainsAppHostCSharpFile = projectFile.Directory?
+            .EnumerateFiles("*", SearchOption.TopDirectoryOnly)
+            .Any(f => f.Name.Equals("AppHost.cs", StringComparison.OrdinalIgnoreCase)) ?? false;
+
+        return fileNameSuggestsAppHost || folderContainsAppHostCSharpFile;
     }
 
     private static AppHostProjectInfo ParseAppHostInfo(AppHostProjectInspectionOutput? msbuildOutput, int exitCode)

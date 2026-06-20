@@ -251,6 +251,31 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
         Assert.Equal(1, nonAppHostInfo.ExitCode);
     }
 
+    [Fact]
+    public async Task GetAppHostInfoAsync_NoEvaluateThenEvaluate_DoesNotReuseHeuristicInMemoryCache()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectFile = CreateProjectFile(workspace);
+        var msbuildCalls = 0;
+        var runner = new TestDotNetCliRunner
+        {
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) =>
+            {
+                msbuildCalls++;
+                return (0, CreateAppHostInfoJson());
+            },
+        };
+        var resolver = new AppHostInfoResolver(runner, new NullAppHostInfoDiskCache());
+
+        var noEvaluateInfo = await resolver.GetAppHostInfoAsync(projectFile, true, CancellationToken.None).DefaultTimeout();
+        var evaluateInfo = await resolver.GetAppHostInfoAsync(projectFile, false, CancellationToken.None).DefaultTimeout();
+
+        Assert.Null(noEvaluateInfo.IsAspireHost);
+        Assert.Equal(0, noEvaluateInfo.ExitCode);
+        Assert.True(evaluateInfo.IsAspireHost);
+        Assert.Equal(1, msbuildCalls);
+    }
+
     private static FileInfo CreateProjectFile(TemporaryWorkspace workspace)
     {
         var path = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.AppHost.csproj");

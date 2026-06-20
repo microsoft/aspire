@@ -205,7 +205,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
         // The resolver owns the cache/MSBuild fallback so validation and later run/publish
         // decisions share a single source of truth for AppHost project metadata.
-        using var cliBundleLease = await AcquireCliBundleLayoutAsync(cancellationToken);
+        using var cliBundleLease = noEvaluate ? null : await AcquireCliBundleLayoutAsync(cancellationToken);
         var information = await _appHostInfoResolver.GetAppHostInfoAsync(appHostFile, noEvaluate, cancellationToken);
 
         if (information.IsAspireHost is null)
@@ -241,11 +241,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
     private static bool IsPossiblyUnbuildableAppHost(FileInfo projectFile)
     {
-        var fileNameSuggestsAppHost = projectFile.Name.EndsWith("AppHost.csproj", StringComparison.OrdinalIgnoreCase);
-        var folderContainsAppHostCSharpFile = projectFile.Directory!
-            .EnumerateFiles("*", SearchOption.TopDirectoryOnly)
-            .Any(f => f.Name.Equals("AppHost.cs", StringComparison.OrdinalIgnoreCase));
-        return fileNameSuggestsAppHost || folderContainsAppHostCSharpFile;
+        return AppHostInfoResolver.IsLikelyAppHost(projectFile);
     }
 
     /// <inheritdoc />
