@@ -204,6 +204,47 @@ public sealed class SelectTestsCliTests
         });
     }
 
+    // The headline call-out (⚠️ "N of the M ... come from a single change") and the <details> collapse
+    // in RenderProjectList are both threshold-gated (headline: tests >= 10 && largest group >= 5;
+    // collapse: inline limit of 12). A single change that fans out to many projects must trip both.
+    // Failure mode: a refactor silently drops the headline or stops collapsing large buckets, making
+    // big selections unreadable again — the very problem this comment layout exists to solve.
+    [Fact]
+    public void LargeFanOutEmitsHeadlineAndCollapsesProjectList()
+    {
+        var projects = Enumerable.Range(1, 14).Select(i => $"Aspire.Pkg{i:00}.Tests").ToList();
+        var slnx = "<Solution>\n"
+            + string.Join("\n", projects.Select(p => $"  <Project Path=\"tests/{p}/{p}.csproj\" />"))
+            + "\n</Solution>";
+        // One path rule maps a single changed file to all 14 test projects, so they land in one group.
+        var map = "version: 1\npath_rules:\n  - paths: [big.txt]\n    targets: ["
+            + string.Join(", ", projects.Select(p => $"\"test:{p}\""))
+            + "]\n";
+
+        RunInTempRepo((repoRoot, propsPath, _) =>
+        {
+            var commentPath = Path.Combine(repoRoot, "comment.md");
+            var previous = Environment.GetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE");
+            Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", commentPath);
+            try
+            {
+                var changed = WriteChangedFiles(repoRoot, "big.txt");
+
+                Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, enforce: true));
+
+                var comment = File.ReadAllText(commentPath);
+                // Headline names the count and the single change that drove it.
+                Assert.Contains("⚠️ 14 of the 14 selected test projects come from a single change — `big.txt`", comment);
+                // The 14-project bucket (over the inline limit of 12) collapses into a <details>.
+                Assert.Contains("<details><summary>show 14</summary>", comment);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", previous);
+            }
+        }, slnx: slnx, map: map);
+    }
+
     // In audit mode the comment is advisory: the full matrix and all jobs still run, and the lists
     // describe what selective CI WOULD run under enforcement. Pin the "(audit mode)" title qualifier
     // and the explanatory line so the advisory framing can't silently disappear — without it a reader

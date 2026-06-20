@@ -770,7 +770,7 @@ internal static class Selection
             }
             if (other.Count > 0)
             {
-                sb.AppendLine(CultureInfo.InvariantCulture, $"→ {RenderProjectList(other.Select(p => $"`{p}`").ToList(), "tests")}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"→ {RenderProjectList(other.Select(p => $"`{p}`").ToList(), other.Count == 1 ? "test" : "tests")}");
             }
             sb.AppendLine();
         }
