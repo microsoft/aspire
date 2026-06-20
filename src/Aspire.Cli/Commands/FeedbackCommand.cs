@@ -278,7 +278,7 @@ internal sealed class FeedbackCommand : BaseCommand
             return string.Format(CultureInfo.InvariantCulture, SharedCommandStrings.FeedbackDoctorCaptureFailed, result.FailureMessage ?? $"exit code {result.ExitCode}");
         }
 
-        return result.Output.Trim();
+        return FeedbackDiagnostics.NormalizeAspireDoctorOutput(result.Output);
     }
 
     private async Task<(int ExitCode, string Output, string? FailureMessage, bool Cancelled)> CaptureProcessOutputAsync(

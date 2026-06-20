@@ -182,7 +182,11 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var interactionService = new TestInteractionService();
-        var processOutputCapture = new TestFeedbackProcessOutputCapture("""{"overallStatus":"Healthy"}""");
+        var processOutputCapture = new TestFeedbackProcessOutputCapture($$"""
+            {"overallStatus":"Healthy"}
+
+            Checking Aspire environment...
+            """);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => interactionService;
@@ -203,6 +207,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
         var message = Assert.Single(interactionService.DisplayedMessages).Message;
         Assert.Contains("template=10_bug_report.yml", message, StringComparison.Ordinal);
         Assert.Contains("aspire-doctor-output=%7B%22overallStatus%22%3A%22Healthy%22%7D", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Checking%20Aspire%20environment", message, StringComparison.Ordinal);
     }
 
     [Fact]

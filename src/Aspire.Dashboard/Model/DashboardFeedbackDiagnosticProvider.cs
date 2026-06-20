@@ -12,6 +12,7 @@ using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Aspire.Dashboard.Utils;
 using Aspire.Hosting;
+using Aspire.Shared;
 using Microsoft.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Model;
@@ -117,7 +118,7 @@ internal sealed class DashboardFeedbackDiagnosticProvider(
                 return string.Create(CultureInfo.InvariantCulture, $"Could not capture `aspire doctor` output (exit code {process.ExitCode}).");
             }
 
-            return NormalizeAspireDoctorOutput(output);
+            return FeedbackDiagnostics.NormalizeAspireDoctorOutput(output);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -128,72 +129,7 @@ internal sealed class DashboardFeedbackDiagnosticProvider(
 
     internal static string NormalizeAspireDoctorOutput(string output)
     {
-        if (string.IsNullOrWhiteSpace(output))
-        {
-            return string.Empty;
-        }
-
-        return TryExtractJsonObject(output) ?? output.Trim();
-    }
-
-    private static string? TryExtractJsonObject(string output)
-    {
-        var startIndex = output.IndexOf('{', StringComparison.Ordinal);
-        if (startIndex < 0)
-        {
-            return null;
-        }
-
-        var depth = 0;
-        var inString = false;
-        var escaped = false;
-
-        // `aspire doctor --format json` can still be accompanied by progress text from
-        // lower-level checks, for example:
-        //   { "checks": [...] }
-        //
-        //   Checking Aspire environment...
-        // Keep only the first complete JSON object so the issue prefill remains clean.
-        for (var i = startIndex; i < output.Length; i++)
-        {
-            var c = output[i];
-            if (inString)
-            {
-                if (escaped)
-                {
-                    escaped = false;
-                }
-                else if (c == '\\')
-                {
-                    escaped = true;
-                }
-                else if (c == '"')
-                {
-                    inString = false;
-                }
-
-                continue;
-            }
-
-            if (c == '"')
-            {
-                inString = true;
-            }
-            else if (c == '{')
-            {
-                depth++;
-            }
-            else if (c == '}')
-            {
-                depth--;
-                if (depth == 0)
-                {
-                    return output[startIndex..(i + 1)].Trim();
-                }
-            }
-        }
-
-        return null;
+        return FeedbackDiagnostics.NormalizeAspireDoctorOutput(output);
     }
 
     private string? TryGetAppHostContext()
