@@ -228,7 +228,9 @@ internal sealed class ScaffoldingService : IScaffoldingService
 
         if (IsNestedBrownfieldTypeScriptAppHost(directory, scaffoldDirectory, language))
         {
-            await AddRootTypeScriptAppHostScriptsAsync(directory, scaffoldDirectory, cancellationToken);
+            // The nested brownfield path only runs for TypeScript, so the toolchain was already resolved
+            // above. Thread it through instead of walking the filesystem a second time.
+            await AddRootTypeScriptAppHostScriptsAsync(directory, scaffoldDirectory, toolchain!.Value, cancellationToken);
         }
 
         // Step 5: Generate SDK code via RPC (must happen before dependency installation
@@ -301,7 +303,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
                scaffoldDirectory.FullName.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
                StringComparison.Ordinal);
 
-    private async Task AddRootTypeScriptAppHostScriptsAsync(DirectoryInfo rootDirectory, DirectoryInfo appHostDirectory, CancellationToken cancellationToken)
+    private async Task AddRootTypeScriptAppHostScriptsAsync(DirectoryInfo rootDirectory, DirectoryInfo appHostDirectory, TypeScriptAppHostToolchain toolchain, CancellationToken cancellationToken)
     {
         var packageJsonPath = Path.Combine(rootDirectory.FullName, PackageJsonFileName);
         var existingContent = await File.ReadAllTextAsync(packageJsonPath, cancellationToken);
@@ -321,7 +323,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
 
         var scripts = EnsureJsonObject(packageJson, "scripts");
         var relativeAppHostDirectory = PathNormalizer.NormalizePathForStorage(Path.GetRelativePath(rootDirectory.FullName, appHostDirectory.FullName));
-        var preservedScriptNames = AddRootTypeScriptAppHostDelegateScripts(scripts, appHostDirectory, relativeAppHostDirectory, _logger);
+        var preservedScriptNames = AddRootTypeScriptAppHostDelegateScripts(scripts, toolchain, relativeAppHostDirectory);
 
         if (preservedScriptNames.Count > 0)
         {
@@ -343,12 +345,6 @@ internal sealed class ScaffoldingService : IScaffoldingService
         AddRootTypeScriptAppHostDelegateScript(scripts, toolchain, relativeAppHostDirectory, "aspire:dev", ref preservedScriptNames);
 
         return preservedScriptNames ?? [];
-    }
-
-    internal static IReadOnlyList<string> AddRootTypeScriptAppHostDelegateScripts(JsonObject scripts, DirectoryInfo appHostDirectory, string relativeAppHostDirectory, ILogger? logger)
-    {
-        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, logger);
-        return AddRootTypeScriptAppHostDelegateScripts(scripts, toolchain, relativeAppHostDirectory);
     }
 
     internal static string SerializePackageJson(JsonObject packageJson, string existingContent)
