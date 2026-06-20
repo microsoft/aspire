@@ -602,6 +602,39 @@ suite('AspireTerminalProvider tests', () => {
             assert.strictEqual(env.ASPIRE_EXTENSION_PROMPT_ENABLED, 'true');
             assert.strictEqual(env.ASPIRE_NON_INTERACTIVE, undefined);
         });
+
+        test('forwards an absolute aspireCliExecutablePath as AspireCliPath so MSBuild bundle resolution can pick it up', () => {
+            const getConfiguredCliPathStub = sinon.stub(cliPathModule, 'getConfiguredCliPath').returns('/work/aspire/artifacts/bin/Aspire.Cli/Debug/net10.0/aspire');
+            try {
+                const env = terminalProvider.createEnvironment();
+                assert.strictEqual(env.AspireCliPath, '/work/aspire/artifacts/bin/Aspire.Cli/Debug/net10.0/aspire');
+            } finally {
+                getConfiguredCliPathStub.restore();
+            }
+        });
+
+        test('omits AspireCliPath when the configured path is empty', () => {
+            const getConfiguredCliPathStub = sinon.stub(cliPathModule, 'getConfiguredCliPath').returns('');
+            try {
+                const env = terminalProvider.createEnvironment();
+                assert.strictEqual(env.AspireCliPath, undefined);
+            } finally {
+                getConfiguredCliPathStub.restore();
+            }
+        });
+
+        test('omits AspireCliPath when the configured path is a bare command name', () => {
+            // A relative or bare-name value would fail ResolveAspireCliBundle's
+            // File.Exists guard, so leaving the env var unset is the correct
+            // behavior. The task then falls back to its PATH/ASPIRE_HOME logic.
+            const getConfiguredCliPathStub = sinon.stub(cliPathModule, 'getConfiguredCliPath').returns('aspire');
+            try {
+                const env = terminalProvider.createEnvironment();
+                assert.strictEqual(env.AspireCliPath, undefined);
+            } finally {
+                getConfiguredCliPathStub.restore();
+            }
+        });
     });
 
     // The Windows quoting form targets PowerShell (powershell.exe / pwsh.exe),

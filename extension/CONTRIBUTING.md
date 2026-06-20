@@ -65,6 +65,12 @@ You may also want to use the `Run Extension (cli stop on entry)` launch configur
 
 You can use the `Aspire: Extension settings` command to open VS Code settings directly to the Aspire extension category.
 
+#### Dogfooding a CLI build alongside the extension
+
+When `Aspire Cli Executable Path` points at an **absolute** path, the extension forwards that value as the `AspireCliPath` MSBuild property/environment variable to every terminal, task, and debug process it creates. The Aspire SDK's `ResolveAspireCliBundle` task uses `AspireCliPath` (defined in [`src/Aspire.Hosting.Tasks/ResolveAspireCliBundle.cs`](/src/Aspire.Hosting.Tasks/ResolveAspireCliBundle.cs)) to locate the matching bundle layout — DCP, dashboard, and terminal-host binaries — and bakes those paths into the built AppHost as `[AssemblyMetadata]` attributes. Without this forwarding, MSBuild probes `PATH` and can stamp the *stable* CLI's bundle into the AppHost while the extension is launching it through the *dev* CLI, producing surprising runtime mismatches such as `<unresolved-aspire-terminalhost>` even though the new CLI is correctly invoked (tracked in [issue #18073](https://github.com/microsoft/aspire/issues/18073)).
+
+A relative value (for example the bare `aspire` literal) is intentionally not forwarded: `ResolveAspireCliBundle` requires an existing file and would emit a warning rather than fall back. Clear the setting (or restart the extension) to revert to default PATH/ASPIRE_HOME resolution.
+
 ## Running tests
 
 Unit tests are `*.test.ts` files under `src/test/`, run via `@vscode/test-electron`. From `extension/`:

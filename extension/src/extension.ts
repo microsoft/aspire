@@ -46,6 +46,7 @@ import { cloneAppHostState, createStateSnapshot, getDashboardUrl } from './exten
 import { createE2eStateFileBridge, isE2eBridgeEnabled } from './testing/e2eStateFileBridge';
 import type { AspireAppHostState, AspireExtensionApi, AspireExtensionStateSnapshot, WaitForStateOptions } from './types/extensionApi';
 import { AppHostsViewTelemetry } from './views/AppHostsViewTelemetry';
+import { registerCliPathEnvironmentSync } from './utils/cliPathEnvironment';
 
 let aspireExtensionContext = new AspireExtensionContext();
 
@@ -56,6 +57,14 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const terminalProvider = new AspireTerminalProvider(context.subscriptions);
   const testRunSessionManager = new TestRunSessionManager();
+
+  // Keep VS Code's contributed terminal/task environment in sync with the
+  // aspire.aspireCliExecutablePath setting so MSBuild's ResolveAspireCliBundle
+  // task and tools spawned from integrated terminals see the configured CLI
+  // path (https://github.com/microsoft/aspire/issues/18073). Registered before
+  // any command can fire so the first user-initiated terminal already inherits
+  // AspireCliPath when the setting is configured.
+  registerCliPathEnvironmentSync(context.environmentVariableCollection, context.subscriptions);
 
   const rpcServer = await AspireRpcServer.create(
     (rpcServerConnectionInfo: RpcServerConnectionInfo, connection: MessageConnection, token: string, debugSessionId: string | null) => {

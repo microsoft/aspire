@@ -6,7 +6,8 @@ import { RpcServerConnectionInfo } from '../server/AspireRpcServer';
 import { DcpServerConnectionInfo } from '../dcp/types';
 import { getRunSessionInfo, getSupportedCapabilities } from '../capabilities';
 import { EnvironmentVariables, getEnvironmentWithoutE2EBridgeVariables } from './environment';
-import { resolveCliPath } from './cliPath';
+import { getConfiguredCliPath, resolveCliPath } from './cliPath';
+import { ASPIRE_CLI_PATH_ENV_VAR } from './cliPathEnvironment';
 import path from 'path';
 
 export const enum AnsiColors {
@@ -275,6 +276,21 @@ export class AspireTerminalProvider implements vscode.Disposable {
             DEBUG_SESSION_TOKEN: this.dcpServerConnectionInfo.token,
             DEBUG_SESSION_SERVER_CERTIFICATE: this.dcpServerConnectionInfo.certificate,
         };
+
+        // Forward aspire.aspireCliExecutablePath as AspireCliPath so MSBuild's
+        // ResolveAspireCliBundle task — which `dotnet build` evaluates whenever
+        // the AppHost is built (including from this CLI process and from VS
+        // Code's auto-build / language server) — resolves the bundle layout
+        // relative to the configured CLI instead of probing PATH. PATH-resolved
+        // bundle paths get baked into the AppHost assembly as
+        // [AssemblyMetadata("aspireterminalhostpath", …)] and can outlive a
+        // dev-loop CLI swap (see https://github.com/microsoft/aspire/issues/18073).
+        // Only forward an absolute path; relative values would fail the task's
+        // File.Exists guard and trigger an ASPIRE009-style warning.
+        const configuredCliPath = getConfiguredCliPath();
+        if (configuredCliPath && path.isAbsolute(configuredCliPath)) {
+            env[ASPIRE_CLI_PATH_ENV_VAR] = configuredCliPath;
+        }
 
         if (debugSessionId) {
             this.addDcpRunSessionEnvironment(env, debugSessionId, noDebug);
