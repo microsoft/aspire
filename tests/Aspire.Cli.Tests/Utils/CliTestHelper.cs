@@ -246,6 +246,7 @@ internal static class CliTestHelper
         services.AddTransient<CertificatesCleanCommand>();
         services.AddTransient<CertificatesTrustCommand>();
         services.AddTransient<DoctorCommand>();
+        services.AddTransient<FeedbackCommand>();
         services.AddTransient<DashboardCommand>();
         services.AddTransient<DashboardRunCommand>();
         services.AddTransient<UpdateCommand>();

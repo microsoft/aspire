@@ -14,7 +14,7 @@
         @* mobile-nav-menu-item-active drives the accent color bar applied via
            ::before in app.css, mirroring the desktop FluentAppBar selected
            treatment without needing a separate sibling element. *@
-        <FluentMenuItem OnClick="@(async () => { CloseNavMenu(); await item.OnClick(); })" Class="@(isActive ? "mobile-nav-menu-item-active" : null)" Style="height: 40px; width: 100vw; margin-bottom: 6px;" AdditionalAttributes="@menuItemAttributes">
+        <FluentMenuItem OnClick="@(async () => { CloseNavMenu(); await item.OnClick(); })" Class="@(isActive ? "mobile-nav-menu-item-active" : null)" Style="height: 40px; width: 100vw; margin-bottom: 6px;" AdditionalAttributes="@menuItemAttributes" MenuItems="@RenderNestedItems(item)">
             <span>@item.Text</span>
 
             @{
@@ -40,6 +40,40 @@
 </FluentMenu>
 
 @code {
+    private RenderFragment? RenderNestedItems(MobileNavMenuEntry item)
+    {
+        if (item.NestedMenuItems is null || item.NestedMenuItems.Count == 0)
+        {
+            return null;
+        }
+
+        return @<div>
+            @foreach (var nestedItem in item.NestedMenuItems)
+            {
+                var additionalMenuItemAttributes = new Dictionary<string, object>(nestedItem.AdditionalAttributes ?? new Dictionary<string, object>());
+                if (nestedItem.Href is not null)
+                {
+                    additionalMenuItemAttributes["href"] = nestedItem.Href;
+                }
+                if (nestedItem.Target is not null)
+                {
+                    additionalMenuItemAttributes["target"] = nestedItem.Target;
+                }
+
+                <FluentMenuItem AdditionalAttributes="@additionalMenuItemAttributes" OnClick="@(async () => { CloseNavMenu(); if (nestedItem.OnClick is { } onClick) { await onClick(); } })" Label="@nestedItem.Text">
+                    @if (nestedItem.Icon is { } icon)
+                    {
+                        <span slot="start">
+                            <FluentIcon Class="align-text-bottom" Value="@icon" Slot="start" Color="Color.Neutral" />
+                        </span>
+                    }
+                </FluentMenuItem>
+            }
+        </div>;
+    }
+}
+
+@code {
     [Parameter, EditorRequired]
     public required bool IsNavMenuOpen { get; set; }
 
@@ -48,6 +82,9 @@
 
     [Parameter, EditorRequired]
     public required Action CloseNavMenu { get; set; }
+
+    [Parameter, EditorRequired]
+    public required Func<List<MenuButtonItem>> GetFeedbackMenuItems { get; set; }
 
     [Parameter, EditorRequired]
     public required Func<Task> LaunchHelpAsync { get; set; }

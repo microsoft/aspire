@@ -89,6 +89,91 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task FeedbackCommand_Idea_PrintsIssueTemplateChooserUrl()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("feedback idea --title \"My idea\" --body \"Make Aspire better\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        var message = Assert.Single(interactionService.DisplayedMessages).Message;
+        Assert.Contains("https://github.com/microsoft/aspire/issues/new/choose", message, StringComparison.Ordinal);
+        Assert.Contains("template=20_feature-request.yml", message, StringComparison.Ordinal);
+        Assert.Contains("title=My%20idea", message, StringComparison.Ordinal);
+        Assert.Contains("solution=Make%20Aspire%20better", message, StringComparison.Ordinal);
+        Assert.Contains("additional-context=", message, StringComparison.Ordinal);
+        Assert.Contains("Posted%20from%3A%20CLI", message, StringComparison.Ordinal);
+        Assert.Empty(interactionService.ShownStatuses);
+    }
+
+    [Fact]
+    public async Task FeedbackCommand_PromptsForKindAndRequiredValues()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService
+        {
+            PromptForSelectionCallback = (_, choices, formatter, _) => choices.Cast<object>().Single(choice => formatter(choice) == "Suggest an idea")
+        };
+        interactionService.SetupStringPromptResponse("A prompted idea");
+        interactionService.SetupStringPromptResponse("Prompted idea body");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("feedback");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Collection(
+            interactionService.StringPromptCalls,
+            titlePrompt => Assert.Equal("Issue title", titlePrompt.PromptText),
+            bodyPrompt => Assert.Equal("Describe the idea", bodyPrompt.PromptText));
+
+        var message = Assert.Single(interactionService.DisplayedMessages).Message;
+        Assert.Contains("template=20_feature-request.yml", message, StringComparison.Ordinal);
+        Assert.Contains("title=A%20prompted%20idea", message, StringComparison.Ordinal);
+        Assert.Contains("solution=Prompted%20idea%20body", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task FeedbackCommand_NonInteractiveWithoutKind_PrintsGenericChooserUrl()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("feedback --title \"My feedback\" --body \"Details\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Empty(interactionService.StringPromptCalls);
+        var message = Assert.Single(interactionService.DisplayedMessages).Message;
+        Assert.Equal("Open this link to send feedback: https://github.com/microsoft/aspire/issues/new/choose", message);
+    }
+
+    [Fact]
     public async Task CaptureProfileOptions_AreHiddenFromHelp()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

@@ -69,6 +69,7 @@ public class MobileNavMenuTests : DashboardTestContext
             builder.Add(p => p.IsNavMenuOpen, true);
             builder.Add(p => p.IsAIEnabled, false);
             builder.Add(p => p.CloseNavMenu, () => { });
+            builder.Add(p => p.GetFeedbackMenuItems, () => []);
             builder.Add(p => p.LaunchHelpAsync, () => Task.CompletedTask);
             builder.Add(p => p.LaunchAIAgentsAsync, () => Task.CompletedTask);
             builder.Add(p => p.IsAgentHelpEnabled, false);

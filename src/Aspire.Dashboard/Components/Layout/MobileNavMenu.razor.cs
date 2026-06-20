@@ -89,6 +89,13 @@ public partial class MobileNavMenu : ComponentBase
         );
 
         yield return new MobileNavMenuEntry(
+            Loc[nameof(Resources.Layout.MainLayoutProvideFeedback)],
+            () => Task.CompletedTask,
+            new Icons.Regular.Size24.PersonFeedback(),
+            NestedMenuItems: GetFeedbackMenuItems()
+        );
+
+        yield return new MobileNavMenuEntry(
             Loc[nameof(Resources.Layout.MainLayoutAspireDashboardHelpLink)],
             LaunchHelpAsync,
             new Icons.Regular.Size24.QuestionCircle()

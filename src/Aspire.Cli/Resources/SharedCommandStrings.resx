@@ -210,4 +210,66 @@
     <value>The {0} command requires --yes when the --non-interactive option is specified.</value>
     <comment>{0} is the command name.</comment>
   </data>
+  <data name="FeedbackCommandDescription" xml:space="preserve">
+    <value>Open a pre-filled GitHub issue to send Aspire feedback</value>
+  </data>
+  <data name="FeedbackKindArgumentDescription" xml:space="preserve">
+    <value>The kind of feedback to send: bug, idea, or general</value>
+  </data>
+  <data name="FeedbackTitleOptionDescription" xml:space="preserve">
+    <value>The issue title to pre-fill</value>
+  </data>
+  <data name="FeedbackBodyOptionDescription" xml:space="preserve">
+    <value>The main issue field to pre-fill</value>
+  </data>
+  <data name="FeedbackKindRequiredInNonInteractiveMode" xml:space="preserve">
+    <value>Specify the feedback kind: bug, idea, or general.</value>
+  </data>
+  <data name="FeedbackKindPrompt" xml:space="preserve">
+    <value>What kind of feedback do you want to send?</value>
+  </data>
+  <data name="FeedbackKindChoiceBug" xml:space="preserve">
+    <value>Report a bug</value>
+  </data>
+  <data name="FeedbackKindChoiceIdea" xml:space="preserve">
+    <value>Suggest an idea</value>
+  </data>
+  <data name="FeedbackKindChoiceGeneral" xml:space="preserve">
+    <value>General feedback</value>
+  </data>
+  <data name="FeedbackTitlePrompt" xml:space="preserve">
+    <value>Issue title</value>
+  </data>
+  <data name="FeedbackBugBodyPrompt" xml:space="preserve">
+    <value>Describe the bug</value>
+  </data>
+  <data name="FeedbackIdeaBodyPrompt" xml:space="preserve">
+    <value>Describe the idea</value>
+  </data>
+  <data name="FeedbackGeneralBodyPrompt" xml:space="preserve">
+    <value>Describe your feedback</value>
+  </data>
+  <data name="FeedbackDefaultBugTitle" xml:space="preserve">
+    <value>Bug report</value>
+  </data>
+  <data name="FeedbackDefaultIdeaTitle" xml:space="preserve">
+    <value>Feature request</value>
+  </data>
+  <data name="FeedbackDefaultGeneralTitle" xml:space="preserve">
+    <value>Feedback</value>
+  </data>
+  <data name="FeedbackCaptureDoctorStatus" xml:space="preserve">
+    <value>Gathering Aspire diagnostics...</value>
+  </data>
+  <data name="FeedbackLinkMessage" xml:space="preserve">
+    <value>Open this link to send feedback: {0}</value>
+    <comment>{0} is a GitHub issue creation URL.</comment>
+  </data>
+  <data name="FeedbackDoctorProcessPathUnavailable" xml:space="preserve">
+    <value>Could not capture `aspire doctor` output because the current Aspire executable path is unavailable.</value>
+  </data>
+  <data name="FeedbackDoctorCaptureFailed" xml:space="preserve">
+    <value>Could not capture `aspire doctor` output ({0}).</value>
+    <comment>{0} is the failure reason.</comment>
+  </data>
 </root>

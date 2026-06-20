@@ -600,6 +600,11 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         context.EnvironmentVariables["ASPNETCORE_ENVIRONMENT"] = environment;
         context.EnvironmentVariables[DashboardConfigNames.ResourceServiceUrlName.EnvVarName] = resourceServiceUrl;
 
+        if (configuration["AppHost:FilePath"] is { Length: > 0 } appHostFilePath)
+        {
+            context.EnvironmentVariables[DashboardConfigNames.AppHostFilePathName.EnvVarName] = appHostFilePath;
+        }
+
         PopulateDashboardUrls(context);
 
         var otlpHttp = ((IResourceWithEndpoints)context.Resource).GetEndpoint(KnownEndpointNames.OtlpHttpEndpointName, KnownNetworkIdentifiers.LocalhostNetwork);

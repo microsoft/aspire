@@ -1,0 +1,83 @@
+@* Licensed to the .NET Foundation under one or more agreements. *@
+@* The .NET Foundation licenses this file to you under the MIT license. *@
+
+@using Aspire.Dashboard.Resources
+@using LayoutResources = Aspire.Dashboard.Resources.Layout
+@implements IDialogContentComponent<FeedbackDialogViewModel>
+
+<FluentDialogBody Class="feedback-dialog-body">
+    <FluentStack Orientation="Orientation.Vertical" VerticalGap="12">
+        <div class="feedback-input input-container">
+            <FluentTextField @ref="_titleTextField"
+                             Id="@TitleInputId"
+                             Label="@Loc[nameof(LayoutResources.MainLayoutProvideFeedbackIssueTitleLabel)]"
+                             @bind-Value="_title"
+                             Immediate="true"
+                             Required="true"
+                             AutoComplete="off" />
+        </div>
+
+        <div class="feedback-input input-container">
+            <div class="feedback-textarea-label">
+                <FluentInputLabel ForId="@MainTextInputId" Label="@MainTextLabel" AriaLabel="@MainTextLabel" Required="true" />
+            </div>
+            <div class="feedback-input-line">
+                <textarea id="@MainTextInputId"
+                          class="feedback-dialog-textarea"
+                          rows="6"
+                          required
+                          @bind="_mainText"
+                          @bind:event="oninput"></textarea>
+            </div>
+        </div>
+
+        @if (IssueKind == FeedbackIssueKind.Bug)
+        {
+            <div class="feedback-input input-container">
+                <div class="feedback-textarea-label">
+                    <FluentInputLabel ForId="@DoctorOutputInputId" Label="@Loc[nameof(LayoutResources.MainLayoutProvideFeedbackAspireDoctorOutputLabel)]" AriaLabel="@Loc[nameof(LayoutResources.MainLayoutProvideFeedbackAspireDoctorOutputLabel)]" />
+                </div>
+                <div class="feedback-input-line">
+                    <textarea id="@DoctorOutputInputId"
+                              class="feedback-dialog-textarea feedback-dialog-monospace"
+                              rows="8"
+                              readonly="@_isCapturingBugContext"
+                              aria-busy="@_isCapturingBugContext.ToString().ToLowerInvariant()"
+                              spellcheck="false"
+                              @bind="_aspireDoctorOutput"
+                              @bind:event="oninput"></textarea>
+                    @if (_isCapturingBugContext)
+                    {
+                        <FluentProgressRing Width="20px" Class="feedback-input-progress" Title="@Loc[nameof(LayoutResources.MainLayoutProvideFeedbackDoctorLoadingMessage)]" />
+                    }
+                </div>
+            </div>
+        }
+
+        <div class="feedback-input input-container">
+            <div class="feedback-textarea-label">
+                <FluentInputLabel ForId="@AdditionalContextInputId" Label="@Loc[nameof(LayoutResources.MainLayoutProvideFeedbackAdditionalContextLabel)]" AriaLabel="@Loc[nameof(LayoutResources.MainLayoutProvideFeedbackAdditionalContextLabel)]" />
+            </div>
+            <div class="feedback-input-line">
+                <textarea id="@AdditionalContextInputId"
+                          class="feedback-dialog-textarea feedback-dialog-monospace"
+                          rows="5"
+                          spellcheck="false"
+                          @bind="_additionalContext"
+                          @bind:event="oninput"></textarea>
+            </div>
+        </div>
+    </FluentStack>
+</FluentDialogBody>
+
+<FluentDialogFooter>
+    <div class="feedback-dialog-footer-content">
+        <span class="feedback-dialog-public-message" role="note">@Loc[nameof(LayoutResources.MainLayoutProvideFeedbackPublicIssueMessage)]</span>
+        <FluentButton Appearance="Appearance.Accent" Disabled="@(!CanOpenIssue)" OnClick="@OpenIssueAsync">
+            @Loc[nameof(LayoutResources.MainLayoutProvideFeedbackOpenIssueButton)]
+        </FluentButton>
+        <FluentButton Appearance="Appearance.Neutral" OnClick="@CancelAsync">
+            @DialogsLoc[nameof(Dialogs.FilterDialogCancelButtonText)]
+        </FluentButton>
+    </div>
+</FluentDialogFooter>

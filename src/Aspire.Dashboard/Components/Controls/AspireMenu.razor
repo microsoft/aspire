@@ -23,6 +23,14 @@
             {
                 { "title", !string.IsNullOrEmpty(item.Tooltip) ? item.Tooltip : item.Text ?? string.Empty }
             };
+            if (item.Href is not null)
+            {
+                additionalMenuItemAttributes["href"] = item.Href;
+            }
+            if (item.Target is not null)
+            {
+                additionalMenuItemAttributes["target"] = item.Target;
+            }
 
             return @<FluentMenuItem Id="@item.Id" Class="@item.Class" OnClick="() => HandleItemClicked(item)" Disabled="@item.IsDisabled" AdditionalAttributes="@additionalMenuItemAttributes" Label="@item.Text" MenuItems="@RenderNestedItems(item)">
                 @if (item.Icon != null)

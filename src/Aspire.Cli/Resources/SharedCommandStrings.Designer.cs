@@ -227,5 +227,125 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NonInteractiveRequiresYesFormat", resourceCulture);
             }
         }
+
+        internal static string FeedbackCommandDescription {
+            get {
+                return ResourceManager.GetString("FeedbackCommandDescription", resourceCulture);
+            }
+        }
+
+        internal static string FeedbackKindArgumentDescription {
+            get {
+                return ResourceManager.GetString("FeedbackKindArgumentDescription", resourceCulture);
+            }
+        }
+
+        internal static string FeedbackTitleOptionDescription {
+            get {
+                return ResourceManager.GetString("FeedbackTitleOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string FeedbackBodyOptionDescription {
+            get {
+                return ResourceManager.GetString("FeedbackBodyOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string FeedbackKindRequiredInNonInteractiveMode {
+            get {
+                return ResourceManager.GetString("FeedbackKindRequiredInNonInteractiveMode", resourceCulture);
+            }
+        }
+
+        internal static string FeedbackKindPrompt {
+            get {
+                return ResourceManager.GetString("FeedbackKindPrompt", resourceCulture);
+            }
+        }
+
+        internal static string FeedbackKindChoiceBug {
+            get {
+                return ResourceManager.GetString("FeedbackKindChoiceBug", resourceCulture);
+            }
+        }
+
+        internal static string FeedbackKindChoiceIdea {
+            get {
+                return ResourceManager.GetString("FeedbackKindChoiceIdea", resourceCulture);
+            }
+        }
+
+        internal static string FeedbackKindChoiceGeneral {
+            get {
+                return ResourceManager.GetString("FeedbackKindChoiceGeneral", resourceCulture);
+            }
+        }
+
+        internal static string FeedbackTitlePrompt {
+            get {
+                return ResourceManager.GetString("FeedbackTitlePrompt", resourceCulture);
+            }
+        }
+
+        internal static string FeedbackBugBodyPrompt {
+            get {
+                return ResourceManager.GetString("FeedbackBugBodyPrompt", resourceCulture);
+            }
+        }
+
+        internal static string FeedbackIdeaBodyPrompt {
+            get {
+                return ResourceManager.GetString("FeedbackIdeaBodyPrompt", resourceCulture);
+            }
+        }
+
+        internal static string FeedbackGeneralBodyPrompt {
+            get {
+                return ResourceManager.GetString("FeedbackGeneralBodyPrompt", resourceCulture);
+            }
+        }
+
+        internal static string FeedbackDefaultBugTitle {
+            get {
+                return ResourceManager.GetString("FeedbackDefaultBugTitle", resourceCulture);
+            }
+        }
+
+        internal static string FeedbackDefaultIdeaTitle {
+            get {
+                return ResourceManager.GetString("FeedbackDefaultIdeaTitle", resourceCulture);
+            }
+        }
+
+        internal static string FeedbackDefaultGeneralTitle {
+            get {
+                return ResourceManager.GetString("FeedbackDefaultGeneralTitle", resourceCulture);
+            }
+        }
+
+        internal static string FeedbackCaptureDoctorStatus {
+            get {
+                return ResourceManager.GetString("FeedbackCaptureDoctorStatus", resourceCulture);
+            }
+        }
+
+        internal static string FeedbackLinkMessage {
+            get {
+                return ResourceManager.GetString("FeedbackLinkMessage", resourceCulture);
+            }
+        }
+
+        internal static string FeedbackDoctorProcessPathUnavailable {
+            get {
+                return ResourceManager.GetString("FeedbackDoctorProcessPathUnavailable", resourceCulture);
+            }
+        }
+
+        internal static string FeedbackDoctorCaptureFailed {
+            get {
+                return ResourceManager.GetString("FeedbackDoctorCaptureFailed", resourceCulture);
+            }
+        }
     }
 }

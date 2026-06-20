@@ -123,6 +123,45 @@
   <data name="MainLayoutAspireDashboardHelpLink" xml:space="preserve">
     <value>Help</value>
   </data>
+  <data name="MainLayoutProvideFeedback" xml:space="preserve">
+    <value>Provide feedback</value>
+  </data>
+  <data name="MainLayoutProvideFeedbackBug" xml:space="preserve">
+    <value>Report a bug</value>
+  </data>
+  <data name="MainLayoutProvideFeedbackIdea" xml:space="preserve">
+    <value>Suggest an idea</value>
+  </data>
+  <data name="MainLayoutProvideFeedbackGeneral" xml:space="preserve">
+    <value>General feedback</value>
+  </data>
+  <data name="MainLayoutProvideFeedbackIssueTitleLabel" xml:space="preserve">
+    <value>Issue title</value>
+  </data>
+  <data name="MainLayoutProvideFeedbackBugDescriptionLabel" xml:space="preserve">
+    <value>What happened?</value>
+  </data>
+  <data name="MainLayoutProvideFeedbackIdeaDescriptionLabel" xml:space="preserve">
+    <value>What would you like to see?</value>
+  </data>
+  <data name="MainLayoutProvideFeedbackGeneralDescriptionLabel" xml:space="preserve">
+    <value>What feedback do you have?</value>
+  </data>
+  <data name="MainLayoutProvideFeedbackAspireDoctorOutputLabel" xml:space="preserve">
+    <value>Aspire doctor output</value>
+  </data>
+  <data name="MainLayoutProvideFeedbackDoctorLoadingMessage" xml:space="preserve">
+    <value>Collecting Aspire doctor output...</value>
+  </data>
+  <data name="MainLayoutProvideFeedbackAdditionalContextLabel" xml:space="preserve">
+    <value>Additional context</value>
+  </data>
+  <data name="MainLayoutProvideFeedbackPublicIssueMessage" xml:space="preserve">
+    <value>Issues created are public on the microsoft/aspire GitHub repo.</value>
+  </data>
+  <data name="MainLayoutProvideFeedbackOpenIssueButton" xml:space="preserve">
+    <value>Open issue</value>
+  </data>
   <data name="MainLayoutLaunchSettings" xml:space="preserve">
     <value>Settings</value>
   </data>

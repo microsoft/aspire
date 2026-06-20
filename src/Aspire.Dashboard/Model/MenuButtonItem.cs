@@ -13,6 +13,8 @@ public class MenuButtonItem
     public string? Tooltip { get; set; }
     public Icon? Icon { get; set; }
     public Func<Task>? OnClick { get; set; }
+    public string? Href { get; set; }
+    public string? Target { get; set; }
     public bool IsDisabled { get; set; }
     public string Id { get; set; } = Identifier.NewId();
     public string? Class { get; set; }

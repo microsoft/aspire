@@ -17,6 +17,106 @@
         <target state="new">No AppHost is currently running for '{0}'. Use 'aspire run' to start it first.</target>
         <note>{0} is the AppHost project path.</note>
       </trans-unit>
+      <trans-unit id="FeedbackBodyOptionDescription">
+        <source>The main issue field to pre-fill</source>
+        <target state="new">The main issue field to pre-fill</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FeedbackBugBodyPrompt">
+        <source>Describe the bug</source>
+        <target state="new">Describe the bug</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FeedbackCaptureDoctorStatus">
+        <source>Gathering Aspire diagnostics...</source>
+        <target state="new">Gathering Aspire diagnostics...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FeedbackCommandDescription">
+        <source>Open a pre-filled GitHub issue to send Aspire feedback</source>
+        <target state="new">Open a pre-filled GitHub issue to send Aspire feedback</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FeedbackDefaultBugTitle">
+        <source>Bug report</source>
+        <target state="new">Bug report</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FeedbackDefaultGeneralTitle">
+        <source>Feedback</source>
+        <target state="new">Feedback</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FeedbackDefaultIdeaTitle">
+        <source>Feature request</source>
+        <target state="new">Feature request</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FeedbackDoctorCaptureFailed">
+        <source>Could not capture `aspire doctor` output ({0}).</source>
+        <target state="new">Could not capture `aspire doctor` output ({0}).</target>
+        <note>{0} is the failure reason.</note>
+      </trans-unit>
+      <trans-unit id="FeedbackDoctorProcessPathUnavailable">
+        <source>Could not capture `aspire doctor` output because the current Aspire executable path is unavailable.</source>
+        <target state="new">Could not capture `aspire doctor` output because the current Aspire executable path is unavailable.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FeedbackGeneralBodyPrompt">
+        <source>Describe your feedback</source>
+        <target state="new">Describe your feedback</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FeedbackIdeaBodyPrompt">
+        <source>Describe the idea</source>
+        <target state="new">Describe the idea</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FeedbackKindArgumentDescription">
+        <source>The kind of feedback to send: bug, idea, or general</source>
+        <target state="new">The kind of feedback to send: bug, idea, or general</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FeedbackKindChoiceBug">
+        <source>Report a bug</source>
+        <target state="new">Report a bug</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FeedbackKindChoiceGeneral">
+        <source>General feedback</source>
+        <target state="new">General feedback</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FeedbackKindChoiceIdea">
+        <source>Suggest an idea</source>
+        <target state="new">Suggest an idea</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FeedbackKindPrompt">
+        <source>What kind of feedback do you want to send?</source>
+        <target state="new">What kind of feedback do you want to send?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FeedbackKindRequiredInNonInteractiveMode">
+        <source>Specify the feedback kind: bug, idea, or general.</source>
+        <target state="new">Specify the feedback kind: bug, idea, or general.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FeedbackLinkMessage">
+        <source>Open this link to send feedback: {0}</source>
+        <target state="new">Open this link to send feedback: {0}</target>
+        <note>{0} is a GitHub issue creation URL.</note>
+      </trans-unit>
+      <trans-unit id="FeedbackTitleOptionDescription">
+        <source>The issue title to pre-fill</source>
+        <target state="new">The issue title to pre-fill</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FeedbackTitlePrompt">
+        <source>Issue title</source>
+        <target state="new">Issue title</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FormatOptionDescription">
         <source>Output format for detached AppHost results</source>
         <target state="new">Output format for detached AppHost results</target>

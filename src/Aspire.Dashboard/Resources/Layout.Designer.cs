@@ -77,6 +77,123 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MainLayoutAspireDashboardHelpLink", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Provide feedback.
+        /// </summary>
+        public static string MainLayoutProvideFeedback {
+            get {
+                return ResourceManager.GetString("MainLayoutProvideFeedback", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Report a bug.
+        /// </summary>
+        public static string MainLayoutProvideFeedbackBug {
+            get {
+                return ResourceManager.GetString("MainLayoutProvideFeedbackBug", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Suggest an idea.
+        /// </summary>
+        public static string MainLayoutProvideFeedbackIdea {
+            get {
+                return ResourceManager.GetString("MainLayoutProvideFeedbackIdea", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to General feedback.
+        /// </summary>
+        public static string MainLayoutProvideFeedbackGeneral {
+            get {
+                return ResourceManager.GetString("MainLayoutProvideFeedbackGeneral", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Issue title.
+        /// </summary>
+        public static string MainLayoutProvideFeedbackIssueTitleLabel {
+            get {
+                return ResourceManager.GetString("MainLayoutProvideFeedbackIssueTitleLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to What happened?.
+        /// </summary>
+        public static string MainLayoutProvideFeedbackBugDescriptionLabel {
+            get {
+                return ResourceManager.GetString("MainLayoutProvideFeedbackBugDescriptionLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to What would you like to see?.
+        /// </summary>
+        public static string MainLayoutProvideFeedbackIdeaDescriptionLabel {
+            get {
+                return ResourceManager.GetString("MainLayoutProvideFeedbackIdeaDescriptionLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to What feedback do you have?.
+        /// </summary>
+        public static string MainLayoutProvideFeedbackGeneralDescriptionLabel {
+            get {
+                return ResourceManager.GetString("MainLayoutProvideFeedbackGeneralDescriptionLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire doctor output.
+        /// </summary>
+        public static string MainLayoutProvideFeedbackAspireDoctorOutputLabel {
+            get {
+                return ResourceManager.GetString("MainLayoutProvideFeedbackAspireDoctorOutputLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Collecting Aspire doctor output....
+        /// </summary>
+        public static string MainLayoutProvideFeedbackDoctorLoadingMessage {
+            get {
+                return ResourceManager.GetString("MainLayoutProvideFeedbackDoctorLoadingMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Additional context.
+        /// </summary>
+        public static string MainLayoutProvideFeedbackAdditionalContextLabel {
+            get {
+                return ResourceManager.GetString("MainLayoutProvideFeedbackAdditionalContextLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Issues created are public on the microsoft/aspire GitHub repo..
+        /// </summary>
+        public static string MainLayoutProvideFeedbackPublicIssueMessage {
+            get {
+                return ResourceManager.GetString("MainLayoutProvideFeedbackPublicIssueMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Open issue.
+        /// </summary>
+        public static string MainLayoutProvideFeedbackOpenIssueButton {
+            get {
+                return ResourceManager.GetString("MainLayoutProvideFeedbackOpenIssueButton", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Aspire repo.

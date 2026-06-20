@@ -203,6 +203,40 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("true", envVars.Single(e => e.Key == "ASPIRE_DASHBOARD_PURPLE_MONKEY_DISHWASHER").Value);
     }
 
+    [Fact]
+    public async Task ConfigureEnvironmentVariables_HasAppHostFilePath_CopiedToDashboard()
+    {
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var appHostFilePath = Path.Combine("C:\\", "apps", "MyApp", "MyApp.AppHost.csproj");
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection([
+                new KeyValuePair<string, string?>("AppHost:FilePath", appHostFilePath)
+            ])
+            .Build();
+        var dashboardOptions = Options.Create(new DashboardOptions
+        {
+            DashboardPath = "test.dll",
+            DashboardUrl = "http://localhost:8080",
+            OtlpGrpcEndpointUrl = "http://localhost:4317",
+        });
+        var hook = CreateHook(resourceLoggerService, resourceNotificationService, configuration, dashboardOptions: dashboardOptions);
+
+        var envVars = new Dictionary<string, object>();
+
+        var dashboardResource = new ExecutableResource("aspire-dashboard", "dashboard.exe", ".");
+        var model = new DistributedApplicationModel([dashboardResource]);
+
+        var context = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+        {
+            Services = new TestServiceProvider().AddService(model)
+        });
+
+        await hook.ConfigureEnvironmentVariables(new EnvironmentCallbackContext(context, environmentVariables: envVars, resource: dashboardResource));
+
+        Assert.Equal(appHostFilePath, envVars.Single(e => e.Key == DashboardConfigNames.AppHostFilePathName.EnvVarName).Value);
+    }
+
     [Theory]
     [InlineData("https://localhost:17131", "localhost", 9999, "https", "localhost")]
     [InlineData("https://aspire-dashboard.dev.localhost:17131", "aspire-dashboard.dev.localhost", 9999, "https", "aspire-dashboard.dev.localhost")]

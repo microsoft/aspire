@@ -28,6 +28,18 @@
                           Title="@Loc[nameof(Layout.MainLayoutAspireRepoLink)]" aria-label="@Loc[nameof(Layout.MainLayoutAspireRepoLink)]">
                 <FluentIcon Value="@(new AspireIcons.Size24.GitHub())" Color="Color.Neutral"/>
             </FluentAnchor>
+            <AspireMenuButton ButtonClass="header-button"
+                              ButtonAppearance="Appearance.Stealth"
+                              Icon="@(new Icons.Regular.Size24.PersonFeedback())"
+                              IconColor="Color.Neutral"
+                              HideIcon="true"
+                              MenuButtonId="@FeedbackButtonId"
+                              Items="@GetFeedbackMenuItems()"
+                              Title="@Loc[nameof(Layout.MainLayoutProvideFeedback)]"
+                              AdditionalAttributes="@(new Dictionary<string, object>
+                              {
+                                  ["aria-label"] = Loc[nameof(Layout.MainLayoutProvideFeedback)]
+                              })" />
             <FluentButton Class="header-button"
                           Id="@HelpButtonId"
                           Appearance="Appearance.Stealth" OnClick="@(() => LaunchHelpAsync(HelpButtonId))"
@@ -90,6 +102,7 @@
             IsNavMenuOpen="_isNavMenuOpen"
             IsAIEnabled="@AIContextProvider.Enabled"
             CloseNavMenu="@CloseMobileNavMenu"
+            GetFeedbackMenuItems="@GetFeedbackMenuItems"
             LaunchHelpAsync="@LaunchHelpAsync"
             LaunchAIAgentsAsync="@LaunchAIAgentsAsync"
             IsAgentHelpEnabled="@(Options.CurrentValue.UI.DisableAgentHelp != true)"
