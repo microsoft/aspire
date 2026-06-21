@@ -166,16 +166,15 @@ public class GetTerminalInfoAsyncTests : IAsyncDisposable
     [Fact]
     public async Task ReturnsAliveForEverySequentialProbe_AgainstSingleSlotHost()
     {
-        // Regression for the JSON-RPC stream-ownership behavior. The per-replica control client
-        // (TerminalHostControlClient) opens a fresh connection per probe and disposes its JsonRpc
-        // when done. The terminal host's control listener serves a single active slot and only
-        // frees it when the client's connection closes (it observes EOF and its rpc.Completion
-        // fires). The migrated client built its HeaderDelimitedMessageHandler with the default
-        // ownsStreams:false, so disposing the rpc left the socket open, the host never saw EOF, and
-        // every probe after the first was wedged out of the single slot (the failing TerminalCommandTests
-        // E2E saw the first 'aspire terminal ps' report alive and all subsequent probes report dead).
-        // Drive several sequential GetTerminalInfo probes through the real client against a single-slot
-        // host and assert each one comes back alive.
+        // Invariant: each sequential probe must be able to claim the host's single control slot.
+        // The per-replica control client (TerminalHostControlClient) opens a fresh connection per
+        // probe and disposes its JsonRpc when done. The terminal host's control listener serves a
+        // single active slot and only frees it when the client's connection closes (it observes EOF
+        // and its rpc.Completion fires). So the client must own and close its underlying stream on
+        // dispose; otherwise the socket stays open, the host never sees EOF, and every probe after
+        // the first is wedged out of the single slot. Drive several sequential GetTerminalInfo
+        // probes through the real client against a single-slot host and assert each one comes back
+        // alive.
         var fakeHost = await StartFakeControlHostAsync(
             new TerminalHostSessionInfo
             {
@@ -460,8 +459,8 @@ public class GetTerminalInfoAsyncTests : IAsyncDisposable
                     // connection inline and do not accept the next one until the current client's
                     // rpc.Completion fires. That only happens when the client closes its socket, so
                     // this loop wedges forever if a probe disposes its JsonRpc without closing the
-                    // underlying stream (the ownsStreams:false migration bug). A well-behaved client
-                    // frees the slot on dispose and the next sequential probe is accepted.
+                    // underlying stream. A well-behaved client frees the slot on dispose and the next
+                    // sequential probe is accepted.
                     await ServeAsync(client).ConfigureAwait(false);
                 }
                 else
@@ -502,9 +501,9 @@ public class GetTerminalInfoAsyncTests : IAsyncDisposable
             try { _listenSocket?.Dispose(); } catch { }
 
             // Dispose any served rpcs before awaiting the accept loop. A single-slot accept loop
-            // serves inline (await rpc.Completion); if a probe wedged the slot (e.g. a failing run
-            // where the client never closed its socket) that completion never fires on its own, so
-            // disposing the rpc here releases the loop instead of hanging teardown.
+            // serves inline (await rpc.Completion); if a probe left the slot occupied (its client
+            // never closed the socket) that completion never fires on its own, so disposing the rpc
+            // here releases the loop instead of hanging teardown.
             JsonRpc[] rpcs;
             lock (_rpcs)
             {
