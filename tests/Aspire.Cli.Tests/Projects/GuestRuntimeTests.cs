@@ -8,6 +8,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Utils;
+using Aspire.Tests;
 using Aspire.TypeSystem;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -244,10 +245,10 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
     public async Task RunAsync_ProfilingTelemetryRecordsGuestCommandPhasesAndArgs()
     {
         var stoppedActivities = new ConcurrentBag<Activity>();
-        using var listener = CreateProfilingActivityListener(stoppedActivities.Add);
         using var profilingTelemetry = CreateProfilingTelemetry(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1"));
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStopped: stoppedActivities.Add);
         using var tempDirectory = new TestTempDirectory();
 
         var spec = CreateTestSpec(
@@ -758,10 +759,10 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
     public async Task ProcessGuestLauncher_AnnotatesAmbientGuestProfilingActivity()
     {
         var stoppedActivities = new ConcurrentBag<Activity>();
-        using var listener = CreateProfilingActivityListener(stoppedActivities.Add);
         using var profilingTelemetry = CreateProfilingTelemetry(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1"));
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStopped: stoppedActivities.Add);
         using var tempDirectory = new TestTempDirectory();
 
         var launcher = new ProcessGuestLauncher(
@@ -1011,17 +1012,5 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
             .AddInMemoryCollection(values.Select(value => new KeyValuePair<string, string?>(value.Key, value.Value)))
             .Build();
         return new ProfilingTelemetry(configuration);
-    }
-
-    private static ActivityListener CreateProfilingActivityListener(Action<Activity> activityStopped)
-    {
-        var listener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == ProfilingTelemetry.ActivitySourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStopped = activityStopped
-        };
-        ActivitySource.AddActivityListener(listener);
-        return listener;
     }
 }

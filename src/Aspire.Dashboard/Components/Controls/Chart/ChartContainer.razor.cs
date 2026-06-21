@@ -145,7 +145,7 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     private static bool MatchFilter(KeyValuePair<string, string>[] attributes, DimensionFilterViewModel filter)
     {
         // No filter selected.
-        if (!filter.SelectedValues.Any())
+        if (filter.SelectedValues.Count == 0)
         {
             return false;
         }
@@ -223,6 +223,7 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
                     Name = item.Key
                 };
 
+                var order = 0;
                 dimensionModel.Values.AddRange(item.Value.Select(v =>
                 {
                     var text = v switch
@@ -231,12 +232,19 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
                         { Length: 0 } => Loc[nameof(ControlsStrings.LabelEmpty)],
                         _ => v
                     };
-                    return new DimensionValueViewModel
+                    return new
                     {
                         Text = text,
-                        Value = v
+                        Value = v,
                     };
-                }).OrderBy(v => v.Text));
+                })
+                .OrderBy(v => v.Text)
+                .Select(i => new DimensionValueViewModel
+                {
+                    Text = i.Text,
+                    Value = i.Value,
+                    Order = order++,
+                }));
 
                 filters.Add(dimensionModel);
             }

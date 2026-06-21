@@ -85,6 +85,7 @@ public class ChannelReseedTests(ITestOutputHelper outputHelper)
             {
                 CreateAsyncCallback = (_, _) => Task.FromResult<IAppHostServerProject>(appHostServerProject)
             },
+            appHostServerSessionFactory: new TestAppHostServerSessionFactory(),
             languageDiscovery: new TestLanguageDiscovery(language),
             interactionService: new TestInteractionService(),
             logger: NullLogger<ScaffoldingService>.Instance,
@@ -115,6 +116,7 @@ public class ChannelReseedTests(ITestOutputHelper outputHelper)
     {
         return new ScaffoldingService(
             appHostServerProjectFactory: new TestAppHostServerProjectFactory(),
+            appHostServerSessionFactory: new TestAppHostServerSessionFactory(),
             languageDiscovery: new TestLanguageDiscovery(s_testLanguage),
             interactionService: new TestInteractionService(),
             logger: NullLogger<ScaffoldingService>.Instance,

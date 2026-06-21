@@ -105,61 +105,75 @@ suite('Aspire tree action command E2E', function () {
         assert.ok(path.isAbsolute(String(copiedLogPath.result)));
 
         let terminalBefore: number;
+
         await setTerminalCommandExecutionSuppressedForE2E(true);
         before = getCommandInvocationCount('aspire-vscode.viewResourceLogs');
-        terminalBefore = getTerminalCommandCount();
         await executeE2eControlCommand({ name: 'viewResourceLogs', appHostPath, resourceName: 'e2e-worker' });
         await waitForCommandOutcome('aspire-vscode.viewResourceLogs', 'success', 60000, before);
-        before = getCommandInvocationCount('aspire-vscode.openResourceTerminal');
-        await executeE2eControlCommand({ name: 'openResourceTerminal', appHostPath, resourceName: workerResourceName });
-        await waitForCommandOutcome('aspire-vscode.openResourceTerminal', 'success', 60000, before);
-        await waitForTerminalCommand(
-            event => event.subcommand.includes(`terminal attach ${quoteExpectedShellArg(workerResourceName)}`) && event.executionSuppressed,
-            'open resource terminal command',
-            60000,
-            terminalBefore);
-
-        // e2e-terminal is registered with .WithTerminal(), so the real Aspire CLI surfaces
-        // terminal.enabled and terminal.replicaIndex over the backchannel. Opening its terminal
-        // must therefore append --replica derived from that metadata, unlike e2e-worker above
-        // which has no terminal annotation and emits no --replica. This proves the terminal
-        // properties flow end-to-end through a real CLI process and drive the Open terminal action.
-        await waitForResource('e2e-terminal');
-        await waitForResourceState('e2e-terminal', ['Running'], 180000);
-        const terminalEnabledBefore = getTerminalCommandCount();
-        before = getCommandInvocationCount('aspire-vscode.openResourceTerminal');
-        await executeE2eControlCommand({ name: 'openResourceTerminal', appHostPath, resourceName: 'e2e-terminal' });
-        await waitForCommandOutcome('aspire-vscode.openResourceTerminal', 'success', 60000, before);
-        await waitForTerminalCommand(
-            event => event.subcommand.includes(`terminal attach ${quoteExpectedShellArg('e2e-terminal')}`)
-                && event.subcommand.includes('--replica')
-                && event.executionSuppressed,
-            'open terminal-enabled resource terminal command',
-            60000,
-            terminalEnabledBefore);
         await setTerminalCommandExecutionSuppressedForE2E(false);
 
         await waitForResource('e2e-worker');
         await waitForResourceState('e2e-worker', ['Running'], 90000);
 
-        before = getCommandInvocationCount('aspire-vscode.stopResource');
-        terminalBefore = getTerminalCommandCount();
-        await executeE2eControlCommand({ name: 'stopResource', appHostPath, resourceName: workerResourceName });
-        await waitForCommandOutcome('aspire-vscode.stopResource', 'success', 60000, before);
-        await waitForResourceTerminalCommand(workerResourceName, 'stop', terminalBefore);
-        await waitForResourceState(workerResourceName, ['Stopped', 'Finished', 'Exited'], 90000);
+        await setTerminalCommandExecutionSuppressedForE2E(true);
+        try {
+            before = getCommandInvocationCount('aspire-vscode.openResourceTerminal');
+            terminalBefore = getTerminalCommandCount();
+            await executeE2eControlCommand({ name: 'openResourceTerminal', appHostPath, resourceName: workerResourceName });
+            await waitForCommandOutcome('aspire-vscode.openResourceTerminal', 'success', 60000, before);
+            await waitForTerminalCommand(
+                event => event.subcommand.includes(`terminal attach ${quoteExpectedShellArg(workerResourceName)}`) && event.executionSuppressed,
+                'open resource terminal command',
+                60000,
+                terminalBefore);
 
-        before = getCommandInvocationCount('aspire-vscode.startResource');
-        terminalBefore = getTerminalCommandCount();
-        await executeE2eControlCommand({ name: 'startResource', appHostPath, resourceName: workerResourceName });
-        await waitForCommandOutcome('aspire-vscode.startResource', 'success', 60000, before);
-        await waitForResourceTerminalCommand(workerResourceName, 'start', terminalBefore);
+            // e2e-terminal is registered with .WithTerminal(), so the real Aspire CLI surfaces
+            // terminal.enabled and terminal.replicaIndex over the backchannel. Opening its terminal
+            // must therefore append --replica derived from that metadata, unlike e2e-worker above
+            // which has no terminal annotation and emits no --replica. This proves the terminal
+            // properties flow end-to-end through a real CLI process and drive the Open terminal action.
+            await waitForResource('e2e-terminal');
+            await waitForResourceState('e2e-terminal', ['Running'], 180000);
+            terminalBefore = getTerminalCommandCount();
+            before = getCommandInvocationCount('aspire-vscode.openResourceTerminal');
+            await executeE2eControlCommand({ name: 'openResourceTerminal', appHostPath, resourceName: 'e2e-terminal' });
+            await waitForCommandOutcome('aspire-vscode.openResourceTerminal', 'success', 60000, before);
+            await waitForTerminalCommand(
+                event => event.subcommand.includes(`terminal attach ${quoteExpectedShellArg('e2e-terminal')}`)
+                    && event.subcommand.includes('--replica')
+                    && event.executionSuppressed,
+                'open terminal-enabled resource terminal command',
+                60000,
+                terminalBefore);
+        } finally {
+            await setTerminalCommandExecutionSuppressedForE2E(false);
+        }
 
-        before = getCommandInvocationCount('aspire-vscode.restartResource');
-        terminalBefore = getTerminalCommandCount();
-        await executeE2eControlCommand({ name: 'restartResource', appHostPath, resourceName: workerResourceName });
-        await waitForCommandOutcome('aspire-vscode.restartResource', 'success', 60000, before);
-        await waitForResourceTerminalCommand(workerResourceName, 'restart', terminalBefore);
+        await waitForResource('e2e-worker');
+        await waitForResourceState('e2e-worker', ['Running'], 90000);
+
+        await setTerminalCommandExecutionSuppressedForE2E(true);
+        try {
+            before = getCommandInvocationCount('aspire-vscode.stopResource');
+            terminalBefore = getTerminalCommandCount();
+            await executeE2eControlCommand({ name: 'stopResource', appHostPath, resourceName: workerResourceName });
+            await waitForCommandOutcome('aspire-vscode.stopResource', 'success', 60000, before);
+            await waitForResourceTerminalCommand(workerResourceName, 'stop', terminalBefore);
+
+            before = getCommandInvocationCount('aspire-vscode.startResource');
+            terminalBefore = getTerminalCommandCount();
+            await executeE2eControlCommand({ name: 'startResource', appHostPath, resourceName: workerResourceName });
+            await waitForCommandOutcome('aspire-vscode.startResource', 'success', 60000, before);
+            await waitForResourceTerminalCommand(workerResourceName, 'start', terminalBefore);
+
+            before = getCommandInvocationCount('aspire-vscode.restartResource');
+            terminalBefore = getTerminalCommandCount();
+            await executeE2eControlCommand({ name: 'restartResource', appHostPath, resourceName: workerResourceName });
+            await waitForCommandOutcome('aspire-vscode.restartResource', 'success', 60000, before);
+            await waitForResourceTerminalCommand(workerResourceName, 'restart', terminalBefore);
+        } finally {
+            await setTerminalCommandExecutionSuppressedForE2E(false);
+        }
 
         await setTerminalCommandExecutionSuppressedForE2E(true);
         before = getCommandInvocationCount('aspire-vscode.executeResourceCommandItem');

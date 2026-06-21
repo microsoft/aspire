@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Tests.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.DotNet;
@@ -67,7 +68,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
 
         Assert.True(execution.Start());
 
-        var exitCode = await execution.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30));
+        var exitCode = await execution.WaitForExitAsync(CancellationToken.None).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
         await releaseTask.WaitAsync(TimeSpan.FromSeconds(1));
 
         Assert.Equal(0, exitCode);
@@ -131,7 +132,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
 
         Assert.True(execution.Start());
 
-        var exitCode = await execution.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30));
+        var exitCode = await execution.WaitForExitAsync(CancellationToken.None).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
         await releaseTask.WaitAsync(TimeSpan.FromSeconds(1));
 
         Assert.Equal(0, exitCode);
@@ -229,7 +230,9 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
             var content =
                 "@echo off" + Environment.NewLine +
                 "echo ready" + Environment.NewLine +
-                "powershell -NoProfile -Command \"Start-Sleep -Seconds 6\"" + Environment.NewLine +
+                // Use ping instead of powershell to avoid variable PowerShell
+                // cold-start overhead on loaded CI agents (can add 10-20s).
+                "ping -n 7 127.0.0.1 > nul" + Environment.NewLine +
                 $"type \"{outputFile.FullName}\"" + Environment.NewLine;
             await File.WriteAllTextAsync(scriptFile.FullName, content);
             return scriptFile;

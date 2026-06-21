@@ -15,29 +15,47 @@
                             RowSize="DataGridRowSize.Medium">
                 <ChildContent>
                     <AspirePropertyColumn Tooltip="true" TooltipText="@(c => c.Name)" Property="@(c => c.Name)"/>
-                    <AspireTemplateColumn Tooltip="true" TooltipText="@(c => c.SelectedValues.Count == 0 ? Loc[nameof(ControlsStrings.LabelNone)] : string.Join(", ", c.SelectedValues.OrderBy(v => v.Text).Select(v => v.Text)))">
-                        <FluentOverflow Class="dimension-overflow">
+                    <AspireTemplateColumn Tooltip="true" TooltipText="@(c => c.AreAllValuesSelected is true ? Loc[nameof(ControlsStrings.LabelAll)] : string.Join(", ", c.SelectedValues.OrderBy(v => v.Text).Select(v => v.Text)))">
+                        <FluentOverflow Class="dimension-overflow" OnOverflowRaised="@(items => HandleOverflowChanged(context, items))">
                             <ChildContent>
-                                @if (context.SelectedValues.Count == 0)
-                                {
-                                    <FluentBadge>@Loc[nameof(ControlsStrings.LabelNone)]</FluentBadge>
-                                }
-                                else
-                                {
+                                @{
                                     var i = 0;
-                                    foreach (var item in context.SelectedValues.OrderBy(v => v.Text))
+                                }
+                                @foreach (var item in context.Values.OrderBy(v => v.Order))
+                                {
+                                    var isIncludedInFilters = context.SelectedValues.Contains(item);
+                                    var isIncludedInFiltersClass = isIncludedInFilters ? "included-in-filters" : "";
+                                    var additionalAttributes = new Dictionary<string, object>()
                                     {
-                                        // Always display the first item by setting a fixed value.
-                                        <FluentOverflowItem Fixed="@((i == 0) ? OverflowItemFixed.Ellipsis : OverflowItemFixed.None)">
-                                            <span class="dimension-tag">@item.Text</span>
-                                        </FluentOverflowItem>
-                                        i++;
-                                    }
+                                        [KeyForDimensionValue] = item,
+                                        [KeyForIsIncludedInFilters] = isIncludedInFilters,
+                                    };
+
+                                    // Always display the first item by setting a fixed value.
+                                    <FluentOverflowItem Fixed="@((i == 0) ? OverflowItemFixed.Ellipsis : OverflowItemFixed.None)" AdditionalAttributes="additionalAttributes">
+                                        <span class="dimension-tag filter-value-tag @isIncludedInFiltersClass"
+                                              role="button"
+                                              tabindex="0"
+                                              aria-pressed="@isIncludedInFilters"
+                                              @onclick="@(() => OnTagSelectionChangedAsync(context, item, !context.SelectedValues.Contains(item)))"
+                                              @onkeydown="@(args => OnTagKeyDownAsync(args, context, item, !context.SelectedValues.Contains(item)))">
+                                            @item.Text
+                                        </span>
+                                    </FluentOverflowItem>
+                                    i++;
                                 }
                             </ChildContent>
                             <MoreButtonTemplate Context="overflow">
+                                @{
+                                    var isIncludedInFiltersClass = overflow.ItemsOverflow.Any(item => (bool)item.AdditionalAttributes![KeyForIsIncludedInFilters]) ? "included-in-filters" : "";
+                                }
                                 @* Display must be inline block so the width is correctly calculated. *@
-                                <span class="dimension-tag" style="display:inline-block;">
+                                <span class="dimension-tag filter-value-tag @isIncludedInFiltersClass"
+                                      role="button"
+                                      tabindex="0"
+                                      style="display:inline-block;"
+                                      @onclick="@(() => context.PopupVisible = true)"
+                                      @onkeydown="@(args => OnOverflowTagKeyDownAsync(args, context))">
                                     @($"+{overflow.ItemsOverflow.Count()}")
                                 </span>
                             </MoreButtonTemplate>
@@ -54,28 +72,28 @@
                                       IconEnd="@(new Icons.Regular.Size20.Filter())"
                                       Appearance="@(context.AreAllValuesSelected is true ? Appearance.Stealth : Appearance.Accent)"
                                       @onclick="() => context.PopupVisible = !context.PopupVisible"
-                                      aria-label="@(context.AreAllValuesSelected is true ? Loc[nameof(ControlsStrings.ChartContainerAllTags)] : Loc[nameof(ControlsStrings.ChartContainerFilteredTags)])"/>
+                                      aria-label="@(context.AreAllValuesSelected is true ? Loc[nameof(ControlsStrings.ChartContainerAllTags)] : Loc[nameof(ControlsStrings.ChartContainerFilteredTags)])" />
                         @* Each item is approximately 36px tall, plus 48px for the header and container padding. Include the always-rendered "All" checkbox row. The popover body has a CSS max-height of 300px. *@
                         <FluentPopover AnchorId="@id" @bind-Open="context.PopupVisible" VerticalThreshold="@(Math.Min((context.Values.Count + 1) * 36 + 48, 300))" AutoFocus="false">
                             <Header>@context.Name</Header>
                             <Body>
-                            <FluentStack Orientation="Orientation.Vertical" Class="dimension-popup">
-                                <FluentCheckbox Label="@Loc[nameof(ControlsStrings.LabelAll)]"
-                                                ThreeState="true"
-                                                ShowIndeterminate="false"
-                                                ThreeStateOrderUncheckToIntermediate="true"
-                                                @bind-CheckState:get="context.AreAllValuesSelected"
-                                                @bind-CheckState:set="@(v => OnAllValuesSelectionChangedAsync(context, v))"/>
-                                @foreach (var tag in context.Values.OrderBy(v => v.Text))
-                                {
-                                    var isChecked = context.SelectedValues.Contains(tag);
-                                    <FluentCheckbox Label="@tag.Text"
-                                                    title="@tag.Text"
-                                                    @key=tag
-                                                    @bind-Value:get="isChecked"
-                                                    @bind-Value:set="c => OnTagSelectionChangedAsync(context, tag, c)"/>
-                                }
-                            </FluentStack>
+                                <FluentStack Orientation="Orientation.Vertical" Class="dimension-popup">
+                                    <FluentCheckbox Label="@Loc[nameof(ControlsStrings.LabelAll)]"
+                                                    ThreeState="true"
+                                                    ShowIndeterminate="false"
+                                                    ThreeStateOrderUncheckToIntermediate="true"
+                                                    @bind-CheckState:get="context.AreAllValuesSelected"
+                                                    @bind-CheckState:set="@(v => OnAllValuesSelectionChangedAsync(context, v))"/>
+                                    @foreach (var tag in context.Values.OrderBy(v => v.Text))
+                                    {
+                                        var isChecked = context.SelectedValues.Contains(tag);
+                                        <FluentCheckbox Label="@tag.Text"
+                                                        title="@tag.Text"
+                                                        @key=tag
+                                                        @bind-Value:get="isChecked"
+                                                        @bind-Value:set="c => OnTagSelectionChangedAsync(context, tag, c)"/>
+                                    }
+                                </FluentStack>
                             </Body>
                         </FluentPopover>
                     </AspireTemplateColumn>

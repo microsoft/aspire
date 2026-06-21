@@ -27,8 +27,8 @@ public class LegacySettingsFileCheckTests(ITestOutputHelper outputHelper)
         var results = await check.CheckAsync();
 
         var result = Assert.Single(results);
-        Assert.Equal("environment", result.Category);
-        Assert.Equal("legacy-settings-file", result.Name);
+        Assert.Equal(EnvironmentCheckCategories.Environment, result.Category);
+        Assert.Equal(LegacySettingsFileCheck.CheckName, result.Name);
         Assert.Equal(EnvironmentCheckStatus.Warning, result.Status);
         Assert.Contains(".aspire", result.Message);
         Assert.Contains("settings.json", result.Message);

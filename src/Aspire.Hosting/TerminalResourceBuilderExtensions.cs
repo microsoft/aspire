@@ -86,6 +86,11 @@ public static class TerminalResourceBuilderExtensions
         var annotation = new TerminalAnnotation(options);
         builder.WithAnnotation(annotation);
 
+        // DCP cannot currently run a process under the debugger and a PTY at the same time.
+        // Prefer a working terminal over IDE execution until both can be combined:
+        // https://github.com/microsoft/dcp/issues/189
+        builder.WithAnnotation(new ForceProcessExecutionAnnotation());
+
         var parent = builder.Resource;
         var appBuilder = builder.ApplicationBuilder;
 

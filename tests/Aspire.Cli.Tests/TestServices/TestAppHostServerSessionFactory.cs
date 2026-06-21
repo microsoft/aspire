@@ -8,10 +8,13 @@ using Aspire.Cli.Utils;
 namespace Aspire.Cli.Tests.TestServices;
 
 /// <summary>
-/// Test implementation of <see cref="IAppHostServerSessionFactory"/> that returns a failure result.
+/// Test implementation of <see cref="IAppHostServerSessionFactory"/> that returns a failure result
+/// from <see cref="CreateAsync"/> and a <see cref="FakeAppHostServerSession"/> from <see cref="Start"/>.
 /// </summary>
 internal sealed class TestAppHostServerSessionFactory : IAppHostServerSessionFactory
 {
+    public Func<IAppHostServerProject, Dictionary<string, string>?, bool, IAppHostServerSession>? StartCallback { get; set; }
+
     public Task<AppHostServerSessionResult> CreateAsync(
         string appHostPath,
         string sdkVersion,
@@ -27,5 +30,18 @@ internal sealed class TestAppHostServerSessionFactory : IAppHostServerSessionFac
             Session: null,
             BuildOutput: outputCollector,
             ChannelName: null));
+    }
+
+    public IAppHostServerSession Start(
+        IAppHostServerProject appHostServerProject,
+        Dictionary<string, string>? environmentVariables,
+        bool debug)
+    {
+        if (StartCallback is { } callback)
+        {
+            return callback(appHostServerProject, environmentVariables, debug);
+        }
+
+        return new FakeAppHostServerSession();
     }
 }

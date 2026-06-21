@@ -95,7 +95,12 @@
       {
         "view": "aspire-vscode.appHosts",
         "contents": "%views.appHosts.errorWelcome%",
-        "when": "aspire.fetchAppHostsError && !aspire.loading"
+        "when": "aspire.fetchAppHostsError && aspire.fetchAppHostsCompatibilityError && !aspire.loading"
+      },
+      {
+        "view": "aspire-vscode.appHosts",
+        "contents": "%views.appHosts.genericErrorWelcome%",
+        "when": "aspire.fetchAppHostsError && !aspire.fetchAppHostsCompatibilityError && !aspire.loading"
       }
     ],
     "debuggers": [

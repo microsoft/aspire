@@ -22,6 +22,7 @@
          This defaults to true for backward compatibility but can be set to false to disable the behavior.
          This is particularly useful in file-based apps where metadata cannot be set on individual ProjectReference items. -->
     <TreatProjectReferencesAsResources Condition="'$(TreatProjectReferencesAsResources)' == ''">true</TreatProjectReferencesAsResources>
+    <AspireUseCliBundle Condition="'$(AspireUseCliBundle)' == ''">true</AspireUseCliBundle>
   </PropertyGroup>
 
   <!--

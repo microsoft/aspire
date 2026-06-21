@@ -91,15 +91,12 @@ public sealed class SingleFileAppHostInitDotnetRunTests(ITestOutputHelper output
         Assert.False(string.IsNullOrWhiteSpace(httpsEnv["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]?.GetValue<string>()));
         Assert.False(string.IsNullOrWhiteSpace(httpsEnv["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]?.GetValue<string>()));
 
-        // `dotnet run apphost.cs` should print "Distributed application started." once the
-        // AppHost is fully up. 1 minute is plenty — even a cold dotnet build of the bare
-        // single-file AppHost completes well inside that budget; if it hasn't started by
-        // then something is wrong (build failure, missing env var, hang) and we should
-        // fail fast rather than wait several minutes.
+        // `dotnet run apphost.cs` is intercepted by the Aspire CLI run hook when the CLI
+        // bundle is active; the CLI run summary is the AppHost-ready signal.
         await auto.TypeAsync("dotnet run apphost.cs");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync(
-            "Distributed application started.",
+            "Press CTRL+C to stop the AppHost and exit.",
             timeout: TimeSpan.FromMinutes(1));
 
         // Stop the running AppHost with Ctrl+C and wait for the shell prompt.
@@ -107,4 +104,3 @@ public sealed class SingleFileAppHostInitDotnetRunTests(ITestOutputHelper output
         await auto.WaitForAnyPromptAsync(counter, TimeSpan.FromMinutes(1));
     }
 }
-

@@ -43,6 +43,12 @@ suite('Aspire extension edge case E2E', function () {
         await assert.rejects(
             executeE2eControlCommand({ name: 'viewAppHostLogFile', appHostPath: getPrimaryAppHostProjectPath() }),
             /could not find an AppHost log file/);
+
+        const beforePublishLaunch = getDebugLaunchCount();
+        await assert.rejects(
+            executeE2eControlCommand({ name: 'publishAppHost' }),
+            /publishAppHost requires appHostPath/);
+        assert.strictEqual(getDebugLaunchCount(), beforePublishLaunch);
     });
 
     test('keeps CLI-independent settings commands available when the CLI is unavailable', async () => {
