@@ -14,6 +14,7 @@
 
 .filter-value-tag {
     cursor: pointer;
+    user-select: none;
 }
 
 .filter-value-tag:hover {
