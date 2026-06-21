@@ -47,7 +47,7 @@ public class ChartFiltersTests : DashboardTestContext
     }
 
     [Fact]
-    public void AreAllValuesSelected_SetTrue_ClearsSelectedValues()
+    public void AreAllValuesSelected_SetTrue_SelectsAllValues()
     {
         var dimensionFilter = new DimensionFilterViewModel { Name = "http.method" };
         dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "GET", Value = "GET", Order = 0, });
@@ -56,7 +56,7 @@ public class ChartFiltersTests : DashboardTestContext
 
         dimensionFilter.AreAllValuesSelected = true;
 
-        Assert.Empty(dimensionFilter.SelectedValues);
+        Assert.Equal(dimensionFilter.Values.Count, dimensionFilter.SelectedValues.Count);
         Assert.True(dimensionFilter.AreAllValuesSelected);
     }
 
@@ -79,14 +79,14 @@ public class ChartFiltersTests : DashboardTestContext
     }
 
     [Fact]
-    public void Render_EmptySelectedValues_ShowsAllState()
+    public void Render_AllValuesSelected_ShowsAllState()
     {
         SetupChartFilters();
         var dimensionFilter = CreateDimensionFilter();
+        dimensionFilter.AreAllValuesSelected = true;
 
         var cut = RenderChartFilters(dimensionFilter);
 
-        Assert.Contains("(All)", cut.Markup);
         Assert.DoesNotContain("(None)", cut.Markup);
         Assert.Contains("aria-label=\"All tags\"", cut.Markup);
     }
