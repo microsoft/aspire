@@ -131,14 +131,21 @@ jobs:
           # DCP binary at tools/dcp. This binary is required by the MSBuild
           # ResolveAspireCliBundle task (ASPIRE009) to validate the CLI bundle layout.
           mkdir -p "$ARTIFACT_DIR/dcp"
+          # A single build produces exactly one orchestration package; sort -V is a
+          # safety net in case retries or manual triggers leave multiple copies.
           DCP_NUPKG=$(find "$ARTIFACT_DIR/packages" \
             -name "Aspire.Hosting.Orchestration.linux-x64.*.nupkg" 2>/dev/null | sort -V | tail -1)
           if [ -z "$DCP_NUPKG" ]; then
             echo "❌ Aspire.Hosting.Orchestration.linux-x64 NuGet package not found; DCP unavailable"
             exit 1
           fi
+          # -j: junk (don't recreate the tools/ prefix), -o: overwrite without prompting
           if ! unzip -jo "$DCP_NUPKG" "tools/dcp" -d "$ARTIFACT_DIR/dcp/"; then
             echo "❌ Failed to extract DCP binary from $DCP_NUPKG"
+            exit 1
+          fi
+          if [ ! -f "$ARTIFACT_DIR/dcp/dcp" ]; then
+            echo "❌ DCP binary not found after extraction from $DCP_NUPKG"
             exit 1
           fi
           chmod +x "$ARTIFACT_DIR/dcp/dcp"
