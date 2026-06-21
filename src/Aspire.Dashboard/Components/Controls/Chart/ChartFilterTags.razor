@@ -30,6 +30,7 @@
                 <span class="dimension-tag filter-value-tag @isIncludedInFiltersClass"
                       role="button"
                       tabindex="0"
+                      aria-pressed="@isIncludedInFilters"
                       @onclick="@(() => OnTagSelectionChangedAsync(item, !Filter.SelectedValues.Contains(item)))"
                       @onkeydown="@(args => OnTagKeyDownAsync(args, item, !Filter.SelectedValues.Contains(item)))">
                     @item.Text
