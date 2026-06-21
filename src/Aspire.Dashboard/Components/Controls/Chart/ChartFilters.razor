@@ -15,7 +15,7 @@
                             RowSize="DataGridRowSize.Medium">
                 <ChildContent>
                     <AspirePropertyColumn Tooltip="true" TooltipText="@(c => c.Name)" Property="@(c => c.Name)"/>
-                    <AspireTemplateColumn Tooltip="true" TooltipText="@(c => c.AreAllValuesSelected is true ? Loc[nameof(ControlsStrings.LabelAll)] : string.Join(", ", ChartFilterTags.GetOrderedValues(c.SelectedValues.ToList()).Select(v => v.Text)))">
+                    <AspireTemplateColumn>
                         <ChartFilterTags @key="context" Filter="context" OnSelectionChanged="OnDimensionValuesChanged" />
                     </AspireTemplateColumn>
                     <AspireTemplateColumn>

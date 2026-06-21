@@ -23,8 +23,8 @@ public partial class ChartFilterTags : IDisposable
     public required EventCallback<DimensionFilterViewModel> OnSelectionChanged { get; set; }
 
     // Prevent magic string for dictionary keys
-    public const string KeyForDimensionValue = "dimensionValue";
-    public const string KeyForIsIncludedInFilters = "isIncludedInFilters";
+    private const string KeyForDimensionValue = "dimensionValue";
+    private const string KeyForIsIncludedInFilters = "isIncludedInFilters";
 
     // Maximum number of tags to render in the FluentOverflow. The visible area fits ~5-7 tags;
     // rendering 20 gives FluentOverflow enough items to measure correctly. Items beyond this
