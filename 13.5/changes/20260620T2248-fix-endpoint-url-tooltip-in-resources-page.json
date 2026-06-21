@@ -1,0 +1,21 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@afscrome"
+  ],
+  "description": "When hovering over an endpoint link in the Resources page URLs column, the tooltip previously showed all endpoint display texts combined. Now each endpoint shows the specific URL it navigates to on hover, making it clear where clicking will take you.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🖱️",
+  "firstMergedAt": "2026-06-20T22:48:52Z",
+  "lastMergedAt": "2026-06-20T22:48:52Z",
+  "name": "Fix endpoint URL tooltip in Resources page",
+  "owner": "JamesNK",
+  "prs": [
+    18373
+  ]
+}

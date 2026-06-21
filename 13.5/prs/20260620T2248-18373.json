@@ -1,0 +1,9 @@
+{
+  "author": "afscrome",
+  "comment": "Dashboard bug fix: endpoint URL tooltip showed all endpoints combined instead of the specific hovered URL. Community contribution.",
+  "mergedAt": "2026-06-20T22:48:52Z",
+  "number": 18373,
+  "runDate": "2026-06-21T00:28:23Z",
+  "status": "included",
+  "title": "Fix dashboard endpoint tooltip to show the hovered URL instead of all endpoints"
+}
