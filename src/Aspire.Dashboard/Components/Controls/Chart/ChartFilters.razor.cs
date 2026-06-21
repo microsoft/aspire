@@ -34,8 +34,8 @@ public partial class ChartFilters
     private readonly Dictionary<DimensionValueViewModel, int> _originalOrdersByTag = [];
 
     // Prevent magic string for dictionary keys
-    public const string KeyForDimentionValue = "dimentionValue";
-    public const string KeyForIsIncludedInFilters = "isIncludedInFilters";
+    private const string KeyForDimensionValue = "dimensionValue";
+    private const string KeyForIsIncludedInFilters = "isIncludedInFilters";
 
     protected override void OnInitialized()
     {
@@ -120,10 +120,10 @@ public partial class ChartFilters
         }
     }
 
-    public void HandleOverflowChanged(DimensionFilterViewModel context, IEnumerable<FluentOverflowItem> overflowItems)
+    private static void HandleOverflowChanged(DimensionFilterViewModel context, IEnumerable<FluentOverflowItem> overflowItems)
     {
         var overflowedValues = overflowItems
-            .Select(i => (DimensionValueViewModel)i.AdditionalAttributes![KeyForDimentionValue])
+            .Select(i => (DimensionValueViewModel)i.AdditionalAttributes![KeyForDimensionValue])
             .ToArray();
 
         context.OverflowedValues = overflowedValues;

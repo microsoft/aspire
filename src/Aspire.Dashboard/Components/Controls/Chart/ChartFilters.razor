@@ -27,7 +27,7 @@
                                     var isIncludedInFiltersClass = isIncludedInFilters ? "included-in-filters" : "";
                                     var additionalAttributes = new Dictionary<string, object>()
                                     {
-                                        [KeyForDimentionValue] = item,
+                                        [KeyForDimensionValue] = item,
                                         [KeyForIsIncludedInFilters] = isIncludedInFilters,
                                     };
 
@@ -36,6 +36,7 @@
                                         <span class="dimension-tag filter-value-tag @isIncludedInFiltersClass"
                                               role="button"
                                               tabindex="0"
+                                              aria-pressed="@isIncludedInFilters"
                                               @onclick="@(() => OnTagSelectionChangedAsync(context, item, !context.SelectedValues.Contains(item)))"
                                               @onkeydown="@(args => OnTagKeyDownAsync(args, context, item, !context.SelectedValues.Contains(item)))">
                                             @item.Text
