@@ -1,4 +1,4 @@
-::deep .dimension-tag {
+.dimension-tag {
     border-radius: calc(var(--control-corner-radius)* 1px);
     padding: calc(((var(--design-unit)* 0.5) - var(--stroke-width))* 1px) calc((var(--design-unit) - var(--stroke-width))* 1px);
     border: calc(var(--stroke-width)* 1px) solid transparent;

@@ -25,6 +25,12 @@ public partial class ChartFilterTags : IDisposable
     public const string KeyForDimensionValue = "dimensionValue";
     public const string KeyForIsIncludedInFilters = "isIncludedInFilters";
 
+    // Maximum number of tags to render in the FluentOverflow. The visible area fits ~5-7 tags;
+    // rendering 20 gives FluentOverflow enough items to measure correctly. Items beyond this
+    // limit are treated as pre-overflowed and counted in the "+N" badge without being added to
+    // the DOM, avoiding hundreds of elements triggering an expensive forced reflow.
+    private const int MaxRenderedTags = 20;
+
     // When some filter value is selected which is not visible (overflowed)
     // we reorder it to the top of the list. For doing so we use this counter
     // to assign decremental negative number to the Order property of
@@ -106,11 +112,16 @@ public partial class ChartFilterTags : IDisposable
 
     public void HandleOverflowChanged(IEnumerable<FluentOverflowItem> overflowItems)
     {
-        var overflowedValues = overflowItems
+        var overflowedFromComponent = overflowItems
             .Select(i => (DimensionValueViewModel)i.AdditionalAttributes![KeyForDimensionValue])
             .ToArray();
 
-        Filter.OverflowedValues = overflowedValues;
+        // Items beyond MaxRenderedTags are always overflowed since they aren't rendered
+        // in the FluentOverflow. Include them so the reordering logic works when a
+        // pre-overflowed tag is selected via the popover.
+        var preOverflowed = Filter.Values.OrderBy(v => v.Order).Skip(MaxRenderedTags);
+
+        Filter.OverflowedValues = [.. overflowedFromComponent, .. preOverflowed];
     }
 
     public void Dispose()

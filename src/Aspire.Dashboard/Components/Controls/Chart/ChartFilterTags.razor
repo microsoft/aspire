@@ -1,11 +1,21 @@
 @namespace Aspire.Dashboard.Components
 
+@{
+    // Only render a limited number of items in the FluentOverflow to avoid expensive
+    // browser layout calculations. The visible area fits ~5-7 tags; rendering 20 gives
+    // FluentOverflow enough items to measure correctly without creating hundreds of DOM
+    // elements that trigger a forced reflow long enough to kill the SignalR connection.
+    var orderedValues = Filter.Values.OrderBy(v => v.Order).ToList();
+    var renderedValues = orderedValues.Take(MaxRenderedTags).ToList();
+    var preOverflowedCount = orderedValues.Count - renderedValues.Count;
+}
+
 <FluentOverflow Class="dimension-overflow" OnOverflowRaised="@(items => HandleOverflowChanged(items))">
     <ChildContent>
         @{
             var i = 0;
         }
-        @foreach (var item in Filter.Values.OrderBy(v => v.Order))
+        @foreach (var item in renderedValues)
         {
             var isIncludedInFilters = Filter.SelectedValues.Contains(item);
             var isIncludedInFiltersClass = isIncludedInFilters ? "included-in-filters" : "";
@@ -30,7 +40,13 @@
     </ChildContent>
     <MoreButtonTemplate Context="overflow">
         @{
-            var isIncludedInFiltersClass = overflow.ItemsOverflow.Any(item => (bool)item.AdditionalAttributes![KeyForIsIncludedInFilters]) ? "included-in-filters" : "";
+            var hasSelectedInOverflow = overflow.ItemsOverflow.Any(item => (bool)item.AdditionalAttributes![KeyForIsIncludedInFilters]);
+            if (!hasSelectedInOverflow && preOverflowedCount > 0)
+            {
+                // Check if any items beyond MaxRenderedTags (not in FluentOverflow) are selected.
+                hasSelectedInOverflow = orderedValues.Skip(MaxRenderedTags).Any(v => Filter.SelectedValues.Contains(v));
+            }
+            var isIncludedInFiltersClass = hasSelectedInOverflow ? "included-in-filters" : "";
         }
         @* Display must be inline block so the width is correctly calculated. *@
         <span class="dimension-tag filter-value-tag @isIncludedInFiltersClass"
@@ -39,7 +55,7 @@
               style="display:inline-block;"
               @onclick="@(() => Filter.PopupVisible = true)"
               @onkeydown="@(args => OnOverflowTagKeyDownAsync(args))">
-            @($"+{overflow.ItemsOverflow.Count()}")
+            @($"+{overflow.ItemsOverflow.Count() + preOverflowedCount}")
         </span>
     </MoreButtonTemplate>
     <OverflowTemplate Context="overflow">
