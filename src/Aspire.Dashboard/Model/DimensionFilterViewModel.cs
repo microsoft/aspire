@@ -77,5 +77,4 @@ public class DimensionValueViewModel
 {
     public required string Text { get; init; }
     public required string? Value { get; init; }
-    public required int Order { get; set; }
 }

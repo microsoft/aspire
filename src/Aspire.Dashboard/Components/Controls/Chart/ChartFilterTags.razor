@@ -5,7 +5,7 @@
     // browser layout calculations. The visible area fits ~5-7 tags; rendering 20 gives
     // FluentOverflow enough items to measure correctly without creating hundreds of DOM
     // elements that trigger a forced reflow long enough to kill the SignalR connection.
-    var orderedValues = Filter.Values.OrderBy(v => v.Order).ToList();
+    var orderedValues = GetOrderedValues(Filter.Values).ToList();
     var renderedValues = orderedValues.Take(MaxRenderedTags).ToList();
     var preOverflowedCount = orderedValues.Count - renderedValues.Count;
 }

@@ -18,8 +18,8 @@ public class ChartFiltersTests : DashboardTestContext
     public void AreAllValuesSelected_SetFalse_ClearsOnlyWhenAllValuesAreStored()
     {
         var dimensionFilter = new DimensionFilterViewModel { Name = "http.method" };
-        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "GET", Value = "GET", Order = 0, });
-        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "POST", Value = "POST", Order = 1, });
+        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "GET", Value = "GET", });
+        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "POST", Value = "POST", });
         dimensionFilter.SelectedValues.Add(dimensionFilter.Values[0]);
         dimensionFilter.SelectedValues.Add(dimensionFilter.Values[1]);
 
@@ -34,8 +34,8 @@ public class ChartFiltersTests : DashboardTestContext
     public void AreAllValuesSelected_SetFalse_DoesNotClearWhenPartiallySelected()
     {
         var dimensionFilter = new DimensionFilterViewModel { Name = "http.method" };
-        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "GET", Value = "GET", Order = 0, });
-        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "POST", Value = "POST", Order = 1, });
+        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "GET", Value = "GET", });
+        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "POST", Value = "POST", });
         dimensionFilter.SelectedValues.Add(dimensionFilter.Values[0]);
 
         Assert.Null(dimensionFilter.AreAllValuesSelected);
@@ -50,8 +50,8 @@ public class ChartFiltersTests : DashboardTestContext
     public void AreAllValuesSelected_SetTrue_SelectsAllValues()
     {
         var dimensionFilter = new DimensionFilterViewModel { Name = "http.method" };
-        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "GET", Value = "GET", Order = 0, });
-        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "POST", Value = "POST", Order = 1, });
+        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "GET", Value = "GET", });
+        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "POST", Value = "POST", });
         dimensionFilter.SelectedValues.Add(dimensionFilter.Values[0]);
 
         dimensionFilter.AreAllValuesSelected = true;
@@ -64,8 +64,8 @@ public class ChartFiltersTests : DashboardTestContext
     public void OnTagSelectionChanged_RemovesValue_LeavesOthersSelected()
     {
         var dimensionFilter = new DimensionFilterViewModel { Name = "http.method" };
-        var getValue = new DimensionValueViewModel { Text = "GET", Value = "GET", Order = 0, };
-        var postValue = new DimensionValueViewModel { Text = "POST", Value = "POST", Order = 1, };
+        var getValue = new DimensionValueViewModel { Text = "GET", Value = "GET", };
+        var postValue = new DimensionValueViewModel { Text = "POST", Value = "POST", };
         dimensionFilter.Values.Add(getValue);
         dimensionFilter.Values.Add(postValue);
         dimensionFilter.SelectedValues.Add(getValue);
@@ -112,22 +112,30 @@ public class ChartFiltersTests : DashboardTestContext
     }
 
     [Fact]
-    public void Render_DeselectedOverflowTag_RestoresOriginalOrder()
+    public void GetOrderedValues_NumericValues_OrdersNumerically()
     {
-        SetupChartFilters();
-        var dimensionFilter = CreateDimensionFilter();
-        var overflowedTag = dimensionFilter.Values.Single(v => v.Text == "POST");
-        dimensionFilter.OverflowedValues = [overflowedTag];
-        var originalOrder = overflowedTag.Order;
+        var dimensionFilter = new DimensionFilterViewModel { Name = "http.status_code" };
+        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "200", Value = "200", });
+        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "404", Value = "404", });
+        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "50", Value = "50", });
+        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "1000", Value = "1000", });
 
-        var cut = RenderChartFilters(dimensionFilter);
-        cut.FindAll(".filter-value-tag").Single(e => e.TextContent.Trim() == "POST").Click();
+        var ordered = ChartFilterTags.GetOrderedValues(dimensionFilter.Values).Select(v => v.Text).ToList();
 
-        Assert.NotEqual(originalOrder, overflowedTag.Order);
+        Assert.Equal(["50", "200", "404", "1000"], ordered);
+    }
 
-        cut.FindAll(".filter-value-tag").Single(e => e.TextContent.Trim() == "POST").Click();
+    [Fact]
+    public void GetOrderedValues_TextValues_OrdersAlphabetically()
+    {
+        var dimensionFilter = new DimensionFilterViewModel { Name = "http.method" };
+        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "POST", Value = "POST", });
+        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "GET", Value = "GET", });
+        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "DELETE", Value = "DELETE", });
 
-        Assert.Equal(originalOrder, overflowedTag.Order);
+        var ordered = ChartFilterTags.GetOrderedValues(dimensionFilter.Values).Select(v => v.Text).ToList();
+
+        Assert.Equal(["DELETE", "GET", "POST"], ordered);
     }
 
     private IRenderedComponent<ChartFilters> RenderChartFilters(DimensionFilterViewModel dimensionFilter, Action<DimensionFilterViewModel>? onDimensionValuesChanged = null)
@@ -157,8 +165,8 @@ public class ChartFiltersTests : DashboardTestContext
     private static DimensionFilterViewModel CreateDimensionFilter()
     {
         var dimensionFilter = new DimensionFilterViewModel { Name = "http.method" };
-        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "GET", Value = "GET", Order = 0, });
-        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "POST", Value = "POST", Order = 1, });
+        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "GET", Value = "GET", });
+        dimensionFilter.Values.Add(new DimensionValueViewModel { Text = "POST", Value = "POST", });
 
         return dimensionFilter;
     }

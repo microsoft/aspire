@@ -223,7 +223,6 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
                     Name = item.Key
                 };
 
-                var order = 0;
                 dimensionModel.Values.AddRange(item.Value.Select(v =>
                 {
                     var text = v switch
@@ -232,18 +231,11 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
                         { Length: 0 } => Loc[nameof(ControlsStrings.LabelEmpty)],
                         _ => v
                     };
-                    return new
+                    return new DimensionValueViewModel
                     {
                         Text = text,
                         Value = v,
                     };
-                })
-                .OrderBy(v => v.Text)
-                .Select(i => new DimensionValueViewModel
-                {
-                    Text = i.Text,
-                    Value = i.Value,
-                    Order = order++,
                 }));
 
                 filters.Add(dimensionModel);

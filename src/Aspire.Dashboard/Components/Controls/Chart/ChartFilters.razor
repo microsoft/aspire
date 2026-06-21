@@ -15,7 +15,7 @@
                             RowSize="DataGridRowSize.Medium">
                 <ChildContent>
                     <AspirePropertyColumn Tooltip="true" TooltipText="@(c => c.Name)" Property="@(c => c.Name)"/>
-                    <AspireTemplateColumn Tooltip="true" TooltipText="@(c => c.AreAllValuesSelected is true ? Loc[nameof(ControlsStrings.LabelAll)] : string.Join(", ", c.SelectedValues.OrderBy(v => v.Text).Select(v => v.Text)))">
+                    <AspireTemplateColumn Tooltip="true" TooltipText="@(c => c.AreAllValuesSelected is true ? Loc[nameof(ControlsStrings.LabelAll)] : string.Join(", ", ChartFilterTags.GetOrderedValues(c.SelectedValues.ToList()).Select(v => v.Text)))">
                         <ChartFilterTags @key="context" Filter="context" OnSelectionChanged="OnDimensionValuesChanged" />
                     </AspireTemplateColumn>
                     <AspireTemplateColumn>
@@ -38,7 +38,7 @@
                                                     ThreeStateOrderUncheckToIntermediate="true"
                                                     @bind-CheckState:get="context.AreAllValuesSelected"
                                                     @bind-CheckState:set="@(v => OnAllValuesSelectionChangedAsync(context, v))"/>
-                                    @foreach (var tag in context.Values.OrderBy(v => v.Text))
+                                    @foreach (var tag in ChartFilterTags.GetOrderedValues(context.Values))
                                     {
                                         var isChecked = context.SelectedValues.Contains(tag);
                                         <FluentCheckbox Label="@tag.Text"

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Dashboard.Model;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
@@ -31,13 +32,6 @@ public partial class ChartFilterTags : IDisposable
     // the DOM, avoiding hundreds of elements triggering an expensive forced reflow.
     private const int MaxRenderedTags = 20;
 
-    // When some filter value is selected which is not visible (overflowed)
-    // we reorder it to the top of the list. For doing so we use this counter
-    // to assign decremental negative number to the Order property of
-    // DimensionValueViewModel
-    private int _reOrderingCounter;
-    private readonly Dictionary<DimensionValueViewModel, int> _originalOrdersByTag = [];
-
     protected override void OnInitialized()
     {
         // Subscribe to external state changes (e.g., popover checkbox toggles)
@@ -52,27 +46,7 @@ public partial class ChartFilterTags : IDisposable
 
     private async Task OnTagSelectionChangedAsync(DimensionValueViewModel tag, bool isChecked)
     {
-        if (isChecked)
-        {
-            if (Filter.OverflowedValues.Contains(tag))
-            {
-                // reorder tag
-                _reOrderingCounter++;
-                _originalOrdersByTag.TryAdd(tag, tag.Order);
-                tag.Order = -_reOrderingCounter;
-            }
-        }
-
         Filter.OnTagSelectionChanged(tag, isChecked);
-        if (Filter.AreAllValuesSelected is true)
-        {
-            RestoreTagOrders(Filter.Values);
-        }
-        else if (!isChecked)
-        {
-            RestoreTagOrder(tag);
-        }
-
         await OnSelectionChanged.InvokeAsync(Filter);
     }
 
@@ -94,22 +68,6 @@ public partial class ChartFilterTags : IDisposable
         return Task.CompletedTask;
     }
 
-    private void RestoreTagOrders(IEnumerable<DimensionValueViewModel> tags)
-    {
-        foreach (var tag in tags)
-        {
-            RestoreTagOrder(tag);
-        }
-    }
-
-    private void RestoreTagOrder(DimensionValueViewModel tag)
-    {
-        if (_originalOrdersByTag.Remove(tag, out var originalOrder))
-        {
-            tag.Order = originalOrder;
-        }
-    }
-
     public void HandleOverflowChanged(IEnumerable<FluentOverflowItem> overflowItems)
     {
         var overflowedFromComponent = overflowItems
@@ -117,11 +75,41 @@ public partial class ChartFilterTags : IDisposable
             .ToArray();
 
         // Items beyond MaxRenderedTags are always overflowed since they aren't rendered
-        // in the FluentOverflow. Include them so the reordering logic works when a
-        // pre-overflowed tag is selected via the popover.
-        var preOverflowed = Filter.Values.OrderBy(v => v.Order).Skip(MaxRenderedTags);
+        // in the FluentOverflow. Include them so the pre-overflowed items appear in the
+        // "+N" badge and popover.
+        var preOverflowed = GetOrderedValues(Filter.Values).Skip(MaxRenderedTags);
 
         Filter.OverflowedValues = [.. overflowedFromComponent, .. preOverflowed];
+    }
+
+    /// <summary>
+    /// Orders dimension values numerically if all values are parsable as doubles;
+    /// otherwise orders alphabetically by text.
+    /// </summary>
+    internal static IEnumerable<DimensionValueViewModel> GetOrderedValues(IReadOnlyList<DimensionValueViewModel> values)
+    {
+        var parsed = new double[values.Count];
+        var allNumeric = true;
+
+        for (var i = 0; i < values.Count; i++)
+        {
+            if (double.TryParse(values[i].Value, CultureInfo.InvariantCulture, out var d))
+            {
+                parsed[i] = d;
+            }
+            else
+            {
+                allNumeric = false;
+                break;
+            }
+        }
+
+        if (allNumeric)
+        {
+            return values.Zip(parsed).OrderBy(pair => pair.Second).Select(pair => pair.First);
+        }
+
+        return values.OrderBy(v => v.Text, StringComparer.OrdinalIgnoreCase);
     }
 
     public void Dispose()
