@@ -132,13 +132,16 @@ jobs:
           # ResolveAspireCliBundle task (ASPIRE009) to validate the CLI bundle layout.
           mkdir -p "$ARTIFACT_DIR/dcp"
           DCP_NUPKG=$(find "$ARTIFACT_DIR/packages" \
-            -name "Aspire.Hosting.Orchestration.linux-x64.*.nupkg" 2>/dev/null | head -1)
-          if [ -n "$DCP_NUPKG" ]; then
-            unzip -jo "$DCP_NUPKG" "tools/dcp" -d "$ARTIFACT_DIR/dcp/"
-            chmod +x "$ARTIFACT_DIR/dcp/dcp"
-          else
-            echo "⚠️ Aspire.Hosting.Orchestration.linux-x64 NuGet package not found; DCP will be unavailable"
+            -name "Aspire.Hosting.Orchestration.linux-x64.*.nupkg" 2>/dev/null | sort -V | tail -1)
+          if [ -z "$DCP_NUPKG" ]; then
+            echo "❌ Aspire.Hosting.Orchestration.linux-x64 NuGet package not found; DCP unavailable"
+            exit 1
           fi
+          if ! unzip -jo "$DCP_NUPKG" "tools/dcp" -d "$ARTIFACT_DIR/dcp/"; then
+            echo "❌ Failed to extract DCP binary from $DCP_NUPKG"
+            exit 1
+          fi
+          chmod +x "$ARTIFACT_DIR/dcp/dcp"
 
           echo "CLI artifacts prepared:"
           ls -la "$ARTIFACT_DIR/bin/"
@@ -219,7 +222,8 @@ jobs:
             cp "${{ github.workspace }}/cli-artifacts/dcp/dcp" "$ASPIRE_HOME/dcp/dcp"
             chmod +x "$ASPIRE_HOME/dcp/dcp"
           else
-            echo "⚠️ DCP binary not found in artifacts — AppHost bundle builds will fail (ASPIRE009)"
+            echo "❌ DCP binary not found in artifacts — AppHost bundle builds will fail (ASPIRE009)"
+            exit 1
           fi
 
           # Set up NuGet hive for local packages
