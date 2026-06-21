@@ -105,6 +105,9 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     // set to a full informational version). The output must keep a single "+" and never double it.
     [InlineData("stable", "13.4.5+73114e86", "73114e86", "13.4.5+73114e86")]
     [InlineData("stable", "13.4.5+73114e86", null, "13.4.5+73114e86")]
+    // When the version carries an embedded "+<sha>" AND an explicit commit is provided, the
+    // explicit commit must win and the embedded sha must be discarded (single "+", explicit value).
+    [InlineData("stable", "13.4.5+aaaaaaaa", "bbbbbbbb", "13.4.5+bbbbbbbb")]
     public async Task RootCommandVersion_ProducesCorrectOutput_AcrossBuildStages(
         string channel,
         string version,
