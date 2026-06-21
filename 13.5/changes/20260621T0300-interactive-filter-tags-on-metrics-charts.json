@@ -1,0 +1,21 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [
+    "@inlineHamed"
+  ],
+  "description": "Filter value tags on the metrics page are now clickable — clicking a tag immediately applies or removes that filter, and active tags automatically reorder to stay visible. Clicking the overflow (+N) badge now opens the filter popover directly.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🏷️",
+  "firstMergedAt": "2026-06-21T03:00:08Z",
+  "lastMergedAt": "2026-06-21T03:00:08Z",
+  "name": "Interactive filter tags on metrics charts",
+  "owner": "JamesNK",
+  "prs": [
+    18199
+  ]
+}

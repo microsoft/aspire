@@ -1,0 +1,9 @@
+{
+  "author": "inlineHamed",
+  "comment": "UX improvement: clickable filter value tags on metrics charts, with smart reordering and overflow badge shortcut",
+  "mergedAt": "2026-06-21T03:00:08Z",
+  "number": 18199,
+  "runDate": "2026-06-21T07:33:14Z",
+  "status": "included",
+  "title": "make dashboard metrics filter value clickable"
+}
