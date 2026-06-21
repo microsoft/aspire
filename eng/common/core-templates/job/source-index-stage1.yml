@@ -10,6 +10,7 @@ parameters:
 
 jobs:
 - job: SourceIndexStage1
+  timeoutInMinutes: 120
   dependsOn: ${{ parameters.dependsOn }}
   condition: ${{ parameters.condition }}
   variables:
