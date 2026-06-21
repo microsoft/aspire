@@ -15,7 +15,6 @@ export const enum AnsiColors {
     Blue = '\x1b[34m',
 }
 
-
 export interface AspireTerminal {
     terminal: vscode.Terminal;
     dispose: () => void;
