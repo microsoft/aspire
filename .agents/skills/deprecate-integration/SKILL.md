@@ -23,7 +23,6 @@ Aspire retires an integration in two releases:
 Precedent in the repo:
 
 - `Aspire.Hosting.Dapr` and `Aspire.Hosting.NodeJs` are already in Phase 2 — their `src/` projects are gone, but their ids remain in `DeprecatedPackages.s_all`.
-- `Aspire.Hosting.GitHub.Models` (issue [#18402](https://github.com/microsoft/aspire/issues/18402)) is the reference implementation for the full Phase 1 sunset that this skill encodes.
 
 ## Inputs to collect
 
