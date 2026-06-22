@@ -156,10 +156,25 @@ public sealed class SelectTestsCliTests
                 var comment = File.ReadAllText(commentPath);
                 Assert.StartsWith("## Tests selector", comment);
                 Assert.DoesNotContain("audit mode", comment);
-                Assert.Contains("**Test projects (1 / 2)**", comment);
-                Assert.Contains("- `Aspire.Hosting.Tests`", comment);
-                Assert.Contains("**Jobs (1)**", comment);
-                Assert.Contains("- `extension-e2e`", comment);
+                Assert.Contains("### Selected test projects (1 / 2)", comment);
+                Assert.Contains("`Aspire.Hosting.Tests`", comment);
+                Assert.Contains("### Selected jobs (1)", comment);
+                Assert.Contains("`extension-e2e`", comment);
+                // Test projects are the primary signal, so their section must come BEFORE the jobs
+                // section. Falsifies a revert to the old jobs-first ordering.
+                Assert.True(
+                    comment.IndexOf("### Selected test projects", StringComparison.Ordinal)
+                        < comment.IndexOf("### Selected jobs", StringComparison.Ordinal),
+                    "Selected test projects must be listed before Selected jobs.");
+                // The rationale is collapsed by default behind a <details> so the comment leads with
+                // what runs; the heading is the <summary>. Falsifies a revert to a plain "### How these
+                // were chosen" heading that is always expanded.
+                Assert.Contains("<summary>How these were chosen — grouped by what changed</summary>", comment);
+                Assert.DoesNotContain("### How these were chosen", comment);
+                // The job-reasons table attributes each selected job to what triggered it
+                // (extension-e2e <- trigger.txt). Falsifies a revert that drops the table.
+                Assert.Contains("| Job | Triggered by |", comment);
+                Assert.Contains("| `extension-e2e` | `trigger.txt` |", comment);
                 Assert.DoesNotContain("### Options", comment);
                 Assert.DoesNotContain("Changed files", comment);
                 Assert.DoesNotContain("Would have been", comment);
@@ -171,10 +186,11 @@ public sealed class SelectTestsCliTests
         });
     }
 
-    // The PR comment lists EVERY cause that selected an item — not a single "primary" cause with a
-    // "(+N more)" tail. A reviewer must see exactly which changed files / edges pulled each test in.
-    // Here both trigger.txt and prod.txt route to Aspire.Hosting.Tests, so its one comment line must
-    // name both files. Failure mode: truncating to one cause hides why a test was selected.
+    // The PR comment attributes EVERY cause that selected an item — no truncation, no "(+N more)"
+    // tail. A reviewer must see exactly which changed files / edges pulled each test in. Here both
+    // trigger.txt and prod.txt route to Aspire.Hosting.Tests, so the grouped "how chosen" section must
+    // show both files as triggers (the project appears under each). Failure mode: dropping a trigger
+    // hides why a test was selected.
     [Fact]
     public void CommentListsEveryCauseWithoutTruncation()
     {
@@ -190,10 +206,15 @@ public sealed class SelectTestsCliTests
                 Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, enforce: true));
 
                 var comment = File.ReadAllText(commentPath);
-                var line = Array.Find(comment.Split('\n'), l => l.Contains("`Aspire.Hosting.Tests`", StringComparison.Ordinal));
-                Assert.NotNull(line);
-                Assert.Contains("`trigger.txt`", line);
-                Assert.Contains("`prod.txt`", line);
+                // Each changed file is its own group heading, and the "directly" bucket under it lists
+                // exactly the projects that file pulled in. Asserting the grouped (by-trigger) shape --
+                // file heading + "→ **N** directly: ..." -- falsifies a revert to the flat per-project
+                // rendering, which had no such per-file buckets. prod.txt selects both projects;
+                // trigger.txt selects only the test project.
+                Assert.Contains("`prod.txt`** *(changed)*", comment);
+                Assert.Contains("→ **2** directly: `Aspire.Hosting`, `Aspire.Hosting.Tests`", comment);
+                Assert.Contains("`trigger.txt`** *(changed)*", comment);
+                Assert.Contains("→ **1** directly: `Aspire.Hosting.Tests`", comment);
                 Assert.DoesNotContain("more)", comment);
             }
             finally
@@ -201,6 +222,47 @@ public sealed class SelectTestsCliTests
                 Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", previous);
             }
         });
+    }
+
+    // The headline call-out (⚠️ "N of the M ... come from a single change") and the <details> collapse
+    // in RenderProjectList are both threshold-gated (headline: tests >= 10 && largest group >= 5;
+    // collapse: inline limit of 12). A single change that fans out to many projects must trip both.
+    // Failure mode: a refactor silently drops the headline or stops collapsing large buckets, making
+    // big selections unreadable again — the very problem this comment layout exists to solve.
+    [Fact]
+    public void LargeFanOutEmitsHeadlineAndCollapsesProjectList()
+    {
+        var projects = Enumerable.Range(1, 14).Select(i => $"Aspire.Pkg{i:00}.Tests").ToList();
+        var slnx = "<Solution>\n"
+            + string.Join("\n", projects.Select(p => $"  <Project Path=\"tests/{p}/{p}.csproj\" />"))
+            + "\n</Solution>";
+        // One path rule maps a single changed file to all 14 test projects, so they land in one group.
+        var map = "version: 1\npath_rules:\n  - paths: [big.txt]\n    targets: ["
+            + string.Join(", ", projects.Select(p => $"\"test:{p}\""))
+            + "]\n";
+
+        RunInTempRepo((repoRoot, propsPath, _) =>
+        {
+            var commentPath = Path.Combine(repoRoot, "comment.md");
+            var previous = Environment.GetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE");
+            Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", commentPath);
+            try
+            {
+                var changed = WriteChangedFiles(repoRoot, "big.txt");
+
+                Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, enforce: true));
+
+                var comment = File.ReadAllText(commentPath);
+                // Headline names the count and the single change that drove it.
+                Assert.Contains("⚠️ 14 of the 14 selected test projects come from a single change — `big.txt`", comment);
+                // The 14-project bucket (over the inline limit of 12) collapses into a <details>.
+                Assert.Contains("<details><summary>show 14</summary>", comment);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", previous);
+            }
+        }, slnx: slnx, map: map);
     }
 
     // In audit mode the comment is advisory: the full matrix and all jobs still run, and the lists

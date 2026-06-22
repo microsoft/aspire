@@ -6,12 +6,31 @@ function getComparisonKey(value: string): string {
     return process.platform === 'win32' ? value.toLowerCase() : value;
 }
 
+function isAspireCommandType(value: unknown): value is AspireCommandType {
+    return value === 'run' || value === 'deploy' || value === 'publish' || value === 'do';
+}
+
+function getTerminationCommand(configuration: vscode.DebugConfiguration): AspireCommandType | undefined {
+    // Run is the default Aspire command when omitted from launch configuration.
+    if (configuration.command === undefined || configuration.command === null) {
+        return 'run';
+    }
+
+    return isAspireCommandType(configuration.command) ? configuration.command : undefined;
+}
+
 export interface AppHostLaunchRequestedEvent {
     appHostPath: string;
     command: AspireCommandType;
     noDebug: boolean;
     doStep?: string;
     executionSuppressed: boolean;
+}
+
+export interface AppHostDebugSessionTerminatedEvent {
+    appHostPath: string;
+    command?: AspireCommandType;
+    shouldRequestStopRefresh: boolean;
 }
 
 /**
@@ -29,7 +48,7 @@ export class AppHostLaunchService implements vscode.Disposable {
     private readonly _onDidChangeLaunchingState = new vscode.EventEmitter<void>();
     readonly onDidChangeLaunchingState = this._onDidChangeLaunchingState.event;
 
-    private readonly _onDidTerminateAppHostDebugSession = new vscode.EventEmitter<string>();
+    private readonly _onDidTerminateAppHostDebugSession = new vscode.EventEmitter<AppHostDebugSessionTerminatedEvent>();
     readonly onDidTerminateAppHostDebugSession = this._onDidTerminateAppHostDebugSession.event;
 
     private readonly _onDidRequestLaunch = new vscode.EventEmitter<AppHostLaunchRequestedEvent>();
@@ -47,7 +66,12 @@ export class AppHostLaunchService implements vscode.Disposable {
                 if (this._launchingPaths.delete(key)) {
                     this._onDidChangeLaunchingState.fire();
                 }
-                this._onDidTerminateAppHostDebugSession.fire(appHostPath);
+                const command = getTerminationCommand(session.configuration);
+                this._onDidTerminateAppHostDebugSession.fire({
+                    appHostPath,
+                    command,
+                    shouldRequestStopRefresh: command === 'run',
+                });
             }
         });
     }

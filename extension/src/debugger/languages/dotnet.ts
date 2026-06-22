@@ -8,7 +8,7 @@ import * as readline from 'readline';
 import * as os from 'os';
 import * as fs from 'fs';
 import { doesFileExist } from '../../utils/io';
-import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, isProjectLaunchConfiguration, ProjectLaunchConfiguration } from '../../dcp/types';
+import { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfiguration, isProjectLaunchConfiguration, ProjectLaunchConfiguration } from '../../dcp/types';
 import { ResourceDebuggerExtension } from '../debuggerExtensions';
 import {
     readLaunchSettings,
@@ -232,8 +232,12 @@ function quoteCommandLineArgument(argument: string): string {
     return `"${argument.replace(/"/g, '\\"')}"`;
 }
 
+function createDotNetRunBaseArguments(projectPath: string): string[] {
+    return ['run', '--project', projectPath, '--no-launch-profile'];
+}
+
 function createDotNetRunArguments(projectPath: string, baseProfileArgs: string | undefined, runSessionArgs: string[] | undefined): string[] | string {
-    const dotnetRunArgs = ['run', '--project', projectPath, '--no-launch-profile'];
+    const dotnetRunArgs = createDotNetRunBaseArguments(projectPath);
     if (runSessionArgs !== undefined) {
         if (runSessionArgs.length > 0) {
             dotnetRunArgs.push('--', ...runSessionArgs);
@@ -253,6 +257,24 @@ function createDotNetRunArguments(projectPath: string, baseProfileArgs: string |
     return dotnetRunArgs;
 }
 
+function configureDotNetRunDebugConfiguration(
+    debugConfiguration: AspireResourceExtendedDebugConfiguration,
+    projectPath: string,
+    args: string[] | string,
+    baseProfileEnvironmentVariables: { [key: string]: string } | undefined,
+    runSessionEnvironmentVariables: EnvVar[]): void {
+    debugConfiguration.program = 'dotnet';
+    debugConfiguration.args = args;
+    debugConfiguration.cwd = path.dirname(projectPath);
+    debugConfiguration.executablePath = undefined;
+    debugConfiguration.noDebug = true;
+    debugConfiguration.env = Object.fromEntries(mergeEnvironmentVariables(
+        baseProfileEnvironmentVariables,
+        debugConfiguration.env,
+        runSessionEnvironmentVariables
+    ));
+}
+
 export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSession: AspireDebugSession) => IDotNetService): ResourceDebuggerExtension {
     return {
         resourceType: 'project',
@@ -268,8 +290,6 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
             throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
         },
         createDebugSessionConfigurationCallback: async (launchConfig, args, env, launchOptions, debugConfiguration: AspireResourceExtendedDebugConfiguration): Promise<void> => {
-            const dotNetService: IDotNetService = dotNetServiceProducer(launchOptions.debugSession);
-
             if (!isProjectLaunchConfiguration(launchConfig)) {
                 extensionLogOutputChannel.info(`The resource type was not project for ${JSON.stringify(launchConfig)}`);
                 throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
@@ -318,6 +338,8 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
             }
 
             if (baseProfile?.commandName?.toLowerCase() === LaunchProfileCommandName.executable && baseProfile.executablePath) {
+                const dotNetService: IDotNetService = dotNetServiceProducer(launchOptions.debugSession);
+
                 // For Executable command profiles (e.g., class library integrations), the launch profile
                 // specifies an external executable to run instead of the project output.
                 // Build the project to ensure dependencies are compiled, then launch
@@ -340,6 +362,7 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                 ));
             }
             else if (!isFileBasedApp(projectPath)) {
+                const dotNetService: IDotNetService = dotNetServiceProducer(launchOptions.debugSession);
                 const outputPath = await dotNetService.getDotNetTargetPath(projectPath);
                 if ((!(await doesFileExist(outputPath)) || launchOptions.forceBuild)) {
                     await dotNetService.buildDotNetProject(projectPath);
@@ -352,21 +375,19 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                         vscode.window.showInformationMessage(fallbackMessage);
                     }
 
-                    debugConfiguration.program = 'dotnet';
-                    debugConfiguration.args = createDotNetRunArguments(projectPath, baseProfile?.commandLineArgs, args);
-                    debugConfiguration.cwd = path.dirname(projectPath);
-                    debugConfiguration.executablePath = undefined;
-                    debugConfiguration.noDebug = true;
+                    configureDotNetRunDebugConfiguration(debugConfiguration, projectPath, createDotNetRunArguments(projectPath, baseProfile?.commandLineArgs, args), baseProfile?.environmentVariables, env);
                 } else {
                     debugConfiguration.program = outputPath;
+                    debugConfiguration.env = Object.fromEntries(mergeEnvironmentVariables(
+                        baseProfile?.environmentVariables,
+                        debugConfiguration.env,
+                        env
+                    ));
                 }
-                debugConfiguration.env = Object.fromEntries(mergeEnvironmentVariables(
-                    baseProfile?.environmentVariables,
-                    debugConfiguration.env,
-                    env
-                ));
             }
             else {
+                const dotNetService: IDotNetService = dotNetServiceProducer(launchOptions.debugSession);
+
                 // For file-based apps, get the dotnet run-api output first to determine the executable path
                 const runApiOutput = await dotNetService.getDotNetRunApiOutput(projectPath);
                 const runApiConfig = getRunApiConfigFromOutput(runApiOutput);

@@ -459,24 +459,32 @@ suite('AppHostDataRepository', () => {
     });
 
     test('describe watch reports minimum CLI version when command help is returned', async () => {
+        const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
         const repository = new AppHostDataRepository(terminalProvider);
 
-        repository.activate();
-        repository.setPanelVisible(true);
-        await waitForMicrotasks();
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
 
-        const lineCallback = spawnStub.firstCall.args[3].lineCallback;
-        const exitCallback = spawnStub.firstCall.args[3].exitCallback;
-        lineCallback('Description:');
-        lineCallback('Usage:');
-        lineCallback('aspire [command] [options]');
-        lineCallback('Commands:');
-        exitCallback(1);
+            const lineCallback = spawnStub.firstCall.args[3].lineCallback;
+            const exitCallback = spawnStub.firstCall.args[3].exitCallback;
+            lineCallback('Description:');
+            lineCallback('Usage:');
+            lineCallback('aspire [command] [options]');
+            lineCallback('Commands:');
+            exitCallback(1);
 
-        assert.strictEqual(repository.hasError, true);
-        assert.ok(repository.errorMessage?.includes('Aspire CLI 13.2.0'), repository.errorMessage);
+            assert.strictEqual(repository.hasError, true);
+            assert.ok(repository.errorMessage?.includes('Aspire CLI 13.2.0'), repository.errorMessage);
 
-        repository.dispose();
+            const compatibilityContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.fetchAppHostsCompatibilityError');
+            assert.strictEqual(compatibilityContextCalls.at(-1)?.args[2], true);
+        } finally {
+            repository.dispose();
+            executeCommandStub.restore();
+        }
     });
 
     test('describe watch does not report compatibility error when workspace AppHost returns no data successfully', async () => {
@@ -524,7 +532,7 @@ suite('AppHostDataRepository', () => {
         }
     });
 
-    test('describe watch reports minimum AppHost version when workspace AppHost exits without unsupported command output', async () => {
+    test('describe watch reports generic error when workspace AppHost exits with runtime failure', async () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             if (args[0] === 'ls') {
@@ -537,6 +545,7 @@ suite('AppHostDataRepository', () => {
             name: 'workspace',
             index: 0,
         }]);
+        const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
         const repository = new AppHostDataRepository(terminalProvider);
 
         try {
@@ -558,14 +567,20 @@ suite('AppHostDataRepository', () => {
                 'describe watch did not start');
             const describeCall = spawnStub.getCalls().find(call => (call.args[2] as string[])[0] === 'describe');
             assert.ok(describeCall);
+            const stderrCallback = describeCall.args[3].stderrCallback;
             const exitCallback = describeCall.args[3].exitCallback;
+            stderrCallback('No container runtime detected');
             exitCallback(1);
 
             assert.strictEqual(repository.hasError, true);
-            assert.ok(repository.errorMessage?.includes('Aspire.Hosting 13.2.0'), repository.errorMessage);
-            assert.ok(!repository.errorMessage?.includes('Aspire CLI 13.2.0'), repository.errorMessage);
+            assert.ok(repository.errorMessage?.includes('No container runtime detected'), repository.errorMessage);
+
+            const compatibilityContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.fetchAppHostsCompatibilityError');
+            assert.strictEqual(compatibilityContextCalls.at(-1)?.args[2], false);
         } finally {
             repository.dispose();
+            executeCommandStub.restore();
             workspaceFoldersStub.restore();
         }
     });
@@ -719,6 +734,519 @@ suite('AppHostDataRepository', () => {
         } finally {
             repository.dispose();
             workspaceFoldersStub.restore();
+        }
+    });
+
+    test('ps cli-path failures surface a single fetch prefix in error message', async () => {
+        const spawned: { args: string[]; options: any }[] = [];
+        spawnStub.callsFake((_terminalProvider, _cliPath, args, options) => {
+            spawned.push({ args, options });
+            return new TestChildProcess();
+        });
+        getCliPathStub.onFirstCall().resolves('aspire');
+        getCliPathStub.onSecondCall().rejects(new Error('cli missing'));
+
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.setViewMode('global');
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            const followCall = spawned.find(call => JSON.stringify(call.args) === JSON.stringify(['ps', '--follow', '--format', 'json']));
+            assert.ok(followCall);
+
+            followCall.options.exitCallback(1);
+            await waitForCondition(() => repository.hasError, 'expected ps error after cli path failure');
+
+            assert.ok(
+                repository.errorMessage?.includes('Error fetching running AppHosts: Error: cli missing'),
+                repository.errorMessage
+            );
+            assert.ok(
+                !repository.errorMessage?.includes('Error fetching running AppHosts: Error fetching running AppHosts'),
+                repository.errorMessage
+            );
+        } finally {
+            repository.dispose();
+        }
+    });
+
+    test('stop refresh clears stale apphost', async () => {
+        const clock = sinon.useFakeTimers();
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discoveryService = {
+            discover: async () => [{
+                path: '/workspace/AppHost.csproj',
+                language: 'csharp' as const,
+                status: 'buildable' as const,
+                selected: true,
+            }],
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            dispose: () => { },
+        } as unknown as AppHostDiscoveryService;
+        const spawned: { args: string[]; options: any }[] = [];
+        spawnStub.callsFake((_terminalProvider, _cliPath, args, options) => {
+            spawned.push({ args, options });
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            const initialFollowCall = spawned.find(call => JSON.stringify(call.args) === JSON.stringify(['ps', '--follow', '--format', 'json']));
+            assert.ok(initialFollowCall, 'clears stale workspace apphost');
+            initialFollowCall.options.lineCallback(JSON.stringify({
+                appHostPath: '/workspace/AppHost.csproj',
+                appHostPid: 1234,
+                status: 'running',
+            }));
+            await waitForCondition(() => repository.workspaceAppHost?.appHostPath === '/workspace/AppHost.csproj', 'workspace apphost did not become running');
+
+            repository.requestAppHostStopRefresh('/workspace/AppHost.csproj');
+            clock.tick(400);
+            await waitForMicrotasks();
+
+            const snapshotCall = spawned.find(call => JSON.stringify(call.args) === JSON.stringify(['ps', '--format', 'json']));
+            assert.ok(snapshotCall, 'clears stale workspace apphost');
+            snapshotCall.options.stdoutCallback(JSON.stringify([]));
+            snapshotCall.options.exitCallback(0);
+            clock.tick(1);
+            await waitForMicrotasks();
+
+            assert.strictEqual(repository.workspaceAppHost, undefined, 'clears stale workspace apphost');
+            assert.strictEqual(repository.appHosts.length, 0, 'clears stale workspace apphost');
+            assert.strictEqual(
+                spawned.filter(call => JSON.stringify(call.args) === JSON.stringify(['ps', '--follow', '--format', 'json'])).length,
+                1,
+                'clears stale workspace apphost'
+            );
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+            clock.restore();
+        }
+    });
+
+    test('stop refresh preserves running apphost', async () => {
+        const clock = sinon.useFakeTimers();
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discoveryService = {
+            discover: async () => [{
+                path: '/workspace/AppHost.csproj',
+                language: 'csharp' as const,
+                status: 'buildable' as const,
+                selected: true,
+            }],
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            dispose: () => { },
+        } as unknown as AppHostDiscoveryService;
+        const spawned: { args: string[]; options: any }[] = [];
+        spawnStub.callsFake((_terminalProvider, _cliPath, args, options) => {
+            spawned.push({ args, options });
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            const initialFollowCall = spawned.find(call => JSON.stringify(call.args) === JSON.stringify(['ps', '--follow', '--format', 'json']));
+            assert.ok(initialFollowCall, 'preserves running apphost');
+            initialFollowCall.options.lineCallback(JSON.stringify({
+                appHostPath: '/workspace/AppHost.csproj',
+                appHostPid: 1234,
+                status: 'running',
+            }));
+            await waitForCondition(() => repository.workspaceAppHost?.appHostPath === '/workspace/AppHost.csproj', 'workspace apphost did not become running');
+
+            repository.requestAppHostStopRefresh('/workspace/AppHost.csproj');
+            clock.tick(400);
+            await waitForMicrotasks();
+
+            const snapshotCall = spawned.find(call => JSON.stringify(call.args) === JSON.stringify(['ps', '--format', 'json']));
+            assert.ok(snapshotCall, 'preserves running apphost');
+            snapshotCall.options.stdoutCallback(JSON.stringify([{
+                appHostPath: '/workspace/AppHost.csproj',
+                appHostPid: 1234,
+                status: 'running',
+            }]));
+            snapshotCall.options.exitCallback(0);
+            clock.tick(1);
+            await waitForMicrotasks();
+
+            assert.strictEqual(repository.workspaceAppHost?.appHostPath, '/workspace/AppHost.csproj', 'preserves running apphost');
+            assert.strictEqual(repository.appHosts.length, 1, 'preserves running apphost');
+            assert.strictEqual(
+                spawned.filter(call => JSON.stringify(call.args) === JSON.stringify(['ps', '--follow', '--format', 'json'])).length,
+                1,
+                'preserves running apphost'
+            );
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+            clock.restore();
+        }
+    });
+
+    test('stop refresh retries while apphost remains running', async () => {
+        const clock = sinon.useFakeTimers();
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discoveryService = {
+            discover: async () => [{
+                path: '/workspace/AppHost.csproj',
+                language: 'csharp' as const,
+                status: 'buildable' as const,
+                selected: true,
+            }],
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            dispose: () => { },
+        } as unknown as AppHostDiscoveryService;
+        const spawned: { args: string[]; options: any }[] = [];
+        spawnStub.callsFake((_terminalProvider, _cliPath, args, options) => {
+            spawned.push({ args, options });
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            const initialFollowCall = spawned.find(call => JSON.stringify(call.args) === JSON.stringify(['ps', '--follow', '--format', 'json']));
+            assert.ok(initialFollowCall);
+            initialFollowCall.options.lineCallback(JSON.stringify({
+                appHostPath: '/workspace/AppHost.csproj',
+                appHostPid: 1234,
+                status: 'running',
+            }));
+            await waitForCondition(() => repository.workspaceAppHost?.appHostPath === '/workspace/AppHost.csproj', 'workspace apphost did not become running');
+
+            repository.requestAppHostStopRefresh('/workspace/AppHost.csproj');
+            await clock.tickAsync(400);
+            await waitForMicrotasks();
+
+            const snapshotArgs = JSON.stringify(['ps', '--format', 'json']);
+            const firstSnapshot = spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).at(-1);
+            assert.ok(firstSnapshot);
+            firstSnapshot.options.stdoutCallback(JSON.stringify([{
+                appHostPath: '/workspace/AppHost.csproj',
+                appHostPid: 1234,
+                status: 'running',
+            }]));
+            firstSnapshot.options.exitCallback(0);
+            await waitForMicrotasks();
+
+            await clock.tickAsync(400);
+            await waitForMicrotasks();
+
+            assert.strictEqual(
+                spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).length,
+                2,
+                'expected retry snapshot while apphost is still running'
+            );
+
+            const secondSnapshot = spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).at(-1);
+            assert.ok(secondSnapshot);
+            secondSnapshot.options.stdoutCallback(JSON.stringify([]));
+            secondSnapshot.options.exitCallback(0);
+            await waitForMicrotasks();
+
+            await clock.tickAsync(400);
+            await waitForMicrotasks();
+
+            assert.strictEqual(
+                spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).length,
+                2,
+                'expected stop refresh to stop retrying after apphost disappears'
+            );
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+            clock.restore();
+        }
+    });
+
+    test('stop refresh retries when debug session reports workspace folder path', async () => {
+        const clock = sinon.useFakeTimers();
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceAppHostPath = '/workspace/apps/Store/AppHost.csproj';
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discoveryService = {
+            discover: async () => [{
+                path: workspaceAppHostPath,
+                language: 'csharp' as const,
+                status: 'buildable' as const,
+                selected: true,
+            }],
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            dispose: () => { },
+        } as unknown as AppHostDiscoveryService;
+        const spawned: { args: string[]; options: any }[] = [];
+        spawnStub.callsFake((_terminalProvider, _cliPath, args, options) => {
+            spawned.push({ args, options });
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            const initialFollowCall = spawned.find(call => JSON.stringify(call.args) === JSON.stringify(['ps', '--follow', '--format', 'json']));
+            assert.ok(initialFollowCall);
+            initialFollowCall.options.lineCallback(JSON.stringify({
+                appHostPath: workspaceAppHostPath,
+                appHostPid: 1234,
+                status: 'running',
+            }));
+            await waitForCondition(() => repository.workspaceAppHost?.appHostPath === workspaceAppHostPath, 'workspace apphost did not become running');
+
+            repository.requestAppHostStopRefresh('/workspace');
+            await clock.tickAsync(400);
+            await waitForMicrotasks();
+
+            const snapshotArgs = JSON.stringify(['ps', '--format', 'json']);
+            const firstSnapshot = spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).at(-1);
+            assert.ok(firstSnapshot);
+            firstSnapshot.options.stdoutCallback(JSON.stringify([{
+                appHostPath: workspaceAppHostPath,
+                appHostPid: 1234,
+                status: 'running',
+            }]));
+            firstSnapshot.options.exitCallback(0);
+            await waitForMicrotasks();
+
+            await clock.tickAsync(400);
+            await waitForMicrotasks();
+
+            assert.strictEqual(
+                spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).length,
+                2,
+                'expected retry snapshot while the folder-matched apphost is still running'
+            );
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+            clock.restore();
+        }
+    });
+
+    test('stop refresh clears snapshot-running AppHost without restarting follow', async () => {
+        const clock = sinon.useFakeTimers();
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discoveryService = {
+            discover: async () => [{
+                path: '/workspace/AppHost.csproj',
+                language: 'csharp' as const,
+                status: 'buildable' as const,
+                selected: true,
+            }],
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            dispose: () => { },
+        } as unknown as AppHostDiscoveryService;
+        const spawned: { args: string[]; options: any }[] = [];
+        spawnStub.callsFake((_terminalProvider, _cliPath, args, options) => {
+            spawned.push({ args, options });
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            const followArgs = JSON.stringify(['ps', '--follow', '--format', 'json']);
+            const snapshotArgs = JSON.stringify(['ps', '--format', 'json']);
+
+            const initialFollowCall = spawned.find(call => JSON.stringify(call.args) === followArgs);
+            assert.ok(initialFollowCall, 'expected initial ps --follow call');
+            initialFollowCall.options.lineCallback(JSON.stringify({
+                appHostPath: '/workspace/AppHost.csproj',
+                appHostPid: 1234,
+                status: 'running',
+            }));
+            await waitForCondition(() => repository.workspaceAppHost?.appHostPath === '/workspace/AppHost.csproj', 'workspace apphost did not become running');
+
+            repository.requestAppHostStopRefresh('/workspace/AppHost.csproj');
+            clock.tick(400);
+            await waitForMicrotasks();
+
+            const snapshotCall = spawned.find(call => JSON.stringify(call.args) === snapshotArgs);
+            assert.ok(snapshotCall, 'expected authoritative snapshot call');
+            snapshotCall.options.stdoutCallback('[]');
+            snapshotCall.options.exitCallback(0);
+            await waitForMicrotasks();
+
+            assert.strictEqual(
+                spawned.filter(call => JSON.stringify(call.args) === followArgs).length,
+                1,
+                'expected stop refresh to keep existing follow session'
+            );
+
+            assert.strictEqual(repository.workspaceAppHost, undefined);
+            assert.strictEqual(repository.appHosts.length, 0);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+            clock.restore();
+        }
+    });
+
+    test('stop refresh schedules independent snapshots per apphost path', async () => {
+        const clock = sinon.useFakeTimers();
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discoveryService = {
+            discover: async () => [{
+                path: '/workspace/AppHost.csproj',
+                language: 'csharp' as const,
+                status: 'buildable' as const,
+                selected: true,
+            }],
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            dispose: () => { },
+        } as unknown as AppHostDiscoveryService;
+        const spawned: { args: string[]; options: any }[] = [];
+        spawnStub.callsFake((_terminalProvider, _cliPath, args, options) => {
+            spawned.push({ args, options });
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            const snapshotArgs = JSON.stringify(['ps', '--format', 'json']);
+            repository.requestAppHostStopRefresh('/workspace/Store/AppHost.csproj');
+            repository.requestAppHostStopRefresh('/workspace/Billing/AppHost.csproj');
+            await clock.tickAsync(400);
+            await waitForMicrotasks();
+
+            const firstSnapshot = spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).at(-1);
+            assert.ok(firstSnapshot, 'expected first stop refresh snapshot');
+            firstSnapshot.options.stdoutCallback('[]');
+            firstSnapshot.options.exitCallback(0);
+            await waitForMicrotasks();
+
+            assert.strictEqual(
+                spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).length,
+                2,
+                'expected one snapshot per apphost stop refresh request'
+            );
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+            clock.restore();
+        }
+    });
+
+    test('stop refresh keeps interval polling active when ps follow is unsupported', async () => {
+        const clock = sinon.useFakeTimers();
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discoveryService = {
+            discover: async () => [{
+                path: '/workspace/AppHost.csproj',
+                language: 'csharp' as const,
+                status: 'buildable' as const,
+                selected: true,
+            }],
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            dispose: () => { },
+        } as unknown as AppHostDiscoveryService;
+        const spawned: { args: string[]; options: any }[] = [];
+        spawnStub.callsFake((_terminalProvider, _cliPath, args, options) => {
+            spawned.push({ args, options });
+            return new TestChildProcess();
+        });
+
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            const initialFollowCall = spawned.find(call => JSON.stringify(call.args) === JSON.stringify(['ps', '--follow', '--format', 'json']));
+            assert.ok(initialFollowCall);
+
+            initialFollowCall.options.errorCallback(new Error('spawn ENOENT'));
+            await waitForMicrotasks();
+
+            const snapshotArgs = JSON.stringify(['ps', '--format', 'json']);
+            const followArgs = JSON.stringify(['ps', '--follow', '--format', 'json']);
+            const snapshotCallsAfterFallback = spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).length;
+            assert.strictEqual(snapshotCallsAfterFallback, 1);
+            const fallbackSnapshot = spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).at(-1);
+            assert.ok(fallbackSnapshot);
+            fallbackSnapshot.options.stdoutCallback('[]');
+            fallbackSnapshot.options.exitCallback(0);
+            await waitForMicrotasks();
+
+            repository.requestAppHostStopRefresh('/workspace/AppHost.csproj');
+            await clock.tickAsync(400);
+            await waitForMicrotasks();
+
+            assert.strictEqual(spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).length, snapshotCallsAfterFallback + 1);
+            const postStopSnapshot = spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).at(-1);
+            assert.ok(postStopSnapshot);
+            postStopSnapshot.options.stdoutCallback('[]');
+            postStopSnapshot.options.exitCallback(0);
+            await waitForMicrotasks();
+            assert.strictEqual(spawned.filter(call => JSON.stringify(call.args) === followArgs).length, 1);
+
+            await clock.tickAsync(30000);
+            await waitForMicrotasks();
+
+            assert.strictEqual(spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).length, snapshotCallsAfterFallback + 2);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+            clock.restore();
         }
     });
 
@@ -1835,6 +2363,10 @@ suite('AppHostDataRepository', () => {
             const errorContextCalls = executeCommandStub.getCalls().filter(call =>
                 call.args[0] === 'setContext' && call.args[1] === 'aspire.fetchAppHostsError');
             assert.strictEqual(errorContextCalls.at(-1)?.args[2], true);
+
+            const compatibilityContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.fetchAppHostsCompatibilityError');
+            assert.strictEqual(compatibilityContextCalls.at(-1)?.args[2], false);
         } finally {
             repository.dispose();
             executeCommandStub.restore();
@@ -1880,6 +2412,10 @@ suite('AppHostDataRepository', () => {
             const errorContextCalls = executeCommandStub.getCalls().filter(call =>
                 call.args[0] === 'setContext' && call.args[1] === 'aspire.fetchAppHostsError');
             assert.strictEqual(errorContextCalls.at(-1)?.args[2], true);
+
+            const compatibilityContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.fetchAppHostsCompatibilityError');
+            assert.strictEqual(compatibilityContextCalls.at(-1)?.args[2], false);
         } finally {
             repository.dispose();
             executeCommandStub.restore();
@@ -1914,6 +2450,10 @@ suite('AppHostDataRepository', () => {
             const errorContextCalls = executeCommandStub.getCalls().filter(call =>
                 call.args[0] === 'setContext' && call.args[1] === 'aspire.fetchAppHostsError');
             assert.strictEqual(errorContextCalls.at(-1)?.args[2], true);
+
+            const compatibilityContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.fetchAppHostsCompatibilityError');
+            assert.strictEqual(compatibilityContextCalls.at(-1)?.args[2], false);
         } finally {
             repository.dispose();
             executeCommandStub.restore();
@@ -2718,19 +3258,23 @@ suite('AppHostDataRepository global polling', () => {
 
             assert.strictEqual(getNoRunningAppHostsContext(), true);
 
-            const latestPsLineCallback = spawnStub.getCalls()
-                .filter(call => call.args[2][0] === 'ps')
-                .at(-1)?.args[3].lineCallback;
-            assert.ok(latestPsLineCallback);
-            latestPsLineCallback(JSON.stringify({
+            const latestSnapshotCall = spawnStub.getCalls()
+                .filter(call =>
+                    call.args[2][0] === 'ps'
+                    && call.args[2][1] === '--format'
+                    && call.args[2][2] === 'json')
+                .at(-1);
+            assert.ok(latestSnapshotCall);
+            latestSnapshotCall.args[3].stdoutCallback(JSON.stringify([{
                 appHostPath: '/workspace/AppHost.csproj',
                 appHostPid: 1234,
                 status: 'running',
                 dashboardUrl: 'https://localhost:17193/login?t=061212',
-            }));
-            await waitForMicrotasks();
-
-            assert.strictEqual(getNoRunningAppHostsContext(), false);
+            }]));
+            latestSnapshotCall.args[3].exitCallback(0);
+            await waitForCondition(
+                () => getNoRunningAppHostsContext() === false,
+                'running AppHost with dashboard URL did not restore dashboard command context');
         } finally {
             repository.dispose();
             executeCommandStub.restore();

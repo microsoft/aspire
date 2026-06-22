@@ -8,6 +8,9 @@ using Aspire.Hosting.Maui.Annotations;
 using Aspire.Hosting.Maui.Utilities;
 using Aspire.Hosting.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Aspire.Hosting.Tests;
 
@@ -23,33 +26,59 @@ public class MauiPlatformExtensionsTests
         new PlatformTestConfig("Windows", "Windows", "windows", "mauiapp-windows", "net10.0-windows10.0.19041.0",
             (maui) => maui.AddWindowsDevice(),
             (maui, name) => maui.AddWindowsDevice(name),
-            typeof(MauiWindowsPlatformResource)),
-        
+            typeof(MauiWindowsPlatformResource),
+            "device",
+            null,
+            null,
+            null),
+
         new PlatformTestConfig("MacCatalyst", "Mac Catalyst", "maccatalyst", "mauiapp-maccatalyst", "net10.0-maccatalyst",
             (maui) => maui.AddMacCatalystDevice(),
             (maui, name) => maui.AddMacCatalystDevice(name),
-            typeof(MauiMacCatalystPlatformResource)),
-        
+            typeof(MauiMacCatalystPlatformResource),
+            "device",
+            null,
+            null,
+            new Dictionary<string, string> { ["OpenArguments"] = "-W" }),
+
         new PlatformTestConfig("AndroidDevice", "Android", "android", "mauiapp-android-device", "net10.0-android",
             (maui) => maui.AddAndroidDevice(),
             (maui, name) => maui.AddAndroidDevice(name),
-            typeof(MauiAndroidDeviceResource)),
-        
+            typeof(MauiAndroidDeviceResource),
+            "device",
+            null,
+            null,
+            new Dictionary<string, string> { ["AdbTarget"] = "-d" }),
+
         new PlatformTestConfig("AndroidEmulator", "Android", "android", "mauiapp-android-emulator", "net10.0-android",
             (maui) => maui.AddAndroidEmulator(),
             (maui, name) => maui.AddAndroidEmulator(name),
-            typeof(MauiAndroidEmulatorResource)),
-        
+            typeof(MauiAndroidEmulatorResource),
+            "emulator",
+            null,
+            null,
+            new Dictionary<string, string> { ["AdbTarget"] = "-e" }),
+
         new PlatformTestConfig("iOSDevice", "iOS", "ios", "mauiapp-ios-device", "net10.0-ios",
             (maui) => maui.AddiOSDevice(),
             (maui, name) => maui.AddiOSDevice(name),
-            typeof(MauiiOSDeviceResource)),
-        
+            typeof(MauiiOSDeviceResource),
+            "device",
+            null,
+            "ios-arm64",
+            new Dictionary<string, string> { ["RuntimeIdentifier"] = "ios-arm64" }),
+
         new PlatformTestConfig("iOSSimulator", "iOS", "ios", "mauiapp-ios-simulator", "net10.0-ios",
             (maui) => maui.AddiOSSimulator(),
             (maui, name) => maui.AddiOSSimulator(name),
-            typeof(MauiiOSSimulatorResource))
+            typeof(MauiiOSSimulatorResource),
+            "simulator",
+            null,
+            null,
+            null)
     };
+
+    public static TheoryData<PlatformTestConfig> MauiPlatformsWithIdeLaunchConfiguration => AllPlatforms;
 
     [Theory]
     [MemberData(nameof(AllPlatforms))]
@@ -125,6 +154,46 @@ public class MauiPlatformExtensionsTests
             var exception = Assert.Throws<DistributedApplicationException>(() =>
                 config.AddPlatformWithCustomName(maui, name));
             Assert.Contains("already exists", exception.Message);
+        }
+        finally
+        {
+            MauiTestHelper.CleanupTempFile(tempFile);
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(MauiPlatformsWithIdeLaunchConfiguration))]
+    public void AddMauiPlatform_EmitsMauiIdeLaunchConfiguration(PlatformTestConfig config)
+    {
+        var projectContent = MauiTestHelper.CreateProjectContent(config.RequiredTfm);
+        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
+
+        try
+        {
+            var appBuilder = DistributedApplication.CreateBuilder();
+            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+
+            var platform = config.AddPlatformWithDefaultName(maui);
+
+            var debugSupport = Assert.Single(platform.Resource.Annotations, annotation => annotation.GetType().FullName == "Aspire.Hosting.ApplicationModel.SupportsDebuggingAnnotation");
+            Assert.Equal("maui", GetPropertyValue(debugSupport, "LaunchConfigurationType"));
+
+            var exe = CreateExecutableForDebugTest();
+            var annotator = Assert.IsAssignableFrom<Delegate>(GetPropertyValue(debugSupport, "LaunchConfigurationAnnotator"));
+            annotator.DynamicInvoke(exe, "Debug");
+
+            var launchConfigurations = GetLaunchConfigurations<SerializedMauiLaunchConfiguration>(exe);
+
+            var launchConfiguration = Assert.Single(launchConfigurations);
+            Assert.Equal("maui", launchConfiguration.Type);
+            Assert.Equal("Debug", launchConfiguration.Mode);
+            Assert.Equal(tempFile, launchConfiguration.ProjectPath);
+            Assert.Equal(config.RequiredTfm, launchConfiguration.TargetFramework);
+            Assert.Equal(config.PlatformIdentifier, launchConfiguration.Platform);
+            Assert.Equal(config.ExpectedTargetKind, launchConfiguration.TargetKind);
+            Assert.Equal(config.ExpectedDevice, launchConfiguration.Device);
+            Assert.Equal(config.ExpectedRuntimeIdentifier, launchConfiguration.RuntimeIdentifier);
+            Assert.Equal(config.ExpectedMsBuildProperties, launchConfiguration.MsBuildProperties);
         }
         finally
         {
@@ -338,6 +407,9 @@ public class MauiPlatformExtensionsTests
             Assert.NotNull(device);
             Assert.Equal("my-device", device.Resource.Name);
             Assert.IsType<MauiAndroidDeviceResource>(device.Resource);
+            var launchConfiguration = GetSingleMauiLaunchConfiguration(device.Resource);
+            Assert.Equal("abc12345", launchConfiguration.Device);
+            Assert.Equal(new Dictionary<string, string> { ["AdbTarget"] = "-s abc12345" }, launchConfiguration.MsBuildProperties);
         }
         finally
         {
@@ -364,6 +436,9 @@ public class MauiPlatformExtensionsTests
             Assert.NotNull(emulator);
             Assert.Equal("my-emulator", emulator.Resource.Name);
             Assert.IsType<MauiAndroidEmulatorResource>(emulator.Resource);
+            var launchConfiguration = GetSingleMauiLaunchConfiguration(emulator.Resource);
+            Assert.Equal("Pixel_5_API_33", launchConfiguration.Device);
+            Assert.Equal(new Dictionary<string, string> { ["AdbTarget"] = "-s Pixel_5_API_33" }, launchConfiguration.MsBuildProperties);
         }
         finally
         {
@@ -390,6 +465,14 @@ public class MauiPlatformExtensionsTests
             Assert.NotNull(device);
             Assert.Equal("my-device", device.Resource.Name);
             Assert.IsType<MauiiOSDeviceResource>(device.Resource);
+            var launchConfiguration = GetSingleMauiLaunchConfiguration(device.Resource);
+            Assert.Equal("00008030-001234567890123A", launchConfiguration.Device);
+            Assert.Equal("ios-arm64", launchConfiguration.RuntimeIdentifier);
+            Assert.Equal(new Dictionary<string, string>
+            {
+                ["RuntimeIdentifier"] = "ios-arm64",
+                ["_DeviceName"] = "00008030-001234567890123A"
+            }, launchConfiguration.MsBuildProperties);
         }
         finally
         {
@@ -416,6 +499,46 @@ public class MauiPlatformExtensionsTests
             Assert.NotNull(simulator);
             Assert.Equal("my-simulator", simulator.Resource.Name);
             Assert.IsType<MauiiOSSimulatorResource>(simulator.Resource);
+            var launchConfiguration = GetSingleMauiLaunchConfiguration(simulator.Resource);
+            Assert.Equal("E25BBE37-69BA-4720-B6FD-D54C97791E79", launchConfiguration.Device);
+            Assert.Equal(new Dictionary<string, string>
+            {
+                ["_DeviceName"] = ":v2:udid=E25BBE37-69BA-4720-B6FD-D54C97791E79"
+            }, launchConfiguration.MsBuildProperties);
+        }
+        finally
+        {
+            MauiTestHelper.CleanupTempFile(tempFile);
+        }
+    }
+
+    [Fact]
+    public async Task AddiOSSimulator_OptsOutOfProjectIdeLaunchAndKeepsSdkRunArgs()
+    {
+        var projectContent = MauiTestHelper.CreateProjectContent("net10.0-ios");
+        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
+
+        try
+        {
+            var appBuilder = DistributedApplication.CreateBuilder();
+            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+            var simulator = maui.AddiOSSimulator("my-simulator", "E25BBE37-69BA-4720-B6FD-D54C97791E79");
+
+            var debugSupport = Assert.Single(simulator.Resource.Annotations, annotation => annotation.GetType().FullName == "Aspire.Hosting.ApplicationModel.SupportsDebuggingAnnotation");
+            Assert.Equal("maui", GetPropertyValue(debugSupport, "LaunchConfigurationType"));
+
+            var args = new List<object>();
+            var argsContext = new CommandLineArgsCallbackContext(args, simulator.Resource);
+            foreach (var argsAnnotation in simulator.Resource.Annotations.OfType<CommandLineArgsCallbackAnnotation>())
+            {
+                await argsAnnotation.Callback(argsContext);
+            }
+
+            Assert.Collection(args,
+                arg => Assert.Equal("run", Assert.IsType<string>(arg)),
+                arg => Assert.Equal("-f", Assert.IsType<string>(arg)),
+                arg => Assert.Equal("net10.0-ios", Assert.IsType<string>(arg)),
+                arg => Assert.Equal("-p:_DeviceName=:v2:udid=E25BBE37-69BA-4720-B6FD-D54C97791E79", Assert.IsType<string>(arg)));
         }
         finally
         {
@@ -682,6 +805,52 @@ public class MauiPlatformExtensionsTests
             """;
     }
 
+    private static object? GetPropertyValue(object target, string propertyName)
+    {
+        var property = target.GetType().GetProperty(propertyName);
+        Assert.NotNull(property);
+
+        return property.GetValue(target);
+    }
+
+    private static object CreateExecutableForDebugTest()
+    {
+        var executableType = typeof(DistributedApplication).Assembly.GetType("Aspire.Hosting.Dcp.Model.Executable");
+        Assert.NotNull(executableType);
+
+        var createMethod = executableType.GetMethod("Create", BindingFlags.Public | BindingFlags.Static);
+        Assert.NotNull(createMethod);
+
+        return createMethod.Invoke(null, ["test", "dotnet"])!;
+    }
+
+    private static List<T> GetLaunchConfigurations<T>(object executable)
+    {
+        var metadata = GetPropertyValue(executable, "Metadata");
+        Assert.NotNull(metadata);
+
+        var annotations = Assert.IsAssignableFrom<IDictionary<string, string>>(
+            GetPropertyValue(metadata, "Annotations"));
+
+        Assert.True(annotations.TryGetValue("executable.usvc-dev.developer.microsoft.com/launch-configurations", out var json));
+        Assert.False(string.IsNullOrWhiteSpace(json));
+
+        var launchConfigurations = JsonSerializer.Deserialize<List<T>>(json);
+        Assert.NotNull(launchConfigurations);
+
+        return launchConfigurations;
+    }
+
+    private static SerializedMauiLaunchConfiguration GetSingleMauiLaunchConfiguration(IResource resource)
+    {
+        var debugSupport = Assert.Single(resource.Annotations, annotation => annotation.GetType().FullName == "Aspire.Hosting.ApplicationModel.SupportsDebuggingAnnotation");
+        var executable = CreateExecutableForDebugTest();
+        var annotator = Assert.IsAssignableFrom<Delegate>(GetPropertyValue(debugSupport, "LaunchConfigurationAnnotator"));
+        annotator.DynamicInvoke(executable, "Debug");
+
+        return Assert.Single(GetLaunchConfigurations<SerializedMauiLaunchConfiguration>(executable));
+    }
+
     // Configuration class for platform-specific test data
     public class PlatformTestConfig
     {
@@ -694,6 +863,10 @@ public class MauiPlatformExtensionsTests
         public Func<IResourceBuilder<MauiProjectResource>, string, IResourceBuilder<IResource>> AddPlatformWithCustomName { get; }
         public Action<IResourceBuilder<IResource>> ApplyWithOtlpDevTunnel { get; }
         public Type ExpectedResourceType { get; }
+        public string ExpectedTargetKind { get; }
+        public string? ExpectedDevice { get; }
+        public string? ExpectedRuntimeIdentifier { get; }
+        public Dictionary<string, string>? ExpectedMsBuildProperties { get; }
 
         public PlatformTestConfig(
             string platformName,
@@ -703,7 +876,11 @@ public class MauiPlatformExtensionsTests
             string requiredTfm,
             Func<IResourceBuilder<MauiProjectResource>, IResourceBuilder<IResource>> addDefault,
             Func<IResourceBuilder<MauiProjectResource>, string, IResourceBuilder<IResource>> addCustom,
-            Type expectedResourceType)
+            Type expectedResourceType,
+            string expectedTargetKind,
+            string? expectedDevice,
+            string? expectedRuntimeIdentifier,
+            Dictionary<string, string>? expectedMsBuildProperties)
         {
             PlatformName = platformName;
             DisplayName = displayName;
@@ -713,7 +890,11 @@ public class MauiPlatformExtensionsTests
             AddPlatformWithDefaultName = addDefault;
             AddPlatformWithCustomName = addCustom;
             ExpectedResourceType = expectedResourceType;
-            
+            ExpectedTargetKind = expectedTargetKind;
+            ExpectedDevice = expectedDevice;
+            ExpectedRuntimeIdentifier = expectedRuntimeIdentifier;
+            ExpectedMsBuildProperties = expectedMsBuildProperties;
+
             // Set up WithOtlpDevTunnel based on the expected resource type
             ApplyWithOtlpDevTunnel = expectedResourceType.Name switch
             {
@@ -728,5 +909,35 @@ public class MauiPlatformExtensionsTests
         }
 
         public override string ToString() => PlatformName;
+    }
+
+    private sealed class SerializedMauiLaunchConfiguration
+    {
+        [JsonPropertyName("type")]
+        public string Type { get; set; } = string.Empty;
+
+        [JsonPropertyName("mode")]
+        public string Mode { get; set; } = string.Empty;
+
+        [JsonPropertyName("project_path")]
+        public string ProjectPath { get; set; } = string.Empty;
+
+        [JsonPropertyName("target_framework")]
+        public string TargetFramework { get; set; } = string.Empty;
+
+        [JsonPropertyName("platform")]
+        public string Platform { get; set; } = string.Empty;
+
+        [JsonPropertyName("target_kind")]
+        public string TargetKind { get; set; } = string.Empty;
+
+        [JsonPropertyName("device")]
+        public string? Device { get; set; }
+
+        [JsonPropertyName("runtime_identifier")]
+        public string? RuntimeIdentifier { get; set; }
+
+        [JsonPropertyName("msbuild_properties")]
+        public Dictionary<string, string>? MsBuildProperties { get; set; }
     }
 }
