@@ -57,13 +57,19 @@ Match the integration's existing root namespace. If a type lives in a different 
 
 ## Step 2 — Mark the entire public + exported API `[Obsolete]`
 
-Add `[Obsolete(<Name>Deprecation.Message)]` to **every** externally reachable member:
+Add `[Obsolete(<Name>Deprecation.Message)]` to each public type and each extension method the integration exposes:
 
 - the resource class(es) (`public class <Name>Resource : Resource, ...`),
-- any public descriptor/option/enum-wrapper types the integration exposes,
+- any public descriptor/option/enum-wrapper types the integration exposes (the **type**, not each of its entries — see scoping below),
 - **all** extension methods in `*Extensions.cs`, including `public` and `internal` ones.
 
-Important details:
+Scope it correctly — mark each public **type and extension method once**, and do **not** over-apply:
+
+- **Marking a type `[Obsolete]` already covers all of its members.** Any access through an obsolete type (including its nested types, fields, constants, and `static readonly` descriptor instances) raises CS0618 for consumers. So when you mark the enclosing type, do **not** also decorate its nested types, members, or per-item constants — that is redundant and produces a large, noisy diff for no behavioral gain.
+- **Do not edit generated files** (`*.Generated.cs`, or any file produced by tooling) to add `[Obsolete]`. Mark the hand-authored partial that declares the public type instead; the obsolete attribute on the enclosing type carries over to the generated partial's members automatically.
+- **Never overwrite a pre-existing `[Obsolete(...)]` attribute that carries a more specific message.** Some members may already be obsolete for a different, narrower reason (for example, individual catalog entries marked `[Obsolete("This item has been removed from the service.")]`). Leave those messages intact — only **add** `[Obsolete(<Name>Deprecation.Message)]` to members that are not already obsolete.
+
+Other important details:
 
 - **Keep `[AspireExport]` / `[AspireExportIgnore]` attributes in place.** `[Obsolete]` does **not** remove a member from polyglot code generation. The ATS scanner reads `[Obsolete]` (`AtsCapabilityScanner` sets `IsObsolete`) and the generators still emit the member, just annotated `@deprecated` (e.g. `AtsTypeScriptCodeGenerator` emits a `@deprecated` JSDoc tag). Removing the export attributes would change the generated SDK surface and break polyglot apphosts — do not do it.
 - **Place `[Obsolete(...)]` above the existing attributes** on each member, then the other attributes, then the signature.
@@ -148,7 +154,7 @@ Prefer per-project `NoWarn` over editing shared props. Do not suppress CS0618 gl
 The CLI tests that assert the deny-list behavior must include the newly deprecated id so they keep covering it. Update both:
 
 - `tests/Aspire.Cli.Tests/NuGet/NuGetPackageCacheTests.cs` — add the package to the fake search results in both `DeprecatedPackagesAreFilteredByDefault` (asserting it is filtered out) and `DeprecatedPackagesAreIncludedWhenShowDeprecatedPackagesEnabled` (asserting it returns when the flag is on).
-- `tests/Aspire.Cli.Tests/Packaging/PackageChannelTests.cs` — add a dropped `.nupkg` for the package in the pinned-local-source test that exercises `DeprecatedPackages`.
+- `tests/Aspire.Cli.Tests/Packaging/PackageChannelTests.cs` — add a dropped `.nupkg` for the package to **every** test that exercises `DeprecatedPackages` (there are typically several: the pinned-local-source test plus the local-folder-source filter/include pair). Search the file for the existing deprecated ids (for example `Aspire.Hosting.Dapr`) and mirror each occurrence so coverage stays complete.
 
 Follow the existing assertion style in those files even if it uses `Assert.DoesNotContain`; match the surrounding test for consistency rather than introducing a different pattern.
 
