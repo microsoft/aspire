@@ -29,7 +29,25 @@ public class MigrateCommandTests(ITestOutputHelper outputHelper)
         await builder.build();
         """;
 
-    private static async Task WriteLegacyLayoutAsync(DirectoryInfo root)
+    private const string LegacyEslintConfigContent =
+        """
+        export default [
+          {
+            files: ['apphost.ts']
+          }
+        ];
+        """;
+
+    private const string ExpectedModernEslintConfigContent =
+        """
+        export default [
+          {
+            files: ['apphost.mts']
+          }
+        ];
+        """;
+
+    private static async Task WriteLegacyLayoutAsync(DirectoryInfo root, string? tsConfigContent = null)
     {
         await File.WriteAllTextAsync(Path.Combine(root.FullName, "apphost.ts"), LegacyAppHostContent);
         await File.WriteAllTextAsync(
@@ -43,14 +61,45 @@ public class MigrateCommandTests(ITestOutputHelper outputHelper)
             """);
         await File.WriteAllTextAsync(
             Path.Combine(root.FullName, "tsconfig.apphost.json"),
+            tsConfigContent ??
             """
             {
-              "include": [ "apphost.ts", ".modules/aspire.ts", ".modules/base.ts", ".modules/transport.ts" ]
+              "include": [ "apphost.ts", ".modules/aspire.ts", ".modules/base.ts", ".modules/transport.ts", "src/**/*.ts", "lib/foo.ts" ]
             }
             """);
+        await File.WriteAllTextAsync(
+            Path.Combine(root.FullName, "package.json"),
+            """
+            {
+              "type": "module",
+              "scripts": {
+                "aspire:build": "tsc -p tsconfig.apphost.json",
+                "aspire:lint": "eslint apphost.ts"
+              }
+            }
+            """);
+        await File.WriteAllTextAsync(Path.Combine(root.FullName, "eslint.config.mjs"), LegacyEslintConfigContent);
 
         var modulesDir = Directory.CreateDirectory(Path.Combine(root.FullName, ".modules"));
         await File.WriteAllTextAsync(Path.Combine(modulesDir.FullName, "aspire.ts"), "// generated");
+    }
+
+    private static async Task AssertMigratedMetadataAsync(DirectoryInfo root, string[] expectedIncludes)
+    {
+        var config = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(root.FullName, "aspire.config.json")))!;
+        Assert.Equal("apphost.mts", config["appHost"]!["path"]!.GetValue<string>());
+
+        var tsconfig = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(root.FullName, "tsconfig.apphost.json")))!;
+        var includes = tsconfig["include"]!.AsArray().Select(n => n!.GetValue<string>()).ToArray();
+        Assert.Equal(expectedIncludes, includes);
+
+        var packageJson = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(root.FullName, "package.json")))!;
+        var scripts = packageJson["scripts"]!;
+        Assert.Equal("tsc -p tsconfig.apphost.json", scripts["aspire:build"]!.GetValue<string>());
+        Assert.Equal("eslint apphost.mts", scripts["aspire:lint"]!.GetValue<string>());
+
+        var eslintConfig = await File.ReadAllTextAsync(Path.Combine(root.FullName, "eslint.config.mjs"));
+        Assert.Equal(ExpectedModernEslintConfigContent, eslintConfig);
     }
 
     private static ServiceCollection CreateServices(TemporaryWorkspace workspace, ITestOutputHelper outputHelper)
@@ -85,14 +134,41 @@ public class MigrateCommandTests(ITestOutputHelper outputHelper)
         var modernContent = await File.ReadAllTextAsync(Path.Combine(root.FullName, "apphost.mts"));
         Assert.Equal(ExpectedModernAppHostContent, modernContent);
 
-        var config = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(root.FullName, "aspire.config.json")))!;
-        Assert.Equal("apphost.mts", config["appHost"]!["path"]!.GetValue<string>());
+        await AssertMigratedMetadataAsync(
+            root,
+            new[] { "apphost.mts", ".aspire/modules/aspire.mts", ".aspire/modules/base.mts", ".aspire/modules/transport.mts", "src/**/*.ts", "lib/foo.ts" });
+    }
 
-        var tsconfig = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(root.FullName, "tsconfig.apphost.json")))!;
-        var includes = tsconfig["include"]!.AsArray().Select(n => n!.GetValue<string>()).ToArray();
-        Assert.Equal(
-            new[] { "apphost.mts", ".aspire/modules/aspire.mts", ".aspire/modules/base.mts", ".aspire/modules/transport.mts" },
-            includes);
+    [Fact]
+    public async Task MigrateCommand_WithJsoncTsConfig_RewritesIncludes()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.WorkspaceRoot;
+        await WriteLegacyLayoutAsync(
+            root,
+            """
+            {
+              "include": [
+                "apphost.ts",
+                ".modules/aspire.ts",
+                ".modules/aspire.d.ts",
+                "src/**/*.ts", // user code remains TypeScript
+              ],
+            }
+            """);
+
+        var services = CreateServices(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("migrate --yes");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(Aspire.Cli.CliExitCodes.Success, exitCode);
+
+        await AssertMigratedMetadataAsync(
+            root,
+            new[] { "apphost.mts", ".aspire/modules/aspire.mts", ".aspire/modules/aspire.d.ts", "src/**/*.ts" });
     }
 
     [Fact]

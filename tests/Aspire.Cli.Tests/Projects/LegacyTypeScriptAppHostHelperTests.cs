@@ -91,13 +91,27 @@ public class LegacyTypeScriptAppHostHelperTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData("apphost.ts", "apphost.mts")]
+    [InlineData("./apphost.ts", "./apphost.mts")]
+    [InlineData("foo/apphost.ts", "foo/apphost.mts")]
     [InlineData(".modules/aspire.ts", ".aspire/modules/aspire.mts")]
     [InlineData(".modules/base.ts", ".aspire/modules/base.mts")]
     [InlineData(".modules/aspire.d.ts", ".aspire/modules/aspire.d.ts")]
     [InlineData("apphost.mts", "apphost.mts")]
     [InlineData("package.json", "package.json")]
+    [InlineData("src/**/*.ts", "src/**/*.ts")]
+    [InlineData("lib/foo.ts", "lib/foo.ts")]
     public void RewriteTsConfigIncludeEntry_RewritesLegacyEntries(string entry, string expected)
     {
         Assert.Equal(expected, LegacyTypeScriptAppHost.RewriteTsConfigIncludeEntry(entry));
+    }
+
+    [Theory]
+    [InlineData("eslint apphost.ts", "eslint apphost.mts")]
+    [InlineData("files: ['apphost.ts']", "files: ['apphost.mts']")]
+    [InlineData("myapphost.ts", "myapphost.ts")]
+    [InlineData("apphost.mts", "apphost.mts")]
+    public void RewriteAppHostFileNameReferences_RewritesStandaloneLegacyFileName(string content, string expected)
+    {
+        Assert.Equal(expected, LegacyTypeScriptAppHost.RewriteAppHostFileNameReferences(content));
     }
 }

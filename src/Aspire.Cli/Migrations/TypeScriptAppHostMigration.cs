@@ -27,6 +27,8 @@ namespace Aspire.Cli.Migrations;
 internal sealed class TypeScriptAppHostMigration : IMigration
 {
     private const string TsConfigFileName = "tsconfig.apphost.json";
+    private const string PackageJsonFileName = "package.json";
+    private static readonly string[] s_eslintConfigFileNames = ["eslint.config.mjs", "eslint.config.js"];
 
     private readonly IProjectLocator _projectLocator;
     private readonly ILanguageDiscovery _languageDiscovery;
@@ -140,28 +142,35 @@ internal sealed class TypeScriptAppHostMigration : IMigration
     }
 
     /// <summary>
-    /// Performs the on-disk migration: renames the AppHost, rewrites its SDK imports, points
-    /// <c>aspire.config.json</c> and <c>tsconfig.apphost.json</c> at the modern files, and removes
-    /// the legacy <c>.modules/</c> folder (regenerated under <c>.aspire/modules/</c> afterwards).
+    /// Performs the on-disk migration: rewrites metadata to point at the modern files, renames the
+    /// AppHost, rewrites its SDK imports, and removes the legacy <c>.modules/</c> folder (regenerated
+    /// under <c>.aspire/modules/</c> afterwards).
     /// </summary>
     private void MigrateFilesOnDisk(FileInfo legacyAppHostFile, FileInfo modernAppHostFile, DirectoryInfo appHostDirectory)
     {
-        // 1. Rewrite the AppHost imports and write the new apphost.mts, then drop apphost.ts.
-        var content = File.ReadAllText(legacyAppHostFile.FullName);
-        File.WriteAllText(modernAppHostFile.FullName, LegacyTypeScriptAppHost.RewriteAppHostContent(content));
-        legacyAppHostFile.Delete();
+        // Keep the destructive AppHost swap last: if an unexpected failure occurs while rewriting
+        // metadata, the user-authored apphost.ts is still available and the migration can be retried.
+        var modernAppHostContent = LegacyTypeScriptAppHost.RewriteAppHostContent(File.ReadAllText(legacyAppHostFile.FullName));
 
-        // 2. Update aspire.config.json's appHost.path. We edit the JSON node directly rather than
+        // 1. Update aspire.config.json's appHost.path. We edit the JSON node directly rather than
         //    round-tripping through AspireConfigFile.Save so that unrelated config keys/values
         //    (profiles, packages, and any properties the typed model doesn't know about) are
         //    preserved. The file is re-serialized with indentation, so exact original whitespace
         //    is not retained.
         UpdateConfigAppHostPath(appHostDirectory);
 
-        // 3. Update tsconfig.apphost.json include entries to point at the modern files.
+        // 2. Update tsconfig.apphost.json include entries to point at the modern files.
         UpdateTsConfigIncludes(appHostDirectory);
 
-        // 4. Remove the legacy .modules folder; the modern .aspire/modules is regenerated next.
+        // 3. Update metadata that can reference the AppHost file name directly.
+        UpdatePackageJsonScripts(appHostDirectory);
+        UpdateEslintConfigFiles(appHostDirectory);
+
+        // 4. Write the new apphost.mts and only then remove apphost.ts.
+        File.WriteAllText(modernAppHostFile.FullName, modernAppHostContent);
+        legacyAppHostFile.Delete();
+
+        // 5. Remove the legacy .modules folder; the modern .aspire/modules is regenerated next.
         var legacyModulesDir = Path.Combine(appHostDirectory.FullName, LanguageInfo.LegacyGeneratedFolderName);
         if (Directory.Exists(legacyModulesDir))
         {
@@ -219,7 +228,15 @@ internal sealed class TypeScriptAppHostMigration : IMigration
 
         try
         {
-            if (JsonNode.Parse(File.ReadAllText(tsConfigPath)) is not JsonObject root ||
+            // tsconfig files are JSONC. Skipping comments makes common files parse successfully,
+            // but comments are not preserved when this migration re-serializes the include array.
+            if (JsonNode.Parse(
+                    File.ReadAllText(tsConfigPath),
+                    documentOptions: new JsonDocumentOptions
+                    {
+                        AllowTrailingCommas = true,
+                        CommentHandling = JsonCommentHandling.Skip
+                    }) is not JsonObject root ||
                 root["include"] is not JsonArray include)
             {
                 return;
@@ -246,6 +263,68 @@ internal sealed class TypeScriptAppHostMigration : IMigration
         catch (JsonException ex)
         {
             _logger.LogDebug(ex, "Failed to update include entries in {TsConfigPath} during migration", tsConfigPath);
+        }
+    }
+
+    private void UpdatePackageJsonScripts(DirectoryInfo appHostDirectory)
+    {
+        var packageJsonPath = Path.Combine(appHostDirectory.FullName, PackageJsonFileName);
+        if (!File.Exists(packageJsonPath))
+        {
+            return;
+        }
+
+        try
+        {
+            if (JsonNode.Parse(File.ReadAllText(packageJsonPath)) is not JsonObject root ||
+                root["scripts"] is not JsonObject scripts)
+            {
+                return;
+            }
+
+            var changed = false;
+            foreach (var script in scripts.ToArray())
+            {
+                if (script.Value is JsonValue value &&
+                    value.GetValueKind() is JsonValueKind.String)
+                {
+                    var current = value.GetValue<string>();
+                    var rewritten = LegacyTypeScriptAppHost.RewriteAppHostFileNameReferences(current);
+                    if (!string.Equals(current, rewritten, StringComparison.Ordinal))
+                    {
+                        scripts[script.Key] = (JsonNode?)JsonValue.Create(rewritten);
+                        changed = true;
+                    }
+                }
+            }
+
+            if (changed)
+            {
+                File.WriteAllText(packageJsonPath, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+            }
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogDebug(ex, "Failed to update script entries in {PackageJsonPath} during migration", packageJsonPath);
+        }
+    }
+
+    private static void UpdateEslintConfigFiles(DirectoryInfo appHostDirectory)
+    {
+        foreach (var configFileName in s_eslintConfigFileNames)
+        {
+            var configPath = Path.Combine(appHostDirectory.FullName, configFileName);
+            if (!File.Exists(configPath))
+            {
+                continue;
+            }
+
+            var current = File.ReadAllText(configPath);
+            var rewritten = LegacyTypeScriptAppHost.RewriteAppHostFileNameReferences(current);
+            if (!string.Equals(current, rewritten, StringComparison.Ordinal))
+            {
+                File.WriteAllText(configPath, rewritten);
+            }
         }
     }
 

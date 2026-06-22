@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Projects;
@@ -18,7 +19,7 @@ namespace Aspire.Cli.Projects;
 /// <c>aspire migrate</c>.
 /// See: https://github.com/microsoft/aspire/issues/17842
 /// </remarks>
-internal static class LegacyTypeScriptAppHost
+internal static partial class LegacyTypeScriptAppHost
 {
     /// <summary>
     /// The legacy TypeScript AppHost entry point file name.
@@ -90,11 +91,14 @@ internal static class LegacyTypeScriptAppHost
     /// </summary>
     internal static string RewriteTsConfigIncludeEntry(string entry)
     {
+        var isLegacyGeneratedModule = entry.Contains(".modules/", StringComparison.Ordinal);
+        var isLegacyAppHost = EndsWithPathSegment(entry, LegacyAppHostFileName);
         var rewritten = entry.Replace(".modules/", ".aspire/modules/", StringComparison.Ordinal);
 
-        // Convert the TypeScript module/entry extensions (.ts → .mts) while leaving declaration
-        // files (.d.ts) and already-modern (.mts) entries alone.
-        if (rewritten.EndsWith(".ts", StringComparison.Ordinal) &&
+        // Only files the migration moves on disk should change extensions. Other user includes
+        // (for example src/**/*.ts) must stay covered by TypeScript after migration.
+        if ((isLegacyAppHost || isLegacyGeneratedModule) &&
+            rewritten.EndsWith(".ts", StringComparison.Ordinal) &&
             !rewritten.EndsWith(".mts", StringComparison.Ordinal) &&
             !rewritten.EndsWith(".d.ts", StringComparison.Ordinal))
         {
@@ -102,6 +106,25 @@ internal static class LegacyTypeScriptAppHost
         }
 
         return rewritten;
+    }
+
+    /// <summary>
+    /// Rewrites standalone references to the legacy AppHost file name in text-based metadata files.
+    /// </summary>
+    internal static string RewriteAppHostFileNameReferences(string content)
+    {
+        return LegacyAppHostFileNameRegex().Replace(content, ModernAppHostFileName);
+    }
+
+    private static bool EndsWithPathSegment(string path, string segment)
+    {
+        if (!path.EndsWith(segment, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var segmentStart = path.Length - segment.Length;
+        return segmentStart is 0 || path[segmentStart - 1] is '/' or '\\';
     }
 
     /// <summary>
@@ -157,4 +180,7 @@ internal static class LegacyTypeScriptAppHost
             return null;
         }
     }
+
+    [GeneratedRegex(@"\bapphost\.ts\b", RegexOptions.CultureInvariant)]
+    private static partial Regex LegacyAppHostFileNameRegex();
 }
