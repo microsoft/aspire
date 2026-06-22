@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Documents mise as a CLI install method - no matching product PR in this milestone; documents existing .NET global tool install capability",
+  "mergedAt": "2026-06-22T14:33:41Z",
+  "number": 1276,
+  "runDate": "2026-06-22T19:06:59Z",
+  "status": "excluded",
+  "title": "Add mise to Aspire CLI install docs"
+}

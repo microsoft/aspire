@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Removes obsolete [EditorBrowsable(Never)] model entries from a preview package that never shipped stable - not user-facing",
+  "mergedAt": "2026-06-22T18:18:36Z",
+  "number": 18404,
+  "runDate": "2026-06-22T19:06:59Z",
+  "status": "excluded",
+  "title": "Remove obsolete model entries from preview Aspire.Hosting.Foundry package"
+}

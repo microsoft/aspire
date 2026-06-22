@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Dashboard logs forwarded to the AppHost console are now split into two categories: Aspire's own dashboard logs (e.g., icon resolution warnings) appear at Warning+ severity, while third-party library logs (e.g., Kestrel, ASP.NET Core) are filtered to Error+ only. A single log filter on the ThirdParty prefix silences all background library noise.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📋",
+  "firstMergedAt": "2026-06-22T17:50:30Z",
+  "lastMergedAt": "2026-06-22T17:50:30Z",
+  "name": "Third-party dashboard log filtering",
+  "owner": "JamesNK",
+  "prs": [
+    18390
+  ]
+}

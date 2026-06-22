@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Bot PR for VS Code extension release preparation - automated release tooling change, not user-facing",
+  "mergedAt": "2026-06-22T13:50:30Z",
+  "number": 18399,
+  "runDate": "2026-06-22T19:06:59Z",
+  "status": "excluded",
+  "title": "Prepare VS Code extension release v1.15.0"
+}

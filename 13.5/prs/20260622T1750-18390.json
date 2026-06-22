@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Routes third-party dashboard logs to a separate ThirdParty category, filtering noise while surfacing Aspire warnings",
+  "mergedAt": "2026-06-22T17:50:30Z",
+  "number": 18390,
+  "runDate": "2026-06-22T19:06:59Z",
+  "status": "included",
+  "title": "Route third-party dashboard logs under ThirdParty category and show Aspire warnings"
+}

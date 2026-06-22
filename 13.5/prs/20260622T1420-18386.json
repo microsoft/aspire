@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Backport of #18160 to main - fixes polyglot codegen binding failure when CLI and SDK versions skew",
+  "mergedAt": "2026-06-22T14:20:24Z",
+  "number": 18386,
+  "runDate": "2026-06-22T19:06:59Z",
+  "status": "included",
+  "title": "[main] [release/13.4] Freeze Aspire.TypeSystem AssemblyVersion at 13.4.5.0 to fix cross-ALC codegen binding"
+}
