@@ -252,6 +252,13 @@ path_rules:
     targets: [test:Aspire.Cli.Tests, test:Infrastructure.Tests]
     reason: Cli.Tests/Npm/AspireJsLauncherTests and Infrastructure.Tests parse this script
   - paths:
+      - .github/workflows/update-nix-cli-flake.yml
+      - flake.nix
+      - flake.lock
+      - eng/nix/**
+    targets: [test:Infrastructure.Tests]
+    reason: Infrastructure.Tests validates the Nix flake, package derivation, update script, and release asset manifest
+  - paths:
       - eng/scripts/download-native-archives.ps1
       - eng/scripts/stage-native-cli-tool-packages.ps1
       - eng/scripts/validate-npm-package-signatures.ps1

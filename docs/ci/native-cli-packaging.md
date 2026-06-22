@@ -11,7 +11,7 @@ The native CLI packaging flow produces two related artifact families:
    - RID-specific packages such as `Aspire.Cli.osx-arm64.<version>.nupkg`.
    - The `Aspire.Cli.<version>.nupkg` pointer package used by `dotnet tool install`.
 
-The archive contains the native `aspire` executable for direct installation and for installer feeds such as Homebrew and WinGet. The RID-specific tool package contains the same native CLI executable under the dotnet tool layout.
+The archive contains the native `aspire` executable plus runtime files that must stay beside it for direct installation and installer feeds such as Homebrew, WinGet, and Nix. The RID-specific tool package contains the same native CLI executable under the dotnet tool layout.
 
 ## GitHub Actions PR builds
 
@@ -36,3 +36,17 @@ If the macOS job produced a tool `.nupkg` from an unsigned binary and the main W
 The tool packaging flow therefore extracts the signed `aspire` binary from the signed native archive and packs that into the RID-specific tool `.nupkg`. This produces an unsigned `.nupkg` that contains the signed `aspire` CLI; the `.nupkg` itself is signed later by the main Windows job.
 
 Linux native jobs do not sign ELF binaries in `build_sign_native`. For Linux, extracting from the native archive gives the same unsigned ELF payload, and the resulting NuGet packages are signed later as packages by the main Windows build.
+
+## Nix flake packaging
+
+The root `flake.nix` packages the stable Aspire CLI from the versioned GitHub release archive URLs and hashes tracked in `eng/nix/versions.json`. It is a binary package, not a Nix source build of this repository. This keeps the Nix package aligned with the same canonical signed native archive consumed by the other installers.
+
+For stable releases, `release-publish-nuget` dispatches `.github/workflows/update-nix-cli-flake.yml` after `PublishReleaseAssetsJob` uploads the `aspire-cli-*` archives and `.sha512` sidecars to the GitHub release. The workflow runs:
+
+```sh
+eng/nix/update-versions.sh --version <VERSION>
+```
+
+The workflow commits the Nix manifest change to the `update-baseline-<VERSION>` branch created by `release-github-tasks.yml`, then creates or updates the baseline PR. The updater reads the official `.sha512` assets and writes Nix-compatible SRI hashes. Do not point the manifest at mutable `aka.ms` channel URLs; Nix fixed-output fetches require stable versioned URLs.
+
+The Nix derivation writes `{"source":"nix"}` to `.aspire-install.json` next to the packaged native binary. `BundleService` treats this route as read-only and extracts the embedded bundle payload into the user-owned Aspire home instead of the Nix store.

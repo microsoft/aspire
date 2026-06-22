@@ -78,6 +78,12 @@ On Linux or macOS:
 curl -sSL https://aspire.dev/install.sh | bash
 ```
 
+With Nix flakes:
+
+```sh
+nix run github:microsoft/aspire#aspire-cli
+```
+
 > [!NOTE]
 > If you want to use the latest daily builds instead of the released version, follow the instructions in [docs/using-latest-daily.md](docs/using-latest-daily.md).
 
