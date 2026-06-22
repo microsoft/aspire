@@ -115,18 +115,36 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         var dashboardLoggerState = resourceLoggerService.GetResourceLoggerState(resourceId);
         dashboardLoggerState.AddLog(LogEntry.Create(timestamp, messageJson, isErrorMessage: false), inMemorySource: true);
 
+        // Add a sentinel log that always passes filters (Error level under Aspire.Dashboard.*
+        // routes to Aspire.Hosting.Dashboard.Sentinel, which is above the Warning threshold).
+        // Since logs are processed in order, observing the sentinel in the channel guarantees
+        // that the preceding test log has already been processed (either logged or filtered).
+        const string SentinelMessage = "SENTINEL_LOG_SYNC";
+        var sentinelMessage = new DashboardLogMessage
+        {
+            LogLevel = LogLevel.Error,
+            Category = "Aspire.Dashboard.Sentinel",
+            Message = SentinelMessage,
+            Timestamp = timestamp.ToString(KnownFormats.ConsoleLogsTimestampFormat, CultureInfo.InvariantCulture),
+        };
+        var sentinelJson = JsonSerializer.Serialize(sentinelMessage, DashboardLogMessageContext.Default.DashboardLogMessage);
+        dashboardLoggerState.AddLog(LogEntry.Create(timestamp, sentinelJson, isErrorMessage: false), inMemorySource: true);
+
         await resourceNotificationService.PublishUpdateAsync(dashboardResource, s => s).DefaultTimeout();
 
-        // Complete the resource logger to drain pending logs, then dispose the hook
-        // to cancel the notification watcher and await all log processing tasks.
-        resourceLoggerService.Complete(resourceId);
-        await hook.DisposeAsync();
-
+        // Wait for the sentinel to arrive, which confirms all preceding logs have been processed.
         var logs = new List<WriteContext>();
-        while (logChannel.Reader.TryRead(out var logContext))
+        while (true)
         {
+            var logContext = await logChannel.Reader.ReadAsync().DefaultTimeout();
             logs.Add(logContext);
+            if (logContext.Message == SentinelMessage)
+            {
+                break;
+            }
         }
+
+        await hook.DisposeAsync();
 
         var matchingLogs = logs.Where(l => l.Message == $"Test message from {category}").ToList();
 
