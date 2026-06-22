@@ -116,9 +116,8 @@ internal sealed class ResourceCommand : BaseCommand
     {
         // Route human-readable status messages to stderr so that structured command output
         // (e.g., JSON) on stdout remains valid and pipeable (e.g., | jq).
-        // Always do this as we don't know if the caller intends to produce structured output. 
-        // It's safer to risk mixing status messages with structured output than to risk breaking
-        // it by writing status messages to stdout.
+        // Always route to stderr unconditionally because we cannot know ahead of time whether
+        // the resource command will produce structured output.
         InteractionService.Console = ConsoleOutput.Error;
 
         var resourceName = parseResult.GetValue(s_resourceArgument)!;
