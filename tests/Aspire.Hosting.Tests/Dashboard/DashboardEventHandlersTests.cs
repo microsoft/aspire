@@ -14,6 +14,7 @@ using Aspire.Hosting.Tests.Utils;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -78,22 +79,21 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
     public async Task WatchDashboardLogs_AspireDashboardWarningsShown_ThirdPartyWarningsSuppressed(
         string category, LogLevel logLevel, bool expectLogged, string? expectedCategory)
     {
+        // Use the real DistributedApplicationBuilder to set up logging filters so the test
+        // exercises the actual production configuration rather than mirroring it.
         var testSink = new TestSink();
-        var factory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(new TestLoggerProvider(testSink));
+        var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions { DisableDashboard = true });
+        appBuilder.Services.AddSingleton<ILoggerProvider>(new TestLoggerProvider(testSink));
+        using var app = appBuilder.Build();
 
-            // Mirror the production filter configuration from DistributedApplicationBuilder.
-            b.AddFilter("Aspire.Hosting.Dashboard", LogLevel.Warning);
-            b.AddFilter("Aspire.Hosting.Dashboard.ThirdParty", LogLevel.Error);
-        });
+        var factory = app.Services.GetRequiredService<ILoggerFactory>();
+        var resourceLoggerService = app.Services.GetRequiredService<ResourceLoggerService>();
+        var resourceNotificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        var configuration = app.Services.GetRequiredService<IConfiguration>();
+
         var logChannel = Channel.CreateUnbounded<WriteContext>();
         testSink.MessageLogged += c => logChannel.Writer.TryWrite(c);
 
-        var resourceLoggerService = new ResourceLoggerService();
-        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create(logger: factory.CreateLogger<ResourceNotificationService>());
-        var configuration = new ConfigurationBuilder().Build();
         var hook = CreateHook(resourceLoggerService, resourceNotificationService, configuration, loggerFactory: factory);
 
         var model = new DistributedApplicationModel(new ResourceCollection());
@@ -117,32 +117,28 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
 
         await resourceNotificationService.PublishUpdateAsync(dashboardResource, s => s).DefaultTimeout();
 
+        // Complete the resource logger to drain pending logs, then dispose the hook
+        // to cancel the notification watcher and await all log processing tasks.
+        resourceLoggerService.Complete(resourceId);
+        await hook.DisposeAsync();
+
+        var logs = new List<WriteContext>();
+        while (logChannel.Reader.TryRead(out var logContext))
+        {
+            logs.Add(logContext);
+        }
+
+        var matchingLogs = logs.Where(l => l.Message == $"Test message from {category}").ToList();
+
         if (expectLogged)
         {
-            // Wait for the expected log to arrive.
-            while (true)
-            {
-                var logContext = await logChannel.Reader.ReadAsync().DefaultTimeout();
-                if (logContext.Message == $"Test message from {category}")
-                {
-                    Assert.Equal(logLevel, logContext.LogLevel);
-                    Assert.Equal(expectedCategory, logContext.LoggerName);
-                    break;
-                }
-            }
+            var matchingLog = Assert.Single(matchingLogs);
+            Assert.Equal(logLevel, matchingLog.LogLevel);
+            Assert.Equal(expectedCategory, matchingLog.LoggerName);
         }
         else
         {
-            // Give a short window for any unexpected logs to arrive, then verify nothing matched.
-            await Task.Delay(200);
-
-            var unexpectedLogs = new List<WriteContext>();
-            while (logChannel.Reader.TryRead(out var logContext))
-            {
-                unexpectedLogs.Add(logContext);
-            }
-
-            Assert.DoesNotContain(unexpectedLogs, l => l.Message == $"Test message from {category}");
+            Assert.Empty(matchingLogs);
         }
     }
 
