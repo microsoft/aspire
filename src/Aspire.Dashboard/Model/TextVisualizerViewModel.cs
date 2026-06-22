@@ -170,7 +170,7 @@ public class TextVisualizerViewModel
                     writer.WriteStringValue(reader.GetString());
                     break;
                 case JsonTokenType.Number:
-                    writer.WriteRawValue(reader.ValueSpan, skipInputValidation: true);
+                    WriteRawNumberValue(writer, stream, reader.ValueSpan);
                     break;
                 case JsonTokenType.True:
                     writer.WriteBooleanValue(true);
@@ -191,6 +191,24 @@ public class TextVisualizerViewModel
         var formattedJson = Encoding.UTF8.GetString(stream.ToArray());
 
         return formattedJson;
+    }
+
+    private static void WriteRawNumberValue(Utf8JsonWriter writer, MemoryStream stream, ReadOnlySpan<byte> rawNumber)
+    {
+        // WriteRawValue preserves the numeric lexeme, but it bypasses Utf8JsonWriter's indentation
+        // handling. Write a placeholder number first so the writer emits the correct separator and
+        // whitespace, then replace only the placeholder bytes with the raw number token.
+        writer.Flush();
+        writer.WriteNumberValue(0);
+        writer.Flush();
+
+        var placeholderPosition = (int)stream.Length - 1;
+        Debug.Assert(stream.GetBuffer()[placeholderPosition] == (byte)'0');
+
+        stream.SetLength(placeholderPosition);
+        stream.Position = placeholderPosition;
+        stream.Write(rawNumber);
+        stream.Position = stream.Length;
     }
 
     public static bool CouldBeJson(string? input)

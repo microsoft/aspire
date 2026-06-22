@@ -103,4 +103,20 @@ public sealed class TextVisualizerViewModelTests
             """,
             vm.FormattedText);
     }
+
+    [Fact]
+    public void Create_KnownJsonFormat_PreservesRawNumberTextAfterComments()
+    {
+        var vm = new TextVisualizerViewModel("""[/* raw number */1e+1000,1.2300]""", indentText: true, knownFormat: DashboardUIHelpers.JsonFormat);
+
+        Assert.Equal(
+            """
+            [
+              /* raw number */
+              1e+1000,
+              1.2300
+            ]
+            """,
+            vm.FormattedText);
+    }
 }
