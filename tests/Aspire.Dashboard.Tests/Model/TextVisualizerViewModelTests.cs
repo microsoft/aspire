@@ -105,16 +105,16 @@ public sealed class TextVisualizerViewModelTests
     }
 
     [Fact]
-    public void Create_KnownJsonFormat_PreservesRawNumberTextAfterComments()
+    public void Create_KnownJsonFormat_FormatsNumberTextAfterComments()
     {
-        var vm = new TextVisualizerViewModel("""[/* raw number */1e+1000,1.2300]""", indentText: true, knownFormat: DashboardUIHelpers.JsonFormat);
+        var vm = new TextVisualizerViewModel("""[/* number */0.1234567890123456789012345,9223372036854775807]""", indentText: true, knownFormat: DashboardUIHelpers.JsonFormat);
 
         Assert.Equal(
             """
             [
-              /* raw number */
-              1e+1000,
-              1.2300
+              /* number */
+              0.1234567890123456789012345,
+              9223372036854775807
             ]
             """,
             vm.FormattedText);

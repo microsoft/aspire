@@ -170,7 +170,7 @@ public class TextVisualizerViewModel
                     writer.WriteStringValue(reader.GetString());
                     break;
                 case JsonTokenType.Number:
-                    WriteIndentedRawNumberValue(writer, stream, reader.ValueSpan);
+                    WriteNumberValue(writer, reader);
                     break;
                 case JsonTokenType.True:
                     writer.WriteBooleanValue(true);
@@ -193,27 +193,27 @@ public class TextVisualizerViewModel
         return formattedJson;
     }
 
-    private static void WriteIndentedRawNumberValue(Utf8JsonWriter writer, MemoryStream stream, ReadOnlySpan<byte> rawNumber)
+    private static void WriteNumberValue(Utf8JsonWriter writer, Utf8JsonReader reader)
     {
-        // Utf8JsonWriter has two incomplete options for numbers:
-        // - WriteNumberValue requires choosing a numeric type, which can round/truncate large or precise values.
-        // - WriteRawValue preserves the numeric lexeme, but bypasses indentation after comments,
-        //   producing output like: /* raw number */1e+1000
-        //
-        // Write a placeholder through the normal number path so the writer emits separators,
-        // indentation, and updates its state, then patch just that placeholder byte before any
-        // subsequent writer calls.
-        writer.Flush();
-        writer.WriteNumberValue(0);
-        writer.Flush();
+        if (reader.TryGetInt64(out var longValue))
+        {
+            writer.WriteNumberValue(longValue);
+            return;
+        }
 
-        var placeholderPosition = (int)stream.Length - 1;
-        Debug.Assert(stream.GetBuffer()[placeholderPosition] == (byte)'0');
+        if (reader.TryGetDecimal(out var decimalValue))
+        {
+            writer.WriteNumberValue(decimalValue);
+            return;
+        }
 
-        stream.SetLength(placeholderPosition);
-        stream.Position = placeholderPosition;
-        stream.Write(rawNumber);
-        stream.Position = stream.Length;
+        if (reader.TryGetDouble(out var doubleValue) && double.IsFinite(doubleValue))
+        {
+            writer.WriteNumberValue(doubleValue);
+            return;
+        }
+
+        throw new JsonException("The JSON number cannot be represented by a supported .NET numeric type.");
     }
 
     public static bool CouldBeJson(string? input)
