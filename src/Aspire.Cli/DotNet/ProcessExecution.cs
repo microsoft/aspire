@@ -180,7 +180,7 @@ internal sealed class ProcessExecution : IProcessExecution
         // to the exit-wait. The signal is dispatched unconditionally (not gated on the graceful
         // token) so callers that intentionally Expire() the budget (e.g. `aspire stop`) still get a
         // best-effort signal.
-        var signalTask = InvokeSignalerAsync(signaler, SafePid(process), gracefulToken);
+        var signalTask = InvokeSignalerAsync(signaler, GetSafePid(process), gracefulToken);
 
         try
         {
@@ -216,7 +216,7 @@ internal sealed class ProcessExecution : IProcessExecution
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to kill {FileName} (pid {Pid}).", _fileName, SafePid(process));
+                _logger.LogWarning(ex, "Failed to kill {FileName} (pid {Pid}).", _fileName, GetSafePid(process));
                 return;
             }
 
@@ -234,7 +234,7 @@ internal sealed class ProcessExecution : IProcessExecution
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Error draining killed {FileName} (pid {Pid}).", _fileName, SafePid(process));
+                _logger.LogWarning(ex, "Error draining killed {FileName} (pid {Pid}).", _fileName, GetSafePid(process));
             }
         }
         finally
@@ -340,7 +340,7 @@ internal sealed class ProcessExecution : IProcessExecution
         }
     }
 
-    private static int SafePid(Process process)
+    private static int GetSafePid(Process process)
     {
         try
         {

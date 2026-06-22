@@ -13,6 +13,7 @@ using Aspire.Cli.Backchannel;
 using Aspire.Cli.Caching;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
@@ -74,7 +75,7 @@ internal sealed class ProcessInvocationOptions
     /// <remarks>
     /// Pair with <see cref="GracefulShutdownSignaler"/> and <see cref="ShutdownService"/>.
     /// On Windows the spawned process is bound to the process-wide
-    /// <see cref="Processes.WindowsConsoleProcessJob"/> kill-on-close job automatically.
+    /// <see cref="WindowsConsoleProcessJob"/> kill-on-close job automatically.
     /// Leaving the signaler/service unset means cancellation falls back to
     /// <see cref="ProcessExecution"/>'s force-kill mode, preserving back-compat
     /// for the many non-Run callers (build, restore, package add, layout, etc.).
@@ -86,7 +87,7 @@ internal sealed class ProcessInvocationOptions
     /// <c>stop-process-tree</c> on Windows, SIGTERM on Unix). When <c>null</c>, the cancellation
     /// path uses <see cref="ProcessExecution"/>'s force-kill mode.
     /// </summary>
-    public Processes.IProcessTreeGracefulShutdownSignaler? GracefulShutdownSignaler { get; set; }
+    public IProcessTreeGracefulShutdownSignaler? GracefulShutdownSignaler { get; set; }
 
     /// <summary>
     /// The central graceful-shutdown window whose
