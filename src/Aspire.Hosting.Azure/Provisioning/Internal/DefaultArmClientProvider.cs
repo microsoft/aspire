@@ -352,7 +352,9 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
         {
             await foreach (var operation in GetDeploymentOperationsAsync(deploymentId, recursive: true, cancellationToken).ConfigureAwait(false))
             {
-                if (operation.TargetResource?.Id is { Length: > 0 } resourceId)
+                if (operation.IsCreateOperation &&
+                    !string.Equals(operation.TargetResource?.ResourceType, AzureDeploymentOperationDetails.DeploymentResourceType, StringComparisons.AzureResourceType) &&
+                    operation.TargetResource?.Id is { Length: > 0 } resourceId)
                 {
                     yield return resourceId;
                 }

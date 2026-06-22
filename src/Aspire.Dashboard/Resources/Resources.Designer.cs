@@ -123,6 +123,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to The AppHost disconnected while executing the command. Restart the AppHost and try again..
+        /// </summary>
+        public static string ResourceCommandAppHostDisconnected {
+            get {
+                return ResourceManager.GetString("ResourceCommandAppHostDisconnected", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to &quot;{0}&quot; canceled.
         /// </summary>
         public static string ResourceCommandCanceled {

@@ -14,6 +14,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
 using Xunit;
+using DashboardResources = Aspire.Dashboard.Resources.Resources;
 
 namespace Aspire.Dashboard.Tests.Model;
 
@@ -374,7 +375,7 @@ public sealed class DashboardClientTests
         var testSink = new TestSink();
         var loggerFactory = LoggerFactory.Create(b => b.AddProvider(new TestLoggerProvider(testSink)));
 
-        await using var instance = new DashboardClient(loggerFactory, _configuration, _dashboardOptions, new MockKnownPropertyLookup());
+        await using var instance = new DashboardClient(loggerFactory, _configuration, _dashboardOptions, new MockKnownPropertyLookup(), new TestStringLocalizer<DashboardResources>());
         instance.SetDashboardServiceClient(new MockDashboardServiceClient { FailOnGetApplicationInformation = true });
 
         IDashboardClient client = instance;
@@ -421,7 +422,7 @@ public sealed class DashboardClientTests
             CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(Aspire.Dashboard.Model.ResourceCommandResponseKind.Failed, response.Kind);
-        Assert.Equal("The AppHost disconnected while executing the command. Restart the AppHost and try again.", response.Message);
+        Assert.Equal("Localized:ResourceCommandAppHostDisconnected", response.Message);
         Assert.Equal(response.Message, response.ErrorMessage);
     }
 
@@ -540,6 +541,6 @@ public sealed class DashboardClientTests
 
     private DashboardClient CreateResourceServiceClient()
     {
-        return new DashboardClient(NullLoggerFactory.Instance, _configuration, _dashboardOptions, new MockKnownPropertyLookup());
+        return new DashboardClient(NullLoggerFactory.Instance, _configuration, _dashboardOptions, new MockKnownPropertyLookup(), new TestStringLocalizer<DashboardResources>());
     }
 }

@@ -112,6 +112,36 @@ public class DefaultArmClientProviderTests
     }
 
     [Fact]
+    public async Task GetDeploymentTargetResourceIdsAsyncReturnsCreatedTargetsOnly()
+    {
+        var existingStorageResourceId = $"/subscriptions/{SubscriptionId}/resourceGroups/test-rg/providers/Microsoft.Storage/storageAccounts/existing-storage";
+        var transport = new ProviderMetadataTransport(
+            extraNestedADeploymentOperations:
+            [
+                ("existing-storage", existingStorageResourceId, "Microsoft.Storage/storageAccounts", "existing-storage", "Read")
+            ]);
+        var provider = new DefaultArmClientProvider(new ArmClientOptions
+        {
+            Transport = transport
+        }, TimeProvider.System);
+        var armClient = provider.GetArmClient(new CapturingTokenCredential(), SubscriptionId);
+        var resourceIds = new List<string>();
+
+        await foreach (var resourceId in armClient.GetDeploymentTargetResourceIdsAsync(RootDeploymentId, CancellationToken.None))
+        {
+            resourceIds.Add(resourceId);
+        }
+
+        Assert.Equal(
+            [
+                $"/subscriptions/{SubscriptionId}/resourceGroups/test-rg/providers/Microsoft.Storage/storageAccounts/storage-a",
+                $"/subscriptions/{SubscriptionId}/resourceGroups/test-rg/providers/Microsoft.Storage/storageAccounts/storage-b"
+            ],
+            resourceIds);
+        Assert.DoesNotContain(existingStorageResourceId, resourceIds);
+    }
+
+    [Fact]
     public async Task GetDeploymentAsyncReturnsProvisioningStateAndOutputs()
     {
         var transport = new ProviderMetadataTransport();
@@ -306,6 +336,7 @@ public class DefaultArmClientProviderTests
         private readonly int _keyVaultDeleteStatus;
         private readonly int _keyVaultDeletePollsBeforeDeleted;
         private readonly int _deletedKeyVaultPurgePollsBeforePurged;
+        private readonly IReadOnlyList<(string OperationId, string TargetResourceId, string TargetResourceType, string TargetResourceName, string ProvisioningOperation)> _extraNestedADeploymentOperations;
         private bool _keyVaultDeleteRequested;
         private bool _deletedKeyVaultPurgeRequested;
         private int _keyVaultDeletePollCount;
@@ -323,7 +354,8 @@ public class DefaultArmClientProviderTests
             int keyVaultGetStatus = 200,
             int keyVaultDeleteStatus = 200,
             int keyVaultDeletePollsBeforeDeleted = 0,
-            int deletedKeyVaultPurgePollsBeforePurged = 0)
+            int deletedKeyVaultPurgePollsBeforePurged = 0,
+            IReadOnlyList<(string OperationId, string TargetResourceId, string TargetResourceType, string TargetResourceName, string ProvisioningOperation)>? extraNestedADeploymentOperations = null)
         {
             _locations = locations ??
             [
@@ -335,6 +367,7 @@ public class DefaultArmClientProviderTests
             _keyVaultDeleteStatus = keyVaultDeleteStatus;
             _keyVaultDeletePollsBeforeDeleted = keyVaultDeletePollsBeforeDeleted;
             _deletedKeyVaultPurgePollsBeforePurged = deletedKeyVaultPurgePollsBeforePurged;
+            _extraNestedADeploymentOperations = extraNestedADeploymentOperations ?? [];
         }
 
         public IReadOnlyList<Uri> RequestUris
@@ -443,14 +476,17 @@ public class DefaultArmClientProviderTests
                 var path when string.Equals(path, RootDeploymentId, StringComparison.Ordinal) => CreateDeploymentContent(RootDeploymentId),
                 var path when string.Equals(path, $"{RootDeploymentId}/operations", StringComparison.Ordinal) => CreateDeploymentOperationsContent(
                     RootDeploymentId,
-                    ("nested-a", NestedADeploymentId, AzureDeploymentOperationDetails.DeploymentResourceType, "nested-a"),
-                    ("nested-b", NestedBDeploymentId, AzureDeploymentOperationDetails.DeploymentResourceType, "nested-b")),
+                    ("nested-a", NestedADeploymentId, AzureDeploymentOperationDetails.DeploymentResourceType, "nested-a", AzureDeploymentOperationDetails.CreateOperation),
+                    ("nested-b", NestedBDeploymentId, AzureDeploymentOperationDetails.DeploymentResourceType, "nested-b", AzureDeploymentOperationDetails.CreateOperation)),
                 var path when string.Equals(path, $"{NestedADeploymentId}/operations", StringComparison.Ordinal) => CreateDeploymentOperationsContent(
                     NestedADeploymentId,
-                    ("storage-a", $"/subscriptions/{SubscriptionId}/resourceGroups/test-rg/providers/Microsoft.Storage/storageAccounts/storage-a", "Microsoft.Storage/storageAccounts", "storage-a")),
+                    [
+                        ("storage-a", $"/subscriptions/{SubscriptionId}/resourceGroups/test-rg/providers/Microsoft.Storage/storageAccounts/storage-a", "Microsoft.Storage/storageAccounts", "storage-a", AzureDeploymentOperationDetails.CreateOperation),
+                        .. _extraNestedADeploymentOperations
+                    ]),
                 var path when string.Equals(path, $"{NestedBDeploymentId}/operations", StringComparison.Ordinal) => CreateDeploymentOperationsContent(
                     NestedBDeploymentId,
-                    ("storage-b", $"/subscriptions/{SubscriptionId}/resourceGroups/test-rg/providers/Microsoft.Storage/storageAccounts/storage-b", "Microsoft.Storage/storageAccounts", "storage-b")),
+                    ("storage-b", $"/subscriptions/{SubscriptionId}/resourceGroups/test-rg/providers/Microsoft.Storage/storageAccounts/storage-b", "Microsoft.Storage/storageAccounts", "storage-b", AzureDeploymentOperationDetails.CreateOperation)),
                 _ => throw new InvalidOperationException($"Unexpected ARM request: {uri}")
             };
 
@@ -641,7 +677,7 @@ public class DefaultArmClientProviderTests
 
         private static string CreateDeploymentOperationsContent(
             string deploymentId,
-            params (string OperationId, string TargetResourceId, string TargetResourceType, string TargetResourceName)[] operations)
+            params (string OperationId, string TargetResourceId, string TargetResourceType, string TargetResourceName, string ProvisioningOperation)[] operations)
         {
             return JsonSerializer.Serialize(new
             {
@@ -651,7 +687,7 @@ public class DefaultArmClientProviderTests
                     operationId = operation.OperationId,
                     properties = new
                     {
-                        provisioningOperation = AzureDeploymentOperationDetails.CreateOperation,
+                        provisioningOperation = operation.ProvisioningOperation,
                         provisioningState = AzureDeploymentOperationDetails.SucceededState,
                         statusCode = "OK",
                         targetResource = new

@@ -92,13 +92,15 @@ public sealed class TextVisualizerViewModelTests
     [Fact]
     public void Create_KnownJsonFormat_PreservesNumberTextWhenFormatting()
     {
-        var vm = new TextVisualizerViewModel("""{"large":9223372036854775807,"precise":0.1234567890123456789012345}""", indentText: true, knownFormat: DashboardUIHelpers.JsonFormat);
+        var vm = new TextVisualizerViewModel("""{"large":9223372036854775807,"precise":0.1234567890123456789012345,"exponent":1.23456789012345678901234567890123456789e-100,"huge":1e1000}""", indentText: true, knownFormat: DashboardUIHelpers.JsonFormat);
 
         Assert.Equal(
             """
             {
               "large": 9223372036854775807,
-              "precise": 0.1234567890123456789012345
+              "precise": 0.1234567890123456789012345,
+              "exponent": 1.23456789012345678901234567890123456789e-100,
+              "huge": 1e1000
             }
             """,
             vm.FormattedText);
@@ -107,14 +109,16 @@ public sealed class TextVisualizerViewModelTests
     [Fact]
     public void Create_KnownJsonFormat_FormatsNumberTextAfterComments()
     {
-        var vm = new TextVisualizerViewModel("""[/* number */0.1234567890123456789012345,9223372036854775807]""", indentText: true, knownFormat: DashboardUIHelpers.JsonFormat);
+        var vm = new TextVisualizerViewModel("""[/* number */0.1234567890123456789012345,9223372036854775807,1.2300,-0]""", indentText: true, knownFormat: DashboardUIHelpers.JsonFormat);
 
         Assert.Equal(
             """
             [
               /* number */
               0.1234567890123456789012345,
-              9223372036854775807
+              9223372036854775807,
+              1.2300,
+              -0
             ]
             """,
             vm.FormattedText);

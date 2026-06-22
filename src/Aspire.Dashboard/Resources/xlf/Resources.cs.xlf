@@ -52,6 +52,11 @@
         <target state="translated">Sbalit podřízené prostředky</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceCommandAppHostDisconnected">
+        <source>The AppHost disconnected while executing the command. Restart the AppHost and try again.</source>
+        <target state="new">The AppHost disconnected while executing the command. Restart the AppHost and try again.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourceCommandCancel">
         <source>Cancel</source>
         <target state="new">Cancel</target>

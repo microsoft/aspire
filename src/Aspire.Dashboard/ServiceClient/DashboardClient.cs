@@ -16,7 +16,9 @@ using Aspire.Hosting;
 using Grpc.Core;
 using Grpc.Net.Client;
 using Grpc.Net.Client.Configuration;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
+using DashboardResources = Aspire.Dashboard.Resources.Resources;
 using ResourceCommandResponseKind = Aspire.Dashboard.Model.ResourceCommandResponseKind;
 
 namespace Aspire.Dashboard.ServiceClient;
@@ -57,6 +59,7 @@ internal sealed class DashboardClient : IDashboardClient
     private readonly ILoggerFactory _loggerFactory;
     private readonly IKnownPropertyLookup _knownPropertyLookup;
     private readonly DashboardOptions _dashboardOptions;
+    private readonly IStringLocalizer<DashboardResources> _loc;
     private readonly ILogger<DashboardClient> _logger;
 
     private ImmutableHashSet<Channel<IReadOnlyList<ResourceViewModelChange>>> _outgoingResourceChannels = [];
@@ -85,11 +88,13 @@ internal sealed class DashboardClient : IDashboardClient
         IConfiguration configuration,
         IOptions<DashboardOptions> dashboardOptions,
         IKnownPropertyLookup knownPropertyLookup,
+        IStringLocalizer<DashboardResources> loc,
         Action<SocketsHttpHandler>? configureHttpHandler = null)
     {
         _loggerFactory = loggerFactory;
         _knownPropertyLookup = knownPropertyLookup;
         _dashboardOptions = dashboardOptions.Value;
+        _loc = loc;
 
         // Take a copy of the token and always use it to avoid race between disposal of CTS and usage of token.
         _clientCancellationToken = _cts.Token;
@@ -985,7 +990,7 @@ internal sealed class DashboardClient : IDashboardClient
             var errorMessage = ex.StatusCode switch
             {
                 StatusCode.Unimplemented => "Command not implemented",
-                StatusCode.Unavailable => "The AppHost disconnected while executing the command. Restart the AppHost and try again.",
+                StatusCode.Unavailable => _loc[nameof(DashboardResources.ResourceCommandAppHostDisconnected)],
                 _ => "Unknown error. See logs for details"
             };
 
