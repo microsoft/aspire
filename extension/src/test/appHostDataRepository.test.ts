@@ -969,11 +969,13 @@ suite('AppHostDataRepository', () => {
             const snapshotArgs = JSON.stringify(['ps', '--format', 'json']);
             const firstSnapshot = spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).at(-1);
             assert.ok(firstSnapshot);
-            firstSnapshot.options.stdoutCallback(JSON.stringify([{
-                appHostPath: '/workspace/AppHost.csproj',
-                appHostPid: 1234,
-                status: 'running',
-            }]));
+            firstSnapshot.options.stdoutCallback(JSON.stringify([
+                {
+                    appHostPath: '/workspace/AppHost.csproj',
+                    appHostPid: 1234,
+                    status: 'running',
+                }
+            ]));
             firstSnapshot.options.exitCallback(0);
             await waitForMicrotasks();
 
@@ -2262,6 +2264,75 @@ suite('AppHostDataRepository', () => {
             await waitForCondition(
                 () => repository.workspaceAppHostCandidates.length === 1 && repository.workspaceAppHostCandidates[0].status === 'buildable',
                 'forced workspace discovery did not apply updated buildable status');
+            assert.strictEqual(discoverStub.callCount, 2);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('launch failure without active data sources only raises change notification', async () => {
+        const repository = new AppHostDataRepository(terminalProvider);
+        let changed = false;
+        const dataSubscription = repository.onDidChangeData(() => {
+            changed = true;
+        });
+
+        try {
+            // With no workspace folders, the launch-failed discovery refresh clears workspace
+            // state and notifies subscribers synchronously without spawning a CLI process.
+            repository.notifyAppHostLaunchFailed('/workspace/AppHost/AppHost.csproj');
+            await waitForMicrotasks();
+
+            assert.strictEqual(changed, true);
+            assert.strictEqual(spawnStub.called, false);
+        } finally {
+            dataSubscription.dispose();
+            repository.dispose();
+        }
+    });
+
+    test('launch failure refreshes workspace discovery to correct stale candidate status', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const candidatePath = '/workspace/AppHost/AppHost.csproj';
+        const discoverStub = sinon.stub();
+        discoverStub.onFirstCall().resolves([{
+            path: candidatePath,
+            language: 'csharp',
+            status: 'possibly-buildable',
+        }]);
+        discoverStub.onSecondCall().callsFake((_folder: vscode.WorkspaceFolder, forceRefresh?: boolean) => {
+            assert.strictEqual(forceRefresh, true);
+            return Promise.resolve([{
+                path: candidatePath,
+                language: 'csharp',
+                status: 'buildable',
+            }]);
+        });
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: discoverStub,
+            dispose: () => { },
+        };
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+
+            await waitForMicrotasks();
+            assert.strictEqual(repository.workspaceAppHostCandidates[0]?.status, 'possibly-buildable');
+            assert.strictEqual(discoverStub.callCount, 1);
+
+            repository.notifyAppHostLaunchFailed(candidatePath);
+            await waitForMicrotasks();
+
+            assert.strictEqual(repository.workspaceAppHostCandidates[0]?.status, 'buildable');
             assert.strictEqual(discoverStub.callCount, 2);
         } finally {
             repository.dispose();

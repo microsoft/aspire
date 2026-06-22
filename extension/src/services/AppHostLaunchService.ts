@@ -31,6 +31,16 @@ export interface AppHostDebugSessionTerminatedEvent {
     appHostPath: string;
     command?: AspireCommandType;
     shouldRequestStopRefresh: boolean;
+    launchFailed: boolean;
+}
+
+export interface AppHostLaunchFailedEvent {
+    appHostPath: string;
+    command: AspireCommandType;
+    noDebug: boolean;
+    doStep?: string;
+    error: unknown;
+    shouldRequestRefresh: boolean;
 }
 
 /**
@@ -54,6 +64,9 @@ export class AppHostLaunchService implements vscode.Disposable {
     private readonly _onDidRequestLaunch = new vscode.EventEmitter<AppHostLaunchRequestedEvent>();
     readonly onDidRequestLaunch = this._onDidRequestLaunch.event;
 
+    private readonly _onDidFailLaunch = new vscode.EventEmitter<AppHostLaunchFailedEvent>();
+    readonly onDidFailLaunch = this._onDidFailLaunch.event;
+
     private readonly _debugSessionSubscription: vscode.Disposable;
 
     constructor() {
@@ -63,14 +76,16 @@ export class AppHostLaunchService implements vscode.Disposable {
             const appHostPath = session.configuration?.program;
             if (appHostPath && session.configuration?.type === 'aspire') {
                 const key = getComparisonKey(path.resolve(appHostPath));
-                if (this._launchingPaths.delete(key)) {
+                const wasStillLaunching = this._launchingPaths.delete(key);
+                if (wasStillLaunching) {
                     this._onDidChangeLaunchingState.fire();
                 }
                 const command = getTerminationCommand(session.configuration);
                 this._onDidTerminateAppHostDebugSession.fire({
                     appHostPath,
                     command,
-                    shouldRequestStopRefresh: command === 'run',
+                    shouldRequestStopRefresh: command === 'run' && !wasStillLaunching,
+                    launchFailed: wasStillLaunching,
                 });
             }
         });
@@ -81,6 +96,7 @@ export class AppHostLaunchService implements vscode.Disposable {
         this._onDidChangeLaunchingState.dispose();
         this._onDidTerminateAppHostDebugSession.dispose();
         this._onDidRequestLaunch.dispose();
+        this._onDidFailLaunch.dispose();
     }
 
     /**
@@ -169,8 +185,8 @@ export class AppHostLaunchService implements vscode.Disposable {
 
         const isFailureSimulated = isE2eDebugLaunchFailureSimulated();
         if (isFailureSimulated) {
-            this.clearLaunching(appHostPath);
-            throw new Error(`Simulated build failure for ${vscode.workspace.asRelativePath(appHostPath)} (E2E).`);
+            const error = new Error(`Simulated build failure for ${vscode.workspace.asRelativePath(appHostPath)} (E2E).`);
+            this._handleLaunchFailure(appHostPath, command, noDebug, doStep, error);
         }
 
         try {
@@ -179,9 +195,21 @@ export class AppHostLaunchService implements vscode.Disposable {
                 throw new Error(`VS Code did not start the Aspire ${command} session for ${vscode.workspace.asRelativePath(appHostPath)}.`);
             }
         } catch (err) {
-            this.clearLaunching(appHostPath);
-            throw err;
+            this._handleLaunchFailure(appHostPath, command, noDebug, doStep, err);
         }
+    }
+
+    private _handleLaunchFailure(appHostPath: string, command: AspireCommandType, noDebug: boolean, doStep: string | undefined, error: unknown): void {
+        this.clearLaunching(appHostPath);
+        this._onDidFailLaunch.fire({
+            appHostPath,
+            command,
+            noDebug,
+            doStep,
+            error,
+            shouldRequestRefresh: command === 'run',
+        });
+        throw error;
     }
 }
 

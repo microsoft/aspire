@@ -137,6 +137,39 @@ suite('AppHostLaunchService', () => {
         assert.strictEqual(service.isLaunching('/repo/AppHost.csproj'), false);
     });
 
+    test('launch failure event requests launch-failed notification for run command', async () => {
+        const error = new Error('boom');
+        startDebuggingStub.rejects(error);
+        let failureEvent: unknown;
+        service.onDidFailLaunch(event => {
+            failureEvent = event;
+        });
+
+        await assert.rejects(service.launch('/repo/AppHost.csproj', 'run', true), /boom/);
+
+        assert.deepStrictEqual(failureEvent, {
+            appHostPath: '/repo/AppHost.csproj',
+            command: 'run',
+            noDebug: true,
+            doStep: undefined,
+            error,
+            shouldRequestRefresh: true,
+        });
+    });
+
+    test('launch failure event does not request launch-failed notification for non-run command', async () => {
+        const error = new Error('boom');
+        startDebuggingStub.rejects(error);
+        let shouldRequestRefresh: boolean | undefined;
+        service.onDidFailLaunch(event => {
+            shouldRequestRefresh = event.shouldRequestRefresh;
+        });
+
+        await assert.rejects(service.launch('/repo/AppHost.csproj', 'publish', true), /boom/);
+
+        assert.strictEqual(shouldRequestRefresh, false);
+    });
+
     test('launch clears launching state and rethrows when startDebugging throws', async () => {
         startDebuggingStub.rejects(new Error('boom'));
 
@@ -164,6 +197,62 @@ suite('AppHostLaunchService', () => {
             appHostPath: '/repo/AppHost.csproj',
             command: 'run',
             shouldRequestStopRefresh: true,
+            launchFailed: false,
+        });
+    });
+
+    test('terminated run session while still launching reports launchFailed', async () => {
+        startDebuggingStub.resolves(true);
+        let terminationEvent: { appHostPath: string; command?: string; shouldRequestStopRefresh: boolean; launchFailed: boolean } | undefined;
+        service.onDidTerminateAppHostDebugSession(event => {
+            terminationEvent = event;
+        });
+
+        await service.launch('/repo/AppHost.csproj', 'run', true);
+        assert.strictEqual(service.isLaunching('/repo/AppHost.csproj'), true);
+
+        assert.ok(onDidTerminateDebugSessionCallback);
+        onDidTerminateDebugSessionCallback({
+            configuration: {
+                type: 'aspire',
+                program: '/repo/AppHost.csproj',
+                command: 'run',
+            },
+        } as unknown as vscode.DebugSession);
+
+        assert.deepStrictEqual(terminationEvent, {
+            appHostPath: '/repo/AppHost.csproj',
+            command: 'run',
+            shouldRequestStopRefresh: false,
+            launchFailed: true,
+        });
+    });
+
+    test('terminated run session that already cleared launching reports launchFailed false', async () => {
+        startDebuggingStub.resolves(true);
+        let terminationEvent: { appHostPath: string; command?: string; shouldRequestStopRefresh: boolean; launchFailed: boolean } | undefined;
+        service.onDidTerminateAppHostDebugSession(event => {
+            terminationEvent = event;
+        });
+
+        await service.launch('/repo/AppHost.csproj', 'run', true);
+        service.clearLaunching('/repo/AppHost.csproj');
+        assert.strictEqual(service.isLaunching('/repo/AppHost.csproj'), false);
+
+        assert.ok(onDidTerminateDebugSessionCallback);
+        onDidTerminateDebugSessionCallback({
+            configuration: {
+                type: 'aspire',
+                program: '/repo/AppHost.csproj',
+                command: 'run',
+            },
+        } as unknown as vscode.DebugSession);
+
+        assert.deepStrictEqual(terminationEvent, {
+            appHostPath: '/repo/AppHost.csproj',
+            command: 'run',
+            shouldRequestStopRefresh: true,
+            launchFailed: false,
         });
     });
 
@@ -186,6 +275,7 @@ suite('AppHostLaunchService', () => {
             appHostPath: '/repo/AppHost.csproj',
             command: 'publish',
             shouldRequestStopRefresh: false,
+            launchFailed: false,
         });
     });
 
@@ -207,6 +297,7 @@ suite('AppHostLaunchService', () => {
             appHostPath: '/repo/AppHost.csproj',
             command: 'run',
             shouldRequestStopRefresh: true,
+            launchFailed: false,
         });
     });
 
@@ -229,6 +320,7 @@ suite('AppHostLaunchService', () => {
             appHostPath: '/repo/AppHost.csproj',
             command: undefined,
             shouldRequestStopRefresh: false,
+            launchFailed: false,
         });
     });
 });

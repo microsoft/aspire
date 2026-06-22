@@ -867,7 +867,7 @@ suite('AspireAppHostTreeProvider', () => {
         assert.strictEqual(item.tooltip, 'Global view selected because aspire ls found 2 buildable AppHosts.\n/workspace/AppHost.csproj');
     });
 
-    test('runAppHost rethrows launch failures after showing the error', async () => {
+    test('runAppHost rethrows launch failures from launch service', async () => {
         const launchError = new Error('launch failed');
         const launchService = {
             launch: sandbox.stub().rejects(launchError),
@@ -875,14 +875,13 @@ suite('AspireAppHostTreeProvider', () => {
             launchingPaths: [],
             onDidChangeLaunchingState: () => ({ dispose: () => { } }),
         } as unknown as AppHostLaunchService;
-        const showErrorStub = sandbox.stub(vscode.window, 'showErrorMessage').resolves(undefined);
         const provider = makeTreeProviderWithLaunchService([
             makeAppHost({ appHostPath: '/workspace/AppHost/AppHost.csproj', appHostPid: 1 }),
         ], launchService);
 
         await assert.rejects(provider.runAppHost({ appHostPath: '/workspace/AppHost/AppHost.csproj' } as any, true), /launch failed/);
 
-        assert.strictEqual(showErrorStub.callCount, 1);
+        assert.ok((launchService.launch as sinon.SinonStub).calledOnce);
     });
 
     test('dashboard quick pick labels add enough parent folders to disambiguate duplicate filenames', async () => {
@@ -2196,14 +2195,10 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         provider.dispose();
     });
 
-    test('runAppHost surfaces launch errors via showErrorMessage', async () => {
-        // The previous fire-and-forget call discarded rejections — they surfaced as
-        // unhandled promise rejections with no user feedback. The async variant must
-        // catch and report so the user knows the launch failed.
+    test('runAppHost rethrows launch errors from launch service', async () => {
         const appHostPath = '/repo/AppHost/AppHost.csproj';
         const launchService = makeLaunchService();
         const launchStub = sinon.stub(launchService, 'launch').rejects(new Error('startDebugging blew up'));
-        const errorStub = sinon.stub(vscode.window, 'showErrorMessage');
         const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
         const repository = {
             viewMode: 'workspace' as ViewMode,
@@ -2227,9 +2222,7 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         await assert.rejects(provider.runAppHost(item as any, false), /startDebugging blew up/);
 
         assert.ok(launchStub.calledOnce, 'Expected launch to be called');
-        assert.ok(errorStub.calledOnce, 'Expected showErrorMessage to be called when launch rejects');
         launchStub.restore();
-        errorStub.restore();
         provider.dispose();
     });
 

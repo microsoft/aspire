@@ -1366,13 +1366,15 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return;
         }
 
-        try {
-            await this._launchService.launch(appHostPath, 'run', noDebug);
-        } catch (err) {
-            vscode.window.showErrorMessage(errorMessage(err));
-            this._repository.refresh?.();
-            throw err;
+        await this._launchService.launch(appHostPath, 'run', noDebug);
+    }
+
+    notifyAppHostLaunchFailed(appHostPath: string): void {
+        if (!appHostPath){
+            return;
         }
+
+        this._repository.notifyAppHostLaunchFailed?.(appHostPath);
     }
 
     notifyAppHostStopping(appHostPath: string): void {

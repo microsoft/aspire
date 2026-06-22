@@ -411,6 +411,14 @@ export class AppHostDataRepository {
         }
     }
 
+    notifyAppHostLaunchFailed(appHostPath: string): void {
+        if (this._disposed || !appHostPath) {
+            return;
+        }
+
+        this._fetchWorkspaceAppHost({ forceRefresh: true });
+    }
+
     requestAppHostStopRefresh(appHostPath: string): void {
         if (this._disposed || !this._shouldPoll || !appHostPath) {
             return;

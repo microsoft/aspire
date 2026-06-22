@@ -171,6 +171,16 @@ export async function activate(context: vscode.ExtensionContext) {
     if (event.shouldRequestStopRefresh) {
       appHostTreeProvider.notifyAppHostStopping(event.appHostPath);
     }
+
+    if (event.launchFailed) {
+      appHostTreeProvider.notifyAppHostLaunchFailed(event.appHostPath);
+    }
+  });
+  const launchFailedRegistration = appHostLaunchService.onDidFailLaunch(event => {
+    if (event.shouldRequestRefresh) {
+      appHostTreeProvider.notifyAppHostLaunchFailed(event.appHostPath);
+    }
+    vscode.window.showErrorMessage(errorMessage(event.error));
   });
 
   // Also drive data sources based on whether an AppHost file is currently visible in any editor.
@@ -245,6 +255,7 @@ export async function activate(context: vscode.ExtensionContext) {
     copyLogFilePathRegistration,
     expandAllRegistration,
     debugSessionRefreshRegistration,
+    launchFailedRegistration,
     { dispose: () => { appHostTreeProvider.dispose(); dataRepository.dispose(); } });
 
   // CodeLens provider — shows Debug on pipeline steps, resource state on resources
