@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Status messages from the `aspire resource` command are now routed to stderr instead of stdout, allowing JSON output to be piped cleanly to tools like `jq`.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📤",
+  "firstMergedAt": "2026-06-22T09:40:16Z",
+  "lastMergedAt": "2026-06-22T09:40:16Z",
+  "name": "Fix aspire resource command polluting stdout",
+  "owner": "JamesNK",
+  "prs": [
+    18395
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "��",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The VS Code extension now sets an extended startup timeout for extension-managed AppHost debug sessions, preventing the CLI from terminating debug sessions when paused on a breakpoint before `builder.Build()` is called.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "⏱️",
+  "firstMergedAt": "2026-06-22T11:55:49Z",
+  "lastMergedAt": "2026-06-22T11:55:49Z",
+  "name": "Fix VS Code debug timeout with pre-build AppHost breakpoints",
+  "owner": "adamint",
+  "prs": [
+    18353
+  ]
+}

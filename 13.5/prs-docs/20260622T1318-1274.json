@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "Dependabot bump for astro 6.4.4 to 6.4.6 in docs frontend; unrelated to Aspire 13.5 features",
+  "mergedAt": "2026-06-22T13:18:15Z",
+  "number": 1274,
+  "runDate": "2026-06-22T13:52:43Z",
+  "status": "excluded",
+  "title": "build(deps): bump astro from 6.4.4 to 6.4.6 in /src/frontend"
+}
