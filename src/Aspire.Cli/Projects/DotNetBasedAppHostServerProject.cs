@@ -547,7 +547,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         // child's pid per line. ProcessInvocationOptions.StandardOutputCallback is Action<string>
         // (line only), but the AppHost wants the pid in each trace line (#16729). The callbacks
         // only fire after Start(), by which point `execution` is assigned and ProcessId is valid.
-        ProcessExecution execution = null!;
+        IProcessExecution execution = null!;
 
         void OnStdout(string line)
         {
@@ -574,7 +574,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
             KillEntireProcessTreeOnCancel = !OperatingSystem.IsWindows(),
         };
 
-        execution = (ProcessExecution)_processExecutionFactory.CreateExecution(startInfo, options);
+        execution = _processExecutionFactory.CreateExecution(startInfo, options);
 
         try
         {

@@ -930,7 +930,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         // log level + prefix differ from the dotnet-based server (#16729); keeping them here keeps
         // this server's per-line behavior in one place. Callbacks only fire after Start(), so
         // `execution` is assigned and ProcessId is valid by then.
-        ProcessExecution execution = null!;
+        IProcessExecution execution = null!;
 
         void OnStdout(string line)
         {
@@ -964,7 +964,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
             KillEntireProcessTreeOnCancel = !OperatingSystem.IsWindows(),
         };
 
-        execution = (ProcessExecution)_processExecutionFactory.CreateExecution(startInfo, options);
+        execution = _processExecutionFactory.CreateExecution(startInfo, options);
 
         try
         {
