@@ -429,6 +429,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         _stopCts.Dispose();
         (_project as IDisposable)?.Dispose();
         _activity.Dispose();
+        _startGate.Dispose();
     }
 
     private static void ObserveFaultedTask(Task task)
