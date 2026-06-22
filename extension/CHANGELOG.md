@@ -2,8 +2,16 @@
 
 ## v1.15.0
 
-<!-- aspire-ext-changelog from=2de7be885e0ecdc531ab000048beb16e00a08335 to=3a4f0eac76b4c0dd7db9047c92cf0c87cf99fa26 base=1.14.0 -->
-_Release notes are being generated automatically and will replace this placeholder shortly. If this line is still here after the `extension-changelog` workflow runs, copy the deterministic commit list from the pull request description into this entry before merging._
+### Features
+
+- Add MAUI platform debugging support (iOS simulator/device, Mac Catalyst, Android emulator/device, and Windows) for MAUI resources running under Aspire when the VS Code MAUI extension is installed ([#17853](https://github.com/microsoft/aspire/issues/17853), [#17857](https://github.com/microsoft/aspire/pull/17857)).
+- Expose AppHost query and resource management APIs from the Aspire extension for programmatic integration by tools such as C# Dev Kit v2 ([#17705](https://github.com/microsoft/aspire/pull/17705)).
+
+### Fixes
+
+- Fix stale AppHost running state in the Aspire pane after a debug session ends ([#17946](https://github.com/microsoft/aspire/issues/17946), [#17965](https://github.com/microsoft/aspire/pull/17965)).
+- Stop the Aspire panel from showing a false CLI upgrade prompt for non-compatibility errors such as a missing container runtime ([#18337](https://github.com/microsoft/aspire/issues/18337), [#18358](https://github.com/microsoft/aspire/pull/18358)).
+- Extend the AppHost debug startup timeout for extension-managed debug sessions so breakpoints hit before `builder.Build()` no longer cause the CLI to terminate the session ([#18021](https://github.com/microsoft/aspire/issues/18021), [#18353](https://github.com/microsoft/aspire/pull/18353)).
 
 ## v1.14.0
 
