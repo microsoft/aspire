@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
@@ -425,6 +426,49 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
             status => Assert.Equal("Scanning for running AppHosts...", status),
             status => Assert.Equal(statusMessage, status));
         Assert.Equal(successMessage, Assert.Single(interactionService.DisplayedSuccess));
+    }
+
+    [Fact]
+    public async Task ResourceCommand_RoutesStatusToStderrAndResultToStdout()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var consoleOutputPerStatus = new List<(string Message, ConsoleOutput Console)>();
+        TestInteractionService? interactionService = null;
+        interactionService = new TestInteractionService
+        {
+            ShowStatusCallback = msg => consoleOutputPerStatus.Add((msg, interactionService!.Console))
+        };
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
+            {
+                Success = true,
+                Value = new ExecuteResourceCommandResult
+                {
+                    Value = "{\"key\": \"value\"}",
+                    Format = CommandResultFormat.Json
+                }
+            }
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel, interactionService);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("resource myresource my-command");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        // The "Scanning for running AppHosts..." message must be routed to stderr,
+        // not stdout, so that piped JSON output remains valid (see #18102).
+        var scanningStatus = Assert.Single(consoleOutputPerStatus, s => s.Message == SharedCommandStrings.ScanningForRunningAppHosts);
+        Assert.Equal(ConsoleOutput.Error, scanningStatus.Console);
+
+        // The JSON result must be written to stdout so it can be piped to tools like jq.
+        var (rawText, consoleOverride) = Assert.Single(interactionService.DisplayedRawText);
+        Assert.Equal("{\"key\": \"value\"}", rawText);
+        Assert.Equal(ConsoleOutput.Standard, consoleOverride);
     }
 
     [Fact]

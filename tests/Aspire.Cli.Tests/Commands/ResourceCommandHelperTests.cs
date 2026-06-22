@@ -115,41 +115,6 @@ public class ResourceCommandHelperTests
     }
 
     [Fact]
-    public async Task ExecuteGenericCommandAsync_RoutesStatusToStderr_ResultToStdout()
-    {
-        var connection = new TestAppHostAuxiliaryBackchannel
-        {
-            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
-            {
-                Success = true,
-                Value = new ExecuteResourceCommandResult
-                {
-                    Value = "some output",
-                    Format = CommandResultFormat.Text
-                }
-            }
-        };
-
-        var interactionService = new TestInteractionService
-        {
-            DisplayRawTextCallback = (_) => { }
-        };
-
-        var exitCode = await ResourceCommandHelper.ExecuteGenericCommandAsync(
-            connection,
-            interactionService,
-            NullLogger.Instance,
-            "myResource",
-            "my-command",
-            arguments: null,
-            cancellationToken: CancellationToken.None).DefaultTimeout();
-
-        Assert.Equal(0, exitCode);
-        // Status messages should be routed to stderr
-        Assert.Equal(ConsoleOutput.Error, interactionService.Console);
-    }
-
-    [Fact]
     public async Task ExecuteGenericCommandAsync_WithArguments_PassesArgumentsToBackchannel()
     {
         var connection = new TestAppHostAuxiliaryBackchannel
