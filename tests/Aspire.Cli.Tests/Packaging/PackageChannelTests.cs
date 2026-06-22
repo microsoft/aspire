@@ -133,6 +133,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
 
         // Dropped — deprecated packages enumerated in DeprecatedPackages.
         File.WriteAllText(Path.Combine(packagesDirectory.FullName, $"Aspire.Hosting.Dapr.{pinnedVersion}.nupkg"), string.Empty);
+        File.WriteAllText(Path.Combine(packagesDirectory.FullName, $"Aspire.Hosting.GitHub.Models.{pinnedVersion}.nupkg"), string.Empty);
         File.WriteAllText(Path.Combine(packagesDirectory.FullName, $"Aspire.Hosting.NodeJs.{pinnedVersion}.nupkg"), string.Empty);
 
         var cache = new FakeNuGetPackageCache

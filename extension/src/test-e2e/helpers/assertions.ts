@@ -50,7 +50,10 @@ export async function waitForAppHostLaunching(appHostPath = getPrimaryAppHostPro
 
 export async function waitForNoRunningAppHost(timeoutMs = 90000, appHostPath = getPrimaryAppHostProjectPath()): Promise<ExtensionE2EStateFile> {
     return await waitForExtensionState(
-        file => findRunningAppHost(file.state, appHostPath) === undefined && !file.state.launchingPaths.some(launchingPath => isSamePath(launchingPath, appHostPath)),
+        file =>
+            findRunningAppHost(file.state, appHostPath) === undefined
+            && !file.state.launchingPaths.some(launchingPath => isSamePath(launchingPath, appHostPath))
+            && !file.state.stoppingPaths.some(stoppingPath => isSamePath(stoppingPath, appHostPath)),
         `AppHost '${appHostPath}' to stop`,
         timeoutMs);
 }

@@ -4,14 +4,16 @@ import { debugProject, runProject } from "../loc/strings";
 import { getEnvironmentWithoutE2EBridgeVariables, mergeEnvs } from "../utils/environment";
 import { extensionLogOutputChannel } from "../utils/logging";
 import { projectDebuggerExtension } from "./languages/dotnet";
-import { isAzureFunctionsExtensionInstalled, isBunInstalled, isCsharpInstalled, isGoInstalled, isPythonInstalled } from '../capabilities';
+import { isAzureFunctionsExtensionInstalled, isBunInstalled, isCsharpInstalled, isGoInstalled, isMauiInstalled, isPythonInstalled } from '../capabilities';
 import { pythonDebuggerExtension } from "./languages/python";
 import { nodeDebuggerExtension } from "./languages/node";
 import { browserDebuggerExtension } from "./languages/browser";
 import { azureFunctionsDebuggerExtension } from "./languages/azureFunctions";
 import { goDebuggerExtension } from "./languages/go";
 import { bunDebuggerExtension } from "./languages/bun";
+import { mauiDebuggerExtension } from "./languages/maui";
 import { isDirectory } from "../utils/io";
+import { waitForRunStartIdle } from "./runStartRegistry";
 
 // Represents a resource-specific debugger extension for when the default session configuration is not sufficient to launch the resource.
 export interface ResourceDebuggerExtension {
@@ -30,6 +32,7 @@ export async function createDebugSessionConfiguration(debugSessionConfig: Aspire
     }
 
     const projectPath = debuggerExtension.getProjectFile(launchConfig);
+    await waitForRunStartIdle();
 
     const configuration: AspireResourceExtendedDebugConfiguration = {
         type: debuggerExtension.debugAdapter || launchConfig.type,
@@ -91,6 +94,10 @@ export function getResourceDebuggerExtensions(): ResourceDebuggerExtension[] {
 
     if (isBunInstalled()) {
         extensions.push(bunDebuggerExtension);
+    }
+
+    if (isMauiInstalled()) {
+        extensions.push(mauiDebuggerExtension);
     }
 
     return extensions;

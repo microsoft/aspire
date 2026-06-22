@@ -11,7 +11,8 @@ internal static class AspireRepositoryDetector
     private const string AspireSolutionFileName = "Aspire.slnx";
 
     private static readonly object s_cacheLock = new();
-    private static readonly Dictionary<string, string?> s_cachedRepoRoots = new(StringComparer.Ordinal);
+    private static string? s_cachedRepoRoot;
+    private static bool s_cacheInitialized;
 #endif
 
     public static string? DetectRepositoryRoot(string? startPath = null)
@@ -27,22 +28,22 @@ internal static class AspireRepositoryDetector
 
         return null;
 #else
-        var cacheKey = GetCacheKey(startPath);
+        if (startPath is not null)
+        {
+            return DetectRepositoryRootCore(startPath);
+        }
+
         lock (s_cacheLock)
         {
-            if (s_cachedRepoRoots.TryGetValue(cacheKey, out var cachedRepoRoot))
+            if (s_cacheInitialized)
             {
-                return cachedRepoRoot;
+                return s_cachedRepoRoot;
             }
-        }
 
-        var repoRoot = DetectRepositoryRootCore(startPath);
-        lock (s_cacheLock)
-        {
-            s_cachedRepoRoots[cacheKey] = repoRoot;
+            s_cachedRepoRoot = DetectRepositoryRootCore(startPath);
+            s_cacheInitialized = true;
+            return s_cachedRepoRoot;
         }
-
-        return repoRoot;
 #endif
     }
 
@@ -51,12 +52,10 @@ internal static class AspireRepositoryDetector
     {
         lock (s_cacheLock)
         {
-            s_cachedRepoRoots.Clear();
+            s_cachedRepoRoot = null;
+            s_cacheInitialized = false;
         }
     }
-
-    private static string GetCacheKey(string? startPath)
-        => startPath is null ? string.Empty : ResolveSearchDirectory(startPath);
 
     private static string? DetectRepositoryRootCore(string? startPath)
     {

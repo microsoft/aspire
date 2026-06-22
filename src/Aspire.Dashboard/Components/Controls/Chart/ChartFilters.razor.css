@@ -11,3 +11,25 @@
     /* Prevent scrollbar briefly appearing during overflow load. */
     overflow-y: hidden;
 }
+
+.filter-value-tag {
+    cursor: pointer;
+}
+
+.filter-value-tag:hover {
+    border-color: var(--accent-foreground-hover);
+}
+
+.included-in-filters {
+    color: var(--foreground-on-accent-rest);
+    background: var(--accent-fill-rest);
+}
+
+::deep .fluent-overflow-item:has(.included-in-filters) {
+    /* change ellipsis color */
+    color: var(--foreground-on-accent-rest);
+}
+
+.included-in-filters:hover {
+    border-color: var(--accent-foreground-hover);
+}
