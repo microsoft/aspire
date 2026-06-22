@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Dashboard bug fix: fallback icons for resource commands with unknown or missing icon names, prevents action row overflow",
+  "mergedAt": "2026-06-22T05:07:14Z",
+  "number": 18389,
+  "runDate": "2026-06-22T07:51:29Z",
+  "status": "included",
+  "title": "Dashboard: Use fallback icons for commands with unknown or missing icon names"
+}

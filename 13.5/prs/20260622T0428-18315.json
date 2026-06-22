@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Bug fix restoring commit SHA in aspire --version output, lost during identity sidecar refactoring in #18087",
+  "mergedAt": "2026-06-22T04:28:21Z",
+  "number": 18315,
+  "runDate": "2026-06-22T07:51:29Z",
+  "status": "included",
+  "title": "Restore commit SHA in aspire --version output"
+}

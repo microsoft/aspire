@@ -1,0 +1,9 @@
+{
+  "author": "afscrome",
+  "comment": "Community contribution: makes HiddenAnnotation and HiddenBehavior part of the public API, allowing callers to control resource visibility in the dashboard",
+  "mergedAt": "2026-06-22T07:32:13Z",
+  "number": 18370,
+  "runDate": "2026-06-22T07:51:29Z",
+  "status": "included",
+  "title": "Make HiddenAnnotation public"
+}

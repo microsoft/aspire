@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The aspire --version command now again shows the commit SHA alongside the version number (e.g., 13.4.5+73114e86c64...), which was unintentionally lost during the identity sidecar refactoring.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔖",
+  "firstMergedAt": "2026-06-22T04:28:21Z",
+  "lastMergedAt": "2026-06-22T04:28:21Z",
+  "name": "Restore commit SHA in aspire --version output",
+  "owner": "mitchdenny",
+  "prs": [
+    18315
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [
+    "@afscrome"
+  ],
+  "description": "HiddenAnnotation and HiddenBehavior are now part of the public API, allowing callers to apply the same visibility annotation that Aspire uses internally to control whether a resource is hidden in the dashboard.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "👁️",
+  "firstMergedAt": "2026-06-22T07:32:13Z",
+  "lastMergedAt": "2026-06-22T07:32:13Z",
+  "name": "HiddenAnnotation and HiddenBehavior made public",
+  "owner": "davidfowl",
+  "prs": [
+    18370
+  ]
+}

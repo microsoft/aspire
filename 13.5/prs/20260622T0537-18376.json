@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI tooling improvement for test selector PR comment formatting — no user-visible product change",
+  "mergedAt": "2026-06-22T05:37:05Z",
+  "number": 18376,
+  "runDate": "2026-06-22T07:51:29Z",
+  "status": "excluded",
+  "title": "Make the test selector comment more readable with reasoning"
+}

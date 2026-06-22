@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "When resource commands specify an unknown or missing icon name, the dashboard now renders a fallback icon instead of raw display-name text, preventing the actions row from overflowing the viewport and hiding the overflow menu.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🎨",
+  "firstMergedAt": "2026-06-22T05:07:14Z",
+  "lastMergedAt": "2026-06-22T05:07:14Z",
+  "name": "Fallback icons for unknown resource command icon names",
+  "owner": "JamesNK",
+  "prs": [
+    18389
+  ]
+}
