@@ -279,7 +279,7 @@ public class Program
         return (factory, fileLoggerProvider);
     }
 
-    internal static async Task<IHost> BuildApplicationAsync(string[] args, CliStartupContext startupContext, Dictionary<string, string?>? configurationValues = null, ConsoleCancellationManager? cancellationManager = null)
+    internal static async Task<IHost> BuildApplicationAsync(string[] args, CliStartupContext startupContext, Dictionary<string, string?>? configurationValues = null)
     {
         // Check for --non-interactive flag early
         var nonInteractive = args?.Any(a => a == CommonOptionNames.NonInteractive) ?? false;
@@ -324,7 +324,9 @@ public class Program
         builder.Services.AddSingleton<ILoggerFactory>(startupContext.LoggerFactory);
         builder.Services.TryAddSingleton(typeof(ILogger<>), typeof(Logger<>));
 
-        // Register the cancellation manager so commands can observe forced-termination signals
+        // Register the cancellation manager so commands can observe forced-termination signals.
+        // It is registered as the existing instance (not a type) so disposal ownership stays with
+        // Program.Main, which owns its lifetime via a `using` statement.
         builder.Services.AddSingleton(startupContext.CancellationManager);
 
         // Register file logger provider for components that write directly to the log file
@@ -336,19 +338,10 @@ public class Program
         // Register logging options so components can read the user's chosen log level
         builder.Services.AddSingleton(startupContext.LoggingOptions);
 
-        // Register CCM as an instance singleton so the DI container does not take disposal ownership —
-        // Program.Main owns the lifetime via a `using` statement. Tests that drive BuildApplicationAsync
-        // directly without passing it in still work because startupContext.CancellationManager is
-        // registered unconditionally above.
-        if (cancellationManager is not null)
-        {
-            builder.Services.AddSingleton(cancellationManager);
-        }
-
         // The graceful-shutdown window is the same object as the CCM (CCM owns the OS-signal
         // registration AND the graceful budget/clock/token). Map the consumer-facing interface to
-        // whichever CCM singleton was registered so per-child shutdown ladders depend on the narrow
-        // contract rather than the whole signal manager.
+        // the CCM singleton so per-child shutdown ladders depend on the narrow contract rather than
+        // the whole signal manager.
         builder.Services.AddSingleton<IGracefulShutdownWindow>(sp => sp.GetRequiredService<ConsoleCancellationManager>());
 
         // Configure OpenTelemetry tracing. TelemetryManager reads configuration and creates
@@ -994,7 +987,7 @@ public class Program
         IHost? app = null;
         try
         {
-            app = await BuildApplicationAsync(args, startupContext, cancellationManager: cancellationManager);
+            app = await BuildApplicationAsync(args, startupContext);
             await app.StartAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
