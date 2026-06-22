@@ -1,9 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Collections.Immutable;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
+using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
@@ -23,36 +23,8 @@ public class UrlsColumnDisplayTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentOverflow(this);
         FluentUISetupHelpers.AddCommonDashboardServices(this);
 
-        var displayedUrls = Enumerable.Range(0, totalUrls).Select(i => new DisplayedUrl
-        {
-            Index = i,
-            Name = $"https-{i}",
-            Text = $"Endpoint {i}",
-            Url = $"https://localhost:{5000 + i}",
-            OriginalUrlString = $"https://localhost:{5000 + i}"
-        }).ToList<DisplayedUrl>();
-
-        var resource = new ResourceViewModel
-        {
-            Name = "test-resource",
-            ResourceType = "Project",
-            DisplayName = "test-resource",
-            Uid = "test-resource-uid",
-            ReplicaIndex = 0,
-            State = "Running",
-            KnownState = KnownResourceState.Running,
-            StateStyle = null,
-            CreationTimeStamp = null,
-            StartTimeStamp = null,
-            StopTimeStamp = null,
-            Environment = [],
-            Urls = [],
-            Volumes = [],
-            Relationships = [],
-            Properties = ImmutableDictionary<string, ResourcePropertyViewModel>.Empty,
-            Commands = [],
-            HealthReports = [],
-        };
+        var displayedUrls = CreateDisplayedUrls(totalUrls);
+        var resource = ModelTestHelpers.CreateResource(resourceName: "test-resource", resourceType: "Project", state: KnownResourceState.Running);
 
         // Act
         var cut = RenderComponent<UrlsColumnDisplay>(builder =>
@@ -77,36 +49,8 @@ public class UrlsColumnDisplayTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentOverflow(this);
         FluentUISetupHelpers.AddCommonDashboardServices(this);
 
-        var displayedUrls = Enumerable.Range(0, totalUrls).Select(i => new DisplayedUrl
-        {
-            Index = i,
-            Name = $"https-{i}",
-            Text = $"Endpoint {i}",
-            Url = $"https://localhost:{5000 + i}",
-            OriginalUrlString = $"https://localhost:{5000 + i}"
-        }).ToList<DisplayedUrl>();
-
-        var resource = new ResourceViewModel
-        {
-            Name = "test-resource",
-            ResourceType = "Project",
-            DisplayName = "test-resource",
-            Uid = "test-resource-uid",
-            ReplicaIndex = 0,
-            State = "Running",
-            KnownState = KnownResourceState.Running,
-            StateStyle = null,
-            CreationTimeStamp = null,
-            StartTimeStamp = null,
-            StopTimeStamp = null,
-            Environment = [],
-            Urls = [],
-            Volumes = [],
-            Relationships = [],
-            Properties = ImmutableDictionary<string, ResourcePropertyViewModel>.Empty,
-            Commands = [],
-            HealthReports = [],
-        };
+        var displayedUrls = CreateDisplayedUrls(totalUrls);
+        var resource = ModelTestHelpers.CreateResource(resourceName: "test-resource", resourceType: "Project", state: KnownResourceState.Running);
 
         // Act
         var cut = RenderComponent<UrlsColumnDisplay>(builder =>
@@ -119,5 +63,17 @@ public class UrlsColumnDisplayTests : DashboardTestContext
         // Assert
         var overflowItems = cut.FindComponents<FluentOverflowItem>();
         Assert.Equal(totalUrls, overflowItems.Count);
+    }
+
+    private static List<DisplayedUrl> CreateDisplayedUrls(int count)
+    {
+        return Enumerable.Range(0, count).Select(i => new DisplayedUrl
+        {
+            Index = i,
+            Name = $"https-{i}",
+            Text = $"Endpoint {i}",
+            Url = $"https://localhost:{5000 + i}",
+            OriginalUrlString = $"https://localhost:{5000 + i}"
+        }).ToList<DisplayedUrl>();
     }
 }
