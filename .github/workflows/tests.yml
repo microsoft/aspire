@@ -155,6 +155,7 @@ jobs:
     continue-on-error: true
     permissions:
       contents: read
+      issues: write
       pull-requests: write
     steps:
       - name: Download selection summary
@@ -194,14 +195,19 @@ jobs:
             const mine = comments.filter(c => c.body && c.body.includes(marker));
             const current = mine.filter(c => c.body.includes(sha)).at(-1);
             let keepId;
-            if (current) {
-              await github.rest.issues.updateComment({ owner, repo, comment_id: current.id, body });
-              keepId = current.id;
-              core.info(`Updated selection comment ${current.id} for ${shortSha}.`);
-            } else {
-              const created = await github.rest.issues.createComment({ owner, repo, issue_number, body });
-              keepId = created.data.id;
-              core.info(`Created selection comment ${created.data.id} for ${shortSha}.`);
+            try {
+              if (current) {
+                await github.rest.issues.updateComment({ owner, repo, comment_id: current.id, body });
+                keepId = current.id;
+                core.info(`Updated selection comment ${current.id} for ${shortSha}.`);
+              } else {
+                const created = await github.rest.issues.createComment({ owner, repo, issue_number, body });
+                keepId = created.data.id;
+                core.info(`Created selection comment ${created.data.id} for ${shortSha}.`);
+              }
+            } catch (error) {
+              core.info(`Could not create or update selection comment for ${shortSha}: ${error.message}`);
+              return;
             }
 
             // Collapse every other prior selection comment (superseded commits, or the legacy single

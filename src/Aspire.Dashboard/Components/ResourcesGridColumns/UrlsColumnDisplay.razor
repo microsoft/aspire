@@ -67,11 +67,11 @@ else if (DisplayedUrls.Count > 1)
     {
         if (displayedUrl.Url != null)
         {
-            return @<a href="@displayedUrl.Url" target="_blank" @onclick:stopPropagation="true">@displayedUrl.Text</a>;
+            return @<a href="@displayedUrl.Url" target="_blank" title="@GetTooltipText(displayedUrl)" @onclick:stopPropagation="true">@displayedUrl.Text</a>;
         }
         else
         {
-            return @<span title="@displayedUrl.Text">@displayedUrl.Text</span>;
+            return @<span title="@GetTooltipText(displayedUrl)">@displayedUrl.Text</span>;
         }
     }
 }

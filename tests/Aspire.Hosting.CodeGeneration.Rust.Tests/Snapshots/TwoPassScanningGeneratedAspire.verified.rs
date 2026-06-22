@@ -850,6 +850,8 @@ pub struct HttpsCertificateExecutionConfigurationExportData {
     pub pfx_path_expression: String,
     #[serde(rename = "IsKeyPathReferenced")]
     pub is_key_path_referenced: bool,
+    #[serde(rename = "IsCertificateWithKeyPathReferenced")]
+    pub is_certificate_with_key_path_referenced: bool,
     #[serde(rename = "IsPfxPathReferenced")]
     pub is_pfx_path_referenced: bool,
     #[serde(rename = "Password", skip_serializing_if = "Option::is_none")]
@@ -866,6 +868,7 @@ impl HttpsCertificateExecutionConfigurationExportData {
         map.insert("KeyPathExpression".to_string(), serde_json::to_value(&self.key_path_expression).unwrap_or(Value::Null));
         map.insert("PfxPathExpression".to_string(), serde_json::to_value(&self.pfx_path_expression).unwrap_or(Value::Null));
         map.insert("IsKeyPathReferenced".to_string(), serde_json::to_value(&self.is_key_path_referenced).unwrap_or(Value::Null));
+        map.insert("IsCertificateWithKeyPathReferenced".to_string(), serde_json::to_value(&self.is_certificate_with_key_path_referenced).unwrap_or(Value::Null));
         map.insert("IsPfxPathReferenced".to_string(), serde_json::to_value(&self.is_pfx_path_referenced).unwrap_or(Value::Null));
         if let Some(ref v) = self.password {
             map.insert("Password".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
@@ -1438,6 +1441,8 @@ pub struct HttpsCertificateExecutionConfigurationContext {
     pub certificate_path: ReferenceExpression,
     #[serde(rename = "KeyPath")]
     pub key_path: ReferenceExpression,
+    #[serde(rename = "CertificateWithKeyPath")]
+    pub certificate_with_key_path: ReferenceExpression,
     #[serde(rename = "PfxPath")]
     pub pfx_path: ReferenceExpression,
 }
@@ -1447,6 +1452,7 @@ impl HttpsCertificateExecutionConfigurationContext {
         let mut map = HashMap::new();
         map.insert("CertificatePath".to_string(), serde_json::to_value(&self.certificate_path).unwrap_or(Value::Null));
         map.insert("KeyPath".to_string(), serde_json::to_value(&self.key_path).unwrap_or(Value::Null));
+        map.insert("CertificateWithKeyPath".to_string(), serde_json::to_value(&self.certificate_with_key_path).unwrap_or(Value::Null));
         map.insert("PfxPath".to_string(), serde_json::to_value(&self.pfx_path).unwrap_or(Value::Null));
         map
     }
@@ -10810,6 +10816,14 @@ impl HttpsCertificateConfigurationCallbackAnnotationContext {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.keyPath", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// A value provider that will resolve to a path to the certificate and key concatenated together in PEM format.
+    pub fn certificate_with_key_path(&self) -> Result<ReferenceExpression, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.certificateWithKeyPath", args)?;
         Ok(serde_json::from_value(result)?)
     }
 

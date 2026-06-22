@@ -925,6 +925,47 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void BackchannelConnectionTimeoutUsesLongerConfiguredAppHostStartupTimeout()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [CliConfigNames.AppHostStartupTimeout] = "86400"
+            })
+            .Build();
+
+        var timeout = DotNetCliRunner.GetBackchannelConnectionTimeout(configuration);
+
+        Assert.Equal(TimeSpan.FromSeconds(86400), timeout);
+    }
+
+    [Fact]
+    public void BackchannelConnectionTimeoutUsesDefaultAppHostStartupTimeout()
+    {
+        var configuration = new ConfigurationBuilder().Build();
+
+        var timeout = DotNetCliRunner.GetBackchannelConnectionTimeout(configuration);
+
+        Assert.Equal(TimeSpan.FromSeconds(120), timeout);
+    }
+
+    [Fact]
+    public void ExplicitBackchannelConnectionTimeoutOverridesAppHostStartupTimeout()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [CliConfigNames.AppHostStartupTimeout] = "180",
+                [KnownConfigNames.CliBackchannelConnectTimeoutSeconds] = "5"
+            })
+            .Build();
+
+        var timeout = DotNetCliRunner.GetBackchannelConnectionTimeout(configuration);
+
+        Assert.Equal(TimeSpan.FromSeconds(5), timeout);
+    }
+
+    [Fact]
     public async Task RunAsyncFailsBackchannelWhenAppHostExitsWithSuccessBeforeBackchannelConnects()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
