@@ -726,13 +726,28 @@ public class AppHostSdkTargetsTests
 
     private static string GetAspireHostingTasksAssemblyPath()
     {
+        // The test loads the Aspire.Hosting.Tasks assembly by spawning `dotnet msbuild` (Core MSBuild),
+        // so it always needs the .NET (non-.NET-Framework) build of the task assembly regardless of
+        // the MSBuild runtime that built the test project. The csproj exposes the Tasks output root
+        // via assembly metadata; pick the .NET TFM subdirectory at runtime so this stays correct as
+        // the Tasks project's target frameworks evolve (e.g. net8.0 today, a newer TFM tomorrow).
         var assembly = typeof(AppHostSdkTargetsTests).Assembly;
-        var tasksAssemblyPath = assembly
+        var outputDirectory = assembly
             .GetCustomAttributes<AssemblyMetadataAttribute>()
-            .Single(a => string.Equals(a.Key, "AspireHostingTasksAssemblyPath", StringComparison.Ordinal))
+            .Single(a => string.Equals(a.Key, "AspireHostingTasksOutputDirectory", StringComparison.Ordinal))
             .Value;
-        Assert.False(string.IsNullOrEmpty(tasksAssemblyPath), "AspireHostingTasksAssemblyPath assembly metadata is not set.");
-        Assert.True(File.Exists(tasksAssemblyPath), $"Aspire.Hosting.Tasks was not built at '{tasksAssemblyPath}'. Build the test project to produce it.");
+        Assert.False(string.IsNullOrEmpty(outputDirectory), "AspireHostingTasksOutputDirectory assembly metadata is not set.");
+        Assert.True(Directory.Exists(outputDirectory), $"Aspire.Hosting.Tasks output directory '{outputDirectory}' does not exist. Build the test project to produce it.");
+
+        // TFM folders like `net8.0`, `net10.0`, etc. are what we want; .NET Framework folders
+        // (`net472`, `net48`, ...) all start with `net4` and cannot be loaded by Core MSBuild.
+        var tasksAssemblyPath = Directory
+            .EnumerateDirectories(outputDirectory!)
+            .Where(dir => !Path.GetFileName(dir).StartsWith("net4", StringComparison.OrdinalIgnoreCase))
+            .Select(dir => Path.Combine(dir, "Aspire.Hosting.Tasks.dll"))
+            .FirstOrDefault(File.Exists);
+
+        Assert.False(string.IsNullOrEmpty(tasksAssemblyPath), $"Aspire.Hosting.Tasks.dll was not found under a .NET TFM in '{outputDirectory}'. Build the test project to produce it.");
         return tasksAssemblyPath!;
     }
 

@@ -2,8 +2,6 @@
 
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
-    <_AspireHostingTasksTfm Condition="'$(MSBuildRuntimeType)' == 'Core'">net8.0</_AspireHostingTasksTfm>
-    <_AspireHostingTasksTfm Condition="'$(MSBuildRuntimeType)' != 'Core'">net472</_AspireHostingTasksTfm>
   </PropertyGroup>
 
   <ItemGroup>
@@ -30,7 +28,8 @@
   <ItemGroup>
     <!-- Expose the built RID tool path to tests via assembly metadata so the older-SDK fallback can be exercised. -->
     <AssemblyMetadata Include="AspireRuntimeIdentifierToolPath" Value="$(ArtifactsBinDir)Aspire.RuntimeIdentifier.Tool\$(Configuration)\$(DefaultTargetFramework)\Aspire.RuntimeIdentifier.Tool.dll" />
-    <AssemblyMetadata Include="AspireHostingTasksAssemblyPath" Value="$(ArtifactsBinDir)Aspire.Hosting.Tasks\$(Configuration)\$(_AspireHostingTasksTfm)\Aspire.Hosting.Tasks.dll" />
+    <!-- Expose the Aspire.Hosting.Tasks output root so the test can discover the correct TFM build at runtime. -->
+    <AssemblyMetadata Include="AspireHostingTasksOutputDirectory" Value="$(ArtifactsBinDir)Aspire.Hosting.Tasks\$(Configuration)\" />
   </ItemGroup>
 
   <ItemGroup>
