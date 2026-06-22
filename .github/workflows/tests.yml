@@ -38,7 +38,9 @@ jobs:
       tests_matrix_requires_cli_archive: ${{ steps.split_matrix.outputs.tests_matrix_requires_cli_archive }}
       # Selective CI (see docs/ci/test-trigger-selector-design.md). The audit/enforce knob is the
       # select-tests action's `enforce` input; tests.yml just consumes what the selector returns.
-      # In audit the selector returns run-all (every gate true + the full matrix), so everything runs.
+      # In enforce the selector returns only the gates its trigger map selected for the changed files
+      # (a non-selected gate is false and its job is skipped); the run-full-ci label / non-PR events
+      # still force every gate true via the action's kill switch.
       run_polyglot: ${{ fromJSON(steps.select_tests.outputs.selection).run_polyglot }}
       run_typescript_sdk: ${{ fromJSON(steps.select_tests.outputs.selection).run_typescript_sdk }}
       run_typescript_api_compat: ${{ fromJSON(steps.select_tests.outputs.selection).run_typescript_api_compat }}
@@ -57,15 +59,17 @@ jobs:
 
       # Compute the selected test subset + non-.NET job booleans. The action reuses this job's checkout
       # (checkout=false) so the BeforeBuildProps.props it may write survives for enumerate-tests below,
-      # and does its own minimal SDK bootstrap (setupDotNet=true). enforce: 'false' keeps this audit-only
-      # (the knob is documented on the action's `enforce` input). No job-level actions/setup-dotnet on
-      # purpose -- global.json declares tools.runtimes, so Arcade always uses repo-local .dotnet.
+      # and does its own minimal SDK bootstrap (setupDotNet=true). enforce: 'true' makes the selection
+      # binding: a non-ALL selection writes the restriction props so enumerate-tests builds only the
+      # selected projects and the run_* gates skip the non-selected jobs (the knob is documented on the
+      # action's `enforce` input). No job-level actions/setup-dotnet on purpose -- global.json declares
+      # tools.runtimes, so Arcade always uses repo-local .dotnet.
       - name: Select relevant tests
         id: select_tests
         uses: ./.github/actions/select-tests
         with:
           checkout: 'false'
-          enforce: 'false'
+          enforce: 'true'
           commentFile: ${{ env.SELECT_TESTS_COMMENT_FILE }}
           # Kill switch: the 'run-full-ci' PR label forces the full matrix + all jobs. Read from the event
           # payload snapshot, so adding the label takes effect on the next push (or reopen), not on a
@@ -88,8 +92,9 @@ jobs:
 
       # enumerate-tests reuses this job's checkout + restore (checkout/restore=false) so the props
       # file the selector wrote survives -- a fresh checkout would git-clean it away. When a
-      # restriction was written, beforeBuildPropsPath points enumerate at the selected subset; in
-      # audit mode project_override_props is empty and enumerate builds the full matrix.
+      # restriction was written, beforeBuildPropsPath points enumerate at the selected subset; for an
+      # ALL selection (run-full-ci, non-PR events, or an ALL escalation) project_override_props is empty
+      # and enumerate builds the full matrix.
       #
       # Skipped entirely when the selection has no .NET test projects (has_dotnet_tests=false, e.g. an
       # extension-only / polyglot-only change whose only targets are non-.NET jobs). An empty selection

@@ -9,15 +9,17 @@ Companion documents:
 - [`test-trigger-map.md`](./test-trigger-map.md) — the descriptive path → target map.
 - [`eng/github-ci/test-trigger-map.yml`](../../eng/github-ci/test-trigger-map.yml) — its machine-readable form.
 
-**Status: audit.** `tests.yml`'s `setup_for_tests` runs the `select-tests` action
-*before* `enumerate-tests`. When its `enforce: 'true'` and the selection is
+**Status: enforcing.** `tests.yml`'s `setup_for_tests` runs the `select-tests` action
+*before* `enumerate-tests` with `enforce: 'true'`. When the selection is
 not ALL, the selector writes an `OverrideProjectToBuild` props file so
-`enumerate-tests` builds and enumerates only the selected projects; in audit mode
-(`enforce: 'false'`) it writes no props and `enumerate-tests` produces
-the full matrix unchanged while the summary still reports what enforcing would
-have skipped.
+`enumerate-tests` builds and enumerates only the selected projects, and the
+`run_*` gates skip the non-selected non-.NET jobs. An ALL selection (the
+`run-full-ci` kill switch, or a non-PR event with no base) writes no props and
+runs the full matrix. Audit mode (`enforce: 'false'`) remains available as a
+knob: it writes no props and `enumerate-tests` produces the full matrix
+unchanged while the summary still reports what enforcing would have skipped.
 
-Audit mode does not soften Layer 1 failures. If the affected-projects graph
+Enforcing does not soften Layer 1 failures. If the affected-projects graph
 cannot be computed, `SelectTests` fails the step because under-selecting would
 silently skip real tests.
 
@@ -468,9 +470,11 @@ hits a curated rule, the convention backstop, or the run-all fallback.
 
 ## Rollout
 
-1. Run `SelectTests` in audit mode.
-2. Watch the audit summaries and fix unsafe skips in the curated layer.
-3. Flip to enforcing. Keep the kill switch and hard-fail Layer 1 policy.
+1. Run `SelectTests` in audit mode. _(done)_
+2. Watch the audit summaries and fix unsafe skips in the curated layer. _(done)_
+3. Flip to enforcing. Keep the kill switch and hard-fail Layer 1 policy. _(done —
+   `tests.yml` runs the selector with `enforce: 'true'`; the `run-full-ci` label
+   remains the kill switch.)_
 
 ## Future refinement
 
