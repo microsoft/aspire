@@ -8,17 +8,6 @@ namespace Aspire.Hosting.GitHub;
 public partial class GitHubModel
 {
     /// <summary>
-    /// Models published by AI21 Labs.
-    /// </summary>
-    public static partial class AI21Labs
-    {
-        /// <summary>
-        /// A 398B parameters (94B active) multilingual model, offering a 256K long context window, function calling, structured output, and grounded generation.
-        /// </summary>
-        public static readonly GitHubModel AI21Jamba15Large = new() { Id = "ai21-labs/ai21-jamba-1.5-large" };
-    }
-
-    /// <summary>
     /// Models published by Cohere.
     /// </summary>
     public static partial class Cohere
@@ -27,16 +16,6 @@ public partial class GitHubModel
         /// Command A is a highly efficient generative model that excels at agentic and multilingual use cases.
         /// </summary>
         public static readonly GitHubModel CohereCommandA = new() { Id = "cohere/cohere-command-a" };
-
-        /// <summary>
-        /// Command R is a scalable generative model targeting RAG and Tool Use to enable production-scale AI for enterprise.
-        /// </summary>
-        public static readonly GitHubModel CohereCommandR082024 = new() { Id = "cohere/cohere-command-r-08-2024" };
-
-        /// <summary>
-        /// Command R+ is a state-of-the-art RAG-optimized model designed to tackle enterprise-grade workloads.
-        /// </summary>
-        public static readonly GitHubModel CohereCommandRPlus082024 = new() { Id = "cohere/cohere-command-r-plus-08-2024" };
     }
 
     /// <summary>
@@ -106,11 +85,6 @@ public partial class GitHubModel
     /// </summary>
     public static partial class Microsoft
     {
-        /// <summary>
-        /// MAI-DS-R1 is a DeepSeek-R1 reasoning model that has been post-trained by the Microsoft AI team to fill in information gaps in the previous version of the model and improve its harm protections while maintaining R1 reasoning capabilities.
-        /// </summary>
-        public static readonly GitHubModel MaiDSR1 = new() { Id = "microsoft/mai-ds-r1" };
-
         /// <summary>
         /// Phi-4 14B, a highly capable model for low latency scenarios.
         /// </summary>
@@ -255,30 +229,11 @@ public partial class GitHubModel
     }
 
     /// <summary>
-    /// Models published by xAI.
-    /// </summary>
-    public static partial class XAI
-    {
-        /// <summary>
-        /// Grok 3 is xAI&apos;s debut model, pretrained by Colossus at supermassive scale to excel in specialized domains like finance, healthcare, and the law.
-        /// </summary>
-        public static readonly GitHubModel Grok3 = new() { Id = "xai/grok-3" };
-
-        /// <summary>
-        /// Grok 3 Mini is a lightweight model that thinks before responding. Trained on mathematic and scientific problems, it is great for logic-based tasks.
-        /// </summary>
-        public static readonly GitHubModel Grok3Mini = new() { Id = "xai/grok-3-mini" };
-    }
-
-    /// <summary>
     /// Gets the model identifier string for the specified <see cref="GitHubModelName"/>.
     /// </summary>
     internal static string GetModelId(GitHubModelName name) => name switch
     {
-        GitHubModelName.AI21Jamba15Large => "ai21-labs/ai21-jamba-1.5-large",
         GitHubModelName.CohereCommandA => "cohere/cohere-command-a",
-        GitHubModelName.CohereCommandR082024 => "cohere/cohere-command-r-08-2024",
-        GitHubModelName.CohereCommandRPlus082024 => "cohere/cohere-command-r-plus-08-2024",
         GitHubModelName.DeepSeekR1 => "deepseek/deepseek-r1",
         GitHubModelName.DeepSeekR10528 => "deepseek/deepseek-r1-0528",
         GitHubModelName.DeepSeekV30324 => "deepseek/deepseek-v3-0324",
@@ -289,7 +244,6 @@ public partial class GitHubModel
         GitHubModelName.Llama3370BInstruct => "meta/llama-3.3-70b-instruct",
         GitHubModelName.MetaLlama31405BInstruct => "meta/meta-llama-3.1-405b-instruct",
         GitHubModelName.MetaLlama318BInstruct => "meta/meta-llama-3.1-8b-instruct",
-        GitHubModelName.MaiDSR1 => "microsoft/mai-ds-r1",
         GitHubModelName.Phi4 => "microsoft/phi-4",
         GitHubModelName.Phi4MiniInstruct => "microsoft/phi-4-mini-instruct",
         GitHubModelName.Phi4MiniReasoning => "microsoft/phi-4-mini-reasoning",
@@ -316,8 +270,6 @@ public partial class GitHubModel
         GitHubModelName.OpenAIO4Mini => "openai/o4-mini",
         GitHubModelName.OpenAITextEmbedding3Large => "openai/text-embedding-3-large",
         GitHubModelName.OpenAITextEmbedding3Small => "openai/text-embedding-3-small",
-        GitHubModelName.Grok3 => "xai/grok-3",
-        GitHubModelName.Grok3Mini => "xai/grok-3-mini",
         _ => throw new System.ArgumentOutOfRangeException(nameof(name), name, "Unknown GitHub model name.")
     };
 }
@@ -328,24 +280,9 @@ public partial class GitHubModel
 internal enum GitHubModelName
 {
     /// <summary>
-    /// A 398B parameters (94B active) multilingual model, offering a 256K long context window, function calling, structured output, and grounded generation.
-    /// </summary>
-    AI21Jamba15Large,
-
-    /// <summary>
     /// Command A is a highly efficient generative model that excels at agentic and multilingual use cases.
     /// </summary>
     CohereCommandA,
-
-    /// <summary>
-    /// Command R is a scalable generative model targeting RAG and Tool Use to enable production-scale AI for enterprise.
-    /// </summary>
-    CohereCommandR082024,
-
-    /// <summary>
-    /// Command R+ is a state-of-the-art RAG-optimized model designed to tackle enterprise-grade workloads.
-    /// </summary>
-    CohereCommandRPlus082024,
 
     /// <summary>
     /// DeepSeek-R1 excels at reasoning tasks using a step-by-step training process, such as language, scientific reasoning, and coding tasks.
@@ -396,11 +333,6 @@ internal enum GitHubModelName
     /// The Llama 3.1 instruction tuned text only models are optimized for multilingual dialogue use cases and outperform many of the available open source and closed chat models on common industry benchmarks.
     /// </summary>
     MetaLlama318BInstruct,
-
-    /// <summary>
-    /// MAI-DS-R1 is a DeepSeek-R1 reasoning model that has been post-trained by the Microsoft AI team to fill in information gaps in the previous version of the model and improve its harm protections while maintaining R1 reasoning capabilities.
-    /// </summary>
-    MaiDSR1,
 
     /// <summary>
     /// Phi-4 14B, a highly capable model for low latency scenarios.
@@ -531,14 +463,4 @@ internal enum GitHubModelName
     /// Text-embedding-3 series models are the latest and most capable embedding model from OpenAI.
     /// </summary>
     OpenAITextEmbedding3Small,
-
-    /// <summary>
-    /// Grok 3 is xAI&apos;s debut model, pretrained by Colossus at supermassive scale to excel in specialized domains like finance, healthcare, and the law.
-    /// </summary>
-    Grok3,
-
-    /// <summary>
-    /// Grok 3 Mini is a lightweight model that thinks before responding. Trained on mathematic and scientific problems, it is great for logic-based tasks.
-    /// </summary>
-    Grok3Mini,
 }
