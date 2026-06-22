@@ -76,7 +76,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
     [Theory]
     [MemberData(nameof(LogLevelFilteringData))]
     public async Task WatchDashboardLogs_AspireDashboardWarningsShown_ThirdPartyWarningsSuppressed(
-        string category, LogLevel logLevel, bool expectLogged)
+        string category, LogLevel logLevel, bool expectLogged, string? expectedCategory)
     {
         var testSink = new TestSink();
         var factory = LoggerFactory.Create(b =>
@@ -126,6 +126,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
                 if (logContext.Message == $"Test message from {category}")
                 {
                     Assert.Equal(logLevel, logContext.LogLevel);
+                    Assert.Equal(expectedCategory, logContext.LoggerName);
                     break;
                 }
             }
@@ -145,22 +146,22 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         }
     }
 
-    public static IEnumerable<object[]> LogLevelFilteringData()
+    public static IEnumerable<object?[]> LogLevelFilteringData()
     {
-        // Aspire.Dashboard.* categories: Warning+ should be logged.
-        yield return ["Aspire.Dashboard.Model.IconResolver", LogLevel.Warning, true];
-        yield return ["Aspire.Dashboard.Model.IconResolver", LogLevel.Error, true];
-        yield return ["Aspire.Dashboard.Components.SomePage", LogLevel.Information, false];
-        yield return ["Aspire.Dashboard.Components.SomePage", LogLevel.Debug, false];
+        // Aspire.Dashboard.* categories: Warning+ should be logged. Prefix is trimmed.
+        yield return ["Aspire.Dashboard.Model.IconResolver", LogLevel.Warning, true, "Aspire.Hosting.Dashboard.Model.IconResolver"];
+        yield return ["Aspire.Dashboard.Model.IconResolver", LogLevel.Error, true, "Aspire.Hosting.Dashboard.Model.IconResolver"];
+        yield return ["Aspire.Dashboard.Components.SomePage", LogLevel.Information, false, null];
+        yield return ["Aspire.Dashboard.Components.SomePage", LogLevel.Debug, false, null];
 
-        // Third-party categories: only Error+ should be logged.
-        yield return ["Microsoft.AspNetCore.Server.Kestrel", LogLevel.Error, true];
-        yield return ["Microsoft.AspNetCore.Server.Kestrel", LogLevel.Critical, true];
-        yield return ["Microsoft.AspNetCore.Server.Kestrel", LogLevel.Warning, false];
-        yield return ["Microsoft.AspNetCore.Server.Kestrel", LogLevel.Information, false];
-        yield return ["Grpc.AspNetCore.Server", LogLevel.Warning, false];
-        yield return ["Grpc.AspNetCore.Server", LogLevel.Error, true];
-        yield return ["System.Net.Http.HttpClient", LogLevel.Warning, false];
+        // Third-party categories: only Error+ should be logged. Routed under ThirdParty.
+        yield return ["Microsoft.AspNetCore.Server.Kestrel", LogLevel.Error, true, "Aspire.Hosting.Dashboard.ThirdParty.Microsoft.AspNetCore.Server.Kestrel"];
+        yield return ["Microsoft.AspNetCore.Server.Kestrel", LogLevel.Critical, true, "Aspire.Hosting.Dashboard.ThirdParty.Microsoft.AspNetCore.Server.Kestrel"];
+        yield return ["Microsoft.AspNetCore.Server.Kestrel", LogLevel.Warning, false, null];
+        yield return ["Microsoft.AspNetCore.Server.Kestrel", LogLevel.Information, false, null];
+        yield return ["Grpc.AspNetCore.Server", LogLevel.Warning, false, null];
+        yield return ["Grpc.AspNetCore.Server", LogLevel.Error, true, "Aspire.Hosting.Dashboard.ThirdParty.Grpc.AspNetCore.Server"];
+        yield return ["System.Net.Http.HttpClient", LogLevel.Warning, false, null];
     }
 
     [Fact]
