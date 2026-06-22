@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Buffers;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
@@ -122,6 +121,11 @@ public class TextVisualizerViewModel
             formattedText = FormatJson(text);
             return true;
         }
+        catch (JsonNumberNotRepresentableException)
+        {
+            formattedText = text;
+            return true;
+        }
         catch (JsonException)
         {
             formattedText = null;
@@ -132,7 +136,6 @@ public class TextVisualizerViewModel
     private static string FormatJson(string jsonString)
     {
         var jsonData = Encoding.UTF8.GetBytes(jsonString);
-        var rawNumberReplacements = new List<RawNumberReplacement>();
 
         // Initialize the Utf8JsonReader
         var reader = new Utf8JsonReader(jsonData, new JsonReaderOptions
@@ -172,7 +175,7 @@ public class TextVisualizerViewModel
                     writer.WriteStringValue(reader.GetString());
                     break;
                 case JsonTokenType.Number:
-                    WriteRawNumberValue(writer, reader, stream, rawNumberReplacements);
+                    WriteNumberValue(writer, reader);
                     break;
                 case JsonTokenType.True:
                     writer.WriteBooleanValue(true);
@@ -190,64 +193,37 @@ public class TextVisualizerViewModel
         }
 
         writer.Flush();
-        var formattedJsonBytes = ApplyRawNumberReplacements(stream.ToArray(), rawNumberReplacements);
-        var formattedJson = Encoding.UTF8.GetString(formattedJsonBytes);
+        var formattedJson = Encoding.UTF8.GetString(stream.ToArray());
 
         return formattedJson;
     }
 
-    private static void WriteRawNumberValue(
-        Utf8JsonWriter writer,
-        Utf8JsonReader reader,
-        MemoryStream stream,
-        List<RawNumberReplacement> rawNumberReplacements)
+    private static void WriteNumberValue(Utf8JsonWriter writer, Utf8JsonReader reader)
     {
-        const long placeholder = 9876543210;
-        const string placeholderText = "9876543210";
-        var placeholderBytes = Encoding.UTF8.GetBytes(placeholderText);
-        var rawNumberBytes = reader.HasValueSequence ? reader.ValueSequence.ToArray() : reader.ValueSpan.ToArray();
-
-        // Utf8JsonWriter owns separators, indentation, and comments. Write a finite placeholder so it
-        // advances its state correctly, then replace only the placeholder token with the original
-        // validated JSON number text. This preserves exact number lexemes that .NET numeric types
-        // cannot represent without rounding or normalization.
-        writer.Flush();
-        var segmentStart = checked((int)stream.Position);
-        writer.WriteNumberValue(placeholder);
-        writer.Flush();
-        var segmentEnd = checked((int)stream.Position);
-        var buffer = stream.GetBuffer();
-        var placeholderOffset = buffer.AsSpan(segmentStart, segmentEnd - segmentStart).IndexOf(placeholderBytes);
-        if (placeholderOffset < 0)
+        if (reader.TryGetInt64(out var longValue))
         {
-            throw new JsonException("Unable to preserve JSON number text while formatting.");
+            writer.WriteNumberValue(longValue);
+            return;
         }
 
-        rawNumberReplacements.Add(new RawNumberReplacement(
-            Start: segmentStart + placeholderOffset,
-            Length: placeholderBytes.Length,
-            RawNumberBytes: rawNumberBytes));
+        if (reader.TryGetDecimal(out var decimalValue) &&
+            DecimalPreservesRawText(decimalValue, reader.ValueSpan))
+        {
+            writer.WriteNumberValue(decimalValue);
+            return;
+        }
+
+        throw new JsonNumberNotRepresentableException();
     }
 
-    private static byte[] ApplyRawNumberReplacements(byte[] formattedJsonBytes, List<RawNumberReplacement> rawNumberReplacements)
+    private static bool DecimalPreservesRawText(decimal value, ReadOnlySpan<byte> rawNumber)
     {
-        if (rawNumberReplacements.Count == 0)
-        {
-            return formattedJsonBytes;
-        }
+        using var stream = new MemoryStream();
+        using var writer = new Utf8JsonWriter(stream);
+        writer.WriteNumberValue(value);
+        writer.Flush();
 
-        using var output = new MemoryStream();
-        var currentPosition = 0;
-
-        foreach (var replacement in rawNumberReplacements)
-        {
-            output.Write(formattedJsonBytes.AsSpan(currentPosition, replacement.Start - currentPosition));
-            output.Write(replacement.RawNumberBytes);
-            currentPosition = replacement.Start + replacement.Length;
-        }
-
-        output.Write(formattedJsonBytes.AsSpan(currentPosition));
-        return output.ToArray();
+        return stream.GetBuffer().AsSpan(0, checked((int)stream.Length)).SequenceEqual(rawNumber);
     }
 
     public static bool CouldBeJson(string? input)
@@ -346,5 +322,5 @@ public class TextVisualizerViewModel
         }
     }
 
-    private sealed record RawNumberReplacement(int Start, int Length, byte[] RawNumberBytes);
+    private sealed class JsonNumberNotRepresentableException : JsonException;
 }

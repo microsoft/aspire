@@ -90,26 +90,36 @@ public sealed class TextVisualizerViewModelTests
     }
 
     [Fact]
-    public void Create_KnownJsonFormat_PreservesNumberTextWhenFormatting()
+    public void Create_KnownJsonFormat_PreservesLosslessNumberTextWhenFormatting()
     {
-        var vm = new TextVisualizerViewModel("""{"large":9223372036854775807,"precise":0.1234567890123456789012345,"exponent":1.23456789012345678901234567890123456789e-100,"huge":1e1000}""", indentText: true, knownFormat: DashboardUIHelpers.JsonFormat);
+        var vm = new TextVisualizerViewModel("""{"large":9223372036854775807,"precise":0.1234567890123456789012345,"trailing":1.2300}""", indentText: true, knownFormat: DashboardUIHelpers.JsonFormat);
 
         Assert.Equal(
             """
             {
               "large": 9223372036854775807,
               "precise": 0.1234567890123456789012345,
-              "exponent": 1.23456789012345678901234567890123456789e-100,
-              "huge": 1e1000
+              "trailing": 1.2300
             }
             """,
             vm.FormattedText);
     }
 
+    [Theory]
+    [InlineData("""{"exponent":1.23456789012345678901234567890123456789e-100}""")]
+    [InlineData("""{"huge":1e1000}""")]
+    public void Create_KnownJsonFormat_LeavesJsonUnformattedWhenNumberCannotBeRepresentedLosslessly(string json)
+    {
+        var vm = new TextVisualizerViewModel(json, indentText: true, knownFormat: DashboardUIHelpers.JsonFormat);
+
+        Assert.Equal(DashboardUIHelpers.JsonFormat, vm.FormatKind);
+        Assert.Equal(json, vm.FormattedText);
+    }
+
     [Fact]
     public void Create_KnownJsonFormat_FormatsNumberTextAfterComments()
     {
-        var vm = new TextVisualizerViewModel("""[/* number */0.1234567890123456789012345,9223372036854775807,1.2300,-0]""", indentText: true, knownFormat: DashboardUIHelpers.JsonFormat);
+        var vm = new TextVisualizerViewModel("""[/* number */0.1234567890123456789012345,9223372036854775807,1.2300]""", indentText: true, knownFormat: DashboardUIHelpers.JsonFormat);
 
         Assert.Equal(
             """
@@ -117,8 +127,7 @@ public sealed class TextVisualizerViewModelTests
               /* number */
               0.1234567890123456789012345,
               9223372036854775807,
-              1.2300,
-              -0
+              1.2300
             ]
             """,
             vm.FormattedText);
