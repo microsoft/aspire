@@ -52,7 +52,7 @@ internal static class <Name>Deprecation
 }
 ```
 
-Match the integration's existing root namespace. If a type lives in a different namespace than the constant (as `GitHubModel` did), add a `using` for the deprecation namespace to that file.
+Match the integration's existing root namespace. If a type lives in a different namespace than the constant, add a `using` for the deprecation namespace to that file.
 
 ## Step 2 — Mark the entire public + exported API `[Obsolete]`
 
