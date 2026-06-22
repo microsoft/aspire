@@ -3519,6 +3519,11 @@ internal sealed class AzureProvisioningController(
         }
         catch (Exception ex)
         {
+            if (await TryPublishTerminalDeploymentStateAsync(resource, parentChildLookup).ConfigureAwait(false))
+            {
+                return;
+            }
+
             var failureDetails = AzureProvisioningFailureDetails.TryCreate(ex, AzureProvisioningFailureDetails.ProvisionOperation);
             await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
             {
@@ -3528,6 +3533,75 @@ internal sealed class AzureProvisioningController(
                     : failureDetails.SetResourceProperties(state.Properties, AzureProvisioningFailureDetails.ProvisionOperation)
             }).ConfigureAwait(false);
         }
+    }
+
+    private async Task<bool> TryPublishTerminalDeploymentStateAsync(
+        (IResource Resource, IAzureResource AzureResource) resource,
+        ILookup<IResource, IResourceWithParent> parentChildLookup)
+    {
+        if (resource.AzureResource is not AzureBicepResource bicepResource)
+        {
+            return false;
+        }
+
+        if (TryGetPublishedTerminalDeploymentState(resource.Resource.Name, out var publishedTerminalState) ||
+            TryGetPublishedTerminalDeploymentState(bicepResource.Name, out publishedTerminalState))
+        {
+            // The provisioner already published an ARM-specific terminal state before throwing to
+            // stop normal provisioning. Do not replace that more precise state with generic failure,
+            // and make sure projected resources see the same terminal state as the Bicep resource.
+            await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
+            {
+                State = publishedTerminalState
+            }).ConfigureAwait(false);
+
+            return true;
+        }
+
+        if (!IsResourceInState(resource.Resource.Name, CancelingState) &&
+            !IsResourceInState(bicepResource.Name, CancelingState))
+        {
+            return false;
+        }
+
+        var section = await deploymentStateManager.AcquireSectionAsync($"Azure:Deployments:{bicepResource.Name}").ConfigureAwait(false);
+        if (!string.Equals(
+                section.Data[BicepProvisioner.DeploymentStateProvisioningStateKey]?.GetValue<string>(),
+                BicepProvisioner.DeploymentStateProvisioningStateCanceled,
+                StringComparisons.AzureProvisioningState))
+        {
+            return false;
+        }
+
+        // ARM can win the cancellation race and report a canceled deployment as a non-cancellation
+        // failure from the SDK path. The cache is the source of truth for that terminal outcome.
+        await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
+        {
+            State = new(AzureProvisioningStrings.ResourceStateCanceled, KnownResourceStateStyles.Info)
+        }).ConfigureAwait(false);
+
+        return true;
+    }
+
+    private bool IsResourceInState(string resourceName, string state)
+    {
+        return notificationService.TryGetCurrentState(resourceName, out var currentEvent) &&
+            string.Equals(currentEvent.Snapshot.State?.Text, state, StringComparison.Ordinal);
+    }
+
+    private bool TryGetPublishedTerminalDeploymentState(string resourceName, out ResourceStateSnapshot state)
+    {
+        if (notificationService.TryGetCurrentState(resourceName, out var currentEvent) &&
+            currentEvent.Snapshot.State is { Text: { } stateText } currentState &&
+            (string.Equals(stateText, AzureProvisioningStrings.ResourceStateAzureDeploymentCanceled, StringComparison.Ordinal) ||
+             string.Equals(stateText, AzureProvisioningStrings.ResourceStateAzureDeploymentFailed, StringComparison.Ordinal)))
+        {
+            state = currentState;
+            return true;
+        }
+
+        state = default!;
+        return false;
     }
 
     private async Task<bool> WaitForRoleAssignmentsAsync(
