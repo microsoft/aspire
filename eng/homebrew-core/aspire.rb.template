@@ -1,0 +1,124 @@
+class Aspire < Formula
+  desc "CLI for building observable, production-ready distributed applications"
+  homepage "https://aspire.dev/"
+  url "https://github.com/microsoft/aspire/archive/refs/tags/v__SRC_VERSION__.tar.gz"
+  sha256 "__SRC_SHA__"
+  license "MIT"
+  head "https://github.com/microsoft/aspire.git", branch: "main"
+
+  # livecheck drives version-discovery telemetry; useful for maintainers and
+  # dashboards even when autobump is disabled.
+  livecheck do
+    url :stable
+    strategy :github_latest
+  end
+
+  # We bump this formula from our release pipeline (per-RID SDK resources are
+  # not autobumpable in lockstep). Suppress BrewTestBot's autobump so it doesn't
+  # open competing PRs with stale resource SHAs.
+  no_autobump! because: :bumped_by_upstream
+
+  # NativeAOT publish requires clang on Linux. macOS gets the linker from Xcode CLT.
+  uses_from_macos "zlib"
+  on_linux do
+    depends_on "llvm" => :build
+  end
+
+  # Vendored .NET SDK, pinned to __SDK_VERSION__ (sourced from the release tag's
+  # global.json). URLs and SHA256s are resolved per release against dotnet's
+  # release metadata and substituted into the placeholders below.
+  #
+  # We vendor because homebrew-core's `dotnet` formula tracks the 1xx feature
+  # band only (livecheck regex `/^v?(\d+\.\d+\.1\d\d)$/i`); we develop and test
+  # against the SDK version pinned in global.json (currently 2xx band). Shipping
+  # a binary built against a different SDK than upstream tests would be a real
+  # correctness risk for production releases.
+  #
+  # A single resource with per-platform url/sha256 (the homebrew-core idiom,
+  # e.g. crystal.rb's `boot` resource) means brew fetches only the current
+  # platform's SDK (~230 MB) rather than all four RIDs (~950 MB), which is what
+  # separate top-level resource blocks would force since brew downloads every
+  # declared resource before `install` runs.
+  resource "dotnet-sdk" do
+    on_macos do
+      on_arm do
+        url "https://builds.dotnet.microsoft.com/dotnet/Sdk/__SDK_VERSION__/dotnet-sdk-__SDK_VERSION__-osx-arm64.tar.gz"
+        sha256 "__SHA_OSX_ARM64__"
+      end
+      on_intel do
+        url "https://builds.dotnet.microsoft.com/dotnet/Sdk/__SDK_VERSION__/dotnet-sdk-__SDK_VERSION__-osx-x64.tar.gz"
+        sha256 "__SHA_OSX_X64__"
+      end
+    end
+    on_linux do
+      on_arm do
+        url "https://builds.dotnet.microsoft.com/dotnet/Sdk/__SDK_VERSION__/dotnet-sdk-__SDK_VERSION__-linux-arm64.tar.gz"
+        sha256 "__SHA_LINUX_ARM64__"
+      end
+      on_intel do
+        url "https://builds.dotnet.microsoft.com/dotnet/Sdk/__SDK_VERSION__/dotnet-sdk-__SDK_VERSION__-linux-x64.tar.gz"
+        sha256 "__SHA_LINUX_X64__"
+      end
+    end
+  end
+
+  def install
+    arch = Hardware::CPU.arm? ? "arm64" : "x64"
+    os   = OS.mac? ? "osx" : "linux"
+    rid  = "#{os}-#{arch}"
+
+    # Stage the vendored SDK into the buildpath so the build runs from a known
+    # toolset. `resource(...).stage` is the only step that must stay in Ruby
+    # (it's Homebrew DSL); everything else is delegated below. The `dotnet-sdk`
+    # resource resolves to the current platform's SDK via its on_macos/on_linux
+    # + on_arm/on_intel guards.
+    resource("dotnet-sdk").stage do
+      (buildpath/"dotnet-sdk").install Dir["./*"]
+    end
+
+    # Build + lay out the keg. All imperative install logic lives in the repo
+    # script so that layout changes ride along with the source tarball and are
+    # validated by .github/workflows/homebrew-formula.yml. The homebrew-core
+    # formula only ever bumps url/sha256/version and the resource SHAs — never
+    # this block — so new releases keep working without a formula edit.
+    system "eng/homebrew-core/install-formula.sh",
+           "--rid", rid,
+           "--dotnet-root", buildpath/"dotnet-sdk",
+           "--libexec", libexec,
+           "--bin", bin,
+           # Only the versions/<v> layout dir name. The binary's version is the
+           # Arcade-computed value; `version` equals it (resolved at render time).
+           "--version", version.to_s
+  end
+
+  test do
+    # Real-shape smoke. `--version` alone wouldn't catch a missing bundle
+    # layout; `aspire new aspire-empty` exercises template extraction
+    # plus the bundle being discoverable via LayoutDiscovery.
+    assert_match version.to_s, shell_output("#{bin}/aspire --version")
+
+    # Sanity: the canonical sidecar-route layout anchor resolves through
+    # libexec/bundle/ → versions/<v>/{managed,dcp}. If this fails the
+    # CLI runs but every polyglot command would error at first use.
+    assert_path_exists libexec/"bundle/managed"
+    assert_path_exists libexec/"bundle/dcp"
+
+    ENV["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1"
+    ENV["DOTNET_NOLOGO"] = "1"
+
+    # The flags are load-bearing in brew test's non-interactive sandbox:
+    #   --language csharp           skips the language-selection prompt
+    #   --non-interactive           disables all prompts and spinners
+    #   --suppress-agent-init       skips the agent-skill install prompt
+    # Without them the command aborts with "Cannot show selection prompt
+    # since the current terminal isn't interactive."
+    system bin/"aspire", "new", "aspire-empty",
+           "--language", "csharp",
+           "--non-interactive",
+           "--suppress-agent-init",
+           "--nologo",
+           "-o", testpath/"smoke",
+           "-n", "SmokeTest"
+    assert_path_exists testpath/"smoke/apphost.cs"
+  end
+end

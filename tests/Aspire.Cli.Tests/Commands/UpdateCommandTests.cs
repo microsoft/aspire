@@ -923,6 +923,221 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task UpdateCommand_SelfUpdate_WhenRunningFromBrew_DisplaysBrewUpdateCommand()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var brewInstall = CreateBrewInstallDirectory();
+        using var brewScope = BrewInstallDetection.UseProcessPathForTesting(brewInstall.BinaryPath);
+        var interactionService = new TestInteractionService();
+        var downloaderInvoked = false;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.CliDownloaderFactory = _ => new TestCliDownloader(workspace.WorkspaceRoot)
+            {
+                DownloadLatestCliAsyncCallback = (_, _) =>
+                {
+                    downloaderInvoked = true;
+                    return Task.FromResult(string.Empty);
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --self");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(downloaderInvoked, "Archive self-update should not be used for brew installs.");
+        Assert.Contains(interactionService.DisplayedPlainText, text => text.Contains("brew upgrade aspire", StringComparison.Ordinal));
+        Assert.DoesNotContain(interactionService.DisplayedPlainText, text => text.Contains("dotnet tool update", StringComparison.Ordinal));
+        Assert.DoesNotContain(interactionService.DisplayedPlainText, text => text.Contains("npm install", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task UpdateCommand_WhenProjectUpdatedSuccessfullyAndRunningFromBrew_DisplaysBrewUpdateCommand()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var brewInstall = CreateBrewInstallDirectory();
+        using var brewScope = BrewInstallDetection.UseProcessPathForTesting(brewInstall.BinaryPath);
+        var interactionService = new TestInteractionService()
+        {
+            ConfirmCallback = (_, _) => true
+        };
+        var downloaderInvoked = false;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator()
+            {
+                UseOrFindAppHostProjectFileAsyncCallback = (projectFile, _, _) =>
+                {
+                    return Task.FromResult<FileInfo?>(new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj")));
+                }
+            };
+
+            options.InteractionServiceFactory = _ => interactionService;
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner();
+
+            options.ProjectUpdaterFactory = _ => new TestProjectUpdater()
+            {
+                UpdateProjectAsyncCallback = (context, cancellationToken) =>
+                {
+                    return Task.FromResult(new ProjectUpdateResult { UpdatedApplied = true });
+                }
+            };
+
+            options.PackagingServiceFactory = _ => new TestPackagingService()
+            {
+                GetChannelsAsyncCallback = (cancellationToken) =>
+                {
+                    var stableChannel = PackageChannel.CreateExplicitChannel(
+                        "stable",
+                        PackageChannelQuality.Stable,
+                        new[] { new PackageMapping("Aspire*", "https://api.nuget.org/v3/index.json") },
+                        null!,
+                        features: new TestFeatures(),
+                        configureGlobalPackagesFolder: false,
+                        cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/ga/daily");
+                    return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel });
+                }
+            };
+
+            options.CliUpdateNotifierFactory = _ => new TestCliUpdateNotifier()
+            {
+                IsUpdateAvailableCallback = () => true
+            };
+
+            options.CliDownloaderFactory = _ => new TestCliDownloader(workspace.WorkspaceRoot)
+            {
+                DownloadLatestCliAsyncCallback = (_, _) =>
+                {
+                    downloaderInvoked = true;
+                    return Task.FromResult(string.Empty);
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --apphost AppHost.csproj");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(downloaderInvoked, "Archive self-update should not be used for brew installs.");
+        Assert.Contains(interactionService.DisplayedPlainText, text => text.Contains("brew upgrade aspire", StringComparison.Ordinal));
+        Assert.DoesNotContain(interactionService.DisplayedPlainText, text => text.Contains("dotnet tool update", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task UpdateCommand_GuestProject_WhenTargetSdkNewerThanCliAndRunningFromBrew_DisplaysBrewUpdateCommandAndSkipsProjectUpdate()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var brewInstall = CreateBrewInstallDirectory();
+        using var brewScope = BrewInstallDetection.UseProcessPathForTesting(brewInstall.BinaryPath);
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
+        File.WriteAllText(appHostPath, "// test apphost");
+
+        var updateProjectInvoked = false;
+        var downloaderInvoked = false;
+        var interactionService = new TestInteractionService
+        {
+            ConfirmCallback = (_, _) => true
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator()
+            {
+                UseOrFindAppHostProjectFileAsyncCallback = (_, _, _) => Task.FromResult<FileInfo?>(new FileInfo(appHostPath))
+            };
+
+            options.AppHostProjectFactory = _ => new TestAppHostProjectFactory
+            {
+                CanHandleCallback = _ => true,
+                LanguageId = "typescript/nodejs",
+                DisplayName = "TypeScript (Node.js)",
+                DetectionPatterns = ["apphost.ts"],
+                UpdatePackagesAsyncCallback = (_, _) =>
+                {
+                    updateProjectInvoked = true;
+                    return Task.FromResult(new UpdatePackagesResult { UpdatesApplied = true });
+                }
+            };
+
+            options.InteractionServiceFactory = _ => interactionService;
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(
+                    [CreatePackageChannelWithGuestSdkVersion("99.0.0", cliDownloadBaseUrl: "https://example.test/aspire")])
+            };
+
+            options.CliDownloaderFactory = _ => new TestCliDownloader(workspace.WorkspaceRoot)
+            {
+                DownloadLatestCliAsyncCallback = (_, _) =>
+                {
+                    downloaderInvoked = true;
+                    return Task.FromResult(string.Empty);
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --apphost apphost.ts");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(updateProjectInvoked, "Project update should be skipped after deferring CLI update to brew.");
+        Assert.False(downloaderInvoked, "Archive self-update should not be used for brew installs.");
+        Assert.Contains(interactionService.DisplayedPlainText, text => text.Contains("brew upgrade aspire", StringComparison.Ordinal));
+        Assert.Contains(interactionService.DisplayedMessages, message => message.Message.Contains("Project update skipped", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task UpdateCommand_WhenNoProjectFoundAndRunningFromBrew_DoesNotPromptForArchiveSelfUpdate()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var brewInstall = CreateBrewInstallDirectory();
+        using var brewScope = BrewInstallDetection.UseProcessPathForTesting(brewInstall.BinaryPath);
+
+        var confirmCallbackInvoked = false;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator()
+            {
+                UseOrFindAppHostProjectFileAsyncCallback = (projectFile, _, _) =>
+                {
+                    throw new ProjectLocatorException(ErrorStrings.NoProjectFileFound, ProjectLocatorFailureReason.NoProjectFileFound);
+                }
+            };
+
+            options.InteractionServiceFactory = _ => new TestInteractionService()
+            {
+                ConfirmCallback = (_, _) =>
+                {
+                    confirmCallbackInvoked = true;
+                    return true;
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.False(confirmCallbackInvoked, "Archive self-update prompt should not be shown for brew installs.");
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
+    }
+
+    [Fact]
     public async Task UpdateCommand_SelfUpdate_WhenRunningAsCustomToolPathDotnetTool_DisplaysToolPathUpdateCommand()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -2784,6 +2999,26 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             [NpmInstallDetection.PackageVersionEnvironmentVariableName] = "9.4.0",
             [NpmInstallDetection.PackageRidEnvironmentVariableName] = "linux-x64"
         };
+    }
+
+    private static BrewInstallScope CreateBrewInstallDirectory()
+    {
+        var temp = new TestTempDirectory();
+        var binaryDir = Directory.CreateDirectory(Path.Combine(temp.Path, "bin"));
+        var binaryPath = Path.Combine(binaryDir.FullName, OperatingSystem.IsWindows() ? "aspire.exe" : "aspire");
+        File.WriteAllText(binaryPath, string.Empty);
+        File.WriteAllText(Path.Combine(binaryDir.FullName, ".aspire-install.json"), """{"source":"brew"}""");
+        return new BrewInstallScope(temp, binaryPath);
+    }
+
+    private sealed class BrewInstallScope(TestTempDirectory tempDirectory, string binaryPath) : IDisposable
+    {
+        public string BinaryPath => binaryPath;
+
+        public void Dispose()
+        {
+            tempDirectory.Dispose();
+        }
     }
 
     // `aspire update --self` no longer mutates the global identity channel via

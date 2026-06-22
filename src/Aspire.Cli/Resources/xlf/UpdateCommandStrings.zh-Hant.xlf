@@ -37,6 +37,11 @@
         <target state="translated">正在套用更新...</target>
         <note />
       </trans-unit>
+      <trans-unit id="BrewSelfUpdateMessage">
+        <source>To update the Aspire CLI when installed from Homebrew, run:</source>
+        <target state="new">To update the Aspire CLI when installed from Homebrew, run:</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CentralPackageManagementNotSupported">
         <source>Central package management is currently not supported by 'aspire update'.</source>
         <target state="translated">中央套件管理目前不受 'aspire update' 支援。</target>

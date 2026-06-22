@@ -990,6 +990,71 @@ public class CliInstallStrategyTests
         Assert.Equal(CliInstallMode.Preinstalled, strategy.Mode);
     }
 
+    [Fact]
+    public void Detect_ReturnsHomebrew_WhenHomebrewIsSet()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL", null),
+            ("ASPIRE_E2E_QUALITY", null),
+            ("ASPIRE_E2E_VERSION", null),
+            ("ASPIRE_E2E_PREINSTALLED", null),
+            ("ASPIRE_E2E_HOMEBREW", "true"),
+            ("ASPIRE_E2E_HOMEBREW_VERSION", null),
+            ("GITHUB_PR_NUMBER", null),
+            ("GITHUB_PR_HEAD_SHA", null),
+            (CliE2ETestHelpers.CliArchiveDirEnvironmentVariableName, null),
+            ("CI", null),
+            ("GITHUB_ACTIONS", null));
+
+        var strategy = CliInstallStrategy.Detect();
+
+        Assert.Equal(CliInstallMode.Homebrew, strategy.Mode);
+        Assert.Null(strategy.ExpectedVersion);
+    }
+
+    [Fact]
+    public void Detect_ReturnsHomebrewWithExpectedVersion_WhenHomebrewVersionIsSet()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL", null),
+            ("ASPIRE_E2E_QUALITY", null),
+            ("ASPIRE_E2E_VERSION", null),
+            ("ASPIRE_E2E_PREINSTALLED", null),
+            ("ASPIRE_E2E_HOMEBREW", "1"),
+            ("ASPIRE_E2E_HOMEBREW_VERSION", "13.4.2"),
+            ("GITHUB_PR_NUMBER", null),
+            ("GITHUB_PR_HEAD_SHA", null),
+            (CliE2ETestHelpers.CliArchiveDirEnvironmentVariableName, null),
+            ("CI", null),
+            ("GITHUB_ACTIONS", null));
+
+        var strategy = CliInstallStrategy.Detect();
+
+        Assert.Equal(CliInstallMode.Homebrew, strategy.Mode);
+        Assert.Equal("13.4.2", strategy.ExpectedVersion);
+    }
+
+    [Fact]
+    public void ConfigureContainer_ThrowsForHomebrew_BecauseModeIsHostOnly()
+    {
+        var strategy = CliInstallStrategy.FromHomebrew();
+        var options = new DockerContainerOptions();
+
+        Assert.Throws<InvalidOperationException>(() => strategy.ConfigureContainer(options));
+    }
+
+    [Fact]
+    public void GetSourceHomebrewEnvironmentCommand_PutsBrewPrefixBinOnPath()
+    {
+        var command = AspireCliShellCommandHelpers.GetSourceHomebrewEnvironmentCommand();
+
+        Assert.Contains("export PATH=\"$(brew --prefix)/bin:$PATH\"", command);
+    }
+
     private static EnvironmentVariableScope WithCleanCliE2ETestEnvironment(params (string Name, string? Value)[] variables)
     {
         (string Name, string? Value)[] defaults =

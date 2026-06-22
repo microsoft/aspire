@@ -1,0 +1,520 @@
+name: Homebrew formula
+
+# Single source of truth for validating eng/homebrew-core/aspire.rb.template:
+#
+#   * lint         — `brew style` + `brew audit --strict` on a rendered copy
+#                    inside a scratch tap (so homebrew-core's RuboCop config
+#                    loads and audit can resolve the formula by tap name).
+#   * install      — for each runner RID, render the template against THIS
+#                    commit's sources (URL = archive/<sha>.tar.gz, SHA
+#                    computed at runtime; SDK URL + per-RID SHA likewise
+#                    resolved at runtime), then `brew install --build-from-
+#                    source <tap>/aspire`. This is the same code path
+#                    homebrew-core's CI runs on the submission PR — it
+#                    exercises the formula's `def install` block, resource
+#                    staging, and `eng/homebrew-core/install-formula.sh`
+#                    (which builds via build-cli.sh and lays out the keg in
+#                    the sidecar-route shape, including the brew sidecar write).
+#   * post-install — `aspire --version` works; `aspire doctor` reports the
+#                    brew install route; **nothing extracts into ~/.aspire**
+#                    (the formula owns the bundle layout via libexec/);
+#                    `aspire update --self` prints `brew upgrade aspire`,
+#                    exits 0, and does not mutate the binary; the canonical
+#                    `brew test` block (the formula's `test do`) runs clean.
+#   * e2e          — HomebrewInstalledCliTests drives the brew-installed CLI in
+#                    a non-Docker host terminal (the only path that can cover
+#                    osx-arm64): doctor route, update-self gate, config
+#                    round-trip, and a new→start→ps→describe→stop lifecycle.
+#   * cleanup      — `brew uninstall aspire` succeeds.
+#
+# While we iterate on the formula, the matrix is intentionally narrow:
+# osx-arm64 and linux-x64 only. osx-x64 hosted runners are scarce right now;
+# linux-arm64 can be added back via ubuntu-24.04-arm once the workflow is
+# stable.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'eng/homebrew-core/**'
+      - 'eng/Bundle.proj'
+      - 'eng/clipack/**'
+      - 'src/Aspire.Cli/**'
+      - 'global.json'
+      - '.github/workflows/homebrew-formula.yml'
+      - 'tests/Aspire.Cli.EndToEnd.Tests/HomebrewInstalledCliTests.cs'
+      - 'tests/Shared/CliInstallStrategy.cs'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  lint:
+    name: Lint formula (style + audit)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # `brew style` / `brew audit` on an out-of-tree formula file (a) load
+      # the default RuboCop config instead of homebrew-core's (surfacing cops
+      # — Sorbet sigils, frozen-string-literal headers, top-level class docs
+      # — that homebrew-core formulas never use), and (b) refuse to run on
+      # file paths since brew 5.x. The supported way to lint a candidate
+      # homebrew-core formula is to drop it into a scratch tap and audit it
+      # by tap-qualified name.
+      - name: Create scratch tap
+        run: brew tap-new aspire-lint/scratch --no-git
+
+      # `no_autobump!` is stripped because `brew audit` rejects it outside
+      # official Homebrew taps. Rendered filename is `aspire.rb` so it
+      # matches the `class Aspire` name in the template.
+      - name: Render formula with lint stubs
+        run: |
+          set -euo pipefail
+          TAP_REPO="$(brew --repo aspire-lint/scratch)"
+          STUB_SHA="0000000000000000000000000000000000000000000000000000000000000000"
+          sed \
+            -e "s|__SRC_VERSION__|13.0.0|g" \
+            -e "s|__SDK_VERSION__|10.0.100|g" \
+            -e "s|__SRC_SHA__|${STUB_SHA}|g" \
+            -e "s|__SHA_OSX_ARM64__|${STUB_SHA}|g" \
+            -e "s|__SHA_OSX_X64__|${STUB_SHA}|g" \
+            -e "s|__SHA_LINUX_X64__|${STUB_SHA}|g" \
+            -e "s|__SHA_LINUX_ARM64__|${STUB_SHA}|g" \
+            -e '/no_autobump!/d' \
+            eng/homebrew-core/aspire.rb.template \
+            > "$TAP_REPO/Formula/aspire.rb"
+
+          if grep -nE '__[A-Z_]+__' "$TAP_REPO/Formula/aspire.rb"; then
+            echo "::error::Unrendered placeholders remain in the formula. Update the sed pipeline above to cover every __PLACEHOLDER__ in the template."
+            exit 1
+          fi
+
+      - name: brew style
+        run: |
+          TAP_REPO="$(brew --repo aspire-lint/scratch)"
+          cd "$TAP_REPO" && brew style Formula/aspire.rb
+
+      - name: brew audit --strict
+        run: brew audit --strict aspire-lint/scratch/aspire
+
+  resolve:
+    name: Resolve formula values
+    runs-on: ubuntu-latest
+    outputs:
+      sdk_version: ${{ steps.resolve.outputs.sdk_version }}
+      src_url: ${{ steps.resolve.outputs.src_url }}
+      src_sha: ${{ steps.resolve.outputs.src_sha }}
+      sha_osx_arm64: ${{ steps.resolve.outputs.sha_osx_arm64 }}
+      sha_osx_x64: ${{ steps.resolve.outputs.sha_osx_x64 }}
+      sha_linux_x64: ${{ steps.resolve.outputs.sha_linux_x64 }}
+      sha_linux_arm64: ${{ steps.resolve.outputs.sha_linux_arm64 }}
+      src_version: ${{ steps.resolve.outputs.src_version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Source URL: point at THIS PR's head commit (or the branch tip on
+      # workflow_dispatch) so the install block builds the candidate
+      # formula's contemporaneous sources. The archive endpoint serves a
+      # gzipped tarball of the tree at the given ref. SHA256 is computed
+      # by downloading once and hashing the bytes; brew install will
+      # re-download and reverify.
+      #
+      # SDK: pinned to the version in global.json (vendoring rationale is
+      # captured in the template's comment block). Per-RID SHA256 is
+      # computed from the live archive at dotnet's CDN.
+      - name: Resolve dynamic values
+        id: resolve
+        run: |
+          set -euo pipefail
+
+          REPO_FULL_NAME="${{ github.event.pull_request.head.repo.full_name || github.repository }}"
+          COMMIT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+          SRC_URL="https://github.com/${REPO_FULL_NAME}/archive/${COMMIT_SHA}.tar.gz"
+
+          echo "Fetching source archive to compute SHA: ${SRC_URL}"
+          curl -fsSL "${SRC_URL}" -o /tmp/src.tar.gz
+          SRC_SHA=$(sha256sum /tmp/src.tar.gz | awk '{print $1}')
+          rm /tmp/src.tar.gz
+
+          # Formula version = the Arcade-computed CLI version, so it matches
+          # what the binary reports (`aspire --version`) and the canonical
+          # test_do `assert_match version.to_s, ...` holds. build-cli.sh builds
+          # with ContinuousIntegrationBuild=true (the pipeline's `-ci`), so the
+          # version Arcade stamps is:
+          #   * VersionPrefix          when StabilizePackageVersion=true (release tag)
+          #   * VersionPrefix + "-ci"  otherwise (preview / main)
+          # Verified against
+          #   dotnet msbuild src/Aspire.Cli/Aspire.Cli.csproj /p:ContinuousIntegrationBuild=true -getProperty:Version
+          # (-> e.g. 13.5.0-ci). eng/Versions.props is a standalone props file,
+          # so this evaluation needs no SDK restore — the runner's dotnet suffices.
+          VERSION_PREFIX=$(dotnet msbuild eng/Versions.props -getProperty:VersionPrefix)
+          STABILIZE=$(dotnet msbuild eng/Versions.props -getProperty:StabilizePackageVersion)
+          if [ "$STABILIZE" = "true" ]; then
+            SRC_VERSION="$VERSION_PREFIX"
+          else
+            SRC_VERSION="${VERSION_PREFIX}-ci"
+          fi
+          echo "Resolved formula version: $SRC_VERSION (VersionPrefix=$VERSION_PREFIX StabilizePackageVersion=$STABILIZE)"
+
+          SDK_VERSION=$(jq -r .sdk.version global.json)
+          if [ -z "$SDK_VERSION" ] || [ "$SDK_VERSION" = "null" ]; then
+            echo "::error::Could not read .sdk.version from global.json"
+            exit 1
+          fi
+
+          fetch_sha() {
+            local rid="$1"
+            local url="https://builds.dotnet.microsoft.com/dotnet/Sdk/${SDK_VERSION}/dotnet-sdk-${SDK_VERSION}-${rid}.tar.gz"
+            local tmp="/tmp/sdk-${rid}.tar.gz"
+            # Diagnostic to stderr so $(fetch_sha) only captures the hash.
+            echo "Fetching SDK for ${rid}: ${url}" >&2
+            curl -fsSL "${url}" -o "${tmp}"
+            sha256sum "${tmp}" | awk '{print $1}'
+            rm "${tmp}"
+          }
+
+          SHA_OSX_ARM64=$(fetch_sha osx-arm64)
+          SHA_OSX_X64=$(fetch_sha osx-x64)
+          SHA_LINUX_X64=$(fetch_sha linux-x64)
+          SHA_LINUX_ARM64=$(fetch_sha linux-arm64)
+
+          {
+            echo "sdk_version=${SDK_VERSION}"
+            echo "src_url=${SRC_URL}"
+            echo "src_sha=${SRC_SHA}"
+            echo "src_version=${SRC_VERSION}"
+            echo "sha_osx_arm64=${SHA_OSX_ARM64}"
+            echo "sha_osx_x64=${SHA_OSX_X64}"
+            echo "sha_linux_x64=${SHA_LINUX_X64}"
+            echo "sha_linux_arm64=${SHA_LINUX_ARM64}"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Resolved:"
+          echo "  SDK = ${SDK_VERSION}"
+          echo "  src = ${SRC_URL} (sha ${SRC_SHA:0:12}…)"
+          echo "  version = ${SRC_VERSION}"
+
+  install:
+    name: brew install (${{ matrix.target.rid }})
+    needs: [lint, resolve]
+    runs-on: ${{ matrix.target.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # While iterating on the formula, keep the matrix narrow.
+        # osx-x64 hosted runners are scarce right now; linux-arm64
+        # (ubuntu-24.04-arm) can be added back when the workflow is stable.
+        target:
+          - { runner: 'macos-latest',  rid: 'osx-arm64',  brew_prefix: '/opt/homebrew' }
+          - { runner: 'ubuntu-latest', rid: 'linux-x64',  brew_prefix: '/home/linuxbrew/.linuxbrew' }
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Linux runners don't ship Homebrew preinstalled. Install Linuxbrew
+      # via the official one-liner. Done inline (rather than via the
+      # Homebrew/actions/setup-homebrew action) to avoid depending on a
+      # third-party action that may not be on this org's allowed-actions
+      # policy. macOS runners already have brew preinstalled.
+      - name: Install Linuxbrew (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          # Add brew to PATH for subsequent steps. The install script writes
+          # the right shellenv for the user's profile, but GH Actions steps
+          # don't source profiles.
+          echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
+          echo "/home/linuxbrew/.linuxbrew/sbin" >> "$GITHUB_PATH"
+          export PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:$PATH"
+          brew --version
+
+      - name: Update Homebrew and confirm tooling
+        run: |
+          brew update --quiet || true
+          brew --version
+
+      # Node is needed by the bundled CLI build (PackDotnetTool depends on
+      # PackNpmPackage which shells out to `npm pack`).
+      - name: Install Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: 22.x
+
+      - name: Create scratch tap
+        run: brew tap-new aspire-e2e/scratch --no-git
+
+      # Render the template against the actually-computed values from the
+      # resolve job. Drop `no_autobump!` (rejected outside official taps).
+      # Rewrite the `url` line entirely because the template's tagged-
+      # release URL shape doesn't match the archive/<sha> shape we use
+      # against a PR commit; we also inject `version "..."` since the
+      # archive URL doesn't carry a version brew can infer.
+      #
+      # The version we inject is the Arcade-computed version (see the resolve
+      # job), which is exactly what build-cli.sh bakes into the binary. So the
+      # canonical test_do `assert_match version.to_s,
+      # shell_output("#{bin}/aspire --version")` holds without any test patch.
+      - name: Render formula into scratch tap
+        env:
+          SDK_VERSION:    ${{ needs.resolve.outputs.sdk_version }}
+          SRC_URL:        ${{ needs.resolve.outputs.src_url }}
+          SRC_SHA:        ${{ needs.resolve.outputs.src_sha }}
+          SRC_VERSION:    ${{ needs.resolve.outputs.src_version }}
+          SHA_OSX_ARM64:  ${{ needs.resolve.outputs.sha_osx_arm64 }}
+          SHA_OSX_X64:    ${{ needs.resolve.outputs.sha_osx_x64 }}
+          SHA_LINUX_X64:  ${{ needs.resolve.outputs.sha_linux_x64 }}
+          SHA_LINUX_ARM64: ${{ needs.resolve.outputs.sha_linux_arm64 }}
+        run: |
+          set -euo pipefail
+          TAP_REPO="$(brew --repo aspire-e2e/scratch)"
+
+          # Escape ampersands and pipes that could break sed substitutions.
+          # All these values are URL-safe or hex so this is defense-in-depth.
+          sed \
+            -e "s|__SRC_VERSION__|${SRC_VERSION}|g" \
+            -e "s|__SDK_VERSION__|${SDK_VERSION}|g" \
+            -e "s|__SRC_SHA__|${SRC_SHA}|g" \
+            -e "s|__SHA_OSX_ARM64__|${SHA_OSX_ARM64}|g" \
+            -e "s|__SHA_OSX_X64__|${SHA_OSX_X64}|g" \
+            -e "s|__SHA_LINUX_X64__|${SHA_LINUX_X64}|g" \
+            -e "s|__SHA_LINUX_ARM64__|${SHA_LINUX_ARM64}|g" \
+            -e "s|^  url \"https://github.com/microsoft/aspire/archive/refs/tags/v${SRC_VERSION}.tar.gz\"|  url \"${SRC_URL}\"\n  version \"${SRC_VERSION}\"|" \
+            -e '/no_autobump!/d' \
+            eng/homebrew-core/aspire.rb.template \
+            > "$TAP_REPO/Formula/aspire.rb"
+
+          if grep -nE '__[A-Z_]+__' "$TAP_REPO/Formula/aspire.rb"; then
+            echo "::error::Unrendered placeholders remain after sed."
+            exit 1
+          fi
+
+          echo "--- rendered formula ---"
+          cat "$TAP_REPO/Formula/aspire.rb"
+          echo "--- end rendered formula ---"
+
+      # Snapshot the directories whose creation/population would indicate
+      # the brew install or any subsequent command leaked bundle layout into
+      # ~/.aspire. The brew route's contract (BundleService.ComputeDefault
+      # ExtractDir's BrewWire arm) is that extraction lives under the
+      # formula's libexec/, NOT under the user's aspire home. So:
+      #   * ~/.aspire/versions/  — must not exist or contain anything new
+      #   * ~/.aspire/bundles/   — must not exist or contain anything new
+      #   * ~/.aspire/bin/       — must not exist or contain anything new
+      # `aspire doctor` is allowed to write its own logs to ~/.aspire/logs/
+      # and telemetry-storage to ~/.aspire/cli/, so those subdirs are NOT
+      # part of the snapshot.
+      - name: Snapshot bundle-layout dirs under ~/.aspire (baseline)
+        run: |
+          mkdir -p "$HOME/.aspire"
+          {
+            for dir in versions bundles bin; do
+              if [ -d "$HOME/.aspire/$dir" ]; then
+                find "$HOME/.aspire/$dir" -mindepth 1 -maxdepth 4 -print 2>/dev/null | sort
+              fi
+            done
+          } > "$RUNNER_TEMP/aspire-home-bundle-before.txt"
+          echo "--- baseline (must stay empty across install/doctor/test) ---"
+          cat "$RUNNER_TEMP/aspire-home-bundle-before.txt"
+
+      - name: brew install --build-from-source
+        run: |
+          set -euo pipefail
+          # --verbose surfaces the install block's progress on failure;
+          # --build-from-source bypasses bottle resolution (we don't have
+          # one) and forces a from-source compile.
+          brew install --build-from-source --verbose aspire-e2e/scratch/aspire
+
+      - name: Verify installed binary
+        run: |
+          set -euo pipefail
+          PREFIX="$(brew --prefix aspire-e2e/scratch/aspire)"
+          BIN="$PREFIX/bin/aspire"
+          test -L "$BIN" || test -f "$BIN"
+          "$BIN" --version
+          # Sidecar lives next to the real binary (under libexec/), not
+          # next to the symlink in bin/. Resolve the symlink before
+          # checking.
+          REAL_BIN="$(readlink -f "$BIN" 2>/dev/null || python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$BIN")"
+          LIBEXEC="$(dirname "$REAL_BIN")"
+          SIDECAR="$LIBEXEC/.aspire-install.json"
+          echo "--- sidecar at $SIDECAR ---"
+          cat "$SIDECAR"
+          grep -q '"source":"brew"' "$SIDECAR"
+
+          # Canonical sidecar-route layout: libexec/bundle -> versions/<v>/{managed,dcp}.
+          # LayoutDiscovery's TryInferLayout resolves through bundle/; if any
+          # link in the chain is broken the CLI runs but every polyglot
+          # command would error at first use.
+          echo "--- libexec contents ---"
+          ls -la "$LIBEXEC"
+          test -L "$LIBEXEC/bundle" || {
+            echo "::error::Expected libexec/bundle to be a symlink (sidecar-route shape)."
+            exit 1
+          }
+          test -d "$LIBEXEC/bundle/managed"
+          test -d "$LIBEXEC/bundle/dcp"
+          MANAGED_EXE="$LIBEXEC/bundle/managed/aspire-managed"
+          test -x "$MANAGED_EXE" || {
+            echo "::error::Expected $MANAGED_EXE to exist and be executable."
+            ls -la "$LIBEXEC/bundle/managed" || true
+            exit 1
+          }
+          DCP_EXE="$LIBEXEC/bundle/dcp/dcp"
+          test -x "$DCP_EXE" || {
+            echo "::error::Expected $DCP_EXE to exist and be executable."
+            ls -la "$LIBEXEC/bundle/dcp" || true
+            exit 1
+          }
+          echo "Layout shape OK: libexec/bundle resolves through versions/<v>/{managed,dcp} with executable component binaries."
+
+      - name: aspire doctor
+        run: |
+          set -euo pipefail
+          PREFIX="$(brew --prefix aspire-e2e/scratch/aspire)"
+          # `aspire doctor` exits non-zero when any host check fails (e.g.
+          # macOS hosted runners have no Docker). We don't gate the
+          # workflow on host completeness — only on the install-route
+          # line being correct. Capture-then-grep avoids pipefail biting
+          # on a non-zero doctor exit.
+          DOCTOR_OUT="$RUNNER_TEMP/aspire-doctor.txt"
+          set +e
+          "$PREFIX/bin/aspire" doctor > "$DOCTOR_OUT" 2>&1
+          doctor_rc=$?
+          set -e
+          echo "--- aspire doctor output (rc=$doctor_rc) ---"
+          cat "$DOCTOR_OUT"
+          # The Installations table row for the running CLI must report
+          # Route=brew. A plain `grep brew` is fragile (matches the word
+          # in the Cellar path even on a misconfigured install); pin the
+          # row by joining `(current)` (only the running CLI is marked
+          # current) and `brew` on the same line.
+          if ! grep -E '\(current\).*\bbrew\b' "$DOCTOR_OUT" > /dev/null; then
+            echo "::error::aspire doctor did not report Route=brew for the running CLI."
+            exit 1
+          fi
+
+      - name: Verify bundle-layout dirs unchanged after install + doctor
+        run: |
+          {
+            for dir in versions bundles bin; do
+              if [ -d "$HOME/.aspire/$dir" ]; then
+                find "$HOME/.aspire/$dir" -mindepth 1 -maxdepth 4 -print 2>/dev/null | sort
+              fi
+            done
+          } > "$RUNNER_TEMP/aspire-home-bundle-after.txt"
+          if ! diff -u "$RUNNER_TEMP/aspire-home-bundle-before.txt" "$RUNNER_TEMP/aspire-home-bundle-after.txt"; then
+            echo "::error::~/.aspire/{versions,bundles,bin} was mutated by brew install or aspire doctor. The brew route extracts into libexec/, not ~/.aspire."
+            exit 1
+          fi
+
+      - name: Verify aspire update --self gate (brew sidecar)
+        shell: bash
+        run: |
+          set -euo pipefail
+          PREFIX="$(brew --prefix aspire-e2e/scratch/aspire)"
+          BIN="$PREFIX/bin/aspire"
+          REAL_BIN="$(readlink -f "$BIN" 2>/dev/null || python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$BIN")"
+
+          mtime_before=$(python3 -c "import os, sys; print(os.path.getmtime(sys.argv[1]))" "$REAL_BIN")
+
+          output=$("$BIN" update --self 2>&1)
+          exit_code=$?
+
+          echo "--- aspire update --self output ---"
+          echo "$output"
+          echo "--- exit code: $exit_code ---"
+
+          if [ "$exit_code" -ne 0 ]; then
+            echo "::error::aspire update --self exited $exit_code; expected 0 (brew gate should print and succeed)."
+            exit 1
+          fi
+
+          if ! grep -q "brew upgrade aspire" <<<"$output"; then
+            echo "::error::Expected output to contain 'brew upgrade aspire', but it did not."
+            exit 1
+          fi
+
+          mtime_after=$(python3 -c "import os, sys; print(os.path.getmtime(sys.argv[1]))" "$REAL_BIN")
+          if [ "$mtime_before" != "$mtime_after" ]; then
+            echo "::error::Binary mtime changed from $mtime_before to $mtime_after — brew gate must not mutate the binary."
+            exit 1
+          fi
+          echo "OK — brew gate printed expected message, exited 0, and did not mutate the binary."
+
+      - name: brew test
+        run: brew test --verbose aspire-e2e/scratch/aspire
+
+      - name: Verify bundle-layout dirs unchanged after brew test
+        run: |
+          {
+            for dir in versions bundles bin; do
+              if [ -d "$HOME/.aspire/$dir" ]; then
+                find "$HOME/.aspire/$dir" -mindepth 1 -maxdepth 4 -print 2>/dev/null | sort
+              fi
+            done
+          } > "$RUNNER_TEMP/aspire-home-bundle-after-test.txt"
+          if ! diff -u "$RUNNER_TEMP/aspire-home-bundle-before.txt" "$RUNNER_TEMP/aspire-home-bundle-after-test.txt"; then
+            echo "::error::~/.aspire/{versions,bundles,bin} was mutated by brew test. The formula test block runs from a sandboxed testpath and must not touch the user's bundle layout."
+            exit 1
+          fi
+
+      # ---- Aspire CLI E2E against the brew-installed binary ----
+      # The rest of this suite runs in Linux containers and can't see a host brew
+      # install or cover osx-arm64. HomebrewInstalledCliTests runs in the non-Docker
+      # host terminal against the brew `aspire` on PATH (gated to ASPIRE_E2E_HOMEBREW).
+      # Placed after the bundle-layout snapshot checks because its `aspire new/start`
+      # side effects (workspace + ~/.aspire/logs) would otherwise trip them.
+      - name: Restore repo SDK for E2E
+        run: ./restore.sh
+
+      - name: Put repo SDK on PATH
+        # The lifecycle scenario's `aspire start` shells out to `dotnet` to build the
+        # generated app; pin it to the global.json SDK the repo develops against.
+        run: |
+          echo "$PWD/.dotnet" >> "$GITHUB_PATH"
+          echo "DOTNET_ROOT=$PWD/.dotnet" >> "$GITHUB_ENV"
+
+      - name: Trust HTTPS dev cert
+        # The starter app's apiservice/webfrontend bind https endpoints; without a dev
+        # cert they fail to start and `aspire start` never reports success. On Linux the
+        # trust store path must be exported so the app's child processes pick it up
+        # (mirrors the Docker DoctorCommandTests).
+        run: |
+          ./.dotnet/dotnet dev-certs https --trust || ./.dotnet/dotnet dev-certs https
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            echo "SSL_CERT_DIR=/etc/ssl/certs:$HOME/.aspnet/dev-certs/trust" >> "$GITHUB_ENV"
+          fi
+
+      - name: Aspire CLI E2E (Homebrew install route)
+        env:
+          ASPIRE_E2E_HOMEBREW: 'true'
+          # The formula bakes its version into the binary, so aspire --version equals the
+          # rendered formula version; assert the running CLI is exactly that build.
+          ASPIRE_E2E_HOMEBREW_VERSION: ${{ needs.resolve.outputs.src_version }}
+        run: |
+          ./.dotnet/dotnet test --project tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj \
+            -c Debug --no-launch-profile \
+            -- --filter-class "*.HomebrewInstalledCliTests" \
+               --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
+
+      - name: brew uninstall
+        run: brew uninstall --verbose aspire-e2e/scratch/aspire
+
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: homebrew-formula-diagnostics-${{ matrix.target.rid }}
+          path: |
+            ${{ runner.temp }}/aspire-doctor.txt
+            ${{ runner.temp }}/aspire-home-bundle-*.txt
+            artifacts/bin/Aspire.Cli.EndToEnd.Tests/**/TestResults/**
+          if-no-files-found: ignore
+          retention-days: 7

@@ -47,6 +47,15 @@ internal enum CliInstallMode
     /// Set via ASPIRE_E2E_DOTNET_TOOL or ASPIRE_E2E_DOTNET_TOOL_SOURCE.
     /// </summary>
     DotnetTool,
+
+    /// <summary>
+    /// Use a CLI that has already been installed via Homebrew (<c>brew install aspire</c>).
+    /// The brew install runs as a pre-step (CI job or local) before the test process starts;
+    /// the harness only puts Homebrew's bin on PATH so the brew-installed <c>aspire</c> resolves.
+    /// Non-Docker only (the brew prefix lives on the host, not in the e2e container).
+    /// Set via ASPIRE_E2E_HOMEBREW.
+    /// </summary>
+    Homebrew,
 }
 
 /// <summary>
@@ -80,6 +89,16 @@ internal static class AspireCliShellCommandHelpers
         return includeBundlePath
             ? $"export PATH=~/.aspire/bin:~/.aspire:$PATH {CommonAspireEnvironmentAssignments}"
             : $"export PATH=~/.aspire/bin:$PATH {CommonAspireEnvironmentAssignments}";
+    }
+
+    /// <summary>
+    /// Puts Homebrew's bin directory on PATH so a brew-installed <c>aspire</c> resolves in the
+    /// bare <c>/bin/bash --norc</c> test shell, which does not load brew's shellenv. <c>brew --prefix</c>
+    /// is the supported way to locate the install root across macOS (Intel/ARM) and Linuxbrew layouts.
+    /// </summary>
+    internal static string GetSourceHomebrewEnvironmentCommand()
+    {
+        return $"export PATH=\"$(brew --prefix)/bin:$PATH\" {CommonAspireEnvironmentAssignments}";
     }
 
     internal static string GetExtractLocalHiveArchiveCommand(string archivePath)
@@ -227,6 +246,8 @@ internal sealed class CliInstallStrategy
     internal const string UbuntuAptMirrorEnvironmentVariableName = "ASPIRE_E2E_UBUNTU_APT_MIRROR";
 
     private const string PreinstalledEnvironmentVariableName = "ASPIRE_E2E_PREINSTALLED";
+    private const string HomebrewEnvironmentVariableName = "ASPIRE_E2E_HOMEBREW";
+    private const string HomebrewVersionEnvironmentVariableName = "ASPIRE_E2E_HOMEBREW_VERSION";
     /// <summary>
     /// The install mode.
     /// </summary>
@@ -308,6 +329,21 @@ internal sealed class CliInstallStrategy
     public static CliInstallStrategy Preinstalled()
     {
         return new CliInstallStrategy(CliInstallMode.Preinstalled);
+    }
+
+    /// <summary>
+    /// Creates a strategy for a CLI installed via Homebrew (<c>brew install aspire</c>).
+    /// The brew install is expected to have run already (CI pre-step or local); the harness
+    /// only sources Homebrew's bin onto PATH. Non-Docker only.
+    /// </summary>
+    /// <param name="expectedVersion">
+    /// The version the brew-installed CLI is expected to report, when known (e.g. the formula
+    /// version rendered in CI). Used by post-install verification. Optional because the host
+    /// brew install may be any version.
+    /// </param>
+    public static CliInstallStrategy FromHomebrew(string? expectedVersion = null)
+    {
+        return new CliInstallStrategy(CliInstallMode.Homebrew, expectedVersion: expectedVersion);
     }
 
     /// <summary>
@@ -434,10 +470,11 @@ internal sealed class CliInstallStrategy
     ///   4. ASPIRE_E2E_QUALITY → InstallScript with quality
     ///   5. ASPIRE_E2E_VERSION → InstallScript with version
     ///   6. ASPIRE_E2E_PREINSTALLED → Preinstalled
-    ///   7. ASPIRE_E2E_CLI_ARCHIVE_DIR → LocalArchive
-    ///   8. GITHUB_PR_NUMBER + GITHUB_PR_HEAD_SHA → PullRequest
-    ///   9. CI/GITHUB_ACTIONS → InstallScript (dev/daily)
-    ///  10. Local fallback → InstallScript (latest GA)
+    ///   7. ASPIRE_E2E_HOMEBREW → Homebrew
+    ///   8. ASPIRE_E2E_CLI_ARCHIVE_DIR → LocalArchive
+    ///   9. GITHUB_PR_NUMBER + GITHUB_PR_HEAD_SHA → PullRequest
+    ///  10. CI/GITHUB_ACTIONS → InstallScript (dev/daily)
+    ///  11. Local fallback → InstallScript (latest GA)
     /// </summary>
     /// <param name="log">Optional log callback (e.g. <c>output.WriteLine</c>) for tracing the detection logic.</param>
     public static CliInstallStrategy Detect(Action<string>? log = null)
@@ -497,6 +534,18 @@ internal sealed class CliInstallStrategy
             return Preinstalled();
         }
 
+        var homebrew = Environment.GetEnvironmentVariable(HomebrewEnvironmentVariableName);
+        if (string.Equals(homebrew, "true", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(homebrew, "1", StringComparison.OrdinalIgnoreCase))
+        {
+            // A dedicated var (not ASPIRE_E2E_VERSION, which is consumed earlier by the
+            // InstallScript branch) carries the formula version brew installed, so post-install
+            // verification can assert the running CLI is the expected build.
+            var brewVersion = Environment.GetEnvironmentVariable(HomebrewVersionEnvironmentVariableName);
+            log?.Invoke($"  → Selected: Homebrew (expected version={brewVersion ?? "(unknown)"})");
+            return FromHomebrew(string.IsNullOrEmpty(brewVersion) ? null : brewVersion);
+        }
+
         var archiveDir = Environment.GetEnvironmentVariable(CliArchiveDirEnvironmentVariableName);
         if (!string.IsNullOrEmpty(archiveDir))
         {
@@ -539,6 +588,9 @@ internal sealed class CliInstallStrategy
 
             case CliInstallMode.Preinstalled:
                 throw new InvalidOperationException("Preinstalled CLI mode is only supported for non-Docker test environments.");
+
+            case CliInstallMode.Homebrew:
+                throw new InvalidOperationException("Homebrew CLI mode is only supported for non-Docker test environments (the brew prefix lives on the host).");
 
             case CliInstallMode.PullRequest:
                 var ghToken = Environment.GetEnvironmentVariable("GH_TOKEN");
@@ -594,6 +646,7 @@ internal sealed class CliInstallStrategy
         {
             CliInstallMode.LocalHive => $"LocalHive ({ArchivePath})",
             CliInstallMode.Preinstalled => "Preinstalled (~/.aspire)",
+            CliInstallMode.Homebrew => "Homebrew (brew install aspire)",
             CliInstallMode.PullRequest => $"PullRequest (PR #{Environment.GetEnvironmentVariable("GITHUB_PR_NUMBER")})",
             CliInstallMode.LocalArchive => $"LocalArchive ({ArchiveDir})",
             CliInstallMode.InstallScript when Quality is not null => $"InstallScript (--quality {Quality.Value.ToString().ToLowerInvariant()})",

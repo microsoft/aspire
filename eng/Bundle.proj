@@ -46,8 +46,25 @@
     <BundleVersion Condition="'$(BundleVersion)' == '' and '$(VersionSuffix)' != ''">$(VersionPrefix)-$(VersionSuffix)</BundleVersion>
     <BundleVersion Condition="'$(BundleVersion)' == ''">$(VersionPrefix)-dev</BundleVersion>
 
+    <!-- Forward VersionPrefix to Exec-invoked dotnet commands so callers can
+         override the in-tree X.Y.Z (e.g. brew install block needs the binary
+         to report the formula's version, not the dev tree's). MSBuild
+         properties do not flow to child processes — they must be passed
+         explicitly on each `dotnet publish` command line. Only forwarded
+         when the caller explicitly set it; otherwise the inner publish
+         picks up VersionPrefix from Versions.props as usual. -->
+    <_VersionPrefixArg Condition="'$(VersionPrefixOverride)' != ''">/p:VersionPrefix=$(VersionPrefixOverride)</_VersionPrefixArg>
+
     <!-- Forward VersionSuffix to Exec-invoked dotnet commands (MSBuild properties don't flow to child processes) -->
     <_VersionSuffixArg Condition="'$(VersionSuffix)' != ''">/p:VersionSuffix=$(VersionSuffix)</_VersionSuffixArg>
+
+    <!-- Same problem as VersionSuffix above: AspireCliChannel is baked into the
+         CLI binary as assembly metadata (Aspire.Cli.csproj reads it at compile
+         time) and identifies the install route's channel. Without this forward,
+         the inner `dotnet publish` would not see it and would fall back to the
+         csproj's "local" default, which is wrong for any release-channel build
+         (homebrew formula, dotnet-tool, winget, script). -->
+    <_AspireCliChannelArg Condition="'$(AspireCliChannel)' != ''">/p:AspireCliChannel=$(AspireCliChannel)</_AspireCliChannelArg>
 
     <!-- Binlog arguments for dotnet commands -->
     <_BinlogArg Condition="'$(ContinuousIntegrationBuild)' == 'true'">-bl:$(ArtifactsLogDir)</_BinlogArg>
@@ -89,9 +106,18 @@
       <_CliBinlog Condition="'$(ContinuousIntegrationBuild)' == 'true'">-bl:$(ArtifactsLogDir)PublishCli.binlog</_CliBinlog>
       <!-- The tar.gz archive produced by CreateLayout is embedded as a resource in the CLI binary -->
       <_BundleArchivePath>$(ArtifactsDir)bundle\aspire-$(BundleVersion)-$(TargetRid).tar.gz</_BundleArchivePath>
+      <!-- When SkipBundleEmbed=true, publish the CLI without the embedded
+           tar.gz resource. The layout directories still get produced by
+           _RunCreateLayout; callers (e.g. eng/homebrew-core/build-cli.sh)
+           lay them out alongside the CLI binary themselves. This is the
+           supported path for install routes that have a native install-time
+           hook (homebrew-core's `def install`) and therefore don't need
+           the self-extracting transport. -->
+      <_BundlePayloadArg Condition="'$(SkipBundleEmbed)' != 'true'">/p:BundlePayloadPath=&quot;$(_BundleArchivePath)&quot;</_BundlePayloadArg>
     </PropertyGroup>
-    <Message Importance="high" Text="Publishing native AOT CLI with embedded bundle: $(_BundleArchivePath)" />
-    <Exec Command="dotnet publish &quot;$(CliProjectPath)&quot; -c $(Configuration) -r $(TargetRid) /p:BundlePayloadPath=&quot;$(_BundleArchivePath)&quot; $(_VersionSuffixArg) $(_CliBinlog)" />
+    <Message Importance="high" Condition="'$(SkipBundleEmbed)' != 'true'" Text="Publishing native AOT CLI with embedded bundle: $(_BundleArchivePath)" />
+    <Message Importance="high" Condition="'$(SkipBundleEmbed)' == 'true'" Text="Publishing native AOT CLI WITHOUT embedded bundle (SkipBundleEmbed=true)." />
+    <Exec Command="dotnet publish &quot;$(CliProjectPath)&quot; -c $(Configuration) -r $(TargetRid) $(_BundlePayloadArg) $(_VersionPrefixArg) $(_VersionSuffixArg) $(_AspireCliChannelArg) $(_CliBinlog)" />
   </Target>
 
   <Target Name="_PublishManagedProjects" Condition="'$(SkipManagedBuild)' != 'true'">
@@ -100,7 +126,7 @@
     </PropertyGroup>
     <Message Importance="high" Text="Publishing aspire-managed (self-contained)..." />
     <!-- Publish as self-contained single-file for the target RID -->
-    <Exec Command="dotnet publish &quot;$(ManagedProjectPath)&quot; -c $(Configuration) -r $(TargetRid) --self-contained /p:GenerateDocumentationFile=false /p:EnforceCodeStyleInBuild=false $(_VersionSuffixArg) $(_ManagedBinlog)" />
+    <Exec Command="dotnet publish &quot;$(ManagedProjectPath)&quot; -c $(Configuration) -r $(TargetRid) --self-contained /p:GenerateDocumentationFile=false /p:EnforceCodeStyleInBuild=false $(_VersionPrefixArg) $(_VersionSuffixArg) $(_ManagedBinlog)" />
   </Target>
 
   <Target Name="_RestoreDcpPackage">
@@ -135,7 +161,14 @@
       <_BundleOutputDirArg>$(BundleOutputDir.TrimEnd('\').TrimEnd('/'))</_BundleOutputDirArg>
       <_ArtifactsDirArg>$(ArtifactsDir.TrimEnd('\').TrimEnd('/'))</_ArtifactsDirArg>
 
-      <_CreateLayoutArgs>--output "$(_BundleOutputDirArg)" --artifacts "$(_ArtifactsDirArg)" --rid $(TargetRid) --bundle-version $(BundleVersion) --verbose --archive</_CreateLayoutArgs>
+      <!-- The tar.gz exists purely to be embedded in the CLI binary for the
+           self-extracting transport. When SkipBundleEmbed=true the caller
+           will lay out the unwrapped components directly, so skip the
+           archive step too — saves ~5-10s per build and avoids producing
+           an artifact that nothing reads. -->
+      <_CreateLayoutArchiveArg Condition="'$(SkipBundleEmbed)' != 'true'">--archive</_CreateLayoutArchiveArg>
+
+      <_CreateLayoutArgs>--output "$(_BundleOutputDirArg)" --artifacts "$(_ArtifactsDirArg)" --rid $(TargetRid) --bundle-version $(BundleVersion) --verbose $(_CreateLayoutArchiveArg)</_CreateLayoutArgs>
     </PropertyGroup>
 
     <Message Importance="high" Text="Creating bundle layout..." />
