@@ -32,7 +32,7 @@ Before starting, determine:
 2. **Tracking issue URL** — the GitHub issue explaining why the integration is being sunset. Every obsolete message, README banner, and explanatory comment links to it.
 3. **A short reason** — one sentence a user will read (e.g. "GitHub Models is no longer available to new customers").
 
-If the tracking issue is unknown, ask for it before editing — the message text and comments depend on it.
+If the tracking issue is unknown, ask for the reason directly — the obsolete message and banner text depend on a clear reason, and any issue link is optional supporting context.
 
 ## Step 1 — Add a shared deprecation message constant
 
