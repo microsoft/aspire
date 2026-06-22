@@ -29,6 +29,7 @@ internal static class DeprecatedPackages
     private static readonly FrozenSet<string> s_all = new[]
     {
         "Aspire.Hosting.Dapr",
+        "Aspire.Hosting.GitHub.Models",
         "Aspire.Hosting.NodeJs"
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
