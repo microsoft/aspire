@@ -1136,6 +1136,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 Name = c.Name,
                 DisplayName = c.DisplayName,
                 Description = c.DisplayDescription,
+                ConfirmationMessage = c.ConfirmationMessage,
                 ArgumentInputs = c.Arguments.Select(CreateCommandArgument).ToArray(),
                 Visibility = c.Visibility.ToString(),
                 State = c.State.ToString()

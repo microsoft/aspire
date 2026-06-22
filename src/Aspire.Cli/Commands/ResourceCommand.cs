@@ -10,6 +10,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
@@ -140,6 +141,8 @@ internal sealed class ResourceCommand : BaseCommand
             return CommandResult.Failure(CliExitCodes.InvalidCommand, errorMessage);
         }
 
+        var confirmationBinding = PromptBinding.Create(parseResult, RootCommand.NonInteractiveOption);
+        var confirmationMessage = GetCommandConfirmationMessage(command);
         var commandArguments = commandArgumentsResult.Arguments;
 
         if (loadArguments)
@@ -160,6 +163,8 @@ internal sealed class ResourceCommand : BaseCommand
                 knownCommand.BaseVerb,
                 knownCommand.PastTenseVerb,
                 commandArguments,
+                confirmationBinding,
+                confirmationMessage,
                 cancellationToken));
         }
 
@@ -170,6 +175,8 @@ internal sealed class ResourceCommand : BaseCommand
             resourceName,
             commandName,
             commandArguments,
+            confirmationBinding,
+            confirmationMessage,
             cancellationToken));
     }
 
@@ -242,6 +249,17 @@ internal sealed class ResourceCommand : BaseCommand
                 return (group.Key, description ?? string.Empty);
             })
             .ToArray();
+    }
+
+    internal static string? GetCommandConfirmationMessage(ResourceSnapshotCommand? command)
+    {
+        if (command is { } resourceCommand &&
+            string.Equals(resourceCommand.State, "Enabled", StringComparison.OrdinalIgnoreCase))
+        {
+            return resourceCommand.ConfirmationMessage;
+        }
+
+        return null;
     }
 
     private static (JsonNode? Arguments, string? ErrorMessage) CreateCommandArguments(ResourceSnapshotCommand? command, string[] capturedArguments, CommandArgumentParseMode parseMode)

@@ -42,6 +42,8 @@ public class ResourceCommandHelperTests
             "myResource",
             "generate-token",
             arguments: null,
+            confirmationBinding: null,
+            confirmationMessage: null,
             cancellationToken: CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(0, exitCode);
@@ -71,6 +73,8 @@ public class ResourceCommandHelperTests
             "myResource",
             "start",
             arguments: null,
+            confirmationBinding: null,
+            confirmationMessage: null,
             cancellationToken: CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(0, exitCode);
@@ -107,6 +111,8 @@ public class ResourceCommandHelperTests
             "myResource",
             "validate-config",
             arguments: null,
+            confirmationBinding: null,
+            confirmationMessage: null,
             cancellationToken: CancellationToken.None).DefaultTimeout();
 
         Assert.NotEqual(0, exitCode);
@@ -142,6 +148,8 @@ public class ResourceCommandHelperTests
             "myResource",
             "my-command",
             arguments: null,
+            confirmationBinding: null,
+            confirmationMessage: null,
             cancellationToken: CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(0, exitCode);
@@ -172,6 +180,8 @@ public class ResourceCommandHelperTests
             "myResource",
             "click",
             arguments,
+            confirmationBinding: null,
+            confirmationMessage: null,
             CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(0, exitCode);
@@ -209,6 +219,8 @@ public class ResourceCommandHelperTests
             "myResource",
             "validate",
             arguments: null,
+            confirmationBinding: null,
+            confirmationMessage: null,
             cancellationToken: CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.FailedToExecuteResourceCommand, exitCode);
@@ -240,11 +252,97 @@ public class ResourceCommandHelperTests
             "test-resource",
             "ss",
             arguments: null,
+            confirmationBinding: null,
+            confirmationMessage: null,
             cancellationToken: CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.FailedToExecuteResourceCommand, exitCode);
         var error = Assert.Single(interactionService.DisplayedErrors);
         Assert.Contains("Failed to execute command 'ss' on resource 'test-resource'", error);
         Assert.Contains("Command 'ss' not available for resource 'test-resource'.", error);
+    }
+
+    [Fact]
+    public async Task ExecuteGenericCommandAsync_WithConfirmation_ExecutesWhenConfirmed()
+    {
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true }
+        };
+        var interactionService = new TestInteractionService();
+        interactionService.SetupBooleanResponse(true);
+
+        var exitCode = await ResourceCommandHelper.ExecuteGenericCommandAsync(
+            connection,
+            interactionService,
+            NullLogger.Instance,
+            "myResource",
+            "reset",
+            arguments: null,
+            confirmationBinding: PromptBinding.CreateDefault(false),
+            confirmationMessage: "Reset resource?",
+            cancellationToken: CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(1, connection.ExecuteResourceCommandCallCount);
+        var prompt = Assert.Single(interactionService.BooleanPromptCalls);
+        Assert.Equal("Reset resource?", prompt.PromptText);
+    }
+
+    [Fact]
+    public async Task ExecuteGenericCommandAsync_WithConfirmation_DoesNotExecuteWhenDeclined()
+    {
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true }
+        };
+        var interactionService = new TestInteractionService();
+        interactionService.SetupBooleanResponse(false);
+
+        var exitCode = await ResourceCommandHelper.ExecuteGenericCommandAsync(
+            connection,
+            interactionService,
+            NullLogger.Instance,
+            "myResource",
+            "reset",
+            arguments: null,
+            confirmationBinding: PromptBinding.CreateDefault(false),
+            confirmationMessage: "Reset resource?",
+            cancellationToken: CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToExecuteResourceCommand, exitCode);
+        Assert.Equal(0, connection.ExecuteResourceCommandCallCount);
+        Assert.Single(interactionService.BooleanPromptCalls);
+    }
+
+    [Fact]
+    public async Task ExecuteGenericCommandAsync_WithConfirmationAndNonInteractiveOption_ExecutesWithoutPrompting()
+    {
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true }
+        };
+        var interactionService = new TestInteractionService();
+        var option = RootCommand.NonInteractiveOption;
+        var command = new System.CommandLine.Command("resource")
+        {
+            option
+        };
+        var binding = PromptBinding.Create(command.Parse("--non-interactive"), option);
+
+        var exitCode = await ResourceCommandHelper.ExecuteGenericCommandAsync(
+            connection,
+            interactionService,
+            NullLogger.Instance,
+            "myResource",
+            "reset",
+            arguments: null,
+            confirmationBinding: binding,
+            confirmationMessage: "Reset resource?",
+            cancellationToken: CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(1, connection.ExecuteResourceCommandCallCount);
+        Assert.Empty(interactionService.BooleanPromptCalls);
     }
 }
