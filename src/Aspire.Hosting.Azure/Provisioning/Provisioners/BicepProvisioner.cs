@@ -42,6 +42,7 @@ internal sealed class BicepProvisioner(
     internal const string DeploymentStateProvisioningStateSucceeded = "Succeeded";
 
     private const string DeploymentActiveErrorCode = "DeploymentActive";
+    private const string DeploymentUrlName = "deployment";
     private const string DeploymentOperationPropertyPrefix = "azure.deployment.operations.";
     private const string DeploymentOperationSummaryPropertyName = DeploymentOperationPropertyPrefix + "summary";
     private static readonly TimeSpan s_deploymentOperationPollingInterval = TimeSpan.FromSeconds(2);
@@ -121,7 +122,7 @@ internal sealed class BicepProvisioner(
         {
             deploymentId = configuredDeploymentId;
             deploymentResourceId = id;
-            portalUrls.Add(new(Name: "deployment", Url: GetDeploymentUrl(id), IsInternal: false));
+            portalUrls.Add(new(Name: DeploymentUrlName, Url: GetDeploymentUrl(id), IsInternal: false));
         }
 
         var azureContext = await GetCurrentAzureContextAsync(deploymentResourceId, cancellationToken).ConfigureAwait(false);
@@ -332,7 +333,7 @@ internal sealed class BicepProvisioner(
         await notificationService.PublishUpdateAsync(resource, state => state with
         {
             State = new(AzureProvisioningController.WaitingForDeploymentState, KnownResourceStateStyles.Info),
-            Urls = [.. state.Urls.Where(static url => url.Name != "deployment"), new(Name: "deployment", Url: deploymentUrl, IsInternal: false)],
+            Urls = [.. state.Urls.Where(static url => !string.Equals(url.Name, DeploymentUrlName, StringComparison.Ordinal)), new(Name: DeploymentUrlName, Url: deploymentUrl, IsInternal: false)],
             Properties = state.Properties
                 .WithoutAzureProvisioningFailureProperties()
                 .SetResourceProperty(CustomResourceKnownProperties.Source, deploymentId)
@@ -367,11 +368,9 @@ internal sealed class BicepProvisioner(
         //   {"resourceGroup":"<group>","subscription":"<subscription>"}
         // Tenant-scoped resources also include "tenant": "current"; resources without
         // an explicit/existing scope persist {"resourceGroup":null}.
-        JsonObject? scope = null;
-        if (TryGetDeploymentStateJsonObject(stateSection, BicepUtilities.DeploymentStateScopeKey, resource.Name, out var cachedScope))
-        {
-            scope = cachedScope;
-        }
+        var scope = TryGetDeploymentStateJsonObject(stateSection, BicepUtilities.DeploymentStateScopeKey, resource.Name, out var cachedScope)
+            ? cachedScope
+            : null;
 
         var locationOverride = stateSection.Data[AzureProvisioningController.LocationOverrideKey]?.GetValue<string>();
 
@@ -690,7 +689,7 @@ internal sealed class BicepProvisioner(
             return state with
             {
                 State = new(AzureProvisioningController.WaitingForDeploymentState, KnownResourceStateStyles.Info),
-                Urls = [.. state.Urls, new(Name: "deployment", Url: url, IsInternal: false)],
+                Urls = [.. state.Urls, new(Name: DeploymentUrlName, Url: url, IsInternal: false)],
                 Properties = state.Properties.SetResourceProperty(CustomResourceKnownProperties.Source, deploymentId.ToString()),
             };
         })
@@ -859,7 +858,7 @@ internal sealed class BicepProvisioner(
         // that this AppHost is trying to run. Otherwise, the 409 could be from another command or a
         // previous model, and adopting it would publish the wrong outputs.
         if (!IsRunningCachedDeployment(stateSection) ||
-            !StringComparers.AzureResourceId.Equals(cachedDeploymentId, deploymentId.ToString()) ||
+            !string.Equals(cachedDeploymentId, deploymentId.ToString(), StringComparisons.AzureResourceId) ||
             !string.Equals(cachedChecksum, checksum, StringComparison.Ordinal))
         {
             logger.LogDebug("Azure deployment {DeploymentId} for {ResourceName} is active, but cached state does not match the current deployment request.", deploymentId, resource.Name);

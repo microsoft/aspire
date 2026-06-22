@@ -2619,9 +2619,11 @@ public class AzureEnvironmentResourceExtensionsTests
     {
         var builder = CreateBuilder(isRunMode: true);
         var testBicepProvisioner = new BlockingTestBicepProvisioner();
+        var operationStartedAt = new DateTimeOffset(2026, 6, 22, 12, 34, 56, TimeSpan.Zero);
 
         builder.Configuration["Azure:SubscriptionId"] = "12345678-1234-1234-1234-123456789012";
         builder.Configuration["Azure:Location"] = "eastus";
+        builder.Services.AddSingleton<TimeProvider>(new FixedTimeProvider(operationStartedAt));
         AddTestAzureProvisioning(builder, bicepProvisioner: testBicepProvisioner);
 
         var storage = builder.AddBicepTemplateString("storage", "resource storage 'Microsoft.Storage/storageAccounts@2024-01-01' = {}");
@@ -2670,7 +2672,7 @@ public class AzureEnvironmentResourceExtensionsTests
             AssertHighlightedContextProperty(storageSnapshot.Properties, AzureResourceProperties.OperationPhase, "Reprovisioning", AzureProvisioningStrings.OperationPropertyPhaseDisplayName);
             AssertHighlightedContextProperty(storageSnapshot.Properties, AzureResourceProperties.OperationStatus, "Reprovisioning in westus2", AzureProvisioningStrings.OperationPropertyStatusDisplayName);
             AssertHighlightedContextProperty(storageSnapshot.Properties, AzureResourceProperties.OperationTargetLocation, "westus2", AzureProvisioningStrings.OperationPropertyTargetLocationDisplayName);
-            Assert.Contains(storageSnapshot.Properties, property => property.Name == AzureResourceProperties.OperationStartedAt);
+            AssertHighlightedContextProperty(storageSnapshot.Properties, AzureResourceProperties.OperationStartedAt, operationStartedAt.ToString("O"), AzureProvisioningStrings.OperationPropertyStartedAtDisplayName);
 
             Assert.True(notifications.TryGetCurrentState(storage2.Resource.Name, out var storage2Event));
             AssertUnaffectedResourceCommandsDuringOperation(storage2Event.Snapshot);
@@ -4703,6 +4705,14 @@ public class AzureEnvironmentResourceExtensionsTests
         Assert.Equal(value, property.Value);
         Assert.Equal(displayName, property.DisplayName);
         Assert.True(property.IsHighlighted);
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow()
+        {
+            return utcNow;
+        }
     }
 
     private sealed class AzureProvisioningFailureTestResponse : Response

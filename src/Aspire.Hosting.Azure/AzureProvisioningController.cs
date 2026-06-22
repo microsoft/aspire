@@ -9,12 +9,12 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Channels;
-using Aspire.Hosting.Eventing;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Azure.Provisioning;
 using Aspire.Hosting.Azure.Provisioning.Internal;
 using Aspire.Hosting.Azure.Resources;
+using Aspire.Hosting.Eventing;
+using Aspire.Hosting.Pipelines;
 using Azure;
 using Azure.Core;
 using Azure.Identity;
@@ -83,7 +83,7 @@ internal sealed class AzureProvisioningController(
     internal const string ForgetStateCommandName = "forget-state";
     internal const string ChangeResourceLocationCommandName = "change-location";
     internal const string GetAzureResourceCommandName = "get-azure-resource";
-    internal const string CancelCommandName = "cancel";
+    internal const string CancelCommandName = "cancel-azure-operation";
     internal const string DeleteAzureResourceCommandName = "delete-azure-resource";
     internal const string ReprovisionResourceCommandName = "reprovision";
     internal const string ResetProvisioningStateCommandName = "reset-provisioning-state";
@@ -129,6 +129,7 @@ internal sealed class AzureProvisioningController(
         SingleWriter = false
     });
     private readonly ILogger<AzureProvisioningController> _logger = logger;
+    private readonly TimeProvider _timeProvider = serviceProvider.GetService<TimeProvider>() ?? TimeProvider.System;
     private readonly object _operationStateLock = new();
     private readonly List<AzureOperationState> _queuedOperationStates = [];
     private AzureControllerState _state = AzureControllerState.Empty;
@@ -1062,6 +1063,7 @@ internal sealed class AzureProvisioningController(
             .Where(static resource => resource.AzureResource.ProvisioningTaskCompletionSource?.Task is { IsFaulted: true } or { IsCanceled: true })
             .Select(static resource => resource.Resource.Name)
             .Distinct(StringComparers.ResourceName)
+            .Order(StringComparers.ResourceName)
             .ToArray();
 
         return failedResourceNames.Length == 0
@@ -1313,9 +1315,9 @@ internal sealed class AzureProvisioningController(
             return GetProvisionableAzureResources(model);
         }
 
-        return [.. GetProvisionableAzureResources(model).Where(resource =>
+        return GetProvisionableAzureResources(model).Where(resource =>
             activeOperation.Operation.ResourceNames.Contains(resource.Resource.Name) ||
-            activeOperation.Operation.ResourceNames.Contains(resource.AzureResource.Name))];
+            activeOperation.Operation.ResourceNames.Contains(resource.AzureResource.Name)).ToList();
     }
 
     private async Task<object?> QueueAndWaitForOperationAsync(
@@ -1371,7 +1373,6 @@ internal sealed class AzureProvisioningController(
         }
 
         var stoppingToken = serviceProvider.GetService<IHostApplicationLifetime>()?.ApplicationStopping ?? CancellationToken.None;
-        var timeProvider = serviceProvider.GetService<TimeProvider>() ?? TimeProvider.System;
 
         _ = Task.Run(async () =>
         {
@@ -1381,7 +1382,7 @@ internal sealed class AzureProvisioningController(
             {
                 try
                 {
-                    await Task.Delay(DriftCheckInterval, timeProvider, stoppingToken).ConfigureAwait(false);
+                    await Task.Delay(DriftCheckInterval, _timeProvider, stoppingToken).ConfigureAwait(false);
                     await CheckForDriftAsync(model, stoppingToken).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -2082,7 +2083,7 @@ internal sealed class AzureProvisioningController(
 
     private ActiveAzureOperation StartOperation(DistributedApplicationModel model, AzureIntent intent, CancellationToken cancellationToken)
     {
-        var activeOperation = ActiveAzureOperation.Create(intent, CreateActiveOperationState(model, intent), cancellationToken);
+        var activeOperation = ActiveAzureOperation.Create(intent, CreateActiveOperationState(model, intent), _timeProvider.GetUtcNow(), cancellationToken);
         lock (_operationStateLock)
         {
             // Store the intent rather than just a boolean so command-state calculation can keep
@@ -3566,9 +3567,9 @@ internal sealed class AzureProvisioningController(
 
         var section = await deploymentStateManager.AcquireSectionAsync($"Azure:Deployments:{bicepResource.Name}").ConfigureAwait(false);
         if (!string.Equals(
-                section.Data[BicepProvisioner.DeploymentStateProvisioningStateKey]?.GetValue<string>(),
-                BicepProvisioner.DeploymentStateProvisioningStateCanceled,
-                StringComparisons.AzureProvisioningState))
+            section.Data[BicepProvisioner.DeploymentStateProvisioningStateKey]?.GetValue<string>(),
+            BicepProvisioner.DeploymentStateProvisioningStateCanceled,
+            StringComparisons.AzureProvisioningState))
         {
             return false;
         }
@@ -3955,20 +3956,20 @@ internal sealed class AzureProvisioningController(
             context.Location);
     }
 
-    private sealed class AzureOperationState(string displayName, bool isAllResources, IReadOnlySet<string> resourceNames)
+    private sealed class AzureOperationState(string displayName, bool isAllResources, IEnumerable<string> resourceNames)
     {
         // Read under _operationStateLock on the hot command-state path, so it holds only what command
         // enablement needs: target resource names and whether the operation affects all resources.
         public string DisplayName { get; } = displayName;
         public bool IsAllResources { get; } = isAllResources;
-        public IReadOnlySet<string> ResourceNames { get; } = resourceNames;
+        public IReadOnlySet<string> ResourceNames { get; } = new HashSet<string>(resourceNames, StringComparers.ResourceName);
         public bool IsNone => !IsAllResources && ResourceNames.Count == 0;
 
-        public static AzureOperationState None { get; } = new(string.Empty, false, new HashSet<string>(StringComparers.ResourceName));
+        public static AzureOperationState None { get; } = new(string.Empty, false, []);
 
-        public static AzureOperationState All(string displayName) => new(displayName, true, new HashSet<string>(StringComparers.ResourceName));
+        public static AzureOperationState All(string displayName) => new(displayName, true, []);
 
-        public static AzureOperationState Resource(string resourceName, string displayName) => new(displayName, false, new HashSet<string>([resourceName], StringComparers.ResourceName));
+        public static AzureOperationState Resource(string resourceName, string displayName) => new(displayName, false, [resourceName]);
 
         public static AzureOperationState Resources(IReadOnlySet<string> resourceNames, string displayName) => new(displayName, false, resourceNames);
     }
@@ -3980,10 +3981,11 @@ internal sealed class AzureProvisioningController(
         private string _phase;
         private string _status;
 
-        private ActiveAzureOperation(AzureIntent intent, AzureOperationState operation, CancellationTokenSource cancellationTokenSource)
+        private ActiveAzureOperation(AzureIntent intent, AzureOperationState operation, DateTimeOffset startedAt, CancellationTokenSource cancellationTokenSource)
         {
             Intent = intent;
             Operation = operation;
+            StartedAt = startedAt;
             _cancellationTokenSource = cancellationTokenSource;
             _phase = operation.DisplayName;
             _status = KnownResourceStates.Running;
@@ -3993,7 +3995,7 @@ internal sealed class AzureProvisioningController(
 
         public AzureOperationState Operation { get; }
 
-        public DateTimeOffset StartedAt { get; } = DateTimeOffset.UtcNow;
+        public DateTimeOffset StartedAt { get; }
 
         public CancellationToken CancellationToken => _cancellationTokenSource.Token;
 
@@ -4001,8 +4003,8 @@ internal sealed class AzureProvisioningController(
 
         public string? TargetLocation => Intent is ChangeResourceLocationIntent changeLocation ? changeLocation.Location : null;
 
-        public static ActiveAzureOperation Create(AzureIntent intent, AzureOperationState operation, CancellationToken cancellationToken)
-            => new(intent, operation, CancellationTokenSource.CreateLinkedTokenSource(cancellationToken));
+        public static ActiveAzureOperation Create(AzureIntent intent, AzureOperationState operation, DateTimeOffset startedAt, CancellationToken cancellationToken)
+            => new(intent, operation, startedAt, CancellationTokenSource.CreateLinkedTokenSource(cancellationToken));
 
         public void SetPhase(string phase, string? status = null)
         {

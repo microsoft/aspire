@@ -38,7 +38,7 @@ public class DefaultArmClientProviderTests
         {
             Environment = environment,
             Transport = transport
-        });
+        }, TimeProvider.System);
 
         var armClient = provider.GetArmClient(credential, SubscriptionId);
 
@@ -77,7 +77,7 @@ public class DefaultArmClientProviderTests
             var provider = new DefaultArmClientProvider(new ArmClientOptions
             {
                 Transport = transport
-            });
+            }, TimeProvider.System);
             var armClient = provider.GetArmClient(new CapturingTokenCredential(), SubscriptionId);
 
             var locations = await armClient.GetAvailableLocationsAsync(SubscriptionId, CancellationToken.None);
@@ -98,7 +98,7 @@ public class DefaultArmClientProviderTests
         var provider = new DefaultArmClientProvider(new ArmClientOptions
         {
             Transport = transport
-        });
+        }, TimeProvider.System);
         var armClient = provider.GetArmClient(new CapturingTokenCredential(), SubscriptionId);
         var operations = new List<AzureDeploymentOperationDetails>();
 
@@ -118,7 +118,7 @@ public class DefaultArmClientProviderTests
         var provider = new DefaultArmClientProvider(new ArmClientOptions
         {
             Transport = transport
-        });
+        }, TimeProvider.System);
         var armClient = provider.GetArmClient(new CapturingTokenCredential(), SubscriptionId);
 
         var deployment = await armClient.GetDeploymentAsync(RootDeploymentId, CancellationToken.None);
@@ -135,7 +135,7 @@ public class DefaultArmClientProviderTests
         var provider = new DefaultArmClientProvider(new ArmClientOptions
         {
             Transport = transport
-        });
+        }, TimeProvider.System);
         var armClient = provider.GetArmClient(new CapturingTokenCredential(), SubscriptionId);
 
         await armClient.DeleteResourceAsync(KeyVaultResourceId, cancellationToken: CancellationToken.None);
@@ -160,7 +160,7 @@ public class DefaultArmClientProviderTests
         var provider = new DefaultArmClientProvider(new ArmClientOptions
         {
             Transport = transport
-        });
+        }, TimeProvider.System);
         var armClient = provider.GetArmClient(new CapturingTokenCredential(), SubscriptionId);
 
         var purged = await armClient.PurgeDeletedKeyVaultAsync(KeyVaultResourceId, "ukwest", CancellationToken.None);

@@ -30,25 +30,16 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
     private static readonly TimeSpan s_keyVaultDeletePollInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan s_keyVaultDeleteTimeout = TimeSpan.FromMinutes(1);
 
-    private readonly ArmClientOptions? _options;
+    private readonly ArmClientOptions _options;
     private readonly TimeProvider _timeProvider;
 
-    public DefaultArmClientProvider()
+    internal DefaultArmClientProvider(ArmClientOptions options, TimeProvider timeProvider)
     {
-        _timeProvider = TimeProvider.System;
-    }
-
-    public DefaultArmClientProvider(TimeProvider timeProvider)
-    {
+        ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(timeProvider);
 
-        _timeProvider = timeProvider;
-    }
-
-    internal DefaultArmClientProvider(ArmClientOptions options, TimeProvider? timeProvider = null)
-    {
         _options = options;
-        _timeProvider = timeProvider ?? TimeProvider.System;
+        _timeProvider = timeProvider;
     }
 
     public IArmClient GetArmClient(TokenCredential credential, string subscriptionId)

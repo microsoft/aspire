@@ -170,7 +170,7 @@ public class TextVisualizerViewModel
                     writer.WriteStringValue(reader.GetString());
                     break;
                 case JsonTokenType.Number:
-                    WriteRawNumberValue(writer, stream, reader.ValueSpan);
+                    WriteIndentedRawNumberValue(writer, stream, reader.ValueSpan);
                     break;
                 case JsonTokenType.True:
                     writer.WriteBooleanValue(true);
@@ -193,11 +193,16 @@ public class TextVisualizerViewModel
         return formattedJson;
     }
 
-    private static void WriteRawNumberValue(Utf8JsonWriter writer, MemoryStream stream, ReadOnlySpan<byte> rawNumber)
+    private static void WriteIndentedRawNumberValue(Utf8JsonWriter writer, MemoryStream stream, ReadOnlySpan<byte> rawNumber)
     {
-        // WriteRawValue preserves the numeric lexeme, but it bypasses Utf8JsonWriter's indentation
-        // handling. Write a placeholder number first so the writer emits the correct separator and
-        // whitespace, then replace only the placeholder bytes with the raw number token.
+        // Utf8JsonWriter has two incomplete options for numbers:
+        // - WriteNumberValue requires choosing a numeric type, which can round/truncate large or precise values.
+        // - WriteRawValue preserves the numeric lexeme, but bypasses indentation after comments,
+        //   producing output like: /* raw number */1e+1000
+        //
+        // Write a placeholder through the normal number path so the writer emits separators,
+        // indentation, and updates its state, then patch just that placeholder byte before any
+        // subsequent writer calls.
         writer.Flush();
         writer.WriteNumberValue(0);
         writer.Flush();
