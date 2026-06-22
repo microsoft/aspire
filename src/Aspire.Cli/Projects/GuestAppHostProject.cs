@@ -367,16 +367,12 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         _logger.LogDebug("Running {Language} AppHost: {AppHostFile}", DisplayName, appHostFile.FullName);
         var startProjectContext = Activity.Current?.Context ?? default;
 
-        // Guard for the backchannel continuation below. Declared at method scope so the finally
-        // (which sets it) and the inner-try declarations of serverStopCts/etc remain consistent
-        // regardless of where we exit.
-        var runEnded = 0;
-
         // Captures an exit code surfaced by an internal teardown trigger (currently only the
         // backchannel-fault continuation). Read by the outer OCE catch when the in-flight await
         // throws OCE because we cancelled appHostSystemCts ourselves. -1 = "no internal failure
         // recorded; fall back to Cancelled (130)". Declared at method scope so the catch can read
-        // it.
+        // it. Written at most once by the single backchannel continuation, so a plain assignment
+        // is sufficient; appHostSystemCts.Cancel() below provides the barrier for the catch's read.
         var internalFaultCode = -1;
 
         try
@@ -539,11 +535,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             using var appHostSystemCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             var appHostSystemToken = appHostSystemCts.Token;
 
-            // Guard the backchannel continuation from firing after RunAsync has already returned.
-            // The continuation can fault late and would otherwise touch the disposed
-            // appHostSystemCts. The continuation uses an atomic CAS on runEnded (rather than a
-            // plain read) so it races safely with the finally below — exactly one of (continuation,
-            // finally) flips the gate 0→1, and the loser observes the flag already set and no-ops.
+            // Guard the backchannel continuation from touching the disposed appHostSystemCts after
+            // RunAsync has already returned. The continuation can fault late, so the Cancel() call
+            // is wrapped in a try/catch (ObjectDisposedException) — that catch is the authoritative
+            // protection against the disposal race.
 
             // When the backchannel polling task gives up (timeout, server process exit, or other
             // fatal connection error), escalate to tearing down the whole AppHost system by
@@ -554,14 +549,11 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             _ = backchannelCompletionSource.Task.ContinueWith(
                 t =>
                 {
-                    // CAS-flip runEnded 0→1 atomically with the fault check. If the finally below
-                    // wins the race the CAS fails and we no-op; otherwise this is the authoritative
-                    // shutdown driver for the backchannel-fault path.
-                    if (t.IsFaulted && Interlocked.CompareExchange(ref runEnded, 1, 0) == 0)
+                    if (t.IsFaulted)
                     {
-                        // First-writer-wins on the surfaced exit code. The outer OCE catch reads
-                        // this when the in-flight await throws because we cancelled below.
-                        Interlocked.CompareExchange(ref internalFaultCode, CliExitCodes.FailedToDotnetRunAppHost, -1);
+                        // The outer OCE catch reads this when the in-flight await throws because we
+                        // cancelled below.
+                        internalFaultCode = CliExitCodes.FailedToDotnetRunAppHost;
                         try
                         {
                             appHostSystemCts.Cancel();
@@ -758,13 +750,6 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             _logger.LogError(ex, "Failed to run {Language} AppHost", DisplayName);
             _interactionService.DisplayError($"Failed to run {DisplayName} AppHost: {ex.Message}");
             return CliExitCodes.FailedToDotnetRunAppHost;
-        }
-        finally
-        {
-            // Mark the run as ended so the backchannel ContinueWith no-ops if it fires late.
-            // Uses CompareExchange to race safely with the continuation: whichever side flips the
-            // gate first wins; the loser observes the gate already set and skips the cancel call.
-            Interlocked.CompareExchange(ref runEnded, 1, 0);
         }
     }
 
