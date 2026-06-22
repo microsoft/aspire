@@ -73,6 +73,96 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         }
     }
 
+    [Theory]
+    [MemberData(nameof(LogLevelFilteringData))]
+    public async Task WatchDashboardLogs_AspireDashboardWarningsShown_ThirdPartyWarningsSuppressed(
+        string category, LogLevel logLevel, bool expectLogged)
+    {
+        var testSink = new TestSink();
+        var factory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            b.AddProvider(new TestLoggerProvider(testSink));
+
+            // Mirror the production filter configuration from DistributedApplicationBuilder.
+            b.AddFilter("Aspire.Hosting.Dashboard", LogLevel.Warning);
+            b.AddFilter("Aspire.Hosting.Dashboard.ThirdParty", LogLevel.Error);
+        });
+        var logChannel = Channel.CreateUnbounded<WriteContext>();
+        testSink.MessageLogged += c => logChannel.Writer.TryWrite(c);
+
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create(logger: factory.CreateLogger<ResourceNotificationService>());
+        var configuration = new ConfigurationBuilder().Build();
+        var hook = CreateHook(resourceLoggerService, resourceNotificationService, configuration, loggerFactory: factory);
+
+        var model = new DistributedApplicationModel(new ResourceCollection());
+        await hook.OnBeforeStartAsync(new BeforeStartEvent(new TestServiceProvider(), model), CancellationToken.None).DefaultTimeout();
+
+        var dashboardResource = model.Resources.Single(r => string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName));
+        var resourceId = dashboardResource.GetResolvedResourceNames()[0];
+
+        var timestamp = new DateTime(2001, 12, 29, 23, 59, 59, DateTimeKind.Utc);
+        var message = new DashboardLogMessage
+        {
+            LogLevel = logLevel,
+            Category = category,
+            Message = $"Test message from {category}",
+            Timestamp = timestamp.ToString(KnownFormats.ConsoleLogsTimestampFormat, CultureInfo.InvariantCulture),
+        };
+        var messageJson = JsonSerializer.Serialize(message, DashboardLogMessageContext.Default.DashboardLogMessage);
+
+        var dashboardLoggerState = resourceLoggerService.GetResourceLoggerState(resourceId);
+        dashboardLoggerState.AddLog(LogEntry.Create(timestamp, messageJson, isErrorMessage: false), inMemorySource: true);
+
+        await resourceNotificationService.PublishUpdateAsync(dashboardResource, s => s).DefaultTimeout();
+
+        if (expectLogged)
+        {
+            // Wait for the expected log to arrive.
+            while (true)
+            {
+                var logContext = await logChannel.Reader.ReadAsync().DefaultTimeout();
+                if (logContext.Message == $"Test message from {category}")
+                {
+                    Assert.Equal(logLevel, logContext.LogLevel);
+                    break;
+                }
+            }
+        }
+        else
+        {
+            // Give a short window for any unexpected logs to arrive, then verify nothing matched.
+            await Task.Delay(200);
+
+            var unexpectedLogs = new List<WriteContext>();
+            while (logChannel.Reader.TryRead(out var logContext))
+            {
+                unexpectedLogs.Add(logContext);
+            }
+
+            Assert.DoesNotContain(unexpectedLogs, l => l.Message == $"Test message from {category}");
+        }
+    }
+
+    public static IEnumerable<object[]> LogLevelFilteringData()
+    {
+        // Aspire.Dashboard.* categories: Warning+ should be logged.
+        yield return ["Aspire.Dashboard.Model.IconResolver", LogLevel.Warning, true];
+        yield return ["Aspire.Dashboard.Model.IconResolver", LogLevel.Error, true];
+        yield return ["Aspire.Dashboard.Components.SomePage", LogLevel.Information, false];
+        yield return ["Aspire.Dashboard.Components.SomePage", LogLevel.Debug, false];
+
+        // Third-party categories: only Error+ should be logged.
+        yield return ["Microsoft.AspNetCore.Server.Kestrel", LogLevel.Error, true];
+        yield return ["Microsoft.AspNetCore.Server.Kestrel", LogLevel.Critical, true];
+        yield return ["Microsoft.AspNetCore.Server.Kestrel", LogLevel.Warning, false];
+        yield return ["Microsoft.AspNetCore.Server.Kestrel", LogLevel.Information, false];
+        yield return ["Grpc.AspNetCore.Server", LogLevel.Warning, false];
+        yield return ["Grpc.AspNetCore.Server", LogLevel.Error, true];
+        yield return ["System.Net.Http.HttpClient", LogLevel.Warning, false];
+    }
+
     [Fact]
     public async Task BeforeStartAsync_ExcludeLifecycleCommands_CommandsNotAddedToDashboard()
     {
@@ -687,6 +777,8 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
     public static IEnumerable<object?[]> Data()
     {
         var timestamp = new DateTime(2001, 12, 29, 23, 59, 59, DateTimeKind.Utc);
+
+        // Third-party category (not prefixed with Aspire.Dashboard.) gets routed under ThirdParty.
         var message = new DashboardLogMessage
         {
             LogLevel = LogLevel.Error,
@@ -701,7 +793,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             DateTime.UtcNow,
             messageJson,
             "Hello world",
-            "Aspire.Hosting.Dashboard.TestCategory",
+            "Aspire.Hosting.Dashboard.ThirdParty.TestCategory",
             LogLevel.Error
         };
         yield return new object?[]
@@ -709,10 +801,11 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             null,
             messageJson,
             "Hello world",
-            "Aspire.Hosting.Dashboard.TestCategory",
+            "Aspire.Hosting.Dashboard.ThirdParty.TestCategory",
             LogLevel.Error
         };
 
+        // Third-party sub-category with exception.
         message = new DashboardLogMessage
         {
             LogLevel = LogLevel.Critical,
@@ -728,8 +821,65 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             null,
             messageJson,
             $"Error message{Environment.NewLine}System.InvalidOperationException: Error!",
-            "Aspire.Hosting.Dashboard.TestCategory.TestSubCategory",
+            "Aspire.Hosting.Dashboard.ThirdParty.TestCategory.TestSubCategory",
             LogLevel.Critical
+        };
+
+        // Aspire.Dashboard category — prefix is trimmed and no ThirdParty segment is added.
+        message = new DashboardLogMessage
+        {
+            LogLevel = LogLevel.Warning,
+            Category = "Aspire.Dashboard.Model.IconResolver",
+            Message = "Icon could not be resolved",
+            Timestamp = timestamp.ToString(KnownFormats.ConsoleLogsTimestampFormat, CultureInfo.InvariantCulture),
+        };
+        messageJson = JsonSerializer.Serialize(message, DashboardLogMessageContext.Default.DashboardLogMessage);
+
+        yield return new object?[]
+        {
+            null,
+            messageJson,
+            "Icon could not be resolved",
+            "Aspire.Hosting.Dashboard.Model.IconResolver",
+            LogLevel.Warning
+        };
+
+        // Aspire.Dashboard top-level category.
+        message = new DashboardLogMessage
+        {
+            LogLevel = LogLevel.Error,
+            Category = "Aspire.Dashboard.Components.SomePage",
+            Message = "Component error",
+            Timestamp = timestamp.ToString(KnownFormats.ConsoleLogsTimestampFormat, CultureInfo.InvariantCulture),
+        };
+        messageJson = JsonSerializer.Serialize(message, DashboardLogMessageContext.Default.DashboardLogMessage);
+
+        yield return new object?[]
+        {
+            null,
+            messageJson,
+            "Component error",
+            "Aspire.Hosting.Dashboard.Components.SomePage",
+            LogLevel.Error
+        };
+
+        // Third-party Microsoft.AspNetCore category.
+        message = new DashboardLogMessage
+        {
+            LogLevel = LogLevel.Error,
+            Category = "Microsoft.AspNetCore.Server.Kestrel",
+            Message = "Kestrel error",
+            Timestamp = timestamp.ToString(KnownFormats.ConsoleLogsTimestampFormat, CultureInfo.InvariantCulture),
+        };
+        messageJson = JsonSerializer.Serialize(message, DashboardLogMessageContext.Default.DashboardLogMessage);
+
+        yield return new object?[]
+        {
+            null,
+            messageJson,
+            "Kestrel error",
+            "Aspire.Hosting.Dashboard.ThirdParty.Microsoft.AspNetCore.Server.Kestrel",
+            LogLevel.Error
         };
     }
 
