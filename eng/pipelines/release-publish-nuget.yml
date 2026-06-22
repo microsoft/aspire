@@ -2362,8 +2362,10 @@ extends:
       #
       #   3. UpdateNixPackageJob — dispatches the update-nix-cli-flake
       #      GitHub Actions workflow after release asset upload. The workflow
-      #      reads the live .sha512 assets and commits the in-repo manifest
-      #      bump to the existing update-baseline-<version> PR on main.
+      #      reads the live .sha512 assets, commits eng/nix/versions.json to
+      #      the update-baseline-<version> branch, and opens the PR from that
+      #      branch (release-github-tasks.yml created only the branch via
+      #      defer_baseline_pr=true; PR creation is handled here).
       #
       #   4. HomebrewValidateJob — runs the full upstream-equivalent cask
       #      validation (`brew audit --cask --online --signing` + real
@@ -2651,8 +2653,9 @@ extends:
 
           # Dispatch the Nix manifest update workflow only after the GitHub
           # release assets are live. The updater reads the release .sha512
-          # assets and adds eng/nix/versions.json to the existing baseline
-          # version PR created by release-github-tasks.yml.
+          # assets, commits eng/nix/versions.json to the update-baseline-<version>
+          # branch created by release-github-tasks.yml (which deferred PR creation
+          # via defer_baseline_pr=true), and opens the PR from that branch.
           # Accepting 'Skipped' supports partial-failure re-runs where the
           # assets were already uploaded and SkipReleaseAssets=true is used.
           - job: UpdateNixPackageJob
