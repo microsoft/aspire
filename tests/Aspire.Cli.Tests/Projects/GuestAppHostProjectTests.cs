@@ -1004,12 +1004,12 @@ public class GuestAppHostProjectTests : IDisposable
                 Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(appPath))
         };
 
-        AppHostServerCodegenSessionFactory sessionFactory = (_, _, _, _) => new FakeAppHostServerSession();
+        IAppHostServerSessionFactory sessionFactory = new FakeAppHostServerSessionFactory();
 
         var project = CreateGuestAppHostProject(
             interactionService: interactionService,
             appHostServerProjectFactory: factory,
-            codegenSessionFactory: sessionFactory);
+            serverSessionFactory: sessionFactory);
 
         var context = new UpdatePackagesContext
         {
@@ -1088,12 +1088,12 @@ public class GuestAppHostProjectTests : IDisposable
                 Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(appPath))
         };
 
-        AppHostServerCodegenSessionFactory sessionFactory = (_, _, _, _) => new FakeAppHostServerSession();
+        IAppHostServerSessionFactory sessionFactory = new FakeAppHostServerSessionFactory();
 
         var project = CreateGuestAppHostProject(
             interactionService: interactionService,
             appHostServerProjectFactory: factory,
-            codegenSessionFactory: sessionFactory);
+            serverSessionFactory: sessionFactory);
 
         var context = new UpdatePackagesContext
         {
@@ -1155,7 +1155,7 @@ public class GuestAppHostProjectTests : IDisposable
         TestInteractionService? interactionService = null,
         string identityChannel = "local",
         TestAppHostServerProjectFactory? appHostServerProjectFactory = null,
-        AppHostServerCodegenSessionFactory? codegenSessionFactory = null,
+        IAppHostServerSessionFactory? serverSessionFactory = null,
         bool identityOverridden = false)
     {
         var language = new LanguageInfo(
@@ -1197,7 +1197,7 @@ public class GuestAppHostProjectTests : IDisposable
             profilingTelemetry: _profilingTelemetry,
             gracefulShutdownSignaler: new NoOpGracefulSignaler(),
             shutdownService: shutdownWindow,
-            codegenSessionFactory: codegenSessionFactory);
+            serverSessionFactory: serverSessionFactory ?? new FakeAppHostServerSessionFactory());
     }
 
     private sealed class NoOpGracefulSignaler : IProcessTreeGracefulShutdownSignaler

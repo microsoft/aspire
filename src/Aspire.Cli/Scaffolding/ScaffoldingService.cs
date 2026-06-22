@@ -38,6 +38,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
     };
 
     private readonly IAppHostServerProjectFactory _appHostServerProjectFactory;
+    private readonly IAppHostServerSessionFactory _serverSessionFactory;
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly IInteractionService _interactionService;
     private readonly ILogger<ScaffoldingService> _logger;
@@ -45,12 +46,14 @@ internal sealed class ScaffoldingService : IScaffoldingService
 
     public ScaffoldingService(
         IAppHostServerProjectFactory appHostServerProjectFactory,
+        IAppHostServerSessionFactory serverSessionFactory,
         ILanguageDiscovery languageDiscovery,
         IInteractionService interactionService,
         ILogger<ScaffoldingService> logger,
         CliExecutionContext executionContext)
     {
         _appHostServerProjectFactory = appHostServerProjectFactory;
+        _serverSessionFactory = serverSessionFactory;
         _languageDiscovery = languageDiscovery;
         _interactionService = interactionService;
         _logger = logger;
@@ -139,12 +142,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
         }
 
         // Step 2: Start the server temporarily for scaffolding and code generation
-        await using var serverSession = new AppHostServerSession(
-            appHostServerProject,
-            environmentVariables: null,
-            debug: false,
-            _logger,
-            cancellationToken);
+        await using var serverSession = _serverSessionFactory.Create(appHostServerProject, cancellationToken);
         // Short-lived RPC session: StartAsync() spawns the server. We never observe the
         // exit-code task (WaitForExitAsync) because disposal flows the exit code through the
         // activity scope and the only failure mode we care about surfaces via the RPC call below.

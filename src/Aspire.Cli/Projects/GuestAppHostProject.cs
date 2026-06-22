@@ -50,7 +50,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     private readonly ProfilingTelemetry _profilingTelemetry;
     private readonly IProcessTreeGracefulShutdownSignaler _gracefulShutdownSignaler;
     private readonly IGracefulShutdownWindow _shutdownService;
-    private readonly AppHostServerCodegenSessionFactory _codegenSessionFactory;
+    private readonly IAppHostServerSessionFactory _serverSessionFactory;
 
     // Language is always resolved via constructor
     private readonly LanguageInfo _resolvedLanguage;
@@ -73,8 +73,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         ProfilingTelemetry profilingTelemetry,
         IProcessTreeGracefulShutdownSignaler gracefulShutdownSignaler,
         IGracefulShutdownWindow shutdownService,
-        TimeProvider? timeProvider = null,
-        AppHostServerCodegenSessionFactory? codegenSessionFactory = null)
+        IAppHostServerSessionFactory serverSessionFactory,
+        TimeProvider? timeProvider = null)
     {
         _resolvedLanguage = language;
         _interactionService = interactionService;
@@ -94,26 +94,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         _runningInstanceManager = new RunningInstanceManager(_logger, _interactionService, _timeProvider, _profilingTelemetry);
         _gracefulShutdownSignaler = gracefulShutdownSignaler;
         _shutdownService = shutdownService;
-
-        // Default to constructing a real session for code generation. This uses the simple
-        // construction (no graceful-shutdown parameters) because the codegen session is transient:
-        // it is started, queried over RPC, and disposed within BuildAndGenerateSdkAsync. Tests
-        // override this to supply a fake session that returns canned RPC results.
-        _codegenSessionFactory = codegenSessionFactory ?? CreateCodegenSession;
+        _serverSessionFactory = serverSessionFactory;
     }
-
-    private static IAppHostServerSession CreateCodegenSession(
-        IAppHostServerProject project,
-        ILogger logger,
-        CancellationToken stopRequested,
-        ProfilingTelemetry? profilingTelemetry) =>
-        new AppHostServerSession(
-            project,
-            environmentVariables: null,
-            debug: false,
-            logger,
-            stopRequested,
-            profilingTelemetry);
 
     // ═══════════════════════════════════════════════════════════════
     // IDENTITY (Always resolved via constructor)
@@ -311,11 +293,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         }
 
         // Step 2: Start the AppHost server temporarily for code generation
-        await using var serverSession = _codegenSessionFactory(
-            appHostServerProject,
-            _logger,
-            cancellationToken,
-            _profilingTelemetry);
+        await using var serverSession = _serverSessionFactory.Create(appHostServerProject, cancellationToken);
         // Short-lived RPC session: StartAsync() spawns the server. We never observe the
         // exit-code task because disposal flows the exit code through the activity scope and the only
         // failure mode we care about surfaces via the RPC call below.

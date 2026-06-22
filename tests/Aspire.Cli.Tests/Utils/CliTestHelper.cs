@@ -152,6 +152,7 @@ internal static class CliTestHelper
         services.AddSingleton<PlaywrightCliInstaller>();
         services.AddSingleton(options.ScaffoldingServiceFactory);
         services.AddSingleton<IAppHostServerProjectFactory, AppHostServerProjectFactory>();
+        services.AddSingleton<IAppHostServerSessionFactory, AppHostServerSessionFactory>();
         services.AddSingleton<ILanguageDiscovery, DefaultLanguageDiscovery>();
         services.AddSingleton(options.LanguageServiceFactory);
         services.AddSingleton<TemplateNuGetConfigService>();
@@ -496,11 +497,12 @@ internal sealed class CliServiceCollectionTestOptions
     public Func<IServiceProvider, IScaffoldingService> ScaffoldingServiceFactory { get; set; } = (IServiceProvider serviceProvider) =>
     {
         var appHostServerProjectFactory = serviceProvider.GetRequiredService<IAppHostServerProjectFactory>();
+        var serverSessionFactory = serviceProvider.GetRequiredService<IAppHostServerSessionFactory>();
         var languageDiscovery = serviceProvider.GetRequiredService<ILanguageDiscovery>();
         var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
         var logger = serviceProvider.GetRequiredService<ILogger<ScaffoldingService>>();
         var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
-        return new ScaffoldingService(appHostServerProjectFactory, languageDiscovery, interactionService, logger, executionContext);
+        return new ScaffoldingService(appHostServerProjectFactory, serverSessionFactory, languageDiscovery, interactionService, logger, executionContext);
     };
 
     public Func<IServiceProvider, IProcessExecutionFactory> DotNetCliExecutionFactoryFactory { get; set; } = (IServiceProvider serviceProvider) =>

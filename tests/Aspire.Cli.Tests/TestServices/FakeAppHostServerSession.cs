@@ -24,6 +24,16 @@ internal sealed class FakeAppHostServerSession : IAppHostServerSession
 }
 
 /// <summary>
+/// Fake <see cref="IAppHostServerSessionFactory"/> that hands back a <see cref="FakeAppHostServerSession"/>
+/// without building or launching a real AppHost server.
+/// </summary>
+internal sealed class FakeAppHostServerSessionFactory : IAppHostServerSessionFactory
+{
+    public IAppHostServerSession Create(IAppHostServerProject appHostServerProject, CancellationToken stopRequested)
+        => new FakeAppHostServerSession();
+}
+
+/// <summary>
 /// Fake RPC client that returns empty results for all operations.
 /// Used to exercise code paths that run after RPC connection without needing a real server.
 /// </summary>

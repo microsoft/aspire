@@ -1,9 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Telemetry;
-using Microsoft.Extensions.Logging;
-
 namespace Aspire.Cli.Projects;
 
 /// <summary>
@@ -36,12 +33,17 @@ internal interface IAppHostServerSession : IAsyncDisposable
 }
 
 /// <summary>
-/// Creates the short-lived <see cref="IAppHostServerSession"/> used for SDK code generation.
-/// Production wires this to construct a real <see cref="AppHostServerSession"/>; tests inject a
-/// factory that returns a fake session.
+/// Creates the short-lived <see cref="IAppHostServerSession"/> used for SDK code generation and
+/// scaffolding. Production wires this to construct a real <see cref="AppHostServerSession"/>;
+/// tests inject a factory that returns a fake session.
 /// </summary>
-internal delegate IAppHostServerSession AppHostServerCodegenSessionFactory(
-    IAppHostServerProject project,
-    ILogger logger,
-    CancellationToken stopRequested,
-    ProfilingTelemetry? profilingTelemetry);
+internal interface IAppHostServerSessionFactory
+{
+    /// <summary>
+    /// Creates an unstarted session for the already-prepared <paramref name="appHostServerProject"/>.
+    /// The caller drives it via <see cref="IAppHostServerSession.StartAsync"/>,
+    /// <see cref="IAppHostServerSession.GetRpcClientAsync"/>, then disposal. Cancelling
+    /// <paramref name="stopRequested"/> (or disposing the session) terminates the server process.
+    /// </summary>
+    IAppHostServerSession Create(IAppHostServerProject appHostServerProject, CancellationToken stopRequested);
+}

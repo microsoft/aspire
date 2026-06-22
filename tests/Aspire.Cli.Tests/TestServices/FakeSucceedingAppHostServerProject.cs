@@ -9,7 +9,7 @@ namespace Aspire.Cli.Tests.TestServices;
 /// <summary>
 /// <see cref="IAppHostServerProject"/> whose <see cref="PrepareAsync"/> returns success.
 /// Used with a fake codegen session (<see cref="FakeAppHostServerSession"/> via an injected
-/// <see cref="AppHostServerCodegenSessionFactory"/>) that bypasses <see cref="AppHostServerSession"/>,
+/// <see cref="IAppHostServerSessionFactory"/>) that bypasses <see cref="AppHostServerSession"/>,
 /// so <see cref="RunAsync"/> is never called.
 /// </summary>
 internal sealed class FakeSucceedingAppHostServerProject(string appDirectoryPath) : IAppHostServerProject, IDisposable

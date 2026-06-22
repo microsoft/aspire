@@ -443,3 +443,30 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     private static InvalidOperationException NotStarted() =>
         new($"{nameof(AppHostServerSession)} has not been started. Call {nameof(StartAsync)} first.");
 }
+
+/// <summary>
+/// Default <see cref="IAppHostServerSessionFactory"/> that constructs real
+/// <see cref="AppHostServerSession"/> instances for the short-lived codegen/scaffolding path.
+/// Sessions are created without graceful-shutdown parameters because they are transient: started,
+/// queried over RPC, and disposed within a single operation.
+/// </summary>
+internal sealed class AppHostServerSessionFactory : IAppHostServerSessionFactory
+{
+    private readonly ILogger<AppHostServerSession> _logger;
+    private readonly ProfilingTelemetry _profilingTelemetry;
+
+    public AppHostServerSessionFactory(ILogger<AppHostServerSession> logger, ProfilingTelemetry profilingTelemetry)
+    {
+        _logger = logger;
+        _profilingTelemetry = profilingTelemetry;
+    }
+
+    public IAppHostServerSession Create(IAppHostServerProject appHostServerProject, CancellationToken stopRequested) =>
+        new AppHostServerSession(
+            appHostServerProject,
+            environmentVariables: null,
+            debug: false,
+            _logger,
+            stopRequested,
+            _profilingTelemetry);
+}

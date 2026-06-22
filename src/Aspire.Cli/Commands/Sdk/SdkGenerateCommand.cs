@@ -20,6 +20,7 @@ internal sealed class SdkGenerateCommand : BaseCommand
 {
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly IAppHostServerProjectFactory _appHostServerProjectFactory;
+    private readonly IAppHostServerSessionFactory _serverSessionFactory;
     private readonly ILogger<SdkGenerateCommand> _logger;
 
     private static readonly Argument<FileInfo> s_integrationArgument = new("integration")
@@ -40,12 +41,14 @@ internal sealed class SdkGenerateCommand : BaseCommand
     public SdkGenerateCommand(
         ILanguageDiscovery languageDiscovery,
         IAppHostServerProjectFactory appHostServerProjectFactory,
+        IAppHostServerSessionFactory serverSessionFactory,
         ILogger<SdkGenerateCommand> logger,
         CommonCommandServices services)
         : base("generate", "Generate typed SDKs from an Aspire integration library for use in other languages.", services)
     {
         _languageDiscovery = languageDiscovery;
         _appHostServerProjectFactory = appHostServerProjectFactory;
+        _serverSessionFactory = serverSessionFactory;
         _logger = logger;
 
         Arguments.Add(s_integrationArgument);
@@ -151,12 +154,7 @@ internal sealed class SdkGenerateCommand : BaseCommand
                 return CliExitCodes.FailedToBuildArtifacts;
             }
 
-            await using var serverSession = new AppHostServerSession(
-                appHostServerProject,
-                environmentVariables: null,
-                debug: false,
-                _logger,
-                cancellationToken);
+            await using var serverSession = _serverSessionFactory.Create(appHostServerProject, cancellationToken);
             // Short-lived RPC session: StartAsync() spawns the server. We never observe the
             // exit-code task (WaitForExitAsync) because disposal flows the exit code through the
             // activity scope and the only failure mode we care about surfaces via the RPC call below.
