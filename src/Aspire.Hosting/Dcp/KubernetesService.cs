@@ -48,7 +48,6 @@ internal interface IKubernetesService
         where T : CustomResource, IKubernetesStaticMetadata;
     IAsyncEnumerable<(WatchEventType, T)> WatchAsync<T>(
         string? namespaceParameter = null,
-        Action<Exception>? onError = null,
         CancellationToken cancellationToken = default)
         where T : CustomResource, IKubernetesStaticMetadata;
 
@@ -257,7 +256,6 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
 
     public async IAsyncEnumerable<(WatchEventType, T)> WatchAsync<T>(
         string? namespaceParameter = null,
-        Action<Exception>? onError = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
         where T : CustomResource, IKubernetesStaticMetadata
     {
@@ -291,13 +289,8 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
                     // TODO: KubernetesClient v18 marked WatchAsync extension method as obsolete.
                     // The new pattern uses Watcher<T> directly, but requires significant refactoring.
                     // This API still works in v18.x and will be updated in a future change.
-                    //
-                    // The onError callback handles IOException thrown by the k8s client's
-                    // internal HTTP/2 stream reader task when the watch is cancelled during
-                    // shutdown. Without it the exception surfaces as an UnobservedTaskException.
-                    // See https://github.com/microsoft/aspire/issues/18388
 #pragma warning disable CS0618 // Type or member is obsolete
-                    return responseTask.WatchAsync<T, object>(onError, restartCancellationToken);
+                    return responseTask.WatchAsync<T, object>(onError: null, restartCancellationToken);
 #pragma warning restore CS0618 // Type or member is obsolete
                 },
                 RetryOnConnectivityAndConflictErrors,

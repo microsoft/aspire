@@ -181,7 +181,7 @@ internal sealed class TestKubernetesService : IKubernetesService
         return Task.FromResult(res.ToList());
     }
 
-    public async IAsyncEnumerable<(WatchEventType, T)> WatchAsync<T>(string? namespaceParameter = null, Action<Exception>? onError = null, [EnumeratorCancellation] CancellationToken cancellationToken = default) where T : CustomResource, IKubernetesStaticMetadata
+    public async IAsyncEnumerable<(WatchEventType, T)> WatchAsync<T>(string? namespaceParameter = null, [EnumeratorCancellation] CancellationToken cancellationToken = default) where T : CustomResource, IKubernetesStaticMetadata
     {
         var chan = Channel.CreateUnbounded<(WatchEventType, CustomResource)>();
 
