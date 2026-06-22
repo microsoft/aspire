@@ -163,7 +163,19 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                 _logger.LogDebug("Watching over DCP {ResourceType} resources.", typeof(T).Name);
                 await WatchResourceRetryPipeline.ExecuteAsync(async (pipelineCancellationToken) =>
                 {
-                    await foreach (var (eventType, resource) in _kubernetesService.WatchAsync<T>(cancellationToken: pipelineCancellationToken).ConfigureAwait<(global::k8s.WatchEventType, T)>(false))
+                    // The onError callback handles IOException thrown by the k8s client's
+                    // internal HTTP/2 stream reader task when the watch is cancelled during
+                    // shutdown. Without it the exception surfaces as an UnobservedTaskException.
+                    // See https://github.com/microsoft/aspire/issues/18388
+                    await foreach (var (eventType, resource) in _kubernetesService.WatchAsync<T>(
+                        onError: ex =>
+                        {
+                            if (!pipelineCancellationToken.IsCancellationRequested)
+                            {
+                                _logger.LogDebug(ex, "Error reading {ResourceType} watch stream.", typeof(T).Name);
+                            }
+                        },
+                        cancellationToken: pipelineCancellationToken).ConfigureAwait<(global::k8s.WatchEventType, T)>(false))
                     {
                         await outputSemaphore.WaitAsync(pipelineCancellationToken).ConfigureAwait(false);
 
