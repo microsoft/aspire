@@ -16,9 +16,17 @@
                 {
                     <FluentIcon Value="@icon" Width="16px" />
                 }
+                else if (!string.IsNullOrEmpty(highlightedCommand.IconName))
+                {
+                    @* Icon name was specified but couldn't be resolved. Show a question-mark so the
+                       button stays icon-sized and the actions row doesn't overflow. *@
+                    <FluentIcon Value="@s_unknownIcon" Width="16px" />
+                }
                 else
                 {
-                    @highlightedCommand.GetDisplayName()
+                    @* No icon name provided. Use a default command icon so highlighted commands
+                       always render as icon buttons and never as text labels. *@
+                    <FluentIcon Value="@s_defaultCommandIcon" Width="16px" />
                 }
             </FluentButton>
         }

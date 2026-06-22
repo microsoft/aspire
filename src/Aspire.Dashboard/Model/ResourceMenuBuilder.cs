@@ -32,6 +32,9 @@ public sealed class ResourceMenuBuilder
     private static readonly Icon s_bracesIcon = new Icons.Regular.Size16.Braces();
     private static readonly Icon s_exportEnvIcon = new Icons.Regular.Size16.DocumentText();
 
+    // Fallback icon shown in the menu when a command specifies an icon name that can't be resolved.
+    private static readonly Icon s_unknownCommandIcon = new Icons.Regular.Size16.QuestionCircle();
+
     private readonly NavigationManager _navigationManager;
     private readonly TelemetryRepository _telemetryRepository;
     private readonly IAIContextProvider _aiContextProvider;
@@ -333,7 +336,16 @@ public sealed class ResourceMenuBuilder
 
         MenuButtonItem CreateMenuItem(CommandViewModel command)
         {
-            var icon = (!string.IsNullOrEmpty(command.IconName) && _iconResolver.ResolveIconName(command.IconName, IconSize.Size16, command.IconVariant) is { } i) ? i : null;
+            Icon? icon;
+            if (!string.IsNullOrEmpty(command.IconName))
+            {
+                // Use the resolved icon, or fall back to a question-mark when the name is unrecognized.
+                icon = _iconResolver.ResolveIconName(command.IconName, IconSize.Size16, command.IconVariant) ?? s_unknownCommandIcon;
+            }
+            else
+            {
+                icon = null;
+            }
 
             return new MenuButtonItem
             {

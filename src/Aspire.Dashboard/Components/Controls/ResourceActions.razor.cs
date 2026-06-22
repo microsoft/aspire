@@ -15,6 +15,12 @@ public partial class ResourceActions : ComponentBase
 {
     private static readonly Icon s_consoleLogsIcon = new Icons.Regular.Size16.SlideText();
 
+    // Fallback icon when a command specifies an icon name that can't be resolved to a FluentUI icon.
+    private static readonly Icon s_unknownIcon = new Icons.Regular.Size16.QuestionCircle();
+
+    // Default icon for highlighted commands that don't specify any icon name.
+    private static readonly Icon s_defaultCommandIcon = new Icons.Regular.Size16.Flash();
+
     private AspireMenuButton? _menuButton;
 
     [Inject]
