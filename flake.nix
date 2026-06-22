@@ -37,6 +37,7 @@
         aspire-cli = {
           type = "app";
           program = "${self.packages.${system}.aspire-cli}/bin/aspire";
+          meta.description = "Run the Aspire CLI";
         };
         default = self.apps.${system}.aspire-cli;
       });
@@ -51,6 +52,6 @@
         aspire-cli = self.packages.${system}.aspire-cli;
       });
 
-      formatter = forAllSystems (system: nixpkgs.legacyPackages.${system}.nixfmt-rfc-style);
+      formatter = forAllSystems (system: nixpkgs.legacyPackages.${system}.nixfmt);
     };
 }

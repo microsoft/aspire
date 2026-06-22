@@ -72,7 +72,10 @@ public sealed class NixCliPackageTests
         Assert.Contains("default = aspireCli;", flake);
         Assert.Contains("overlays.default = final: _prev:", flake);
         Assert.Contains("program = \"${self.packages.${system}.aspire-cli}/bin/aspire\";", flake);
+        Assert.Contains("meta.description = \"Run the Aspire CLI\";", flake);
         Assert.Contains("checks = forAllSystems", flake);
+        Assert.Contains("nixpkgs.legacyPackages.${system}.nixfmt", flake);
+        Assert.DoesNotContain("nixfmt-rfc-style", flake);
     }
 
     [Fact]
