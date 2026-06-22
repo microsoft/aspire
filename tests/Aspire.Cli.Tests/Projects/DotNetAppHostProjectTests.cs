@@ -6,6 +6,7 @@ using Aspire.Cli.Layout;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
@@ -273,6 +274,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.False(watch);
             Assert.True(noBuild);
             Assert.False(noRestore);
+            Assert.Equal(bundleRoot.FullName, env!["AspireCliBundlePath"]);
             Assert.Equal(Path.Combine(bundleRoot.FullName, BundleDiscovery.DcpDirectoryName), env![BundleDiscovery.DcpPathEnvVar]);
             Assert.Equal(
                 Path.Combine(bundleRoot.FullName, BundleDiscovery.ManagedDirectoryName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
@@ -1644,7 +1646,8 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         var backchannelsDir = Path.Combine(_workspace.WorkspaceRoot.FullName, ".aspire", "cli", "bch");
         Directory.CreateDirectory(backchannelsDir);
 
-        var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(appHostPath, _workspace.WorkspaceRoot.FullName);
+        var resolvedAppHostPath = PathNormalizer.ResolveSymlinks(appHostPath);
+        var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(resolvedAppHostPath, _workspace.WorkspaceRoot.FullName);
         var appHostId = Path.GetFileName(prefix);
         var socketPath = Path.Combine(
             backchannelsDir,

@@ -38,6 +38,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
     };
 
     private readonly IAppHostServerProjectFactory _appHostServerProjectFactory;
+    private readonly IAppHostServerSessionFactory _appHostServerSessionFactory;
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly IInteractionService _interactionService;
     private readonly ILogger<ScaffoldingService> _logger;
@@ -45,12 +46,14 @@ internal sealed class ScaffoldingService : IScaffoldingService
 
     public ScaffoldingService(
         IAppHostServerProjectFactory appHostServerProjectFactory,
+        IAppHostServerSessionFactory appHostServerSessionFactory,
         ILanguageDiscovery languageDiscovery,
         IInteractionService interactionService,
         ILogger<ScaffoldingService> logger,
         CliExecutionContext executionContext)
     {
         _appHostServerProjectFactory = appHostServerProjectFactory;
+        _appHostServerSessionFactory = appHostServerSessionFactory;
         _languageDiscovery = languageDiscovery;
         _interactionService = interactionService;
         _logger = logger;
@@ -139,11 +142,10 @@ internal sealed class ScaffoldingService : IScaffoldingService
         }
 
         // Step 2: Start the server temporarily for scaffolding and code generation
-        await using var serverSession = AppHostServerSession.Start(
+        await using var serverSession = _appHostServerSessionFactory.Start(
             appHostServerProject,
             environmentVariables: null,
-            debug: false,
-            _logger);
+            debug: false);
 
         // Step 3: Connect to server and get scaffold templates via RPC
         var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);

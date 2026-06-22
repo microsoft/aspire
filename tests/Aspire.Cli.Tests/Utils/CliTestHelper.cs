@@ -196,6 +196,8 @@ internal static class CliTestHelper
         services.AddSingleton<IEnvironmentCheck, DeprecatedWorkloadCheck>();
         services.AddSingleton<IEnvironmentCheck, DevCertsCheck>();
         services.AddSingleton<IEnvironmentCheck, ContainerRuntimeCheck>();
+        services.AddSingleton<IDcpConnectionChecker, TestDcpConnectionChecker>();
+        services.AddSingleton<IEnvironmentCheck, DcpConnectionHealthCheck>();
         services.AddSingleton<IEnvironmentCheck, DeprecatedAgentConfigCheck>();
         services.AddSingleton<IEnvironmentChecker, EnvironmentChecker>();
 
@@ -214,6 +216,7 @@ internal static class CliTestHelper
 
         services.AddSingleton(new ConsoleCancellationManager(processTerminationTimeout: Timeout.InfiniteTimeSpan));
         services.AddSingleton<CommonCommandServices>();
+        services.AddTransient<AppHostConnectionResolver>();
         services.AddTransient<RootCommand>();
         services.AddTransient<NewCommand>();
         services.AddTransient<InitCommand>();
@@ -486,11 +489,12 @@ internal sealed class CliServiceCollectionTestOptions
     public Func<IServiceProvider, IScaffoldingService> ScaffoldingServiceFactory { get; set; } = (IServiceProvider serviceProvider) =>
     {
         var appHostServerProjectFactory = serviceProvider.GetRequiredService<IAppHostServerProjectFactory>();
+        var appHostServerSessionFactory = serviceProvider.GetRequiredService<IAppHostServerSessionFactory>();
         var languageDiscovery = serviceProvider.GetRequiredService<ILanguageDiscovery>();
         var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
         var logger = serviceProvider.GetRequiredService<ILogger<ScaffoldingService>>();
         var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
-        return new ScaffoldingService(appHostServerProjectFactory, languageDiscovery, interactionService, logger, executionContext);
+        return new ScaffoldingService(appHostServerProjectFactory, appHostServerSessionFactory, languageDiscovery, interactionService, logger, executionContext);
     };
 
     public Func<IServiceProvider, IProcessExecutionFactory> DotNetCliExecutionFactoryFactory { get; set; } = (IServiceProvider serviceProvider) =>
@@ -697,6 +701,30 @@ internal sealed class NullLayoutDiscovery : ILayoutDiscovery
     public string? GetComponentPath(LayoutComponent component, string? projectDirectory = null) => null;
 
     public bool IsBundleModeAvailable(string? projectDirectory = null) => false;
+}
+
+internal sealed class FixedLayoutDiscovery : ILayoutDiscovery
+{
+    private readonly LayoutConfiguration? _layout;
+    private readonly Dictionary<LayoutComponent, string> _componentPaths = [];
+
+    public FixedLayoutDiscovery(LayoutConfiguration layout)
+    {
+        _layout = layout;
+    }
+
+    public FixedLayoutDiscovery(LayoutComponent component, string componentPath)
+    {
+        _componentPaths.Add(component, componentPath);
+    }
+
+    public LayoutConfiguration? DiscoverLayout(string? projectDirectory = null) => _layout;
+
+    public string? GetComponentPath(LayoutComponent component, string? projectDirectory = null) =>
+        _layout?.GetComponentPath(component) ??
+        (_componentPaths.TryGetValue(component, out var componentPath) ? componentPath : null);
+
+    public bool IsBundleModeAvailable(string? projectDirectory = null) => _layout is not null || _componentPaths.Count > 0;
 }
 
 /// <summary>

@@ -553,4 +553,20 @@ public class WithTerminalTests
         await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
         return model;
     }
+
+    [Fact]
+    public void WithTerminalForcesProcessExecution()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var resource = builder.AddProject<TestProject>("myproj", options => { options.ExcludeLaunchProfile = true; });
+
+        resource.WithTerminal();
+
+        Assert.True(resource.Resource.HasAnnotationOfType<ForceProcessExecutionAnnotation>());
+    }
+
+    private sealed class TestProject : IProjectMetadata
+    {
+        public string ProjectPath => "another-path";
+    }
 }

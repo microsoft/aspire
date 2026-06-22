@@ -8,6 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ApplicationIcon>$(MSBuildThisFileDirectory)..\Shared\Aspire.ico</ApplicationIcon>
     <EnablePackageValidation>false</EnablePackageValidation>
     <AssemblyName>aspire</AssemblyName>
     <RootNamespace>Aspire.Cli</RootNamespace>

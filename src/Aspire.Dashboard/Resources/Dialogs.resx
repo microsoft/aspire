@@ -305,7 +305,7 @@
     <value>Sensitive value hidden</value>
   </data>
   <data name="TextVisualizerSecretWarningDescription" xml:space="preserve">
-    <value>Confirm you want to show the value. In the future, opening the text visualizer will automatically display all values</value>
+    <value>Confirm you want to show this value. Once confirmed, the text visualizer in the browser will show values automatically</value>
   </data>
   <data name="TextVisualizerSecretWarningAcknowledge" xml:space="preserve">
     <value>Show value</value>

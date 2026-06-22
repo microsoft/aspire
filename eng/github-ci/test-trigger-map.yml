@@ -1,0 +1,366 @@
+# Test trigger map (machine-readable) -- the CURATED layer (Layer 2) of selective CI.
+#
+# Maps repo paths -> CI targets that must run when a matching file changes. Holds ONLY what the
+# MSBuild project graph cannot see: Layer 1 computes the ProjectReference + linked/shared-file closure
+# from Aspire.slnx in-process at the PR head, so leaf-integration -> own-test, core fan-out, and
+# link-compiled edges are NOT enumerated here. Rules are additive -- a changed file selects the union
+# of every matching rule's targets plus the Layer 1 affected projects.
+#
+# Five matchers (conventions, ignore, path_rules, affected_project_rules, derived_targets) plus
+# reusable `groups`. The selector flow, the prefilter, the run-all fallback, and a per-section
+# reference live in the companion docs -- READ THESE before editing this file:
+#   docs/ci/test-trigger-map.md              -- per-section reference + how to edit
+#   docs/ci/test-trigger-selector-design.md  -- design rationale + the selector algorithm
+#
+# Target vocabulary:
+#   test:<Name>                a .NET test project tests/<Name> (run-tests.yml matrix entry)
+#   job:polyglot               tests.yml -> polyglot-validation.yml (py/go/java/rust/ts)
+#   job:typescript-sdk         tests.yml -> typescript-sdk-tests.yml
+#   job:typescript-api-compat  tests.yml -> typescript-api-compat.yml
+#   job:extension-unit         tests.yml extension_tests_win + extension_bootstrap_linux
+#   job:extension-e2e          tests.yml -> extension-e2e-tests.yml
+#   job:cli-starter            tests.yml cli_starter_validation_windows
+#   job:winget-installer       tests.yml prepare_winget_installer_artifacts
+#   job:homebrew-installer     tests.yml prepare_homebrew_installer_artifacts
+#   job:api-diffs              generate-api-diffs.yml    (schedule-only today)
+#   job:ats-diffs              generate-ats-diffs.yml    (schedule-only today)
+#   job:deployment-e2e         deployment-tests.yml      (schedule/dispatch-only today)
+#   ALL                        full test matrix + all jobs
+#   <GROUP_NAME>               a named group (see groups:) expanding recursively to its members
+version: 1
+
+# Named groups (test projects and/or jobs) -----------------------------------
+groups:
+  CLI_BUNDLE:
+    - test:Aspire.Cli.EndToEnd.Tests
+    - job:cli-starter
+    - job:extension-e2e
+    # The WinGet/Homebrew installer artifacts package and ship this CLI bundle, so a change to the
+    # bundle (eng/Bundle.proj) must regenerate/validate them too.
+    - job:winget-installer
+    - job:homebrew-installer
+
+# Conventions: <name> captures one path segment; the derived target is emitted only when that test
+# project exists in the matrix (existence guard), so a folder with no same-named test falls through to
+# path_rules / Layer 1. Additive backstop for non-MSBuild files Layer 1 cannot attribute (data/resource
+# files, files excluded from compile). See docs/ci/test-trigger-map.md.
+conventions:
+  - pattern: tests/<name>/**                        # a test project's own folder -> that test
+    target: test:<name>
+  - pattern: src/Aspire.Hosting.<name>/**
+    target: test:Aspire.Hosting.<name>.Tests
+  - pattern: src/Components/<name>/**
+    target: test:<name>.Tests
+
+# Prefilter (pre-Layer-1 exclude): changed files matching a pattern in `patterns_file` are DROPPED
+# before BOTH layers run. patterns_file is the SAME list the top-level CI skip gate uses
+# (ci-skip-entirely-patterns.txt, read at runtime so the two can never drift); its glob syntax is the
+# check-changed-files action's, ported verbatim in ChangedFileFilter. keep_routed carves out files the
+# selector still routes to a target. Why this is distinct from `ignore` (the README fan-out case) and
+# the full flow: see docs/ci/test-trigger-selector-design.md.
+prefilter:
+  patterns_file: eng/github-ci/ci-skip-entirely-patterns.txt
+  keep_routed:
+    - .github/workflows/**                            # routed to Infrastructure.Tests (workflow validation)
+    - eng/pipelines/**                                # routed to Infrastructure.Tests (pipeline validation)
+    - eng/github-ci/ci-skip-entirely-patterns.txt      # a selector input (read above) -> route to Infrastructure.Tests
+
+# Ignore: files Layer 2 accounts for with NO target, so they do NOT trigger the run-all fallback.
+# Each is either covered precisely by Layer 1 (the graph index sees the linked/shared-file consumers)
+# or is inert. Not a no-op for selection: Layer 1 still unions in the real consumers.
+ignore:
+  - src/Components/Common/**                            # link-compiled into many components; Layer 1 covers
+  - src/Vendoring/OpenTelemetry.Instrumentation.*/**    # glob-compiled into the Redis/Kafka components; Layer 1 covers
+  - src/Vendoring/OpenTelemetry.Shared/**               # compiled by nothing (each instrumentation dir has its own Shared/); inert
+  # Dev/AzDO-only eng/scripts with NO test consumer and no GH-CI build/test path: local debug-channel
+  # helpers and the AzDO native-symbol validator. Listed so they do not show as unattributed audit noise.
+  # (verify-cli-archive.ps1 and validate-npm-release-aliases.ps1 are NOT here -- they have test consumers
+  # and are routed to their tests in path_rules above.)
+  - eng/scripts/debug-*.ps1                             # debug-aspire-channel/stable/staging: local channel-switch helpers
+  - eng/scripts/debug-*.sh
+  - eng/scripts/validate-cli-symbols.ps1                # AzDO native-AOT symbol publish validation; no GH-CI consumer
+  # Schedule-only workflows that regenerate API/ATS surface baselines; no PR-CI path.
+  - .github/workflows/generate-api-diffs.yml
+  - .github/workflows/generate-ats-diffs.yml
+  # NOTE: src/Shared/**/*.cs and tests/Shared/**/*.cs are deliberately NOT ignored -- Layer 1 attributes
+  # them to their consuming projects and the run-all fallback treats any attributed file as owned, so
+  # they are selected precisely without an entry. **/*.md and other no-CI files are dropped by
+  # `prefilter` above. See docs/ci/test-trigger-map.md.
+
+
+# Path rules: a glob set -> a target set. One mechanism; the comment headers below are organization
+# only. targets may be test: / job: / a GROUP name / ALL.
+path_rules:
+
+  # --- catch-all: build infrastructure & broadly shared code -> ALL --------------------------
+  - paths:
+      - global.json
+      - NuGet.config
+      - .config/dotnet-tools.json
+      - Directory.Build.props
+      - Directory.Build.targets
+      - Directory.Packages.props
+      - Aspire.slnx
+      - src/Directory.Build.props
+      - src/Directory.Build.targets
+      - tests/Directory.Build.props
+      - tests/Directory.Build.targets
+      - tests/Directory.Packages.props
+      # Root-level eng build props that affect every build/test -> ALL. Listed explicitly (not eng/*.props)
+      # so the AzDO-publish-only props (Publishing.props, Signing.props) are NOT swept into ALL; those are
+      # consumed only by eng/pipelines (no GH-CI build/test path) and are routed to Infrastructure.Tests below.
+      - eng/Build.props
+      - eng/Testing.props
+      - eng/Versions.props
+      - eng/*.targets    # any root-level eng build target (Testing, AfterSigning, ReplaceText, ...) -> err toward ALL
+      - eng/OuterPreBuild.proj   # build-wide project-name validation traversal -> err toward ALL
+      - eng/Version.Details.xml
+      - eng/common/**
+      # tests/Shared build & fixture infra that is NOT link-compiled source (Layer 1 cannot attribute
+      # these the way it does the *.cs here, and they are imported/consumed broadly): props/targets/
+      # packages, the EmptyProject/InstallSdk/RepoTesting closure, Docker e2e images, Playwright config,
+      # template fixtures, and test certificates -> err toward ALL. The link-compiled tests/Shared/**/*.cs
+      # are handled precisely by Layer 1 (see the `ignore` section), NOT routed here.
+      - tests/Shared/**/*.props
+      - tests/Shared/**/*.targets
+      - tests/Shared/**/*.proj
+      - tests/Shared/**/*.config
+      - tests/Shared/**/*.json
+      - tests/Shared/**/*.sh
+      - tests/Shared/**/*.pfx
+      - tests/Shared/**/Dockerfile*
+      - tests/Shared/TemplatesTesting/data/**
+      - .github/actions/**   # local composite actions are CI-load-bearing (the skip gate, the test
+                             # runner's keychain unlock, enumerate-tests, ...) and a change to one can
+                             # affect any job. They would hit the run-all fallback anyway as unmapped
+                             # leftovers, but route them to ALL explicitly so the intent is recorded
+                             # and pinned by TestTriggerMapTests.EveryLocalActionUsedByAWorkflowIsRoutedToAll.
+      - eng/scripts/split-test-matrix-by-deps.ps1
+      - eng/scripts/build-test-matrix.ps1   # canonical-matrix builder; a bug skews every PR's matrix -> err toward ALL (also runs its BuildTestMatrixTests verifier)
+      - eng/scripts/expand-test-matrix-github.ps1   # GitHub matrix expansion; a bug skews every PR's matrix -> err toward ALL (also runs its ExpandTestMatrixGitHubTests verifier)
+      - eng/scripts/write-class-mode-test-props.ps1   # enumerate-tests class-mode restriction; a bug skews every PR's matrix -> err toward ALL (also runs its WriteClassModeTestPropsTests verifier)
+      - eng/scripts/scan-test-partitions-from-source.ps1   # source partition discovery in the runsheet builder; a bug skews every split project's enumeration -> err toward ALL
+      - eng/TestEnumerationRunsheetBuilder/**
+      - eng/testing/CITestsProperties.props
+      - .github/workflows/tests.yml
+      - .github/workflows/run-tests.yml
+      - .github/workflows/specialized-test-runner.yml
+      - .github/workflows/build-packages.yml
+      - .github/workflows/build-cli-native-archives.yml
+    targets: [ALL]
+    reason: build infrastructure / broadly shared code -> run everything
+
+  # --- convention misses: integration dirs whose covering test is NOT the same-named one ------
+  - paths: [src/Aspire.Hosting.Azure.*/**]
+    targets: [test:Aspire.Hosting.Azure.Tests]
+    reason: Azure hosting integrations have no dedicated test; Aspire.Hosting.Azure.Tests is the aggregate
+  - paths: [src/Aspire.Hosting.Integration.Analyzers/**]
+    targets: [test:Aspire.Hosting.Analyzers.Tests]
+
+  # --- non-.NET jobs: loose-file & sub-project triggers ---------------------------------------
+  # Production-project triggers for these jobs live in affected_project_rules (keyed off the
+  # affected-project set). Only paths the project graph cannot attribute to a project (loose files,
+  # narrow sub-paths, non-compiled baselines) remain here.
+  - paths:
+      - tests/PolyglotAppHosts/**
+      - .github/workflows/polyglot-validation/**
+      - .github/workflows/polyglot-validation.yml
+    targets: [job:polyglot]
+    reason: polyglot fixtures + workflow; the typesystem/SDK/CLI/codegen production projects are in affected_project_rules
+  - paths:
+      - tests/Aspire.Hosting.CodeGeneration.TypeScript.JsTests/**
+      - src/Aspire.Cli/Templating/Templates/ts-starter/**
+      - .github/workflows/typescript-sdk-tests.yml
+    targets: [job:typescript-sdk]
+    reason: vitest over generated TS SDK; ts-starter is a narrow sub-path of Aspire.Cli, not the whole project
+  - paths:
+      - src/Aspire.Hosting*/api/*.ats.txt
+      - src/**/*.tscompat.suppression.txt
+      - tools/TypeScriptApiCompat/**
+      - .github/workflows/typescript-api-compat.yml
+    targets: [job:typescript-api-compat]
+    reason: checked-in *.ats.txt/suppression baselines are not compiled items (Layer 1 blind); Hosting/Cli production projects are in affected_project_rules
+  - paths: [extension/**]
+    targets: [job:extension-unit]
+    reason: extension_tests_win + extension_bootstrap_linux run yarn build/test in extension/
+  - paths:
+      - extension/**
+      - src/Aspire.Cli/**
+      - src/Aspire/Cli/**
+      - src/Aspire.Hosting*/**
+      - src/Aspire.Dashboard*/**
+      - tests/Aspire.Cli.Tests/**
+      - tests/Aspire.Cli.EndToEnd.Tests/**
+      - tests/Aspire.Hosting.Tests/Cli/**
+      - eng/scripts/get-aspire-cli*
+      - .github/workflows/tests.yml
+      - .github/workflows/extension-e2e-tests.yml
+      - .github/workflows/build-packages.yml
+      - .github/workflows/build-cli-native-archives.yml
+    targets: [job:extension-e2e]
+    reason: >-
+      verbatim mirror of the tests.yml extension_e2e_changes regex. extension-e2e is
+      intentionally double-routed: its production triggers also live in affected_project_rules
+      (transitive coverage when Layer 1 runs), but these path globs keep the gate working without
+      Layer 1 -- a src/Aspire.Cli|Hosting*|Dashboard* change still fires it via pure path match.
+  - paths:
+      - eng/scripts/get-aspire-cli-pr.ps1
+      - eng/scripts/cli-starter-validation.ps1
+    targets: [job:cli-starter]
+    reason: Windows starter-app smoke installing the PR CLI via dogfood script; Cli/TypeSystem/Managed production projects are in affected_project_rules
+  - paths:
+      - tests/Aspire.Deployment.EndToEnd.Tests/**
+      - src/Aspire.ProjectTemplates/**
+      - .github/workflows/deployment-tests.yml
+    targets: [job:deployment-e2e]
+    reason: SCHEDULE/DISPATCH-ONLY today; ProjectTemplates is a Layer-1 blind spot; Azure/Cli/TypeSystem/Managed production projects are in affected_project_rules
+
+  # --- linked-compiled source with no owning project ------------------------------------------
+  # src/Aspire/Cli is link-compiled only into Aspire.Hosting.CodeGeneration.TypeScript and is not
+  # itself a project dir, so Layer 1 attributes it to that consumer, not to these targets. Listed
+  # explicitly with the CI targets that src/Aspire/Cli/** changes must trigger.
+  - paths: [src/Aspire/Cli/**]
+    targets: [job:polyglot, job:extension-e2e, job:cli-starter, job:deployment-e2e, test:Aspire.Cli.EndToEnd.Tests]
+    reason: linked-compiled source with no owning project; preserves the targets the old src/Aspire/Cli/** job globs carried
+
+  # --- outerloop / e2e test targets: loose paths (production projects in affected_project_rules) --------
+  - paths:
+      - tests/Aspire.EndToEnd.Tests/**
+      - tests/testproject/**
+    targets: [test:Aspire.EndToEnd.Tests]
+    reason: OUTERLOOP-ONLY today (SkipTests on GH Actions unless RunOuterloopTests); the Hosting production projects it builds against are in affected_project_rules
+
+
+  # --- runtime / loose-file dependencies (invisible to the csproj graph) ----------------------
+  - paths:
+      - eng/scripts/get-aspire-cli.sh
+      - eng/scripts/get-aspire-cli.ps1
+      - eng/scripts/get-aspire-cli-pr.sh
+      - eng/scripts/get-aspire-cli-pr.ps1
+    targets: [test:Aspire.Acquisition.Tests, test:Aspire.Cli.EndToEnd.Tests, job:cli-starter, job:extension-e2e]
+    reason: Acquisition.Tests asserts script behavior; CliE2EAutomatorHelpers.cs:406,415 invokes get-aspire-cli*.sh at runtime
+  - paths:
+      - eng/clipack/**
+    targets: [test:Aspire.Cli.Tests, test:Aspire.Cli.EndToEnd.Tests, test:Infrastructure.Tests, job:winget-installer, job:homebrew-installer]
+    reason: Cli.Tests/Npm/AspireJsLauncherTests reads eng/clipack/npm/aspire.js; Infrastructure.Tests reads eng/clipack/*; CLI archive consumed by e2e and packaged into the WinGet/Homebrew installer artifacts
+  - paths:
+      - .github/workflows/build-cli-e2e-image.yml
+    targets: [test:Aspire.Cli.EndToEnd.Tests]
+    reason: builds the CLI E2E Docker image consumed only by the requiresCliArchive test shards (Aspire.Cli.EndToEnd.Tests, the sole RequiresCliArchive=true project); the build_cli_e2e_image job self-gates on tests_matrix_requires_cli_archive, so it only runs when that test is selected anyway -> route there, not ALL
+  - paths:
+      - eng/scripts/pack-cli-npm-package.ps1
+    targets: [test:Aspire.Cli.Tests, test:Infrastructure.Tests]
+    reason: Cli.Tests/Npm/AspireJsLauncherTests and Infrastructure.Tests parse this script
+  - paths:
+      - eng/scripts/download-native-archives.ps1
+      - eng/scripts/stage-native-cli-tool-packages.ps1
+      - eng/scripts/validate-npm-package-signatures.ps1
+      - eng/scripts/validate-npm-release-aliases.ps1
+    targets: [test:Infrastructure.Tests]
+    reason: Infrastructure.Tests/PowerShellScripts validates these CLI-archive/npm packaging scripts (DownloadNativeArchivesTests, StageNativeCliToolPackagesTests, ValidateNpmPackageSignaturesTests, ValidateNpmReleaseAliasesTests; ReleasePublishNugetPipelineTests reads validate-npm-release-aliases.ps1); the build jobs that run them are unconditional needs, so the unit verifier is the trigger that must fire
+  - paths:
+      - eng/scripts/verify-cli-archive.ps1
+    targets: [test:Aspire.Acquisition.Tests]
+    reason: Aspire.Acquisition.Tests/Scripts/VerifyCliArchivePowerShellTests invokes eng/scripts/verify-cli-archive.ps1
+  - paths:
+      - eng/winget/**
+    targets: [test:Aspire.Acquisition.Tests, job:winget-installer]
+    reason: WinGet manifest generation; prepare_winget_installer_artifacts builds from eng/winget, Acquisition.Tests exercises installer-mode
+  - paths:
+      - eng/homebrew/**
+    targets: [test:Aspire.Acquisition.Tests, job:homebrew-installer]
+    reason: Homebrew cask generation; prepare_homebrew_installer_artifacts builds from eng/homebrew, Acquisition.Tests exercises installer-mode
+  - paths:
+      - eng/dashboardpack/**
+    targets: [test:Aspire.Hosting.Sdk.Tests]
+    reason: AppHostSdkTargetsTests asserts Aspire.Dashboard.Sdk.* package ref
+  - paths:
+      - eng/dcppack/**
+    targets: [test:Aspire.Hosting.Sdk.Tests, test:Aspire.TerminalHost.Tests]
+    reason: AppHostSdkTargetsTests asserts Aspire.Hosting.Orchestration.*; TerminalHost exercises DCP
+  - paths:
+      - src/Aspire.ProjectTemplates/**
+    targets: [test:Aspire.Templates.Tests]
+    reason: Templates.Tests installs the template hive from src/Aspire.ProjectTemplates
+  - paths:
+      - playground/**
+    targets: [test:Aspire.Playground.Tests]
+    reason: Aspire.Playground.Tests builds/runs apps under playground/
+  - paths:
+      - src/Aspire.AppHost.Sdk/**
+    targets: [test:Aspire.Hosting.Sdk.Tests, test:Aspire.Hosting.DotnetTool.Tests, job:polyglot]
+    reason: AppHost SDK targets + RuntimeIdentifier tool; SDK ships to every generated apphost
+  - paths:
+      - tools/QuarantineTools/**
+    targets: [test:QuarantineTools.Tests]
+    reason: QuarantineTools.Tests exercises the quarantine/disable source-rewriting logic
+  - paths:
+      - tools/SelectTests/**
+      - eng/github-ci/test-trigger-map.yml
+      - eng/github-ci/ci-skip-entirely-patterns.txt
+    targets: [test:Infrastructure.Tests]
+    reason: SelectTests acceptance/behavior tests live in Infrastructure.Tests/TestTriggerMap; the same project's verifier validates eng/github-ci/test-trigger-map.yml and reads eng/github-ci/ci-skip-entirely-patterns.txt (the prefilter source), so a change to any of them must run it
+  - paths:
+      - .github/workflows/**
+      - eng/pipelines/**
+      - eng/Signing.props
+      - eng/Publishing.props
+    targets: [test:Infrastructure.Tests]
+    reason: Infrastructure.Tests WorkflowScripts/Pipelines assert on workflow & pipeline files; NpmCliPackageTests reads eng/Signing.props, and Publishing.props is AzDO-publish-only infra grouped with it (no GH-CI build/test path -> not ALL)
+  - paths: [eng/Bundle.proj]
+    targets: [CLI_BUNDLE]
+    reason: assembles the CLI bundle (Aspire.Managed + native CLI + DCP); consumed by CLI e2e/starter/extension, not integrations
+
+# Project rules: an affected PRODUCTION project (Layer 1, matched by project-NAME glob) -> targets.
+# This follows the graph's transitive closure: a change to a project's dependency marks it affected,
+# so its jobs fire too (more correct than a literal path glob, and additive -- never removes a
+# trigger). Matched only against the affected PRODUCTION projects (matrix test projects are handled
+# by the Layer 1 intersection), so a name glob like "Aspire.Hosting*" keys off production identity.
+# Inert when Layer 1 did not run (--skip-layer1); the loose-file path_rules above still cover those
+# triggers.
+# Project Name == the .csproj base name (what Layer 1 emits).
+affected_project_rules:
+  - projects:
+      - Aspire.TypeSystem
+      - Aspire.Hosting.RemoteHost
+      - Aspire.Managed
+      - Aspire.Cli
+      - Aspire.AppHost.Sdk
+      - Aspire.Hosting.CodeGeneration.*
+      - Aspire.Hosting.Go
+      - Aspire.Hosting.JavaScript
+      - Aspire.Hosting.Python
+    targets: [job:polyglot]
+    reason: ATS typesystem -> per-language SDK generators -> RemoteHost server + CLI run + fixtures
+  - projects: [Aspire.Hosting.CodeGeneration.TypeScript]
+    targets: [job:typescript-sdk]
+    reason: vitest unit tests over generated TS SDK (@aspire/transport, @aspire/base)
+  - projects: [Aspire.Hosting*, Aspire.Cli]
+    targets: [job:typescript-api-compat]
+    reason: compares checked-in *.ats.txt baselines vs fresh `aspire sdk dump --format ci`
+  - projects: [Aspire.Cli, Aspire.Hosting*, Aspire.Dashboard*]
+    targets: [job:extension-e2e]
+    reason: mirrors the production-project half of tests.yml extension_e2e_changes
+  - projects: [Aspire.Cli, Aspire.TypeSystem, Aspire.Managed]
+    targets: [job:cli-starter]
+    reason: Windows starter-app smoke installing the PR CLI via dogfood script
+  - projects: [Aspire.Hosting.Azure*, Aspire.Cli, Aspire.TypeSystem, Aspire.Managed]
+    targets: [job:deployment-e2e]
+    reason: SCHEDULE/DISPATCH-ONLY today; deploys generated apps to Azure
+  - projects: [Aspire.Hosting, Aspire.Hosting.AppHost, Aspire.Hosting.PostgreSQL, Aspire.Hosting.Redis]
+    targets: [test:Aspire.EndToEnd.Tests]
+    reason: OUTERLOOP-ONLY today; builds testproject apphost against built nugets
+  - projects: [Aspire.Cli, Aspire.TypeSystem, Aspire.Managed, Aspire.AppHost.Sdk]
+    targets: [test:Aspire.Cli.EndToEnd.Tests]
+    reason: consumes the CLI native archive (RequiresCliArchive=true) built from these sources
+
+# Derived targets: selected test project -> extra jobs/tests. Applied to the UNION of Layer 1 and
+# Layer 2 selected tests, to a fixpoint (a derived test is itself expanded; cycle-safe). This is how
+# a job fires based on WHICH tests run, regardless of which file triggered them.
+derived_targets:
+  - tests: [test:Aspire.Cli.Tests, test:Aspire.Cli.EndToEnd.Tests]
+    targets: [job:cli-starter]
+    reason: if the CLI is under test, validate the Windows starter-app install path
+  - tests: [test:Aspire.Acquisition.Tests]
+    targets: [job:cli-starter, job:winget-installer, job:homebrew-installer]
+    reason: acquisition covers the installers; prepare the WinGet/Homebrew installer artifacts too

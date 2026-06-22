@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
@@ -19,7 +19,8 @@ internal static class ExtensionUtils
         var supportedLaunchConfigurations = GetSupportedLaunchConfigurations(configuration);
 
         if (!builder.TryGetLastAnnotation(out supportsDebuggingAnnotation)
-            || string.IsNullOrEmpty(configuration[DcpExecutor.DebugSessionPortVar]))
+            || string.IsNullOrEmpty(configuration[DcpExecutor.DebugSessionPortVar])
+            || builder.HasAnnotationOfType<ForceProcessExecutionAnnotation>())
         {
             return false;
         }

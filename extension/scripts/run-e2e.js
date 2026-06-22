@@ -535,6 +535,9 @@ async function main() {
       LC_ALL: 'C.UTF-8',
       NODE_PATH: [extesterNodeModules, process.env.NODE_PATH].filter(Boolean).join(path.delimiter),
     });
+    if (process.env.ASPIRE_EXTENSION_E2E_UNSET_CLI_START_TIMEOUT === 'true') {
+      extestEnv.ASPIRE_CLI_START_TIMEOUT = undefined;
+    }
 
     logStep('Downloading VS Code');
     runWithRetry(process.execPath, [extesterCli, 'get-vscode', '--storage', storageDir, '--code_version', vscodeVersion], extestEnv, { attempts: 2, retryDelayMs: 5000, beforeRetry: cleanPartialExtesterDownloads, timeout: 240000 });

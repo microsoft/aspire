@@ -87,7 +87,7 @@ internal static class MauiEnvironmentHelper
     /// <summary>
     /// Generates the content of an MSBuild targets file for Android environment variables.
     /// </summary>
-    private static string GenerateAndroidTargetsFileContent(Dictionary<string, string> environmentVariables)
+    internal static string GenerateAndroidTargetsFileContent(Dictionary<string, string> environmentVariables)
     {
         var projectElement = new XElement("Project");
 
@@ -178,7 +178,7 @@ internal static class MauiEnvironmentHelper
         }
     }
 
-    private static string SanitizeFileName(string name)
+    internal static string SanitizeFileName(string name)
     {
         var invalidCharacters = Path.GetInvalidFileNameChars();
         if (name.IndexOfAny(invalidCharacters) < 0)
@@ -198,7 +198,7 @@ internal static class MauiEnvironmentHelper
         return new string(chars);
     }
 
-    private static string EncodeSemicolons(string value, out bool wasEncoded)
+    internal static string EncodeSemicolons(string value, out bool wasEncoded)
     {
         wasEncoded = value.Contains(';', StringComparison.Ordinal);
         if (!wasEncoded)
@@ -258,7 +258,7 @@ internal static class MauiEnvironmentHelper
     /// <summary>
     /// Generates the content of an MSBuild targets file for iOS environment variables.
     /// </summary>
-    private static string GenerateiOSTargetsFileContent(Dictionary<string, string> environmentVariables)
+    internal static string GenerateiOSTargetsFileContent(Dictionary<string, string> environmentVariables)
     {
         var projectElement = new XElement("Project");
 
