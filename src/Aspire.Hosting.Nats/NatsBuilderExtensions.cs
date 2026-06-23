@@ -211,7 +211,7 @@ public static class NatsBuilderExtensions
                 port: clusterPort,
                 name: NatsServerResource.ClusterEndpointName
             )
-            .WithArgs("--cluster", $"nats://localhost:{NatsServerResource.ConventionalClusterPort}");
+            .WithArgs("--cluster", $"nats://0.0.0.0:{NatsServerResource.ConventionalClusterPort}");
 
         if (clusterName is not (null or ""))
         {
@@ -223,20 +223,10 @@ public static class NatsBuilderExtensions
             builder = builder.WithArgs(context =>
             {
                 var otherRoutes = otherRoutesLocator();
-
-                var routesValueBuilder = new ReferenceExpressionBuilder();
-                for (var i = 0; i < otherRoutes.Count; i++)
-                {
-                    var route = otherRoutes[i];
-                    routesValueBuilder.Append($"{NatsServerResource.PrimaryNatsSchemeName}://{route.Property(EndpointProperty.HostAndPort)}");
-                    if (i < otherRoutes.Count - 1)
-                    {
-                        routesValueBuilder.AppendLiteral(",");
-                    }
-                }
+                var routeUrls = otherRoutes.Select(r => $"{NatsServerResource.PrimaryNatsSchemeName}://{r.Resource.Name}:{r.TargetPort}");
 
                 context.Args.Add("--routes");
-                context.Args.Add(routesValueBuilder.Build());
+                context.Args.Add(string.Join(',', routeUrls));
             });
         }
 
