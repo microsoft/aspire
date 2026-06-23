@@ -97,11 +97,6 @@
         <target state="new">What kind of feedback do you want to send?</target>
         <note />
       </trans-unit>
-      <trans-unit id="FeedbackKindRequiredInNonInteractiveMode">
-        <source>Specify the feedback kind: bug, idea, or general.</source>
-        <target state="new">Specify the feedback kind: bug, idea, or general.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="FeedbackLinkMessage">
         <source>Open this link to send feedback: {0}</source>
         <target state="new">Open this link to send feedback: {0}</target>

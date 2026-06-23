@@ -222,9 +222,6 @@
   <data name="FeedbackBodyOptionDescription" xml:space="preserve">
     <value>The main issue field to pre-fill</value>
   </data>
-  <data name="FeedbackKindRequiredInNonInteractiveMode" xml:space="preserve">
-    <value>Specify the feedback kind: bug, idea, or general.</value>
-  </data>
   <data name="FeedbackKindPrompt" xml:space="preserve">
     <value>What kind of feedback do you want to send?</value>
   </data>

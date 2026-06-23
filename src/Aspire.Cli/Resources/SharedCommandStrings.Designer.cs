@@ -252,12 +252,6 @@ namespace Aspire.Cli.Resources {
             }
         }
 
-        internal static string FeedbackKindRequiredInNonInteractiveMode {
-            get {
-                return ResourceManager.GetString("FeedbackKindRequiredInNonInteractiveMode", resourceCulture);
-            }
-        }
-
         internal static string FeedbackKindPrompt {
             get {
                 return ResourceManager.GetString("FeedbackKindPrompt", resourceCulture);
