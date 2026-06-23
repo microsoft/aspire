@@ -176,10 +176,13 @@ internal sealed class DotNetCliRunner(
         var outputCounters = new ProcessOutputCounters();
         var instrumentedOptions = CreateInstrumentedProcessOptions(options, processActivity, outputCounters);
 
-        // Do not use 'using' here: StartBackchannelAsync runs fire-and-forget and
+        // Do not use 'await using' here: StartBackchannelAsync runs fire-and-forget and
         // accesses execution.HasExited / ExitCode after this method returns. Disposing
         // the underlying Process while the backchannel task is still polling would
-        // cause ObjectDisposedException. Let the GC handle cleanup instead.
+        // cause ObjectDisposedException. We intentionally never dispose this execution:
+        // IAsyncDisposable.DisposeAsync is not called by the finalizer, but the Process's
+        // native handles are still reclaimed by the SafeHandle finalizers, so this is not
+        // a resource leak.
         var execution = executionFactory.CreateExecution(processFileName, effectiveArgs, finalEnv, workingDirectory, instrumentedOptions);
 
         // Get socket path from env if present
