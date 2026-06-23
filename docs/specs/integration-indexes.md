@@ -141,7 +141,7 @@ Future provider types can include `npm`, `container`, `template`, or `module`, b
 
 ## Index authoring format
 
-Indexes should be authored as normal repo files. The exact authoring format can be YAML, JSON, or TOML; this spec uses YAML for readability. The CLI should consume a generated, validated JSON artifact.
+Indexes should be authored as normal repo files. The authoring format should be JSON so entry files, generated artifacts, schemas, and CLI consumption all use one format. The CLI should consume a generated, validated JSON artifact.
 
 Recommended repo shape for built-in indexes:
 
@@ -150,10 +150,10 @@ src/Aspire.Cli/IntegrationIndexes/
   schema/
     integration-index.schema.json
   aspire/
-    redis.yaml
-    postgres.yaml
+    redis.json
+    postgres.json
   community-toolkit/
-    orleans-redis.yaml
+    orleans-redis.json
   generated/
     aspire.index.json
     community-toolkit.index.json
@@ -171,26 +171,26 @@ Committing generated artifacts is a trade-off. It creates larger PR diffs and po
 
 Example entry:
 
-```yaml
-id: redis
-displayName: Redis
-description: Adds Redis hosting support.
-aliases:
-  - cache
-tags:
-  - cache
-  - database
-provenance: official
-providers:
-  - type: nuget
-    package: Aspire.Hosting.Redis
-    languages:
-      - csharp
-      - typescript
-      - python
-    versionPolicy:
-      variantAware: true
-      allowPrerelease: variant
+```json
+{
+  "id": "redis",
+  "displayName": "Redis",
+  "description": "Adds Redis hosting support.",
+  "aliases": ["cache"],
+  "tags": ["cache", "database"],
+  "provenance": "official",
+  "providers": [
+    {
+      "type": "nuget",
+      "package": "Aspire.Hosting.Redis",
+      "languages": ["csharp", "typescript", "python"],
+      "versionPolicy": {
+        "variantAware": true,
+        "allowPrerelease": "variant"
+      }
+    }
+  ]
+}
 ```
 
 Docs links are optional and should point to an existing first-party doc or repository README when one is available. The generated artifact should include enough metadata for the CLI to search and resolve without reading the repo tree:
@@ -230,21 +230,33 @@ Docs links are optional and should point to an existing first-party doc or repos
 
 `minCliVersion` is optional. When present and newer than the running CLI, the entry is treated as unavailable with a clear reason rather than being installed through partially understood metadata.
 
+### Name conflicts
+
+Entry IDs are unique only within an index, so `aspire/redis`, `community-toolkit/redis`, and `contoso/redis` can coexist. The generated artifact validator should reject duplicate entry IDs within one index and should reject aliases that conflict with another entry ID or alias in the same index unless they point to the same entry.
+
+Cross-index conflicts are handled at resolution time. The index-qualified ID is the stable identity, and bare names are shortcuts that use the precedence rules in [Index and name precedence](#index-and-name-precedence). Human-readable list/search output should always include index and provenance when multiple enabled indexes expose the same bare name so users can disambiguate with commands such as `aspire add community-toolkit/redis`.
+
 ## Index acquisition
 
 Indexes should not require a clone in the normal path.
 
-The default acquisition order:
+Normal list/search/add commands should not fetch or switch index artifacts based on age. They should use the latest valid artifact already available locally:
 
-1. Use an embedded snapshot when no cache exists or the network is unavailable.
-2. Use a cached generated index artifact when it is fresh enough.
-3. Fetch a generated artifact or archive from the index endpoint.
-4. Validate the artifact schema and index metadata.
-5. Cache the artifact with the resolved commit or immutable version.
+1. Use a project-pinned artifact when the project pins an external index.
+2. Otherwise use the newest valid cached generated artifact for the index.
+3. For built-in indexes, compare the cache with the embedded snapshot when the CLI can order their revisions, then use the newest valid local artifact. If revisions cannot be ordered, prefer the project pin or cached artifact over the embedded snapshot to avoid silent downgrades.
+4. For built-in indexes with no valid cache, use the embedded snapshot.
+5. For external indexes with no valid cache or project pin, fail with instructions to run `aspire integration index update` or re-add the index.
+
+Fetching happens through explicit index-management operations such as `aspire integration index add` and `aspire integration index update`:
+
+1. Fetch a generated artifact or archive from the index endpoint.
+2. Validate the artifact schema and index metadata.
+3. Cache the artifact with the resolved commit or immutable version.
 
 For GitHub-backed indexes, the preferred artifact is a generated JSON file committed in the index repository and fetched by commit SHA. A release asset or branch-generated artifact is acceptable only when the CLI can bind it to immutable content with a digest and index metadata. `aspire integration index update` advances a cached index from one resolved commit/digest to another; project-pinned indexes do not advance silently.
 
-The embedded snapshot is a fallback, not the freshness boundary. Normal commands should prefer a valid cached remote artifact when available and can refresh built-in indexes opportunistically or through `aspire integration index update`. CLI releases should refresh the embedded snapshot so first-run/offline behavior does not drift indefinitely from the official index.
+The embedded snapshot is a local artifact, not a freshness boundary. Normal commands should not perform opportunistic refreshes and should not switch artifacts based on cache age. Users can run `aspire integration index update` to advance cached indexes intentionally, similar to package managers that separate update from install/search. CLI releases should refresh the embedded snapshot so first-run/offline behavior does not drift indefinitely from the official index.
 
 Cloning is an implementation fallback only for indexes that cannot expose a generated artifact through a simple HTTPS/GitHub raw/archive path, such as some private enterprise repositories.
 
@@ -276,11 +288,14 @@ User-added indexes are explicit:
 
 ```bash
 aspire integration index add contoso https://github.com/contoso/aspire-index
+aspire integration index add contoso https://github.com/contoso/aspire-index --ref v1.2.3
 aspire integration index update
 aspire integration index remove contoso
 ```
 
 Project-level index pins should be recorded when a project uses a non-built-in index. This avoids silently changing integration meaning when an external index moves.
+
+Git-backed index references can be branches, tags, or commit SHAs at configuration time. The cache and project pin should store the resolved commit SHA and artifact digest, not the original mutable ref, so later commands can detect drift and reproduce the same index content.
 
 Example project provenance:
 
@@ -558,14 +573,20 @@ Provider artifact versions remain owned by the provider ecosystem:
 
 Example policy:
 
-```yaml
-providers:
-  - type: nuget
-    package: Aspire.Hosting.Redis
-    versionPolicy:
-      variantAware: true
-      compatibleAspire: "[13.0.0,14.0.0)"
-      allowPrerelease: variant
+```json
+{
+  "providers": [
+    {
+      "type": "nuget",
+      "package": "Aspire.Hosting.Redis",
+      "versionPolicy": {
+        "variantAware": true,
+        "compatibleAspire": "[13.0.0,14.0.0)",
+        "allowPrerelease": "variant"
+      }
+    }
+  ]
+}
 ```
 
 Default NuGet version behavior:
@@ -695,9 +716,9 @@ The JSON shape in `docs/specs/cli-output-formats.md` currently has:
 ```json
 [
   {
-    "name": "redis",
+    "name": "Redis",
     "package": "Aspire.Hosting.Redis",
-    "version": "13.4.0"
+    "version": "13.0.0"
   }
 ]
 ```
@@ -765,15 +786,15 @@ The first index should live with the CLI because the CLI is the first consumer a
 
 ### Choice 3: Authoring format vs consumed artifact
 
-**Recommendation:** author entry files for review, consume generated canonical JSON.
+**Recommendation:** author per-entry JSON files for review, consume generated canonical JSON.
 
 | Option | Pros | Cons |
 | ------ | ---- | ---- |
 | Author and consume one JSON file | Simple and no generation step. | Large merge conflicts, poor contribution ergonomics, hard to review one-entry changes. |
-| Author per-entry YAML/TOML, consume generated JSON | Good PR diffs and stable runtime artifact. | Requires a generator/validator and generated artifact policy. |
+| Author per-entry JSON, consume generated JSON | Good PR diffs, one parser format, and stable runtime artifact. | Requires a generator/validator and generated artifact policy. |
 | Consume repo tree directly | No generated artifact. | Requires clone/archive traversal and makes index integrity harder. |
 
-YAML is readable for examples, but JSON may be better if we want zero new parser dependencies in build tooling. The hard requirement is not YAML; it is "small authoring files plus deterministic generated JSON".
+Per-entry JSON keeps contribution diffs small without adding another parser format to build tooling or the CLI. The hard requirement is "small authoring files plus deterministic generated JSON".
 
 ### Choice 4: What does project pinning look like?
 
@@ -974,7 +995,6 @@ CLI tests should cover:
 
 ## Open questions
 
-- Should the first built-in authoring files be YAML for readability or JSON to avoid adding build-time parser dependencies?
 - Should generated index artifacts be committed for built-in indexes, or generated during build and only committed/published for external index repos?
 - Should Community Toolkit entries be authored in this repo first, in the Community Toolkit repo first, or mirrored between both?
 - Should `community-toolkit` be enabled by default, or listed as built-in but disabled until a user opts in?
