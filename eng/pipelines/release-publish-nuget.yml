@@ -102,6 +102,24 @@ parameters:
     type: boolean
     default: false
 
+  # Source builds from `release/*` branches bake `AspireCliChannel=staging` by
+  # default (see eng/pipelines/templates/build_sign_native.yml). A GA ship build
+  # must explicitly queue `microsoft-aspire` with `aspireCliChannelOverride=stable`
+  # so the CLI binary identifies as `stable` and `aspire init` drops the
+  # nuget.org-only nuget.config that GA users expect. To enforce this, the
+  # `Validate Source Build CLI Channel` step below fetches the source build's
+  # tags and fails the pipeline unless the `aspire-cli-channel - stable` tag is
+  # present. Set this parameter to `true` only in the rare case of intentionally
+  # publishing a non-stable-channel build to nuget.org (currently no known
+  # use case — exists as a documented escape hatch).
+  # See: https://github.com/microsoft/aspire/pull/17528 (#17527) and
+  # https://github.com/microsoft/aspire/issues/17550 (longer-term 13.5+ work
+  # to decouple channel identity from build-time baking).
+  - name: AllowNonStableCliChannel
+    displayName: '[Advanced] Allow source build with AspireCliChannel != stable (escape hatch; leave false for GA ships)'
+    type: boolean
+    default: false
+
   # Ref used when invoking `workflow_dispatch` against release-github-tasks.yml.
   # GitHub loads the workflow file *from this ref*, so it controls which version
   # of the workflow runs. The branch/commit being released is passed separately
@@ -910,6 +928,106 @@ extends:
                       exit 1
                     }
                   displayName: 'Extract BAR Build ID'
+                  env:
+                    SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+
+              # ===== VALIDATE SOURCE BUILD CLI CHANNEL =====
+              # Source builds from `release/*` branches bake `AspireCliChannel=staging`
+              # by default (see eng/pipelines/templates/build_sign_native.yml and
+              # eng/scripts/compute-cli-channel.ps1). To ship a build as GA, the
+              # source build must have been queued with `aspireCliChannelOverride=stable`,
+              # which causes compute-cli-channel.ps1 to also tag the source build
+              # with `aspire-cli-channel - stable`.
+              #
+              # Without this guard, forgetting the queue-time override on the GA
+              # ship build silently publishes a `staging`-baked CLI binary to
+              # nuget.org; `aspire init` then drops a nuget.config that maps
+              # Aspire.* to the staging feed, which 404s for GA users once the
+              # darc-pub feed for that SHA expires. See
+              # https://github.com/microsoft/aspire/issues/17527 for the bug this
+              # guard is the safety net against.
+              #
+              # Builds from before the channel-tag emission landed will not have
+              # this tag; those cannot be shipped as GA without queueing a fresh
+              # source build. The `AllowNonStableCliChannel` parameter is the
+              # documented escape hatch.
+              - ${{ if and(eq(parameters.DryRun, false), eq(parameters.AllowNonStableCliChannel, false)) }}:
+                - powershell: |
+                    $buildId = "$(resources.pipeline.aspire-build.runID)"
+                    $org = "$(System.CollectionUri)"
+                    $project = "internal"
+
+                    Write-Host "Fetching build tags for build: $buildId"
+
+                    $uri = "${org}${project}/_apis/build/builds/${buildId}/tags?api-version=7.0"
+                    Write-Host "API URI: $uri"
+
+                    try {
+                      $response = Invoke-RestMethod -Uri $uri -Headers @{
+                        Authorization = "Bearer $(System.AccessToken)"
+                      } -Method Get
+
+                      Write-Host "Build tags found: $($response.value -join ', ')"
+
+                      # Tags look like 'aspire-cli-channel - stable'. The ' - ' separator
+                      # matches the existing 'BAR ID - <id>' and 'release-version - X.Y.Z'
+                      # tag styles emitted elsewhere in the source build.
+                      $channelTags = @($response.value | Where-Object { $_ -match '^aspire-cli-channel - (.+)$' })
+
+                      if ($channelTags.Count -eq 0) {
+                        Write-Error @"
+                    Source build $buildId has no 'aspire-cli-channel - *' tag.
+
+                    This means either:
+                      (a) The build predates the channel-tag emission in
+                          eng/scripts/compute-cli-channel.ps1 (anything before that
+                          landed on the source branch). Queue a fresh source build
+                          from the current release branch and re-run this pipeline
+                          against it.
+                      (b) The compute-cli-channel.ps1 step was modified to drop
+                          the `##vso[build.addbuildtag]` emission. Restore it.
+
+                    To override this guard for an intentional non-stable ship,
+                    re-run with -AllowNonStableCliChannel `$true.
+                    "@
+                        exit 1
+                      }
+
+                      if ($channelTags.Count -gt 1) {
+                        Write-Error "Source build $buildId has multiple 'aspire-cli-channel - *' tags ($($channelTags -join ', ')). Refusing to guess."
+                        exit 1
+                      }
+
+                      $resolvedChannel = ($channelTags[0] -replace '^aspire-cli-channel - ', '').Trim()
+                      Write-Host "Source build CLI channel: '$resolvedChannel'"
+
+                      if ($resolvedChannel -ne 'stable') {
+                        Write-Error @"
+                    Source build $buildId has aspire-cli-channel='$resolvedChannel', not 'stable'.
+
+                    The selected microsoft-aspire build was queued with the default
+                    AspireCliChannel resolution, which bakes 'staging' for release/*
+                    branches. Publishing this build to nuget.org would ship a CLI
+                    binary that identifies as '$resolvedChannel' and writes the
+                    corresponding nuget.config from ``aspire init`` for end users —
+                    see https://github.com/microsoft/aspire/issues/17527.
+
+                    To produce a GA ship build, re-queue microsoft-aspire
+                    (definition 1602) with -aspireCliChannelOverride stable, then
+                    re-run this pipeline against the new source build.
+
+                    To override this guard for an intentional non-stable ship,
+                    re-run with -AllowNonStableCliChannel `$true.
+                    "@
+                        exit 1
+                      }
+
+                      Write-Host "✓ Source build $buildId has AspireCliChannel=stable; GA ship may proceed."
+                    } catch {
+                      Write-Error "Failed to fetch build tags: $_"
+                      exit 1
+                    }
+                  displayName: 'Validate Source Build CLI Channel'
                   env:
                     SYSTEM_ACCESSTOKEN: $(System.AccessToken)
 
