@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using Aspire.Dashboard.Utils;
 using Aspire.Hosting;
+using Aspire.Shared;
 using Microsoft.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Model;
@@ -148,20 +149,14 @@ internal sealed class DashboardFeedbackDiagnosticProvider(
     {
         // Single-file AppHosts (apphost.cs) must go through the `dotnet build` driver so the
         // file-based app is materialized into a project; project AppHosts use `dotnet msbuild`.
-        // Matches the CLI's DotNetCliRunner.GetProjectItemsAndPropertiesAsync.
-        var isSingleFile = string.Equals(Path.GetExtension(appHostFilePath), ".cs", StringComparison.OrdinalIgnoreCase);
-
-        var arguments = new List<string>
-        {
-            isSingleFile ? "build" : "msbuild",
-            // MSBuildVersion is requested first as a workaround: `dotnet msbuild -getProperty` with a
-            // single property name returns a bare value instead of a JSON document, which breaks
-            // parsing. Asking for more than one property forces the JSON shape.
-            // https://github.com/dotnet/msbuild/issues/12490
-            "-getProperty:MSBuildVersion,AspireHostingSDKVersion,TargetFramework",
-            "-getItem:PackageReference,AspireProjectOrPackageReference,PackageVersion",
-            appHostFilePath
-        };
+        // The argument construction is shared with the CLI's
+        // DotNetCliRunner.GetProjectItemsAndPropertiesAsync via DotNetProjectProbe so the two
+        // probes stay identical.
+        var arguments = DotNetProjectProbe.BuildItemsAndPropertiesArguments(
+            appHostFilePath,
+            items: ["PackageReference", "AspireProjectOrPackageReference", "PackageVersion"],
+            properties: ["AspireHostingSDKVersion", "TargetFramework"],
+            targets: []);
 
         // Evaluation-only environment so first-run/telemetry/workload-update banners can't corrupt
         // the JSON written to stdout. Mirrors the env the CLI sets for the same probe.
