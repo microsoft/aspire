@@ -136,6 +136,7 @@ internal static class CliTestHelper
         services.AddSingleton<IAppHostInfoResolver, AppHostInfoResolver>();
         services.AddSingleton(options.CliHostEnvironmentFactory);
         services.AddSingleton(options.CliDownloaderFactory);
+        services.AddSingleton(options.ProcessPathProviderFactory);
         services.AddSingleton(options.FirstTimeUseNoticeSentinelFactory);
         services.AddSingleton(options.BannerServiceFactory);
         services.AddSingleton<FallbackProjectParser>();
@@ -606,6 +607,8 @@ internal sealed class CliServiceCollectionTestOptions
         var tmpDirectory = new DirectoryInfo(Path.Combine(executionContext.WorkingDirectory.FullName, "tmp"));
         return new TestCliDownloader(tmpDirectory);
     };
+
+    public Func<IServiceProvider, IProcessPathProvider> ProcessPathProviderFactory { get; set; } = _ => new EnvironmentProcessPathProvider();
 
     public Func<IServiceProvider, IAuxiliaryBackchannelMonitor> AuxiliaryBackchannelMonitorFactory { get; set; } = (IServiceProvider serviceProvider) =>
     {

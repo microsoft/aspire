@@ -33,8 +33,7 @@ internal sealed class UpdateCommand : BaseCommand
     private readonly IFeatures _features;
     private readonly IConfigurationService _configurationService;
     private readonly IConfiguration _configuration;
-
-    private static readonly AsyncLocal<string?> s_processPathOverride = new();
+    private readonly IProcessPathProvider _processPathProvider;
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", UpdateCommandStrings.ProjectArgumentDescription);
     private static readonly Option<bool> s_selfOption = new("--self")
@@ -61,6 +60,7 @@ internal sealed class UpdateCommand : BaseCommand
         ICliDownloader? cliDownloader,
         IConfigurationService configurationService,
         IConfiguration configuration,
+        IProcessPathProvider processPathProvider,
         CommonCommandServices services)
         : base("update", UpdateCommandStrings.Description, services)
     {
@@ -73,6 +73,7 @@ internal sealed class UpdateCommand : BaseCommand
         _features = services.Features;
         _configurationService = configurationService;
         _configuration = configuration;
+        _processPathProvider = processPathProvider;
 
         Options.Add(s_appHostOption);
         Options.Add(s_selfOption);
@@ -113,14 +114,9 @@ internal sealed class UpdateCommand : BaseCommand
         return NpmInstallDetection.GetNpmUpdateCommand();
     }
 
-    private static string? GetCurrentProcessPath()
-    {
-        return s_processPathOverride.Value ?? Environment.ProcessPath;
-    }
-
     private bool IsNixInstall()
     {
-        var processPath = GetCurrentProcessPath();
+        var processPath = _processPathProvider.ProcessPath;
         if (string.IsNullOrEmpty(processPath))
         {
             return false;
@@ -586,7 +582,7 @@ internal sealed class UpdateCommand : BaseCommand
         try
         {
             // Get current executable path for display purposes only
-            var currentExePath = GetCurrentProcessPath();
+            var currentExePath = _processPathProvider.ProcessPath;
             if (string.IsNullOrEmpty(currentExePath))
             {
                 return CommandResult.Failure(CliExitCodes.InvalidCommand, "Unable to determine the current executable path.");
@@ -618,7 +614,7 @@ internal sealed class UpdateCommand : BaseCommand
     private async Task ExtractAndUpdateAsync(string archivePath, CancellationToken cancellationToken)
     {
         // Install to the same directory as the current CLI executable
-        var currentExePath = GetCurrentProcessPath();
+        var currentExePath = _processPathProvider.ProcessPath;
         if (string.IsNullOrEmpty(currentExePath))
         {
             throw new InvalidOperationException("Unable to determine current CLI location.");
@@ -767,13 +763,6 @@ internal sealed class UpdateCommand : BaseCommand
         }
     }
 
-    internal static IDisposable UseProcessPathForTesting(string? processPath)
-    {
-        var previousValue = s_processPathOverride.Value;
-        s_processPathOverride.Value = processPath;
-        return new ProcessPathOverrideScope(previousValue);
-    }
-
     private async Task<string?> GetNewVersionAsync(string exePath, CancellationToken cancellationToken)
     {
         try
@@ -826,11 +815,4 @@ internal sealed class UpdateCommand : BaseCommand
         }
     }
 
-    private sealed class ProcessPathOverrideScope(string? previousValue) : IDisposable
-    {
-        public void Dispose()
-        {
-            s_processPathOverride.Value = previousValue;
-        }
-    }
 }

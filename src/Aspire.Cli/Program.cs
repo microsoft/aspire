@@ -344,6 +344,7 @@ public class Program
         builder.Services.AddSingleton(sp => new TelemetryManager(sp.GetRequiredService<IConfiguration>(), args));
 
         // Shared services.
+        builder.Services.AddSingleton<IProcessPathProvider, EnvironmentProcessPathProvider>();
         // Two identity readers coexist by design. `IdentityChannelReader` is constructed early in
         // CliStartupContext so the channel can be logged at startup before DI is fully wired, and it
         // continues to power that early startup log. `IIdentityResolver` is the richer reader that
@@ -357,7 +358,7 @@ public class Program
             // sidecar path relative to it (<binaryDir>/.aspire-install.json).
             //
             // This is the right anchor for every shipping install route because
-            // Environment.ProcessPath resolves to the actual native CLI binary
+            // IProcessPathProvider resolves to the actual native CLI binary
             // that is running, and each route either co-locates its sidecar next
             // to that binary or intentionally ships none (see
             // docs/specs/install-routes.md):
@@ -373,7 +374,8 @@ public class Program
             //   - managed-host launch (dotnet aspire.dll in tests/dev) or a null
             //     ProcessPath: the resolver simply skips the sidecar layer and the
             //     env → assembly → terminal default fallbacks still apply.
-            var binaryDir = Environment.ProcessPath is { Length: > 0 } p
+            var processPathProvider = sp.GetRequiredService<IProcessPathProvider>();
+            var binaryDir = processPathProvider.ProcessPath is { Length: > 0 } p
                 ? Path.GetDirectoryName(p)
                 : null;
             return new IdentityResolver(
