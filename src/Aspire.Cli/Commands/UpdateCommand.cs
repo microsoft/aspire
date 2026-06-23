@@ -161,19 +161,6 @@ internal sealed class UpdateCommand : BaseCommand
                 return CommandResult.Success();
             }
 
-            if (IsNixInstall())
-            {
-                InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.NixSelfUpdateMessage);
-                InteractionService.DisplayPlainText("  nix profile upgrade aspire-cli");
-                InteractionService.DisplayPlainText("  nix flake update <input-name>");
-                return CommandResult.Success();
-            }
-
-            if (_cliDownloader is null)
-            {
-                return CommandResult.Failure(CliExitCodes.InvalidCommand, "CLI self-update is not available in this environment.");
-            }
-
             try
             {
                 return await ExecuteSelfUpdateAsync(parseResult, null, cancellationToken);
@@ -413,10 +400,9 @@ internal sealed class UpdateCommand : BaseCommand
             // Check if this is a "no project found" error and prompt for self-update
             if (string.Equals(ex.Message, ErrorStrings.NoProjectFileFound, StringComparisons.CliInputOrOutput))
             {
-                // Only prompt for self-update when we can actually perform it: not as a
-                // dotnet tool, not from an npm install, and the GitHub-binary downloader
-                // is wired up. Otherwise the downloader would overwrite package-manager-owned
-                // files instead of letting the package manager handle the update.
+                // Only prompt for self-update when we have an actionable update path:
+                // dotnet tool and npm installs are handled by their package managers, while
+                // Nix installs flow through ExecuteSelfUpdateAsync so it can print Nix guidance.
                 if (GetDotNetToolUpdateCommand() is null && GetNpmUpdateCommand() is null && _cliDownloader is not null)
                 {
                     var shouldUpdateCli = await InteractionService.PromptConfirmAsync(
@@ -530,6 +516,19 @@ internal sealed class UpdateCommand : BaseCommand
 
     private async Task<CommandResult> ExecuteSelfUpdateAsync(ParseResult parseResult, string? selectedChannel, CancellationToken cancellationToken)
     {
+        if (IsNixInstall())
+        {
+            InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.NixSelfUpdateMessage);
+            InteractionService.DisplayPlainText("  nix profile upgrade aspire-cli");
+            InteractionService.DisplayPlainText("  nix flake update <input-name>");
+            return CommandResult.Success();
+        }
+
+        if (_cliDownloader is null)
+        {
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, "CLI self-update is not available in this environment.");
+        }
+
         var channel = selectedChannel ?? parseResult.GetValue(_channelOption) ?? parseResult.GetValue(_qualityOption);
 
         // If channel is not specified, prompt the user to select one. The choice
@@ -592,7 +591,7 @@ internal sealed class UpdateCommand : BaseCommand
             InteractionService.DisplayMessage(KnownEmojis.UpButton, $"Updating to channel: {channel}");
 
             // Download the latest CLI
-            var archivePath = await _cliDownloader!.DownloadLatestCliAsync(channel, cancellationToken);
+            var archivePath = await _cliDownloader.DownloadLatestCliAsync(channel, cancellationToken);
 
             // Extract and update to $HOME/.aspire/bin
             await ExtractAndUpdateAsync(archivePath, cancellationToken);

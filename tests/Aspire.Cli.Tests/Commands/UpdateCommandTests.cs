@@ -940,14 +940,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var tempDirectory = new TestTempDirectory();
-
-        var binaryDir = Path.Combine(tempDirectory.Path, "nix", "store", "hash-aspire-cli", "lib", "aspire-cli");
-        Directory.CreateDirectory(binaryDir);
-
-        var processPath = Path.Combine(binaryDir, GetAspireExecutableName());
-        File.WriteAllText(processPath, string.Empty);
-        File.WriteAllText(Path.Combine(binaryDir, InstallSidecarReader.SidecarFileName), """{"source":"nix"}""");
-
+        var processPath = CreateNixInstall(tempDirectory);
         var interactionService = new TestInteractionService();
         var downloaderInvoked = false;
 
@@ -973,10 +966,129 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(downloaderInvoked, "Archive self-update should not be used for Nix installs.");
-        Assert.Contains(interactionService.DisplayedPlainText, text => text.Contains("nix profile upgrade aspire-cli", StringComparison.Ordinal));
-        Assert.Contains(interactionService.DisplayedPlainText, text => text.Contains("nix flake update <input-name>", StringComparison.Ordinal));
-        Assert.DoesNotContain(interactionService.DisplayedPlainText, text => text.Contains("npm install", StringComparison.Ordinal));
-        Assert.DoesNotContain(interactionService.DisplayedPlainText, text => text.Contains("dotnet tool update", StringComparison.Ordinal));
+        AssertNixUpdateGuidance(interactionService, expectProjectUpdateSkippedMessage: false);
+    }
+
+    [Theory]
+    [InlineData(NixSelfUpdateEntryPoint.AfterProjectUpdate)]
+    [InlineData(NixSelfUpdateEntryPoint.NoProjectFound)]
+    [InlineData(NixSelfUpdateEntryPoint.BeforeGuestProjectUpdate)]
+    public async Task UpdateCommand_WhenRunningFromNix_DisplaysNixUpdateGuidanceForSelfUpdateEntryPoints(NixSelfUpdateEntryPoint entryPoint)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var tempDirectory = new TestTempDirectory();
+        var processPath = CreateNixInstall(tempDirectory);
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
+        File.WriteAllText(appHostPath, "// test apphost");
+
+        var updateProjectInvoked = false;
+        var downloaderInvoked = false;
+        var interactionService = new TestInteractionService
+        {
+            ConfirmCallback = (_, _) => true
+        };
+
+        var commandLine = entryPoint switch
+        {
+            NixSelfUpdateEntryPoint.AfterProjectUpdate => "update --apphost AppHost.csproj",
+            NixSelfUpdateEntryPoint.NoProjectFound => "update",
+            NixSelfUpdateEntryPoint.BeforeGuestProjectUpdate => "update --apphost apphost.ts",
+            _ => throw new InvalidOperationException($"Unexpected entry point: {entryPoint}")
+        };
+        var expectProjectUpdateSkippedMessage = false;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            UseProcessPath(options, processPath);
+            options.InteractionServiceFactory = _ => interactionService;
+            options.CliDownloaderFactory = _ => new TestCliDownloader(workspace.WorkspaceRoot)
+            {
+                DownloadLatestCliAsyncCallback = (_, _) =>
+                {
+                    downloaderInvoked = true;
+                    return Task.FromResult(string.Empty);
+                }
+            };
+
+            switch (entryPoint)
+            {
+                case NixSelfUpdateEntryPoint.AfterProjectUpdate:
+                    options.ProjectLocatorFactory = _ => new TestProjectLocator()
+                    {
+                        UseOrFindAppHostProjectFileAsyncCallback = (_, _, _) => Task.FromResult<FileInfo?>(new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj")))
+                    };
+                    options.ProjectUpdaterFactory = _ => new TestProjectUpdater()
+                    {
+                        UpdateProjectAsyncCallback = (_, _) =>
+                        {
+                            updateProjectInvoked = true;
+                            return Task.FromResult(new ProjectUpdateResult { UpdatedApplied = true });
+                        }
+                    };
+                    options.PackagingServiceFactory = _ => new TestPackagingService
+                    {
+                        GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(
+                            [CreatePackageChannelWithGuestSdkVersion("99.0.0", cliDownloadBaseUrl: "https://example.test/aspire")])
+                    };
+                    options.CliUpdateNotifierFactory = _ => new TestCliUpdateNotifier
+                    {
+                        IsUpdateAvailableCallback = () => true
+                    };
+                    break;
+
+                case NixSelfUpdateEntryPoint.NoProjectFound:
+                    options.ProjectLocatorFactory = _ => new TestProjectLocator()
+                    {
+                        UseOrFindAppHostProjectFileAsyncCallback = (_, _, _) =>
+                        {
+                            throw new ProjectLocatorException(ErrorStrings.NoProjectFileFound, ProjectLocatorFailureReason.NoProjectFileFound);
+                        }
+                    };
+                    break;
+
+                case NixSelfUpdateEntryPoint.BeforeGuestProjectUpdate:
+                    expectProjectUpdateSkippedMessage = true;
+                    options.ProjectLocatorFactory = _ => new TestProjectLocator()
+                    {
+                        UseOrFindAppHostProjectFileAsyncCallback = (_, _, _) => Task.FromResult<FileInfo?>(new FileInfo(appHostPath))
+                    };
+                    options.AppHostProjectFactory = _ => new TestAppHostProjectFactory
+                    {
+                        CanHandleCallback = _ => true,
+                        LanguageId = "typescript/nodejs",
+                        DisplayName = "TypeScript (Node.js)",
+                        DetectionPatterns = ["apphost.ts"],
+                        UpdatePackagesAsyncCallback = (_, _) =>
+                        {
+                            updateProjectInvoked = true;
+                            return Task.FromResult(new UpdatePackagesResult { UpdatesApplied = true });
+                        }
+                    };
+                    options.PackagingServiceFactory = _ => new TestPackagingService
+                    {
+                        GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(
+                            [CreatePackageChannelWithGuestSdkVersion("99.0.0", cliDownloadBaseUrl: "https://example.test/aspire")])
+                    };
+                    break;
+
+                default:
+                    throw new InvalidOperationException($"Unexpected entry point: {entryPoint}");
+            }
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(commandLine);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(downloaderInvoked, "Archive self-update should not be used for Nix installs.");
+        AssertNixUpdateGuidance(interactionService, expectProjectUpdateSkippedMessage);
+
+        if (expectProjectUpdateSkippedMessage)
+        {
+            Assert.False(updateProjectInvoked);
+        }
     }
 
     [Fact]
@@ -2830,6 +2942,42 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         return processPath;
     }
 
+    private static string CreateNixInstall(TestTempDirectory tempDirectory)
+    {
+        var binaryDir = Path.Combine(tempDirectory.Path, "nix", "store", "hash-aspire-cli", "lib", "aspire-cli");
+        Directory.CreateDirectory(binaryDir);
+
+        var processPath = Path.Combine(binaryDir, GetAspireExecutableName());
+        File.WriteAllText(processPath, string.Empty);
+        File.WriteAllText(Path.Combine(binaryDir, InstallSidecarReader.SidecarFileName), """{"source":"nix"}""");
+
+        return processPath;
+    }
+
+    private static void AssertNixUpdateGuidance(TestInteractionService interactionService, bool expectProjectUpdateSkippedMessage)
+    {
+        string[] expectedPlainText =
+        [
+            "  nix profile upgrade aspire-cli",
+            "  nix flake update <input-name>"
+        ];
+
+        Assert.Equal(
+            expectedPlainText,
+            interactionService.DisplayedPlainText);
+
+        string[] expectedMessages = expectProjectUpdateSkippedMessage
+            ? [
+                UpdateCommandStrings.NixSelfUpdateMessage,
+                UpdateCommandStrings.ProjectUpdateSkippedAfterCliUpdateMessage
+            ]
+            : [UpdateCommandStrings.NixSelfUpdateMessage];
+
+        Assert.Equal(
+            expectedMessages,
+            interactionService.DisplayedMessages.Select(message => message.Message));
+    }
+
     private static string GetAspireExecutableName()
     {
         return OperatingSystem.IsWindows() ? "aspire.exe" : "aspire";
@@ -2925,6 +3073,13 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     private static void UseProcessPath(CliServiceCollectionTestOptions options, string? processPath)
     {
         options.ProcessPathProviderFactory = _ => new TestProcessPathProvider(processPath);
+    }
+
+    public enum NixSelfUpdateEntryPoint
+    {
+        AfterProjectUpdate,
+        NoProjectFound,
+        BeforeGuestProjectUpdate
     }
 
 }
