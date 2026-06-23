@@ -2917,7 +2917,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await pendingRun.DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(["arg1=value1", "--custom-arg"], args);
     }
 
@@ -2949,7 +2949,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.NotNull(capturedOptions);
         Assert.Equal("run", capturedOptions.Command);
         var debugSessionArgs = capturedOptions.Args;

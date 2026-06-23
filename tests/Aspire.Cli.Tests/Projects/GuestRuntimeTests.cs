@@ -588,8 +588,8 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
             new Dictionary<string, string>(),
             watchMode: false,
             launcher,
-            runArgs: ["arg1=value1", "--flag"],
-            CancellationToken.None);
+            CancellationToken.None,
+            runArgs: ["arg1=value1", "--flag"]);
 
         Assert.Equal([appHostFile.FullName, "arg1=value1", "--flag"], launcher.LastArgs);
     }
@@ -613,8 +613,8 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
             new Dictionary<string, string>(),
             watchMode: false,
             launcher,
-            runArgs: ["arg1=value1", "--flag", "--", "literal"],
-            CancellationToken.None);
+            CancellationToken.None,
+            runArgs: ["arg1=value1", "--flag", "--", "literal"]);
 
         Assert.Equal([appHostFile.FullName, "arg1=value1", "--flag", "--", "literal"], launcher.LastArgs);
     }
@@ -638,8 +638,8 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
             new Dictionary<string, string>(),
             watchMode: false,
             launcher,
-            runArgs: ["arg with spaces", "; rm -rf important", "--flag=value"],
-            CancellationToken.None);
+            CancellationToken.None,
+            runArgs: ["arg with spaces", "; rm -rf important", "--flag=value"]);
 
         Assert.Equal([appHostFile.FullName, "arg with spaces", "; rm -rf important", "--flag=value"], launcher.LastArgs);
     }
