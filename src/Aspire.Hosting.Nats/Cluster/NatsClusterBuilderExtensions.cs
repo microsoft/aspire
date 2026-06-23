@@ -89,7 +89,7 @@ public static class NatsClusterBuilderExtensions
 
         member.WithCluster(
             clusterName: builder.Resource.Name,
-            routes: [.. builder.Resource.Members.Select(m => m.ClusterEndpoint)]
+            otherRoutesLocator: () => [.. builder.Resource.Members.Except([member.Resource]).Select(m => m.ClusterEndpoint)]
         );
         if (member.Resource.TryGetAnnotationsOfType<NatsJetStreamAnnotation>(out _))
         {

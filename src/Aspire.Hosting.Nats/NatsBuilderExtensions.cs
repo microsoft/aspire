@@ -200,7 +200,7 @@ public static class NatsBuilderExtensions
         this IResourceBuilder<NatsServerResource> builder,
         string? clusterName = null,
         int? clusterPort = null,
-        IReadOnlyList<EndpointReference>? routes = null
+        Func<IReadOnlyList<EndpointReference>>? otherRoutesLocator = null
     )
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -215,23 +215,29 @@ public static class NatsBuilderExtensions
 
         if (clusterName is not (null or ""))
         {
-            builder = builder.WithArgs("--cluster_name", clusterName); // NOTE: If unset, NATS will create one automatically.
+            builder = builder.WithArgs("--cluster_name", clusterName); // NOTE: If unset, NATS will create one automatically, but only when JetStream isn't enabled.
         }
 
-        if (routes is not (null or []))
+        if (otherRoutesLocator is not null)
         {
-            var routesValueBuilder = new ReferenceExpressionBuilder();
-            for (var i = 0; i < routes.Count; i++)
+            builder = builder.WithArgs(context =>
             {
-                var route = routes[i];
-                routesValueBuilder.Append($"{NatsServerResource.PrimaryNatsSchemeName}://{route.Property(EndpointProperty.HostAndPort)}");
-                if (i < routes.Count - 1)
-                {
-                    routesValueBuilder.AppendLiteral(",");
-                }
-            }
+                var otherRoutes = otherRoutesLocator();
 
-            builder = builder.WithArgs("--routes", routesValueBuilder.Build());
+                var routesValueBuilder = new ReferenceExpressionBuilder();
+                for (var i = 0; i < otherRoutes.Count; i++)
+                {
+                    var route = otherRoutes[i];
+                    routesValueBuilder.Append($"{NatsServerResource.PrimaryNatsSchemeName}://{route.Property(EndpointProperty.HostAndPort)}");
+                    if (i < otherRoutes.Count - 1)
+                    {
+                        routesValueBuilder.AppendLiteral(",");
+                    }
+                }
+
+                context.Args.Add("--routes");
+                context.Args.Add(routesValueBuilder.Build());
+            });
         }
 
         return builder;
