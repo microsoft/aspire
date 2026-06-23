@@ -9,7 +9,6 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Semver;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
@@ -608,18 +607,18 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         return isHostingOrCommunityToolkitNamespaced && !isExcluded;
     }
 
-    public static PackageChannel CreateExplicitChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, IFeatures features, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null, string? currentCliVersion = null)
+    public static PackageChannel CreateExplicitChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, IFeatures features, ILogger logger, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, string? currentCliVersion = null)
     {
-        return new PackageChannel(name, quality, mappings, nuGetPackageCache, features, logger ?? NullLogger.Instance, configureGlobalPackagesFolder, cliDownloadBaseUrl, pinnedVersion, currentCliVersion);
+        return new PackageChannel(name, quality, mappings, nuGetPackageCache, features, logger, configureGlobalPackagesFolder, cliDownloadBaseUrl, pinnedVersion, currentCliVersion);
     }
 
-    public static PackageChannel CreateImplicitChannel(INuGetPackageCache nuGetPackageCache, IFeatures features, ILogger? logger = null, string? currentCliVersion = null)
+    public static PackageChannel CreateImplicitChannel(INuGetPackageCache nuGetPackageCache, IFeatures features, ILogger logger, string? currentCliVersion = null)
     {
         // The reason that PackageChannelQuality.Both is because there are situations like
         // in community toolkit where there is a newer beta version available for a package
         // in the case of implicit feeds we want to be able to show that, along side the stable
         // version. Not really an issue for template selection though (unless we start allowing)
         // for broader templating options.
-        return new PackageChannel("default", PackageChannelQuality.Both, null, nuGetPackageCache, features, logger ?? NullLogger.Instance, currentCliVersion: currentCliVersion);
+        return new PackageChannel("default", PackageChannelQuality.Both, null, nuGetPackageCache, features, logger, currentCliVersion: currentCliVersion);
     }
 }

@@ -195,6 +195,24 @@ internal sealed class RunModeProvisioningContextProvider(
         }
     }
 
+    public async Task<AzureProvisioningOptionsState> GetProvisioningOptionsAsync(CancellationToken cancellationToken = default)
+    {
+        await _provisioningOptionsLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            return new AzureProvisioningOptionsState(
+                _options.SubscriptionId,
+                _options.ResourceGroup,
+                _options.Location,
+                _options.TenantId);
+        }
+        finally
+        {
+            _provisioningOptionsLock.Release();
+        }
+    }
+
     private bool HasProvisioningOptions() =>
         !string.IsNullOrEmpty(_options.Location) &&
         !string.IsNullOrEmpty(_options.SubscriptionId);

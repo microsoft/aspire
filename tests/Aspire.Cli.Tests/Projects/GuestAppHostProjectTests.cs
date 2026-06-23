@@ -599,7 +599,7 @@ public class GuestAppHostProjectTests : IDisposable
                 ])
         };
 
-        var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
+        var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures(), NullLogger.Instance);
 
         var interactionService = new TestInteractionService
         {
@@ -723,7 +723,7 @@ public class GuestAppHostProjectTests : IDisposable
             PackageChannelQuality.Both,
             [new PackageMapping("Aspire.*", "stable")],
             stableCache,
-            features: new TestFeatures());
+            features: new TestFeatures(), NullLogger.Instance);
 
         var interactionService = new TestInteractionService
         {
@@ -778,7 +778,7 @@ public class GuestAppHostProjectTests : IDisposable
             PackageChannelQuality.Both,
             [new PackageMapping("Aspire*", "staging")],
             stagingCache,
-            features: new TestFeatures());
+            features: new TestFeatures(), NullLogger.Instance);
 
         var interactionService = new TestInteractionService
         {
@@ -834,7 +834,7 @@ public class GuestAppHostProjectTests : IDisposable
             PackageChannelQuality.Both,
             [new PackageMapping("Aspire.*", "stable")],
             stableCache,
-            features: new TestFeatures());
+            features: new TestFeatures(), NullLogger.Instance);
 
         var project = CreateGuestAppHostProject();
 
@@ -990,7 +990,7 @@ public class GuestAppHostProjectTests : IDisposable
                 ])
         };
 
-        var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
+        var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures(), NullLogger.Instance);
 
         var interactionService = new TestInteractionService
         {
@@ -1079,7 +1079,7 @@ public class GuestAppHostProjectTests : IDisposable
                 ])
         };
 
-        var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
+        var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures(), NullLogger.Instance);
 
         var interactionService = new TestInteractionService
         {
@@ -1197,7 +1197,8 @@ public class GuestAppHostProjectTests : IDisposable
             executionContext: executionContext,
             logger: NullLogger<GuestAppHostProject>.Instance,
             fileLoggerProvider: new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()),
-            profilingTelemetry: _profilingTelemetry);
+            profilingTelemetry: _profilingTelemetry,
+            timeProvider: TimeProvider.System);
     }
 
 }

@@ -60,6 +60,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
                     return (0, [
                         new NuGetPackage { Id = "Aspire.Hosting.Redis", Version = "9.4.0", Source = "nuget.org" },
                         new NuGetPackage { Id = "Aspire.Hosting.Dapr", Version = "9.4.0", Source = "nuget.org" }, // Deprecated
+                        new NuGetPackage { Id = "Aspire.Hosting.GitHub.Models", Version = "9.4.0", Source = "nuget.org" }, // Deprecated
                         new NuGetPackage { Id = "Aspire.Hosting.NodeJs", Version = "9.4.0", Source = "nuget.org" }, // Deprecated
                         new NuGetPackage { Id = "Aspire.Hosting.PostgreSQL", Version = "9.4.0", Source = "nuget.org" }
                     ]);
@@ -79,6 +80,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
         Assert.Contains("Aspire.Hosting.Redis", packageIds);
         Assert.Contains("Aspire.Hosting.PostgreSQL", packageIds);
         Assert.DoesNotContain("Aspire.Hosting.Dapr", packageIds);
+        Assert.DoesNotContain("Aspire.Hosting.GitHub.Models", packageIds);
         Assert.DoesNotContain("Aspire.Hosting.NodeJs", packageIds);
     }
 
@@ -100,6 +102,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
                     return (0, [
                         new NuGetPackage { Id = "Aspire.Hosting.Redis", Version = "9.4.0", Source = "nuget.org" },
                         new NuGetPackage { Id = "Aspire.Hosting.Dapr", Version = "9.4.0", Source = "nuget.org" }, // Deprecated
+                        new NuGetPackage { Id = "Aspire.Hosting.GitHub.Models", Version = "9.4.0", Source = "nuget.org" }, // Deprecated
                         new NuGetPackage { Id = "Aspire.Hosting.NodeJs", Version = "9.4.0", Source = "nuget.org" }, // Deprecated
                         new NuGetPackage { Id = "Aspire.Hosting.PostgreSQL", Version = "9.4.0", Source = "nuget.org" }
                     ]);
@@ -119,6 +122,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
         Assert.Contains("Aspire.Hosting.Redis", packageIds);
         Assert.Contains("Aspire.Hosting.PostgreSQL", packageIds);
         Assert.Contains("Aspire.Hosting.Dapr", packageIds);
+        Assert.Contains("Aspire.Hosting.GitHub.Models", packageIds);
         Assert.Contains("Aspire.Hosting.NodeJs", packageIds);
     }
 

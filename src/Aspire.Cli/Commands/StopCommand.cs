@@ -206,6 +206,12 @@ internal sealed class StopCommand : BaseCommand
 
         if (stopped)
         {
+            // ProcessShutdownService only reports success once it has confirmed the AppHost process has
+            // terminated, so the socket's owner is gone and the file is safe to remove by exact path. Doing
+            // it here is the primary guard against a stale socket tripping up later commands: the AppHost's own
+            // cleanup is skipped if it crashes hard, and the orphan-pruning backstop misfires on Windows when the
+            // dead PID is reused (https://github.com/microsoft/aspire/issues/17587).
+            AppHostHelper.TryDeleteSocketFile(connection.SocketPath, _logger);
             InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, appHostIdentifier));
             return CompleteStopActivity(activity, CliExitCodes.Success);
         }

@@ -66,7 +66,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         ILogger<GuestAppHostProject> logger,
         FileLoggerProvider fileLoggerProvider,
         ProfilingTelemetry profilingTelemetry,
-        TimeProvider? timeProvider = null)
+        TimeProvider timeProvider)
     {
         _resolvedLanguage = language;
         _interactionService = interactionService;
@@ -83,7 +83,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;
         _profilingTelemetry = profilingTelemetry;
-        _timeProvider = timeProvider ?? TimeProvider.System;
+        _timeProvider = timeProvider;
         _runningInstanceManager = new RunningInstanceManager(_logger, _interactionService, _timeProvider, _profilingTelemetry);
     }
 
@@ -1833,7 +1833,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(runtimeSpec, toolchain);
             }
 
-            _guestRuntime = new GuestRuntime(runtimeSpec, _logger, _fileLoggerProvider, profilingTelemetry: _profilingTelemetry);
+            _guestRuntime = new GuestRuntime(runtimeSpec, _logger, PathLookupHelper.FindFullPathFromPath, _profilingTelemetry, _fileLoggerProvider);
 
             _logger.LogDebug("Created GuestRuntime for {RuntimeDisplayName}: Execute={Command} {Args}",
                 runtimeSpec.DisplayName,

@@ -1,0 +1,36 @@
+.dimension-tag {
+    border-radius: calc(var(--control-corner-radius)* 1px);
+    padding: calc(((var(--design-unit)* 0.5) - var(--stroke-width))* 1px) calc((var(--design-unit) - var(--stroke-width))* 1px);
+    border: calc(var(--stroke-width)* 1px) solid transparent;
+    background: var(--neutral-fill-secondary-rest);
+    font-size: var(--type-ramp-minus-1-font-size);
+    line-height: var(--type-ramp-minus-1-line-height);
+}
+
+::deep .dimension-overflow {
+    /* Prevent scrollbar briefly appearing during overflow load. */
+    overflow-y: hidden;
+}
+
+.filter-value-tag {
+    cursor: pointer;
+    user-select: none;
+}
+
+.filter-value-tag:hover {
+    border-color: var(--accent-foreground-hover);
+}
+
+.included-in-filters {
+    color: var(--foreground-on-accent-rest);
+    background: var(--accent-fill-rest);
+}
+
+::deep .fluent-overflow-item:has(.included-in-filters) {
+    /* change ellipsis color */
+    color: var(--foreground-on-accent-rest);
+}
+
+.included-in-filters:hover {
+    border-color: var(--accent-foreground-hover);
+}

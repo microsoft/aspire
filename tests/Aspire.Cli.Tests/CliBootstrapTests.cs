@@ -127,15 +127,23 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var installPrefix = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-pr-test");
-        var binaryPath = WriteBinaryWithSidecar(Path.Combine(installPrefix, "dogfood", "pr-17159", "bin"), InstallSourceExtensions.PrWire);
+        var binaryDir = Path.Combine(installPrefix, "dogfood", "pr-17159", "bin");
+        var binaryPath = WriteBinaryWithSidecar(binaryDir, InstallSourceExtensions.PrWire, channel: "pr-17159");
         var logsDirectory = Path.Combine(installPrefix, "logs");
         var logFilePath = Path.Combine(logsDirectory, "aspire.log");
+
+        var environment = new TestEnvironment();
+        var resolver = new IdentityResolver(
+            CliTestHelper.CreateSidecarReader(outputHelper),
+            typeof(Program).Assembly,
+            binaryDir,
+            environment);
 
         var context = Program.BuildCliExecutionContext(
             debugMode: true,
             logsDirectory: logsDirectory,
             logFilePath: logFilePath,
-            channel: "pr-17159",
+            identityResolver: resolver,
             processPath: binaryPath);
 
         Assert.Equal(Path.Combine(installPrefix, "hives"), context.HivesDirectory.FullName);
@@ -156,11 +164,13 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         // startup override notice fires and tooling does not mistake a diagnostic run for a real build.
         // Regression guard: this source was previously omitted from the identityOverridden computation.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var envVars = new Dictionary<string, string?> { [IdentityResolver.NuGetServiceIndexEnvVar] = "http://localhost:5000/v3/index.json" };
+        var environment = new TestEnvironment(envVars);
         var resolver = new IdentityResolver(
-            new InstallSidecarReader(),
+            CliTestHelper.CreateSidecarReader(outputHelper),
             typeof(Program).Assembly,
             binaryDir: null,
-            envReader: name => name == IdentityResolver.NuGetServiceIndexEnvVar ? "http://localhost:5000/v3/index.json" : null);
+            environment);
 
         var context = Program.BuildCliExecutionContext(
             debugMode: false,
@@ -176,11 +186,12 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
     public void BuildCliExecutionContext_NoOverrides_DoesNotMarkIdentityOverridden()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var environment = new TestEnvironment();
         var resolver = new IdentityResolver(
-            new InstallSidecarReader(),
+            CliTestHelper.CreateSidecarReader(outputHelper),
             typeof(Program).Assembly,
             binaryDir: null,
-            envReader: _ => null);
+            environment);
 
         var context = Program.BuildCliExecutionContext(
             debugMode: false,
@@ -192,12 +203,13 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         Assert.Null(context.NuGetServiceIndexOverride);
     }
 
-    private static string WriteBinaryWithSidecar(string binaryDir, string source)
+    private static string WriteBinaryWithSidecar(string binaryDir, string source, string? channel = null)
     {
         Directory.CreateDirectory(binaryDir);
         var binaryPath = Path.Combine(binaryDir, OperatingSystem.IsWindows() ? "aspire.exe" : "aspire");
         File.WriteAllText(binaryPath, string.Empty);
-        File.WriteAllText(Path.Combine(binaryDir, InstallSidecarReader.SidecarFileName), $$"""{"source":"{{source}}"}""");
+        var channelField = channel is not null ? $",\"channel\":\"{channel}\"" : "";
+        File.WriteAllText(Path.Combine(binaryDir, InstallSidecarReader.SidecarFileName), $$"""{"source":"{{source}}"{{channelField}}}""");
 
         return binaryPath;
     }

@@ -157,6 +157,11 @@
         <target state="new">The project packages were updated, but applying migrations failed. Run 'aspire update --migrate' again to retry.</target>
         <note />
       </trans-unit>
+      <trans-unit id="NixSelfUpdateMessage">
+        <source>To update the Aspire CLI when installed from Nix, update the profile package or flake input:</source>
+        <target state="new">To update the Aspire CLI when installed from Nix, update the profile package or flake input:</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoAppHostFoundUpdateCliPrompt">
         <source>No Aspire AppHost project found. Would you like to update the Aspire CLI instead?</source>
         <target state="needs-review-translation">Não foram encontrados projetos AppHost do Aspire. Você quer atualizar a CLI do Aspire em vez disso?</target>
