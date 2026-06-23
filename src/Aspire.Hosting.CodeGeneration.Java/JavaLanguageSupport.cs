@@ -110,8 +110,8 @@ internal sealed class JavaLanguageSupport : ILanguageSupport
                 {
                     Command = "javac",
                     Args = OperatingSystem.IsWindows()
-                        ? ["--enable-preview", "--source", "25", "-d", ".java-build", "@.modules\\sources.txt", "AppHost.java"]
-                        : ["--enable-preview", "--source", "25", "-d", ".java-build", "@.modules/sources.txt", "AppHost.java"]
+                        ? ["--enable-preview", "--source", "25", "-d", ".java-build", "@.aspire\\modules\\sources.txt", "AppHost.java"]
+                        : ["--enable-preview", "--source", "25", "-d", ".java-build", "@.aspire/modules/sources.txt", "AppHost.java"]
                 }
             ],
             Execute = new CommandSpec

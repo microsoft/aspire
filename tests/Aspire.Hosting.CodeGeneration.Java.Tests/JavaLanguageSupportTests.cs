@@ -14,7 +14,10 @@ public class JavaLanguageSupportTests
 
         var preExecute = Assert.Single(spec.PreExecute!);
         Assert.Equal("javac", preExecute.Command);
-        Assert.All(preExecute.Args, arg => Assert.DoesNotContain("{args}", arg));
+        Assert.Equal(OperatingSystem.IsWindows()
+            ? ["--enable-preview", "--source", "25", "-d", ".java-build", "@.aspire\\modules\\sources.txt", "AppHost.java"]
+            : ["--enable-preview", "--source", "25", "-d", ".java-build", "@.aspire/modules/sources.txt", "AppHost.java"],
+            preExecute.Args);
 
         Assert.Equal("java", spec.Execute.Command);
         Assert.Equal(["--enable-preview", "-cp", ".java-build", "AppHost", "{args}"], spec.Execute.Args);
