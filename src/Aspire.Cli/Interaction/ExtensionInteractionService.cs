@@ -56,43 +56,9 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
             SingleWriter = true
         });
 
-        PumpTask = Task.Run(async () =>
-        {
-            try
-            {
-                while (await _extensionTaskChannel.Reader.WaitToReadAsync(_cancellationToken).ConfigureAwait(false))
-                {
-                    try
-                    {
-                        var taskFunction = await _extensionTaskChannel.Reader.ReadAsync().ConfigureAwait(false);
-                        await taskFunction.Invoke();
-                    }
-                    catch (Exception ex) when (ex is not ExtensionOperationCanceledException)
-                    {
-                        try
-                        {
-                            await Backchannel.DisplayErrorAsync(StringUtils.RemoveMarkup(ex.Message), _cancellationToken);
-                        }
-                        catch (Exception displayErrorException)
-                        {
-                            // Keep the single-reader pump alive even when the extension connection is
-                            // already broken; otherwise the final flush sentinel can never be processed.
-                            _logger.LogDebug(displayErrorException, "Failed to display an extension operation error through the extension backchannel.");
-                        }
-
-                        _consoleInteractionService.DisplayError(ex.Message);
-                    }
-                }
-            }
-            catch (OperationCanceledException) when (_cancellationToken.IsCancellationRequested)
-            {
-                // Expected during disposal — the channel was completed and/or the token cancelled.
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Unexpected error in extension task channel processing loop.");
-            }
-        }, _cancellationToken);
+        // Use CancellationToken.None here to avoid the pump task being cancelled before it is scheduled.
+        // Code in the pump task itself will observe the cancellation token to exit gracefully when the service is disposed.
+        PumpTask = Task.Run(ProcessExtensionTaskChannelAsync, CancellationToken.None);
     }
 
     public async Task FlushAsync(CancellationToken cancellationToken = default)
@@ -588,6 +554,44 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
     {
         var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.WriteDebugSessionMessageAsync(StringUtils.RemoveMarkup(message), stdout, textStyle, _cancellationToken));
         Debug.Assert(result);
+    }
+
+    private async Task ProcessExtensionTaskChannelAsync()
+    {
+        try
+        {
+            while (await _extensionTaskChannel.Reader.WaitToReadAsync(_cancellationToken).ConfigureAwait(false))
+            {
+                try
+                {
+                    var taskFunction = await _extensionTaskChannel.Reader.ReadAsync().ConfigureAwait(false);
+                    await taskFunction.Invoke();
+                }
+                catch (Exception ex) when (ex is not ExtensionOperationCanceledException)
+                {
+                    try
+                    {
+                        await Backchannel.DisplayErrorAsync(StringUtils.RemoveMarkup(ex.Message), _cancellationToken);
+                    }
+                    catch (Exception displayErrorException)
+                    {
+                        // Keep the single-reader pump alive even when the extension connection is
+                        // already broken; otherwise the final flush sentinel can never be processed.
+                        _logger.LogDebug(displayErrorException, "Failed to display an extension operation error through the extension backchannel.");
+                    }
+
+                    _consoleInteractionService.DisplayError(ex.Message);
+                }
+            }
+        }
+        catch (OperationCanceledException) when (_cancellationToken.IsCancellationRequested)
+        {
+            // Expected during disposal — the channel was completed and/or the token cancelled.
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error in extension task channel processing loop.");
+        }
     }
 
     public void Dispose()
