@@ -400,9 +400,11 @@ internal sealed class UpdateCommand : BaseCommand
             // Check if this is a "no project found" error and prompt for self-update
             if (string.Equals(ex.Message, ErrorStrings.NoProjectFileFound, StringComparisons.CliInputOrOutput))
             {
-                // Only prompt for self-update when we have an actionable update path:
-                // dotnet tool and npm installs are handled by their package managers, while
-                // Nix installs flow through ExecuteSelfUpdateAsync so it can print Nix guidance.
+                // dotnet tool and npm installs have package-manager-specific update commands, so
+                // this recovery path does not prompt for archive self-update in those cases. Nix
+                // does not have a launcher-provided command here; let it reach ExecuteSelfUpdateAsync
+                // where the Nix store guard can print Nix-specific guidance instead of writing to
+                // the read-only install path.
                 if (GetDotNetToolUpdateCommand() is null && GetNpmUpdateCommand() is null && _cliDownloader is not null)
                 {
                     var shouldUpdateCli = await InteractionService.PromptConfirmAsync(
@@ -516,6 +518,14 @@ internal sealed class UpdateCommand : BaseCommand
 
     private async Task<CommandResult> ExecuteSelfUpdateAsync(ParseResult parseResult, string? selectedChannel, CancellationToken cancellationToken)
     {
+        // Keep the Nix guard at the archive self-update boundary. The dotnet tool and npm
+        // checks live at the call sites because they produce package-manager commands before
+        // the user is prompted or before project-update skip messaging is emitted. Nix installs
+        // are identified from the sidecar next to the resolved binary, and every path that
+        // reaches this method is about to replace that binary in-place. A Nix profile or flake
+        // points at an immutable /nix/store path, so archive self-update would either fail with
+        // no write permission or bypass Nix if it fell back to another directory. Let Nix update
+        // the profile/flake instead.
         if (IsNixInstall())
         {
             InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.NixSelfUpdateMessage);
@@ -593,7 +603,8 @@ internal sealed class UpdateCommand : BaseCommand
             // Download the latest CLI
             var archivePath = await _cliDownloader.DownloadLatestCliAsync(channel, cancellationToken);
 
-            // Extract and update to $HOME/.aspire/bin
+            // Replace the current CLI in-place. Package-manager-owned installs that should not
+            // be mutated, such as dotnet tool, npm, and Nix, are handled before this path.
             await ExtractAndUpdateAsync(archivePath, cancellationToken);
 
             return CommandResult.Success();
@@ -612,7 +623,9 @@ internal sealed class UpdateCommand : BaseCommand
 
     private async Task ExtractAndUpdateAsync(string archivePath, CancellationToken cancellationToken)
     {
-        // Install to the same directory as the current CLI executable
+        // Archive self-update is a same-directory replacement, not an installer that searches
+        // for a writable fallback. If the executable is package-manager-owned, installing
+        // elsewhere would leave the user's PATH/profile pointing at the old package-managed CLI.
         var currentExePath = _processPathProvider.ProcessPath;
         if (string.IsNullOrEmpty(currentExePath))
         {
