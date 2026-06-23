@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
 using System.Net.Sockets;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Projects;
@@ -28,10 +27,13 @@ public class RunningInstanceManagerTests
         // where the dead AppHost's PID can be reused (so the orphan-pruning heuristic believes the
         // process is still alive), which is why a unit test is the deterministic, cross-platform guard.
 
-        // The AppHost process reported by the fake backchannel must already be gone so that
-        // MonitorProcessesForTerminationAsync observes termination immediately and StopRunningInstanceAsync
-        // reaches the socket-cleanup branch.
-        var exitedProcessId = StartAndWaitForProcessToExit();
+        // The AppHost process reported by the fake backchannel must be one MonitorProcessesForTerminationAsync
+        // observes as already terminated so StopRunningInstanceAsync reaches the socket-cleanup branch. A fabricated,
+        // guaranteed-nonexistent PID makes Process.GetProcessById throw ArgumentException, which the monitor treats as
+        // "terminated". We deliberately do NOT start a real process and reuse its exited PID: the OS can recycle that
+        // exact PID for an unrelated live process before the monitor checks, which would make the monitor loop for the
+        // full timeout, return stopped == false, and flake the cleanup assertion.
+        const int exitedProcessId = int.MaxValue - 9;
 
         var socketDirectory = Directory.CreateTempSubdirectory("aspire-rim-");
         try
@@ -56,19 +58,6 @@ public class RunningInstanceManagerTests
         {
             socketDirectory.Delete(recursive: true);
         }
-    }
-
-    private static int StartAndWaitForProcessToExit()
-    {
-        var startInfo = OperatingSystem.IsWindows()
-            ? new ProcessStartInfo("cmd.exe", "/c exit")
-            : new ProcessStartInfo("/bin/sh", "-c \"exit 0\"");
-        startInfo.CreateNoWindow = true;
-        startInfo.UseShellExecute = false;
-
-        using var process = Process.Start(startInfo)!;
-        process.WaitForExit();
-        return process.Id;
     }
 
     private sealed class TestAuxiliaryBackchannelUdsServer : IDisposable
