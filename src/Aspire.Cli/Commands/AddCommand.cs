@@ -154,11 +154,12 @@ internal sealed class AddCommand : BaseCommand
             }
 
             // For non-C# (polyglot) AppHosts, only integrations with ATS export coverage are usable: a
-            // TypeScript/Python/Go/Java/Rust AppHost gets a generated SDK only for integrations marked
-            // <IsAspirePolyglotCompatible>, surfaced via the `polyglot` NuGet tag. Decide up front whether to
-            // hide the rest so the polyglot allow-list is resolved in the same discovery pass as the
-            // integration search rather than a second serial round. C# AppHosts consume the C# API directly
-            // and are never filtered; --all opts out of filtering entirely.
+            // TypeScript/Python/Go/Java/Rust AppHost gets a generated SDK only for packages carrying the
+            // `polyglot` NuGet tag. The tag is added by default to Aspire.Hosting integrations that run the
+            // export analyzer; authors opt out with <IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible>.
+            // Decide up front whether to hide the rest so the polyglot allow-list is resolved in the same
+            // discovery pass as the integration search rather than a second serial round. C# AppHosts consume
+            // the C# API directly and are never filtered; --all opts out of filtering entirely.
             var applyPolyglotFilter = project.LanguageId != KnownLanguageId.CSharp && !includeAllIntegrations;
 
             List<(NuGetPackage Package, PackageChannel Channel)> packagesWithChannels;
