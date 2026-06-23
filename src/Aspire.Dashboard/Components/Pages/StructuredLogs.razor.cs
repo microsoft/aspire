@@ -333,7 +333,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         }
     }
 
-    private async Task ClearSelectedLogEntryAsync(bool causedByUserAction = false)
+    private Task ClearSelectedLogEntryAsync(bool causedByUserAction = false)
     {
         PageViewModel.SelectedLogEntry = null;
 
@@ -343,6 +343,8 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         }
 
         _elementIdBeforeDetailsViewOpened = null;
+
+        return Task.CompletedTask;
     }
 
     private async Task ExplainErrorsAsync()

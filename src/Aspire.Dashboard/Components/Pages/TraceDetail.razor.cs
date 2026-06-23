@@ -442,7 +442,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         }
     }
 
-    private async Task ClearSelectedSpanAsync(bool causedByUserAction = false)
+    private Task ClearSelectedSpanAsync(bool causedByUserAction = false)
     {
         PageViewModel.SelectedData = null;
 
@@ -452,6 +452,8 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         }
 
         _elementIdBeforeDetailsViewOpened = null;
+
+        return Task.CompletedTask;
     }
 
     private bool HasCollapsedSpans()
