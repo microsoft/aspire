@@ -1,4 +1,5 @@
 import type * as vscode from 'vscode';
+import type { EnvVar, ExecutableLaunchConfiguration } from '../dcp/types';
 import type { ViewMode } from '../views/AppHostDataRepository';
 import type { CommandInvocationEvent } from '../utils/telemetry';
 import type { AspireTerminalCommandEvent } from '../utils/AspireTerminalProvider';
@@ -152,12 +153,14 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'stopAppHost'; appHostPath?: string }
     | { name: 'openDashboard'; appHostPath?: string }
     | { name: 'debugAppHost'; appHostPath?: string }
+    | { name: 'publishAppHost'; appHostPath?: string }
     | { name: 'openAppHostSource'; appHostPath?: string }
     | { name: 'viewAppHostSource'; appHostPath?: string }
     | { name: 'copyAppHostPath'; appHostPath?: string }
     | { name: 'viewAppHostLogFile'; appHostPath?: string }
     | { name: 'copyLogFilePath'; appHostPath?: string }
     | { name: 'viewResourceLogs'; appHostPath?: string; resourceName: string }
+    | { name: 'openResourceTerminal'; appHostPath?: string; resourceName: string }
     | { name: 'copyResourceName'; appHostPath?: string; resourceName: string }
     | { name: 'copyEndpointUrl'; appHostPath?: string; resourceName?: string; url?: string }
     | { name: 'openInIntegratedBrowser'; appHostPath?: string; resourceName?: string; url?: string }
@@ -179,4 +182,7 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'readClipboard' }
     | { name: 'openWorkspaceFolder'; folderPath: string }
     | { name: 'getWorkspaceFolders' }
-    | { name: 'getActiveEditor' };
+    | { name: 'getActiveEditor' }
+    | { name: 'getResourceDebuggerExtensions' }
+    | { name: 'createResourceDebugConfiguration'; launchConfig: ExecutableLaunchConfiguration; args?: readonly string[]; env?: readonly EnvVar[]; debug?: boolean }
+    | { name: 'proveMauiResourceDebugging'; appHostPath: string; resourceName: string; sourcePath: string; breakpointLine: number; timeoutMs?: number; pauseOnBreakpointMs?: number };

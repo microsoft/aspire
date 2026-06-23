@@ -89,12 +89,15 @@ public sealed class SelectTestsLayer1IntegrationTests
                     BeforeBuildProps: propsPath));
 
                 Assert.Equal(0, exit);
-                // Summary carries the full chain; the terse PR comment names just the seed file.
+                // Summary carries the full chain; the terse PR comment groups the graph fan-out under
+                // the seed file heading instead of repeating the path per project.
                 var summary = File.ReadAllText(System.IO.Path.Combine(fixture.Path, "summary"));
                 Assert.Contains("src/Core/Core.cs → Core → Core.Tests", summary);
 
                 var comment = File.ReadAllText(commentPath);
-                Assert.Contains("via graph from `src/Core/Core.cs`", comment);
+                Assert.Contains("`src/Core/Core.cs`", comment);
+                Assert.Contains("via the project graph", comment);
+                Assert.Contains("`Core.Tests`", comment);
 
                 // The JSON artifact preserves the decision path as a structured array.
                 using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(jsonPath));
@@ -104,6 +107,62 @@ public sealed class SelectTestsLayer1IntegrationTests
                 Assert.Equal("Layer1Graph", cause.GetProperty("kind").GetString());
                 var path = cause.GetProperty("path").EnumerateArray().Select(e => e.GetString()).ToArray();
                 Assert.Equal(new[] { "src/Core/Core.cs", "Core", "Core.Tests" }, path);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", previousComment);
+                Environment.SetEnvironmentVariable("SELECT_TESTS_JSON_FILE", previousJson);
+            }
+        });
+    }
+
+    // Failure mode: the "(N hops)" annotation in the PR comment (MemberWithHops, path.Count - 2) is
+    // dropped or its math regresses, so a reviewer loses the near-vs-far dependency signal for
+    // graph-selected tests. With Core.Tests -> Mid -> Core, a change to src/Core/Core.cs reaches
+    // Core.Tests through two project edges, which must render as "(2 hops)".
+    [Fact]
+    public void MultiHopGraphSelectionAnnotatesHopCountInComment()
+    {
+        using var fixture = new GraphRepoFixture(withIntermediateProject: true);
+
+        var changed = fixture.WriteChangedFiles("src/Core/Core.cs");
+        var propsPath = System.IO.Path.Combine(fixture.Path, "BeforeBuildProps.props");
+
+        fixture.WithGitHubEnvRedirected(_ =>
+        {
+            var commentPath = System.IO.Path.Combine(fixture.Path, "comment.md");
+            var jsonPath = System.IO.Path.Combine(fixture.Path, "selection.json");
+            var previousComment = Environment.GetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE");
+            var previousJson = Environment.GetEnvironmentVariable("SELECT_TESTS_JSON_FILE");
+            Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", commentPath);
+            Environment.SetEnvironmentVariable("SELECT_TESTS_JSON_FILE", jsonPath);
+            try
+            {
+                var exit = Selection.Run(new RunOptions(
+                    RepoRoot: fixture.Path,
+                    MapPath: System.IO.Path.Combine(fixture.Path, "map.yml"),
+                    SlnxPath: System.IO.Path.Combine(fixture.Path, "Aspire.slnx"),
+                    From: null,
+                    To: null,
+                    ChangedFilesPath: changed,
+                    SkipLayer1: false,
+                    ForceAll: false,
+                    Enforce: true,
+                    BeforeBuildProps: propsPath));
+
+                Assert.Equal(0, exit);
+
+                // The structured path confirms the two-edge chain before we assert on the rendered text.
+                using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(jsonPath));
+                var cause = doc.RootElement.GetProperty("testProjects").EnumerateArray()
+                    .Single(t => t.GetProperty("name").GetString() == "Core.Tests")
+                    .GetProperty("causes").EnumerateArray().Single();
+                var path = cause.GetProperty("path").EnumerateArray().Select(e => e.GetString()).ToArray();
+                Assert.Equal(new[] { "src/Core/Core.cs", "Core", "Mid", "Core.Tests" }, path);
+
+                var comment = File.ReadAllText(commentPath);
+                Assert.Contains("via the project graph", comment);
+                Assert.Contains("`Core.Tests` (2 hops)", comment);
             }
             finally
             {
@@ -124,7 +183,7 @@ public sealed class SelectTestsLayer1IntegrationTests
 
         public string Path => _temp.Path;
 
-        public GraphRepoFixture()
+        public GraphRepoFixture(bool withIntermediateProject = false)
         {
             Write("Directory.Build.props", "<Project />");
             Write("Directory.Build.targets", "<Project />");
@@ -132,6 +191,30 @@ public sealed class SelectTestsLayer1IntegrationTests
 
             Write("src/Core/Core.cs", "namespace Core; public class C { }");
             WriteProject("src/Core/Core.csproj", compiles: ["Core.cs"], references: []);
+
+            if (withIntermediateProject)
+            {
+                // A two-edge chain: Core.Tests -> Mid -> Core. A change to src/Core/Core.cs reaches
+                // Core.Tests through two project edges, so its Layer 1 path is
+                // [src/Core/Core.cs, Core, Mid, Core.Tests] (hops == 2) -- exactly what makes the PR
+                // comment render the "(N hops)" annotation. Only Core.Tests (under tests/) is in the
+                // test matrix; Mid is a production project that just lengthens the dependency path.
+                Write("src/Mid/Mid.cs", "namespace Mid; public class M { }");
+                WriteProject("src/Mid/Mid.csproj", compiles: ["Mid.cs"], references: [@"..\..\src\Core\Core.csproj"]);
+
+                Write("tests/Core.Tests/Core.Tests.cs", "namespace Core.Tests; public class T { }");
+                WriteProject("tests/Core.Tests/Core.Tests.csproj", compiles: ["Core.Tests.cs"], references: [@"..\..\src\Mid\Mid.csproj"]);
+
+                Write("Aspire.slnx",
+                    """
+                    <Solution>
+                      <Project Path="src/Core/Core.csproj" />
+                      <Project Path="src/Mid/Mid.csproj" />
+                      <Project Path="tests/Core.Tests/Core.Tests.csproj" />
+                    </Solution>
+                    """);
+                return;
+            }
 
             Write("tests/Core.Tests/Core.Tests.cs", "namespace Core.Tests; public class T { }");
             WriteProject("tests/Core.Tests/Core.Tests.csproj", compiles: ["Core.Tests.cs"], references: [@"..\..\src\Core\Core.csproj"]);

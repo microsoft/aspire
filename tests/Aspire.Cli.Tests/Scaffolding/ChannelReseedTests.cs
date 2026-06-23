@@ -4,9 +4,11 @@
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Scaffolding;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Diagnostics;
 
@@ -89,7 +91,8 @@ public class ChannelReseedTests(ITestOutputHelper outputHelper)
             languageDiscovery: new TestLanguageDiscovery(language),
             interactionService: new TestInteractionService(),
             logger: NullLogger<ScaffoldingService>.Instance,
-            executionContext: workspace.CreateExecutionContext());
+            executionContext: workspace.CreateExecutionContext(),
+            profilingTelemetry: new ProfilingTelemetry(new ConfigurationBuilder().Build()));
 
         var context = new ScaffoldContext(
             Language: language,
@@ -120,7 +123,8 @@ public class ChannelReseedTests(ITestOutputHelper outputHelper)
             languageDiscovery: new TestLanguageDiscovery(s_testLanguage),
             interactionService: new TestInteractionService(),
             logger: NullLogger<ScaffoldingService>.Instance,
-            executionContext: workspace.CreateExecutionContext());
+            executionContext: workspace.CreateExecutionContext(),
+            profilingTelemetry: new ProfilingTelemetry(new ConfigurationBuilder().Build()));
     }
 
     private sealed class CapturingAppHostServerProject(string appDirectoryPath) : IAppHostServerProject

@@ -272,4 +272,8 @@
     <value>Could not capture `aspire doctor` output ({0}).</value>
     <comment>{0} is the failure reason.</comment>
   </data>
+  <data name="UnrecognizedOptionDidYouMeanFormat" xml:space="preserve">
+    <value>Unrecognized option '{0}'. Did you mean '{1}'?</value>
+    <comment>{0} is the unrecognized option, {1} is the suggested correct option.</comment>
+  </data>
 </root>

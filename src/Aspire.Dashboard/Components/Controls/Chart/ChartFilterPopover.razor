@@ -1,0 +1,37 @@
+@namespace Aspire.Dashboard.Components
+
+@using Aspire.Dashboard.Components.Controls.Grid
+@using Aspire.Dashboard.Resources
+@inject IStringLocalizer<ControlsStrings> Loc
+
+@{
+    var id = $"typeFilterButton-{Filter.SanitizedHtmlId}-{Guid.NewGuid()}";
+}
+<FluentButton id="@id"
+              IconEnd="@(new Icons.Regular.Size20.Filter())"
+              Appearance="@(Filter.AreAllValuesSelected is true ? Appearance.Stealth : Appearance.Accent)"
+              @onclick="() => Filter.PopupVisible = !Filter.PopupVisible"
+              aria-label="@(Filter.AreAllValuesSelected is true ? Loc[nameof(ControlsStrings.ChartContainerAllTags)] : Loc[nameof(ControlsStrings.ChartContainerFilteredTags)])" />
+@* Each item is approximately 36px tall, plus 48px for the header and container padding. Include the always-rendered "All" checkbox row. The popover body has a CSS max-height of 300px. *@
+<FluentPopover AnchorId="@id" @bind-Open="Filter.PopupVisible" VerticalThreshold="@(Math.Min((Filter.Values.Count + 1) * 36 + 48, 300))" AutoFocus="false">
+    <Header>@Filter.Name</Header>
+    <Body>
+        <FluentStack Orientation="Orientation.Vertical" Class="dimension-popup">
+            <FluentCheckbox Label="@Loc[nameof(ControlsStrings.LabelAll)]"
+                            ThreeState="true"
+                            ShowIndeterminate="false"
+                            ThreeStateOrderUncheckToIntermediate="true"
+                            @bind-CheckState:get="Filter.AreAllValuesSelected"
+                            @bind-CheckState:set="@(v => OnAllValuesSelectionChangedAsync(v))"/>
+            @foreach (var tag in ChartFilterTags.GetOrderedValues(Filter.Values))
+            {
+                var isChecked = Filter.SelectedValues.Contains(tag);
+                <FluentCheckbox Label="@tag.Text"
+                                title="@tag.Text"
+                                @key=tag
+                                @bind-Value:get="isChecked"
+                                @bind-Value:set="c => OnTagSelectionChangedAsync(tag, c)"/>
+            }
+        </FluentStack>
+    </Body>
+</FluentPopover>

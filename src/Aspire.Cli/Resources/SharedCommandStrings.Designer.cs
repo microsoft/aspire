@@ -347,5 +347,11 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("FeedbackDoctorCaptureFailed", resourceCulture);
             }
         }
+
+        internal static string UnrecognizedOptionDidYouMeanFormat {
+            get {
+                return ResourceManager.GetString("UnrecognizedOptionDidYouMeanFormat", resourceCulture);
+            }
+        }
     }
 }

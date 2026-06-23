@@ -1024,6 +1024,8 @@ export interface HttpsCertificateExecutionConfigurationContext {
     certificatePath?: ReferenceExpression;
     /** Expression that will resolve to the path of the server authentication certificate key in PEM format. For containers this will be a path inside the container. */
     keyPath?: ReferenceExpression;
+    /** Expression that will resolve to the path of the server authentication certificate and key in a combined PEM file. For containers this will be a path inside the container. */
+    certificateWithKeyPath?: ReferenceExpression;
     /** Expression that will resolve to the path of the server authentication certificate in PFX format. For containers this will be a path inside the container. */
     pfxPath?: ReferenceExpression;
 }
@@ -1040,6 +1042,8 @@ export interface HttpsCertificateExecutionConfigurationExportData {
     pfxPathExpression?: string;
     /** Indicates whether the key path was referenced. */
     isKeyPathReferenced?: boolean;
+    /** Indicates whether the key path was referenced. */
+    isCertificateWithKeyPathReferenced?: boolean;
     /** Indicates whether the PFX path was referenced. */
     isPfxPathReferenced?: boolean;
     /** The certificate password, if any. */
@@ -5981,6 +5985,8 @@ export interface HttpsCertificateConfigurationCallbackAnnotationContext {
     certificatePath(): Promise<ReferenceExpression>;
     /** A value provider that will resolve to a path to the private key for the certificate. */
     keyPath(): Promise<ReferenceExpression>;
+    /** A value provider that will resolve to a path to the certificate and key concatenated together in PEM format. */
+    certificateWithKeyPath(): Promise<ReferenceExpression>;
     /** A value provider that will resolve to a path to a PFX file for the key pair. */
     pfxPath(): Promise<ReferenceExpression>;
     /** Gets the `CancellationToken` that can be used to cancel the operation. */
@@ -6000,6 +6006,8 @@ export interface HttpsCertificateConfigurationCallbackAnnotationContextPromise e
     certificatePath(): Promise<ReferenceExpression>;
     /** A value provider that will resolve to a path to the private key for the certificate. */
     keyPath(): Promise<ReferenceExpression>;
+    /** A value provider that will resolve to a path to the certificate and key concatenated together in PEM format. */
+    certificateWithKeyPath(): Promise<ReferenceExpression>;
     /** A value provider that will resolve to a path to a PFX file for the key pair. */
     pfxPath(): Promise<ReferenceExpression>;
     /** Gets the `CancellationToken` that can be used to cancel the operation. */
@@ -6053,6 +6061,13 @@ class HttpsCertificateConfigurationCallbackAnnotationContextImpl implements Http
     async keyPath(): Promise<ReferenceExpression> {
         return await this._client.invokeCapability<ReferenceExpression>(
             'Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.keyPath',
+            { context: this._handle }
+        );
+    }
+
+    async certificateWithKeyPath(): Promise<ReferenceExpression> {
+        return await this._client.invokeCapability<ReferenceExpression>(
+            'Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.certificateWithKeyPath',
             { context: this._handle }
         );
     }
@@ -6125,6 +6140,10 @@ class HttpsCertificateConfigurationCallbackAnnotationContextPromiseImpl implemen
 
     keyPath(): Promise<ReferenceExpression> {
         return this._promise.then(obj => obj.keyPath());
+    }
+
+    certificateWithKeyPath(): Promise<ReferenceExpression> {
+        return this._promise.then(obj => obj.certificateWithKeyPath());
     }
 
     pfxPath(): Promise<ReferenceExpression> {

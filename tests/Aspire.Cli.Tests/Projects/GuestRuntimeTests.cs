@@ -27,8 +27,8 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         return new GuestRuntime(
             spec ?? CreateTestSpec(),
             _loggerFactory.CreateLogger<GuestRuntime>(),
-            commandResolver: commandResolver,
-            profilingTelemetry: profilingTelemetry);
+            commandResolver ?? PathLookupHelper.FindFullPathFromPath,
+            profilingTelemetry ?? new ProfilingTelemetry(new ConfigurationBuilder().Build()));
     }
 
     private static RuntimeSpec CreateTestSpec(
@@ -717,8 +717,8 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
             var launcher = new ProcessGuestLauncher(
                 "test",
                 _loggerFactory.CreateLogger<ProcessGuestLauncher>(),
-                fileLoggerProvider,
-                commandResolver: cmd => cmd == "dotnet" ? "dotnet" : null);
+                commandResolver: cmd => cmd == "dotnet" ? "dotnet" : null,
+                fileLoggerProvider: fileLoggerProvider);
 
             var (exitCode, output) = await launcher.LaunchAsync(
                 "dotnet",
@@ -818,7 +818,8 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         // appears to hang while it waits for the AppHost system to exit.
         var launcher = new ProcessGuestLauncher(
             "test",
-            _loggerFactory.CreateLogger<ProcessGuestLauncher>());
+            _loggerFactory.CreateLogger<ProcessGuestLauncher>(),
+            PathLookupHelper.FindFullPathFromPath);
 
         // Use a long-running cross-platform command. We pick something the OS resolves through PATH
         // so the launcher's CommandPathResolver succeeds without any fake.

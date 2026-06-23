@@ -12,6 +12,7 @@ using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Agents.CopilotCli;
 using Aspire.Cli.Agents.OpenCode;
+using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Agents.VsCode;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Bundles;
@@ -28,6 +29,7 @@ using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Mcp;
+using Aspire.Cli.Npm;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Processes;
@@ -344,12 +346,23 @@ public class Program
         builder.Services.AddSingleton(sp => new TelemetryManager(sp.GetRequiredService<IConfiguration>(), args));
 
         // Shared services.
+        builder.Services.AddSingleton<IProcessPathProvider, EnvironmentProcessPathProvider>();
         // Two identity readers coexist by design. `IdentityChannelReader` is constructed early in
         // CliStartupContext so the channel can be logged at startup before DI is fully wired, and it
         // continues to power that early startup log. `IIdentityResolver` is the richer reader that
         // also resolves sidecar/env overrides for version, commit, and the NuGet service index; it
-        // powers `CliExecutionContext` construction.
+        // powers `CliExecutionContext` identity population.
         builder.Services.AddSingleton<IIdentityChannelReader>(startupContext.IdentityChannelReader);
+        builder.Services.AddSingleton<IEnvironment, HostEnvironment>();
+        if (OperatingSystem.IsWindows())
+        {
+            builder.Services.AddSingleton<IWindowsRegistryReader, WindowsRegistryReader>();
+        }
+        else
+        {
+            builder.Services.AddSingleton<IWindowsRegistryReader, NullWindowsRegistryReader>();
+        }
+        builder.Services.AddSingleton<WingetFirstRunProbe>();
         builder.Services.AddSingleton<IIdentityResolver>(sp =>
         {
             // Binary dir is the directory containing the running executable.
@@ -357,7 +370,7 @@ public class Program
             // sidecar path relative to it (<binaryDir>/.aspire-install.json).
             //
             // This is the right anchor for every shipping install route because
-            // Environment.ProcessPath resolves to the actual native CLI binary
+            // IProcessPathProvider resolves to the actual native CLI binary
             // that is running, and each route either co-locates its sidecar next
             // to that binary or intentionally ships none (see
             // docs/specs/install-routes.md):
@@ -373,23 +386,16 @@ public class Program
             //   - managed-host launch (dotnet aspire.dll in tests/dev) or a null
             //     ProcessPath: the resolver simply skips the sidecar layer and the
             //     env → assembly → terminal default fallbacks still apply.
-            var binaryDir = Environment.ProcessPath is { Length: > 0 } p
+            var processPathProvider = sp.GetRequiredService<IProcessPathProvider>();
+            var binaryDir = processPathProvider.ProcessPath is { Length: > 0 } p
                 ? Path.GetDirectoryName(p)
                 : null;
             return new IdentityResolver(
                 sp.GetRequiredService<IInstallSidecarReader>(),
                 typeof(Program).Assembly,
-                binaryDir);
+                binaryDir,
+                sp.GetRequiredService<IEnvironment>());
         });
-        if (OperatingSystem.IsWindows())
-        {
-            builder.Services.AddSingleton<IWindowsRegistryReader, WindowsRegistryReader>();
-        }
-        else
-        {
-            builder.Services.AddSingleton<IWindowsRegistryReader, NullWindowsRegistryReader>();
-        }
-        builder.Services.AddSingleton<WingetFirstRunProbe>();
         builder.Services.AddSingleton(sp =>
         {
             // Use the resolver overload so env/sidecar overrides apply to
@@ -512,13 +518,13 @@ public class Program
         builder.Services.AddSingleton<ICopilotCliRunner, CopilotCliRunner>();
 
         // Npm and Playwright CLI operations.
-        builder.Services.AddSingleton<Aspire.Cli.Npm.INpmRunner, Aspire.Cli.Npm.NpmRunner>();
-        builder.Services.AddHttpClient<Aspire.Cli.Npm.INpmProvenanceChecker, Aspire.Cli.Npm.SigstoreNpmProvenanceChecker>();
+        builder.Services.AddSingleton<INpmRunner, NpmRunner>();
+        builder.Services.AddHttpClient<INpmProvenanceChecker, SigstoreNpmProvenanceChecker>();
         builder.Services.AddHttpClient<IGitHubArtifactAttestationVerifier, GitHubArtifactAttestationVerifier>();
         builder.Services.AddSingleton<IEmbeddedAspireSkillsBundleProvider, EmbeddedAspireSkillsBundleProvider>();
         builder.Services.AddSingleton<IAspireSkillsInstaller, AspireSkillsInstaller>();
-        builder.Services.AddSingleton<Aspire.Cli.Agents.Playwright.IPlaywrightCliRunner, Aspire.Cli.Agents.Playwright.PlaywrightCliRunner>();
-        builder.Services.AddSingleton<Aspire.Cli.Agents.Playwright.PlaywrightCliInstaller>();
+        builder.Services.AddSingleton<IPlaywrightCliRunner, PlaywrightCliRunner>();
+        builder.Services.AddSingleton<PlaywrightCliInstaller>();
 
         // Agent environment detection.
         builder.Services.AddSingleton<IAgentEnvironmentDetector, AgentEnvironmentDetector>();
@@ -659,17 +665,6 @@ public class Program
         var homeDirectory = GetUsersAspirePath(processPath);
         var sdksPath = Path.Combine(homeDirectory, "sdks");
         return new DirectoryInfo(sdksPath);
-    }
-
-    internal static CliExecutionContext BuildCliExecutionContext(bool debugMode, string logsDirectory, string logFilePath, string channel, string? processPath = null)
-    {
-        var workingDirectory = new DirectoryInfo(Environment.CurrentDirectory);
-        var hivesDirectory = GetHivesDirectory(processPath);
-        var cacheDirectory = GetCacheDirectory(processPath);
-        var sdksDirectory = GetSdksDirectory(processPath);
-        var packagesDirectory = GetPackagesDirectory(processPath);
-        var aspireHomeDirectory = new DirectoryInfo(GetUsersAspirePath(processPath));
-        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, new DirectoryInfo(logsDirectory), logFilePath, identityChannel: channel, debugMode: debugMode, packagesDirectory: packagesDirectory, aspireHomeDirectory: aspireHomeDirectory);
     }
 
     internal static CliExecutionContext BuildCliExecutionContext(bool debugMode, string logsDirectory, string logFilePath, IIdentityResolver identityResolver, string? processPath = null)
@@ -1136,9 +1131,10 @@ public class Program
                 consoleEnvironment.Out.Profile.Width = 256; // VS code terminal will handle wrapping so set a large width here.
                 var executionContext = provider.GetRequiredService<CliExecutionContext>();
                 var hostEnvironment = provider.GetRequiredService<ICliHostEnvironment>();
+                var processPathProvider = provider.GetRequiredService<IProcessPathProvider>();
                 var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
                 var logBufferCtx = provider.GetRequiredService<ConsoleLogBufferContext>();
-                var consoleInteractionService = new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment, loggerFactory, logBufferCtx);
+                var consoleInteractionService = new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment, processPathProvider, loggerFactory, logBufferCtx);
                 return new ExtensionInteractionService(consoleInteractionService,
                     provider.GetRequiredService<IExtensionBackchannel>(),
                     extensionPromptEnabled,
@@ -1152,9 +1148,10 @@ public class Program
                 var consoleEnvironment = provider.GetRequiredService<ConsoleEnvironment>();
                 var executionContext = provider.GetRequiredService<CliExecutionContext>();
                 var hostEnvironment = provider.GetRequiredService<ICliHostEnvironment>();
+                var processPathProvider = provider.GetRequiredService<IProcessPathProvider>();
                 var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
                 var logBufferCtx = provider.GetRequiredService<ConsoleLogBufferContext>();
-                return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment, loggerFactory, logBufferCtx);
+                return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment, processPathProvider, loggerFactory, logBufferCtx);
             });
         }
     }

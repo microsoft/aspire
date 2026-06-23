@@ -242,6 +242,11 @@
         <target state="new">Select an AppHost to {0}:</target>
         <note />
       </trans-unit>
+      <trans-unit id="UnrecognizedOptionDidYouMeanFormat">
+        <source>Unrecognized option '{0}'. Did you mean '{1}'?</source>
+        <target state="new">Unrecognized option '{0}'. Did you mean '{1}'?</target>
+        <note>{0} is the unrecognized option, {1} is the suggested correct option.</note>
+      </trans-unit>
       <trans-unit id="UsingAppHost">
         <source>Using AppHost: {0}</source>
         <target state="new">Using AppHost: {0}</target>
