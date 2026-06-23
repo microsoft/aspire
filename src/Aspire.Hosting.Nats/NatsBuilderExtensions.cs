@@ -190,4 +190,49 @@ public static class NatsBuilderExtensions
         return builder.WithBindMount(source, "/var/lib/nats", isReadOnly)
             .WithArgs("-sd", "/var/lib/nats");
     }
+
+    /// <summary>
+    /// Adds cluster configurations to a NATS container resource.
+    /// </summary>
+    [AspireExport]
+    public static IResourceBuilder<NatsServerResource> WithCluster(
+        this IResourceBuilder<NatsServerResource> builder,
+        string? clusterName = null,
+        int? clusterPort = null,
+        IReadOnlyList<EndpointReference>? routes = null
+    )
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder = builder
+            .WithEndpoint(
+                targetPort: NatsServerResource.ConventionalClusterPort,
+                port: clusterPort,
+                name: NatsServerResource.ClusterEndpointName
+            )
+            .WithArgs("--cluster", $"nats://localhost:{NatsServerResource.ConventionalClusterPort}");
+
+        if (clusterName is not (null or ""))
+        {
+            builder = builder.WithArgs("--cluster_name", clusterName); // NOTE: If unset, NATS will create one automatically.
+        }
+
+        if (routes is not (null or []))
+        {
+            var routesValueBuilder = new ReferenceExpressionBuilder();
+            for (var i = 0; i < routes.Count; i++)
+            {
+                var route = routes[i];
+                routesValueBuilder.Append($"{NatsServerResource.PrimaryNatsSchemeName}://{route.Property(EndpointProperty.HostAndPort)}");
+                if (i < routes.Count - 1)
+                {
+                    routesValueBuilder.AppendLiteral(",");
+                }
+            }
+
+            builder = builder.WithArgs("--routes", routesValueBuilder.Build());
+        }
+
+        return builder;
+    }
 }
