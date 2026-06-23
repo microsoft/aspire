@@ -177,7 +177,7 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
         await diskCache.SetAsync(projectFile, expectedCacheKey, new AppHostInfoCacheEntry
         {
             ExitCode = info.ExitCode,
-            IsAspireHost = info.IsAspireHost ?? throw new ArgumentException("IsAspireHost is null", nameof(projectFile)),
+            IsAspireHost = info.IsAspireHost ?? throw new InvalidOperationException("Evaluated AppHost info unexpectedly had a null IsAspireHost value."),
             AspireHostingVersion = info.AspireHostingVersion,
             IsUsingCliBundle = info.IsUsingCliBundle,
             UserSecretsId = info.UserSecretsId,
