@@ -2956,15 +2956,10 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
     private static void AssertNixUpdateGuidance(TestInteractionService interactionService, bool expectProjectUpdateSkippedMessage)
     {
-        string[] expectedPlainText =
-        [
-            "  nix profile upgrade aspire-cli",
-            "  nix flake update <input-name>"
-        ];
-
-        Assert.Equal(
-            expectedPlainText,
-            interactionService.DisplayedPlainText);
+        Assert.Collection(
+            interactionService.DisplayedPlainText,
+            text => Assert.Equal("  nix profile upgrade aspire-cli", text),
+            text => Assert.Equal("  nix flake update <input-name>", text));
 
         string[] expectedMessages = expectProjectUpdateSkippedMessage
             ? [
