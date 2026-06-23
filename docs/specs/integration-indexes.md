@@ -718,7 +718,7 @@ The JSON shape in `docs/specs/cli-output-formats.md` currently has:
   {
     "name": "Redis",
     "package": "Aspire.Hosting.Redis",
-    "version": "13.0.0"
+    "version": "13.4.0"
   }
 ]
 ```
@@ -912,34 +912,81 @@ Examples of provider-owned policy:
 
 Putting provider-specific policy entirely in the index would make indexes too powerful and too hard to trust. Putting all policy in providers would make indexes little more than search aliases. The split above keeps indexes data-only while still making curation meaningful.
 
+## Incremental delivery strategy
+
+The riskiest implementation would replace discovery, naming, version resolution, command output, MCP behavior, and external index acquisition in one change. This should be treated as a compatibility migration, not a rewrite.
+
+Delivery rules:
+
+1. Change one axis at a time: model, data, resolver, output, external acquisition, then new providers.
+2. Keep NuGet provider resolution on `PackagingService` and `PackageChannel` until index-based discovery has proven equivalence.
+3. Preserve old package-derived names as accepted aliases before introducing curated names as the primary display value.
+4. Make every phase independently shippable with a rollback path to the previous resolver.
+5. Prefer additive output fields before changing existing fields.
+6. Require equivalence tests for current list/search/add behavior before new UX is enabled.
+
+The first implementation should run the new model in **shadow mode** before it becomes authoritative:
+
+```text
+legacy NuGet resolver -> current command behavior
+index resolver        -> parallel candidate set used by tests/diagnostics
+comparison            -> reports mismatches in package ID, version, alias, provider, and availability
+```
+
+Shadow mode should not silently fall back in production command paths. Its purpose is to make mismatches visible in tests and optional diagnostics before the command path changes. Once the candidate sets match for the existing official/community NuGet surface, the command adapter can switch to the index resolver while preserving the old public method shapes.
+
 ## Migration plan
 
 Each phase should have an explicit decision gate. If a gate fails, the next phase should not expand the concept surface area.
 
-### Phase 1: Internal model and built-in indexes
+### Phase 0: Baseline current behavior
 
-- Add internal `IntegrationEntry`, `IntegrationProviderReference`, and `IntegrationIndex` abstractions.
-- Add built-in Aspire and Community Toolkit indexes.
-- Author initial index entries from existing prefix-discovered package set.
+- Add focused tests that capture today's `aspire add`, `aspire integration list`, `aspire integration search`, and MCP integration listing behavior.
+- Include stable/daily/staging, PR/local hives, `ASPIRE_CLI_PACKAGES`, exact package ID fallback, friendly-name derivation, and non-interactive fuzzy failure behavior.
+- Capture compatibility expectations for the current JSON shape and current human-readable output.
+
+**Gate:** tests describe the current behavior closely enough that a resolver replacement cannot change names, packages, versions, availability, or non-interactive behavior without a deliberate test update.
+
+### Phase 1: Data model and generated built-in indexes
+
+- Add `IntegrationEntry`, `IntegrationProviderReference`, and `IntegrationIndex` data abstractions.
+- Add JSON schema validation and deterministic generation for built-in Aspire and Community Toolkit index artifacts.
+- Author initial index entries from the existing prefix-discovered package set.
 - Preserve existing user-facing names by generating aliases from both current friendly-name schemes: `IntegrationPackageSearchService.GenerateFriendlyName` and `ListIntegrationsTool.GetFriendlyName`.
+- Do not change command behavior.
+
+**Gate:** generated built-in index artifacts cover the same current official/community package set, and index CI catches duplicate IDs, alias conflicts, invalid provider coordinates, and nondeterministic generation.
+
+### Phase 2: Shadow resolver
+
+- Add `IntegrationResolver`, `IIntegrationIndexSource`, and NuGet-only `IIntegrationProvider` abstractions.
+- Load built-in indexes and convert existing `PackageChannel` instances into `IntegrationIndexVariant` values.
+- Run resolver comparison tests against the legacy NuGet search pipeline.
+- Keep command paths using the legacy resolver.
+
+**Gate:** shadow resolver results match legacy resolver results for current supported scenarios, including package ID, selected version, aliases, availability, and AppHost language support.
+
+### Phase 3: Compatibility adapter switch
+
 - Support only NuGet providers.
 - Keep existing NuGet index-variant/version/install behavior.
-- Update `IntegrationPackageSearchService` to return integration candidates instead of raw packages.
+- Update `IntegrationPackageSearchService` to delegate to `IntegrationResolver` while keeping its existing public method shapes where possible.
 - Keep exact package ID matching as a fallback.
+- Keep current human-readable and JSON output fields stable.
 
 **Gate:** existing `aspire add`, `aspire integration list`, `aspire integration search`, and MCP integration listing produce equivalent results for current official/community NuGet packages, with only additive index/provenance metadata.
 
-### Phase 2: CLI UX and output
+### Phase 4: Additive CLI/MCP UX
 
 - Show index/provenance in human-readable output.
 - Add index-qualified names such as `aspire/redis`.
-- Update JSON output shape or introduce a new format version.
+- Add JSON output fields such as `qualifiedName`, `index`, `provenance`, and `provider` without removing existing fields.
 - Update MCP listing to use the shared integration service.
 - Add ambiguity prompts for same name across indexes.
 
 **Gate:** every old package-derived name remains an accepted alias, non-interactive ambiguity rules are tested, and JSON/MCP/VS Code consumers have a documented compatibility path.
 
-### Phase 3: External indexes
+### Phase 5: External indexes
 
 - Add `aspire integration index list/add/remove/update`.
 - Add generated artifact acquisition and cache.
@@ -948,7 +995,7 @@ Each phase should have an explicit decision gate. If a gate fails, the next phas
 
 **Gate:** remote index acquisition validates ID, schema, commit, and digest; project pins persist URL, commit, and digest for every non-built-in index used by a project.
 
-### Phase 4: Dynamic NuGet discovery
+### Phase 6: Dynamic NuGet discovery
 
 - Integrate #16882-style NuGet tag discovery as an optional `NuGetTagDiscoveryIndex`.
 - Keep third-party discovery opt-in.
@@ -956,7 +1003,7 @@ Each phase should have an explicit decision gate. If a gate fails, the next phas
 
 **Gate:** curated search remains the default, third-party discovery is visibly marked, and enterprise/non-interactive policy can disable it.
 
-### Phase 5: Additional providers
+### Phase 7: Additional providers
 
 - Add new built-in providers only after the index/trust model is stable.
 - Candidate provider types: `npm`, `container`, `template`, `module`.
