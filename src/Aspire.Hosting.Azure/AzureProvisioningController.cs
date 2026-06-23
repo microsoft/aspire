@@ -1462,6 +1462,11 @@ internal sealed class AzureProvisioningController(
         var shouldPromptForMissingAzureContext = false;
         ActiveAzureOperation? activeOperation = null;
         var operationCancellationToken = queuedOperation.CancellationToken;
+        object? result = null;
+        Exception? failure = null;
+        var canceled = false;
+        var canceledToken = CancellationToken.None;
+
         if (updatesCommandState)
         {
             // Publish command-state changes before running the operation so dashboard buttons
@@ -1477,12 +1482,12 @@ internal sealed class AzureProvisioningController(
                 await RefreshCommandStatesAsync(queuedOperation.Model, operationCancellationToken).ConfigureAwait(false);
             }
 
-            var result = await ExecuteIntentAsync(queuedOperation.Model, queuedOperation.Intent, operationCancellationToken).ConfigureAwait(false);
-            queuedOperation.Completion.TrySetResult(result);
+            result = await ExecuteIntentAsync(queuedOperation.Model, queuedOperation.Intent, operationCancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException ex) when (operationCancellationToken.IsCancellationRequested || ex.CancellationToken == operationCancellationToken || queuedOperation.CancellationToken.IsCancellationRequested)
         {
-            queuedOperation.Completion.TrySetCanceled(operationCancellationToken.IsCancellationRequested ? operationCancellationToken : ex.CancellationToken);
+            canceled = true;
+            canceledToken = operationCancellationToken.IsCancellationRequested ? operationCancellationToken : ex.CancellationToken;
         }
         catch (Exception ex)
         {
@@ -1491,28 +1496,54 @@ internal sealed class AzureProvisioningController(
                 shouldPromptForMissingAzureContext = true;
             }
 
-            queuedOperation.Completion.TrySetException(ex);
+            failure = ex;
         }
         finally
         {
-            if (updatesCommandState)
+            try
             {
-                CompleteOperation(queuedOperation.Intent, activeOperation);
-                // Use CancellationToken.None for the final refresh because command state must be
-                // re-enabled even if the operation request token was canceled after the work stopped.
-                await RefreshCommandStatesAsync(queuedOperation.Model, CancellationToken.None).ConfigureAwait(false);
+                if (updatesCommandState)
+                {
+                    CompleteOperation(queuedOperation.Intent, activeOperation);
+                    // Use CancellationToken.None for the final refresh because command state must be
+                    // re-enabled even if the operation request token was canceled after the work stopped.
+                    await RefreshCommandStatesAsync(queuedOperation.Model, CancellationToken.None).ConfigureAwait(false);
+                }
+                else
+                {
+                    // Drift detection is a background probe. It must serialize with commands, but it
+                    // should not make dashboard commands flicker disabled while it checks ARM state.
+                    CompleteDriftCheck();
+                }
+
+                if (shouldPromptForMissingAzureContext)
+                {
+                    EnsureAzureContextNotificationStarted(queuedOperation.Model);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                // Drift detection is a background probe. It must serialize with commands, but it
-                // should not make dashboard commands flicker disabled while it checks ARM state.
-                CompleteDriftCheck();
+                queuedOperation.Completion.TrySetException(ex);
+                throw;
             }
 
-            if (shouldPromptForMissingAzureContext)
-            {
-                EnsureAzureContextNotificationStarted(queuedOperation.Model);
-            }
+            CompleteQueuedOperation(queuedOperation, result, canceled, canceledToken, failure);
+        }
+    }
+
+    private static void CompleteQueuedOperation(QueuedOperation queuedOperation, object? result, bool canceled, CancellationToken canceledToken, Exception? failure)
+    {
+        if (failure is not null)
+        {
+            queuedOperation.Completion.TrySetException(failure);
+        }
+        else if (canceled)
+        {
+            queuedOperation.Completion.TrySetCanceled(canceledToken);
+        }
+        else
+        {
+            queuedOperation.Completion.TrySetResult(result);
         }
     }
 
