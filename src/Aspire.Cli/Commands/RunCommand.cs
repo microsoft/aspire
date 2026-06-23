@@ -72,7 +72,6 @@ internal sealed class RunCommand : BaseCommand
     private readonly ICliHostEnvironment _hostEnvironment;
     private readonly ProfilingTelemetry _profilingTelemetry;
     private readonly TimeProvider _timeProvider;
-    private readonly ConsoleCancellationManager _cancellationManager;
     private bool _isDetachMode;
     private const int MaxDisplayedAppHostStartupOutputLines = 80;
 
@@ -94,6 +93,8 @@ internal sealed class RunCommand : BaseCommand
     private static readonly TimeSpan s_startupFailureObservationWindow = TimeSpan.FromSeconds(2);
 
     protected override bool UpdateNotificationsEnabled => !_isDetachMode;
+
+    protected override TimeSpan GracefulShutdownBudget => s_gracefulShutdownBudget;
 
     private static readonly Option<bool> s_detachOption = new("--detach")
     {
@@ -133,7 +134,6 @@ internal sealed class RunCommand : BaseCommand
         _hostEnvironment = hostEnvironment;
         _profilingTelemetry = profilingTelemetry;
         _timeProvider = timeProvider;
-        _cancellationManager = services.CancellationManager;
 
         Options.Add(s_detachOption);
         Options.Add(s_noBuildOption);
@@ -144,12 +144,6 @@ internal sealed class RunCommand : BaseCommand
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
-        // Give DCP a cooperative window to drain resources before the central drain budget
-        // arms and shutdown ladders escalate to forceful kill. Without this, GracefulShutdownToken
-        // fires immediately on the first user signal and isolation/AttachConsole buys nothing
-        // because every ladder sees the graceful window already expired.
-        _cancellationManager.ConfigureForCommand(s_gracefulShutdownBudget);
-
         var passedAppHostProjectFile = parseResult.GetValue(AppHostLauncher.s_appHostOption);
         var detach = parseResult.GetValue(s_detachOption);
         _isDetachMode = detach;
