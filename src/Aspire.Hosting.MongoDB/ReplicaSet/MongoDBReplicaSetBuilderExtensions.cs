@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
@@ -15,6 +16,8 @@ public static class MongoDBReplicaSetBuilderExtensions
     private const string ReplicaSetAlreadyInitializedCodeName = "AlreadyInitialized";
     private const string ReplicaSetNotYetInitializedCodeName = "NotYetInitialized";
     private const string NewReplicaSetConfigurationIsTooOldCodeName = "NewReplicaSetConfigurationIsTooOld";
+    private const int MaxRetriesAttempt = 10;
+    private static readonly TimeSpan s_rsInitiationRetryWaitInterval = TimeSpan.FromSeconds(2);
 
     /// <summary>
     /// Adds a MongoDB replica set resource to the application model.
@@ -64,6 +67,8 @@ public static class MongoDBReplicaSetBuilderExtensions
             })
             .OnInitializeResource(async (resource, evt, ct) =>
             {
+                var logger = evt.Services.GetRequiredService<ILogger<MongoDBReplicaSetResource>>();
+
                 connectionString = await rsResource.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
 
                 await evt.Eventing.PublishAsync(new ConnectionStringAvailableEvent(resource, evt.Services), ct)
@@ -82,7 +87,7 @@ public static class MongoDBReplicaSetBuilderExtensions
                 var initialPrimary = memberAnnotations.First().Member;
                 var connectionStringToPrimary = await initialPrimary.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
 
-                var primaryClient = new MongoClient(connectionStringToPrimary);
+                using var primaryClient = new MongoClient(connectionStringToPrimary);
 
                 var membersBsonArray = new BsonArray(
                     await Task.WhenAll(memberAnnotations.Select(async (m, i) => new BsonDocument
@@ -103,31 +108,13 @@ public static class MongoDBReplicaSetBuilderExtensions
                     })).ConfigureAwait(false)
                 );
 
+                var rsConfigAttempts = 0;
                 var admin = primaryClient.GetDatabase("admin");
                 while (true)
                 {
                     try
                     {
-                        var replicaSetInitiateCommand = new BsonDocument
-                        {
-                            ["replSetInitiate"] = new BsonDocument
-                            {
-                                ["_id"] = rsResource.Name,
-                                ["members"] = membersBsonArray,
-                            }
-                        };
-
-                        try
-                        {
-                            await admin.RunCommandAsync<BsonDocument>(replicaSetInitiateCommand, cancellationToken: ct).ConfigureAwait(false);
-                            break;
-                        }
-                        catch (MongoCommandException initiateEx) when (initiateEx.CodeName is ReplicaSetAlreadyInitializedCodeName)
-                        {
-                            // NOTE: Happens when in race with another concurrent process trying to initialize the replica set
-                            // NOTE: We retry the whole operation
-                        }
-
+                        logger.LogInformation("Retrieving MongoDB replica set information ({ResourceName}) from the primary", resource.Name);
                         var currentConfig = await admin.RunCommandAsync<BsonDocument>(
                             command: new BsonDocument
                             {
@@ -138,6 +125,7 @@ public static class MongoDBReplicaSetBuilderExtensions
 
                         var version = currentConfig["config"]["version"].AsInt32;
 
+                        logger.LogInformation("Re-configuring MongoDB replica set resource '{ResourceName}' — last version {Version}", resource.Name, version);
                         await admin.RunCommandAsync<BsonDocument>(
                             command: new BsonDocument
                             {
@@ -151,12 +139,15 @@ public static class MongoDBReplicaSetBuilderExtensions
                         ).ConfigureAwait(false);
                         break;
                     }
-                    catch (MongoCommandException ex) when (ex.CodeName is NewReplicaSetConfigurationIsTooOldCodeName)
+                    catch (MongoCommandException ex) when (ex.CodeName is NewReplicaSetConfigurationIsTooOldCodeName && rsConfigAttempts++ < MaxRetriesAttempt)
                     {
                         // NOTE: Happens when another concurrent process has already updated the replica set configuration with a higher version. We need to re-fetch the current configuration and retry with an updated version number.
+                        logger.LogInformation("Reconfiguring the replica set failed due to another concurrent process doing the same — retry attempt {Current}/{Max} to begin after {WaitIntervalSeconds} seconds", rsConfigAttempts, MaxRetriesAttempt, s_rsInitiationRetryWaitInterval.TotalSeconds);
+                        await Task.Delay(s_rsInitiationRetryWaitInterval, ct).ConfigureAwait(false);
                     }
                     catch (MongoCommandException ex) when (ex.CodeName is ReplicaSetNotYetInitializedCodeName)
                     {
+                        logger.LogInformation("Initializing MongoDB replica set resource '{ResourceName}'", resource.Name);
                         var replicaSetInitiateCommand = new BsonDocument
                         {
                             ["replSetInitiate"] = new BsonDocument
@@ -171,16 +162,14 @@ public static class MongoDBReplicaSetBuilderExtensions
                             await admin.RunCommandAsync<BsonDocument>(replicaSetInitiateCommand, cancellationToken: ct).ConfigureAwait(false);
                             break;
                         }
-                        catch (MongoCommandException initiateEx) when (initiateEx.CodeName is ReplicaSetAlreadyInitializedCodeName)
+                        catch (MongoCommandException initiateEx) when (initiateEx.CodeName is ReplicaSetAlreadyInitializedCodeName && rsConfigAttempts++ < MaxRetriesAttempt)
                         {
-                            // NOTE: Happens when in race with another concurrent process trying to initialize the replica set
-                            // NOTE: We retry the whole operation
+                            // NOTE: Happens when in race with another concurrent process trying to initialize the replica set; so we retry the whole operation
+                            logger.LogInformation("Initiating the replica set failed due to it already being initialized — retry attempt {Current}/{Max} to begin after {WaitIntervalSeconds} seconds", rsConfigAttempts, MaxRetriesAttempt, s_rsInitiationRetryWaitInterval.TotalSeconds);
+                            await Task.Delay(s_rsInitiationRetryWaitInterval, ct).ConfigureAwait(false);
                         }
                     }
                 }
-
-                var foo = new MongoClient(connectionString);
-                var v = await foo.GetDatabase("admin").RunCommandAsync<BsonDocument>(new BsonDocument { ["hello"] = 1 }, cancellationToken: ct).ConfigureAwait(false);
 
                 await evt.Notifications.PublishUpdateAsync(resource, s => s with
                 {
@@ -213,6 +202,9 @@ public static class MongoDBReplicaSetBuilderExtensions
         IResourceBuilder<MongoDBServerResource> member
     )
     {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(member);
+
         member
             .WithReplicaSet(builder.Resource.Name)
             .WithTls() // NOTE: TLS is actually necessary here, because the `horizons` feature used for initializing the replica set operates on top of SNI, which requires client-to-server TLS to be enabled.

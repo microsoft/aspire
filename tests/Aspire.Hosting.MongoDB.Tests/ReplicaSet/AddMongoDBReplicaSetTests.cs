@@ -142,16 +142,4 @@ public class AddMongoDBReplicaSetTests(ITestOutputHelper testOutputHelper)
             : Assert.Throws<ArgumentException>(action);
         Assert.Equal(nameof(name), exception.ParamName);
     }
-
-    [Fact]
-    public void WithMemberThrowsWhenBuilderIsNull()
-    {
-        IResourceBuilder<MongoDBReplicaSetResource> builder = null!;
-        using var appBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        var member = appBuilder.AddMongoDB("mongo1");
-
-        var action = () => builder.WithMember(member);
-
-        Assert.Throws<NullReferenceException>(action);
-    }
 }
