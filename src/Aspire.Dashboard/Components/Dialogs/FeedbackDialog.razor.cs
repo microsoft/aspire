@@ -72,26 +72,34 @@ public partial class FeedbackDialog : IDisposable
     {
         _additionalContext = FeedbackDiagnosticProvider.BuildAdditionalContext();
 
+        // AppHost context and `aspire doctor` output are only relevant to bug reports, and both can
+        // launch external processes: the AppHost probe runs MSBuild (or `dotnet build` for a
+        // single-file apphost.cs, which materializes/builds the app) or Node.js, and the doctor
+        // capture launches the CLI. Skip them entirely for idea/general feedback so opening that
+        // dialog never spawns a build or runtime process. This also matches the CLI feedback
+        // command, which only gathers AppHost context for bug reports.
+        if (IssueKind != FeedbackIssueKind.Bug)
+        {
+            return;
+        }
+
         // Resolve the AppHost line out-of-band: it can require launching MSBuild or Node.js, so it
         // must not block the synchronous environment lines from populating immediately. Remember the
         // generated value so the result is only appended when the user hasn't edited the field.
         var generatedContext = _additionalContext;
         var appHostContextTask = FeedbackDiagnosticProvider.CaptureAppHostContextAsync(_captureCts.Token);
 
-        if (IssueKind == FeedbackIssueKind.Bug)
+        _isCapturingBugContext = true;
+        try
         {
-            _isCapturingBugContext = true;
-            try
-            {
-                _aspireDoctorOutput = await FeedbackDiagnosticProvider.CaptureAspireDoctorOutputAsync(_captureCts.Token).ConfigureAwait(true);
-            }
-            catch (OperationCanceledException) when (_captureCts.IsCancellationRequested)
-            {
-            }
-            finally
-            {
-                _isCapturingBugContext = false;
-            }
+            _aspireDoctorOutput = await FeedbackDiagnosticProvider.CaptureAspireDoctorOutputAsync(_captureCts.Token).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException) when (_captureCts.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            _isCapturingBugContext = false;
         }
 
         try

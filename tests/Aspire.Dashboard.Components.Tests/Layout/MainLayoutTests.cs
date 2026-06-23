@@ -430,6 +430,43 @@ public partial class MainLayoutTests : DashboardTestContext
     }
 
     [Theory]
+    [InlineData(nameof(FeedbackIssueKind.Bug), "Report a bug", 1)]
+    [InlineData(nameof(FeedbackIssueKind.Idea), "Suggest an idea", 0)]
+    [InlineData(nameof(FeedbackIssueKind.General), "General feedback", 0)]
+    public async Task FeedbackDialog_CapturesAppHostAndDoctorContext_OnlyForBugReports(string kind, string title, int expectedCaptures)
+    {
+        var diagnosticProvider = new TestDashboardFeedbackDiagnosticProvider(
+            doctorOutput: """{"sdk":"10.0.301"}""",
+            additionalContext: "- Posted from: Dashboard");
+        SetupMainLayoutServices(feedbackDiagnosticProvider: diagnosticProvider);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentInputLabel(this);
+        FluentUISetupHelpers.SetupFluentTextField(this);
+        JSInterop.SetupVoid("open", _ => true);
+
+        var cut = FluentUISetupHelpers.RenderDialogProvider(this);
+        var dialogService = Services.GetRequiredService<IDialogService>();
+        await dialogService.ShowDialogAsync<FeedbackDialog>(
+            new FeedbackDialogViewModel(kind, title),
+            new DialogParameters
+            {
+                Title = title,
+                PrimaryAction = null,
+                SecondaryAction = null
+            });
+
+        // The AppHost probe (MSBuild/Node.js) and the `aspire doctor` capture both spawn external
+        // processes, so they must only run for bug reports. Idea/general feedback must leave both
+        // capture counts at zero.
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(cut.HasComponent<FeedbackDialog>());
+            Assert.Equal(expectedCaptures, diagnosticProvider.AppHostContextCaptureCount);
+            Assert.Equal(expectedCaptures, diagnosticProvider.DoctorOutputCaptureCount);
+        });
+    }
+
+    [Theory]
     [InlineData(true, false, "dashboard-help-button", "HelpDialog", "dashboard-navigation-button")]
     [InlineData(true, false, "dashboard-settings-button", "SettingsDialog", "dashboard-navigation-button")]
     [InlineData(false, true, "dashboard-navigation-button", "HelpDialog", "dashboard-help-button")]
@@ -717,11 +754,23 @@ public partial class MainLayoutTests : DashboardTestContext
 
     private sealed class TestDashboardFeedbackDiagnosticProvider(string doctorOutput, string additionalContext) : IDashboardFeedbackDiagnosticProvider
     {
+        public int AppHostContextCaptureCount { get; private set; }
+
+        public int DoctorOutputCaptureCount { get; private set; }
+
         public string BuildAdditionalContext() => additionalContext;
 
-        public Task<string?> CaptureAppHostContextAsync(CancellationToken cancellationToken) => Task.FromResult<string?>(null);
+        public Task<string?> CaptureAppHostContextAsync(CancellationToken cancellationToken)
+        {
+            AppHostContextCaptureCount++;
+            return Task.FromResult<string?>(null);
+        }
 
-        public Task<string> CaptureAspireDoctorOutputAsync(CancellationToken cancellationToken) => Task.FromResult(doctorOutput);
+        public Task<string> CaptureAspireDoctorOutputAsync(CancellationToken cancellationToken)
+        {
+            DoctorOutputCaptureCount++;
+            return Task.FromResult(doctorOutput);
+        }
     }
 
     private sealed class WaitingDashboardFeedbackDiagnosticProvider : IDashboardFeedbackDiagnosticProvider
