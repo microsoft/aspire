@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Buffers.Text;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
@@ -121,11 +122,6 @@ public class TextVisualizerViewModel
             formattedText = FormatJson(text);
             return true;
         }
-        catch (JsonNumberNotRepresentableException)
-        {
-            formattedText = text;
-            return true;
-        }
         catch (JsonException)
         {
             formattedText = null;
@@ -213,17 +209,17 @@ public class TextVisualizerViewModel
             return;
         }
 
-        throw new JsonNumberNotRepresentableException();
+        // Preserve the validated token text so large exponents and high precision decimals
+        // that don't fit in .NET numeric types still survive dashboard reformatting.
+        writer.WriteRawValue(reader.ValueSpan);
     }
 
     private static bool DecimalPreservesRawText(decimal value, ReadOnlySpan<byte> rawNumber)
     {
-        using var stream = new MemoryStream();
-        using var writer = new Utf8JsonWriter(stream);
-        writer.WriteNumberValue(value);
-        writer.Flush();
+        Span<byte> buffer = stackalloc byte[64];
 
-        return stream.GetBuffer().AsSpan(0, checked((int)stream.Length)).SequenceEqual(rawNumber);
+        return Utf8Formatter.TryFormat(value, buffer, out var bytesWritten) &&
+            buffer[..bytesWritten].SequenceEqual(rawNumber);
     }
 
     public static bool CouldBeJson(string? input)
@@ -321,6 +317,4 @@ public class TextVisualizerViewModel
             ChangeFormattedText(DashboardUIHelpers.PlaintextFormat, Text);
         }
     }
-
-    private sealed class JsonNumberNotRepresentableException : JsonException;
 }

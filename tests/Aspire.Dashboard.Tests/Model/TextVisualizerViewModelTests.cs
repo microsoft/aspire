@@ -105,15 +105,23 @@ public sealed class TextVisualizerViewModelTests
             vm.FormattedText);
     }
 
-    [Theory]
-    [InlineData("""{"exponent":1.23456789012345678901234567890123456789e-100}""")]
-    [InlineData("""{"huge":1e1000}""")]
-    public void Create_KnownJsonFormat_LeavesJsonUnformattedWhenNumberCannotBeRepresentedLosslessly(string json)
+    [Fact]
+    public void Create_KnownJsonFormat_PreservesRawNumberTextWhenNumberCannotBeRepresentedLosslessly()
     {
+        var json = """{"exponent":1.23456789012345678901234567890123456789e-100,"huge":1e1000,"largeDouble":1e100}""";
+
         var vm = new TextVisualizerViewModel(json, indentText: true, knownFormat: DashboardUIHelpers.JsonFormat);
 
         Assert.Equal(DashboardUIHelpers.JsonFormat, vm.FormatKind);
-        Assert.Equal(json, vm.FormattedText);
+        Assert.Equal(
+            """
+            {
+              "exponent": 1.23456789012345678901234567890123456789e-100,
+              "huge": 1e1000,
+              "largeDouble": 1e100
+            }
+            """,
+            vm.FormattedText);
     }
 
     [Fact]

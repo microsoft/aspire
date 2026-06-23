@@ -983,6 +983,17 @@ internal sealed class DashboardClient : IDashboardClient
                 Kind = ResourceCommandResponseKind.Cancelled
             };
         }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled && _clientCancellationToken.IsCancellationRequested)
+        {
+            var errorMessage = _loc[nameof(DashboardResources.ResourceCommandAppHostDisconnected)];
+
+            return new ResourceCommandResponseViewModel()
+            {
+                Kind = ResourceCommandResponseKind.Failed,
+                ErrorMessage = errorMessage,
+                Message = errorMessage
+            };
+        }
         catch (RpcException ex)
         {
             _logger.LogError(ex, "Error executing command \"{CommandName}\" on resource \"{ResourceName}\": {StatusCode}", command.Name, resourceName, ex.StatusCode);
