@@ -344,13 +344,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y nix-bin
-          nix --version
+          sudo git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          sudo --preserve-env=NIX_CONFIG nix --version
 
       - name: Check flake
-        run: nix flake check --print-build-logs
+        run: sudo --preserve-env=NIX_CONFIG nix flake check --print-build-logs
 
       - name: Build Aspire CLI package
-        run: nix build .#aspire-cli --print-build-logs
+        run: sudo --preserve-env=NIX_CONFIG nix build .#aspire-cli --print-build-logs
 
       - name: Smoke test packaged CLI
         run: |
