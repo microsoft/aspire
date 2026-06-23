@@ -28,10 +28,9 @@ public class NatsClusterResource(string name) : Resource(name), IResourceWithCon
         for (var i = 0; i < membersList.Count; i++)
         {
             var member = membersList[i];
-            var memberEndpoint = member.ClusterEndpoint;
 
             // NOTE: See https://docs.nats.io/using-nats/developer/connecting#connecting-to-clusters
-            builder.Append($"{memberEndpoint}");
+            builder.Append($"{member.ConnectionStringExpression}");
 
             if (i < membersList.Count - 1)
             {

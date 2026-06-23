@@ -60,7 +60,7 @@ public static class NatsClusterBuilderExtensions
                 }).ConfigureAwait(false);
 
                 connectionString = await resource.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false)
-                    ?? throw new DistributedApplicationException($"ConnectionStringAvailableEvent was published for the '{resource.Name}' resource but the connection string was null.");
+                    ?? throw new DistributedApplicationException($"{nameof(ConnectionStringAvailableEvent)} was published for the '{resource.Name}' resource but the connection string was null.");
 
                 await @event.Eventing.PublishAsync(new ConnectionStringAvailableEvent(resource, @event.Services), ct)
                     .ConfigureAwait(false);
