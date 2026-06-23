@@ -43,6 +43,9 @@ stdenv.mkDerivation {
   dontBuild = true;
   dontStrip = true;
 
+  # The release archive already contains the complete CLI bundle. Keep the real
+  # binary and install-route sidecar together under $out/lib/aspire-cli, then
+  # expose $out/bin/aspire as the user-facing wrapper.
   installPhase = ''
     runHook preInstall
 
