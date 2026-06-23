@@ -58,11 +58,17 @@ public partial class ChartFilterTags : IDisposable
         }
     }
 
+    private void ShowPopover()
+    {
+        Filter.PopupVisible = true;
+        Filter.NotifyStateChanged?.Invoke();
+    }
+
     private Task OnOverflowTagKeyDownAsync(KeyboardEventArgs args)
     {
         if (args.Key is "Enter" or " ")
         {
-            Filter.PopupVisible = true;
+            ShowPopover();
         }
 
         return Task.CompletedTask;

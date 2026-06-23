@@ -37,24 +37,4 @@ public partial class ChartFilters
     {
         InstrumentViewModel.ShowCount = ShowCounts;
     }
-
-    private async Task OnPopoverTagSelectionChangedAsync(DimensionFilterViewModel context, DimensionValueViewModel tag, bool isChecked)
-    {
-        context.OnTagSelectionChanged(tag, isChecked);
-
-        // Notify the ChartFilterTags component for this row to re-render with updated selections.
-        context.NotifyStateChanged?.Invoke();
-
-        await OnDimensionValuesChanged.InvokeAsync(context);
-    }
-
-    private async Task OnAllValuesSelectionChangedAsync(DimensionFilterViewModel context, bool? isChecked)
-    {
-        context.AreAllValuesSelected = isChecked;
-
-        // Notify the ChartFilterTags component for this row to re-render with updated selections.
-        context.NotifyStateChanged?.Invoke();
-
-        await OnDimensionValuesChanged.InvokeAsync(context);
-    }
 }

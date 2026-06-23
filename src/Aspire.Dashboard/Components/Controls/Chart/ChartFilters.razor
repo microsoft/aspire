@@ -19,37 +19,7 @@
                         <ChartFilterTags @key="context" Filter="context" OnSelectionChanged="OnDimensionValuesChanged" />
                     </AspireTemplateColumn>
                     <AspireTemplateColumn>
-                        @{
-                            var id = $"typeFilterButton-{context.SanitizedHtmlId}-{Guid.NewGuid()}";
-                        }
-                        <FluentButton id="@id"
-                                      IconEnd="@(new Icons.Regular.Size20.Filter())"
-                                      Appearance="@(context.AreAllValuesSelected is true ? Appearance.Stealth : Appearance.Accent)"
-                                      @onclick="() => context.PopupVisible = !context.PopupVisible"
-                                      aria-label="@(context.AreAllValuesSelected is true ? Loc[nameof(ControlsStrings.ChartContainerAllTags)] : Loc[nameof(ControlsStrings.ChartContainerFilteredTags)])" />
-                        @* Each item is approximately 36px tall, plus 48px for the header and container padding. Include the always-rendered "All" checkbox row. The popover body has a CSS max-height of 300px. *@
-                        <FluentPopover AnchorId="@id" @bind-Open="context.PopupVisible" VerticalThreshold="@(Math.Min((context.Values.Count + 1) * 36 + 48, 300))" AutoFocus="false">
-                            <Header>@context.Name</Header>
-                            <Body>
-                                <FluentStack Orientation="Orientation.Vertical" Class="dimension-popup">
-                                    <FluentCheckbox Label="@Loc[nameof(ControlsStrings.LabelAll)]"
-                                                    ThreeState="true"
-                                                    ShowIndeterminate="false"
-                                                    ThreeStateOrderUncheckToIntermediate="true"
-                                                    @bind-CheckState:get="context.AreAllValuesSelected"
-                                                    @bind-CheckState:set="@(v => OnAllValuesSelectionChangedAsync(context, v))"/>
-                                    @foreach (var tag in ChartFilterTags.GetOrderedValues(context.Values))
-                                    {
-                                        var isChecked = context.SelectedValues.Contains(tag);
-                                        <FluentCheckbox Label="@tag.Text"
-                                                        title="@tag.Text"
-                                                        @key=tag
-                                                        @bind-Value:get="isChecked"
-                                                        @bind-Value:set="c => OnPopoverTagSelectionChangedAsync(context, tag, c)"/>
-                                    }
-                                </FluentStack>
-                            </Body>
-                        </FluentPopover>
+                        <ChartFilterPopover @key="context" Filter="context" OnSelectionChanged="OnDimensionValuesChanged" />
                     </AspireTemplateColumn>
                 </ChildContent>
             </FluentDataGrid>
