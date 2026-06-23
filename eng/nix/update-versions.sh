@@ -2,6 +2,10 @@
 
 set -euo pipefail
 
+# This updater intentionally runs after a stable GitHub release already exists.
+# The Nix package is a fixed-output binary package, so the manifest must point
+# at immutable release asset URLs plus their hashes instead of branch builds,
+# mutable channel redirects, or locally produced artifacts.
 repo="microsoft/aspire"
 version=""
 output_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/versions.json"
@@ -59,6 +63,9 @@ if [[ -z "$version" ]]; then
   exit 1
 fi
 
+# The in-repo flake tracks latest stable CLI acquisition assets. Preview/daily
+# channels can move independently and are intentionally not written here because
+# Nix fixed-output fetches must be reproducible after a consumer pins this repo.
 normalized_version="${version#[vV]}"
 if [[ ! "$normalized_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   echo "error: Nix packaging consumes stable GitHub release assets. Version '$version' must be a stable x.y.z version." >&2
@@ -68,6 +75,10 @@ fi
 hex_sha512_to_sri() {
   local hex="$1"
   local normalized
+
+  # Release checksum files are authored as SHA512 hex, while Nix fetchers store
+  # hashes as SRI strings (`sha512-<base64 raw digest>`). Normalize case and
+  # whitespace before validating so both Windows and Unix line endings work.
   normalized="$(printf '%s' "$hex" | tr -d '\r\n[:space:]' | tr '[:upper:]' '[:lower:]')"
 
   if [[ ! "$normalized" =~ ^[0-9a-f]{128}$ ]]; then
@@ -80,6 +91,9 @@ hex_sha512_to_sri() {
 
 release_tag="v${normalized_version}"
 asset_base_url="https://github.com/${repo}/releases/download/${release_tag}"
+# Keep this list in the same stable order as versions.json so rerunning the
+# updater produces minimal diffs. The right side is the RID used by the Aspire
+# release archive names; the left side is the Nix system that consumes it.
 systems=(
   "aarch64-darwin:osx-arm64"
   "aarch64-linux:linux-arm64"
@@ -88,6 +102,8 @@ systems=(
 )
 
 temp_path="${output_path}.tmp"
+# Write the complete manifest to a sibling file first so a curl/hash failure
+# never leaves eng/nix/versions.json partially rewritten.
 {
   printf '{\n'
   printf '  "version": "%s",\n' "$normalized_version"
@@ -102,6 +118,9 @@ temp_path="${output_path}.tmp"
     checksum_url="${archive_url}.sha512"
 
     echo "Reading ${checksum_url}" >&2
+    # curl must fail loudly here. A missing asset usually means the release
+    # pipeline dispatched this workflow before PublishReleaseAssetsJob finished
+    # or the release was re-run with CLI asset upload skipped.
     checksum_contents="$(curl -fsSL "$checksum_url")"
     # The release checksum sidecar can be either:
     #   <hex-sha512>
@@ -126,5 +145,8 @@ temp_path="${output_path}.tmp"
   printf '}\n'
 } > "$temp_path"
 
+# Only publish the new manifest after every platform has been resolved and
+# hashed. The file is committed by update-nix-cli-flake.yml to the existing
+# update-baseline-<version> branch with the stable-version baseline bump.
 mv "$temp_path" "$output_path"
 echo "Updated ${output_path}" >&2
