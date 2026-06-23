@@ -125,6 +125,14 @@ removing the old volume and letting Aspire create a new PostgreSQL 18 volume:
 ```bash
 # Find the volume (Aspire names it "{appname}-{hash}-{resourceName}-data")
 docker volume ls
+
+# Stop your app first, then list any containers still referencing the volume
+# (docker volume rm fails while the volume is in use).
+docker ps -a --filter volume=<old-volume-name>
+
+# Remove each referencing container, then remove the volume so Aspire creates
+# a fresh PostgreSQL 18 volume on the next run.
+docker rm -f <container-id>
 docker volume rm <old-volume-name>
 ```
 
