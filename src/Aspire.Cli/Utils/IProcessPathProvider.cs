@@ -13,5 +13,5 @@ internal interface IProcessPathProvider
 
 internal sealed class EnvironmentProcessPathProvider : IProcessPathProvider
 {
-    public string? ProcessPath => Environment.ProcessPath;
+    public string? ProcessPath => DotNetToolDetection.GetCurrentProcessPath();
 }

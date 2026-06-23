@@ -936,13 +936,13 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         File.WriteAllText(processPath, string.Empty);
         File.WriteAllText(Path.Combine(binaryDir, InstallSidecarReader.SidecarFileName), """{"source":"nix"}""");
 
+        using var processPathScope = DotNetToolDetection.UseProcessPathForTesting(processPath);
         var interactionService = new TestInteractionService();
         var downloaderInvoked = false;
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => interactionService;
-            options.ProcessPathProviderFactory = _ => new TestProcessPathProvider(processPath);
             options.CliDownloaderFactory = _ => new TestCliDownloader(workspace.WorkspaceRoot)
             {
                 DownloadLatestCliAsyncCallback = (_, _) =>
@@ -2907,10 +2907,6 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             cliDownloadBaseUrl: cliDownloadBaseUrl);
     }
 
-    private sealed class TestProcessPathProvider(string? processPath) : IProcessPathProvider
-    {
-        public string? ProcessPath { get; } = processPath;
-    }
 }
 
 // Helper class to track DisplayCancellationMessage calls

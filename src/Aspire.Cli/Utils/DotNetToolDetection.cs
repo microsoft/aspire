@@ -32,7 +32,12 @@ internal static class DotNetToolDetection
 
     internal static string? GetDotNetToolUpdateCommand()
     {
-        return GetDotNetToolUpdateCommand(s_processPathOverride.Value ?? Environment.ProcessPath);
+        return GetDotNetToolUpdateCommand(GetCurrentProcessPath());
+    }
+
+    internal static string? GetCurrentProcessPath()
+    {
+        return s_processPathOverride.Value ?? Environment.ProcessPath;
     }
 
     internal static string? GetDotNetToolUpdateCommand(string? processPath)

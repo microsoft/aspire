@@ -104,9 +104,9 @@ internal sealed class UpdateCommand : BaseCommand
         Options.Add(_qualityOption);
     }
 
-    private static string? GetDotNetToolUpdateCommand()
+    private string? GetDotNetToolUpdateCommand()
     {
-        return DotNetToolDetection.GetDotNetToolUpdateCommand();
+        return DotNetToolDetection.GetDotNetToolUpdateCommand(_processPathProvider.ProcessPath);
     }
 
     private static string? GetNpmUpdateCommand()
