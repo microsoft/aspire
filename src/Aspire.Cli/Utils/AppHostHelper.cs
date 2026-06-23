@@ -150,6 +150,37 @@ internal static class AppHostHelper
     }
 
     /// <summary>
+    /// Best-effort deletion of an auxiliary backchannel socket file after its owning AppHost instance has been confirmed stopped.
+    /// </summary>
+    /// <remarks>
+    /// Leaving the socket behind causes a later command (for example <c>aspire add</c> or <c>aspire stop</c>) to rediscover it
+    /// via <see cref="FindMatchingNonOrphanedSockets"/> and attempt to connect to a now-dead process. This is most visible on
+    /// Windows, where the dead AppHost's PID can be reused so the orphan-pruning heuristic in <see cref="PruneOrphanedSockets"/>
+    /// still believes the process is alive. Deleting by exact path at stop time sidesteps that PID heuristic entirely. The
+    /// caller must only invoke this once it knows the owning process has terminated. See
+    /// https://github.com/microsoft/aspire/issues/17587.
+    /// </remarks>
+    /// <param name="socketPath">The path to the auxiliary backchannel socket file.</param>
+    /// <param name="logger">Logger used for diagnostic output.</param>
+    internal static void TryDeleteSocketFile(string socketPath, ILogger logger)
+    {
+        try
+        {
+            if (File.Exists(socketPath))
+            {
+                File.Delete(socketPath);
+                logger.LogDebug("Cleaned up socket file after stopping instance: {SocketPath}", socketPath);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A failed delete is non-fatal: the existing orphan-pruning backstop will still attempt cleanup on a
+            // later command. We swallow the same exception types as the other socket-cleanup sites for consistency.
+            logger.LogDebug(ex, "Failed to clean up socket file after stopping instance (this may be safe to ignore): {SocketPath}", socketPath);
+        }
+    }
+
+    /// <summary>
     /// Deletes PID-qualified socket files whose owning process has exited and returns sockets that should still be probed.
     /// </summary>
     private static string[] PruneOrphanedSockets(string[] socketPaths, int currentPid, out int deletedCount)

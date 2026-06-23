@@ -6,6 +6,7 @@ using System.Globalization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Projects;
@@ -65,20 +66,9 @@ internal sealed class RunningInstanceManager
             if (stopped)
             {
                 _interactionService.DisplaySuccess(RunCommandStrings.RunningInstanceStopped);
-                // Clean up the socket file now that the instance has been stopped.
-                // Leaving it behind would cause subsequent operations to fail when trying to connect to a dead process.
-                try
-                {
-                    if (File.Exists(socketPath))
-                    {
-                        File.Delete(socketPath);
-                        _logger.LogDebug("Cleaned up socket file after stopping instance: {SocketPath}", socketPath);
-                    }
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                {
-                    _logger.LogDebug(ex, "Failed to clean up socket file after stopping instance (this may be safe to ignore)");
-                }
+                // Clean up the socket file now that the instance has been stopped so a later command does not
+                // rediscover it and try to connect to a dead process (https://github.com/microsoft/aspire/issues/17587).
+                AppHostHelper.TryDeleteSocketFile(socketPath, _logger);
             }
             else
             {

@@ -317,6 +317,44 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(SharedCommandStrings.AppHostNotRunning, displayedMessage.Message);
     }
 
+    [Fact]
+    public async Task StopCommand_DeletesSocketFile_AfterSuccessfulStop()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/17587: 'aspire stop' is the command
+        // that leaks the socket, so it must delete the socket file once the AppHost has been confirmed stopped.
+        // Otherwise a later command rediscovers the stale socket and tries to connect to a dead process.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+
+        // The AppHost is reported with a process id that does not exist, so ProcessShutdownService observes
+        // termination immediately and the stop reaches the socket-cleanup branch.
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost.csproj");
+        var socketPath = Path.Combine(workspace.WorkspaceRoot.FullName, "a.sock");
+        File.WriteAllText(socketPath, "");
+        Assert.True(File.Exists(socketPath));
+
+        var connection = CreateConnection(appHostPath, int.MaxValue - 9);
+        connection.SocketPath = socketPath;
+
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("hash1", socketPath, connection);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("stop");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(File.Exists(socketPath));
+    }
+
     private static TestAppHostAuxiliaryBackchannel CreateConnection(string appHostPath, int processId, bool isInScope = true)
     {
         return new TestAppHostAuxiliaryBackchannel
