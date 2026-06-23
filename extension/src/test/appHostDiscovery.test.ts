@@ -7,9 +7,11 @@ import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import * as cliModule from '../debugger/languages/cli';
+import * as configInfoProviderModule from '../utils/configInfoProvider';
 import { AppHostDiscoveryService, findCandidateForEditorFile, findConfiguredAppHostPaths, getDebugTargetForCandidate, selectWorkspaceAppHostPath } from '../utils/appHostDiscovery';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { appHostDiscoveryFindFilesMaxResults } from '../utils/workspaceFileSearch';
+import { lsStreamCapability } from '../types/configInfo';
 
 suite('AppHost discovery', () => {
     test('resolves SDK-style C# AppHost source file to discovered project candidate', () => {
@@ -103,10 +105,12 @@ suite('AppHost discovery', () => {
     suite('service', () => {
         let sandbox: sinon.SinonSandbox;
         let findFilesStub: sinon.SinonStub;
+        let hasCapabilityStub: sinon.SinonStub;
 
         setup(() => {
             sandbox = sinon.createSandbox();
             findFilesStub = sandbox.stub(vscode.workspace, 'findFiles').resolves([]);
+            hasCapabilityStub = sandbox.stub(configInfoProviderModule.ConfigInfoProvider.prototype, 'hasCapability').resolves(true);
         });
 
         teardown(() => {
@@ -116,12 +120,11 @@ suite('AppHost discovery', () => {
         test('does not force refresh discovery after cached negative editor lookup', async () => {
             stubFileSystemWatchers(sandbox);
             const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
-                options?.stdoutCallback?.(JSON.stringify([{
+                emitLsStream(options, [{
                     path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
                     language: 'csharp',
                     status: 'buildable',
-                }]));
-                options?.exitCallback?.(0);
+                }]);
                 return { kill: () => { } } as any;
             });
             const service = new AppHostDiscoveryService(makeTerminalProvider());
@@ -448,11 +451,11 @@ suite('AppHost discovery', () => {
                 await assert.rejects(cancelledDiscovery, /cancelled/);
                 assert.strictEqual(childProcess.kill.callCount, 0);
 
-                options.stdoutCallback?.(JSON.stringify([{
+                options.lineCallback?.(JSON.stringify({
                     path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
                     language: 'csharp',
                     status: 'buildable',
-                }]));
+                }));
                 options.exitCallback?.(0);
 
                 assert.deepStrictEqual(await sharedDiscovery, [{
@@ -523,12 +526,17 @@ suite('AppHost discovery', () => {
                 const discovery = service.discover(workspaceFolder);
                 await waitForMicrotasks();
 
+                // Each failed CLI step arms its own 5s timeout: stream ls, then the buffered ls
+                // fallback, then the legacy get-apphosts fallback. Advance the clock once per step.
+                await clock.tickAsync(5_000);
+                await waitForMicrotasks();
                 await clock.tickAsync(5_000);
                 await waitForMicrotasks();
                 await clock.tickAsync(5_000);
 
                 await assert.rejects(discovery, /timed out after 5 seconds/);
                 assert.deepStrictEqual(killedArgs, [
+                    ['ls', '--format', 'json', '--stream'],
                     ['ls', '--format', 'json'],
                     ['extension', 'get-apphosts'],
                 ]);
@@ -536,7 +544,7 @@ suite('AppHost discovery', () => {
                 hangCli = false;
                 const retryResult = await service.discover(workspaceFolder);
                 assert.deepStrictEqual(retryResult, []);
-                assert.strictEqual(spawnStub.callCount, 3);
+                assert.strictEqual(spawnStub.callCount, 4);
             }
             finally {
                 service.dispose();
@@ -547,7 +555,7 @@ suite('AppHost discovery', () => {
         test('keeps valid aspire ls candidates when future entries have unexpected shape', async () => {
             stubFileSystemWatchers(sandbox);
             sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
-                options?.stdoutCallback?.(JSON.stringify([
+                emitLsStream(options, [
                     {
                         path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
                         language: 'csharp',
@@ -559,7 +567,36 @@ suite('AppHost discovery', () => {
                         status: 42,
                         extraMetadata: true,
                     },
-                ]));
+                ]);
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+            try {
+                const result = await service.discover(makeWorkspaceFolder(buildPath('workspace')));
+
+                assert.deepStrictEqual(result, [{
+                    path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
+                    language: 'csharp',
+                    status: 'buildable',
+                }]);
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
+        test('uses buffered aspire ls without --stream when the CLI does not advertise streaming', async () => {
+            stubFileSystemWatchers(sandbox);
+            hasCapabilityStub.resolves(false);
+            const observedArgs: string[][] = [];
+            const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
+                observedArgs.push(args);
+                options?.stdoutCallback?.(JSON.stringify([{
+                    path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
+                    language: 'csharp',
+                    status: 'buildable',
+                }]));
                 options?.exitCallback?.(0);
                 return { kill: () => { } } as any;
             });
@@ -568,6 +605,8 @@ suite('AppHost discovery', () => {
             try {
                 const result = await service.discover(makeWorkspaceFolder(buildPath('workspace')));
 
+                assert.strictEqual(spawnStub.callCount, 1);
+                assert.deepStrictEqual(observedArgs, [['ls', '--format', 'json']]);
                 assert.deepStrictEqual(result, [{
                     path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
                     language: 'csharp',
@@ -849,7 +888,7 @@ suite('AppHost discovery', () => {
                         : [];
                 });
                 sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
-                    options?.stdoutCallback?.(JSON.stringify([
+                    emitLsStream(options, [
                         {
                             path: otherAppHostPath,
                             language: 'csharp',
@@ -860,8 +899,7 @@ suite('AppHost discovery', () => {
                             language: 'csharp',
                             status: 'buildable',
                         },
-                    ]));
-                    options?.exitCallback?.(0);
+                    ]);
                     return { kill: () => { } } as any;
                 });
                 const service = new AppHostDiscoveryService(makeTerminalProvider());
@@ -957,6 +995,20 @@ function makeCancellationToken(): vscode.CancellationToken {
 async function waitForMicrotasks(): Promise<void> {
     await Promise.resolve();
     await Promise.resolve();
+}
+
+type SpawnCliProcessOptions = Parameters<typeof cliModule.spawnCliProcess>[3];
+
+// Emits an `aspire ls --stream` response the same way the CLI does: newline-delimited JSON,
+// one value per line via lineCallback, terminated by a successful (exit 0) completion. Entries
+// are typed as `unknown` so tests can interleave malformed/unexpected shapes with valid
+// candidates to exercise the stream parser's per-line tolerance.
+function emitLsStream(options: SpawnCliProcessOptions, entries: readonly unknown[]): void {
+    for (const entry of entries) {
+        options?.lineCallback?.(JSON.stringify(entry));
+    }
+
+    options?.exitCallback?.(0);
 }
 
 function stubFileSystemWatchers(sandbox: sinon.SinonSandbox): Array<(uri?: vscode.Uri) => void> {

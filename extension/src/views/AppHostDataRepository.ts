@@ -5,7 +5,7 @@ import { spawnCliProcess } from '../debugger/languages/cli';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { appHostDescribeMayNotBeSupported, appHostPathMustBeNonEmptyAbsolute, aspireCliCommandFailed, aspireCliCommandTimedOut, aspireCliDescribeNotSupported, aspireCliOutputParseFailed, aspireDescribeMinimumVersion, errorFetchingAppHosts, workspaceViewSelectedMultipleAppHosts, workspaceViewSelectedSingleAppHost } from '../loc/strings';
-import { AppHostCandidate, AppHostDiscoveryService, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult, isBuildableAppHostCandidate } from '../utils/appHostDiscovery';
+import { AppHostCandidate, AppHostDiscoveryService, CandidateAppHostDisplayInfo, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult, isBuildableAppHostCandidate } from '../utils/appHostDiscovery';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { describeIncludeDisabledCommandsCapability } from '../types/configInfo';
 
@@ -640,7 +640,21 @@ export class AppHostDataRepository {
         this._workspaceAppHostDiscoveryInProgress = true;
         this._workspaceAppHostDiscoveryCancellationSource = cancellationSource;
 
-        this._appHostDiscoveryService.discover(rootFolder, options?.forceRefresh, cancellationSource.token).then(appHosts => {
+        // Accumulate candidates streamed by `aspire ls --stream` so the panel can paint AppHosts
+        // as they are discovered. The completion handler below is still authoritative for
+        // single/multi selection, describe streams, and ps polling — streaming only renders the
+        // candidate list early so the user isn't staring at a spinner during slow discovery.
+        const streamedCandidates: CandidateAppHostDisplayInfo[] = [];
+        const onCandidate = (candidate: CandidateAppHostDisplayInfo): void => {
+            if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
+                return;
+            }
+
+            streamedCandidates.push(candidate);
+            this._handleStreamingWorkspaceAppHostCandidates(rootFolder, streamedCandidates);
+        };
+
+        this._appHostDiscoveryService.discover(rootFolder, options?.forceRefresh, cancellationSource.token, onCandidate).then(appHosts => {
             if (cancellationSource.token.isCancellationRequested || !this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
                 return;
             }
@@ -731,6 +745,22 @@ export class AppHostDataRepository {
         this._clearWorkspaceAppHostDiscovery();
         this._syncPolling();
         this._updateWorkspaceContext({ clearLoading: true });
+    }
+
+    // Incrementally renders the workspace AppHost candidate list as `aspire ls --stream` emits
+    // candidates, so the panel paints discovered AppHosts during slow discovery instead of waiting
+    // for the full result. This intentionally does NOT finalize single/multi selection, describe
+    // streams, or ps polling — that stays in `_handleWorkspaceAppHostCandidates` on completion to
+    // avoid describe/polling churn as each candidate arrives.
+    private _handleStreamingWorkspaceAppHostCandidates(rootFolder: vscode.WorkspaceFolder, streamedCandidates: readonly CandidateAppHostDisplayInfo[]): void {
+        const result = getWorkspaceAppHostProjectSearchResult(rootFolder, streamedCandidates);
+        const buildableAppHostCandidates = result.app_host_candidates.filter(isBuildableAppHostCandidate);
+        if (buildableAppHostCandidates.length === 0) {
+            return;
+        }
+
+        this._setWorkspaceAppHostCandidatePaths(buildableAppHostCandidates);
+        this._updateWorkspaceContext();
     }
 
     private _isCurrentWorkspaceDiscovery(discoveryVersion: number, workspaceFolder: vscode.WorkspaceFolder): boolean {
@@ -1654,7 +1684,7 @@ export class AppHostDataRepository {
         let workspaceAppHostPath = this._workspaceAppHostPath;
         const discoveryPending = !this._workspaceAppHostDiscoveryComplete;
         let workspaceAppHosts: AppHostDisplayInfo[];
-        if (this._workspaceAppHostCandidatePaths.length === 0 && discoveryPending) {
+        if (discoveryPending) {
             workspaceAppHosts = appHosts.filter(appHost => isPathInWorkspace(appHost.appHostPath));
         } else if (this._workspaceAppHostCandidatePaths.length > 0) {
             workspaceAppHosts = appHosts.filter(appHost => this._workspaceAppHostCandidatePaths.some(candidatePath => isMatchingAppHostPath(appHost.appHostPath, candidatePath)));
