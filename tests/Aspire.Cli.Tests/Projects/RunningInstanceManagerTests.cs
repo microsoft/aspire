@@ -5,8 +5,10 @@ using System.Diagnostics;
 using System.Net.Sockets;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using StreamJsonRpc;
 
@@ -41,7 +43,7 @@ public class RunningInstanceManagerTests
             // Binding the server creates the socket file on disk.
             Assert.True(File.Exists(socketPath));
 
-            var manager = new RunningInstanceManager(NullLogger.Instance, new TestInteractionService(), TimeProvider.System);
+            var manager = new RunningInstanceManager(NullLogger.Instance, new TestInteractionService(), TimeProvider.System, new ProfilingTelemetry(new ConfigurationBuilder().Build()));
 
             var stopped = await manager.StopRunningInstanceAsync(socketPath, CancellationToken.None).DefaultTimeout();
 

@@ -146,7 +146,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         Assert.Contains(doc.Root!.Element("packageSources")!.Elements("add"), e => (string?)e.Attribute("value") == "https://project.example/v3/index.json");
         Assert.DoesNotContain(doc.Root!.Element("packageSources")!.Elements("add"), e => (string?)e.Attribute("value") == "https://parent.example/v3/index.json");
         Assert.Equal(["Aspire*"], GetPackagePatternsForSource(doc, sourceOverride));
-        Assert.Equal(["Project.*", PackageMapping.AllPackages], GetPackagePatternsForSource(doc, "project-local"));
+        Assert.Equal(["Project.*"], GetPackagePatternsForSource(doc, "project-local"));
     }
 
     [Fact]

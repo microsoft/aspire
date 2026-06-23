@@ -548,5 +548,6 @@ const expectedWelcomeWhenClauses = [
     'aspire.loading',
     'aspire.noAppHosts && !aspire.fetchAppHostsError && !aspire.loading && aspire.viewMode != \'global\'',
     'aspire.noAppHosts && !aspire.fetchAppHostsError && !aspire.loading && aspire.viewMode == \'global\'',
-    'aspire.fetchAppHostsError && !aspire.loading',
+    'aspire.fetchAppHostsError && aspire.fetchAppHostsCompatibilityError && !aspire.loading',
+    'aspire.fetchAppHostsError && !aspire.fetchAppHostsCompatibilityError && !aspire.loading',
 ];

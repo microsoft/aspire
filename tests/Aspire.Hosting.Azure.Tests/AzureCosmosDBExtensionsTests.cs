@@ -659,9 +659,10 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
             Resource = cosmos.Resource,
             Arguments = args,
             EnvironmentVariables = env,
-            CertificatePath = ReferenceExpression.Create($"/certs/cert.pem"),
-            KeyPath = ReferenceExpression.Create($"/certs/key.pem"),
-            PfxPath = ReferenceExpression.Create($"/certs/cert.pfx"),
+            CertificatePath = ReferenceExpression.Create($"/certs/server.crt"),
+            KeyPath = ReferenceExpression.Create($"/certs/server.key"),
+            CertificateWithKeyPath = ReferenceExpression.Create($"/certs/server.pem"),
+            PfxPath = ReferenceExpression.Create($"/certs/server.pfx"),
             Password = null,
             CancellationToken = CancellationToken.None
         };
@@ -726,9 +727,10 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
             Resource = cosmos.Resource,
             Arguments = args,
             EnvironmentVariables = env,
-            CertificatePath = ReferenceExpression.Create($"/certs/cert.pem"),
-            KeyPath = ReferenceExpression.Create($"/certs/key.pem"),
-            PfxPath = ReferenceExpression.Create($"/certs/cert.pfx"),
+            CertificatePath = ReferenceExpression.Create($"/certs/server.crt"),
+            KeyPath = ReferenceExpression.Create($"/certs/server.key"),
+            CertificateWithKeyPath = ReferenceExpression.Create($"/certs/server.pem"),
+            PfxPath = ReferenceExpression.Create($"/certs/server.pfx"),
             Password = passwordParam,
             CancellationToken = CancellationToken.None
         };
