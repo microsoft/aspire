@@ -44,14 +44,31 @@ public class AddNatsClusterTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task WithMemberConfiguresServerWithClusterArg()
+    public async Task WithMemberMoreThanOnceConfiguresServersWithClusterArg()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        var natsNode = builder.AddNats("nats-1");
+        var natsNode1 = builder.AddNats("nats-1");
+        var natsNode2 = builder.AddNats("nats-2");
         builder.AddNatsCluster("rs0")
-            .WithMember(natsNode);
+            .WithMember(natsNode1)
+            .WithMember(natsNode2);
 
-        var args = await ArgumentEvaluator.GetArgumentListAsync(natsNode.Resource);
-        Assert.Contains("--cluster", args);
+        var natsNode1Args = await ArgumentEvaluator.GetArgumentListAsync(natsNode1.Resource);
+        Assert.Contains("--cluster", natsNode1Args);
+
+        var natsNode2Args = await ArgumentEvaluator.GetArgumentListAsync(natsNode2.Resource);
+        Assert.Contains("--cluster", natsNode2Args);
+    }
+
+    [Fact]
+    public async Task WithMemberOnlyOnceDoesNotAddClusterArgs()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var singleNode = builder.AddNats("nats-1");
+        builder.AddNatsCluster("rs0")
+            .WithMember(singleNode);
+
+        var singleNodeArgs = await ArgumentEvaluator.GetArgumentListAsync(singleNode.Resource);
+        Assert.DoesNotContain("--cluster", singleNodeArgs);
     }
 }
