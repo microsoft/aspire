@@ -6,7 +6,7 @@ name: Update Azure VM Sizes
 # an arbitrary ref, which keeps unreviewed branch code from ever wielding the bot token.
 on:
   schedule:
-    - cron: '0 6 1 * *' # Monthly on the 1st at 06:00 UTC
+    - cron: '0 6 * * *' # Daily at 06:00 UTC
 
 permissions:
   contents: write
