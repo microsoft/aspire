@@ -29,6 +29,7 @@ internal static class DeprecatedPackages
     private static readonly FrozenSet<string> s_all = new[]
     {
         "Aspire.Hosting.Dapr",
+        "Aspire.Hosting.GitHub.Models",
         "Aspire.Hosting.NodeJs"
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
@@ -183,7 +184,6 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
         };
 
         return collectedPackages.Where(effectiveFilter);
-
     }
 
     public async Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(DirectoryInfo workingDirectory, string exactPackageId, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)

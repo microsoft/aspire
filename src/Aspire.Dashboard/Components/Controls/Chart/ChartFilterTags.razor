@@ -1,0 +1,65 @@
+@namespace Aspire.Dashboard.Components
+
+@{
+    // Only render a limited number of items in the FluentOverflow to avoid expensive
+    // browser layout calculations. The visible area fits ~5-7 tags; rendering 20 gives
+    // FluentOverflow enough items to measure correctly without creating hundreds of DOM
+    // elements that trigger a forced reflow long enough to kill the SignalR connection.
+    var orderedValues = GetOrderedValues(Filter.Values).ToList();
+    var renderedValues = orderedValues.Take(MaxRenderedTags).ToList();
+    var preOverflowedCount = orderedValues.Count - renderedValues.Count;
+}
+
+<FluentOverflow Class="dimension-overflow">
+    <ChildContent>
+        @{
+            var i = 0;
+        }
+        @foreach (var item in renderedValues)
+        {
+            var isIncludedInFilters = Filter.SelectedValues.Contains(item);
+            var isIncludedInFiltersClass = isIncludedInFilters ? "included-in-filters" : "";
+            var additionalAttributes = new Dictionary<string, object>()
+            {
+                [KeyForDimensionValue] = item,
+                [KeyForIsIncludedInFilters] = isIncludedInFilters,
+            };
+
+            // Always display the first item by setting a fixed value.
+            <FluentOverflowItem Fixed="@((i == 0) ? OverflowItemFixed.Ellipsis : OverflowItemFixed.None)" AdditionalAttributes="additionalAttributes">
+                <span class="dimension-tag filter-value-tag @isIncludedInFiltersClass"
+                      role="button"
+                      tabindex="0"
+                      aria-pressed="@isIncludedInFilters"
+                      @onclick="@(() => OnTagSelectionChangedAsync(item, !Filter.SelectedValues.Contains(item)))"
+                      @onkeydown="@(args => OnTagKeyDownAsync(args, item, !Filter.SelectedValues.Contains(item)))">
+                    @item.Text
+                </span>
+            </FluentOverflowItem>
+            i++;
+        }
+    </ChildContent>
+    <MoreButtonTemplate Context="overflow">
+        @{
+            var hasSelectedInOverflow = overflow.ItemsOverflow.Any(item => (bool)item.AdditionalAttributes![KeyForIsIncludedInFilters]);
+            if (!hasSelectedInOverflow && preOverflowedCount > 0)
+            {
+                // Check if any items beyond MaxRenderedTags (not in FluentOverflow) are selected.
+                hasSelectedInOverflow = orderedValues.Skip(MaxRenderedTags).Any(v => Filter.SelectedValues.Contains(v));
+            }
+            var isIncludedInFiltersClass = hasSelectedInOverflow ? "included-in-filters" : "";
+        }
+        @* Display must be inline block so the width is correctly calculated. *@
+        <span class="dimension-tag filter-value-tag @isIncludedInFiltersClass"
+              role="button"
+              tabindex="0"
+              style="display:inline-block;"
+              @onclick="@ShowPopover"
+              @onkeydown="@(args => OnOverflowTagKeyDownAsync(args))">
+            @($"+{overflow.ItemsOverflow.Count() + preOverflowedCount}")
+        </span>
+    </MoreButtonTemplate>
+    <OverflowTemplate Context="overflow">
+        @* Intentionally empty. Don't display an overflow template here. *@
+    </OverflowTemplate>
+</FluentOverflow>

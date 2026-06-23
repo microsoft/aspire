@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
@@ -428,6 +429,49 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ResourceCommand_RoutesStatusToStderrAndResultToStdout()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var consoleOutputPerStatus = new List<(string Message, ConsoleOutput Console)>();
+        TestInteractionService? interactionService = null;
+        interactionService = new TestInteractionService
+        {
+            ShowStatusCallback = msg => consoleOutputPerStatus.Add((msg, interactionService!.Console))
+        };
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
+            {
+                Success = true,
+                Value = new ExecuteResourceCommandResult
+                {
+                    Value = "{\"key\": \"value\"}",
+                    Format = CommandResultFormat.Json
+                }
+            }
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel, interactionService);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("resource myresource my-command");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        // The "Scanning for running AppHosts..." message must be routed to stderr,
+        // not stdout, so that piped JSON output remains valid (see #18102).
+        var scanningStatus = Assert.Single(consoleOutputPerStatus, s => s.Message == SharedCommandStrings.ScanningForRunningAppHosts);
+        Assert.Equal(ConsoleOutput.Error, scanningStatus.Console);
+
+        // The JSON result must be written to stdout so it can be piped to tools like jq.
+        var (rawText, consoleOverride) = Assert.Single(interactionService.DisplayedRawText);
+        Assert.Equal("{\"key\": \"value\"}", rawText);
+        Assert.Equal(ConsoleOutput.Standard, consoleOverride);
+    }
+
+    [Fact]
     public async Task ResourceCommand_AcceptsProjectOptionWithStart()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -565,6 +609,44 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("text", "Submitted Aspire!"), ("timeoutMilliseconds", "500"));
+    }
+
+    [Fact]
+    public async Task ResourceCommand_ForwardsArgumentAfterDoubleDashThatCollidesWithCliOption()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "mydb",
+                    CreateCommand(
+                        "configure",
+                        CreateArgument("AppHost")))
+            ]
+        };
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("hash", "/tmp/test.sock", backchannel);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        // "--AppHost" collides case-insensitively with the CLI's --apphost option, so it
+        // must be placed after "--" to bypass the miscased-option check and reach the
+        // resource command's second-pass parser.
+        var result = command.Parse("resource mydb configure -- --AppHost primary");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("AppHost", "primary"));
     }
 
     [Fact]

@@ -14,6 +14,6 @@ public class MyAzureBlobTrigger(BlobContainerClient containerClient, ILogger<MyA
         await containerClient.UploadBlobAsync(blobName, new BinaryData(triggerString));
 
         logger.LogInformation("C# blob trigger function invoked for 'myblobcontainer/{source}' with {message}...", blobName, triggerString);
-        return triggerString.ToUpper();
+        return triggerString.ToUpperInvariant();
     }
 }

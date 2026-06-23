@@ -1496,6 +1496,11 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         {
             return Task.CompletedTask;
         }
+
+        public Task<bool> ReconcileDeploymentStateAsync(AzureBicepResource resource, ProvisioningContext context, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(false);
+        }
     }
 
     private sealed class FailingBicepProvisioner : IBicepProvisioner
@@ -1515,6 +1520,11 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
             var response = new TestAzureResponse(400, "Bad Request", jsonContent);
 
             throw new global::Azure.RequestFailedException(response);
+        }
+
+        public Task<bool> ReconcileDeploymentStateAsync(AzureBicepResource resource, ProvisioningContext context, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(false);
         }
     }
 

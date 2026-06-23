@@ -5,12 +5,16 @@
 
 using System.Collections.Immutable;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Provisioning.Internal;
+using Aspire.Hosting.Azure.Resources;
 using Aspire.Hosting.Pipelines;
 using Azure;
 using Azure.Core;
+using Azure.Identity;
 using Azure.ResourceManager;
 using Azure.ResourceManager.Resources;
 using Azure.ResourceManager.Resources.Models;
@@ -34,9 +38,13 @@ internal sealed class BicepProvisioner(
     internal const string DeploymentStateProvisioningStateKey = "ProvisioningState";
     internal const string DeploymentStateProvisioningStateRunning = "Running";
     internal const string DeploymentStateProvisioningStateCanceled = "Canceled";
+    internal const string DeploymentStateProvisioningStateFailed = "Failed";
     internal const string DeploymentStateProvisioningStateSucceeded = "Succeeded";
 
+    private const string DeploymentActiveErrorCode = "DeploymentActive";
+    private const string DeploymentUrlName = "deployment";
     private const string DeploymentOperationPropertyPrefix = "azure.deployment.operations.";
+    private const string DeploymentOperationSummaryPropertyName = DeploymentOperationPropertyPrefix + "summary";
     private static readonly TimeSpan s_deploymentOperationPollingInterval = TimeSpan.FromSeconds(2);
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
@@ -114,7 +122,7 @@ internal sealed class BicepProvisioner(
         {
             deploymentId = configuredDeploymentId;
             deploymentResourceId = id;
-            portalUrls.Add(new(Name: "deployment", Url: GetDeploymentUrl(id), IsInternal: false));
+            portalUrls.Add(new(Name: DeploymentUrlName, Url: GetDeploymentUrl(id), IsInternal: false));
         }
 
         var azureContext = await GetCurrentAzureContextAsync(deploymentResourceId, cancellationToken).ConfigureAwait(false);
@@ -136,7 +144,7 @@ internal sealed class BicepProvisioner(
 
             return state with
             {
-                State = new("Provisioned", KnownResourceStateStyles.Success),
+                State = new(AzureProvisioningController.ProvisionedState, KnownResourceStateStyles.Success),
                 Urls = [.. portalUrls],
                 Properties = props
             };
@@ -144,6 +152,355 @@ internal sealed class BicepProvisioner(
 
         return true;
     }
+
+    /// <summary>
+    /// Adopts a cached ARM deployment that was still running when the AppHost last stopped or was canceled.
+    /// </summary>
+    /// <remarks>
+    /// The persisted state only tells us which deployment belongs to this resource. ARM remains the source of
+    /// truth, so reconciliation probes the deployment, follows it while it is still active, applies outputs if it
+    /// succeeded, records terminal failure/cancellation, or clears stale local state so normal provisioning can retry.
+    /// </remarks>
+    public async Task<bool> ReconcileDeploymentStateAsync(AzureBicepResource resource, ProvisioningContext context, CancellationToken cancellationToken)
+    {
+        // Reconciliation is a run-mode recovery step. Publish should not revive state
+        // left behind by a previous local command.
+        if (!context.ExecutionContext.IsRunMode)
+        {
+            return false;
+        }
+
+        // The cache stores the ARM deployment ID that was running before the AppHost
+        // stopped or a command was canceled.
+        var sectionName = $"Azure:Deployments:{resource.Name}";
+        var stateSection = await deploymentStateManager.AcquireSectionAsync(sectionName, cancellationToken).ConfigureAwait(false);
+
+        // Example cached section shape:
+        //   Azure:Deployments:cache
+        //     Id = /subscriptions/<subscription>/resourceGroups/<group>/providers/Microsoft.Resources/deployments/cache
+        //     Parameters = {"redisName":{"value":"cache"}}
+        //     Scope = {"subscriptionId":"<subscription>","resourceGroup":"<group>"}
+        //     CheckSum = <model-checksum>
+        //     ProvisioningState = Running
+        // Only sections that still claim a running deployment with a parseable ARM ID can be adopted.
+        if (!IsRunningCachedDeployment(stateSection) ||
+            stateSection.Data[BicepUtilities.DeploymentStateIdKey]?.GetValue<string>() is not { Length: > 0 } deploymentId ||
+            !ResourceIdentifier.TryParse(deploymentId, out var deploymentResourceId) ||
+            deploymentResourceId is null)
+        {
+            return false;
+        }
+
+        AzureDeploymentState? deployment;
+        try
+        {
+            // Probe ARM before mutating cached state. If the probe cannot run, leave
+            // the cache intact and let normal provisioning decide.
+            deployment = await context.ArmClient.GetDeploymentAsync(deploymentId, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (CredentialUnavailableException ex)
+        {
+            logger.LogDebug(ex, "Unable to reconcile cached deployment state for {ResourceName} because no Azure credential is available.", resource.Name);
+            return false;
+        }
+        catch (RequestFailedException ex)
+        {
+            logger.LogDebug(ex, "Unable to reconcile cached deployment state for {ResourceName} because the Azure deployment probe failed.", resource.Name);
+            return false;
+        }
+
+        if (deployment is null)
+        {
+            // ARM no longer has the cached deployment, so the local "running" marker
+            // is stale and should not block a fresh deployment.
+            logger.LogInformation("Cached Azure deployment {DeploymentId} for {ResourceName} no longer exists. Reprovisioning.", deploymentId, resource.Name);
+            await ClearCachedRunningDeploymentStateAsync(stateSection, cancellationToken).ConfigureAwait(false);
+            return false;
+        }
+
+        var currentLocation = GetConfiguredLocation(stateSection, context.Location.Name);
+        if (IsActiveDeploymentProvisioningState(deployment.ProvisioningState))
+        {
+            // A still-active ARM deployment should be adopted and observed to
+            // completion instead of starting a duplicate deployment.
+            deployment = await WaitForCachedRunningDeploymentAsync(
+                resource,
+                context,
+                deploymentId,
+                currentLocation,
+                deployment,
+                cancellationToken).ConfigureAwait(false);
+
+            if (deployment is null)
+            {
+                // The deployment disappeared while we were watching it; clear the
+                // stale marker so the caller reprovisions from the model.
+                logger.LogInformation("Cached Azure deployment {DeploymentId} for {ResourceName} no longer exists after reconciliation started. Reprovisioning.", deploymentId, resource.Name);
+                await ClearCachedRunningDeploymentStateAsync(stateSection, cancellationToken).ConfigureAwait(false);
+                return false;
+            }
+        }
+
+        // At this point the cached deployment is no longer active. Adopt known
+        // terminal outcomes; leave unknown states to the reprovision fallback below.
+        if (await TryApplyTerminalReconciledDeploymentStateAsync(resource, stateSection, deploymentResourceId, deployment, currentLocation, cancellationToken).ConfigureAwait(false))
+        {
+            return true;
+        }
+
+        logger.LogDebug("Cached Azure deployment {DeploymentId} for {ResourceName} has provisioning state {ProvisioningState}. Reprovisioning.", deploymentId, resource.Name, deployment.ProvisioningState);
+        return false;
+    }
+
+    private async Task<AzureDeploymentState?> WaitForCachedRunningDeploymentAsync(
+        AzureBicepResource resource,
+        ProvisioningContext context,
+        string deploymentId,
+        string currentLocation,
+        AzureDeploymentState deployment,
+        CancellationToken cancellationToken)
+    {
+        var tracker = new DeploymentOperationProgressTracker();
+        while (IsActiveDeploymentProvisioningState(deployment.ProvisioningState))
+        {
+            try
+            {
+                await PublishCachedRunningDeploymentStateAsync(resource, context, deploymentId, currentLocation, tracker, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (RequestFailedException ex)
+            {
+                logger.LogDebug(ex, "Unable to publish Azure deployment operation progress for cached deployment {DeploymentId} on {ResourceName}.", deploymentId, resource.Name);
+            }
+            catch (CredentialUnavailableException ex)
+            {
+                logger.LogDebug(ex, "Unable to publish Azure deployment operation progress for cached deployment {DeploymentId} on {ResourceName} because no Azure credential is available.", deploymentId, resource.Name);
+            }
+
+            await Task.Delay(s_deploymentOperationPollingInterval, _timeProvider, cancellationToken).ConfigureAwait(false);
+            AzureDeploymentState? latestDeployment;
+            try
+            {
+                latestDeployment = await context.ArmClient.GetDeploymentAsync(deploymentId, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (RequestFailedException ex)
+            {
+                logger.LogDebug(ex, "Unable to continue reconciling cached Azure deployment {DeploymentId} for {ResourceName}.", deploymentId, resource.Name);
+                return deployment;
+            }
+            catch (CredentialUnavailableException ex)
+            {
+                logger.LogDebug(ex, "Unable to continue reconciling cached Azure deployment {DeploymentId} for {ResourceName} because no Azure credential is available.", deploymentId, resource.Name);
+                return deployment;
+            }
+
+            if (latestDeployment is null)
+            {
+                return null;
+            }
+
+            deployment = latestDeployment;
+        }
+
+        return deployment;
+    }
+
+    private async Task PublishCachedRunningDeploymentStateAsync(
+        AzureBicepResource resource,
+        ProvisioningContext context,
+        string deploymentId,
+        string currentLocation,
+        DeploymentOperationProgressTracker tracker,
+        CancellationToken cancellationToken)
+    {
+        var deploymentResourceId = new ResourceIdentifier(deploymentId);
+        var deploymentUrl = GetDeploymentUrl(deploymentResourceId);
+
+        // A cached deployment can be adopted after the original AppHost process is gone,
+        // so rebuild the dashboard's "waiting for deployment" state from persisted ARM
+        // metadata before publishing more detailed operation progress.
+        await notificationService.PublishUpdateAsync(resource, state => state with
+        {
+            State = new(AzureProvisioningController.WaitingForDeploymentState, KnownResourceStateStyles.Info),
+            Urls = [.. state.Urls.Where(static url => !string.Equals(url.Name, DeploymentUrlName, StringComparison.Ordinal)), new(Name: DeploymentUrlName, Url: deploymentUrl, IsInternal: false)],
+            Properties = state.Properties
+                .WithoutAzureProvisioningFailureProperties()
+                .SetResourceProperty(CustomResourceKnownProperties.Source, deploymentId)
+        }).ConfigureAwait(false);
+
+        // Deployment operations carry provider-level progress and failure details that
+        // are not present on the deployment resource itself. Publish a best-effort
+        // summary so the adopted deployment looks like an in-flight deployment started
+        // by the current AppHost run.
+        await PublishDeploymentOperationSummaryAsync(resource, context, deploymentResourceId, currentLocation, tracker, force: false, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<bool> ConfigureSucceededReconciledDeploymentAsync(
+        AzureBicepResource resource,
+        DeploymentStateSection stateSection,
+        ResourceIdentifier deploymentId,
+        JsonObject? outputs,
+        string currentLocation,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetDeploymentStateJsonObject(stateSection, BicepUtilities.DeploymentStateParametersKey, resource.Name, out var parameters) ||
+            stateSection.Data[BicepUtilities.DeploymentStateChecksumKey]?.GetValue<string>() is not { Length: > 0 } checksum)
+        {
+            logger.LogDebug("Cached deployment state for resource {ResourceName} cannot be reconciled because parameters or checksum are missing.", resource.Name);
+            return false;
+        }
+
+        // Scope is optional cached state. If it is missing or malformed, we can still
+        // adopt the succeeded deployment because the current Azure context supplies
+        // the resource group scope when ConfigureResourceAsync reloads the outputs.
+        // The cached value is the JSON string produced by BicepUtilities.SetScopeAsync:
+        //   {"resourceGroup":"<group>","subscription":"<subscription>"}
+        // Tenant-scoped resources also include "tenant": "current"; resources without
+        // an explicit/existing scope persist {"resourceGroup":null}.
+        var scope = TryGetDeploymentStateJsonObject(stateSection, BicepUtilities.DeploymentStateScopeKey, resource.Name, out var cachedScope)
+            ? cachedScope
+            : null;
+
+        var locationOverride = stateSection.Data[AzureProvisioningController.LocationOverrideKey]?.GetValue<string>();
+
+        UpdateDeploymentState(
+            stateSection,
+            locationOverride,
+            deploymentId,
+            parameters,
+            outputs,
+            scope,
+            checksum,
+            currentLocation,
+            provisioningState: null);
+        await deploymentStateManager.SaveSectionAsync(stateSection, cancellationToken).ConfigureAwait(false);
+
+        return await ConfigureResourceAsync(resource, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<bool> TryApplyTerminalReconciledDeploymentStateAsync(
+        AzureBicepResource resource,
+        DeploymentStateSection stateSection,
+        ResourceIdentifier deploymentId,
+        AzureDeploymentState deployment,
+        string currentLocation,
+        CancellationToken cancellationToken)
+    {
+        // Terminal deployment states are the only states we can safely adopt. A
+        // succeeded deployment updates cached outputs and configures the resource.
+        // Canceled/failed deployments persist the ARM terminal state and throw so
+        // the dashboard shows the original outcome. Any other state returns false
+        // so the caller can reprovision from the current model.
+        if (string.Equals(deployment.ProvisioningState, DeploymentStateProvisioningStateSucceeded, StringComparisons.AzureProvisioningState))
+        {
+            // Successful adoption replays the deployment outputs into the resource
+            // state exactly as normal provisioning would.
+            return await ConfigureSucceededReconciledDeploymentAsync(
+                resource,
+                stateSection,
+                deploymentId,
+                deployment.Outputs,
+                currentLocation,
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        if (string.Equals(deployment.ProvisioningState, DeploymentStateProvisioningStateCanceled, StringComparisons.AzureProvisioningState))
+        {
+            // Preserve ARM's terminal cancellation so the dashboard explains why this
+            // resource stopped instead of silently retrying.
+            await PersistReconciledProvisioningStateAsync(stateSection, DeploymentStateProvisioningStateCanceled, cancellationToken).ConfigureAwait(false);
+            await PublishReconciledTerminalStateAsync(resource, AzureProvisioningStrings.ResourceStateAzureDeploymentCanceled).ConfigureAwait(false);
+            throw new InvalidOperationException($"Azure deployment for {resource.Name} was canceled.");
+        }
+
+        if (string.Equals(deployment.ProvisioningState, DeploymentStateProvisioningStateFailed, StringComparisons.AzureProvisioningState))
+        {
+            // Preserve ARM's terminal failure for the same reason as cancellation:
+            // this is the outcome of the adopted deployment.
+            await PersistReconciledProvisioningStateAsync(stateSection, DeploymentStateProvisioningStateFailed, cancellationToken).ConfigureAwait(false);
+            await PublishReconciledTerminalStateAsync(resource, AzureProvisioningStrings.ResourceStateAzureDeploymentFailed).ConfigureAwait(false);
+            throw new InvalidOperationException($"Azure deployment for {resource.Name} failed.");
+        }
+
+        return false;
+    }
+
+    private async Task PersistReconciledProvisioningStateAsync(DeploymentStateSection stateSection, string provisioningState, CancellationToken cancellationToken)
+    {
+        stateSection.Data[DeploymentStateProvisioningStateKey] = provisioningState;
+        await deploymentStateManager.SaveSectionAsync(stateSection, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task PublishReconciledTerminalStateAsync(AzureBicepResource resource, string state)
+    {
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            State = new(state, KnownResourceStateStyles.Error)
+        }).ConfigureAwait(false);
+    }
+
+    private async Task ClearCachedRunningDeploymentStateAsync(DeploymentStateSection stateSection, CancellationToken cancellationToken)
+    {
+        var locationOverride = stateSection.Data[AzureProvisioningController.LocationOverrideKey]?.GetValue<string>();
+        stateSection.Data.Clear();
+
+        if (!string.IsNullOrWhiteSpace(locationOverride))
+        {
+            stateSection.Data[AzureProvisioningController.LocationOverrideKey] = locationOverride;
+            await deploymentStateManager.SaveSectionAsync(stateSection, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            await deploymentStateManager.DeleteSectionAsync(stateSection, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private bool TryGetDeploymentStateJsonObject(
+        DeploymentStateSection stateSection,
+        string key,
+        string resourceName,
+        [NotNullWhen(true)] out JsonObject? value)
+    {
+        value = null;
+        if (stateSection.Data[key]?.GetValue<string>() is not { Length: > 0 } json)
+        {
+            return false;
+        }
+
+        try
+        {
+            value = AzureProvisioningJsonHelpers.ParseDeploymentStateJson(json)?.AsObject();
+            return value is not null;
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Unable to parse cached deployment state property {PropertyName} for resource {ResourceName}.", key, resourceName);
+            return false;
+        }
+    }
+
+    private static bool IsRunningCachedDeployment(DeploymentStateSection stateSection)
+        => string.Equals(
+            stateSection.Data[DeploymentStateProvisioningStateKey]?.GetValue<string>(),
+            DeploymentStateProvisioningStateRunning,
+            StringComparison.Ordinal);
+
+    private static bool IsActiveDeploymentProvisioningState(string? provisioningState)
+        => !string.IsNullOrEmpty(provisioningState) &&
+           !string.Equals(provisioningState, DeploymentStateProvisioningStateSucceeded, StringComparisons.AzureProvisioningState) &&
+           !string.Equals(provisioningState, DeploymentStateProvisioningStateFailed, StringComparisons.AzureProvisioningState) &&
+           !string.Equals(provisioningState, DeploymentStateProvisioningStateCanceled, StringComparisons.AzureProvisioningState);
 
     /// <inheritdoc />
     public async Task GetOrCreateResourceAsync(AzureBicepResource resource, ProvisioningContext context, CancellationToken cancellationToken)
@@ -175,7 +532,7 @@ internal sealed class BicepProvisioner(
         await notificationService.PublishUpdateAsync(resource, state => state with
         {
             ResourceType = resource.GetType().Name,
-            State = new("Starting", KnownResourceStateStyles.Info),
+            State = new(AzureProvisioningController.StartingState, KnownResourceStateStyles.Info),
             Properties = WithoutDeploymentOperationProperties(state.Properties.WithoutAzureProvisioningFailureProperties()).SetResourcePropertyRange(
                 AzureResourceProperties.CreateContextProperties(
                     subscription.Id.Name,
@@ -198,7 +555,7 @@ internal sealed class BicepProvisioner(
         {
             return state with
             {
-                State = new("Compiling ARM template", KnownResourceStateStyles.Info)
+                State = new(AzureProvisioningController.CompilingArmTemplateState, KnownResourceStateStyles.Info)
             };
         })
         .ConfigureAwait(false);
@@ -270,6 +627,19 @@ internal sealed class BicepProvisioner(
         }
         catch (RequestFailedException ex)
         {
+            if (context.ExecutionContext.IsRunMode &&
+                IsActiveDeploymentConflict(ex) &&
+                await TryAdoptActiveDeploymentConflictAsync(
+                    resource,
+                    context,
+                    deploymentId,
+                    checksum,
+                    effectiveLocation,
+                    cancellationToken).ConfigureAwait(false))
+            {
+                return;
+            }
+
             // Some validation failures occur before Azure creates a deployment operation. In that
             // path there is no operation list to poll, so parse and enrich the provider error from
             // the CreateOrUpdate response itself.
@@ -285,7 +655,7 @@ internal sealed class BicepProvisioner(
             {
                 await notificationService.PublishUpdateAsync(resource, state => state with
                 {
-                    State = new("Azure deployment failed", KnownResourceStateStyles.Error),
+                    State = new(AzureProvisioningStrings.ResourceStateAzureDeploymentFailed, KnownResourceStateStyles.Error),
                     Properties = failureDetails.SetResourceProperties(WithoutDeploymentOperationProperties(state.Properties), AzureProvisioningFailureDetails.ProvisionOperation)
                 }).ConfigureAwait(false);
             }
@@ -319,7 +689,7 @@ internal sealed class BicepProvisioner(
             return state with
             {
                 State = new(AzureProvisioningController.WaitingForDeploymentState, KnownResourceStateStyles.Info),
-                Urls = [.. state.Urls, new(Name: "deployment", Url: url, IsInternal: false)],
+                Urls = [.. state.Urls, new(Name: DeploymentUrlName, Url: url, IsInternal: false)],
                 Properties = state.Properties.SetResourceProperty(CustomResourceKnownProperties.Source, deploymentId.ToString()),
             };
         })
@@ -459,13 +829,113 @@ internal sealed class BicepProvisioner(
 
             return state with
             {
-                State = new("Provisioned", KnownResourceStateStyles.Success),
+                State = new(AzureProvisioningController.ProvisionedState, KnownResourceStateStyles.Success),
                 CreationTimeStamp = _timeProvider.GetUtcNow().UtcDateTime,
                 Properties = properties
             };
         })
         .ConfigureAwait(false);
     }
+
+    // Handles ARM 409 DeploymentActive responses by adopting the deployment that Azure says is
+    // already running, but only when persisted state proves it belongs to the same resource model.
+    // If any proof is missing, stale, or unreadable, return false so the caller uses the normal
+    // failure path instead of accidentally adopting an unrelated deployment.
+    private async Task<bool> TryAdoptActiveDeploymentConflictAsync(
+        AzureBicepResource resource,
+        ProvisioningContext context,
+        ResourceIdentifier deploymentId,
+        string checksum,
+        string effectiveLocation,
+        CancellationToken cancellationToken)
+    {
+        var sectionName = $"Azure:Deployments:{resource.Name}";
+        var stateSection = await deploymentStateManager.AcquireSectionAsync(sectionName, cancellationToken).ConfigureAwait(false);
+        var cachedDeploymentId = stateSection.Data[BicepUtilities.DeploymentStateIdKey]?.GetValue<string>();
+        var cachedChecksum = stateSection.Data[BicepUtilities.DeploymentStateChecksumKey]?.GetValue<string>();
+
+        // The active deployment must be the same ARM deployment and the same compiled model checksum
+        // that this AppHost is trying to run. Otherwise, the 409 could be from another command or a
+        // previous model, and adopting it would publish the wrong outputs.
+        if (!IsRunningCachedDeployment(stateSection) ||
+            !string.Equals(cachedDeploymentId, deploymentId.ToString(), StringComparisons.AzureResourceId) ||
+            !string.Equals(cachedChecksum, checksum, StringComparison.Ordinal))
+        {
+            logger.LogDebug("Azure deployment {DeploymentId} for {ResourceName} is active, but cached state does not match the current deployment request.", deploymentId, resource.Name);
+            return false;
+        }
+
+        AzureDeploymentState? deployment;
+        try
+        {
+            // ARM is the source of truth after the 409. The cache proves ownership, but ARM tells us
+            // whether the deployment is still active, terminal, or already gone.
+            deployment = await context.ArmClient.GetDeploymentAsync(deploymentId.ToString(), cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (RequestFailedException ex)
+        {
+            logger.LogDebug(ex, "Unable to adopt active Azure deployment {DeploymentId} for {ResourceName} because the Azure deployment probe failed.", deploymentId, resource.Name);
+            return false;
+        }
+        catch (CredentialUnavailableException ex)
+        {
+            logger.LogDebug(ex, "Unable to adopt active Azure deployment {DeploymentId} for {ResourceName} because no Azure credential is available.", deploymentId, resource.Name);
+            return false;
+        }
+
+        if (deployment is null)
+        {
+            // The active-deployment conflict raced with deletion or cleanup. Do not clear local state
+            // here because this path runs while handling a failed create attempt; let the caller surface
+            // the original ARM failure.
+            logger.LogDebug("Unable to adopt active Azure deployment {DeploymentId} for {ResourceName} because it could not be found.", deploymentId, resource.Name);
+            return false;
+        }
+
+        var currentLocation = GetConfiguredLocation(stateSection, effectiveLocation);
+        if (IsActiveDeploymentProvisioningState(deployment.ProvisioningState))
+        {
+            // The deployment is still running, so wait on the existing ARM operation rather than
+            // starting a duplicate deployment with the same name.
+            logger.LogInformation("Azure deployment {DeploymentId} for {ResourceName} is already active. Waiting for the existing deployment to complete.", deploymentId, resource.Name);
+            deployment = await WaitForCachedRunningDeploymentAsync(
+                resource,
+                context,
+                deploymentId.ToString(),
+                currentLocation,
+                deployment,
+                cancellationToken).ConfigureAwait(false);
+
+            if (deployment is null)
+            {
+                // If the deployment disappears while we are waiting, adoption is no longer possible.
+                // Return false so the caller keeps the original conflict behavior.
+                logger.LogDebug("Unable to adopt active Azure deployment {DeploymentId} for {ResourceName} because it disappeared while waiting.", deploymentId, resource.Name);
+                return false;
+            }
+        }
+
+        // The conflict pointed at an existing deployment for this model. If it has
+        // now reached a known terminal state, adopt that result instead of starting
+        // another deployment.
+        if (await TryApplyTerminalReconciledDeploymentStateAsync(resource, stateSection, deploymentId, deployment, currentLocation, cancellationToken).ConfigureAwait(false))
+        {
+            return true;
+        }
+
+        // A non-terminal or unknown ARM state cannot be safely mapped to resource outputs or a dashboard
+        // terminal state, so leave it unadopted and let the original active-deployment failure stand.
+        logger.LogDebug("Unable to adopt active Azure deployment {DeploymentId} for {ResourceName} because provisioning state is {ProvisioningState}.", deploymentId, resource.Name, deployment.ProvisioningState);
+        return false;
+    }
+
+    private static bool IsActiveDeploymentConflict(RequestFailedException ex)
+        => ex.Status == 409 &&
+           string.Equals(ex.ErrorCode, DeploymentActiveErrorCode, StringComparisons.AzureProvisioningErrorCode);
 
     private async Task TrackDeploymentOperationsAsync(
         AzureBicepResource resource,
@@ -645,6 +1115,12 @@ internal sealed class BicepProvisioner(
     private static ImmutableArray<ResourcePropertySnapshot> CreateDeploymentOperationProperties(AzureDeploymentOperationSummary summary)
     {
         var properties = ImmutableArray.CreateBuilder<ResourcePropertySnapshot>();
+
+        if (CreateDeploymentOperationSummaryProperty(summary) is { } summaryProperty)
+        {
+            properties.Add(summaryProperty);
+        }
+
         properties.Add(new("azure.deployment.operations.total", summary.Operations.Length));
         properties.Add(new("azure.deployment.operations.running", summary.RunningOperations.Length));
         properties.Add(new("azure.deployment.operations.succeeded", summary.SucceededOperations.Length));
@@ -665,6 +1141,48 @@ internal sealed class BicepProvisioner(
             {
                 properties.Add(new(propertyName, labels));
             }
+        }
+    }
+
+    private static ResourcePropertySnapshot? CreateDeploymentOperationSummaryProperty(AzureDeploymentOperationSummary summary)
+    {
+        if (TryCreateSummaryValue(summary.FailedOperations, AzureProvisioningStrings.DeploymentOperationFailedResourcesFormat, out var failedValue))
+        {
+            return CreateSummaryProperty(failedValue);
+        }
+
+        if (TryCreateSummaryValue(summary.CanceledOperations, AzureProvisioningStrings.DeploymentOperationCanceledResourcesFormat, out var canceledValue))
+        {
+            return CreateSummaryProperty(canceledValue);
+        }
+
+        if (TryCreateSummaryValue(summary.RunningOperations, AzureProvisioningStrings.DeploymentOperationRunningResourcesFormat, out var runningValue))
+        {
+            return CreateSummaryProperty(runningValue);
+        }
+
+        return null;
+
+        static bool TryCreateSummaryValue(ImmutableArray<AzureDeploymentOperationDetails> operations, string format, [NotNullWhen(true)] out string? value)
+        {
+            var labels = CreateOperationResourceLabels(operations);
+            if (labels.Length > 0)
+            {
+                value = string.Format(CultureInfo.CurrentCulture, format, string.Join(", ", labels));
+                return true;
+            }
+
+            value = null;
+            return false;
+        }
+
+        static ResourcePropertySnapshot CreateSummaryProperty(string value)
+        {
+            return new(DeploymentOperationSummaryPropertyName, value)
+            {
+                DisplayName = AzureProvisioningStrings.DeploymentOperationSummaryDisplayName,
+                IsHighlighted = true
+            };
         }
     }
 
@@ -710,22 +1228,24 @@ internal sealed class BicepProvisioner(
     {
         if (summary.FailedOperations.Length > 0)
         {
-            return new("Azure deployment failed", KnownResourceStateStyles.Error);
+            return new(AzureProvisioningStrings.ResourceStateAzureDeploymentFailed, KnownResourceStateStyles.Error);
         }
 
         var runningLabels = CreateOperationResourceLabels(summary.RunningOperations);
         if (runningLabels.Length > 0)
         {
             var runningText = runningLabels.Length == 1
-                ? $"Provisioning {runningLabels[0]}"
-                : $"Provisioning {runningLabels.Length} Azure resources";
+                ? string.Format(CultureInfo.CurrentCulture, AzureProvisioningStrings.ResourceStateProvisioningResourceFormat, runningLabels[0])
+                : string.Format(CultureInfo.CurrentCulture, AzureProvisioningStrings.ResourceStateProvisioningMultipleAzureResourcesFormat, runningLabels.Length);
 
             return new(runningText, KnownResourceStateStyles.Info);
         }
 
         if (summary.SucceededOperations.Length > 0)
         {
-            return new($"Provisioned {summary.SucceededOperations.Length} Azure resources", KnownResourceStateStyles.Info);
+            return new(
+                string.Format(CultureInfo.CurrentCulture, AzureProvisioningStrings.ResourceStateProvisionedMultipleAzureResourcesFormat, summary.SucceededOperations.Length),
+                KnownResourceStateStyles.Info);
         }
 
         return new(AzureProvisioningController.WaitingForDeploymentState, KnownResourceStateStyles.Info);

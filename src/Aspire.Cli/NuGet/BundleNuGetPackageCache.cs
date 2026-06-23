@@ -282,7 +282,6 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
 
         return packages.Where(effectiveFilter);
     }
-
 }
 
 #region JSON Models for NuGetHelper output

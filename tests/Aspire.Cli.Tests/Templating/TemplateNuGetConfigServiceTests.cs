@@ -7,6 +7,7 @@ using Aspire.Cli.Tests.Mcp;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Xml.Linq;
 
 namespace Aspire.Cli.Tests.Templating;
@@ -90,7 +91,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
                         new PackageMapping(PackageMapping.AllPackages, fallbackSource),
                     ],
                     new FakeNuGetPackageCache(),
-                    features: new TestFeatures());
+                    features: new TestFeatures(), NullLogger.Instance);
                 return Task.FromResult<IEnumerable<PackageChannel>>([channel]);
             }
         };
@@ -146,7 +147,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         Assert.Contains(doc.Root!.Element("packageSources")!.Elements("add"), e => (string?)e.Attribute("value") == "https://project.example/v3/index.json");
         Assert.DoesNotContain(doc.Root!.Element("packageSources")!.Elements("add"), e => (string?)e.Attribute("value") == "https://parent.example/v3/index.json");
         Assert.Equal(["Aspire*"], GetPackagePatternsForSource(doc, sourceOverride));
-        Assert.Equal(["Project.*", PackageMapping.AllPackages], GetPackagePatternsForSource(doc, "project-local"));
+        Assert.Equal(["Project.*"], GetPackagePatternsForSource(doc, "project-local"));
     }
 
     [Fact]
@@ -226,7 +227,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
                 var implicitCh = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache
                 {
                     GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult(Enumerable.Empty<Aspire.Shared.NuGetPackageCli>())
-                }, new TestFeatures());
+                }, new TestFeatures(), NullLogger.Instance);
                 return Task.FromResult<IEnumerable<PackageChannel>>([implicitCh]);
             }
         };
@@ -259,7 +260,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         {
             GetChannelsAsyncCallback = _ =>
             {
-                var implicitCh = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache(), new TestFeatures());
+                var implicitCh = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
                 return Task.FromResult<IEnumerable<PackageChannel>>([implicitCh]);
             }
         };
@@ -286,7 +287,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         {
             GetChannelsAsyncCallback = _ =>
             {
-                var implicitCh = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache(), new TestFeatures());
+                var implicitCh = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
                 var stableCh = PackageChannel.CreateExplicitChannel(
                     "stable",
                     PackageChannelQuality.Both,
@@ -298,7 +299,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
                             new Aspire.Shared.NuGetPackageCli { Id = TemplateNuGetConfigService.TemplatesPackageName, Version = "13.3.0", Source = "stable-src" }
                         ])
                     },
-                    features: new TestFeatures());
+                    features: new TestFeatures(), NullLogger.Instance);
                 return Task.FromResult<IEnumerable<PackageChannel>>([implicitCh, stableCh]);
             }
         };
@@ -328,7 +329,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         {
             GetChannelsAsyncCallback = _ =>
             {
-                var implicitCh = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache(), new TestFeatures());
+                var implicitCh = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
                 return Task.FromResult<IEnumerable<PackageChannel>>([implicitCh]);
             }
         };
@@ -389,13 +390,14 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
                     [
                         new Aspire.Shared.NuGetPackageCli { Id = TemplateNuGetConfigService.TemplatesPackageName, Version = "1.0.0", Source = "implicit-src" }
                     ])
-                }, new TestFeatures());
+                }, new TestFeatures(), NullLogger.Instance);
                 var hiveCh = PackageChannel.CreateExplicitChannel(
                     "pr-12345",
                     PackageChannelQuality.Both,
                     [new PackageMapping("Aspire*", "pr-src")],
                     new FakeNuGetPackageCache(),
                     features: new TestFeatures(),
+                    NullLogger.Instance,
                     pinnedVersion: "2.0.0");
                 return Task.FromResult<IEnumerable<PackageChannel>>([implicitCh, hiveCh]);
             }
@@ -455,13 +457,14 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
                     [
                         new Aspire.Shared.NuGetPackageCli { Id = TemplateNuGetConfigService.TemplatesPackageName, Version = "13.4.3", Source = "nuget.org" }
                     ])
-                }, new TestFeatures());
+                }, new TestFeatures(), NullLogger.Instance);
                 var localStableCh = PackageChannel.CreateExplicitChannel(
                     "stable",
                     PackageChannelQuality.Both,
                     [new PackageMapping("Aspire*", packagesDir.FullName.Replace('\\', '/'))],
                     new FakeNuGetPackageCache(),
                     features: new TestFeatures(),
+                    NullLogger.Instance,
                     pinnedVersion: "13.5.0");
                 return Task.FromResult<IEnumerable<PackageChannel>>([implicitCh, localStableCh]);
             }
@@ -519,7 +522,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
                         new PackageMapping("*", "https://api.nuget.org/v3/index.json")
                     ],
                     new FakeNuGetPackageCache(),
-                    features: new TestFeatures());
+                    features: new TestFeatures(), NullLogger.Instance);
                 return Task.FromResult<IEnumerable<PackageChannel>>([dailyCh]);
             }
         };
@@ -557,7 +560,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
                     PackageChannelQuality.Stable,
                     [new PackageMapping("*", "https://api.nuget.org/v3/index.json")],
                     new FakeNuGetPackageCache(),
-                    features: new TestFeatures());
+                    features: new TestFeatures(), NullLogger.Instance);
                 return Task.FromResult<IEnumerable<PackageChannel>>([stableCh]);
             }
         };
@@ -602,7 +605,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
                     PackageChannelQuality.Stable,
                     [new PackageMapping("*", "https://api.nuget.org/v3/index.json")],
                     new FakeNuGetPackageCache(),
-                    features: new TestFeatures());
+                    features: new TestFeatures(), NullLogger.Instance);
                 return Task.FromResult<IEnumerable<PackageChannel>>([stableCh]);
             }
         };
@@ -659,7 +662,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
                     PackageChannelQuality.Stable,
                     [new PackageMapping("*", "https://api.nuget.org/v3/index.json")],
                     new FakeNuGetPackageCache(),
-                    features: new TestFeatures());
+                    features: new TestFeatures(), NullLogger.Instance);
                 return Task.FromResult<IEnumerable<PackageChannel>>([stableCh]);
             }
         };

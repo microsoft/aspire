@@ -44,8 +44,8 @@ internal sealed class AppHostConnectionResolver(
     IProjectLocator projectLocator,
     CliExecutionContext executionContext,
     ICliHostEnvironment hostEnvironment,
-    ILogger logger,
-    ProfilingTelemetry? profilingTelemetry = null)
+    ILogger<AppHostConnectionResolver> logger,
+    ProfilingTelemetry profilingTelemetry)
 {
     /// <summary>
     /// Resolves all running AppHost connections using socket-first discovery.
@@ -147,7 +147,7 @@ internal sealed class AppHostConnectionResolver(
                 try
                 {
                     var connection = await AppHostAuxiliaryBackchannel.ConnectAsync(
-                        socketPath, logger, cancellationToken, profilingTelemetry).ConfigureAwait(false);
+                        socketPath, logger, profilingTelemetry, cancellationToken).ConfigureAwait(false);
                     if (connection is not null)
                     {
                         var result = new AppHostConnectionResult { Connection = connection };

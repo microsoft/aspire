@@ -6,7 +6,6 @@ using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Utils;
@@ -50,8 +49,7 @@ internal sealed class ExportCommand : BaseCommand
     };
 
     public ExportCommand(
-        IAuxiliaryBackchannelMonitor backchannelMonitor,
-        IProjectLocator projectLocator,
+        AppHostConnectionResolver connectionResolver,
         IHttpClientFactory httpClientFactory,
         TimeProvider timeProvider,
         ILogger<ExportCommand> logger,
@@ -61,7 +59,7 @@ internal sealed class ExportCommand : BaseCommand
         _httpClientFactory = httpClientFactory;
         _timeProvider = timeProvider;
         _logger = logger;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, services.ExecutionContext, services.HostEnvironment, logger);
+        _connectionResolver = connectionResolver;
 
         Arguments.Add(s_resourceArgument);
         Options.Add(s_appHostOption);

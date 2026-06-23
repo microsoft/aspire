@@ -1,8 +1,10 @@
 import type * as vscode from 'vscode';
+import type { EnvVar, ExecutableLaunchConfiguration } from '../dcp/types';
 import type { ViewMode } from '../views/AppHostDataRepository';
 import type { CommandInvocationEvent } from '../utils/telemetry';
 import type { AspireTerminalCommandEvent } from '../utils/AspireTerminalProvider';
 import type { AppHostLaunchRequestedEvent } from '../services/AppHostLaunchService';
+import type { AcquiredTestRunSession, TestRunSessionAcquireOptions } from '../dcp/TestRunSessionManager';
 
 export interface AspireExtensionStateSnapshot {
     viewMode: ViewMode;
@@ -34,6 +36,7 @@ export interface AspireResourceState {
     displayName: string | null;
     resourceType: string;
     state: string | null;
+    projectPath: string | null;
     dashboardUrl: string | null;
     urls: readonly AspireResourceUrlState[] | null;
     commands: Record<string, AspireResourceCommandState> | null;
@@ -67,8 +70,7 @@ export interface WaitForStateOptions {
     timeoutMs?: number;
 }
 
-export interface AspireExtensionApi {
-    readonly apiVersion: 1;
+export interface AspireExtensionApiBase {
     readonly rpcServerInfo: AspireServerInfo;
     readonly dcpServerInfo: AspireServerInfo;
     readonly logDirectory: string;
@@ -78,6 +80,21 @@ export interface AspireExtensionApi {
     waitForRepositoryIdle(options?: WaitForStateOptions): Promise<AspireExtensionStateSnapshot>;
     getDashboardUrl(appHostPath?: string): string | undefined;
 }
+
+export interface AspireExtensionApiV1 extends AspireExtensionApiBase {
+    readonly apiVersion: 1;
+}
+
+export interface AspireExtensionApiV2 extends AspireExtensionApiBase {
+    readonly apiVersion: 2;
+    getRunningAppHosts(): Promise<readonly AspireAppHostState[]>;
+    stopResource(resourceName: string, appHostPath: string): Promise<void>;
+    startResource(resourceName: string, appHostPath: string): Promise<void>;
+    acquireTestRunSession(options: TestRunSessionAcquireOptions): AcquiredTestRunSession;
+    releaseTestRunSession(id: string): Promise<void>;
+}
+
+export type AspireExtensionApi = AspireExtensionApiV2;
 
 export interface AspireExtensionE2EStateFile {
     updatedAt: string;
@@ -136,12 +153,14 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'stopAppHost'; appHostPath?: string }
     | { name: 'openDashboard'; appHostPath?: string }
     | { name: 'debugAppHost'; appHostPath?: string }
+    | { name: 'publishAppHost'; appHostPath?: string }
     | { name: 'openAppHostSource'; appHostPath?: string }
     | { name: 'viewAppHostSource'; appHostPath?: string }
     | { name: 'copyAppHostPath'; appHostPath?: string }
     | { name: 'viewAppHostLogFile'; appHostPath?: string }
     | { name: 'copyLogFilePath'; appHostPath?: string }
     | { name: 'viewResourceLogs'; appHostPath?: string; resourceName: string }
+    | { name: 'openResourceTerminal'; appHostPath?: string; resourceName: string }
     | { name: 'copyResourceName'; appHostPath?: string; resourceName: string }
     | { name: 'copyEndpointUrl'; appHostPath?: string; resourceName?: string; url?: string }
     | { name: 'openInIntegratedBrowser'; appHostPath?: string; resourceName?: string; url?: string }
@@ -163,4 +182,7 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'readClipboard' }
     | { name: 'openWorkspaceFolder'; folderPath: string }
     | { name: 'getWorkspaceFolders' }
-    | { name: 'getActiveEditor' };
+    | { name: 'getActiveEditor' }
+    | { name: 'getResourceDebuggerExtensions' }
+    | { name: 'createResourceDebugConfiguration'; launchConfig: ExecutableLaunchConfiguration; args?: readonly string[]; env?: readonly EnvVar[]; debug?: boolean }
+    | { name: 'proveMauiResourceDebugging'; appHostPath: string; resourceName: string; sourcePath: string; breakpointLine: number; timeoutMs?: number; pauseOnBreakpointMs?: number };
