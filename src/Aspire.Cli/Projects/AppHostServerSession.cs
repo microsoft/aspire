@@ -249,7 +249,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         // The completion is the lifetime signal published by Start; DriveAsync trips it (never the
         // raw run task, which is hardened to never throw). Hand back the same task each call so a
         // caller can capture it, poll IsCompleted, and await it without spawning new tasks.
-        return (_completion ?? throw NotStarted()).Task;
+        return (_completion ?? throw new SessionNotStartedException()).Task;
     }
 
     // Owns the single WaitForExitAsync call for the child. On normal exit it trips the completion
@@ -286,10 +286,10 @@ internal sealed class AppHostServerSession : IAppHostServerSession
             return _rpcClient;
         }
 
-        var socketPath = _socketPath ?? throw NotStarted();
+        var socketPath = _socketPath ?? throw new SessionNotStartedException();
         // _completion is published alongside _socketPath in Start, so a non-null socket
         // path guarantees the server-exit signal is available here.
-        var serverExitTask = (_completion ?? throw NotStarted()).Task;
+        var serverExitTask = (_completion ?? throw new SessionNotStartedException()).Task;
 
         // ConnectAsync already retries until the RPC socket is available. Race it against the
         // server-exit signal instead of sleeping first, so fast startups connect immediately and
@@ -441,8 +441,8 @@ internal sealed class AppHostServerSession : IAppHostServerSession
             TaskScheduler.Default);
     }
 
-    private static InvalidOperationException NotStarted() =>
-        new($"{nameof(AppHostServerSession)} has not been started. Call {nameof(StartAsync)} first.");
+    private sealed class SessionNotStartedException() : InvalidOperationException(
+        $"{nameof(AppHostServerSession)} has not been started. Call {nameof(StartAsync)} first.");
 }
 
 /// <summary>
