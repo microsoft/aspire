@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Utils;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Integrations;
@@ -20,6 +21,29 @@ internal sealed record IntegrationPackageCandidate(
 
     public (string FriendlyName, NuGetPackage Package, PackageChannel Channel) ToLegacyPackage() =>
         (Name, Package, Channel);
+
+    public double GetSearchScore(string searchTerm)
+    {
+        var score = Math.Max(
+            StringUtils.CalculateFuzzyScore(searchTerm, Name),
+            StringUtils.CalculateFuzzyScore(searchTerm, QualifiedName));
+
+        if (Entry.DisplayName is { } displayName)
+        {
+            score = Math.Max(score, StringUtils.CalculateFuzzyScore(searchTerm, displayName));
+        }
+
+        foreach (var alias in Entry.Aliases)
+        {
+            score = Math.Max(score, StringUtils.CalculateFuzzyScore(searchTerm, alias));
+        }
+
+        return Math.Max(
+            score,
+            Math.Max(
+                StringUtils.CalculateFuzzyScore(searchTerm, Package.Id),
+                StringUtils.CalculateFuzzyScore(searchTerm, ProviderCoordinate)));
+    }
 
     public bool IsExactMatch(string? value)
     {

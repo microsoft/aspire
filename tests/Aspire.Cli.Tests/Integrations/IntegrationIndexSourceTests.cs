@@ -62,15 +62,12 @@ public class IntegrationIndexSourceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var cache = new FakeNuGetPackageCache
         {
-            GetPackagesAsyncCallback = (_, packageId, filter, prerelease, _, useCache, _) =>
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) =>
             {
-                Assert.Equal("Aspire.Hosting.Redis", packageId);
-                Assert.True(filter?.Invoke("Aspire.Hosting.Redis") == true);
-                Assert.True(useCache);
-
-                return Task.FromResult<IEnumerable<NuGetPackage>>(prerelease
-                    ? [CreatePackage("Aspire.Hosting.Redis", "13.5.0-preview.1")]
-                    : [CreatePackage("Aspire.Hosting.Redis", "13.4.0")]);
+                return Task.FromResult<IEnumerable<NuGetPackage>>([
+                    CreatePackage("Aspire.Hosting.Redis", "13.4.0"),
+                    CreatePackage("Aspire.Hosting.RabbitMQ", "13.4.0"),
+                ]);
             }
         };
         var channel = PackageChannel.CreateImplicitChannel(cache, new TestFeatures(), NullLogger.Instance);
@@ -88,24 +85,75 @@ public class IntegrationIndexSourceTests(ITestOutputHelper outputHelper)
 
         var candidates = (await source.GetPackageCandidatesAsync(
             new IntegrationIndexSourceContext(workspace.WorkspaceRoot, [channel]),
-            CancellationToken.None)).OrderBy(static candidate => candidate.Package.Version).ToArray();
+            CancellationToken.None)).ToArray();
 
         Assert.Equal(IntegrationIndexSourceKind.StaticGeneratedArtifact, source.Index.SourceKind);
-        Assert.Collection(candidates,
-            candidate =>
+        var candidate = Assert.Single(candidates);
+        Assert.Equal("redis", candidate.Name);
+        Assert.Equal("aspire/redis", candidate.QualifiedName);
+        Assert.Equal("13.4.0", candidate.Package.Version);
+        Assert.Equal("nuget:Aspire.Hosting.Redis", candidate.ProviderCoordinate);
+        Assert.True(candidate.IsExactMatch("cache"));
+        Assert.True(candidate.IsExactMatch("aspire/redis"));
+    }
+
+    [Fact]
+    public async Task StaticGeneratedIndexSourceLoadsEmbeddedAspireIndex()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var cache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) =>
             {
-                Assert.Equal("redis", candidate.Name);
-                Assert.Equal("aspire/redis", candidate.QualifiedName);
-                Assert.Equal("13.4.0", candidate.Package.Version);
-                Assert.True(candidate.IsExactMatch("cache"));
-                Assert.True(candidate.IsExactMatch("aspire/redis"));
-            },
-            candidate =>
+                return Task.FromResult<IEnumerable<NuGetPackage>>([
+                    CreatePackage("Aspire.Hosting.Redis", "13.4.0")
+                ]);
+            }
+        };
+        var channel = PackageChannel.CreateImplicitChannel(cache, new TestFeatures(), NullLogger.Instance);
+        var source = new StaticGeneratedIntegrationIndexSource();
+
+        var candidate = Assert.Single(await source.GetPackageCandidatesAsync(
+            new IntegrationIndexSourceContext(workspace.WorkspaceRoot, [channel]),
+            CancellationToken.None));
+
+        Assert.Equal("aspire", source.Index.Id);
+        Assert.Equal("redis", candidate.Name);
+        Assert.Equal("Redis", candidate.Entry.DisplayName);
+        Assert.Equal("Aspire.Hosting.Redis", candidate.Provider.Package);
+        Assert.True(candidate.IsExactMatch("cache"));
+    }
+
+    [Fact]
+    public async Task ResolverSharesNuGetIntegrationSearchAcrossStaticAndDynamicIndexes()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var packageSearchCount = 0;
+        var cache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) =>
             {
-                Assert.Equal("redis", candidate.Name);
-                Assert.Equal("13.5.0-preview.1", candidate.Package.Version);
-                Assert.Equal("nuget:Aspire.Hosting.Redis", candidate.ProviderCoordinate);
-            });
+                Interlocked.Increment(ref packageSearchCount);
+                return Task.FromResult<IEnumerable<NuGetPackage>>([
+                    CreatePackage("Aspire.Hosting.Redis", "13.4.0")
+                ]);
+            }
+        };
+        var channel = PackageChannel.CreateImplicitChannel(cache, new TestFeatures(), NullLogger.Instance);
+        var resolver = new IntegrationResolver([
+            new StaticGeneratedIntegrationIndexSource(),
+            new NuGetSearchIntegrationIndexSource()
+        ]);
+
+        var candidates = (await resolver.GetPackageCandidatesAsync(
+            new IntegrationIndexSourceContext(workspace.WorkspaceRoot, [channel]),
+            CancellationToken.None)).ToArray();
+
+        // The implicit channel probes stable and prerelease once. If the static and dynamic
+        // index sources did not share the channel-level search result, this would be 4.
+        Assert.Equal(2, packageSearchCount);
+        Assert.Contains(candidates, candidate => candidate.QualifiedName == "aspire/redis");
+        Assert.Contains(candidates, candidate => candidate.QualifiedName == "nuget-search/redis");
     }
 
     private static NuGetPackage CreatePackage(string id, string version)

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "index": {
+    "id": "aspire",
+    "displayName": "Aspire",
+    "provenance": "official"
+  },
+  "entries": [
+    {
+      "id": "redis",
+      "displayName": "Redis",
+      "aliases": [
+        "cache"
+      ],
+      "providers": [
+        {
+          "type": "nuget",
+          "package": "Aspire.Hosting.Redis",
+          "languages": [
+            "csharp",
+            "typescript",
+            "python"
+          ]
+        }
+      ]
+    }
+  ]
+}

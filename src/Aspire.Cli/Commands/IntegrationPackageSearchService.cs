@@ -137,11 +137,28 @@ internal sealed class IntegrationPackageSearchService(
             .ThenByDescending(p => p.FriendlyName, new CommunityToolkitFirstComparer());
     }
 
+    public static IEnumerable<(IntegrationPackageCandidate Candidate, double SearchScore)> GetIntegrationSearchMatches(IEnumerable<IntegrationPackageCandidate> candidates, string searchTerm)
+    {
+        return candidates
+            .Select(candidate => (Candidate: candidate, SearchScore: candidate.GetSearchScore(searchTerm)))
+            .Where(candidate => candidate.SearchScore > FuzzyMatchThreshold)
+            .OrderByDescending(candidate => candidate.SearchScore)
+            .ThenByDescending(candidate => candidate.Candidate.Name, new CommunityToolkitFirstComparer());
+    }
+
     public static (string FriendlyName, NuGetPackage Package, PackageChannel Channel, double SearchScore) SelectPreferredIntegrationPackage(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel, double SearchScore)> packages)
     {
         return packages
             .OrderByDescending(p => p.Channel.Type is PackageChannelType.Implicit)
             .ThenByDescending(p => SemVersion.Parse(p.Package.Version), SemVersion.PrecedenceComparer)
+            .First();
+    }
+
+    public static IntegrationPackageCandidate SelectPreferredIntegrationPackage(IEnumerable<IntegrationPackageCandidate> candidates)
+    {
+        return candidates
+            .OrderByDescending(candidate => candidate.Channel.Type is PackageChannelType.Implicit)
+            .ThenByDescending(candidate => SemVersion.Parse(candidate.Package.Version), SemVersion.PrecedenceComparer)
             .First();
     }
 

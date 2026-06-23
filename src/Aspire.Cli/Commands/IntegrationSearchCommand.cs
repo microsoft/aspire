@@ -4,13 +4,12 @@
 using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
+using Aspire.Cli.Integrations;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Spectre.Console;
-using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Commands;
 
@@ -59,12 +58,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
                 async () => await _integrationPackageSearchService.GetIntegrationPackageCandidatesAsync(workingDirectory, configuredChannel, cancellationToken)))
                 .ToArray();
 
-            var packagesWithShortName = packageCandidates
-                .Select(static candidate => candidate.ToLegacyPackage())
-                .OrderBy(p => p.FriendlyName, new CommunityToolkitFirstComparer())
-                .ToArray();
-
-            return CommandResult.FromExitCode(DisplayIntegrationResults(packagesWithShortName, searchTerm, format));
+            return CommandResult.FromExitCode(DisplayIntegrationResults(packageCandidates, searchTerm, format));
         }
         catch (ProjectLocatorException ex)
         {
@@ -82,24 +76,24 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
         }
     }
 
-    private int DisplayIntegrationResults(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, string? searchTerm, OutputFormat format)
+    private int DisplayIntegrationResults(IEnumerable<IntegrationPackageCandidate> candidates, string? searchTerm, OutputFormat format)
     {
         var matches = (searchTerm is null
-            ? packages.Select(p => (p.FriendlyName, p.Package, p.Channel, SearchScore: 0.0))
-            : IntegrationPackageSearchService.GetIntegrationSearchMatches(packages, searchTerm))
-            .GroupBy(p => p.Package.Id)
+            ? candidates
+            : IntegrationPackageSearchService.GetIntegrationSearchMatches(candidates, searchTerm).Select(static match => match.Candidate))
+            .GroupBy(static candidate => candidate.Package.Id)
             .Select(IntegrationPackageSearchService.SelectPreferredIntegrationPackage);
 
         var orderedMatches = searchTerm is null
-            ? matches.OrderBy(p => p.FriendlyName, new CommunityToolkitFirstComparer()).ThenBy(p => p.Package.Id, StringComparer.OrdinalIgnoreCase)
+            ? matches.OrderBy(static candidate => candidate.Name, new CommunityToolkitFirstComparer()).ThenBy(static candidate => candidate.Package.Id, StringComparer.OrdinalIgnoreCase)
             : matches;
 
         var results = orderedMatches
-            .Select(p => new IntegrationSearchResult
+            .Select(candidate => new IntegrationSearchResult
             {
-                Name = p.FriendlyName,
-                Package = p.Package.Id,
-                Version = p.Package.Version
+                Name = candidate.Name,
+                Package = candidate.Package.Id,
+                Version = candidate.Package.Version
             })
             .ToArray();
 

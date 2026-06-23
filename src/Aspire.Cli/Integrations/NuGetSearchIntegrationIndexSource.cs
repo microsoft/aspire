@@ -22,9 +22,7 @@ internal sealed class NuGetSearchIntegrationIndexSource : IIntegrationIndexSourc
 
         await Parallel.ForEachAsync(context.Channels, cancellationToken, async (channel, ct) =>
         {
-            var integrationPackages = await channel.GetIntegrationPackagesAsync(
-                workingDirectory: context.WorkingDirectory,
-                cancellationToken: ct);
+            var integrationPackages = await context.GetNuGetIntegrationPackagesAsync(channel, ct);
 
             var channelCandidates = integrationPackages.Select(package =>
             {

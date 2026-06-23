@@ -1001,6 +1001,45 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task IntegrationSearchCommandFormatJsonMatchesStaticIndexAlias()
+    {
+        var rawJson = string.Empty;
+        var testInteractionService = new TestInteractionService
+        {
+            DisplayRawTextCallback = text => rawJson = text
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (_, _, _, _, _, _, _, _, _, _) =>
+                {
+                    return (0, [CreatePackage("Aspire.Hosting.Redis", "13.4.0")]);
+                };
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("integration search cache --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var integration = Assert.Single(ReadIntegrationResults(rawJson));
+        Assert.Equal("redis", integration.Name);
+        Assert.Equal("Aspire.Hosting.Redis", integration.Package);
+        Assert.Equal("13.4.0", integration.Version);
+    }
+
+    [Fact]
     public async Task AddCommandExactIndexQualifiedNameDoesNotMatchOtherEntryForSamePackage()
     {
         var addedPackageVersion = string.Empty;
