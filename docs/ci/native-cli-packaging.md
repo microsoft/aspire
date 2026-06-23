@@ -41,12 +41,12 @@ Linux native jobs do not sign ELF binaries in `build_sign_native`. For Linux, ex
 
 The root `flake.nix` packages the stable Aspire CLI from the versioned GitHub release archive URLs and hashes tracked in `eng/nix/versions.json`. It is a binary package, not a Nix source build of this repository. This keeps the Nix package aligned with the same canonical signed native archive consumed by the other installers.
 
-For stable releases, `release-publish-nuget` dispatches `.github/workflows/update-nix-cli-flake.yml` after `PublishReleaseAssetsJob` uploads the `aspire-cli-*` archives and `.sha512` sidecars to the GitHub release. The workflow runs:
+For stable releases, the GitHub release assets must exist before the Nix manifest is updated. `release-publish-nuget` dispatches `.github/workflows/update-nix-cli-flake.yml` after `PublishReleaseAssetsJob` uploads the `aspire-cli-*` archives and `.sha512` sidecars to the GitHub release. The workflow runs:
 
 ```sh
 eng/nix/update-versions.sh --version <VERSION>
 ```
 
-The workflow commits the Nix manifest change to the `update-baseline-<VERSION>` branch created by `release-github-tasks.yml`, then creates or updates the baseline PR. The updater reads the official `.sha512` assets and writes Nix-compatible SRI hashes. Do not point the manifest at mutable `aka.ms` channel URLs; Nix fixed-output fetches require stable versioned URLs.
+The workflow commits the Nix manifest change to the `update-baseline-<VERSION>` branch created by `release-github-tasks.yml`, then creates or updates the baseline PR. Merging that PR is the in-repo Nix "ship" step: it publishes the flake metadata that points at the already-published release assets. The updater reads the official `.sha512` assets and writes Nix-compatible SRI hashes. Do not point the manifest at mutable `aka.ms` channel URLs; Nix fixed-output fetches require stable versioned URLs.
 
 The Nix derivation writes `{"source":"nix"}` to `.aspire-install.json` next to the packaged native binary. `BundleService` treats this route as read-only and extracts the embedded bundle payload into the user-owned Aspire home instead of the Nix store.

@@ -86,7 +86,9 @@ Use the overlay the same way:
 
 ## Updating the packaged version
 
-The `release-publish-nuget` Azure DevOps pipeline dispatches `.github/workflows/update-nix-cli-flake.yml` after stable CLI archives and `.sha512` sidecars are uploaded to the GitHub release. That workflow runs the updater below, commits the Nix manifest change to the `update-baseline-<version>` branch created by `release-github-tasks.yml`, and creates or updates the baseline PR so the post-release stable version updates stay together.
+The stable GitHub release assets must exist before this manifest is updated. The `release-publish-nuget` Azure DevOps pipeline dispatches `.github/workflows/update-nix-cli-flake.yml` after stable CLI archives and `.sha512` sidecars are uploaded to the GitHub release. That workflow runs the updater below, commits the Nix manifest change to the `update-baseline-<version>` branch created by `release-github-tasks.yml`, and creates or updates the baseline PR so the post-release stable version updates stay together.
+
+Merging the baseline PR is the in-repo Nix "ship" step: it updates the flake metadata in `main` to point at the already-published GitHub release assets and hashes. There is no separate Nix registry publish step in this repository.
 
 To update the manifest manually after a stable Aspire release publishes native CLI assets to GitHub, pass the same stable version used by the release baseline PR:
 
