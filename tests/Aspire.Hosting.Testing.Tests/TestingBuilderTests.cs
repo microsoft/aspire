@@ -6,6 +6,7 @@ using System.Reflection;
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Tests;
 using Aspire.Hosting.Tests.Utils;
+using Aspire.Hosting.UserSecrets;
 using Aspire.Hosting.Utils;
 using Aspire.TestProject;
 using Aspire.TestUtilities;
@@ -17,12 +18,16 @@ using Xunit;
 
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIRECONTAINERSHELLEXECUTION001
+#pragma warning disable ASPIREFILESYSTEM001
+#pragma warning disable ASPIREUSERSECRETS001
 
 namespace Aspire.Hosting.Testing.Tests;
 
 public class TestingBuilderTests(ITestOutputHelper output)
 {
     private static readonly TimeSpan s_appAliveCheckTimeout = TimeSpan.FromMinutes(1);
+    private const string AspireUserSecretsIdConfigKey = "ASPIRE_USER_SECRETS_ID";
+    private const string IsolateUserSecretsConfigKey = "ASPIRE_ISOLATE_USER_SECRETS";
 
     [Fact]
     [ActiveIssue("https://github.com/dotnet/dnceng/issues/6232", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningOnAzdoBuildMachine))]
@@ -126,6 +131,295 @@ public class TestingBuilderTests(ITestOutputHelper output)
     {
         var builder = await DistributedApplicationTestingBuilder.CreateAsync<Projects.TestingAppHost1_AppHost>();
         Assert.Equal(Environments.Development, builder.Environment.EnvironmentName);
+    }
+
+    [Fact]
+    public async Task CreateAsyncUsesCopiedIsolatedUserSecretsStore()
+    {
+        var sourceUserSecretsId = Guid.NewGuid().ToString();
+        var sourceManager = CreateUserSecretsManager(sourceUserSecretsId);
+        var probeKey = $"IsolationProbe:{Guid.NewGuid():N}";
+        var probeValue = Guid.NewGuid().ToString("N");
+        Assert.True(sourceManager.TrySetSecret(probeKey, probeValue));
+
+        string? isolatedUserSecretsFilePath = null;
+        try
+        {
+            await using var builder = await DistributedApplicationTestingBuilder.CreateAsync(
+                typeof(Projects.TestingAppHost1_AppHost),
+                [$"{AspireUserSecretsIdConfigKey}={sourceUserSecretsId}", $"{IsolateUserSecretsConfigKey}=true"],
+                (_, _) => { });
+
+            isolatedUserSecretsFilePath = builder.UserSecretsManager.FilePath;
+
+            Assert.Equal(sourceUserSecretsId, builder.Configuration[AspireUserSecretsIdConfigKey]);
+            Assert.NotEqual(sourceManager.FilePath, isolatedUserSecretsFilePath);
+            Assert.Equal("secrets.json", Path.GetFileName(isolatedUserSecretsFilePath));
+            Assert.True(Directory.Exists(Path.GetDirectoryName(isolatedUserSecretsFilePath)));
+            Assert.Equal(probeValue, builder.Configuration[probeKey]);
+            Assert.True(builder.UserSecretsManager.TrySetSecret("IsolationProbe", "isolated"));
+            Assert.True(File.Exists(isolatedUserSecretsFilePath));
+        }
+        finally
+        {
+            DeleteUserSecretsFile(sourceManager.FilePath);
+        }
+
+        Assert.False(File.Exists(isolatedUserSecretsFilePath));
+    }
+
+    [Fact]
+    public void CreateUsesCopiedIsolatedUserSecretsStore()
+    {
+        var sourceUserSecretsId = Guid.NewGuid().ToString();
+        var sourceManager = CreateUserSecretsManager(sourceUserSecretsId);
+        var probeKey = $"IsolationProbe:{Guid.NewGuid():N}";
+        var probeValue = Guid.NewGuid().ToString("N");
+        Assert.True(sourceManager.TrySetSecret(probeKey, probeValue));
+
+        string? isolatedUserSecretsFilePath = null;
+        try
+        {
+            using var builder = DistributedApplicationTestingBuilder.Create(
+                [$"{AspireUserSecretsIdConfigKey}={sourceUserSecretsId}", $"{IsolateUserSecretsConfigKey}=true"],
+                (_, _) => { },
+                typeof(Projects.TestingAppHost1_AppHost).Assembly);
+
+            isolatedUserSecretsFilePath = builder.UserSecretsManager.FilePath;
+
+            Assert.Equal(sourceUserSecretsId, builder.Configuration[AspireUserSecretsIdConfigKey]);
+            Assert.NotEqual(sourceManager.FilePath, isolatedUserSecretsFilePath);
+            Assert.Equal("secrets.json", Path.GetFileName(isolatedUserSecretsFilePath));
+            Assert.True(Directory.Exists(Path.GetDirectoryName(isolatedUserSecretsFilePath)));
+            Assert.Equal(probeValue, builder.Configuration[probeKey]);
+            Assert.True(builder.UserSecretsManager.TrySetSecret("IsolationProbe", "isolated"));
+            Assert.True(File.Exists(isolatedUserSecretsFilePath));
+        }
+        finally
+        {
+            DeleteUserSecretsFile(sourceManager.FilePath);
+        }
+
+        Assert.False(File.Exists(isolatedUserSecretsFilePath));
+    }
+
+    [Fact]
+    public void ConfigureBuilderDefaultsToIsolatedUserSecretsWhenUserSecretsIdIsImplicit()
+    {
+        var applicationOptions = new DistributedApplicationOptions();
+        var hostBuilderOptions = new HostApplicationBuilderSettings();
+
+        DistributedApplicationFactory.ConfigureBuilder(
+            [],
+            applicationOptions,
+            hostBuilderOptions,
+            typeof(Projects.TestingAppHost1_AppHost).Assembly,
+            (_, _) => { });
+
+        var configuration = new ConfigurationManager();
+        configuration.AddCommandLine(applicationOptions.Args ?? []);
+        configuration.AddConfiguration(hostBuilderOptions.Configuration!);
+
+        Assert.Equal("true", configuration[IsolateUserSecretsConfigKey]);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CreatePreservesExplicitUserSecretsStoreByDefault(bool directArgs)
+    {
+        var sourceUserSecretsId = Guid.NewGuid().ToString();
+        var sourceManager = CreateUserSecretsManager(sourceUserSecretsId);
+        DeleteUserSecretsFile(sourceManager.FilePath);
+        string[] args = directArgs ? [$"{AspireUserSecretsIdConfigKey}={sourceUserSecretsId}"] : [];
+        Action<DistributedApplicationOptions, HostApplicationBuilderSettings> configureBuilder = directArgs
+            ? (_, _) => { }
+            : (_, settings) =>
+            {
+                settings.Configuration ??= new();
+                settings.Configuration.AddInMemoryCollection(
+                    new Dictionary<string, string?>
+                    {
+                        [AspireUserSecretsIdConfigKey] = sourceUserSecretsId
+                    });
+            };
+
+        try
+        {
+            using var builder = DistributedApplicationTestingBuilder.Create(
+                args,
+                configureBuilder,
+                typeof(Projects.TestingAppHost1_AppHost).Assembly);
+
+            Assert.Equal(sourceUserSecretsId, builder.Configuration[AspireUserSecretsIdConfigKey]);
+            Assert.Equal(sourceManager.FilePath, builder.UserSecretsManager.FilePath);
+            Assert.True(builder.UserSecretsManager.TrySetSecret("ExplicitStoreProbe", "persisted"));
+            Assert.Equal("persisted", GetUserSecrets(sourceManager.FilePath)["ExplicitStoreProbe"]);
+        }
+        finally
+        {
+            DeleteUserSecretsFile(sourceManager.FilePath);
+        }
+    }
+
+    [Fact]
+    public async Task CreateAsyncCommandLineConfigurationOverridesCopiedIsolatedUserSecretsStore()
+    {
+        var sourceUserSecretsId = Guid.NewGuid().ToString();
+        var sourceManager = CreateUserSecretsManager(sourceUserSecretsId);
+        var probeKey = $"IsolationProbe{Guid.NewGuid():N}";
+        Assert.True(sourceManager.TrySetSecret(probeKey, "secret"));
+
+        string? isolatedUserSecretsFilePath = null;
+        try
+        {
+            await using var builder = await DistributedApplicationTestingBuilder.CreateAsync(
+                typeof(Projects.TestingAppHost1_AppHost),
+                [$"{AspireUserSecretsIdConfigKey}={sourceUserSecretsId}", $"{IsolateUserSecretsConfigKey}=true", $"{probeKey}=command-line"],
+                (_, _) => { });
+
+            isolatedUserSecretsFilePath = builder.UserSecretsManager.FilePath;
+
+            Assert.Equal("command-line", builder.Configuration[probeKey]);
+        }
+        finally
+        {
+            DeleteUserSecretsFile(sourceManager.FilePath);
+        }
+
+        Assert.False(File.Exists(isolatedUserSecretsFilePath));
+    }
+
+    [Fact]
+    public void CreateUsesUniqueIsolatedUserSecretsStoresWhenConfiguredStoreDoesNotExist()
+    {
+        var sourceUserSecretsId = Guid.NewGuid().ToString();
+        var sourceManager = CreateUserSecretsManager(sourceUserSecretsId);
+        DeleteUserSecretsFile(sourceManager.FilePath);
+
+        string? firstIsolatedUserSecretsFilePath = null;
+        string? secondIsolatedUserSecretsFilePath = null;
+
+        try
+        {
+            using var firstBuilder = DistributedApplicationTestingBuilder.Create(
+                [$"{AspireUserSecretsIdConfigKey}={sourceUserSecretsId}", $"{IsolateUserSecretsConfigKey}=true"],
+                (_, _) => { },
+                typeof(Projects.TestingAppHost1_AppHost).Assembly);
+            using var secondBuilder = DistributedApplicationTestingBuilder.Create(
+                [$"{AspireUserSecretsIdConfigKey}={sourceUserSecretsId}", $"{IsolateUserSecretsConfigKey}=true"],
+                (_, _) => { },
+                typeof(Projects.TestingAppHost1_AppHost).Assembly);
+
+            firstIsolatedUserSecretsFilePath = firstBuilder.UserSecretsManager.FilePath;
+            secondIsolatedUserSecretsFilePath = secondBuilder.UserSecretsManager.FilePath;
+
+            Assert.Equal(sourceUserSecretsId, firstBuilder.Configuration[AspireUserSecretsIdConfigKey]);
+            Assert.Equal(sourceUserSecretsId, secondBuilder.Configuration[AspireUserSecretsIdConfigKey]);
+            Assert.NotEqual(sourceManager.FilePath, firstIsolatedUserSecretsFilePath);
+            Assert.NotEqual(sourceManager.FilePath, secondIsolatedUserSecretsFilePath);
+            Assert.NotEqual(firstIsolatedUserSecretsFilePath, secondIsolatedUserSecretsFilePath);
+            Assert.True(Directory.Exists(Path.GetDirectoryName(firstIsolatedUserSecretsFilePath)));
+            Assert.True(Directory.Exists(Path.GetDirectoryName(secondIsolatedUserSecretsFilePath)));
+
+            Assert.True(firstBuilder.UserSecretsManager.TrySetSecret("IsolationProbe", "first"));
+            Assert.True(secondBuilder.UserSecretsManager.TrySetSecret("IsolationProbe", "second"));
+            Assert.False(File.Exists(sourceManager.FilePath));
+            Assert.True(File.Exists(firstIsolatedUserSecretsFilePath));
+            Assert.True(File.Exists(secondIsolatedUserSecretsFilePath));
+        }
+        finally
+        {
+            DeleteUserSecretsFile(sourceManager.FilePath);
+        }
+
+        Assert.False(File.Exists(firstIsolatedUserSecretsFilePath));
+        Assert.False(File.Exists(secondIsolatedUserSecretsFilePath));
+    }
+
+    [Fact]
+    public void CreateDisposesIsolatedUserSecretsStoreWhenBuildFailsBeforeHostIsBuilt()
+    {
+        var sourceUserSecretsId = Guid.NewGuid().ToString();
+        var sourceManager = CreateUserSecretsManager(sourceUserSecretsId);
+        DeleteUserSecretsFile(sourceManager.FilePath);
+
+        string? isolatedUserSecretsFilePath = null;
+
+        try
+        {
+            using var builder = DistributedApplicationTestingBuilder.Create(
+                [$"{AspireUserSecretsIdConfigKey}={sourceUserSecretsId}", $"{IsolateUserSecretsConfigKey}=true"],
+                (_, _) => { },
+                typeof(Projects.TestingAppHost1_AppHost).Assembly);
+
+            var longName = new string('a', 65);
+
+            isolatedUserSecretsFilePath = builder.UserSecretsManager.FilePath;
+            Assert.True(Directory.Exists(Path.GetDirectoryName(isolatedUserSecretsFilePath)));
+            builder.Resources.Add(new ContainerResource(longName));
+
+            var ex = Assert.Throws<ArgumentException>(builder.Build);
+            Assert.Equal($"Resource name '{longName}' is invalid. Name must be between 1 and 64 characters long. (Parameter 'name')", ex.Message);
+        }
+        finally
+        {
+            DeleteUserSecretsFile(sourceManager.FilePath);
+        }
+
+        Assert.False(Directory.Exists(Path.GetDirectoryName(isolatedUserSecretsFilePath)));
+    }
+
+    [Fact]
+    public async Task ConcurrentTestingBuildersPersistGeneratedParametersToIsolatedStores()
+    {
+        var sourceUserSecretsId = Guid.NewGuid().ToString();
+        var sourceManager = CreateUserSecretsManager(sourceUserSecretsId);
+        DeleteUserSecretsFile(sourceManager.FilePath);
+
+        var appHostAssembly = typeof(Projects.TestingAppHost1_AppHost).Assembly;
+        var results = await Task.WhenAll(
+            Enumerable.Range(0, 2).Select(_ => Task.Run(CreatePersistedParameter)));
+
+        Assert.NotEqual(results[0].IsolatedUserSecretsFilePath, results[1].IsolatedUserSecretsFilePath);
+        Assert.False(File.Exists(sourceManager.FilePath));
+
+        foreach (var result in results)
+        {
+            Assert.Equal(result.GeneratedValue, result.PersistedValue);
+            Assert.False(File.Exists(result.IsolatedUserSecretsFilePath));
+        }
+
+        PersistedParameterResult CreatePersistedParameter()
+        {
+            string? isolatedUserSecretsFilePath = null;
+            string? generatedValue = null;
+            string? persistedValue = null;
+
+            using (var builder = DistributedApplicationTestingBuilder.Create(
+                [$"{AspireUserSecretsIdConfigKey}={sourceUserSecretsId}", $"{IsolateUserSecretsConfigKey}=true"],
+                (_, _) => { },
+                appHostAssembly))
+            {
+                isolatedUserSecretsFilePath = builder.UserSecretsManager.FilePath;
+                Assert.Equal(sourceUserSecretsId, builder.Configuration[AspireUserSecretsIdConfigKey]);
+                Assert.NotEqual(sourceManager.FilePath, isolatedUserSecretsFilePath);
+
+                var parameter = builder.AddParameter(
+                    "concurrent-password",
+                    new GenerateParameterDefault(),
+                    secret: true,
+                    persist: true).Resource;
+
+                generatedValue = parameter.GetValueAsync(CancellationToken.None).AsTask().GetAwaiter().GetResult();
+                persistedValue = GetUserSecrets(isolatedUserSecretsFilePath)["Parameters:concurrent-password"];
+            }
+
+            return new PersistedParameterResult(
+                isolatedUserSecretsFilePath!,
+                generatedValue!,
+                persistedValue!);
+        }
     }
 
     [Theory]
@@ -638,6 +932,56 @@ public class TestingBuilderTests(ITestOutputHelper output)
         var ex = await Assert.ThrowsAsync<ArgumentException>(() => app.StartAsync());
         Assert.Equal("ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL must contain a local loopback address.", ex.Message);
     }
+
+    private static IUserSecretsManager CreateUserSecretsManager(string userSecretsId)
+    {
+        var factory = new UserSecretsManagerFactory(
+            new FileSystemService(
+                new ConfigurationBuilder().Build()));
+        return factory.GetOrCreateFromId(userSecretsId);
+    }
+
+    private static void DeleteUserSecretsFile(string? userSecretsFilePath)
+    {
+        if (string.IsNullOrWhiteSpace(userSecretsFilePath))
+        {
+            return;
+        }
+
+        if (File.Exists(userSecretsFilePath))
+        {
+            File.Delete(userSecretsFilePath);
+        }
+
+        var directory = Path.GetDirectoryName(userSecretsFilePath);
+        if (!string.IsNullOrEmpty(directory) &&
+            Directory.Exists(directory) &&
+            !Directory.EnumerateFileSystemEntries(directory).Any())
+        {
+            Directory.Delete(directory);
+        }
+    }
+
+    private static Dictionary<string, string?> GetUserSecrets(string userSecretsFilePath)
+    {
+        if (!File.Exists(userSecretsFilePath))
+        {
+            return [];
+        }
+
+        var config = new ConfigurationBuilder()
+            .AddJsonFile(userSecretsFilePath, optional: true)
+            .Build();
+
+        return config.AsEnumerable()
+            .Where(kvp => kvp.Value is not null)
+            .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+    }
+
+    private sealed record PersistedParameterResult(
+        string IsolatedUserSecretsFilePath,
+        string GeneratedValue,
+        string PersistedValue);
 
     private sealed record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
     {

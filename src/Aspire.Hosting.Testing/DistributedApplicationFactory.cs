@@ -317,8 +317,23 @@ public class DistributedApplicationFactory(Type entryPoint, string[] args) : IDi
             }
         }
 
+        // Preserve the explicit ASPIRE_USER_SECRETS_ID contract: callers that provide a
+        // store are asking the AppHost to persist state there across runs. Otherwise,
+        // isolate the AppHost assembly's default user-secrets store so testing builders
+        // don't mutate developer secrets or race each other when generating parameters.
+        if (!HasConfiguredValue(KnownConfigNames.AspireUserSecretsId) &&
+            !HasConfiguredValue(KnownConfigNames.IsolateUserSecrets))
+        {
+            additionalConfig[KnownConfigNames.IsolateUserSecrets] = "true";
+        }
+
         hostBuilderOptions.Configuration ??= new();
         hostBuilderOptions.Configuration.AddInMemoryCollection(additionalConfig);
+
+        bool HasConfiguredValue(string key) =>
+            existingConfig[key] is not null ||
+            additionalConfig.ContainsKey(key) ||
+            Environment.GetEnvironmentVariable(key) is not null;
 
         void SetDefault(string key, string? value)
         {
@@ -582,7 +597,11 @@ public class DistributedApplicationFactory(Type entryPoint, string[] args) : IDi
             _disposing = true;
             if (innerHost is IAsyncDisposable asyncDisposable)
             {
-                await asyncDisposable.DisposeAsync().AsTask().WaitAsync(appFactory._disposingCts.Token).ConfigureAwait(false);
+                // The factory disposal token is canceled before the app is disposed. Using it here
+                // cancels host disposal before DI can dispose singleton services registered by the AppHost.
+                // The outer DistributedApplicationFactory.DisposeAsync path already bounds app disposal
+                // with the configured shutdown timeout.
+                await asyncDisposable.DisposeAsync().ConfigureAwait(false);
             }
             else
             {

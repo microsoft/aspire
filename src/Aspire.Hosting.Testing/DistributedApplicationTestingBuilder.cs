@@ -112,7 +112,15 @@ public static class DistributedApplicationTestingBuilder
         ArgumentNullException.ThrowIfNull(configureBuilder, nameof(configureBuilder));
 
         var factory = new SuspendingDistributedApplicationFactory(entryPoint, args, configureBuilder);
-        return await factory.CreateBuilderAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await factory.CreateBuilderAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await factory.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
     }
 
     /// <summary>
@@ -228,6 +236,8 @@ public static class DistributedApplicationTestingBuilder
 
         private sealed class Builder(SuspendingDistributedApplicationFactory factory, DistributedApplicationBuilder innerBuilder) : IDistributedApplicationTestingBuilder
         {
+            private DistributedApplication? _app;
+
             public ConfigurationManager Configuration => innerBuilder.Configuration;
 
             public string AppHostDirectory => innerBuilder.AppHostDirectory;
@@ -255,19 +265,61 @@ public static class DistributedApplicationTestingBuilder
             public async Task<DistributedApplication> BuildAsync(CancellationToken cancellationToken)
             {
                 var innerApp = await factory.BuildAsync(cancellationToken).ConfigureAwait(false);
-                return new DelegatedDistributedApplication(new DelegatedHost(factory, innerApp));
+                return _app = new DelegatedDistributedApplication(new DelegatedHost(factory, innerApp));
             }
 
             public IResourceBuilder<T> CreateResourceBuilder<T>(T resource) where T : IResource => innerBuilder.CreateResourceBuilder(resource);
 
             public void Dispose()
             {
-                factory.Dispose();
+                if (_app is null)
+                {
+                    try
+                    {
+                        Build();
+                    }
+                    catch
+                    {
+                        // Suppress.
+                    }
+                }
+
+                if (_app is { } app)
+                {
+                    app.Dispose();
+                }
+                else
+                {
+                    factory.Dispose();
+                }
             }
 
             public async ValueTask DisposeAsync()
             {
-                await factory.DisposeAsync().ConfigureAwait(false);
+                if (_app is null)
+                {
+                    try
+                    {
+                        await BuildAsync(CancellationToken.None).ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        // Suppress.
+                    }
+                }
+
+                if (_app is IAsyncDisposable asyncDisposable)
+                {
+                    await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+                }
+                else if (_app is { } app)
+                {
+                    app.Dispose();
+                }
+                else
+                {
+                    await factory.DisposeAsync().ConfigureAwait(false);
+                }
             }
         }
 
@@ -321,19 +373,23 @@ public static class DistributedApplicationTestingBuilder
         }
     }
 
-    private sealed class TestingBuilder(
-        string[] args,
-        Action<DistributedApplicationOptions, HostApplicationBuilderSettings> configureBuilder,
-        Assembly? appHostAssembly = null)
-        : IDistributedApplicationTestingBuilder
+    private sealed class TestingBuilder : IDistributedApplicationTestingBuilder
     {
-        private readonly DistributedApplicationBuilder _innerBuilder = CreateInnerBuilder(args, configureBuilder, appHostAssembly);
+        private readonly DistributedApplicationBuilder _innerBuilder;
         private DistributedApplication? _app;
+
+        public TestingBuilder(
+            string[] args,
+            Action<DistributedApplicationOptions, HostApplicationBuilderSettings> configureBuilder,
+            Assembly? appHostAssembly = null)
+        {
+            _innerBuilder = CreateInnerBuilder(args, configureBuilder, appHostAssembly);
+        }
 
         private static DistributedApplicationBuilder CreateInnerBuilder(
             string[] args,
             Action<DistributedApplicationOptions, HostApplicationBuilderSettings> configureBuilder,
-            Assembly? appHostAssembly = null)
+            Assembly? appHostAssembly)
         {
             var builder = TestingBuilderFactory.CreateBuilder(args, onConstructing: (applicationOptions, hostBuilderOptions) =>
             {
