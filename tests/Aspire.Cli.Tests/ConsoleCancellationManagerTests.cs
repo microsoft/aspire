@@ -61,10 +61,11 @@ public class ConsoleCancellationManagerTests
     public async Task FirstSignal_NonZeroBudget_DelaysExpireUntilBudgetElapses()
     {
         // The graceful clock is armed via CancelAfter, which is a no-op while a debugger is
-        // attached (developers need unlimited stepping time).
+        // attached (developers need unlimited stepping time), so the timing this test asserts
+        // never happens. Surface that as a real skip rather than a silent pass.
         if (Debugger.IsAttached)
         {
-            return;
+            Assert.Skip("Graceful CancelAfter timing is disabled while a debugger is attached.");
         }
 
         using var manager = new ConsoleCancellationManager(TimeSpan.FromSeconds(30));
@@ -352,10 +353,11 @@ public class ConsoleCancellationManagerTests
     public async Task BeginGracefulWindow_PositiveBudget_FiresTokenAfterBudget()
     {
         // BeginGracefulWindow arms CancelAfter, which is a no-op while a debugger is attached
-        // (developers need unlimited stepping time). Skip the timing assertion in that case.
+        // (developers need unlimited stepping time), so the timing this test asserts never
+        // happens. Surface that as a real skip rather than a silent pass.
         if (Debugger.IsAttached)
         {
-            return;
+            Assert.Skip("Graceful CancelAfter timing is disabled while a debugger is attached.");
         }
 
         using var manager = new ConsoleCancellationManager(TimeSpan.FromSeconds(5));
@@ -372,9 +374,12 @@ public class ConsoleCancellationManagerTests
     [Fact]
     public async Task BeginGracefulWindow_SecondCall_DoesNotResetTimer()
     {
+        // BeginGracefulWindow arms CancelAfter, which is a no-op while a debugger is attached
+        // (developers need unlimited stepping time), so the timing this test asserts never
+        // happens. Surface that as a real skip rather than a silent pass.
         if (Debugger.IsAttached)
         {
-            return;
+            Assert.Skip("Graceful CancelAfter timing is disabled while a debugger is attached.");
         }
 
         using var manager = new ConsoleCancellationManager(TimeSpan.FromSeconds(5));
