@@ -17,6 +17,11 @@
                       SkipGetTargetFrameworkProperties="true"
                       Private="false"
                       ExcludeAssets="all" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Tasks\Aspire.Hosting.Tasks.csproj"
+                      ReferenceOutputAssembly="false"
+                      SkipGetTargetFrameworkProperties="true"
+                      Private="false"
+                      ExcludeAssets="all" />
   </ItemGroup>
 
   <ItemGroup>

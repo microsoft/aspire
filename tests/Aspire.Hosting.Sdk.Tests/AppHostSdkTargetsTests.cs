@@ -90,6 +90,57 @@ public class AppHostSdkTargetsTests
         Assert.Equal(project.ProjectDirectory, properties["RunWorkingDirectory"]);
     }
 
+    [Theory]
+    [InlineData("Dnx")]
+    [InlineData("dNx")]
+    public async Task ComputeRunArgumentsUsesDnxAspireCliWhenConfigured(string invocationMode)
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "fake-cli"));
+        await CreateFakeDnxAsync(fakeCliDirectory.FullName);
+        var project = await CreateRunHookProjectAsync(tempDirectory.Path, aspireUseCliBundle: true,
+            $$"""
+              <PropertyGroup>
+                <AspireCliInvocationMode>{{invocationMode}}</AspireCliInvocationMode>
+              </PropertyGroup>
+            """);
+        var environment = CreatePathEnvironment(fakeCliDirectory.FullName);
+
+        var properties = await GetComputeRunArgumentsPropertiesAsync(project, ["-p:RunArguments=--custom foo"], environment);
+
+        Assert.Equal(GetExpectedDnxRunCommand(), properties["RunCommand"]);
+        Assert.Equal(GetExpectedDnxRunArguments(project, "--custom foo"), properties["RunArguments"]);
+        Assert.Equal(project.ProjectDirectory, properties["RunWorkingDirectory"]);
+    }
+
+    [Fact]
+    public async Task ComputeRunArgumentsFailsWhenDnxModeIsConfiguredAndDnxIsMissing()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var emptyPathDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "empty-path"));
+        var project = await CreateRunHookProjectAsync(tempDirectory.Path, aspireUseCliBundle: true,
+            """
+              <PropertyGroup>
+                <AspireCliInvocationMode>Dnx</AspireCliInvocationMode>
+              </PropertyGroup>
+            """);
+        var environment = CreatePathEnvironment(emptyPathDirectory.FullName, includeCurrentPath: false);
+
+        var result = await RunDotNetWithArgumentsAsync(
+            project.ProjectDirectory,
+            ["msbuild", "-nologo", "-restore", "-t:ComputeRunArguments", project.ProjectFile],
+            environment);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("ASPIRE011", result.Output);
+        Assert.Contains("AspireCliInvocationMode=Dnx", result.Output);
+        Assert.Contains("dnx command could not be found on PATH", result.Output);
+        Assert.Contains("Install or use the .NET SDK 10.0 or later", result.Output);
+        Assert.Contains("dotnet tool restore", result.Output);
+        Assert.Contains("AspireCliInvocationMode=Path", result.Output);
+        Assert.Contains("AspireCliPath", result.Output);
+    }
+
     [Fact]
     public async Task ComputeRunArgumentsUsesConfiguredAspireCliPathWhenCliBundleIsEnabled()
     {
@@ -102,6 +153,27 @@ public class AppHostSdkTargetsTests
 
         Assert.Equal(aspireCliPath, properties["RunCommand"]);
         Assert.Equal(GetExpectedExplicitAspireRunArguments(project), properties["RunArguments"]);
+    }
+
+    [Fact]
+    public async Task ComputeRunArgumentsUsesConfiguredAspireCliPathWhenDnxModeIsConfigured()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var emptyPathDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "empty-path"));
+        var project = await CreateRunHookProjectAsync(tempDirectory.Path, aspireUseCliBundle: true,
+            """
+              <PropertyGroup>
+                <AspireCliInvocationMode>Dnx</AspireCliInvocationMode>
+              </PropertyGroup>
+            """);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "fake-cli"));
+        var aspireCliPath = await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
+        var environment = CreatePathEnvironment(emptyPathDirectory.FullName);
+
+        var properties = await GetComputeRunArgumentsPropertiesAsync(project, [$"-p:AspireCliPath={aspireCliPath}"], environment);
+
+        Assert.Equal(aspireCliPath, properties["RunCommand"]);
+        Assert.Equal($"run --project \"{project.ProjectFile}\" --no-build --", properties["RunArguments"]);
     }
 
     [Fact]
@@ -414,6 +486,7 @@ public class AppHostSdkTargetsTests
                 <AspireUseCliBundle>{{aspireUseCliBundle.ToString().ToLowerInvariant()}}</AspireUseCliBundle>
                 <AspireDashboardPath>$(MSBuildProjectDirectory)/Aspire.Dashboard.dll</AspireDashboardPath>
                 <DcpDir>$(MSBuildProjectDirectory)</DcpDir>
+                <_AspireTasksAssembly>{{SecurityElement.Escape(GetAspireTasksAssemblyPath())}}</_AspireTasksAssembly>
                 <SkipAspireWorkloadManifest>true</SkipAspireWorkloadManifest>
                 <SkipValidateAspireHostProjectResources>true</SkipValidateAspireHostProjectResources>
               </PropertyGroup>
@@ -629,6 +702,33 @@ public class AppHostSdkTargetsTests
         File.SetUnixFileMode(aspirePath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
     }
 
+    private static async Task CreateFakeDnxAsync(string fakeCliDirectory)
+    {
+        var dnxPath = Path.Combine(fakeCliDirectory, OperatingSystem.IsWindows() ? "dnx.cmd" : "dnx");
+        await File.WriteAllTextAsync(dnxPath, OperatingSystem.IsWindows()
+            ? """
+                @echo off
+                if "%~1"=="aspire.cli" if "%~2"=="--" if "%~3"=="--version" (
+                    echo 13.5.0
+                    exit /b 0
+                )
+                exit /b 0
+                """
+            : """
+                #!/bin/sh
+                if [ "$1" = "aspire.cli" ] && [ "$2" = "--" ] && [ "$3" = "--version" ]; then
+                    echo "13.5.0"
+                    exit 0
+                fi
+                exit 0
+                """);
+
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(dnxPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+    }
+
     private static void AssertDashboardAndOrchestrationReferences(string[] packageReferences)
     {
         var dashboardReference = Assert.Single(packageReferences, static packageReference => packageReference.StartsWith("Aspire.Dashboard.Sdk.", StringComparison.Ordinal));
@@ -667,6 +767,8 @@ public class AppHostSdkTargetsTests
 
     private static string GetExpectedAspireRunCommand() => OperatingSystem.IsWindows() ? "cmd" : "aspire";
 
+    private static string GetExpectedDnxRunCommand() => OperatingSystem.IsWindows() ? "cmd" : "dnx";
+
     private static string GetExpectedAspireRunArguments(RunHookProject project, string? extraArguments = null)
         => GetExpectedAspireRunArguments(project.ProjectFile, extraArguments);
 
@@ -681,6 +783,14 @@ public class AppHostSdkTargetsTests
     private static string GetExpectedExplicitAspireRunArguments(RunHookProject project, string? extraArguments = null)
     {
         var arguments = $"run --project \"{project.ProjectFile}\" --no-build --";
+
+        return string.IsNullOrEmpty(extraArguments) ? arguments : $"{arguments} {extraArguments}";
+    }
+
+    private static string GetExpectedDnxRunArguments(RunHookProject project, string? extraArguments = null)
+    {
+        var prefix = OperatingSystem.IsWindows() ? "/C dnx " : string.Empty;
+        var arguments = $"{prefix}aspire.cli -- run --project \"{project.ProjectFile}\" --no-build --";
 
         return string.IsNullOrEmpty(extraArguments) ? arguments : $"{arguments} {extraArguments}";
     }
@@ -806,6 +916,16 @@ public class AppHostSdkTargetsTests
         }
 
         return directory ?? throw new InvalidOperationException("Could not find repository root.");
+    }
+
+    private static string GetAspireTasksAssemblyPath()
+    {
+#if DEBUG
+        const string configuration = "Debug";
+#else
+        const string configuration = "Release";
+#endif
+        return Path.Combine(GetRepoRoot(), "artifacts", "bin", "Aspire.Hosting.Tasks", configuration, "net8.0", "Aspire.Hosting.Tasks.dll");
     }
 
     private sealed record RunHookProject(string ProjectDirectory, string ProjectFile);
