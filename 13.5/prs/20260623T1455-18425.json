@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Test-only change adding e2e test for resource command JSON output separation",
+  "mergedAt": "2026-06-23T14:55:02Z",
+  "number": 18425,
+  "runDate": "2026-06-23T18:37:43Z",
+  "status": "excluded",
+  "title": "Add e2e test for resource command JSON result output separation"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI/release engineering change to WinGet PR submission workflow, no user-facing product impact",
+  "mergedAt": "2026-06-23T17:05:40Z",
+  "number": 18266,
+  "runDate": "2026-06-23T18:37:43Z",
+  "status": "excluded",
+  "title": "ci(release): submit WinGet PR ready-for-review instead of draft"
+}

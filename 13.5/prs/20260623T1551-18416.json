@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Documentation-only change updating integration README for PostgreSQL 18 data volume upgrade",
+  "mergedAt": "2026-06-23T15:51:02Z",
+  "number": 18416,
+  "runDate": "2026-06-23T18:37:43Z",
+  "status": "excluded",
+  "title": "Document PostgreSQL 18 data volume upgrade in integration README"
+}

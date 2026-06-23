@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Internal code quality: enabling analyzer rules CA1310/CA1311 and fixing resulting warnings, no user-facing change",
+  "mergedAt": "2026-06-23T17:39:15Z",
+  "number": 18429,
+  "runDate": "2026-06-23T18:37:43Z",
+  "status": "excluded",
+  "title": "Enable CA1310 and CA1311 globally and fix warnings"
+}

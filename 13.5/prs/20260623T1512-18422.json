@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Bot-authored automated update of Azure VM size descriptors in generated file",
+  "mergedAt": "2026-06-23T15:12:38Z",
+  "number": 18422,
+  "runDate": "2026-06-23T18:37:43Z",
+  "status": "excluded",
+  "title": "[Automated] Update Azure VM Sizes"
+}

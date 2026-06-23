@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Bug fix: special characters & and + in user secrets were incorrectly escaped as Unicode sequences, corrupting passwords and tokens",
+  "mergedAt": "2026-06-23T14:21:07Z",
+  "number": 18431,
+  "runDate": "2026-06-23T18:37:43Z",
+  "status": "included",
+  "title": "Fix user secrets escaping & and + as unicode sequences"
+}
