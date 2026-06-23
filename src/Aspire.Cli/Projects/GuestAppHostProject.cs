@@ -1036,12 +1036,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             // Step 2: Start the AppHost server process(it opens the backchannel for progress reporting)
             // Linked stop CTS is the only termination trigger we hand to the session.
             using var serverStopCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            await using var serverSession = new AppHostServerSession(
+            await using var serverSession = _serverSessionFactory.Create(
                 appHostServerProject,
                 launchSettingsEnvVars,
                 context.Debug,
-                _logger,
-                _profilingTelemetry,
                 gracefulShutdownSignaler: null,
                 shutdownService: null,
                 isolateConsole: false,
