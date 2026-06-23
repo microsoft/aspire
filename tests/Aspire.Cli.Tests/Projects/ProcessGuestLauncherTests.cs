@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -12,6 +13,14 @@ namespace Aspire.Cli.Tests.Projects;
 
 public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper)
 {
+    private static ProcessGuestLauncher CreateLauncher()
+        => new(
+            "test",
+            NullLogger<ProcessGuestLauncher>.Instance,
+            fileLoggerProvider: null,
+            commandResolver: PathLookupHelper.FindFullPathFromPath,
+            processExecutionFactory: new ProcessExecutionFactory(NullLogger<ProcessExecutionFactory>.Instance));
+
     [Fact]
     public async Task LaunchAsync_NoOptions_OnCancellation_ForceKillsProcessTreeAndReturns()
     {
@@ -20,7 +29,7 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper)
         // cancellation. This preserves today's tactical behavior for non-Run callers and exercises
         // the same code path as the existing ProcessGuestLauncher_KillsProcessAndReturnsOnCancellation
         // test, just with an explicit assertion on the no-options branch.
-        var launcher = new ProcessGuestLauncher("test", NullLogger<ProcessGuestLauncher>.Instance);
+        var launcher = CreateLauncher();
 
         var (command, args) = GetLongRunningCommand();
 
@@ -30,6 +39,8 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper)
             args,
             new DirectoryInfo(Path.GetTempPath()),
             new Dictionary<string, string>(),
+            afterLaunchAsync: null,
+            options: null,
             cts.Token);
 
         // Give the OS time to spawn the child before cancelling so we exercise the kill-while-running
@@ -55,7 +66,7 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper)
         // before anyone calls Expire(). The central shutdown token must NOT be cancelled — this
         // proves the launcher consumes the token as a deadline (not a trigger) and doesn't burn
         // the central budget on successful graceful exits.
-        var launcher = new ProcessGuestLauncher("test", NullLogger<ProcessGuestLauncher>.Instance);
+        var launcher = CreateLauncher();
         var (command, args) = GetLongRunningCommand();
 
         using var cts = new CancellationTokenSource();
@@ -86,9 +97,9 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper)
             args,
             new DirectoryInfo(Path.GetTempPath()),
             new Dictionary<string, string>(),
-            cts.Token,
             afterLaunchAsync: null,
-            options: options);
+            options: options,
+            cts.Token);
 
         await Task.Delay(500);
         cts.Cancel();
@@ -106,7 +117,7 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper)
         // Regression coverage for DCP's stop-process-tree behavior: the graceful signaler can
         // deliver the signal quickly and then block until the target exits. The ladder must wait
         // for process exit in parallel with that signaler instead of awaiting the signaler first.
-        var launcher = new ProcessGuestLauncher("test", NullLogger<ProcessGuestLauncher>.Instance);
+        var launcher = CreateLauncher();
         var (command, args) = GetLongRunningCommand();
 
         using var cts = new CancellationTokenSource();
@@ -138,9 +149,9 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper)
             args,
             new DirectoryInfo(Path.GetTempPath()),
             new Dictionary<string, string>(),
-            cts.Token,
             afterLaunchAsync: null,
-            options: options);
+            options: options,
+            cts.Token);
 
         await Task.Delay(500);
         cts.Cancel();
@@ -164,7 +175,7 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper)
         // must break the ladder out of WaitForExitAsync and escalate to Kill(entireProcessTree: true)
         // so the tree dies even when the cooperative path fails.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var launcher = new ProcessGuestLauncher("test", NullLogger<ProcessGuestLauncher>.Instance);
+        var launcher = CreateLauncher();
         var descendantPidFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "descendant.pid"));
         var (command, args) = await GetProcessTreeCommandAsync(workspace.WorkspaceRoot, descendantPidFile);
 
@@ -192,9 +203,9 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper)
             args,
             workspace.WorkspaceRoot,
             new Dictionary<string, string>(),
-            cts.Token,
             afterLaunchAsync: null,
-            options: options);
+            options: options,
+            cts.Token);
 
         var descendantPid = await WaitForPidFileAsync(descendantPidFile);
 
@@ -231,7 +242,7 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper)
         // network blip, anything) must be logged and swallowed so the ladder still escalates to
         // Kill(entireProcessTree: true). The previous force-kill path swallowed signaler failures
         // implicitly by not even calling the signaler; the new ladder needs an explicit guarantee.
-        var launcher = new ProcessGuestLauncher("test", NullLogger<ProcessGuestLauncher>.Instance);
+        var launcher = CreateLauncher();
         var (command, args) = GetLongRunningCommand();
 
         using var cts = new CancellationTokenSource();
@@ -252,9 +263,9 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper)
             args,
             new DirectoryInfo(Path.GetTempPath()),
             new Dictionary<string, string>(),
-            cts.Token,
             afterLaunchAsync: null,
-            options: options);
+            options: options,
+            cts.Token);
 
         await Task.Delay(500);
         cts.Cancel();

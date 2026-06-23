@@ -7,7 +7,6 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Projects;
 
@@ -25,19 +24,18 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
     public ProcessGuestLauncher(
         string language,
         ILogger logger,
-        FileLoggerProvider? fileLoggerProvider = null,
-        Func<string, string?>? commandResolver = null,
-        IProcessExecutionFactory? processExecutionFactory = null)
+        FileLoggerProvider? fileLoggerProvider,
+        Func<string, string?> commandResolver,
+        IProcessExecutionFactory processExecutionFactory)
     {
         _language = language;
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;
-        _commandResolver = commandResolver ?? PathLookupHelper.FindFullPathFromPath;
+        _commandResolver = commandResolver;
         // The guest launcher does its own per-line trace logging via the per-line callbacks below,
-        // so the execution's logger is suppressed to avoid double-logging each stdout/stderr line.
-        // Defaulting here (rather than requiring DI threading through GuestRuntime/ScaffoldingService)
-        // keeps the construction sites unchanged; the factory is stateless.
-        _processExecutionFactory = processExecutionFactory ?? new ProcessExecutionFactory(NullLogger<ProcessExecutionFactory>.Instance);
+        // so callers pass a factory whose execution logger is suppressed (NullLogger) to avoid
+        // double-logging each stdout/stderr line.
+        _processExecutionFactory = processExecutionFactory;
     }
 
     public async Task<(int ExitCode, OutputCollector? Output)> LaunchAsync(
@@ -45,9 +43,9 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
         string[] args,
         DirectoryInfo workingDirectory,
         IDictionary<string, string> environmentVariables,
-        CancellationToken cancellationToken,
-        Func<Task>? afterLaunchAsync = null,
-        GuestLaunchOptions? options = null)
+        Func<Task>? afterLaunchAsync,
+        GuestLaunchOptions? options,
+        CancellationToken cancellationToken)
     {
         var activity = GetCurrentProfilingActivity();
         AddEvent(activity, ProfilingTelemetry.Events.GuestProcessResolveStart);

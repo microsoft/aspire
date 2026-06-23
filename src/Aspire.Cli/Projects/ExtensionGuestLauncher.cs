@@ -33,9 +33,9 @@ internal sealed class ExtensionGuestLauncher : IGuestProcessLauncher
         string[] args,
         DirectoryInfo workingDirectory,
         IDictionary<string, string> environmentVariables,
-        CancellationToken cancellationToken,
-        Func<Task>? afterLaunchAsync = null,
-        GuestLaunchOptions? options = null)
+        Func<Task>? afterLaunchAsync,
+        GuestLaunchOptions? options,
+        CancellationToken cancellationToken)
     {
         // GuestLaunchOptions is intentionally ignored — the extension owns the debug-session
         // lifecycle and has its own teardown path (it does not spawn a child process here, so

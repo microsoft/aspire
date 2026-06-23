@@ -51,7 +51,7 @@ internal interface IGuestProcessLauncher
         string[] args,
         DirectoryInfo workingDirectory,
         IDictionary<string, string> environmentVariables,
-        CancellationToken cancellationToken,
-        Func<Task>? afterLaunchAsync = null,
-        GuestLaunchOptions? options = null);
+        Func<Task>? afterLaunchAsync,
+        GuestLaunchOptions? options,
+        CancellationToken cancellationToken);
 }

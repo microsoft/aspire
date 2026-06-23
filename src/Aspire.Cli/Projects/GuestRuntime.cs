@@ -2,10 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Diagnostics;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.TypeSystem;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Projects;
 
@@ -85,6 +87,8 @@ internal sealed class GuestRuntime
                 args,
                 directory,
                 environmentVariables,
+                afterLaunchAsync: null,
+                options: null,
                 cancellationToken);
             activity.SetProcessExitCode(exitCode);
             if (exitCode != 0)
@@ -125,6 +129,8 @@ internal sealed class GuestRuntime
             args,
             directory,
             environmentVariables,
+            afterLaunchAsync: null,
+            options: null,
             cancellationToken);
         activity.SetProcessExitCode(exitCode);
         if (exitCode != 0)
@@ -246,7 +252,7 @@ internal sealed class GuestRuntime
             using var activity = _profilingTelemetry is null
                 ? default
                 : _profilingTelemetry.StartGuestExecuteCommand(_spec.Language, _spec.DisplayName, commandSpec.Command, args, directory, ProfilingTelemetry.Values.GuestCommandPhasePreExecute);
-            var (exitCode, output) = await preExecuteLauncher.LaunchAsync(commandSpec.Command, args, directory, mergedEnvironment, cancellationToken);
+            var (exitCode, output) = await preExecuteLauncher.LaunchAsync(commandSpec.Command, args, directory, mergedEnvironment, afterLaunchAsync: null, options: null, cancellationToken);
             activity.SetProcessExitCode(exitCode);
             if (exitCode != 0)
             {
@@ -278,7 +284,7 @@ internal sealed class GuestRuntime
         using var activity = _profilingTelemetry is null
             ? default
             : _profilingTelemetry.StartGuestExecuteCommand(_spec.Language, _spec.DisplayName, commandSpec.Command, args, directory, phase);
-        var (exitCode, output) = await launcher.LaunchAsync(commandSpec.Command, args, directory, mergedEnvironment, cancellationToken, afterLaunchAsync: afterLaunchAsync, options: launchOptions);
+        var (exitCode, output) = await launcher.LaunchAsync(commandSpec.Command, args, directory, mergedEnvironment, afterLaunchAsync: afterLaunchAsync, options: launchOptions, cancellationToken);
         activity.SetProcessExitCode(exitCode);
         if (exitCode != 0)
         {
@@ -329,7 +335,14 @@ internal sealed class GuestRuntime
     /// <summary>
     /// Creates the default process-based launcher for this runtime.
     /// </summary>
-    public ProcessGuestLauncher CreateDefaultLauncher() => new(_spec.Language, _logger, fileLoggerProvider: _fileLoggerProvider, commandResolver: _commandResolver);
+    public ProcessGuestLauncher CreateDefaultLauncher() => new(
+        _spec.Language,
+        _logger,
+        fileLoggerProvider: _fileLoggerProvider,
+        commandResolver: _commandResolver,
+        // The launcher logs each guest stdout/stderr line itself, so the execution factory is given
+        // a NullLogger to avoid double-logging those lines.
+        processExecutionFactory: new ProcessExecutionFactory(NullLogger<ProcessExecutionFactory>.Instance));
 
     /// <summary>
     /// Replaces placeholders in command arguments with actual values.
