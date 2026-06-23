@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "CI workflow maintenance - federated OIDC auth fix for Update Azure VM Sizes workflow, no user-visible impact",
+  "mergedAt": "2026-06-23T07:44:07Z",
+  "number": 18421,
+  "runDate": "2026-06-23T12:54:00Z",
+  "status": "excluded",
+  "title": "Use federated OIDC auth for Update Azure VM Sizes workflow"
+}

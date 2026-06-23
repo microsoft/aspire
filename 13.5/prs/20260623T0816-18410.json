@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "New first-party Nix acquisition path for Aspire CLI - NixOS users can now run via nix run github:microsoft/aspire#aspire-cli",
+  "mergedAt": "2026-06-23T08:16:49Z",
+  "number": 18410,
+  "runDate": "2026-06-23T12:54:00Z",
+  "status": "included",
+  "title": "Add first-party Nix package for Aspire CLI"
+}

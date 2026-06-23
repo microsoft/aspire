@@ -1,0 +1,9 @@
+{
+  "author": "afscrome",
+  "comment": "Internal refactoring of health check URI resolution using GetValueAsync() - no user-visible behavior change",
+  "mergedAt": "2026-06-23T08:35:09Z",
+  "number": 18011,
+  "runDate": "2026-06-23T12:54:00Z",
+  "status": "excluded",
+  "title": "Refactor health check to resolve URI directly from an endpoint rather…"
+}

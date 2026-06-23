@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Improved Azure provisioning recovery with new cancel-azure-operation command, Key Vault soft-delete recovery, and ARM state reconciliation on restart",
+  "mergedAt": "2026-06-23T08:18:36Z",
+  "number": 18269,
+  "runDate": "2026-06-23T12:54:00Z",
+  "status": "included",
+  "title": "Improve Azure provisioning recovery commands"
+}

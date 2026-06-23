@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Azure provisioning recovery is now more actionable. A new `cancel-azure-operation` resource command cancels in-flight Azure operations from the CLI or dashboard, while `reprovision` and `delete-azure-resource` are highlighted as recovery actions with clearer state tracking (Starting, Deleting, Canceling). Key Vault soft-delete tombstones are automatically purged during reprovision, and ARM deployment state is reconciled from Azure on AppHost restart.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔄",
+  "firstMergedAt": "2026-06-23T08:18:36Z",
+  "lastMergedAt": "2026-06-23T08:18:36Z",
+  "name": "Improved Azure provisioning recovery commands",
+  "owner": "davidfowl",
+  "prs": [
+    18269
+  ]
+}
