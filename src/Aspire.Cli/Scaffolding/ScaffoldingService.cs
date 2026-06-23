@@ -142,7 +142,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
         }
 
         // Step 2: Start the server temporarily for scaffolding and code generation
-        await using var serverSession = _serverSessionFactory.Create(appHostServerProject, cancellationToken);
+        await using var serverSession = _serverSessionFactory.Create(appHostServerProject, environmentVariables: null, debug: false, gracefulShutdownSignaler: null, shutdownService: null, isolateConsole: false, cancellationToken);
         // Short-lived RPC session: StartAsync() spawns the server. We never observe the
         // exit-code task (WaitForExitAsync) because disposal flows the exit code through the
         // activity scope and the only failure mode we care about surfaces via the RPC call below.

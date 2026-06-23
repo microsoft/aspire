@@ -293,7 +293,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         }
 
         // Step 2: Start the AppHost server temporarily for code generation
-        await using var serverSession = _serverSessionFactory.Create(appHostServerProject, cancellationToken);
+        await using var serverSession = _serverSessionFactory.Create(appHostServerProject, environmentVariables: null, debug: false, gracefulShutdownSignaler: null, shutdownService: null, isolateConsole: false, cancellationToken);
         // Short-lived RPC session: StartAsync() spawns the server. We never observe the
         // exit-code task because disposal flows the exit code through the activity scope and the only
         // failure mode we care about surfaces via the RPC call below.
@@ -458,14 +458,14 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             // is how we ask the session to kill its child process. The outer cancellationToken IS
             // CCM.Token (see Program.Main), so a user Ctrl+C lands here automatically.
             using var serverStopCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            await using var serverSession = new AppHostServerSession(
+            await using var serverSession = _serverSessionFactory.Create(
                 appHostServerProject,
                 launchSettingsEnvVars,
                 context.Debug,
-                _logger,
-                _profilingTelemetry,
-                gracefulShutdownSignaler: _gracefulShutdownSignaler,
-                shutdownService: _shutdownService,
+                _gracefulShutdownSignaler,
+                _shutdownService,
+                // Isolate the child console so a user Ctrl+C reaches the CLI (and drives the shared
+                // shutdown ladder) rather than terminating the server child directly.
                 isolateConsole: true,
                 serverStopCts.Token);
             Task<int> serverCompletion;
@@ -1242,7 +1242,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     /// Starts connecting to the AppHost server's backchannel server.
     /// </summary>
     private async Task StartBackchannelConnectionAsync(
-        AppHostServerSession serverSession,
+        IAppHostServerSession serverSession,
         string socketPath,
         TaskCompletionSource<IAppHostCliBackchannel> backchannelCompletionSource,
         bool enableHotReload,

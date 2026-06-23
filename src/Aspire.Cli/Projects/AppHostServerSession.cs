@@ -447,9 +447,10 @@ internal sealed class AppHostServerSession : IAppHostServerSession
 
 /// <summary>
 /// Default <see cref="IAppHostServerSessionFactory"/> that constructs real
-/// <see cref="AppHostServerSession"/> instances for the short-lived codegen/scaffolding path.
-/// Sessions are created without graceful-shutdown parameters because they are transient: started,
-/// queried over RPC, and disposed within a single operation.
+/// <see cref="AppHostServerSession"/> instances. The factory injects the ambient
+/// <see cref="ILogger{AppHostServerSession}"/> and <see cref="ProfilingTelemetry"/>; callers supply
+/// the per-session configuration, including the optional graceful-shutdown wiring used by the
+/// <c>aspire run</c> path.
 /// </summary>
 internal sealed class AppHostServerSessionFactory : IAppHostServerSessionFactory
 {
@@ -462,15 +463,22 @@ internal sealed class AppHostServerSessionFactory : IAppHostServerSessionFactory
         _profilingTelemetry = profilingTelemetry;
     }
 
-    public IAppHostServerSession Create(IAppHostServerProject appHostServerProject, CancellationToken stopRequested) =>
+    public IAppHostServerSession Create(
+        IAppHostServerProject appHostServerProject,
+        Dictionary<string, string>? environmentVariables,
+        bool debug,
+        IProcessTreeGracefulShutdownSignaler? gracefulShutdownSignaler,
+        IGracefulShutdownWindow? shutdownService,
+        bool isolateConsole,
+        CancellationToken stopRequested) =>
         new AppHostServerSession(
             appHostServerProject,
-            environmentVariables: null,
-            debug: false,
+            environmentVariables,
+            debug,
             _logger,
             _profilingTelemetry,
-            gracefulShutdownSignaler: null,
-            shutdownService: null,
-            isolateConsole: false,
+            gracefulShutdownSignaler,
+            shutdownService,
+            isolateConsole,
             stopRequested);
 }
