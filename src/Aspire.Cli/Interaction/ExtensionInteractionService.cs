@@ -35,6 +35,12 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
     private readonly Channel<Func<Task>> _extensionTaskChannel;
     private readonly ILogger<ExtensionInteractionService> _logger;
 
+    /// <summary>
+    /// The background pump task that processes queued extension operations.
+    /// Completes when the channel is completed and/or the token is cancelled.
+    /// </summary>
+    internal Task PumpTask { get; }
+
     public IExtensionBackchannel Backchannel { get; }
 
     public ExtensionInteractionService(ConsoleInteractionService consoleInteractionService, IExtensionBackchannel backchannel, bool extensionPromptEnabled, ILogger<ExtensionInteractionService> logger)
@@ -50,7 +56,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
             SingleWriter = true
         });
 
-        _ = Task.Run(async () =>
+        PumpTask = Task.Run(async () =>
         {
             try
             {
