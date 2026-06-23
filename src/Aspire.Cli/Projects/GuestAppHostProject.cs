@@ -647,7 +647,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     GracefulShutdownSignaler: _gracefulShutdownSignaler,
                     ShutdownService: _shutdownService);
                 (guestExitCode, guestOutput) = await ExecuteGuestAppHostAsync(
-                    appHostFile, directory, environmentVariables, enableHotReload, context.NoBuild, rpcClient, launcher, StartBackchannelConnectionAfterGuestAppHostLaunchesAsync, appHostSystemToken, guestLaunchOptions);
+                    appHostFile, directory, environmentVariables, enableHotReload, context.NoBuild, rpcClient, launcher, StartBackchannelConnectionAfterGuestAppHostLaunchesAsync, guestLaunchOptions, appHostSystemToken);
             }
 
             // If the user cancelled (Ctrl+C), surface that as cancellation instead of a "guest failed"
@@ -1904,8 +1904,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         IAppHostRpcClient rpcClient,
         IGuestProcessLauncher launcher,
         Func<Task>? afterAppHostLaunchedAsync,
-        CancellationToken cancellationToken,
-        GuestLaunchOptions? appHostLaunchOptions = null)
+        GuestLaunchOptions? appHostLaunchOptions,
+        CancellationToken cancellationToken)
     {
         await EnsureRuntimeCreatedAsync(directory, rpcClient, cancellationToken);
 

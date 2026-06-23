@@ -219,11 +219,11 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
         => _waitForExitProvider?.Invoke(cancellationToken) ?? Process.WaitForExitAsync(cancellationToken);
 
     /// <summary>
-    /// Mirrors <see cref="Process.Kill(bool)"/>. Defaults to <see langword="true"/>
-    /// because every consumer of this type needs tree-kill semantics
-    /// (graceful-shutdown failures escalate to tree kill).
+    /// Mirrors <see cref="Process.Kill(bool)"/>. Every consumer of this type needs tree-kill
+    /// semantics (graceful-shutdown failures escalate to tree kill), so callers pass
+    /// <see langword="true"/> explicitly, matching <see cref="Aspire.Cli.DotNet.ProcessExecution.Kill(bool)"/>.
     /// </summary>
-    public void Kill(bool entireProcessTree = true) => Process.Kill(entireProcessTree);
+    public void Kill(bool entireProcessTree) => Process.Kill(entireProcessTree);
 
     /// <inheritdoc />
     public ValueTask DisposeAsync()

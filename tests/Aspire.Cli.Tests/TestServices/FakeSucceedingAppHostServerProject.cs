@@ -28,10 +28,10 @@ internal sealed class FakeSucceedingAppHostServerProject(string appDirectoryPath
 
     public Task<AppHostServerRunResult> RunAsync(
         int hostPid,
-        IReadOnlyDictionary<string, string>? environmentVariables = null,
-        string[]? additionalArgs = null,
-        bool debug = false,
-        AppHostServerRunControl? runControl = null) =>
+        IReadOnlyDictionary<string, string>? environmentVariables,
+        string[]? additionalArgs,
+        bool debug,
+        AppHostServerRunControl? runControl) =>
         throw new NotSupportedException("Run should not be invoked when using a fake codegen session.");
 
     public void Dispose()

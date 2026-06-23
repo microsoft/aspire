@@ -196,6 +196,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
                 result = await _project.RunAsync(
                     Environment.ProcessId,
                     serverEnvironmentVariables,
+                    additionalArgs: null,
                     debug: _debug,
                     runControl: new AppHostServerRunControl(_isolateConsole, _gracefulShutdownSignaler, _shutdownService)).ConfigureAwait(false);
             }

@@ -917,10 +917,10 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
     /// <inheritdoc />
     public async Task<AppHostServerRunResult> RunAsync(
         int hostPid,
-        IReadOnlyDictionary<string, string>? environmentVariables = null,
-        string[]? additionalArgs = null,
-        bool debug = false,
-        AppHostServerRunControl? runControl = null)
+        IReadOnlyDictionary<string, string>? environmentVariables,
+        string[]? additionalArgs,
+        bool debug,
+        AppHostServerRunControl? runControl)
     {
         var startInfo = CreateStartInfo(hostPid, environmentVariables, additionalArgs, debug);
         var outputCollector = new OutputCollector();

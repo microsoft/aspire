@@ -113,17 +113,17 @@ internal interface IAppHostServerProject
     /// <param name="additionalArgs">Additional command-line arguments.</param>
     /// <param name="debug">Whether to enable debug logging.</param>
     /// <param name="runControl">
-    /// Console-isolation + graceful-shutdown wiring for the spawn. <see langword="null"/> (the
-    /// default) preserves force-kill-on-cancel semantics for non-Run callers (SDK gen, scaffolding,
+    /// Console-isolation + graceful-shutdown wiring for the spawn. <see langword="null"/>
+    /// preserves force-kill-on-cancel semantics for non-Run callers (SDK gen, scaffolding,
     /// publish, dump). The run path passes a populated <see cref="AppHostServerRunControl"/>.
     /// </param>
     /// <returns>A task producing the launched server process execution and its captured output.</returns>
     Task<AppHostServerRunResult> RunAsync(
         int hostPid,
-        IReadOnlyDictionary<string, string>? environmentVariables = null,
-        string[]? additionalArgs = null,
-        bool debug = false,
-        AppHostServerRunControl? runControl = null);
+        IReadOnlyDictionary<string, string>? environmentVariables,
+        string[]? additionalArgs,
+        bool debug,
+        AppHostServerRunControl? runControl);
 
     /// <summary>
     /// Gets a unique identifier path for this AppHost, used for running instance detection.

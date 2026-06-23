@@ -31,10 +31,10 @@ internal sealed class FakeFailingAppHostServerProject(string appDirectoryPath) :
 
     public Task<AppHostServerRunResult> RunAsync(
         int hostPid,
-        IReadOnlyDictionary<string, string>? environmentVariables = null,
-        string[]? additionalArgs = null,
-        bool debug = false,
-        AppHostServerRunControl? runControl = null) =>
+        IReadOnlyDictionary<string, string>? environmentVariables,
+        string[]? additionalArgs,
+        bool debug,
+        AppHostServerRunControl? runControl) =>
         throw new NotSupportedException("Run should not be invoked when PrepareAsync fails.");
 
     public void Dispose()
