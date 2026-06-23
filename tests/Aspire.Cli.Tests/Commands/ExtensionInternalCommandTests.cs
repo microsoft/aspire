@@ -208,12 +208,12 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
             return Task.FromResult(result);
         }
 
-        public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken, bool noEvaluate = false)
         {
             return Task.FromResult<List<AppHostProjectCandidate>>([new(_projectFile, "test")]);
         }
 
-        public Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        public Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken, bool noEvaluate = false)
         {
             return Task.FromResult<List<FileInfo>>([_projectFile]);
         }
@@ -273,12 +273,12 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
             return Task.FromResult(result);
         }
 
-        public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken, bool noEvaluate = false)
         {
             return Task.FromResult(_projectFiles.Select(projectFile => new AppHostProjectCandidate(projectFile, "test")).ToList());
         }
 
-        public Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        public Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken, bool noEvaluate = false)
         {
             return Task.FromResult(_projectFiles);
         }
@@ -321,12 +321,12 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
 
     private sealed class NoProjectFileProjectLocator : IProjectLocator
     {
-        public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken, bool noEvaluate = false)
         {
             throw new ProjectLocatorException("No AppHost project found.", ProjectLocatorFailureReason.NoProjectFileFound);
         }
 
-        public Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        public Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken, bool noEvaluate = false)
         {
             throw new ProjectLocatorException("No AppHost project found.", ProjectLocatorFailureReason.NoProjectFileFound);
         }
@@ -378,12 +378,12 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
 
     private sealed class ThrowingProjectLocator : IProjectLocator
     {
-        public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken, bool noEvaluate = false)
         {
             throw new InvalidOperationException("Something went wrong");
         }
 
-        public Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        public Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken, bool noEvaluate = false)
         {
             throw new InvalidOperationException("Something went wrong");
         }

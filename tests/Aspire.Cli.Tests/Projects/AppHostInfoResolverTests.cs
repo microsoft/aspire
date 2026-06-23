@@ -13,7 +13,7 @@ namespace Aspire.Cli.Tests.Projects;
 public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
 {
     [Fact]
-    public async Task GetAppHostInfoAsync_UsesDiskCacheWhenPresent()
+    public async Task GetAppHostInfoAsync_EvaluateMode_UsesDiskCacheWhenPresent()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var projectFile = CreateProjectFile(workspace);
@@ -54,7 +54,7 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task GetAppHostInfoAsync_CachesSuccessfulMsBuildEvaluationInMemory()
+    public async Task GetAppHostInfoAsync_EvaluateMode_CachesSuccessfulMsBuildEvaluationInMemory()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var projectFile = CreateProjectFile(workspace);
@@ -78,7 +78,7 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task GetAppHostInfoAsync_DoesNotCacheFailedMsBuildEvaluationInMemory()
+    public async Task GetAppHostInfoAsync_EvaluateMode_DoesNotCacheFailedMsBuildEvaluationInMemory()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var projectFile = CreateProjectFile(workspace);
@@ -104,7 +104,7 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task GetAppHostInfoAsync_CoalescesConcurrentMsBuildEvaluationInMemory()
+    public async Task GetAppHostInfoAsync_EvaluateMode_CoalescesConcurrentMsBuildEvaluationInMemory()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var projectFile = CreateProjectFile(workspace);
@@ -135,7 +135,7 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task GetAppHostInfoAsync_CallerCancellationDoesNotCancelSharedEvaluation()
+    public async Task GetAppHostInfoAsync_EvaluateMode_CallerCancellationDoesNotCancelSharedEvaluation()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var projectFile = CreateProjectFile(workspace);
@@ -169,7 +169,7 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task GetAppHostInfoAsync_RequestsComputeRunArgumentsTarget()
+    public async Task GetAppHostInfoAsync_EvaluateMode_RequestsComputeRunArgumentsTarget()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var projectFile = CreateProjectFile(workspace);
@@ -192,6 +192,88 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
         // target on its single MSBuild probe so the cached run metadata is correct.
         Assert.NotNull(capturedTargets);
         Assert.Contains("ComputeRunArguments", capturedTargets);
+    }
+
+    [Fact]
+    public async Task GetAppHostInfoAsync_NoEvaluateMode_UsesDiskCacheWhenPresent()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectFile = CreateProjectFile(workspace);
+        var runner = new TestDotNetCliRunner
+        {
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => throw new InvalidOperationException("MSBuild should not run in no-evaluate mode."),
+        };
+        var diskCache = new TestAppHostInfoDiskCache
+        {
+            Entry = new AppHostInfoCacheEntry
+            {
+                ExitCode = 0,
+                IsAspireHost = true,
+                AspireHostingVersion = "9.5.0",
+                IsUsingCliBundle = false,
+                UserSecretsId = null,
+                RunCommand = null,
+                TargetPath = null,
+                RunWorkingDirectory = null,
+                RunArguments = null,
+                TargetFramework = "net10.0",
+                TargetFrameworks = null,
+            },
+        };
+        var resolver = new AppHostInfoResolver(runner, diskCache);
+
+        var info = await resolver.GetAppHostInfoAsync(projectFile, CancellationToken.None, noEvaluate: true).DefaultTimeout();
+
+        Assert.True(info.IsAspireHost);
+        Assert.Equal(0, info.ExitCode);
+    }
+
+    [Fact]
+    public async Task GetAppHostInfoAsync_NoEvaluateMode_WhenCacheMiss_UsesHeuristicFallback()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostProjectFile = CreateProjectFile(workspace);
+        var nonAppHostProjectPath = Path.Combine(workspace.WorkspaceRoot.FullName, "Web.csproj");
+        File.WriteAllText(nonAppHostProjectPath, "<Project Sdk=\"Microsoft.NET.Sdk\" />");
+        var nonAppHostProjectFile = new FileInfo(nonAppHostProjectPath);
+        var runner = new TestDotNetCliRunner
+        {
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => throw new InvalidOperationException("MSBuild should not run in no-evaluate mode."),
+        };
+        var resolver = new AppHostInfoResolver(runner, new NullAppHostInfoDiskCache());
+
+        var appHostInfo = await resolver.GetAppHostInfoAsync(appHostProjectFile, CancellationToken.None, noEvaluate: true).DefaultTimeout();
+        var nonAppHostInfo = await resolver.GetAppHostInfoAsync(nonAppHostProjectFile, CancellationToken.None, noEvaluate: true).DefaultTimeout();
+
+        Assert.Null(appHostInfo.IsAspireHost);
+        Assert.Equal(0, appHostInfo.ExitCode);
+        Assert.Null(nonAppHostInfo.IsAspireHost);
+        Assert.Equal(1, nonAppHostInfo.ExitCode);
+    }
+
+    [Fact]
+    public async Task GetAppHostInfoAsync_NoEvaluateThenEvaluate_DoesNotReuseHeuristicInMemoryCache()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectFile = CreateProjectFile(workspace);
+        var msbuildCalls = 0;
+        var runner = new TestDotNetCliRunner
+        {
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) =>
+            {
+                msbuildCalls++;
+                return (0, CreateAppHostInfoJson());
+            },
+        };
+        var resolver = new AppHostInfoResolver(runner, new NullAppHostInfoDiskCache());
+
+        var noEvaluateInfo = await resolver.GetAppHostInfoAsync(projectFile, CancellationToken.None, noEvaluate: true).DefaultTimeout();
+        var evaluateInfo = await resolver.GetAppHostInfoAsync(projectFile, CancellationToken.None, noEvaluate: false).DefaultTimeout();
+
+        Assert.Null(noEvaluateInfo.IsAspireHost);
+        Assert.Equal(0, noEvaluateInfo.ExitCode);
+        Assert.True(evaluateInfo.IsAspireHost);
+        Assert.Equal(1, msbuildCalls);
     }
 
     private static FileInfo CreateProjectFile(TemporaryWorkspace workspace)

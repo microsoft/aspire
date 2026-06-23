@@ -17,7 +17,7 @@ Most JSON output uses camel-case property names. Properties whose values are not
 `aspire ls` lists candidate AppHost project files in the current workspace.
 
 ```bash
-aspire ls [--all] [--format json] [--stream]
+aspire ls [--all] [--format json] [--stream] [--no-evaluate]
 ```
 
 By default, the command outputs a human-readable table. Use `--format json` for a stable JSON snapshot after discovery completes:
@@ -48,13 +48,15 @@ Stream output is emitted in arrival order from parallel discovery; lines are not
 
 If discovery finds no AppHost candidates, the stream emits no lines. The stream does not emit `started`, `complete`, or `canceled` control records; use the command's exit code and end-of-file to detect stream completion.
 
+Use `--no-evaluate` to keep discovery in strict non-inspecting mode for tooling and cold starts: it avoids fresh project inspection, uses known AppHost details when present, and otherwise reports best-effort matches from project naming and layout cues.
+
 #### AppHost candidate fields
 
 | Field | Applies to | Description |
 | ----- | ---------- | ----------- |
 | `path` | All candidates | Full path to the candidate AppHost project file. |
 | `language` | All candidates | Detected AppHost language, such as `C#` or `TypeScript`. |
-| `status` | All candidates | Candidate validation status, such as `buildable` or `possibly-unbuildable`. |
+| `status` | All candidates | Candidate validation status: `buildable`, `possibly-unbuildable`, or `possibly-buildable`. |
 
 ### `aspire start` and `aspire run --detach`
 

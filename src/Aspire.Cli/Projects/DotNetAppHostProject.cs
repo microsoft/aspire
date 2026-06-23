@@ -186,7 +186,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     // ═══════════════════════════════════════════════════════════════
 
     /// <inheritdoc />
-    public async Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+    public async Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, CancellationToken cancellationToken, bool noEvaluate = false)
     {
         if (IsUnsupported)
         {
@@ -205,16 +205,21 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
         // The resolver owns the cache/MSBuild fallback so validation and later run/publish
         // decisions share a single source of truth for AppHost project metadata.
-        using var cliBundleLease = await AcquireCliBundleLayoutAsync(cancellationToken);
-        var information = await _appHostInfoResolver.GetAppHostInfoAsync(appHostFile, cancellationToken);
+        using var cliBundleLease = noEvaluate ? null : await AcquireCliBundleLayoutAsync(cancellationToken);
+        var information = await _appHostInfoResolver.GetAppHostInfoAsync(appHostFile, cancellationToken, noEvaluate);
 
-        if (information.ExitCode == 0 && information.IsAspireHost)
+        if (information.IsAspireHost is null)
+        {
+            return new AppHostValidationResult(IsValid: information.ExitCode == 0, IsNotEvaluated: true);
+        }
+
+        if (information.ExitCode == 0 && information.IsAspireHost == true)
         {
             return new AppHostValidationResult(IsValid: true, AspireHostingVersion: information.AspireHostingVersion);
         }
 
         // Check if it's possibly an unbuildable AppHost (has the right name pattern but couldn't be validated)
-        var isPossiblyUnbuildable = IsPossiblyUnbuildableAppHost(appHostFile);
+        var isPossiblyUnbuildable = AppHostProjectUtils.IsLikelyAppHost(appHostFile);
 
         return new AppHostValidationResult(
             IsValid: false,
@@ -229,18 +234,9 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // SDK-style projects, package references, and Central Package Management.
         using var cliBundleLease = await AcquireCliBundleLayoutAsync(cancellationToken);
         var information = await _appHostInfoResolver.GetAppHostInfoAsync(appHostFile, cancellationToken);
-        return information.ExitCode == 0 && information.IsAspireHost
+        return information.ExitCode == 0 && information.IsAspireHost == true
             ? information.AspireHostingVersion
             : null;
-    }
-
-    private static bool IsPossiblyUnbuildableAppHost(FileInfo projectFile)
-    {
-        var fileNameSuggestsAppHost = projectFile.Name.EndsWith("AppHost.csproj", StringComparison.OrdinalIgnoreCase);
-        var folderContainsAppHostCSharpFile = projectFile.Directory!
-            .EnumerateFiles("*", SearchOption.TopDirectoryOnly)
-            .Any(f => f.Name.Equals("AppHost.cs", StringComparison.OrdinalIgnoreCase));
-        return fileNameSuggestsAppHost || folderContainsAppHostCSharpFile;
     }
 
     /// <inheritdoc />
@@ -548,7 +544,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         var info = await _appHostInfoResolver.GetAppHostInfoAsync(effectiveAppHostFile, cancellationToken);
         var appHostCompatibilityCheck = AppHostHelper.EvaluateAppHostCompatibility(
             info.ExitCode,
-            info.IsAspireHost,
+            info.IsAspireHost ?? throw new ArgumentException("IsAspireHost is null", nameof(effectiveAppHostFile)),
             info.AspireHostingVersion,
             _interactionService,
             _fileLoggerProvider.LogFilePath);

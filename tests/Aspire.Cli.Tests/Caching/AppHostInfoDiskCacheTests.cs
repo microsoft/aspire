@@ -251,6 +251,36 @@ public class AppHostInfoDiskCacheTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void ComputeKey_IsCaseInsensitiveForDriveLetter()
+    {
+        // On Windows the same physical project is reached through paths that differ only by drive
+        // casing — VS Code launches the CLI with a lowercase drive letter ("c:\...") while a
+        // terminal uses an uppercase one ("C:\..."). Both must derive the same cache key, otherwise
+        // a terminal-populated entry is invisible to the extension's no-evaluate read and the
+        // AppHost stays "possibly-buildable". NormalizePathForHash only normalizes the drive letter
+        // (not the rest of the path), so this only applies on Windows; flip just the drive letter
+        // here to mirror the real c:\ vs C:\ scenario.
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectFile = CreateProjectFile(workspace);
+
+        var fullPath = projectFile.FullName;
+        var lowerDrivePath = char.ToLowerInvariant(fullPath[0]) + fullPath[1..];
+        var upperDrivePath = char.ToUpperInvariant(fullPath[0]) + fullPath[1..];
+
+        var keyLower = AppHostInfoDiskCache.ComputeKeyAsync(new FileInfo(lowerDrivePath));
+        var keyUpper = AppHostInfoDiskCache.ComputeKeyAsync(new FileInfo(upperDrivePath));
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Equal(keyLower, keyUpper);
+        }
+        else
+        {
+            Assert.NotEqual(keyLower, keyUpper);
+        }
+    }
+
+    [Fact]
     public void ComputeKey_WalksAboveTenParentDirectories()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

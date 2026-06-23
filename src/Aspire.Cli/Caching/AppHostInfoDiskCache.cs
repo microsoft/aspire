@@ -244,7 +244,7 @@ internal sealed class AppHostInfoDiskCache : IAppHostInfoDiskCache
         var sb = new StringBuilder(512);
         sb.Append(SchemaVersion);
         sb.Append('|');
-        sb.Append(projectFile.FullName);
+        sb.Append(NormalizePathForHash(projectFile.FullName));
         sb.Append('|');
         AppendMtime(sb, projectFile.FullName, "csproj");
 
@@ -326,6 +326,25 @@ internal sealed class AppHostInfoDiskCache : IAppHostInfoDiskCache
             // marker. Worst case we get a cache miss until the situation resolves.
             sb.Append('-');
         }
+    }
+
+    // Normalize the Windows drive-letter casing so the same physical project resolves to one cache
+    // key regardless of how the drive was cased by the caller (for example, `c:\...` from VS Code
+    // vs `C:\...` from a terminal). Only the drive letter is normalized — the rest of the path is
+    // left as-is, and no normalization happens off Windows.
+    private static string NormalizePathForHash(string path)
+    {
+        var canonical = Path.TrimEndingDirectorySeparator(path);
+
+        if (OperatingSystem.IsWindows() &&
+            canonical.Length >= 2 &&
+            canonical[1] == ':' &&
+            char.IsLetter(canonical[0]))
+        {
+            canonical = char.ToUpperInvariant(canonical[0]) + canonical[1..];
+        }
+
+        return canonical;
     }
 }
 
