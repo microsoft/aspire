@@ -184,9 +184,8 @@ Example entry:
       "type": "nuget",
       "package": "Aspire.Hosting.Redis",
       "languages": ["csharp", "typescript", "python"],
-      "versionPolicy": {
-        "variantAware": true,
-        "allowPrerelease": "variant"
+      "resolution": {
+        "prerelease": "variant"
       }
     }
   ]
@@ -216,9 +215,8 @@ Docs links are optional and should point to an existing first-party doc or repos
           "type": "nuget",
           "package": "Aspire.Hosting.Redis",
           "languages": ["csharp", "typescript", "python"],
-          "versionPolicy": {
-            "variantAware": true,
-            "allowPrerelease": "variant"
+          "resolution": {
+            "prerelease": "variant"
           }
         }
       ],
@@ -396,7 +394,7 @@ Detailed flow:
 5. Select an entry.
 6. Select the best provider supported by the current AppHost language.
 7. Ask the provider for candidate versions.
-8. Apply index-variant and version policy.
+8. Apply variant quality and provider compatibility filters.
 9. Install through the provider.
 
 For the NuGet provider, step 7 should use existing `PackageChannel` methods:
@@ -415,7 +413,7 @@ This preserves today's provider-resolution behavior:
 - Temporary `NuGet.config` generation.
 - Bundle-mode NuGet search.
 
-The implicit/default Aspire variant must always participate in NuGet provider resolution, even when an AppHost has pinned an explicit variant. This preserves the current invariant from `IntegrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync`: prerelease-only integrations must remain reachable through the implicit `Quality.Both` channel even when a polyglot AppHost pins a stable-quality channel. Index `versionPolicy` filters candidates after variants have produced them; it must not narrow the variant set. This avoids regressing [#17724](https://github.com/microsoft/aspire/issues/17724) and [#17725](https://github.com/microsoft/aspire/issues/17725).
+The implicit/default Aspire variant must always participate in NuGet provider resolution, even when an AppHost has pinned an explicit variant. This preserves the current invariant from `IntegrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync`: prerelease-only integrations must remain reachable through the implicit `Quality.Both` channel even when a polyglot AppHost pins a stable-quality channel. Entry compatibility and resolution hints filter candidates after variants have produced them; they must not narrow the variant set. This avoids regressing [#17724](https://github.com/microsoft/aspire/issues/17724) and [#17725](https://github.com/microsoft/aspire/issues/17725).
 
 ## Walking-skeleton implementation
 
@@ -427,7 +425,7 @@ Proposed internal types:
 | ---- | -------------- |
 | `IntegrationIndexDocument` | Deserialized generated artifact: schema version, index metadata, entries. |
 | `IntegrationEntry` | Curated entry ID, display name, aliases, tags, docs, provenance, provider references. |
-| `IntegrationProviderReference` | Provider type plus provider-specific coordinate and version policy. |
+| `IntegrationProviderReference` | Provider type plus provider-specific coordinate, compatibility constraints, and resolution hints. |
 | `IntegrationIndexVariant` | Publicly modeled index variant such as `aspire@daily`; internally maps to one or more `PackageChannel` instances for NuGet. |
 | `IntegrationCandidate` | Runtime candidate after AppHost language, index precedence, alias, availability, and provider filtering. |
 | `IIntegrationIndexSource` | Loads built-in, cached, external, or dynamic-discovery indexes. |
@@ -557,21 +555,36 @@ Before installing a NuGet provider coordinate, the CLI should detect whether the
 
 The provider coordinate is not the global integration identity. `index/id` is.
 
-## Version handling
+## Version and revision handling
 
-The index should express version policy, not every available package version.
+The index should not introduce a second package-version axis. It is a catalog that maps a stable integration ID to provider coordinates. It can constrain or hint provider resolution, but package versions remain owned by the provider ecosystem.
 
-Provider artifact versions remain owned by the provider ecosystem:
+Separate the concepts:
 
-| Axis | Owner |
-| ---- | ----- |
-| Index schema version | Integration index format. |
-| Integration identity | Index and entry ID. |
-| Provider artifact version | NuGet, npm, container registry, or other provider. |
-| Aspire compatibility | Index metadata and provider validation. |
-| Installed version | Project package reference or Aspire config. |
+| Concept | Example | Owner | Meaning |
+| ------- | ------- | ----- | ------- |
+| Index schema version | `1` | Integration index format | Format compatibility between the CLI and generated index artifact. |
+| Index artifact revision | Git commit + digest | Index source | The exact catalog content the CLI embedded, cached, or pinned. This is not an installable integration version. |
+| Integration identity | `aspire/redis` | Index and entry ID | Stable name for search/add and provenance. It has no independent semantic version in the MVP. |
+| Provider artifact version | `13.4.0` for `Aspire.Hosting.Redis` | NuGet, npm, container registry, or other provider | The installable artifact version selected by provider resolution. |
+| Aspire compatibility | `[13.0.0,14.0.0)` | Index hints plus provider validation | Constraint used to filter provider artifact versions for a project. |
+| Installed version | Package reference or Aspire config value | Project | The provider artifact version recorded by `aspire add`. |
 
-Example policy:
+The `--version` option applies to the selected provider artifact, not to the index entry:
+
+```bash
+aspire add redis --version 13.4.0
+```
+
+This means:
+
+- `aspire/redis` names the catalog entry.
+- `aspire@daily` selects the Aspire catalog variant and provider resolution profile.
+- `nuget:Aspire.Hosting.Redis` is the provider coordinate.
+- `13.4.0` is the NuGet package version.
+- The index commit/digest identifies which catalog metadata was used.
+
+Example provider resolution hints:
 
 ```json
 {
@@ -579,34 +592,27 @@ Example policy:
     {
       "type": "nuget",
       "package": "Aspire.Hosting.Redis",
-      "versionPolicy": {
-        "variantAware": true,
-        "compatibleAspire": "[13.0.0,14.0.0)",
-        "allowPrerelease": "variant"
+      "resolution": {
+        "aspireCompatibility": "[13.0.0,14.0.0)",
+        "prerelease": "variant"
       }
     }
   ]
 }
 ```
 
-Default NuGet version behavior:
+Default NuGet provider version behavior:
 
 1. Query package versions from selected index variants.
 2. Filter by variant quality.
-3. Filter by index compatibility metadata when present.
+3. Filter by entry compatibility hints when present.
 4. Prefer the installed CLI/SDK version for local/PR hives when available.
 5. Prefer the configured variant for polyglot AppHosts when present.
 6. Otherwise select the latest compatible version using semantic version precedence.
 
-The `compatibleAspire` range is evaluated against the AppHost's resolved Aspire SDK/hosting version. C# AppHosts should use the resolved `Aspire.Hosting`/SDK version from the project. Polyglot AppHosts should use the SDK version stored in Aspire configuration or resolved by the guest AppHost project model.
+The `aspireCompatibility` range is evaluated against the AppHost's resolved Aspire SDK/hosting version. C# AppHosts should use the resolved `Aspire.Hosting`/SDK version from the project. Polyglot AppHosts should use the SDK version stored in Aspire configuration or resolved by the guest AppHost project model.
 
-Explicit versions still work:
-
-```bash
-aspire add redis --version 13.4.0
-```
-
-An explicit version should:
+An explicit provider version should:
 
 - Resolve against the selected provider coordinate.
 - Validate that the provider artifact exists.
@@ -699,6 +705,39 @@ Opt-in third-party discovery can include NuGet tag search:
 ```bash
 aspire integration search terraform --discovery-scope all
 ```
+
+## Relationship to ATS projection and polyglot integrations
+
+[#16110](https://github.com/microsoft/aspire/pull/16110) explores TypeScript-authored integrations that participate in the ATS projection pipeline. That work is complementary to the index model:
+
+```text
+Integration index:
+  "Which integration package should this name resolve to?"
+
+Provider restore/install:
+  "How do I acquire that package for this AppHost?"
+
+ATS projection:
+  "What typed builder methods and capabilities does the restored integration expose?"
+```
+
+For C# integrations, the NuGet provider installs a package and C# APIs are available through normal assembly references. For polyglot integrations, a future provider such as `npm` can install or reference an integration host package, then ATS projection can generate the TypeScript/Python/etc. AppHost surface from that package's exported capabilities.
+
+The index should not duplicate the ATS-generated API surface. It can contain coarse discovery metadata such as:
+
+- Provider coordinate, such as `npm:@spike/aspire-deno`.
+- Supported AppHost languages.
+- Projection kind, such as `ats`, when the provider package requires code generation.
+- Aspire compatibility constraints.
+- Documentation and provenance.
+
+The method-level surface, DTOs, annotations, callbacks, and resource capabilities stay owned by the provider package and ATS projection. In other words, `aspire add deno` can use an index entry to find `npm:@spike/aspire-deno`, but `addDenoApp`, `withDenoPermissions`, and deployment callbacks come from the restored package's ATS exports, not from the index.
+
+This keeps the responsibilities separate:
+
+- The index is a catalog and trust/provenance layer.
+- The provider is the acquisition and version-resolution layer.
+- ATS projection is the polyglot API-shape layer.
 
 ## CLI output
 
@@ -1007,9 +1046,10 @@ Each phase should have an explicit decision gate. If a gate fails, the next phas
 
 - Add new built-in providers only after the index/trust model is stable.
 - Candidate provider types: `npm`, `container`, `template`, `module`.
-- Each provider must define version resolution, install behavior, validation, and trust policy.
+- Each provider must define version resolution, install behavior, validation, trust policy, and any projection requirements.
+- For polyglot integration packages, require an ATS projection contract so the index only selects the package and the restored package defines the generated AppHost surface.
 
-**Gate:** provider-coordinate syntax, provider ordering, AppHost language selection, and provider-specific trust policy are documented and tested with one concrete non-NuGet provider before adding more.
+**Gate:** provider-coordinate syntax, provider ordering, AppHost language selection, provider-specific trust policy, and ATS projection responsibilities are documented and tested with one concrete non-NuGet provider before adding more.
 
 ## Validation
 
@@ -1048,4 +1088,5 @@ CLI tests should cover:
 - Is `<AppHost directory>/.aspire/integration-indexes.lock.json` acceptable as a committed project file for external index pins, or should C# and polyglot AppHosts use their existing project/config stores?
 - Should `aspire add Aspire.Hosting.Redis` continue as an unqualified exact package ID fallback forever, or should help text steer advanced users to `nuget:Aspire.Hosting.Redis` once provider coordinates exist?
 - Does additive JSON output preserve enough compatibility, or do VS Code/MCP consumers need a versioned output mode before index fields are added?
+- Should index entries include a simple `projection` hint for ATS-backed provider packages, or should that be inferred entirely from provider package metadata after restore?
 - What enterprise policy hooks are required before user-added indexes ship: allowed index URLs, allowed commits, provider allowlists, package-source allowlists, or all of these?
