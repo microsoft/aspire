@@ -463,11 +463,11 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 launchSettingsEnvVars,
                 context.Debug,
                 _logger,
-                serverStopCts.Token,
                 _profilingTelemetry,
                 gracefulShutdownSignaler: _gracefulShutdownSignaler,
                 shutdownService: _shutdownService,
-                isolateConsole: true);
+                isolateConsole: true,
+                serverStopCts.Token);
             Task<int> serverCompletion;
             IAppHostRpcClient rpcClient;
             using (_profilingTelemetry.StartRunAppHostStartAppHostServer())
@@ -1041,8 +1041,11 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 launchSettingsEnvVars,
                 context.Debug,
                 _logger,
-                serverStopCts.Token,
-                _profilingTelemetry);
+                _profilingTelemetry,
+                gracefulShutdownSignaler: null,
+                shutdownService: null,
+                isolateConsole: false,
+                serverStopCts.Token);
             Task<int> serverCompletion;
             IAppHostRpcClient rpcClient;
             using (_profilingTelemetry.StartRunAppHostStartAppHostServer())

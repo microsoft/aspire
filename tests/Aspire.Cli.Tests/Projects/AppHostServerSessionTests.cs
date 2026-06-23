@@ -7,6 +7,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Mcp;
@@ -33,12 +34,10 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             ["EXISTING_VALUE"] = "present"
         };
 
-        await using var session = new AppHostServerSession(
+        await using var session = CreateSession(
             project,
-            environmentVariables,
-            debug: false,
-            NullLogger<AppHostServerSession>.Instance,
-            CancellationToken.None);
+            CancellationToken.None,
+            environmentVariables: environmentVariables);
         await session.StartAsync();
 
         Assert.Equal("present", environmentVariables["EXISTING_VALUE"]);
@@ -62,13 +61,11 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1")));
         using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource);
 
-        await using var session = new AppHostServerSession(
+        await using var session = CreateSession(
             project,
-            environmentVariables,
-            debug: false,
-            NullLogger<AppHostServerSession>.Instance,
             CancellationToken.None,
-            profilingTelemetry);
+            environmentVariables: environmentVariables,
+            profilingTelemetry: profilingTelemetry);
         await session.StartAsync();
 
         Assert.Equal("present", environmentVariables["EXISTING_VALUE"]);
@@ -102,13 +99,10 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
         using var parentActivity = parentSource.StartActivity("aspire/cli/run");
         Assert.NotNull(parentActivity);
 
-        await using var session = new AppHostServerSession(
+        await using var session = CreateSession(
             project,
-            environmentVariables: null,
-            debug: false,
-            NullLogger<AppHostServerSession>.Instance,
             CancellationToken.None,
-            profilingTelemetry);
+            profilingTelemetry: profilingTelemetry);
         await session.StartAsync();
 
         Assert.Same(parentActivity, Activity.Current);
@@ -121,11 +115,8 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
     public void AuthenticationToken_IsAvailableBeforeStart()
     {
         var project = new RecordingAppHostServerProject();
-        var session = new AppHostServerSession(
+        var session = CreateSession(
             project,
-            environmentVariables: null,
-            debug: false,
-            NullLogger<AppHostServerSession>.Instance,
             CancellationToken.None);
 
         Assert.False(string.IsNullOrEmpty(session.AuthenticationToken));
@@ -140,11 +131,8 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
         // fast rather than burning the full connection-retry timeout.
         var project = new RecordingAppHostServerProject();
 
-        await using var session = new AppHostServerSession(
+        await using var session = CreateSession(
             project,
-            environmentVariables: null,
-            debug: false,
-            NullLogger<AppHostServerSession>.Instance,
             CancellationToken.None);
         await session.StartAsync();
 
@@ -170,11 +158,8 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
     public void SessionState_BeforeStart_IsNull()
     {
         var project = new RecordingAppHostServerProject();
-        var session = new AppHostServerSession(
+        var session = CreateSession(
             project,
-            environmentVariables: null,
-            debug: false,
-            NullLogger<AppHostServerSession>.Instance,
             CancellationToken.None);
 
         Assert.Null(session.SocketPath);
@@ -186,11 +171,8 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
     public async Task Start_CalledTwice_Throws()
     {
         var project = new RecordingAppHostServerProject();
-        await using var session = new AppHostServerSession(
+        await using var session = CreateSession(
             project,
-            environmentVariables: null,
-            debug: false,
-            NullLogger<AppHostServerSession>.Instance,
             CancellationToken.None);
 
         await session.StartAsync();
@@ -203,11 +185,8 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
     {
         var project = new LongRunningAppHostServerProject();
         using var stopCts = new CancellationTokenSource();
-        await using var session = new AppHostServerSession(
+        await using var session = CreateSession(
             project,
-            environmentVariables: null,
-            debug: false,
-            NullLogger<AppHostServerSession>.Instance,
             stopCts.Token);
 
         await session.StartAsync();
@@ -253,13 +232,9 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             return Task.FromResult(true);
         });
 
-        await using var session = new AppHostServerSession(
+        await using var session = CreateSession(
             project,
-            environmentVariables: null,
-            debug: false,
-            NullLogger<AppHostServerSession>.Instance,
             stopCts.Token,
-            profilingTelemetry: null,
             gracefulShutdownSignaler: signaler,
             shutdownService: shutdownService);
 
@@ -301,13 +276,9 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             return Task.FromResult(true);
         });
 
-        await using var session = new AppHostServerSession(
+        await using var session = CreateSession(
             project,
-            environmentVariables: null,
-            debug: false,
-            NullLogger<AppHostServerSession>.Instance,
             stopCts.Token,
-            profilingTelemetry: null,
             gracefulShutdownSignaler: signaler,
             shutdownService: shutdownService);
 
@@ -345,13 +316,9 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
         var signaler = new RecordingGracefulSignaler(onSignal: _ =>
             throw new InvalidOperationException("simulated DCP failure"));
 
-        await using var session = new AppHostServerSession(
+        await using var session = CreateSession(
             project,
-            environmentVariables: null,
-            debug: false,
-            NullLogger<AppHostServerSession>.Instance,
             stopCts.Token,
-            profilingTelemetry: null,
             gracefulShutdownSignaler: signaler,
             shutdownService: shutdownService);
 
@@ -381,13 +348,9 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
         using var shutdownService = new TestGracefulShutdownWindow { IsEnabled = false };
         var signaler = new RecordingGracefulSignaler();
 
-        var session = new AppHostServerSession(
+        var session = CreateSession(
             project,
-            environmentVariables: null,
-            debug: false,
-            NullLogger<AppHostServerSession>.Instance,
             stopCts.Token,
-            profilingTelemetry: null,
             gracefulShutdownSignaler: signaler,
             shutdownService: shutdownService);
 
@@ -415,11 +378,8 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
     public async Task Start_ProcessExitsNaturally_CompletionReturnsExitCode()
     {
         var project = new RecordingAppHostServerProject();
-        await using var session = new AppHostServerSession(
+        await using var session = CreateSession(
             project,
-            environmentVariables: null,
-            debug: false,
-            NullLogger<AppHostServerSession>.Instance,
             CancellationToken.None);
 
         await session.StartAsync();
@@ -471,11 +431,8 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
 
         static async Task RunScenarioAsync(ThrowingAppHostServerProject project)
         {
-            var session = new AppHostServerSession(
+            var session = CreateSession(
                 project,
-                environmentVariables: null,
-                debug: false,
-                NullLogger<AppHostServerSession>.Instance,
                 CancellationToken.None);
 
             await Assert.ThrowsAsync<InvalidOperationException>(session.StartAsync);
@@ -575,6 +532,31 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             .AddInMemoryCollection(values.Select(value => new KeyValuePair<string, string?>(value.Key, value.Value)))
             .Build();
     }
+
+    // Constructs a session with the test-default wiring so call sites stay focused on the one or two
+    // arguments each scenario actually cares about. The production constructor is intentionally strict
+    // (every parameter required); this helper centralizes the defaults that virtually every test shares:
+    // a null logger, no profiling, and the codegen-style "no graceful shutdown / no console isolation"
+    // configuration. Scenarios that exercise the graceful ladder opt in via the optional parameters.
+    private static AppHostServerSession CreateSession(
+        IAppHostServerProject project,
+        CancellationToken stopRequested,
+        Dictionary<string, string>? environmentVariables = null,
+        bool debug = false,
+        ProfilingTelemetry? profilingTelemetry = null,
+        IProcessTreeGracefulShutdownSignaler? gracefulShutdownSignaler = null,
+        IGracefulShutdownWindow? shutdownService = null,
+        bool isolateConsole = false) =>
+        new(
+            project,
+            environmentVariables,
+            debug,
+            NullLogger<AppHostServerSession>.Instance,
+            profilingTelemetry,
+            gracefulShutdownSignaler,
+            shutdownService,
+            isolateConsole,
+            stopRequested);
 
     private static AppHostServerProjectFactory CreateAppHostServerProjectFactory()
     {

@@ -58,11 +58,11 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         Dictionary<string, string>? environmentVariables,
         bool debug,
         ILogger logger,
-        CancellationToken stopRequested,
-        ProfilingTelemetry? profilingTelemetry = null,
-        IProcessTreeGracefulShutdownSignaler? gracefulShutdownSignaler = null,
-        IGracefulShutdownWindow? shutdownService = null,
-        bool isolateConsole = false)
+        ProfilingTelemetry? profilingTelemetry,
+        IProcessTreeGracefulShutdownSignaler? gracefulShutdownSignaler,
+        IGracefulShutdownWindow? shutdownService,
+        bool isolateConsole,
+        CancellationToken stopRequested)
     {
         _project = project ?? throw new ArgumentNullException(nameof(project));
         _callerEnvironmentVariables = environmentVariables;
@@ -468,6 +468,9 @@ internal sealed class AppHostServerSessionFactory : IAppHostServerSessionFactory
             environmentVariables: null,
             debug: false,
             _logger,
-            stopRequested,
-            _profilingTelemetry);
+            _profilingTelemetry,
+            gracefulShutdownSignaler: null,
+            shutdownService: null,
+            isolateConsole: false,
+            stopRequested);
 }
