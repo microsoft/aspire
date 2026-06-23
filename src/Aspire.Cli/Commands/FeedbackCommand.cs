@@ -278,7 +278,9 @@ internal sealed class FeedbackCommand : BaseCommand
             return string.Format(CultureInfo.InvariantCulture, SharedCommandStrings.FeedbackDoctorCaptureFailed, result.FailureMessage ?? $"exit code {result.ExitCode}");
         }
 
-        return FeedbackDiagnostics.NormalizeAspireDoctorOutput(result.Output);
+        // `aspire doctor --format json` writes clean JSON to stdout; progress text goes to stderr
+        // (drained and discarded by the capture), so the captured stdout can be used directly.
+        return result.Output.Trim();
     }
 
     private async Task<(int ExitCode, string Output, string? FailureMessage, bool Cancelled)> CaptureProcessOutputAsync(
@@ -324,17 +326,13 @@ internal sealed class FeedbackProcessOutputCapture(ILogger<FeedbackProcessOutput
             async (process, token) =>
             {
                 var outputTask = process.StandardOutput.ReadToEndAsync(token);
-                var errorTask = process.StandardError.ReadToEndAsync(token);
-                await Task.WhenAll(outputTask, errorTask).ConfigureAwait(false);
+                var drainErrorTask = process.StandardError.ReadToEndAsync(token);
+                await Task.WhenAll(outputTask, drainErrorTask).ConfigureAwait(false);
 
-                if (string.IsNullOrWhiteSpace(errorTask.Result))
-                {
-                    return outputTask.Result;
-                }
-
-                return string.IsNullOrWhiteSpace(outputTask.Result)
-                    ? errorTask.Result
-                    : string.Concat(outputTask.Result, Environment.NewLine, errorTask.Result);
+                // Only stdout is returned. stderr is still drained concurrently (required to avoid a
+                // pipe-buffer deadlock) but discarded, so callers such as `aspire doctor --format
+                // json` and `<tool> --version` get a clean stdout payload free of progress text.
+                return outputTask.Result;
             },
             static () => string.Empty,
             logger,

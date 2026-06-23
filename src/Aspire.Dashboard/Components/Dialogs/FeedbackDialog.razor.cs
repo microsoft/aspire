@@ -72,13 +72,18 @@ public partial class FeedbackDialog : IDisposable
     {
         _additionalContext = FeedbackDiagnosticProvider.BuildAdditionalContext();
 
+        // Resolve the AppHost line out-of-band: it can require launching MSBuild or Node.js, so it
+        // must not block the synchronous environment lines from populating immediately. Remember the
+        // generated value so the result is only appended when the user hasn't edited the field.
+        var generatedContext = _additionalContext;
+        var appHostContextTask = FeedbackDiagnosticProvider.CaptureAppHostContextAsync(_captureCts.Token);
+
         if (IssueKind == FeedbackIssueKind.Bug)
         {
             _isCapturingBugContext = true;
             try
             {
-                var context = await FeedbackDiagnosticProvider.CaptureBugContextAsync(_captureCts.Token).ConfigureAwait(true);
-                _aspireDoctorOutput = context.AspireDoctorOutput;
+                _aspireDoctorOutput = await FeedbackDiagnosticProvider.CaptureAspireDoctorOutputAsync(_captureCts.Token).ConfigureAwait(true);
             }
             catch (OperationCanceledException) when (_captureCts.IsCancellationRequested)
             {
@@ -87,6 +92,18 @@ public partial class FeedbackDialog : IDisposable
             {
                 _isCapturingBugContext = false;
             }
+        }
+
+        try
+        {
+            if (await appHostContextTask.ConfigureAwait(true) is { } appHostContext &&
+                string.Equals(_additionalContext, generatedContext, StringComparison.Ordinal))
+            {
+                _additionalContext = generatedContext + appHostContext;
+            }
+        }
+        catch (OperationCanceledException) when (_captureCts.IsCancellationRequested)
+        {
         }
     }
 

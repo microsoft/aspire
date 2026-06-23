@@ -717,29 +717,27 @@ public partial class MainLayoutTests : DashboardTestContext
 
     private sealed class TestDashboardFeedbackDiagnosticProvider(string doctorOutput, string additionalContext) : IDashboardFeedbackDiagnosticProvider
     {
-        public bool CaptureBugContextCalled { get; private set; }
-
         public string BuildAdditionalContext() => additionalContext;
 
-        public Task<DashboardFeedbackDiagnosticContext> CaptureBugContextAsync(CancellationToken cancellationToken)
-        {
-            CaptureBugContextCalled = true;
-            return Task.FromResult(new DashboardFeedbackDiagnosticContext(doctorOutput, additionalContext));
-        }
+        public Task<string?> CaptureAppHostContextAsync(CancellationToken cancellationToken) => Task.FromResult<string?>(null);
+
+        public Task<string> CaptureAspireDoctorOutputAsync(CancellationToken cancellationToken) => Task.FromResult(doctorOutput);
     }
 
     private sealed class WaitingDashboardFeedbackDiagnosticProvider : IDashboardFeedbackDiagnosticProvider
     {
-        private readonly TaskCompletionSource<DashboardFeedbackDiagnosticContext> _contextTaskCompletionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<string> _doctorOutputTaskCompletionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public string BuildAdditionalContext() => "- Posted from: Dashboard";
 
-        public Task<DashboardFeedbackDiagnosticContext> CaptureBugContextAsync(CancellationToken cancellationToken) =>
-            _contextTaskCompletionSource.Task.WaitAsync(cancellationToken);
+        public Task<string?> CaptureAppHostContextAsync(CancellationToken cancellationToken) => Task.FromResult<string?>(null);
+
+        public Task<string> CaptureAspireDoctorOutputAsync(CancellationToken cancellationToken) =>
+            _doctorOutputTaskCompletionSource.Task.WaitAsync(cancellationToken);
 
         public void SetResult()
         {
-            _contextTaskCompletionSource.TrySetResult(new DashboardFeedbackDiagnosticContext("""{"sdk":"10.0.301"}""", "- Posted from: Dashboard"));
+            _doctorOutputTaskCompletionSource.TrySetResult("""{"sdk":"10.0.301"}""");
         }
     }
 
