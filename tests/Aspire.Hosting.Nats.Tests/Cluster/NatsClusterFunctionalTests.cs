@@ -23,7 +23,7 @@ public class NatsClusterFunctionalTests(ITestOutputHelper testOutputHelper)
 
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
 
-        var node = builder.AddNats("nats-1");
+        var node = builder.AddNats("nats-1").WithJetStream(); // NOTE: JetStream is needed in order to verify the cluster's mechanisms in the assert phase of the tests.
         var cluster = builder.AddNatsCluster("cluster").WithMember(node);
 
         using var app = builder.Build();
@@ -56,9 +56,9 @@ public class NatsClusterFunctionalTests(ITestOutputHelper testOutputHelper)
 
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
 
-        var node1 = builder.AddNats("nats-1");
-        var node2 = builder.AddNats("nats-2");
-        var node3 = builder.AddNats("nats-3");
+        var node1 = builder.AddNats("nats-1").WithJetStream(); // NOTE: JetStream is needed in order to verify the cluster's mechanisms in the assert phase of the tests.
+        var node2 = builder.AddNats("nats-2").WithJetStream();
+        var node3 = builder.AddNats("nats-3").WithJetStream();
         var cluster = builder.AddNatsCluster("cluster")
             .WithMember(node1)
             .WithMember(node2)
@@ -77,7 +77,27 @@ public class NatsClusterFunctionalTests(ITestOutputHelper testOutputHelper)
             {
                 Url = connectionString!,
             });
-            await client.ConnectAsync();
+
+            var node1ConnectionString = await node1.Resource.ConnectionStringExpression.GetValueAsync(cts.Token);
+            var node2ConnectionString = await node2.Resource.ConnectionStringExpression.GetValueAsync(cts.Token);
+
+            await using var node1Connection = new NatsConnection(new() { Url = node1ConnectionString! });
+            await using var node2Connection = new NatsConnection(new() { Url = node2ConnectionString! });
+
+            await node1Connection.ConnectAsync();
+            await node2Connection.ConnectAsync();
+
+            var sub = Task.Run(async () =>
+            {
+                await foreach (var msg in node2Connection.SubscribeAsync<string>("test.subject", cancellationToken: cts.Token))
+                {
+                    break;
+                }
+            }, cts.Token);
+
+            await node1Connection.PublishAsync("test.subject", "hello from node 1", cancellationToken: cts.Token);
+
+            await sub;
         }, cts.Token);
 
         await app.StopAsync();

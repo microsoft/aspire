@@ -152,7 +152,8 @@ public static class NatsBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        return builder.WithArgs("-js");
+        return builder.WithAnnotation(new NatsJetStreamAnnotation())
+            .WithArgs("-js");
     }
 
     /// <summary>
@@ -235,4 +236,25 @@ public static class NatsBuilderExtensions
 
         return builder;
     }
+
+    /// <summary>
+    /// Adds a server name to a NATS server instance.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="serverName">The server name to set. Defaults to the resource name if not provided.</param>
+    /// <remarks>s
+    /// This is useful when configuring a NATS cluster with JetStream enabled, where each member of the cluster must have a unique server name.
+    /// </remarks>
+    [AspireExport]
+    public static IResourceBuilder<NatsServerResource> WithServerName(
+        this IResourceBuilder<NatsServerResource> builder,
+        string? serverName = null
+    )
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithArgs("--server_name", serverName ?? builder.Resource.Name);
+    }
 }
+
+internal sealed record NatsJetStreamAnnotation : IResourceAnnotation;

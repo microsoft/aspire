@@ -91,6 +91,10 @@ public static class NatsClusterBuilderExtensions
             clusterName: builder.Resource.Name,
             routes: [.. builder.Resource.Members.Select(m => m.ClusterEndpoint)]
         );
+        if (member.Resource.TryGetAnnotationsOfType<NatsJetStreamAnnotation>(out _))
+        {
+            member.WithServerName();
+        }
 
         return builder
             .WithAnnotation(new NatsClusterMemberAnnotation(member.Resource))
