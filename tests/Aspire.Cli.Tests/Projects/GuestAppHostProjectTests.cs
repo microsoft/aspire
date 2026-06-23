@@ -164,8 +164,8 @@ public class GuestAppHostProjectTests : IDisposable
         var refs = config.GetIntegrationReferences("13.1.0", "/tmp").ToList();
 
         // Assert - should include base package (Aspire.Hosting) plus explicit packages
-        Assert.Contains(refs, r => r.Name == "Aspire.Hosting" && r.Version == "13.1.0" && !r.IsProjectReference);
-        Assert.Contains(refs, r => r.Name == "Aspire.Hosting.Redis" && r.Version == "13.1.0" && !r.IsProjectReference);
+        Assert.Contains(refs, r => r.Name == "Aspire.Hosting" && r.Version == "13.1.0" && r.Source != IntegrationSource.Project);
+        Assert.Contains(refs, r => r.Name == "Aspire.Hosting.Redis" && r.Version == "13.1.0" && r.Source != IntegrationSource.Project);
         Assert.Equal(2, refs.Count);
     }
 
@@ -250,13 +250,13 @@ public class GuestAppHostProjectTests : IDisposable
         var refs = config.GetIntegrationReferences("13.1.0", "/home/user/app").ToList();
 
         // Assert
-        Assert.Contains(refs, r => r.Name == "Aspire.Hosting" && r.IsPackageReference);
-        Assert.Contains(refs, r => r.Name == "Aspire.Hosting.Redis" && r.IsPackageReference);
-        var projectRef = Assert.Single(refs, r => r.IsProjectReference);
+        Assert.Contains(refs, r => r.Name == "Aspire.Hosting" && r.Source == IntegrationSource.Nuget);
+        Assert.Contains(refs, r => r.Name == "Aspire.Hosting.Redis" && r.Source == IntegrationSource.Nuget);
+        var projectRef = Assert.Single(refs, r => r.Source == IntegrationSource.Project);
         Assert.Equal("Aspire.Hosting.MyCustom", projectRef.Name);
         Assert.Null(projectRef.Version);
-        Assert.NotNull(projectRef.ProjectPath);
-        Assert.EndsWith(".csproj", projectRef.ProjectPath);
+        Assert.NotNull(projectRef.Path);
+        Assert.EndsWith(".csproj", projectRef.Path);
     }
 
     [Fact]
@@ -625,7 +625,8 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.NotNull(reloaded);
         Assert.Equal("1.0.0", reloaded.SdkVersion);
         Assert.NotNull(reloaded.Packages);
-        Assert.Equal("1.0.0", reloaded.Packages["Aspire.Hosting"]);
+        Assert.Equal(IntegrationSource.Nuget, reloaded.Packages["Aspire.Hosting"].Source);
+        Assert.Equal("1.0.0", reloaded.Packages["Aspire.Hosting"].Version);
         Assert.Null(reloaded.Channel);
     }
 
@@ -666,7 +667,8 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.NotNull(reloaded);
         Assert.Equal("1.0.0", reloaded.SdkVersion);
         Assert.NotNull(reloaded.Packages);
-        Assert.Equal("1.0.0", reloaded.Packages["Aspire.Hosting"]);
+        Assert.Equal(IntegrationSource.Nuget, reloaded.Packages["Aspire.Hosting"].Source);
+        Assert.Equal("1.0.0", reloaded.Packages["Aspire.Hosting"].Version);
         Assert.False(reloaded.Packages.ContainsKey("Aspire.Hosting.Redis"));
     }
 
@@ -747,7 +749,8 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.NotNull(reloaded);
         Assert.Equal(PackageChannelNames.Staging, reloaded.Channel);
         Assert.Equal("1.0.0", reloaded.SdkVersion);
-        Assert.Equal("1.0.0", reloaded.Packages?["Aspire.Hosting"]);
+        Assert.Equal(IntegrationSource.Nuget, reloaded.Packages?["Aspire.Hosting"].Source);
+        Assert.Equal("1.0.0", reloaded.Packages?["Aspire.Hosting"].Version);
     }
 
     [Fact]
@@ -802,7 +805,8 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.NotNull(reloaded);
         Assert.Null(reloaded.Channel);
         Assert.Equal("1.0.0", reloaded.SdkVersion);
-        Assert.Equal("1.0.0", reloaded.Packages?["Aspire.Hosting"]);
+        Assert.Equal(IntegrationSource.Nuget, reloaded.Packages?["Aspire.Hosting"].Source);
+        Assert.Equal("1.0.0", reloaded.Packages?["Aspire.Hosting"].Version);
     }
 
     [Fact]
@@ -853,7 +857,8 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.NotNull(reloaded);
         Assert.Equal(PackageChannelNames.Staging, reloaded.Channel);
         Assert.Equal("2.0.0", reloaded.SdkVersion);
-        Assert.Equal("2.0.0", reloaded.Packages?["Aspire.Hosting"]);
+        Assert.Equal(IntegrationSource.Nuget, reloaded.Packages?["Aspire.Hosting"].Source);
+        Assert.Equal("2.0.0", reloaded.Packages?["Aspire.Hosting"].Version);
     }
 
     /// <summary>

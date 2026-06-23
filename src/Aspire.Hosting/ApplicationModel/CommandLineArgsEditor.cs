@@ -12,6 +12,15 @@ internal sealed class CommandLineArgsEditor(IList<object> args)
     private readonly IList<object> _args = args ?? throw new ArgumentNullException(nameof(args));
 
     /// <summary>
+    /// Clears all command-line arguments.
+    /// </summary>
+    [AspireExport]
+    public void Clear()
+    {
+        _args.Clear();
+    }
+
+    /// <summary>
     /// Adds a command-line argument.
     /// </summary>
     /// <param name="value">The argument to add.</param>

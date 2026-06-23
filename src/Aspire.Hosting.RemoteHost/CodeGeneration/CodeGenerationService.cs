@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.TypeSystem;
+using Aspire.Hosting.RemoteHost.Ats;
 using Aspire.Hosting.RemoteHost.Diagnostics;
 using Microsoft.Extensions.Logging;
 using StreamJsonRpc;
@@ -18,6 +19,8 @@ internal sealed class CodeGenerationService
 
     private readonly JsonRpcAuthenticationState _authenticationState;
     private readonly AtsContextFactory _atsContextFactory;
+    private readonly ExternalCapabilityRegistry _externalCapabilityRegistry;
+    private readonly Aspire.Hosting.RemoteHost.Language.IntegrationHostLauncher _integrationHostLauncher;
     private readonly CodeGeneratorResolver _resolver;
     private readonly AssemblyLoader _assemblyLoader;
     private readonly ILogger<CodeGenerationService> _logger;
@@ -26,6 +29,8 @@ internal sealed class CodeGenerationService
     public CodeGenerationService(
         JsonRpcAuthenticationState authenticationState,
         AtsContextFactory atsContextFactory,
+        ExternalCapabilityRegistry externalCapabilityRegistry,
+        Aspire.Hosting.RemoteHost.Language.IntegrationHostLauncher integrationHostLauncher,
         CodeGeneratorResolver resolver,
         AssemblyLoader assemblyLoader,
         ILogger<CodeGenerationService> logger,
@@ -33,6 +38,8 @@ internal sealed class CodeGenerationService
     {
         _authenticationState = authenticationState;
         _atsContextFactory = atsContextFactory;
+        _externalCapabilityRegistry = externalCapabilityRegistry;
+        _integrationHostLauncher = integrationHostLauncher;
         _resolver = resolver;
         _assemblyLoader = assemblyLoader;
         _logger = logger;
@@ -49,7 +56,7 @@ internal sealed class CodeGenerationService
     /// </param>
     /// <returns>The capabilities information.</returns>
     [JsonRpcMethod(GetCapabilitiesMethodName)]
-    public CapabilitiesResponse GetCapabilities(string[]? assemblyNames = null)
+    public async Task<CapabilitiesResponse> GetCapabilities(string[]? assemblyNames = null)
     {
         using var rpcActivity = _profilingTelemetry.StartJsonRpcServerCall(GetCapabilitiesMethodName);
         using var activity = _profilingTelemetry.StartCodeGenerationGetCapabilities();
@@ -58,11 +65,12 @@ internal sealed class CodeGenerationService
             _authenticationState.ThrowIfNotAuthenticated();
             _logger.LogDebug(">> getCapabilities()");
             var sw = System.Diagnostics.Stopwatch.StartNew();
-            var context = _atsContextFactory.GetContext();
-            if (assemblyNames is { Length: > 0 })
-            {
-                context = AtsContextFilter.FilterByExportingAssemblies(context, assemblyNames);
-            }
+
+            // Make sure server-spawned integration hosts have registered and their
+            // getCapabilities payloads are merged before codegen callers observe ATS.
+            await _integrationHostLauncher.ReadyAsync().ConfigureAwait(false);
+
+            var context = GetCodeGenerationContext(assemblyNames);
             activity.SetAtsCounts(
                 context.Capabilities.Count,
                 context.HandleTypes.Count,
@@ -228,7 +236,7 @@ internal sealed class CodeGenerationService
     /// <param name="assemblyName">The exporting assembly to scope the generated SDK to, or null to use the full ATS context.</param>
     /// <returns>A dictionary of file paths to file contents.</returns>
     [JsonRpcMethod(GenerateCodeMethodName)]
-    public Dictionary<string, string> GenerateCode(string language, string? assemblyName = null)
+    public async Task<Dictionary<string, string>> GenerateCode(string language, string? assemblyName = null)
     {
         using var rpcActivity = _profilingTelemetry.StartJsonRpcServerCall(GenerateCodeMethodName);
         using var activity = _profilingTelemetry.StartCodeGenerationGenerate(language);
@@ -237,17 +245,18 @@ internal sealed class CodeGenerationService
             _authenticationState.ThrowIfNotAuthenticated();
             _logger.LogDebug(">> generateCode({Language})", language);
             var sw = System.Diagnostics.Stopwatch.StartNew();
+
+            // Wait for server-spawned integration hosts to be ready so their capabilities are
+            // present in the AtsContext before we run codegen.
+            await _integrationHostLauncher.ReadyAsync().ConfigureAwait(false);
+
             var generator = _resolver.GetCodeGenerator(language);
             if (generator == null)
             {
                 throw new ArgumentException(BuildNoCodeGeneratorMessage(language));
             }
 
-            var context = _atsContextFactory.GetContext();
-            if (!string.IsNullOrWhiteSpace(assemblyName))
-            {
-                context = AtsContextFilter.FilterByExportingAssembliesWithReferences(context, [assemblyName]);
-            }
+            var context = GetCodeGenerationContext(string.IsNullOrWhiteSpace(assemblyName) ? null : [assemblyName], includeReferencedTypes: true);
 
             var files = generator.GenerateDistributedApplication(context);
             activity.SetFileCount(files.Count);
@@ -268,6 +277,20 @@ internal sealed class CodeGenerationService
         }
     }
 
+    private AtsContext GetCodeGenerationContext(string[]? assemblyNames, bool includeReferencedTypes = false)
+    {
+        var context = _atsContextFactory.GetContext();
+
+        if (assemblyNames is { Length: > 0 })
+        {
+            return includeReferencedTypes
+                ? AtsContextFilter.FilterByExportingAssembliesWithReferences(context, assemblyNames)
+                : AtsContextFilter.FilterByExportingAssemblies(context, assemblyNames);
+        }
+
+        return _externalCapabilityRegistry.AugmentContext(context);
+    }
+
     private string BuildNoCodeGeneratorMessage(string language)
     {
         var available = _resolver.GetSupportedLanguages()
@@ -284,7 +307,6 @@ internal sealed class CodeGenerationService
                    "This usually indicates a binary mismatch between the bundled apphost server and the integration assemblies on disk; " +
                    "check the apphost server log for 'LoaderExceptions' Warnings.";
         }
-
         return $"No code generator found for language: {language}. Available languages: {string.Join(", ", available)}.";
     }
 }

@@ -1751,6 +1751,13 @@ class VolumeParameters(typing.TypedDict, total=False):
     is_read_only: bool
 
 
+class ExecutableDebugSupportParameters(typing.TypedDict, total=False):
+    launch_config_type: typing.Required[str]
+    script_path: typing.Required[str]
+    runtime_executable: str
+    launch_method: str
+
+
 class DataVolumeParameters(typing.TypedDict, total=False):
     name: str
     is_read_only: bool
@@ -3751,6 +3758,14 @@ class CommandLineArgsEditor:
     def handle(self) -> Handle:
         """The underlying object reference handle."""
         return self._handle
+
+    def clear(self) -> None:
+        """Clears all command-line arguments."""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/clear',
+            rpc_args
+        )
 
     def add(self, value: str | ReferenceExpression | EndpointReference | ParameterResource | AbstractResourceWithConnectionString | AbstractExpressionValue) -> None:
         """Adds a command-line argument."""
@@ -7276,6 +7291,18 @@ class AbstractResource(abc.ABC):
         """Configures a resource to use a persistent lifetime that ends when a parent process exits."""
 
     @abc.abstractmethod
+    def with_serialized_annotation(self, annotation_id: str, json: str) -> AbstractResource:
+        """Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID."""
+
+    @abc.abstractmethod
+    def get_serialized_annotation(self, annotation_id: str) -> str:
+        """Gets a serialized ATS annotation payload from a resource."""
+
+    @abc.abstractmethod
+    def has_serialized_annotation(self, annotation_id: str) -> bool:
+        """Determines whether a resource has a serialized ATS annotation with the specified ID."""
+
+    @abc.abstractmethod
     def with_urls(self, callback: typing.Callable[[ResourceUrlsCallbackContext], None]) -> typing.Self:
         """Registers a callback to customize the URLs displayed for the resource."""
 
@@ -7498,6 +7525,14 @@ class AbstractResourceWithArgs(AbstractResource):
     @abc.abstractmethod
     def with_args_callback(self, callback: typing.Callable[[CommandLineArgsCallbackContext], None]) -> typing.Self:
         """Adds a callback to be executed with a list of command-line arguments when a resource is started."""
+
+    @abc.abstractmethod
+    def with_args_replace(self, args: typing.Iterable[str]) -> typing.Self:
+        """Replaces the arguments to be passed to a resource that supports arguments when it is launched."""
+
+    @abc.abstractmethod
+    def with_certificate_trust_env(self, certificate_bundle_env_var: str, *, certificate_directories_env_var: str | None = None) -> typing.Self:
+        """Configures environment variables that point to Aspire-managed certificate trust paths."""
 
 
 class AbstractResourceWithConnectionString(AbstractResource, AbstractExpressionValue, AbstractValueWithReferences):
@@ -7849,6 +7884,37 @@ class _BaseResource(AbstractResource):
         )
         self._handle = self._wrap_builder(result)
         return self
+
+    def with_serialized_annotation(self, annotation_id: str, json: str) -> AbstractResource:
+        """Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID."""
+        rpc_args: dict[str, typing.Any] = {'resource': self._handle}
+        rpc_args['annotationId'] = annotation_id
+        rpc_args['json'] = json
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withSerializedAnnotation',
+            rpc_args,
+        )
+        return typing.cast(AbstractResource, result)
+
+    def get_serialized_annotation(self, annotation_id: str) -> str:
+        """Gets a serialized ATS annotation payload from a resource."""
+        rpc_args: dict[str, typing.Any] = {'resource': self._handle}
+        rpc_args['annotationId'] = annotation_id
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/getSerializedAnnotation',
+            rpc_args,
+        )
+        return typing.cast(str, result)
+
+    def has_serialized_annotation(self, annotation_id: str) -> bool:
+        """Determines whether a resource has a serialized ATS annotation with the specified ID."""
+        rpc_args: dict[str, typing.Any] = {'resource': self._handle}
+        rpc_args['annotationId'] = annotation_id
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/hasSerializedAnnotation',
+            rpc_args,
+        )
+        return typing.cast(bool, result)
 
     def with_urls(self, callback: typing.Callable[[ResourceUrlsCallbackContext], None]) -> typing.Self:
         """Registers a callback to customize the URLs displayed for the resource."""
@@ -8884,6 +8950,7 @@ class ContainerResourceKwargs(_BaseResourceKwargs, total=False):
     env_callback: typing.Callable[[EnvironmentCallbackContext], None]
     args: typing.Iterable[str]
     args_callback: typing.Callable[[CommandLineArgsCallbackContext], None]
+    args_replace: typing.Iterable[str]
     reference_env: ReferenceEnvironmentInjectionOptions
     reference: AbstractResource | EndpointReference | str | ReferenceParameters
     endpoint_callback: tuple[str, typing.Callable[[EndpointUpdateContext], None]] | EndpointCallbackParameters
@@ -8902,6 +8969,7 @@ class ContainerResourceKwargs(_BaseResourceKwargs, total=False):
     http_command: tuple[str, str] | HttpCommandParameters
     developer_certificate_trust: bool
     certificate_trust_scope: CertificateTrustScope
+    certificate_trust_env: str | tuple[str, str]
     https_developer_certificate: ParameterResource | typing.Literal[True]
     without_https_certificate: typing.Literal[True]
     https_certificate_config: typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]
@@ -9249,6 +9317,17 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_args_replace(self, args: typing.Iterable[str]) -> typing.Self:
+        """Replaces the arguments to be passed to a resource that supports arguments when it is launched."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['args'] = args
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withArgsReplace',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def with_reference_env(self, options: ReferenceEnvironmentInjectionOptions) -> typing.Self:
         """Configures how information is injected into environment variables when the resource references other resources."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -9514,6 +9593,19 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         rpc_args['scope'] = scope
         result = self._client.invoke_capability(
             'Aspire.Hosting/withCertificateTrustScope',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_certificate_trust_env(self, certificate_bundle_env_var: str, *, certificate_directories_env_var: str | None = None) -> typing.Self:
+        """Configures environment variables that point to Aspire-managed certificate trust paths."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['certificateBundleEnvironmentVariable'] = certificate_bundle_env_var
+        if certificate_directories_env_var is not None:
+            rpc_args['certificateDirectoriesEnvironmentVariable'] = certificate_directories_env_var
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withCertificateTrustEnvironment',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -9918,6 +10010,13 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withArgsCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'args_callback'. Expected: Callable[[CommandLineArgsCallbackContext], None]")
+        if _args_replace := kwargs.pop("args_replace", None):
+            if _validate_type(_args_replace, typing.Iterable[str]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["args"] = typing.cast(typing.Iterable[str], _args_replace)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withArgsReplace', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'args_replace'. Expected: Iterable[str]")
         if _reference_env := kwargs.pop("reference_env", None):
             if _validate_type(_reference_env, ReferenceEnvironmentInjectionOptions):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -10119,6 +10218,18 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withCertificateTrustScope', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'certificate_trust_scope'. Expected: CertificateTrustScope")
+        if _certificate_trust_env := kwargs.pop("certificate_trust_env", None):
+            if _validate_type(_certificate_trust_env, str):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["certificateBundleEnvironmentVariable"] = typing.cast(str, _certificate_trust_env)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withCertificateTrustEnvironment', rpc_args))
+            elif _validate_tuple_types(_certificate_trust_env, (str, str)):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["certificateBundleEnvironmentVariable"] = typing.cast(tuple[str, str], _certificate_trust_env)[0]
+                rpc_args["certificateDirectoriesEnvironmentVariable"] = typing.cast(tuple[str, str], _certificate_trust_env)[1]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withCertificateTrustEnvironment', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'certificate_trust_env'. Expected: str or (str, str)")
         if _https_developer_certificate := kwargs.pop("https_developer_certificate", None):
             if _validate_type(_https_developer_certificate, ParameterResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -10237,6 +10348,7 @@ class ProjectResourceKwargs(_BaseResourceKwargs, total=False):
     env_callback: typing.Callable[[EnvironmentCallbackContext], None]
     args: typing.Iterable[str]
     args_callback: typing.Callable[[CommandLineArgsCallbackContext], None]
+    args_replace: typing.Iterable[str]
     reference_env: ReferenceEnvironmentInjectionOptions
     reference: AbstractResource | EndpointReference | str | ReferenceParameters
     endpoint_callback: tuple[str, typing.Callable[[EndpointUpdateContext], None]] | EndpointCallbackParameters
@@ -10256,6 +10368,7 @@ class ProjectResourceKwargs(_BaseResourceKwargs, total=False):
     http_command: tuple[str, str] | HttpCommandParameters
     developer_certificate_trust: bool
     certificate_trust_scope: CertificateTrustScope
+    certificate_trust_env: str | tuple[str, str]
     https_developer_certificate: ParameterResource | typing.Literal[True]
     without_https_certificate: typing.Literal[True]
     https_certificate_config: typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]
@@ -10374,6 +10487,17 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         rpc_args['callback'] = self._client.register_callback(callback)
         result = self._client.invoke_capability(
             'Aspire.Hosting/withArgsCallback',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_args_replace(self, args: typing.Iterable[str]) -> typing.Self:
+        """Replaces the arguments to be passed to a resource that supports arguments when it is launched."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['args'] = args
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withArgsReplace',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -10661,6 +10785,19 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_certificate_trust_env(self, certificate_bundle_env_var: str, *, certificate_directories_env_var: str | None = None) -> typing.Self:
+        """Configures environment variables that point to Aspire-managed certificate trust paths."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['certificateBundleEnvironmentVariable'] = certificate_bundle_env_var
+        if certificate_directories_env_var is not None:
+            rpc_args['certificateDirectoriesEnvironmentVariable'] = certificate_directories_env_var
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withCertificateTrustEnvironment',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def with_https_developer_certificate(self, *, password: ParameterResource | None = None) -> typing.Self:
         """Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -10881,6 +11018,13 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withArgsCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'args_callback'. Expected: Callable[[CommandLineArgsCallbackContext], None]")
+        if _args_replace := kwargs.pop("args_replace", None):
+            if _validate_type(_args_replace, typing.Iterable[str]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["args"] = typing.cast(typing.Iterable[str], _args_replace)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withArgsReplace', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'args_replace'. Expected: Iterable[str]")
         if _reference_env := kwargs.pop("reference_env", None):
             if _validate_type(_reference_env, ReferenceEnvironmentInjectionOptions):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -11090,6 +11234,18 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withCertificateTrustScope', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'certificate_trust_scope'. Expected: CertificateTrustScope")
+        if _certificate_trust_env := kwargs.pop("certificate_trust_env", None):
+            if _validate_type(_certificate_trust_env, str):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["certificateBundleEnvironmentVariable"] = typing.cast(str, _certificate_trust_env)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withCertificateTrustEnvironment', rpc_args))
+            elif _validate_tuple_types(_certificate_trust_env, (str, str)):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["certificateBundleEnvironmentVariable"] = typing.cast(tuple[str, str], _certificate_trust_env)[0]
+                rpc_args["certificateDirectoriesEnvironmentVariable"] = typing.cast(tuple[str, str], _certificate_trust_env)[1]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withCertificateTrustEnvironment', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'certificate_trust_env'. Expected: str or (str, str)")
         if _https_developer_certificate := kwargs.pop("https_developer_certificate", None):
             if _validate_type(_https_developer_certificate, ParameterResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -11216,6 +11372,7 @@ class ExecutableResourceKwargs(_BaseResourceKwargs, total=False):
     env_callback: typing.Callable[[EnvironmentCallbackContext], None]
     args: typing.Iterable[str]
     args_callback: typing.Callable[[CommandLineArgsCallbackContext], None]
+    args_replace: typing.Iterable[str]
     reference_env: ReferenceEnvironmentInjectionOptions
     reference: AbstractResource | EndpointReference | str | ReferenceParameters
     endpoint_callback: tuple[str, typing.Callable[[EndpointUpdateContext], None]] | EndpointCallbackParameters
@@ -11234,10 +11391,12 @@ class ExecutableResourceKwargs(_BaseResourceKwargs, total=False):
     http_command: tuple[str, str] | HttpCommandParameters
     developer_certificate_trust: bool
     certificate_trust_scope: CertificateTrustScope
+    certificate_trust_env: str | tuple[str, str]
     https_developer_certificate: ParameterResource | typing.Literal[True]
     without_https_certificate: typing.Literal[True]
     https_certificate_config: typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]
     compute_env: AbstractComputeEnvironmentResource
+    executable_debug_support: tuple[str, str] | ExecutableDebugSupportParameters
     http_probe: ProbeType | HttpProbeParameters
     image_push_options: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]
     remote_image_name: str
@@ -11351,6 +11510,17 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         rpc_args['callback'] = self._client.register_callback(callback)
         result = self._client.invoke_capability(
             'Aspire.Hosting/withArgsCallback',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_args_replace(self, args: typing.Iterable[str]) -> typing.Self:
+        """Replaces the arguments to be passed to a resource that supports arguments when it is launched."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['args'] = args
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withArgsReplace',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -11626,6 +11796,19 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_certificate_trust_env(self, certificate_bundle_env_var: str, *, certificate_directories_env_var: str | None = None) -> typing.Self:
+        """Configures environment variables that point to Aspire-managed certificate trust paths."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['certificateBundleEnvironmentVariable'] = certificate_bundle_env_var
+        if certificate_directories_env_var is not None:
+            rpc_args['certificateDirectoriesEnvironmentVariable'] = certificate_directories_env_var
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withCertificateTrustEnvironment',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def with_https_developer_certificate(self, *, password: ParameterResource | None = None) -> typing.Self:
         """Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -11665,6 +11848,22 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         rpc_args['computeEnvironmentResource'] = compute_env_resource
         result = self._client.invoke_capability(
             'Aspire.Hosting/withComputeEnvironment',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_executable_debug_support(self, launch_config_type: str, script_path: str, *, runtime_executable: str | None = None, launch_method: str | None = None) -> typing.Self:
+        """Adds VS Code-compatible debug metadata for an executable resource."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['launchConfigurationType'] = launch_config_type
+        rpc_args['scriptPath'] = script_path
+        if runtime_executable is not None:
+            rpc_args['runtimeExecutable'] = runtime_executable
+        if launch_method is not None:
+            rpc_args['launchMethod'] = launch_method
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withExecutableDebugSupport',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -11833,6 +12032,13 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withArgsCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'args_callback'. Expected: Callable[[CommandLineArgsCallbackContext], None]")
+        if _args_replace := kwargs.pop("args_replace", None):
+            if _validate_type(_args_replace, typing.Iterable[str]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["args"] = typing.cast(typing.Iterable[str], _args_replace)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withArgsReplace', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'args_replace'. Expected: Iterable[str]")
         if _reference_env := kwargs.pop("reference_env", None):
             if _validate_type(_reference_env, ReferenceEnvironmentInjectionOptions):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -12034,6 +12240,18 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withCertificateTrustScope', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'certificate_trust_scope'. Expected: CertificateTrustScope")
+        if _certificate_trust_env := kwargs.pop("certificate_trust_env", None):
+            if _validate_type(_certificate_trust_env, str):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["certificateBundleEnvironmentVariable"] = typing.cast(str, _certificate_trust_env)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withCertificateTrustEnvironment', rpc_args))
+            elif _validate_tuple_types(_certificate_trust_env, (str, str)):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["certificateBundleEnvironmentVariable"] = typing.cast(tuple[str, str], _certificate_trust_env)[0]
+                rpc_args["certificateDirectoriesEnvironmentVariable"] = typing.cast(tuple[str, str], _certificate_trust_env)[1]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withCertificateTrustEnvironment', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'certificate_trust_env'. Expected: str or (str, str)")
         if _https_developer_certificate := kwargs.pop("https_developer_certificate", None):
             if _validate_type(_https_developer_certificate, ParameterResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -12064,6 +12282,21 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withComputeEnvironment', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'compute_env'. Expected: AbstractComputeEnvironmentResource")
+        if _executable_debug_support := kwargs.pop("executable_debug_support", None):
+            if _validate_tuple_types(_executable_debug_support, (str, str)):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["launchConfigurationType"] = typing.cast(tuple[str, str], _executable_debug_support)[0]
+                rpc_args["scriptPath"] = typing.cast(tuple[str, str], _executable_debug_support)[1]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withExecutableDebugSupport', rpc_args))
+            elif _validate_dict_types(_executable_debug_support, ExecutableDebugSupportParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["launchConfigurationType"] = typing.cast(ExecutableDebugSupportParameters, _executable_debug_support)["launch_config_type"]
+                rpc_args["scriptPath"] = typing.cast(ExecutableDebugSupportParameters, _executable_debug_support)["script_path"]
+                rpc_args["runtimeExecutable"] = typing.cast(ExecutableDebugSupportParameters, _executable_debug_support).get("runtime_executable")
+                rpc_args["launchMethod"] = typing.cast(ExecutableDebugSupportParameters, _executable_debug_support).get("launch_method")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withExecutableDebugSupport', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'executable_debug_support'. Expected: (str, str) or ExecutableDebugSupportParameters")
         if _http_probe := kwargs.pop("http_probe", None):
             if _validate_type(_http_probe, ProbeType):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}

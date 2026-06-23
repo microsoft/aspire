@@ -2972,10 +2972,31 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         // Determine return type
         var returnType = callbackReturnType == null || callbackReturnType.TypeId == AtsConstants.Void
             ? "void"
-            : MapTypeRefToTypeScript(callbackReturnType);
+            : MapCallbackReturnTypeToTypeScript(callbackReturnType);
 
         // Callbacks are always async in TypeScript
         return $"({paramsString}) => Promise<{returnType}>";
+    }
+
+    private string MapCallbackReturnTypeToTypeScript(AtsTypeRef? typeRef)
+    {
+        if (typeRef is null)
+        {
+            return "unknown";
+        }
+
+        // Callback return values are serialized as JSON-RPC payload data from the guest
+        // back to the integration host. Collection-shaped returns should therefore be
+        // plain JavaScript data, not AspireList/AspireDict handles that represent
+        // server-owned mutable .NET collections.
+        var mappedType = typeRef.Category switch
+        {
+            AtsTypeCategory.Array or AtsTypeCategory.List => $"{MapCallbackReturnTypeToTypeScript(typeRef.ElementType)}[]",
+            AtsTypeCategory.Dict => $"Record<{MapCallbackReturnTypeToTypeScript(typeRef.KeyType)}, {MapCallbackReturnTypeToTypeScript(typeRef.ValueType)}>",
+            _ => MapTypeRefToTypeScript(typeRef)
+        };
+
+        return ApplyNullableType(typeRef, mappedType);
     }
 
     private void GenerateCallbackRegistration(AtsParameterInfo callbackParam, string indent = "        ", string clientExpression = "this._client")

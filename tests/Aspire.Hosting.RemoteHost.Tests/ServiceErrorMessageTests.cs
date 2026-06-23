@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Reflection;
+using Aspire.Hosting.RemoteHost.Ats;
 using Aspire.Hosting.RemoteHost.CodeGeneration;
 using Aspire.Hosting.RemoteHost.Diagnostics;
 using Aspire.Hosting.RemoteHost.Language;
@@ -32,11 +33,11 @@ public class ServiceErrorMessageTests
     }
 
     [Fact]
-    public void GenerateCode_UnknownLanguage_ListsAvailableLanguages()
+    public async Task GenerateCode_UnknownLanguage_ListsAvailableLanguages()
     {
         var (_, codeService) = CreateServices();
 
-        var ex = Assert.Throws<ArgumentException>(() => codeService.GenerateCode("klingon"));
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => codeService.GenerateCode("klingon"));
 
         Assert.Contains("No code generator found for language: klingon", ex.Message);
         Assert.Contains("Available languages:", ex.Message);
@@ -56,11 +57,11 @@ public class ServiceErrorMessageTests
     }
 
     [Fact]
-    public void GenerateCode_NoGeneratorsDiscovered_PointsAtBundleMismatch()
+    public async Task GenerateCode_NoGeneratorsDiscovered_PointsAtBundleMismatch()
     {
         var codeService = CreateCodeGenerationServiceWithEmptyResolver();
 
-        var ex = Assert.Throws<ArgumentException>(() => codeService.GenerateCode("TypeScript"));
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => codeService.GenerateCode("TypeScript"));
 
         Assert.Contains("No code generator found for language: TypeScript", ex.Message);
         Assert.Contains("LoaderExceptions", ex.Message);
@@ -93,9 +94,11 @@ public class ServiceErrorMessageTests
         var auth = CreateAuthenticatedState();
 
         var atsContextFactory = new AtsContextFactory(loader, NullLogger<AtsContextFactory>.Instance, telemetry);
+        var externalCapabilityRegistry = new ExternalCapabilityRegistry(NullLogger<ExternalCapabilityRegistry>.Instance);
+        var integrationHostLauncher = CreateReadyIntegrationHostLauncher(langResolver, externalCapabilityRegistry, configuration);
 
         var lang = new LanguageService(auth, langResolver, NullLogger<LanguageService>.Instance, telemetry);
-        var code = new CodeGenerationService(auth, atsContextFactory, codeResolver, loader, NullLogger<CodeGenerationService>.Instance, telemetry);
+        var code = new CodeGenerationService(auth, atsContextFactory, externalCapabilityRegistry, integrationHostLauncher, codeResolver, loader, NullLogger<CodeGenerationService>.Instance, telemetry);
         return (lang, code);
     }
 
@@ -130,7 +133,13 @@ public class ServiceErrorMessageTests
 
         var auth = CreateAuthenticatedState();
         var atsContextFactory = new AtsContextFactory(loader, NullLogger<AtsContextFactory>.Instance, telemetry);
-        return new CodeGenerationService(auth, atsContextFactory, codeResolver, loader, NullLogger<CodeGenerationService>.Instance, telemetry);
+        var externalCapabilityRegistry = new ExternalCapabilityRegistry(NullLogger<ExternalCapabilityRegistry>.Instance);
+        var langResolver = new LanguageSupportResolver(
+            services,
+            Array.Empty<Assembly>,
+            NullLogger<LanguageSupportResolver>.Instance);
+        var integrationHostLauncher = CreateReadyIntegrationHostLauncher(langResolver, externalCapabilityRegistry, configuration);
+        return new CodeGenerationService(auth, atsContextFactory, externalCapabilityRegistry, integrationHostLauncher, codeResolver, loader, NullLogger<CodeGenerationService>.Instance, telemetry);
     }
 
     // The default state is "authenticated" when no JsonRpcAuthToken is present in configuration.
@@ -139,4 +148,18 @@ public class ServiceErrorMessageTests
 
     private static RemoteHostProfilingTelemetry CreateTelemetry()
         => new(new ConfigurationBuilder().Build());
+
+    private static IntegrationHostLauncher CreateReadyIntegrationHostLauncher(
+        LanguageSupportResolver languageResolver,
+        ExternalCapabilityRegistry externalCapabilityRegistry,
+        IConfiguration configuration)
+    {
+        var launcher = new IntegrationHostLauncher(
+            languageResolver,
+            externalCapabilityRegistry,
+            configuration,
+            NullLogger<IntegrationHostLauncher>.Instance);
+        launcher.StartAsync(CancellationToken.None).GetAwaiter().GetResult();
+        return launcher;
+    }
 }

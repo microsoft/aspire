@@ -84,6 +84,34 @@
     ]
   },
   {
+    CapabilityId: Aspire.Hosting/getSerializedAnnotation,
+    MethodName: getSerializedAnnotation,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/hasSerializedAnnotation,
+    MethodName: hasSerializedAnnotation,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
     CapabilityId: Aspire.Hosting/onBeforeResourceStarted,
     MethodName: onBeforeResourceStarted,
     TargetType: {
@@ -266,6 +294,20 @@
     ]
   },
   {
+    CapabilityId: Aspire.Hosting/withArgsReplace,
+    MethodName: withArgsReplace,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithArgs,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
     CapabilityId: Aspire.Hosting/withBindMount,
     MethodName: withBindMount,
     TargetType: {
@@ -326,6 +368,20 @@
     MethodName: withRelationship,
     TargetType: {
       TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/withCertificateTrustEnvironment,
+    MethodName: withCertificateTrustEnvironment,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithArgs,
       IsInterface: true
     },
     ExpandedTargetTypes: [
@@ -1178,6 +1234,20 @@
   {
     CapabilityId: Aspire.Hosting/withRequiredCommandValidation,
     MethodName: withRequiredCommandValidation,
+    TargetType: {
+      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
+      IsInterface: true
+    },
+    ExpandedTargetTypes: [
+      {
+        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
+        IsInterface: false
+      }
+    ]
+  },
+  {
+    CapabilityId: Aspire.Hosting/withSerializedAnnotation,
+    MethodName: withSerializedAnnotation,
     TargetType: {
       TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
       IsInterface: true

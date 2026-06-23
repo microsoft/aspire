@@ -792,6 +792,35 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public void MapCallbackReturnTypeToTypeScript_MapsCollectionsAsJsonData()
+    {
+        var method = typeof(AtsTypeScriptCodeGenerator).GetMethod("MapCallbackReturnTypeToTypeScript", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+
+        var stringType = new AtsTypeRef
+        {
+            TypeId = "string",
+            Category = AtsTypeCategory.Primitive
+        };
+        var listType = new AtsTypeRef
+        {
+            TypeId = "list",
+            Category = AtsTypeCategory.List,
+            ElementType = stringType
+        };
+        var dictionaryType = new AtsTypeRef
+        {
+            TypeId = "dictionary",
+            Category = AtsTypeCategory.Dict,
+            KeyType = stringType,
+            ValueType = stringType
+        };
+
+        Assert.Equal("string[]", method.Invoke(_generator, [listType]));
+        Assert.Equal("Record<string, string>", method.Invoke(_generator, [dictionaryType]));
+    }
+
+    [Fact]
     public async Task Scanner_BaseTypeHierarchy_IsCollected()
     {
         // Verify that AtsTypeInfo includes base type hierarchy for inheritance expansion.
