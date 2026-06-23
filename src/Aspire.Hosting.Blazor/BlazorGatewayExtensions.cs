@@ -30,7 +30,7 @@ public static class BlazorGatewayExtensions
     /// via <c>AddCSharpApp</c>. No separate project is needed.
     /// </summary>
     [AspireExport]
-    public static IResourceBuilder<ProjectResource> AddBlazorGateway(
+    public static IResourceBuilder<CSharpAppResource> AddBlazorGateway(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name)
     {
@@ -134,8 +134,8 @@ public static class BlazorGatewayExtensions
     /// <param name="otlpPrefix">The URL path prefix for OTLP proxy routes. Defaults to <c>"_otlp"</c>.</param>
     /// <param name="proxyTelemetry"><see langword="true"/> to expose the OTLP proxy for the client app; otherwise, <see langword="false"/>.</param>
     [AspireExport]
-    public static IResourceBuilder<ProjectResource> WithBlazorClientApp(
-        this IResourceBuilder<ProjectResource> gateway,
+    public static IResourceBuilder<CSharpAppResource> WithBlazorClientApp(
+        this IResourceBuilder<CSharpAppResource> gateway,
         IResourceBuilder<BlazorWasmAppResource> wasmApp,
         string apiPrefix = GatewayConfigurationBuilder.DefaultApiPrefix,
         string otlpPrefix = GatewayConfigurationBuilder.DefaultOtlpPrefix,
@@ -181,8 +181,8 @@ public static class BlazorGatewayExtensions
     /// into the Gateway as environment variables.
     /// </summary>
     [AspireExportIgnore(Reason = "Blazor gateway APIs are not yet stable for ATS export.")]
-    internal static IResourceBuilder<ProjectResource> WithBlazorApp(
-        this IResourceBuilder<ProjectResource> gateway,
+    internal static IResourceBuilder<CSharpAppResource> WithBlazorApp(
+        this IResourceBuilder<CSharpAppResource> gateway,
         IResourceBuilder<BlazorWasmAppResource> wasmApp,
         string pathPrefix,
         GatewayAppService[] services,
@@ -278,13 +278,13 @@ public static class BlazorGatewayExtensions
         return new ProjectInfo(solutionRoot, relativeProjectPath);
     }
 
-    private static void MirrorGatewayStateToClients(IResourceBuilder<ProjectResource> gateway)
+    private static void MirrorGatewayStateToClients(IResourceBuilder<CSharpAppResource> gateway)
     {
         // Subscribe to the gateway's InitializeResourceEvent to start a background watcher
         // that mirrors state changes from the gateway to all registered WASM app resources.
         // This mirrors the pattern used by ApplicationOrchestrator.SetChildResourceAsync for
         // container children, but uses ResourceNotificationService.WatchAsync since the
-        // orchestrator does not propagate state for ProjectResource parents.
+        // orchestrator does not propagate state for the gateway resource's parents.
         gateway.ApplicationBuilder.Eventing.Subscribe<InitializeResourceEvent>(gateway.Resource, (e, ct) =>
         {
             var notificationService = e.Notifications;
@@ -294,7 +294,7 @@ public static class BlazorGatewayExtensions
     }
 
     private static async Task WatchGatewayStateAsync(
-        ProjectResource gateway,
+        CSharpAppResource gateway,
         ResourceNotificationService notificationService,
         CancellationToken cancellationToken)
     {
@@ -404,7 +404,7 @@ public static class BlazorGatewayExtensions
     }
 
     private static void CreatePublishCompanion(
-        IResourceBuilder<ProjectResource> gateway,
+        IResourceBuilder<CSharpAppResource> gateway,
         IResourceBuilder<BlazorWasmAppResource> wasmApp,
         string pathPrefix)
     {
@@ -531,7 +531,7 @@ public static class BlazorGatewayExtensions
     /// all endpoints are forwarded so YARP can resolve by scheme.
     /// </summary>
     private static void ForwardEndpointReference(
-        IResourceBuilder<ProjectResource> gateway,
+        IResourceBuilder<CSharpAppResource> gateway,
         EndpointReferenceAnnotation endpointRef)
     {
         var svcResource = (IResourceWithServiceDiscovery)endpointRef.Resource;

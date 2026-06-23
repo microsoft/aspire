@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRECSHARPAPPS001
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 
@@ -13,7 +15,7 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
-        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+        var gateway = builder.AddCSharpApp("gateway", "TestProject/TestProject.csproj", o => o.ExcludeLaunchProfile = true)
             .WithHttpEndpoint()
             .WithHttpsEndpoint();
 
@@ -32,7 +34,7 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
-        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+        var gateway = builder.AddCSharpApp("gateway", "TestProject/TestProject.csproj", o => o.ExcludeLaunchProfile = true)
             .WithHttpEndpoint()
             .WithHttpsEndpoint();
 
@@ -55,7 +57,7 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
-        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+        var gateway = builder.AddCSharpApp("gateway", "TestProject/TestProject.csproj", o => o.ExcludeLaunchProfile = true)
             .WithHttpEndpoint()
             .WithHttpsEndpoint();
 
@@ -80,7 +82,7 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
         var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi")
             .WithHttpEndpoint();
 
-        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+        var gateway = builder.AddCSharpApp("gateway", "TestProject/TestProject.csproj", o => o.ExcludeLaunchProfile = true)
             .WithHttpEndpoint()
             .WithHttpsEndpoint();
 
@@ -106,7 +108,7 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
         var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi")
             .WithHttpEndpoint();
 
-        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+        var gateway = builder.AddCSharpApp("gateway", "TestProject/TestProject.csproj", o => o.ExcludeLaunchProfile = true)
             .WithHttpEndpoint()
             .WithHttpsEndpoint()
             .WithReference(weatherApi); // Already referencing weatherapi
@@ -135,7 +137,7 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
 
         // Gateway already has WaitFor(weatherApi) but not WithReference(weatherApi).
         // WithBlazorClientApp should still forward the reference so YARP gets service discovery env vars.
-        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+        var gateway = builder.AddCSharpApp("gateway", "TestProject/TestProject.csproj", o => o.ExcludeLaunchProfile = true)
             .WithHttpEndpoint()
             .WithHttpsEndpoint()
             .WaitFor(weatherApi);
@@ -158,7 +160,7 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
-        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+        var gateway = builder.AddCSharpApp("gateway", "TestProject/TestProject.csproj", o => o.ExcludeLaunchProfile = true)
             .WithHttpEndpoint()
             .WithHttpsEndpoint();
 
@@ -176,7 +178,7 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
-        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+        var gateway = builder.AddCSharpApp("gateway", "TestProject/TestProject.csproj", o => o.ExcludeLaunchProfile = true)
             .WithHttpEndpoint()
             .WithHttpsEndpoint();
 
@@ -198,7 +200,7 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
             .WithHttpEndpoint()
             .WithHttpsEndpoint();
 
-        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+        var gateway = builder.AddCSharpApp("gateway", "TestProject/TestProject.csproj", o => o.ExcludeLaunchProfile = true)
             .WithHttpEndpoint()
             .WithHttpsEndpoint();
 
@@ -226,7 +228,7 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
             .WithHttpEndpoint(name: "public")
             .WithHttpsEndpoint(name: "internal");
 
-        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+        var gateway = builder.AddCSharpApp("gateway", "TestProject/TestProject.csproj", o => o.ExcludeLaunchProfile = true)
             .WithHttpEndpoint()
             .WithHttpsEndpoint();
 
@@ -267,7 +269,7 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
             .WithHttpsEndpoint(name: "admin")
             .WithHttpEndpoint(name: "health");
 
-        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+        var gateway = builder.AddCSharpApp("gateway", "TestProject/TestProject.csproj", o => o.ExcludeLaunchProfile = true)
             .WithHttpEndpoint()
             .WithHttpsEndpoint();
 

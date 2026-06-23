@@ -101,21 +101,6 @@ public class ResourceCommandAnnotationTests
         Assert.Equal(CommandStrings.RestartProjectDescription, restartCommand.DisplayDescription);
     }
 
-    [Fact]
-    public void RestartCommand_CSharpAppResource_HasDetailedDescription()
-    {
-        // Arrange
-        var builder = DistributedApplication.CreateBuilder();
-        var csharpAppResource = new CSharpAppResource("testapp");
-        csharpAppResource.AddLifeCycleCommands();
-
-        // Act
-        var restartCommand = csharpAppResource.Annotations.OfType<ResourceCommandAnnotation>().Single(a => a.Name == KnownResourceCommands.RestartCommand);
-
-        // Assert - Single file C# app resources should have the detailed description mentioning source code is not recompiled
-        Assert.Equal(CommandStrings.RestartProjectDescription, restartCommand.DisplayDescription);
-    }
-
     [Theory]
     [InlineData("rebuild", "Starting", ResourceCommandState.Disabled)]
     [InlineData("rebuild", "Stopping", ResourceCommandState.Disabled)]

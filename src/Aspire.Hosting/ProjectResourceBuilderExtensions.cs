@@ -4,7 +4,6 @@
 #pragma warning disable ASPIREEXTENSION001
 #pragma warning disable ASPIRECERTIFICATES001
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Dcp.Model;
@@ -324,134 +323,6 @@ public static class ProjectResourceBuilderExtensions
                       .WithProjectDefaults(options);
     }
 
-    /// <summary>
-    /// Adds a C# project or file-based app to the application model.
-    /// </summary>
-    /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
-    /// <param name="name">The name of the resource. This name will be used for service discovery when referenced in a dependency.</param>
-    /// <param name="path">The path to the file-based app file, project file, or project directory.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <remarks>
-    /// <para>
-    /// This overload of the <see cref="AddCSharpApp(IDistributedApplicationBuilder, string, string)"/> method adds a C# project or file-based app to the application
-    /// model using a path to the file-based app .cs file, project file (.csproj), or project directory.
-    /// If the path is not an absolute path then it will be computed relative to the app host directory.
-    /// </para>
-    /// <example>
-    /// Add a file-based app to the app model via a file path.
-    /// <code lang="csharp">
-    /// var builder = DistributedApplication.CreateBuilder(args);
-    ///
-    /// builder.AddCSharpApp("inventoryservice", @"..\InventoryService.cs");
-    ///
-    /// builder.Build().Run();
-    /// </code>
-    /// </example>
-    /// </remarks>
-    [Experimental("ASPIRECSHARPAPPS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addCSharpApp dispatcher export.")]
-    public static IResourceBuilder<ProjectResource> AddCSharpApp(this IDistributedApplicationBuilder builder, string name, string path)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(name);
-        ArgumentNullException.ThrowIfNull(path);
-
-        return builder.AddCSharpApp(name, path, _ => { });
-    }
-
-    /// <summary>
-    /// Adds a C# application resource
-    /// </summary>
-    [Experimental("ASPIRECSHARPAPPS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExport("addCSharpApp")]
-    internal static IResourceBuilder<CSharpAppResource> AddCSharpAppForPolyglot(
-        this IDistributedApplicationBuilder builder,
-        [ResourceName] string name,
-        string path,
-        ProjectResourceOptions? options = null)
-    {
-        return options is null
-            ? builder.AddCSharpApp(name, path, _ => { })
-            : builder.AddCSharpApp(name, path, configure => ApplyProjectResourceOptions(configure, options));
-    }
-
-    /// <summary>
-    /// Adds a C# project or file-based app to the application model.
-    /// </summary>
-    /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
-    /// <param name="name">The name of the resource. This name will be used for service discovery when referenced in a dependency.</param>
-    /// <param name="path">The path to the file-based app file, project file, or project directory.</param>
-    /// <param name="configure">An optional action to configure the C# app resource options.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <remarks>
-    /// <para>
-    /// This overload of the <see cref="AddCSharpApp(IDistributedApplicationBuilder, string, string)"/> method adds a C# project or file-based app to the application
-    /// model using a path to the file-based app .cs file, project file (.csproj), or project directory.
-    /// If the path is not an absolute path then it will be computed relative to the app host directory.
-    /// </para>
-    /// <example>
-    /// Add a file-based app to the app model via a file path.
-    /// <code lang="csharp">
-    /// var builder = DistributedApplication.CreateBuilder(args);
-    ///
-    /// builder.AddCSharpApp("inventoryservice", @"..\InventoryService.cs", o => o.LaunchProfileName = "https");
-    ///
-    /// builder.Build().Run();
-    /// </code>
-    /// </example>
-    /// </remarks>
-    [Experimental("ASPIRECSHARPAPPS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addCSharpApp dispatcher export.")]
-    public static IResourceBuilder<CSharpAppResource> AddCSharpApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string path, Action<ProjectResourceOptions> configure)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(name);
-        ArgumentNullException.ThrowIfNull(path);
-        ArgumentNullException.ThrowIfNull(configure);
-
-        var options = new ProjectResourceOptions();
-        configure(options);
-
-        var app = new CSharpAppResource(name);
-
-        path = PathNormalizer.NormalizePathForCurrentPlatform(Path.Combine(builder.AppHostDirectory, path));
-        var projectMetadata = new ProjectMetadata(path);
-
-        var resource = builder.AddResource(app)
-                              .WithAnnotation(projectMetadata)
-                              .WithDebugSupport(mode => new ProjectLaunchConfiguration { ProjectPath = projectMetadata.ProjectPath, Mode = mode }, "project")
-                              .WithProjectDefaults(options);
-
-        resource.OnBeforeResourceStarted(async (r, e, ct) =>
-        {
-            var projectPath = projectMetadata.ProjectPath;
-
-            // Validate project path
-            if (!projectPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) && !projectPath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
-            {
-                // Project path did not resolve to a .csproj or .cs file
-                var message = Directory.Exists(projectPath)
-                    ? $"Path to C# project could not be determined. The directory '{projectPath}' must contain a single .csproj file."
-                    : $"The C# app path '{projectPath}' is invalid. The path must be to a .cs file, .csproj file, or directory containing a single .csproj file.";
-                throw new DistributedApplicationException(message);
-            }
-
-            // Validate .NET version
-            if (((IProjectMetadata)projectMetadata).IsFileBasedApp
-                && await DotnetSdkUtils.TryGetVersionAsync(Path.GetDirectoryName(projectPath)).ConfigureAwait(false) is { } version
-                && version.Major < 10)
-            {
-                // File-based apps are only supported on .NET 10 or later
-                var versionValue = version is not null
-                    ? $"is {version}"
-                    : "could not be determined";
-                throw new DistributedApplicationException($"File-based apps are only supported on .NET 10 or later. The version active in '{Path.GetDirectoryName(projectPath)}' {versionValue}.");
-            }
-        });
-
-        return resource;
-    }
-
     private static void ApplyProjectResourceOptions(ProjectResourceOptions target, ProjectResourceOptions source)
     {
         ArgumentNullException.ThrowIfNull(target);
@@ -462,8 +333,8 @@ public static class ProjectResourceBuilderExtensions
         target.ExcludeKestrelEndpoints = source.ExcludeKestrelEndpoints;
     }
 
-    private static IResourceBuilder<TProjectResource> WithProjectDefaults<TProjectResource>(this IResourceBuilder<TProjectResource> builder, ProjectResourceOptions options)
-        where TProjectResource : ProjectResource
+    internal static IResourceBuilder<TProjectResource> WithProjectDefaults<TProjectResource>(this IResourceBuilder<TProjectResource> builder, ProjectResourceOptions options)
+        where TProjectResource : class, IProjectLaunchDefaultsResource
     {
         // .NET SDK has experimental support for retries. Enable with env var.
         // https://github.com/open-telemetry/opentelemetry-dotnet/pull/5495
@@ -955,9 +826,9 @@ public static class ProjectResourceBuilderExtensions
             context.WriteContainerAsync(container));
     }
 
-    private static IConfiguration GetConfiguration(ProjectResource projectResource)
+    private static IConfiguration GetConfiguration(IProjectLaunchDefaultsResource projectResource)
     {
-        var projectMetadata = projectResource.GetProjectMetadata();
+        var projectMetadata = projectResource.Annotations.OfType<IProjectMetadata>().Single();
 
         // For testing
         if (projectMetadata.Configuration is { } configuration)
@@ -986,7 +857,7 @@ public static class ProjectResourceBuilderExtensions
     /// Creates a hidden rebuilder resource that runs 'dotnet build' on demand via the rebuild command.
     /// </summary>
     private static void AddRebuilderResource<TProjectResource>(IResourceBuilder<TProjectResource> builder, TProjectResource projectResource)
-        where TProjectResource : ProjectResource
+        where TProjectResource : class, IProjectLaunchDefaultsResource
     {
         var projectMetadata = projectResource.Annotations.OfType<IProjectMetadata>().SingleOrDefault();
         if (projectMetadata is null || projectMetadata.IsFileBasedApp)
@@ -1013,7 +884,8 @@ public static class ProjectResourceBuilderExtensions
             });
     }
 
-    private static void SetAspNetCoreUrls(this IResourceBuilder<ProjectResource> builder)
+    private static void SetAspNetCoreUrls<T>(this IResourceBuilder<T> builder)
+        where T : IProjectLaunchDefaultsResource
     {
         builder.WithEnvironment(context =>
         {
@@ -1057,7 +929,8 @@ public static class ProjectResourceBuilderExtensions
         });
     }
 
-    private static void SetBothPortsEnvVariables(this IResourceBuilder<ProjectResource> builder)
+    private static void SetBothPortsEnvVariables<T>(this IResourceBuilder<T> builder)
+        where T : IProjectLaunchDefaultsResource
     {
         builder.WithEnvironment(context =>
         {
@@ -1066,7 +939,8 @@ public static class ProjectResourceBuilderExtensions
         });
     }
 
-    private static void SetOnePortsEnvVariable(this IResourceBuilder<ProjectResource> builder, EnvironmentCallbackContext context, string portEnvVariable, string scheme)
+    private static void SetOnePortsEnvVariable<T>(this IResourceBuilder<T> builder, EnvironmentCallbackContext context, string portEnvVariable, string scheme)
+        where T : IProjectLaunchDefaultsResource
     {
         if (context.EnvironmentVariables.ContainsKey(portEnvVariable))
         {
@@ -1101,7 +975,8 @@ public static class ProjectResourceBuilderExtensions
         }
     }
 
-    private static void SetKestrelUrlOverrideEnvVariables(this IResourceBuilder<ProjectResource> builder)
+    private static void SetKestrelUrlOverrideEnvVariables<T>(this IResourceBuilder<T> builder)
+        where T : IProjectLaunchDefaultsResource
     {
         builder.WithEnvironment(context =>
         {

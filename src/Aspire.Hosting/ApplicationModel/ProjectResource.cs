@@ -22,7 +22,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 [DebuggerDisplay("{DebuggerToString(),nq}")]
 public class ProjectResource : Resource, IResourceWithEnvironment, IResourceWithArgs, IResourceWithServiceDiscovery, IResourceWithWaitSupport, IResourceWithProbes,
-    IComputeResource, IContainerFilesDestinationResource
+    IComputeResource, IContainerFilesDestinationResource, IProjectLaunchDefaultsResource
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="ProjectResource"/> class.
@@ -98,28 +98,20 @@ public class ProjectResource : Resource, IResourceWithEnvironment, IResourceWith
         }));
     }
     // Keep track of the config host for each Kestrel endpoint annotation
-    internal Dictionary<EndpointAnnotation, string> KestrelEndpointAnnotationHosts { get; } = new();
-
-    // Are there any endpoints coming from Kestrel configuration
-    internal bool HasKestrelEndpoints => KestrelEndpointAnnotationHosts.Count > 0;
+    private readonly Dictionary<EndpointAnnotation, string> _kestrelEndpointAnnotationHosts = new();
 
     // Track the https endpoint that was added as a default, and should be excluded from the port & kestrel environment
-    internal EndpointAnnotation? DefaultHttpsEndpoint { get; set; }
+    private EndpointAnnotation? _defaultHttpsEndpoint;
 
-    internal bool ShouldInjectEndpointEnvironment(EndpointReference e)
+    // IProjectLaunchDefaultsResource state is implemented explicitly so the project-defaults plumbing
+    // is reused by Aspire.Hosting.Dotnet's CSharpAppResource without becoming public surface here.
+    // HasKestrelEndpoints and ShouldInjectEndpointEnvironment come from the interface's default members.
+    Dictionary<EndpointAnnotation, string> IProjectLaunchDefaultsResource.KestrelEndpointAnnotationHosts => _kestrelEndpointAnnotationHosts;
+
+    EndpointAnnotation? IProjectLaunchDefaultsResource.DefaultHttpsEndpoint
     {
-        var endpoint = e.EndpointAnnotation;
-
-        if (endpoint.UriScheme is not ("http" or "https") ||    // Only process http and https endpoints
-            endpoint.TargetPortEnvironmentVariable is not null) // Skip if target port env variable was set
-        {
-            return false;
-        }
-
-        // If any filter rejects the endpoint, skip it
-        return !Annotations.OfType<EndpointEnvironmentInjectionFilterAnnotation>()
-            .Select(a => a.Filter)
-            .Any(f => !f(endpoint));
+        get => _defaultHttpsEndpoint;
+        set => _defaultHttpsEndpoint = value;
     }
 
     private async Task BuildProjectImage(PipelineStepContext ctx)
