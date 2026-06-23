@@ -419,6 +419,11 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         if (ExecutionContext.IsRunMode)
         {
+            // Test loop: when the app host is launched via `aspire test`, this hosted service watches
+            // the resources marked with a TestAnnotation and shuts the app host down once they have all
+            // reached a terminal state. It no-ops when the CLI did not request test mode.
+            _innerBuilder.Services.AddHostedService<TestLoopCoordinator>();
+
             // Dashboard
             if (!options.DisableDashboard)
             {

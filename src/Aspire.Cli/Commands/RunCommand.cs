@@ -55,7 +55,7 @@ internal sealed partial class RunCommandJsonContext : JsonSerializerContext
     });
 }
 
-internal sealed class RunCommand : BaseCommand
+internal class RunCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
 
@@ -107,7 +107,29 @@ internal sealed class RunCommand : BaseCommand
         ProfilingTelemetry profilingTelemetry,
         TimeProvider timeProvider,
         CommonCommandServices services)
-        : base("run", RunCommandStrings.Description, services)
+        : this("run", RunCommandStrings.Description, runner, certificateService, projectLocator, configuration, serviceProvider, logger, projectFactory, appHostLauncher, fileLoggerProvider, hostEnvironment, profilingTelemetry, timeProvider, services)
+    {
+    }
+
+    // Protected so derived commands (for example `aspire test`) can reuse the entire run flow while
+    // presenting a different command name/description and tweaking the launched environment.
+    protected RunCommand(
+        string name,
+        string description,
+        IDotNetCliRunner runner,
+        ICertificateService certificateService,
+        IProjectLocator projectLocator,
+        IConfiguration configuration,
+        IServiceProvider serviceProvider,
+        ILogger<RunCommand> logger,
+        IAppHostProjectFactory projectFactory,
+        AppHostLauncher appHostLauncher,
+        FileLoggerProvider fileLoggerProvider,
+        ICliHostEnvironment hostEnvironment,
+        ProfilingTelemetry profilingTelemetry,
+        TimeProvider timeProvider,
+        CommonCommandServices services)
+        : base(name, description, services)
     {
         _runner = runner;
         _certificateService = certificateService;
@@ -128,6 +150,14 @@ internal sealed class RunCommand : BaseCommand
         AppHostLauncher.AddLaunchOptions(this);
 
         TreatUnmatchedTokensAsErrors = false;
+    }
+
+    /// <summary>
+    /// Allows derived commands to contribute environment variables to the launched app host process.
+    /// The base implementation does nothing; <c>aspire test</c> uses this to enable test mode.
+    /// </summary>
+    protected virtual void ConfigureAppHostEnvironment(IDictionary<string, string> environmentVariables)
+    {
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -278,6 +308,10 @@ internal sealed class RunCommand : BaseCommand
             {
                 ProfileCaptureEnvironment.AddCurrentToEnvironment(context.EnvironmentVariables);
             }
+
+            // Allow derived commands (for example `aspire test`) to contribute additional environment
+            // variables to the launched app host without re-implementing the run flow.
+            ConfigureAppHostEnvironment(context.EnvironmentVariables);
 
             // Start the project run as a pending task - we'll handle UX while it runs
             Task<int> pendingRun;

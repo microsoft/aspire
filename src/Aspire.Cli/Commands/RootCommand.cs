@@ -140,6 +140,7 @@ internal sealed class RootCommand : BaseRootCommand
         NewCommand newCommand,
         InitCommand initCommand,
         RunCommand runCommand,
+        TestCommand testCommand,
         StopCommand stopCommand,
         StartCommand startCommand,
         WaitCommand waitCommand,
@@ -242,6 +243,7 @@ internal sealed class RootCommand : BaseRootCommand
         Subcommands.Add(newCommand);
         Subcommands.Add(initCommand);
         Subcommands.Add(runCommand);
+        Subcommands.Add(testCommand);
         Subcommands.Add(stopCommand);
         Subcommands.Add(startCommand);
         Subcommands.Add(waitCommand);
