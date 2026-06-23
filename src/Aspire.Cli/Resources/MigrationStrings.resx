@@ -117,12 +117,6 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="Description" xml:space="preserve">
-    <value>Migrate the current project to the latest recommended Aspire conventions.</value>
-  </data>
-  <data name="YesOptionDescription" xml:space="preserve">
-    <value>Perform the migration without prompting for confirmation.</value>
-  </data>
   <data name="NothingToMigrate" xml:space="preserve">
     <value>Nothing to migrate. The current project is already using the latest recommended Aspire conventions.</value>
   </data>

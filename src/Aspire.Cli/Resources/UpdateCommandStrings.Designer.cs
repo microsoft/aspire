@@ -129,5 +129,7 @@ namespace Aspire.Cli.Resources {
     internal static string NoChannelFoundMatching => ResourceManager.GetString("NoChannelFoundMatching", resourceCulture);
     internal static string PendingMigrationsHeader => ResourceManager.GetString("PendingMigrationsHeader", resourceCulture);
     internal static string PendingMigrationsHint => ResourceManager.GetString("PendingMigrationsHint", resourceCulture);
+    internal static string MigrateOptionDescription => ResourceManager.GetString("MigrateOptionDescription", resourceCulture);
+    internal static string MigrationApplyFailedWarning => ResourceManager.GetString("MigrationApplyFailedWarning", resourceCulture);
     }
 }

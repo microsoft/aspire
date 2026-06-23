@@ -142,9 +142,19 @@
         <target state="translated">   映射: {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="MigrateOptionDescription">
+        <source>Apply any pending migrations to the project after updating its packages.</source>
+        <target state="new">Apply any pending migrations to the project after updating its packages.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MigratedToNewSdkFormat">
         <source>Migrated to new project format: &lt;Project Sdk="Aspire.AppHost.Sdk/{0}"&gt;</source>
         <target state="translated">已迁移到新的项目格式: &lt;Project Sdk="Aspire.AppHost.Sdk/{0}"&gt;</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MigrationApplyFailedWarning">
+        <source>The project packages were updated, but applying migrations failed. Run 'aspire update --migrate' again to retry.</source>
+        <target state="new">The project packages were updated, but applying migrations failed. Run 'aspire update --migrate' again to retry.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoAppHostFoundUpdateCliPrompt">
@@ -203,8 +213,8 @@
         <note />
       </trans-unit>
       <trans-unit id="PendingMigrationsHint">
-        <source>Run 'aspire migrate' to apply them.</source>
-        <target state="new">Run 'aspire migrate' to apply them.</target>
+        <source>Run 'aspire update --migrate' to apply them.</source>
+        <target state="new">Run 'aspire update --migrate' to apply them.</target>
         <note />
       </trans-unit>
       <trans-unit id="PerformUpdatesPrompt">

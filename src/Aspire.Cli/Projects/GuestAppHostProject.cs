@@ -1563,7 +1563,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             outputPath = Path.Combine(appPath, LanguageInfo.LegacyGeneratedFolderName);
 
             // Nudge the user toward the modern `apphost.mts` layout. The legacy layout keeps
-            // working, so this is a single, non-blocking warning that points at `aspire migrate`.
+            // working, so this is a single, non-blocking warning that points at `aspire update --migrate`.
             _interactionService.DisplayMessage(
                 KnownEmojis.Warning,
                 $"[yellow]{Markup.Escape(ErrorStrings.LegacyTypeScriptAppHostWarning)}[/]",

@@ -11,7 +11,7 @@ using Xunit;
 namespace Aspire.Cli.EndToEnd.Tests;
 
 /// <summary>
-/// End-to-end coverage for the <c>aspire migrate</c> command, which upgrades a legacy
+/// End-to-end coverage for <c>aspire update --migrate</c>, which upgrades a legacy
 /// TypeScript AppHost (<c>apphost.ts</c> importing the generated SDK from
 /// <c>./.modules/aspire.js</c>) to the modern <c>apphost.mts</c> layout (importing from
 /// <c>./.aspire/modules/aspire.mjs</c>). After migration the command must:
@@ -21,7 +21,8 @@ namespace Aspire.Cli.EndToEnd.Tests;
 ///   <item><description>Regenerate the SDK into <c>./.aspire/modules/</c> (the legacy <c>./.modules/</c> is removed).</description></item>
 ///   <item><description>Leave the project runnable via <c>aspire start</c> against the migrated <c>apphost.mts</c>.</description></item>
 /// </list>
-/// See <c>MigrateCommand</c> and https://github.com/microsoft/aspire/issues/17842.
+/// See <c>UpdateCommand</c> (the <c>--migrate</c> flag), <c>TypeScriptAppHostMigration</c>, and
+/// https://github.com/microsoft/aspire/issues/17842.
 /// </summary>
 public sealed class TypeScriptMigrateAppHostTests(ITestOutputHelper output)
 {
@@ -63,9 +64,10 @@ public sealed class TypeScriptMigrateAppHostTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForAspireAddSuccessAsync(counter, TimeSpan.FromMinutes(2));
 
-        // Step 3: Run the migration. This rewrites apphost.ts -> apphost.mts, updates config and
-        // tsconfig, removes .modules/, and regenerates the SDK into .aspire/modules/.
-        await auto.TypeAsync("aspire migrate --yes");
+        // Step 3: Run the migration via `aspire update --migrate`. This updates packages first,
+        // then rewrites apphost.ts -> apphost.mts, updates config and tsconfig, removes .modules/,
+        // and regenerates the SDK into .aspire/modules/.
+        await auto.TypeAsync("aspire update --migrate --yes");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Migrated 'apphost.ts' to 'apphost.mts'", timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(3));
@@ -158,7 +160,7 @@ public sealed class TypeScriptMigrateAppHostTests(ITestOutputHelper output)
         {
             throw new InvalidOperationException(
                 $"Legacy 'apphost.ts' still exists at {legacyAppHost} after migration. " +
-                "The migrate command should have deleted it after writing apphost.mts.");
+                "The migration should have deleted it after writing apphost.mts.");
         }
 
         var modernAppHost = Path.Combine(projectRoot, "apphost.mts");
@@ -182,7 +184,7 @@ public sealed class TypeScriptMigrateAppHostTests(ITestOutputHelper output)
         {
             throw new InvalidOperationException(
                 $"Legacy '.modules' directory still exists at {legacyModulesDir} after migration. " +
-                "The migrate command should have removed it.");
+                "The migration should have removed it.");
         }
 
         var modernModulesDir = Path.Combine(projectRoot, ".aspire", "modules");

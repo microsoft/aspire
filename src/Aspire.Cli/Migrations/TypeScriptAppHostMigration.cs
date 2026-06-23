@@ -72,7 +72,7 @@ internal sealed class TypeScriptAppHostMigration : IMigration
         {
             Title = string.Format(
                 CultureInfo.CurrentCulture,
-                MigrateCommandStrings.TypeScriptMigrationTitleFormat,
+                MigrationStrings.TypeScriptMigrationTitleFormat,
                 LegacyTypeScriptAppHost.LegacyAppHostFileName,
                 LegacyTypeScriptAppHost.ModernAppHostFileName),
             Detail = string.Format(
@@ -101,7 +101,7 @@ internal sealed class TypeScriptAppHostMigration : IMigration
         var modernAppHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, LegacyTypeScriptAppHost.ModernAppHostFileName));
 
         await _interactionService.ShowStatusAsync(
-            MigrateCommandStrings.MigratingStatus,
+            MigrationStrings.MigratingStatus,
             () =>
             {
                 MigrateFilesOnDisk(appHostFile, modernAppHostFile, appHostDirectory);
@@ -111,7 +111,7 @@ internal sealed class TypeScriptAppHostMigration : IMigration
 
         _interactionService.DisplaySuccess(string.Format(
             CultureInfo.CurrentCulture,
-            MigrateCommandStrings.MigrationSucceededFormat,
+            MigrationStrings.MigrationSucceededFormat,
             appHostFile.Name,
             modernAppHostFile.Name));
 
@@ -338,7 +338,7 @@ internal sealed class TypeScriptAppHostMigration : IMigration
             }
 
             var success = await _interactionService.ShowStatusAsync(
-                MigrateCommandStrings.RegeneratingStatus,
+                MigrationStrings.RegeneratingStatus,
                 async () => await guestProject.BuildAndGenerateSdkAsync(appHostDirectory, cancellationToken: cancellationToken),
                 emoji: KnownEmojis.Gear);
 
@@ -346,7 +346,7 @@ internal sealed class TypeScriptAppHostMigration : IMigration
             {
                 _interactionService.DisplayMessage(
                     KnownEmojis.Warning,
-                    $"[yellow]{Markup.Escape(MigrateCommandStrings.RegenerateFailedWarning)}[/]",
+                    $"[yellow]{Markup.Escape(MigrationStrings.RegenerateFailedWarning)}[/]",
                     allowMarkup: true);
             }
         }
@@ -359,7 +359,7 @@ internal sealed class TypeScriptAppHostMigration : IMigration
             _logger.LogDebug(ex, "SDK regeneration after migration failed");
             _interactionService.DisplayMessage(
                 KnownEmojis.Warning,
-                $"[yellow]{Markup.Escape(MigrateCommandStrings.RegenerateFailedWarning)}[/]",
+                $"[yellow]{Markup.Escape(MigrationStrings.RegenerateFailedWarning)}[/]",
                 allowMarkup: true);
         }
     }

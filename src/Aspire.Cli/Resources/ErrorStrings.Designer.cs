@@ -427,7 +427,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to This project uses the legacy 'apphost.ts' layout. Run 'aspire migrate' to upgrade to the recommended 'apphost.mts' format. The legacy layout continues to work — this is a non-blocking warning..
+        ///   Looks up a localized string similar to This project uses the legacy 'apphost.ts' layout. Run 'aspire update --migrate' to upgrade to the recommended 'apphost.mts' format. The legacy layout continues to work — this is a non-blocking warning..
         /// </summary>
         public static string LegacyTypeScriptAppHostWarning {
             get {

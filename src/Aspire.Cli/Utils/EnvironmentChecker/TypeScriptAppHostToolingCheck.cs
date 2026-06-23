@@ -128,7 +128,7 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
         ];
     }
 
-    // Delegates to the shared resolver so the doctor tooling check and `aspire migrate` stay in
+    // Delegates to the shared resolver so the doctor tooling check and `aspire update --migrate` stay in
     // lockstep on how the TypeScript AppHost entry point is located.
     private Task<FileInfo?> ResolveTypeScriptAppHostAsync(CancellationToken cancellationToken)
         => LegacyTypeScriptAppHost.ResolveTypeScriptAppHostAsync(

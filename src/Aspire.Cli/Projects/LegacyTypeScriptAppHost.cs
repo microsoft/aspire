@@ -16,7 +16,7 @@ namespace Aspire.Cli.Projects;
 /// <c>./.aspire/modules/aspire.mjs</c>. The legacy layout continues to work (see
 /// <see cref="GuestAppHostProject.ConvertGeneratedFilesForLegacyTypeScriptAppHost"/>),
 /// so detection here is only used to nudge users toward migrating via
-/// <c>aspire migrate</c>.
+/// <c>aspire update --migrate</c>.
 /// See: https://github.com/microsoft/aspire/issues/17842
 /// </remarks>
 internal static partial class LegacyTypeScriptAppHost
@@ -131,7 +131,7 @@ internal static partial class LegacyTypeScriptAppHost
     /// Resolves the TypeScript AppHost entry point for the current working directory, if any.
     /// Prefers the AppHost recorded in settings (<c>aspire.config.json</c>) and falls back to a
     /// recursive file-system scan. Returns <see langword="null"/> when no TypeScript AppHost can
-    /// be located. Both <c>aspire migrate</c> and the <c>aspire doctor</c> legacy-layout check
+    /// be located. Both <c>aspire update --migrate</c> and the <c>aspire doctor</c> legacy-layout check
     /// share this so detection stays in lockstep.
     /// </summary>
     /// <param name="projectLocator">Used to read the configured AppHost from settings.</param>

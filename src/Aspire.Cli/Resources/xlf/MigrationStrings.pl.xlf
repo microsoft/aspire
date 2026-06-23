@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
-  <file datatype="xml" source-language="en" target-language="zh-Hant" original="../MigrateCommandStrings.resx">
+  <file datatype="xml" source-language="en" target-language="pl" original="../MigrationStrings.resx">
     <body>
       <trans-unit id="AvailableMigrationsHeader">
         <source>The following migrations will be applied:</source>
@@ -10,11 +10,6 @@
       <trans-unit id="ConfirmApplyPrompt">
         <source>Apply these migrations?</source>
         <target state="new">Apply these migrations?</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="Description">
-        <source>Migrate the current project to the latest recommended Aspire conventions.</source>
-        <target state="new">Migrate the current project to the latest recommended Aspire conventions.</target>
         <note />
       </trans-unit>
       <trans-unit id="MigratingStatus">
@@ -51,11 +46,6 @@
         <source>Migrate '{0}' to '{1}' (rewrites SDK imports and updates aspire.config.json and tsconfig.apphost.json).</source>
         <target state="new">Migrate '{0}' to '{1}' (rewrites SDK imports and updates aspire.config.json and tsconfig.apphost.json).</target>
         <note>{0} is the legacy apphost.ts file name, {1} is the modern apphost.mts file name.</note>
-      </trans-unit>
-      <trans-unit id="YesOptionDescription">
-        <source>Perform the migration without prompting for confirmation.</source>
-        <target state="new">Perform the migration without prompting for confirmation.</target>
-        <note />
       </trans-unit>
     </body>
   </file>

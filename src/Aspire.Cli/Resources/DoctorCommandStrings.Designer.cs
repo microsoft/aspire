@@ -780,7 +780,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Run 'aspire migrate' to apply the recommended migration....
+        ///   Looks up a localized string similar to Run 'aspire update --migrate' to apply the recommended migration....
         /// </summary>
         public static string PendingMigrationFix {
             get {

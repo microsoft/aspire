@@ -7,7 +7,7 @@ namespace Aspire.Cli.Migrations;
 
 /// <summary>
 /// Describes a pending migration detected by <see cref="IMigration.DetectAsync"/>. The same
-/// descriptor feeds two surfaces: <c>aspire migrate</c> lists <see cref="Title"/> before applying,
+/// descriptor feeds two surfaces: <c>aspire update --migrate</c> lists <see cref="Title"/> before applying,
 /// and <c>aspire doctor</c> reports <see cref="Detail"/> (plus <see cref="Metadata"/> for JSON
 /// output) as a non-blocking warning.
 /// </summary>
@@ -15,7 +15,7 @@ internal sealed class MigrationDescriptor
 {
     /// <summary>
     /// A short, human-readable summary of what the migration does, shown as a list item by
-    /// <c>aspire migrate</c> (e.g. <c>Migrate 'apphost.ts' to 'apphost.mts'</c>).
+    /// <c>aspire update --migrate</c> (e.g. <c>Migrate 'apphost.ts' to 'apphost.mts'</c>).
     /// </summary>
     public required string Title { get; init; }
 

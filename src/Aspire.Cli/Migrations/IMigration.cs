@@ -8,7 +8,7 @@ namespace Aspire.Cli.Migrations;
 /// and, when it does, bring the project up to the latest recommended Aspire conventions.
 /// </summary>
 /// <remarks>
-/// Migrations are the shared unit of work behind both <c>aspire migrate</c> (which applies them)
+/// Migrations are the shared unit of work behind both <c>aspire update --migrate</c> (which applies them)
 /// and the <c>aspire doctor</c> pending-migrations check (which only detects them). New kinds of
 /// migration — a future Java AppHost layout change, a C# version bump, or an integration breaking
 /// change — are added by implementing this interface and registering it in DI; neither the

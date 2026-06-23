@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json.Nodes;
 using Aspire.Cli.Migrations;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
@@ -96,5 +97,156 @@ public class TypeScriptAppHostMigrationTests(ITestOutputHelper outputHelper)
         var descriptor = await CreateMigration(workspace).DetectAsync(CancellationToken.None);
 
         Assert.Null(descriptor);
+    }
+
+    private const string LegacyAppHostContent =
+        """
+        import { createBuilder } from './.modules/aspire.js';
+
+        const builder = createBuilder();
+        await builder.build();
+        """;
+
+    private const string ExpectedModernAppHostContent =
+        """
+        import { createBuilder } from './.aspire/modules/aspire.mjs';
+
+        const builder = createBuilder();
+        await builder.build();
+        """;
+
+    private const string LegacyEslintConfigContent =
+        """
+        export default [
+          {
+            files: ['apphost.ts']
+          }
+        ];
+        """;
+
+    private const string ExpectedModernEslintConfigContent =
+        """
+        export default [
+          {
+            files: ['apphost.mts']
+          }
+        ];
+        """;
+
+    private static async Task WriteLegacyLayoutAsync(DirectoryInfo root, string? tsConfigContent = null)
+    {
+        await File.WriteAllTextAsync(Path.Combine(root.FullName, "apphost.ts"), LegacyAppHostContent);
+        await File.WriteAllTextAsync(
+            Path.Combine(root.FullName, "aspire.config.json"),
+            """
+            {
+              "appHost": {
+                "path": "apphost.ts"
+              }
+            }
+            """);
+        await File.WriteAllTextAsync(
+            Path.Combine(root.FullName, "tsconfig.apphost.json"),
+            tsConfigContent ??
+            """
+            {
+              "include": [ "apphost.ts", ".modules/aspire.ts", ".modules/base.ts", ".modules/transport.ts", "src/**/*.ts", "lib/foo.ts" ]
+            }
+            """);
+        await File.WriteAllTextAsync(
+            Path.Combine(root.FullName, "package.json"),
+            """
+            {
+              "type": "module",
+              "scripts": {
+                "aspire:build": "tsc -p tsconfig.apphost.json",
+                "aspire:lint": "eslint apphost.ts"
+              }
+            }
+            """);
+        await File.WriteAllTextAsync(Path.Combine(root.FullName, "eslint.config.mjs"), LegacyEslintConfigContent);
+
+        var modulesDir = Directory.CreateDirectory(Path.Combine(root.FullName, ".modules"));
+        await File.WriteAllTextAsync(Path.Combine(modulesDir.FullName, "aspire.ts"), "// generated");
+    }
+
+    private static async Task AssertMigratedMetadataAsync(DirectoryInfo root, string[] expectedIncludes)
+    {
+        var config = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(root.FullName, "aspire.config.json")))!;
+        Assert.Equal("apphost.mts", config["appHost"]!["path"]!.GetValue<string>());
+
+        var tsconfig = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(root.FullName, "tsconfig.apphost.json")))!;
+        var includes = tsconfig["include"]!.AsArray().Select(n => n!.GetValue<string>()).ToArray();
+        Assert.Equal(expectedIncludes, includes);
+
+        var packageJson = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(root.FullName, "package.json")))!;
+        var scripts = packageJson["scripts"]!;
+        Assert.Equal("tsc -p tsconfig.apphost.json", scripts["aspire:build"]!.GetValue<string>());
+        Assert.Equal("eslint apphost.mts", scripts["aspire:lint"]!.GetValue<string>());
+
+        var eslintConfig = await File.ReadAllTextAsync(Path.Combine(root.FullName, "eslint.config.mjs"));
+        Assert.Equal(ExpectedModernEslintConfigContent, eslintConfig);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_WithLegacyAppHost_MigratesToMts()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.WorkspaceRoot;
+        await WriteLegacyLayoutAsync(root);
+
+        await CreateMigration(workspace).ApplyAsync(CancellationToken.None);
+
+        Assert.False(File.Exists(Path.Combine(root.FullName, "apphost.ts")));
+        Assert.False(Directory.Exists(Path.Combine(root.FullName, ".modules")));
+
+        var modernContent = await File.ReadAllTextAsync(Path.Combine(root.FullName, "apphost.mts"));
+        Assert.Equal(ExpectedModernAppHostContent, modernContent);
+
+        await AssertMigratedMetadataAsync(
+            root,
+            new[] { "apphost.mts", ".aspire/modules/aspire.mts", ".aspire/modules/base.mts", ".aspire/modules/transport.mts", "src/**/*.ts", "lib/foo.ts" });
+    }
+
+    [Fact]
+    public async Task ApplyAsync_WithJsoncTsConfig_RewritesIncludes()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.WorkspaceRoot;
+        await WriteLegacyLayoutAsync(
+            root,
+            """
+            {
+              "include": [
+                "apphost.ts",
+                ".modules/aspire.ts",
+                ".modules/aspire.d.ts",
+                "src/**/*.ts", // user code remains TypeScript
+              ],
+            }
+            """);
+
+        await CreateMigration(workspace).ApplyAsync(CancellationToken.None);
+
+        await AssertMigratedMetadataAsync(
+            root,
+            new[] { "apphost.mts", ".aspire/modules/aspire.mts", ".aspire/modules/aspire.d.ts", "src/**/*.ts" });
+    }
+
+    [Fact]
+    public async Task ApplyAsync_RunTwice_SecondRunIsNoOp()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.WorkspaceRoot;
+        await WriteLegacyLayoutAsync(root);
+
+        var migration = CreateMigration(workspace);
+        await migration.ApplyAsync(CancellationToken.None);
+
+        var migratedContent = await File.ReadAllTextAsync(Path.Combine(root.FullName, "apphost.mts"));
+
+        await migration.ApplyAsync(CancellationToken.None);
+
+        Assert.Equal(migratedContent, await File.ReadAllTextAsync(Path.Combine(root.FullName, "apphost.mts")));
     }
 }

@@ -21,14 +21,14 @@ namespace Aspire.Cli.Resources {
     [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "4.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    internal class MigrateCommandStrings {
+    internal class MigrationStrings {
         
         private static global::System.Resources.ResourceManager resourceMan;
         
         private static global::System.Globalization.CultureInfo resourceCulture;
         
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
-        internal MigrateCommandStrings() {
+        internal MigrationStrings() {
         }
         
         /// <summary>
@@ -38,7 +38,7 @@ namespace Aspire.Cli.Resources {
         internal static global::System.Resources.ResourceManager ResourceManager {
             get {
                 if (object.ReferenceEquals(resourceMan, null)) {
-                    global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("Aspire.Cli.Resources.MigrateCommandStrings", typeof(MigrateCommandStrings).Assembly);
+                    global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("Aspire.Cli.Resources.MigrationStrings", typeof(MigrationStrings).Assembly);
                     resourceMan = temp;
                 }
                 return resourceMan;
@@ -56,24 +56,6 @@ namespace Aspire.Cli.Resources {
             }
             set {
                 resourceCulture = value;
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Migrate the current project to the latest recommended Aspire conventions..
-        /// </summary>
-        internal static string Description {
-            get {
-                return ResourceManager.GetString("Description", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Perform the migration without prompting for confirmation..
-        /// </summary>
-        internal static string YesOptionDescription {
-            get {
-                return ResourceManager.GetString("YesOptionDescription", resourceCulture);
             }
         }
         

@@ -324,7 +324,7 @@ The legacy file continues to work — this is a non-blocking warning.</value>
     <comment>{0} is the full path to the legacy apphost.ts file.</comment>
   </data>
   <data name="PendingMigrationFix" xml:space="preserve">
-    <value>Run 'aspire migrate' to apply the recommended migration.
+    <value>Run 'aspire update --migrate' to apply the recommended migration.
 The current layout continues to work — this is a non-blocking warning.</value>
   </data>
 </root>

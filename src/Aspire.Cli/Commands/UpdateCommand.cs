@@ -45,6 +45,10 @@ internal sealed class UpdateCommand : BaseCommand
         Description = UpdateCommandStrings.YesOptionDescription,
         Aliases = { "-y" }
     };
+    private static readonly Option<bool> s_migrateOption = new("--migrate")
+    {
+        Description = UpdateCommandStrings.MigrateOptionDescription
+    };
     private static readonly Option<string?> s_nugetConfigDirOption = new("--nuget-config-dir")
     {
         Description = UpdateCommandStrings.NuGetConfigDirOptionDescription
@@ -78,6 +82,7 @@ internal sealed class UpdateCommand : BaseCommand
         Options.Add(s_appHostOption);
         Options.Add(s_selfOption);
         Options.Add(s_yesOption);
+        Options.Add(s_migrateOption);
         Options.Add(s_nugetConfigDirOption);
 
         AddNonInteractiveRequiresYesValidator(this, s_yesOption);
@@ -336,11 +341,12 @@ internal sealed class UpdateCommand : BaseCommand
 
             // The package update may have moved the project onto a newer Aspire version whose
             // recommended conventions require an on-disk migration (e.g. apphost.ts -> apphost.mts).
-            // `update` stays non-destructive: rather than rewriting source files here, surface a
-            // non-blocking advisory pointing at `aspire migrate`. Detection reuses the same
-            // IMigration registry behind `aspire migrate` and `aspire doctor`, so any future
-            // migration shows up here automatically. Failures must never break a successful update.
-            await DisplayPendingMigrationsAdvisoryAsync(cancellationToken);
+            // When --migrate is passed we apply pending migrations now, after the packages are
+            // updated, since a migration may depend on the newer package version. Without --migrate
+            // we stay non-destructive and only surface a non-blocking advisory. Detection reuses the
+            // same IMigration registry behind `aspire doctor`, so any future migration shows up here
+            // automatically.
+            await HandlePendingMigrationsAsync(parseResult.GetValue(s_migrateOption), confirmBinding, cancellationToken);
 
             // After successful project update, check if CLI update is available and prompt
             // Only prompt if the channel supports CLI downloads (has a non-null CliDownloadBaseUrl)
@@ -422,14 +428,17 @@ internal sealed class UpdateCommand : BaseCommand
     }
 
     /// <summary>
-    /// Detects pending migrations after a successful project update and, when any apply, prints a
-    /// non-blocking advisory nudging the user toward <c>aspire migrate</c>. This is intentionally
-    /// advisory-only: <c>update</c> never rewrites source files itself, keeping its risk profile
-    /// distinct from the destructive on-disk changes that <c>aspire migrate</c> performs.
+    /// After a successful project update, detects pending migrations from the <see cref="IMigration"/>
+    /// registry. When <paramref name="applyRequested"/> is <c>true</c> (the user passed <c>--migrate</c>)
+    /// the migrations are applied in <see cref="IMigration.Order"/> after an optional confirmation;
+    /// otherwise a non-blocking advisory is printed nudging the user toward <c>aspire update --migrate</c>.
+    /// Migrations run after the package update so that any migration depending on a newer package
+    /// version sees the updated packages. A failure here never turns a successful update into a failure.
     /// </summary>
-    private async Task DisplayPendingMigrationsAdvisoryAsync(CancellationToken cancellationToken)
+    private async Task HandlePendingMigrationsAsync(bool applyRequested, PromptBinding<bool> confirmBinding, CancellationToken cancellationToken)
     {
-        var pendingTitles = new List<string>();
+        // Detect once up front so we can list the full set before asking for a single confirmation.
+        var pending = new List<(IMigration Migration, MigrationDescriptor Descriptor)>();
         foreach (var migration in _migrations.OrderBy(m => m.Order))
         {
             MigrationDescriptor? descriptor;
@@ -450,22 +459,70 @@ internal sealed class UpdateCommand : BaseCommand
 
             if (descriptor is not null)
             {
-                pendingTitles.Add(descriptor.Title);
+                pending.Add((migration, descriptor));
             }
         }
 
-        if (pendingTitles.Count == 0)
+        if (!applyRequested)
         {
+            if (pending.Count == 0)
+            {
+                return;
+            }
+
+            InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.PendingMigrationsHeader);
+            foreach (var (_, descriptor) in pending)
+            {
+                InteractionService.DisplaySubtleMessage($"  - {descriptor.Title}");
+            }
+
+            InteractionService.DisplaySubtleMessage(UpdateCommandStrings.PendingMigrationsHint);
             return;
         }
 
-        InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.PendingMigrationsHeader);
-        foreach (var title in pendingTitles)
+        if (pending.Count == 0)
         {
-            InteractionService.DisplaySubtleMessage($"  - {title}");
+            InteractionService.DisplaySubtleMessage(MigrationStrings.NothingToMigrate);
+            return;
         }
 
-        InteractionService.DisplaySubtleMessage(UpdateCommandStrings.PendingMigrationsHint);
+        InteractionService.DisplayMessage(KnownEmojis.Gear, MigrationStrings.AvailableMigrationsHeader);
+        foreach (var (_, descriptor) in pending)
+        {
+            InteractionService.DisplaySubtleMessage($"  - {descriptor.Title}");
+        }
+
+        // Applying migrations rewrites source files, so confirm before doing so. The shared
+        // confirmBinding is pre-set to "yes" when --yes was passed (and the non-interactive
+        // validator already required --yes), so this only prompts in interactive runs.
+        var confirmed = await InteractionService.PromptConfirmAsync(
+            MigrationStrings.ConfirmApplyPrompt,
+            binding: confirmBinding,
+            cancellationToken: cancellationToken);
+        if (!confirmed)
+        {
+            InteractionService.DisplaySubtleMessage(MigrationStrings.MigrationCancelled);
+            return;
+        }
+
+        foreach (var (migration, _) in pending)
+        {
+            try
+            {
+                await migration.ApplyAsync(cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // The packages were already updated successfully; a migration failure should warn
+                // but not fail the overall update so the user keeps the successful package update.
+                _logger.LogDebug(ex, "Migration '{MigrationId}' apply failed", migration.Id);
+                InteractionService.DisplayMessage(KnownEmojis.Warning, UpdateCommandStrings.MigrationApplyFailedWarning);
+            }
+        }
     }
 
     private async Task<CommandResult?> TryUpdateCliBeforeGuestProjectUpdateAsync(
