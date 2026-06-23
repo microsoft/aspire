@@ -59,6 +59,13 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
         {
             FileName = resolvedCommandPath,
             WorkingDirectory = workingDirectory.FullName,
+            // Redirect stdin so the child does not inherit the CLI's TTY. Without this, on macOS/Linux
+            // any child (e.g. `npm install` postinstall scripts, husky, package-manager permission
+            // prompts) that reads from stdin will block forever waiting on the terminal, making
+            // `aspire new`/`init`/`add`/`restore` appear to stall with no output. We close stdin
+            // immediately after Start() below so a reader sees EOF instead of hanging.
+            // See https://github.com/microsoft/aspire/issues/16791.
+            RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -126,6 +133,17 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
         AddEvent(activity, ProfilingTelemetry.Events.GuestProcessStart);
         process.Start();
         _logger.LogDebug("{Language} guest process {ProcessId} started: {Command}", _language, process.Id, resolvedCommandPath);
+        // Close the redirected stdin pipe immediately so any read attempt in the child surfaces
+        // as EOF rather than blocking on an empty pipe. We never write to the guest process
+        // stdin, so this is safe.
+        try
+        {
+            process.StandardInput.Close();
+        }
+        catch (IOException)
+        {
+            // The child may have already closed its stdin; ignore.
+        }
         activity?.SetTag(TelemetryConstants.Tags.ProcessPid, process.Id);
         AddEvent(activity, ProfilingTelemetry.Events.GuestProcessStarted, TelemetryConstants.Tags.ProcessPid, process.Id);
         if (afterLaunchAsync is not null)

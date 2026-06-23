@@ -276,6 +276,11 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger, ProfilingTelemetry pr
     {
         var startInfo = new ProcessStartInfo
         {
+            // Redirect stdin so the child npm process (and any lifecycle scripts it invokes)
+            // does not inherit the CLI's TTY. The caller closes stdin immediately after Start()
+            // so any read surfaces as EOF instead of hanging waiting on the terminal. NpmRunner
+            // is intended to be fully non-interactive. See https://github.com/microsoft/aspire/issues/16791.
+            RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -357,6 +362,17 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger, ProfilingTelemetry pr
             using var process = new Process { StartInfo = startInfo };
             using var activity = profilingTelemetry.StartNpmCommand(npmPath, args, workingDirectory);
             process.Start();
+            // Close stdin so any npm lifecycle script that tries to read terminal input
+            // sees EOF instead of blocking on the inherited TTY. See ProcessGuestLauncher
+            // and https://github.com/microsoft/aspire/issues/16791.
+            try
+            {
+                process.StandardInput.Close();
+            }
+            catch (IOException)
+            {
+                // The child may have already closed its stdin; ignore.
+            }
             activity.SetProcessId(process.Id);
 
             var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);

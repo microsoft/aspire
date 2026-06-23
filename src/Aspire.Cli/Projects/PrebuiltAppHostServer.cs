@@ -920,6 +920,18 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         var startInfo = CreateStartInfo(hostPid, environmentVariables, additionalArgs, debug);
 
         var process = Process.Start(startInfo)!;
+        // Close the redirected stdin pipe immediately so the AppHost server process — and any
+        // child/library it loads — observes EOF rather than blocking on the parent CLI's TTY
+        // if it ever reads from stdin. The CLI communicates with the server over a Unix socket
+        // (REMOTE_APP_HOST_SOCKET_PATH), not stdin. See https://github.com/microsoft/aspire/issues/16791.
+        try
+        {
+            process.StandardInput.Close();
+        }
+        catch (IOException)
+        {
+            // The child may have already closed its stdin; ignore.
+        }
 
         var outputCollector = new OutputCollector();
         process.OutputDataReceived += (_, e) =>
@@ -1045,6 +1057,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
             startInfo.Environment[KnownConfigNames.AspireLogLevel] = "Debug";
         }
 
+        startInfo.RedirectStandardInput = true;
         startInfo.RedirectStandardOutput = true;
         startInfo.RedirectStandardError = true;
 
