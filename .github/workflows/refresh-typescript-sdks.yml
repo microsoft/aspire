@@ -31,6 +31,23 @@ jobs:
         run: |
           ./eng/refreshTypeScriptSdks.ps1
 
+      - name: Stage generated TypeScript SDKs
+        shell: bash
+        run: |
+          shopt -s globstar nullglob
+
+          generated_sdk_files=(
+            playground/**/.aspire/modules/*
+            playground/**/.modules/*
+          )
+
+          if ((${#generated_sdk_files[@]} > 0)); then
+            # Generated AppHost SDKs live under directories ignored for local developer
+            # state. Force-add them here so the automated refresh PR contains the SDK
+            # updates instead of exiting as a no-op after the script succeeds.
+            git add -f -- "${generated_sdk_files[@]}"
+          fi
+
       - name: Create or update pull request
         uses: ./.github/actions/create-pull-request
         with:
