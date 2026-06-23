@@ -71,13 +71,9 @@ public class NatsClusterFunctionalTests(ITestOutputHelper testOutputHelper)
 
         var connectionString = await cluster.Resource.ConnectionStringExpression.GetValueAsync(cts.Token);
 
+        // NOTE: This the most reliable way to verify that the cluster is functional. We publish a message through one node and subscribe on a different node, proving the message crosses the cluster boundary
         await pipeline.ExecuteAsync(async token =>
         {
-            var client = new NatsConnection(new()
-            {
-                Url = connectionString!,
-            });
-
             var node1ConnectionString = await node1.Resource.ConnectionStringExpression.GetValueAsync(cts.Token);
             var node2ConnectionString = await node2.Resource.ConnectionStringExpression.GetValueAsync(cts.Token);
 
@@ -87,14 +83,20 @@ public class NatsClusterFunctionalTests(ITestOutputHelper testOutputHelper)
             await node1Connection.ConnectAsync();
             await node2Connection.ConnectAsync();
 
+            var subscribedSignal = new TaskCompletionSource();
             var sub = Task.Run(async () =>
             {
-                await foreach (var msg in node2Connection.SubscribeAsync<string>("test.subject", cancellationToken: cts.Token))
+                var sub = await node2Connection.SubscribeCoreAsync<string>("test.subject", cancellationToken: cts.Token);
+                await node2Connection.PingAsync(cts.Token); // NOTE: See https://docs.nats.io/using-nats/developer/sending/caches
+                subscribedSignal.SetResult();
+
+                await foreach (var msg in sub.Msgs.ReadAllAsync(cts.Token))
                 {
                     break;
                 }
             }, cts.Token);
 
+            await subscribedSignal.Task;
             await node1Connection.PublishAsync("test.subject", "hello from node 1", cancellationToken: cts.Token);
 
             await sub;
