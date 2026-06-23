@@ -568,6 +568,44 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ResourceCommand_ForwardsArgumentAfterDoubleDashThatCollidesWithCliOption()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "mydb",
+                    CreateCommand(
+                        "configure",
+                        CreateArgument("AppHost")))
+            ]
+        };
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("hash", "/tmp/test.sock", backchannel);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        // "--AppHost" collides case-insensitively with the CLI's --apphost option, so it
+        // must be placed after "--" to bypass the miscased-option check and reach the
+        // resource command's second-pass parser.
+        var result = command.Parse("resource mydb configure -- --AppHost primary");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("AppHost", "primary"));
+    }
+
+    [Fact]
     public async Task ResourceCommand_LegacyParameterCommandName_UsesCurrentCommandMetadata()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

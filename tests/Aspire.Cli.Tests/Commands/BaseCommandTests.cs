@@ -432,6 +432,8 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
     [InlineData("run --No-Build", "--No-Build", "--no-build")]
     [InlineData("run --Project somepath", "--Project", "--project")]
     [InlineData("run --Debug", "--Debug", "--debug")]
+    [InlineData("run --AppHost=somepath", "--AppHost", "--apphost")]
+    [InlineData("run --APPHOST=somepath", "--APPHOST", "--apphost")]
     public async Task BaseCommand_MiscasedOption_ReturnsErrorWithSuggestion(string args, string badOption, string correctOption)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -457,9 +459,15 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var testInteractionService = new TestInteractionService();
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, ct) =>
+                throw new OperationCanceledException(ct)
+        };
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => testInteractionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
         });
         using var provider = services.BuildServiceProvider();
 
@@ -469,10 +477,55 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        // The command may still fail for other reasons (e.g. invalid path), but it should
-        // not fail due to a miscased option error.
-        Assert.DoesNotContain(testInteractionService.DisplayedErrors,
-            e => e.Contains("Did you mean", StringComparison.OrdinalIgnoreCase));
+        Assert.Empty(testInteractionService.DisplayedErrors);
+    }
+
+    [Theory]
+    [InlineData("--apphost", "somepath", false)]
+    [InlineData("--AppHost", "somepath", true)]
+    [InlineData("--APPHOST", "somepath", true)]
+    public async Task BaseCommand_OptionWithEqualsValue_ParsedCorrectlyOrFlaggedAsMiscased(string optionName, string value, bool expectError)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var testInteractionService = new TestInteractionService();
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, ct) =>
+                throw new OperationCanceledException(ct)
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"run {optionName}={value}");
+
+        if (expectError)
+        {
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+            var expectedError = string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.UnrecognizedOptionDidYouMeanFormat, optionName, "--apphost");
+            Assert.Single(testInteractionService.DisplayedErrors, expectedError);
+        }
+        else
+        {
+            // System.CommandLine accepted the --option=value syntax
+            Assert.Empty(result.Errors);
+            Assert.Empty(result.UnmatchedTokens);
+
+            // The option value was parsed correctly
+            var parsedValue = result.GetValue(AppHostLauncher.s_appHostOption);
+            Assert.NotNull(parsedValue);
+            Assert.Equal(value, parsedValue.Name);
+
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Empty(testInteractionService.DisplayedErrors);
+        }
     }
 
     [Fact]
@@ -480,9 +533,15 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var testInteractionService = new TestInteractionService();
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, ct) =>
+                throw new OperationCanceledException(ct)
+        };
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => testInteractionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
         });
         using var provider = services.BuildServiceProvider();
 
@@ -492,8 +551,7 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.DoesNotContain(testInteractionService.DisplayedErrors,
-            e => e.Contains("Did you mean", StringComparison.OrdinalIgnoreCase));
+        Assert.Empty(testInteractionService.DisplayedErrors);
     }
 
     [Fact]
@@ -501,9 +559,15 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var testInteractionService = new TestInteractionService();
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, ct) =>
+                throw new OperationCanceledException(ct)
+        };
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => testInteractionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
         });
         using var provider = services.BuildServiceProvider();
 
@@ -513,8 +577,7 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.DoesNotContain(testInteractionService.DisplayedErrors,
-            e => e.Contains("Did you mean", StringComparison.OrdinalIgnoreCase));
+        Assert.Empty(testInteractionService.DisplayedErrors);
     }
 
     [Fact]
@@ -554,5 +617,29 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
 
         // System.CommandLine itself should report the error.
         Assert.NotEmpty(result.Errors);
+    }
+
+    [Fact]
+    public async Task BaseCommand_ResourceCommand_MiscasedOptionBeforeDoubleDash_IsFlagged()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var testInteractionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        // --AppHost before "--" collides case-insensitively with the CLI's --apphost option.
+        // Users who need to pass an argument named AppHost to a resource command should use
+        // the "--" separator to disambiguate.
+        var result = command.Parse("resource myresource mycommand --AppHost primary");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        var expectedError = string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.UnrecognizedOptionDidYouMeanFormat, "--AppHost", "--apphost");
+        Assert.Single(testInteractionService.DisplayedErrors, expectedError);
     }
 }

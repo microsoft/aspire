@@ -66,6 +66,9 @@ internal abstract class BaseCommand : Command
     {
         // Check for miscased options that would be silently ignored as unmatched tokens
         // when TreatUnmatchedTokensAsErrors is false (e.g. --AppHost instead of --apphost).
+        // This intentionally also applies to resource command: users who want to pass arguments
+        // that collide with CLI option names to the resource command's second-pass parser should
+        // use the "--" separator (e.g. "aspire resource mydb cmd -- --AppHost primary").
         var miscasedOptionError = ParseResultHelper.CheckForMiscasedOptions(this, parseResult);
         if (miscasedOptionError is not null)
         {

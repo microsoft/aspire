@@ -65,10 +65,15 @@ internal static class ParseResultHelper
                 continue;
             }
 
-            if (knownOptions.TryGetValue(token, out var correctName) &&
-                !string.Equals(token, correctName, StringComparison.Ordinal))
+            // Split off the "=value" suffix so that "--AppHost=somepath" is looked up
+            // as "--AppHost" against the known "--apphost" key.
+            var equalsIndex = token.IndexOf('=');
+            var optionName = equalsIndex >= 0 ? token[..equalsIndex] : token;
+
+            if (knownOptions.TryGetValue(optionName, out var correctName) &&
+                !string.Equals(optionName, correctName, StringComparison.Ordinal))
             {
-                return string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.UnrecognizedOptionDidYouMeanFormat, token, correctName);
+                return string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.UnrecognizedOptionDidYouMeanFormat, optionName, correctName);
             }
         }
 
