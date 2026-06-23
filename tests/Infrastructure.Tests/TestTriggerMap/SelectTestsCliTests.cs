@@ -224,6 +224,56 @@ public sealed class SelectTestsCliTests
         });
     }
 
+    // A job pulled in by SEVERAL independent triggers must render each as its OWN bulleted line, not
+    // comma-joined: a comma between e.g. "affected project X" and a selected-test reason reads as a
+    // single causal chain when they are unrelated. Here job:multi is hit by a path rule (a.txt) AND a
+    // derived_targets pull from the selected test Aspire.Cli.Tests; the cell must bullet the two and
+    // name the trigger as "selected test" (a noun, parallel to "affected project"). Failure mode:
+    // regressing to comma-joining makes "affected project X, selected test Y" look like one chain.
+    [Fact]
+    public void JobWithIndependentCausesRendersEachReasonOnItsOwnLine()
+    {
+        const string slnx = """
+            <Solution>
+              <Project Path="tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj" />
+            </Solution>
+            """;
+        const string map = """
+            version: 1
+            path_rules:
+              - paths: [a.txt]
+                targets: ["job:multi"]
+              - paths: [b.txt]
+                targets: ["test:Aspire.Cli.Tests"]
+            derived_targets:
+              - tests: [test:Aspire.Cli.Tests]
+                targets: [job:multi]
+            """;
+
+        RunInTempRepo((repoRoot, propsPath, _) =>
+        {
+            var commentPath = Path.Combine(repoRoot, "comment.md");
+            var previous = Environment.GetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE");
+            Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", commentPath);
+            try
+            {
+                var changed = WriteChangedFiles(repoRoot, "a.txt", "b.txt");
+
+                Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, enforce: true));
+
+                var comment = File.ReadAllText(commentPath);
+                // The two independent triggers are bulleted on separate lines (<br>), and the derived
+                // pull reads "selected test" -- pinning the bullets, the separation, and the wording in
+                // one exact cell match.
+                Assert.Contains("| `multi` | • `a.txt`<br>• selected test `Aspire.Cli.Tests` |", comment);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", previous);
+            }
+        }, slnx: slnx, map: map);
+    }
+
     // The headline call-out (⚠️ "N of the M ... come from a single change") and the <details> collapse
     // in RenderProjectList are both threshold-gated (headline: tests >= 10 && largest group >= 5;
     // collapse: inline limit of 12). A single change that fans out to many projects must trip both.

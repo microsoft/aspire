@@ -119,11 +119,11 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
 
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
         await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
-        await auto.PrepareDockerEnvironmentAsync(counter, workspace, enableDcpDiagnostics: true);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
         await auto.AspireNewAsync(projectName, counter, template: AspireTemplate.EmptyAppHost);
 
@@ -133,7 +133,9 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
 
         // Read the generated apphost.cs so we can extract the #:sdk line with the
         // resolved version, then replace the entire file with a minimal AppHost
-        // that has a placeholder resource and a command that uses IInteractionService.
+        // that has a parameter resource and a command that uses IInteractionService.
+        // Using a parameter instead of a container avoids Docker container teardown
+        // flakiness during `aspire stop` in CI (see #17485).
         var appHostFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, projectName, "apphost.cs");
         var content = File.ReadAllText(appHostFilePath);
 
@@ -145,9 +147,9 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
 
             var builder = DistributedApplication.CreateBuilder(args);
 
-            var cache = builder.AddContainer("cache", "redis");
+            var resource = builder.AddParameter("test-resource");
 
-            cache.WithCommand(
+            resource.WithCommand(
                 name: "needs-interaction",
                 displayName: "Needs interaction",
                 executeCommand: async context =>
@@ -187,9 +189,9 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        await auto.TypeAsync("aspire resource cache needs-interaction");
+        await auto.TypeAsync("aspire resource test-resource needs-interaction");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Failed to execute command 'needs-interaction' on resource 'cache'", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitUntilTextAsync("Failed to execute command 'needs-interaction' on resource 'test-resource'", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitUntilTextAsync("InteractionService is not available", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitUntilTextAsync("See logs at", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitUntilTextAsync("See AppHost logs at", timeout: TimeSpan.FromSeconds(30));

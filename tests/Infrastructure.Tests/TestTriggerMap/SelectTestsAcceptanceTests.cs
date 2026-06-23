@@ -535,7 +535,8 @@ public sealed class SelectTestsAcceptanceTests : IDisposable
     public void DerivedJobCauseNamesTheTriggeringTestProject()
     {
         // A job pulled in purely because a test project is selected: tests/CliTests/** -> test:CliTests
-        // (convention) -> job:cli-starter (derived_targets). The cause must say "via test CliTests".
+        // (convention) -> job:cli-starter (derived_targets). The cause is DerivedFromTest naming CliTests
+        // (rendered "selected test CliTests" in the job-reasons cell).
         var r = Select(["tests/CliTests/Foo.cs"]);
 
         var cause = Assert.Single(r.JobCauses["job:cli-starter"]);
@@ -815,6 +816,19 @@ public sealed class SelectTestsAcceptanceTests : IDisposable
         Assert.True(filter.IsExcluded(".agents/skills/foo/SKILL.md"));
         Assert.True(filter.IsExcluded("Aspire-Core.slnf"));
         Assert.True(filter.IsExcluded("localhive.ps1"));                 // localhive.* -> localhive\.[^/]*
+
+        // Repository metadata with no build/test impact: a PR touching only these must not force the
+        // full matrix via the run-all fallback (the reason they are in the skip-gate patterns file).
+        Assert.True(filter.IsExcluded(".gitignore"));                    // repo-ROOT .gitignore (anchored)
+        Assert.True(filter.IsExcluded(".github/CODEOWNERS"));
+        Assert.True(filter.IsExcluded(".github/ISSUE_TEMPLATE/10_bug_report.yml"));
+
+        // Safety carve-outs: NOT dropped, because they can change build/test outcomes -- nested .gitignore
+        // files are shipped CLI-template assets (Layer 1 / conventions route them to their projects), and
+        // .editorconfig / .gitattributes affect the build and checkout.
+        Assert.False(filter.IsExcluded("src/Aspire.Cli/Templating/Templates/ts-starter/.gitignore"));
+        Assert.False(filter.IsExcluded(".editorconfig"));
+        Assert.False(filter.IsExcluded(".gitattributes"));
 
         // Kept: real source the patterns file does not list.
         Assert.False(filter.IsExcluded("src/Aspire.Cli/Program.cs"));
