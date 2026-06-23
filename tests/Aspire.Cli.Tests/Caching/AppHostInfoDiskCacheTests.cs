@@ -253,6 +253,9 @@ public class AppHostInfoDiskCacheTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ComputeKey_IsCaseInsensitiveForDriveLetter()
     {
+        Assert.SkipWhen(!OperatingSystem.IsWindows(),
+            "Drive letter normalization only applies on Windows.");
+
         // On Windows the same physical project is reached through paths that differ only by drive
         // casing — VS Code launches the CLI with a lowercase drive letter ("c:\...") while a
         // terminal uses an uppercase one ("C:\..."). Both must derive the same cache key, otherwise
@@ -270,14 +273,8 @@ public class AppHostInfoDiskCacheTests(ITestOutputHelper outputHelper)
 
         var keyLower = AppHostInfoDiskCache.ComputeKeyAsync(new FileInfo(lowerDrivePath));
         var keyUpper = AppHostInfoDiskCache.ComputeKeyAsync(new FileInfo(upperDrivePath));
-        if (OperatingSystem.IsWindows())
-        {
-            Assert.Equal(keyLower, keyUpper);
-        }
-        else
-        {
-            Assert.NotEqual(keyLower, keyUpper);
-        }
+
+        Assert.Equal(keyLower, keyUpper);
     }
 
     [Fact]
