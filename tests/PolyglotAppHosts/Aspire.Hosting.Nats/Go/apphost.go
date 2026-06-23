@@ -62,6 +62,22 @@ func main() {
 	_ = nats.UserNameReference()
 	_ = nats.ConnectionStringExpression()
 
+	cluster := builder.AddNatsCluster("nats-cluster")
+	if err = cluster.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
+
+	clusterMember1 := builder.AddNats("cluster-member-1").WithJetStream()
+	clusterMember2 := builder.AddNats("cluster-member-2").WithJetStream()
+	clusterMember3 := builder.AddNats("cluster-member-3").WithJetStream()
+
+	cluster.WithMember(clusterMember1).WithMember(clusterMember2).WithMember(clusterMember3)
+	if err = cluster.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
+
+	_ = cluster.ConnectionStringExpression()
+
 	app, err := builder.Build()
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
