@@ -200,4 +200,10 @@
   <data name="NoChannelFoundMatching" xml:space="preserve">
     <value>No channel found matching '{0}'. Valid options are: {1}.</value>
   </data>
+  <data name="PendingMigrationsHeader" xml:space="preserve">
+    <value>This project has pending migrations:</value>
+  </data>
+  <data name="PendingMigrationsHint" xml:space="preserve">
+    <value>Run 'aspire migrate' to apply them.</value>
+  </data>
 </root>

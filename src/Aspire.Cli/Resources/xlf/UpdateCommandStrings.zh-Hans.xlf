@@ -197,6 +197,16 @@
         <target state="translated">包引用没有版本。</target>
         <note />
       </trans-unit>
+      <trans-unit id="PendingMigrationsHeader">
+        <source>This project has pending migrations:</source>
+        <target state="new">This project has pending migrations:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PendingMigrationsHint">
+        <source>Run 'aspire migrate' to apply them.</source>
+        <target state="new">Run 'aspire migrate' to apply them.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PerformUpdatesPrompt">
         <source>Perform updates?</source>
         <target state="translated">是否执行更新?</target>

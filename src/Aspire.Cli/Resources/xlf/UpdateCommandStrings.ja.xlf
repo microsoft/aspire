@@ -197,6 +197,16 @@
         <target state="translated">パッケージ参照にバージョンがありません。</target>
         <note />
       </trans-unit>
+      <trans-unit id="PendingMigrationsHeader">
+        <source>This project has pending migrations:</source>
+        <target state="new">This project has pending migrations:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PendingMigrationsHint">
+        <source>Run 'aspire migrate' to apply them.</source>
+        <target state="new">Run 'aspire migrate' to apply them.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PerformUpdatesPrompt">
         <source>Perform updates?</source>
         <target state="translated">更新を実行しますか?</target>

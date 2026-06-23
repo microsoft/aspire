@@ -8,6 +8,7 @@ using System.Runtime.InteropServices;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Migrations;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -32,6 +33,7 @@ internal sealed class UpdateCommand : BaseCommand
     private readonly IFeatures _features;
     private readonly IConfigurationService _configurationService;
     private readonly IConfiguration _configuration;
+    private readonly IEnumerable<IMigration> _migrations;
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", UpdateCommandStrings.ProjectArgumentDescription);
     private static readonly Option<bool> s_selfOption = new("--self")
@@ -58,6 +60,7 @@ internal sealed class UpdateCommand : BaseCommand
         ICliDownloader? cliDownloader,
         IConfigurationService configurationService,
         IConfiguration configuration,
+        IEnumerable<IMigration> migrations,
         CommonCommandServices services)
         : base("update", UpdateCommandStrings.Description, services)
     {
@@ -70,6 +73,7 @@ internal sealed class UpdateCommand : BaseCommand
         _features = services.Features;
         _configurationService = configurationService;
         _configuration = configuration;
+        _migrations = migrations;
 
         Options.Add(s_appHostOption);
         Options.Add(s_selfOption);
@@ -330,6 +334,14 @@ internal sealed class UpdateCommand : BaseCommand
 
             await project.UpdatePackagesAsync(updateContext, cancellationToken);
 
+            // The package update may have moved the project onto a newer Aspire version whose
+            // recommended conventions require an on-disk migration (e.g. apphost.ts -> apphost.mts).
+            // `update` stays non-destructive: rather than rewriting source files here, surface a
+            // non-blocking advisory pointing at `aspire migrate`. Detection reuses the same
+            // IMigration registry behind `aspire migrate` and `aspire doctor`, so any future
+            // migration shows up here automatically. Failures must never break a successful update.
+            await DisplayPendingMigrationsAdvisoryAsync(cancellationToken);
+
             // After successful project update, check if CLI update is available and prompt
             // Only prompt if the channel supports CLI downloads (has a non-null CliDownloadBaseUrl)
             if (_cliDownloader is not null &&
@@ -407,6 +419,53 @@ internal sealed class UpdateCommand : BaseCommand
         }
 
         return CommandResult.FromExitCode(0);
+    }
+
+    /// <summary>
+    /// Detects pending migrations after a successful project update and, when any apply, prints a
+    /// non-blocking advisory nudging the user toward <c>aspire migrate</c>. This is intentionally
+    /// advisory-only: <c>update</c> never rewrites source files itself, keeping its risk profile
+    /// distinct from the destructive on-disk changes that <c>aspire migrate</c> performs.
+    /// </summary>
+    private async Task DisplayPendingMigrationsAdvisoryAsync(CancellationToken cancellationToken)
+    {
+        var pendingTitles = new List<string>();
+        foreach (var migration in _migrations.OrderBy(m => m.Order))
+        {
+            MigrationDescriptor? descriptor;
+            try
+            {
+                descriptor = await migration.DetectAsync(cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // A broken migration provider must not turn a successful update into a failure.
+                _logger.LogDebug(ex, "Migration '{MigrationId}' detection failed", migration.Id);
+                continue;
+            }
+
+            if (descriptor is not null)
+            {
+                pendingTitles.Add(descriptor.Title);
+            }
+        }
+
+        if (pendingTitles.Count == 0)
+        {
+            return;
+        }
+
+        InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.PendingMigrationsHeader);
+        foreach (var title in pendingTitles)
+        {
+            InteractionService.DisplaySubtleMessage($"  - {title}");
+        }
+
+        InteractionService.DisplaySubtleMessage(UpdateCommandStrings.PendingMigrationsHint);
     }
 
     private async Task<CommandResult?> TryUpdateCliBeforeGuestProjectUpdateAsync(

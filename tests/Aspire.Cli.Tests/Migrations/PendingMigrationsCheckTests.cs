@@ -3,6 +3,7 @@
 
 using System.Text.Json.Nodes;
 using Aspire.Cli.Migrations;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Utils.EnvironmentChecker;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -37,7 +38,7 @@ public class PendingMigrationsCheckTests
             Detail = "The thing needs migrating",
             Metadata = new JsonObject { ["language"] = "typescript" }
         };
-        var migration = new StubMigration("stub-migration", 100, descriptor);
+        var migration = new TestMigration("stub-migration", 100, descriptor);
         var check = new PendingMigrationsCheck([migration], NullLogger<PendingMigrationsCheck>.Instance);
 
         var results = await check.CheckAsync();
@@ -54,7 +55,7 @@ public class PendingMigrationsCheckTests
     [Fact]
     public async Task CheckAsync_WithNonApplicableMigration_ReturnsEmpty()
     {
-        var migration = new StubMigration("stub-migration", 100, descriptor: null);
+        var migration = new TestMigration("stub-migration", 100, descriptor: null);
         var check = new PendingMigrationsCheck([migration], NullLogger<PendingMigrationsCheck>.Instance);
 
         var results = await check.CheckAsync();
@@ -65,8 +66,8 @@ public class PendingMigrationsCheckTests
     [Fact]
     public async Task CheckAsync_WithFailingMigration_SkipsItAndContinues()
     {
-        var failing = new StubMigration("failing", 100, descriptor: null, throwOnDetect: true);
-        var applicable = new StubMigration("applicable", 200, new MigrationDescriptor
+        var failing = new TestMigration("failing", 100, descriptor: null, throwOnDetect: true);
+        var applicable = new TestMigration("applicable", 200, new MigrationDescriptor
         {
             Title = "Apply me",
             Detail = "Detail message"
@@ -77,24 +78,5 @@ public class PendingMigrationsCheckTests
 
         var result = Assert.Single(results);
         Assert.Equal("applicable", result.Name);
-    }
-
-    private sealed class StubMigration(string id, int order, MigrationDescriptor? descriptor, bool throwOnDetect = false) : IMigration
-    {
-        public string Id => id;
-
-        public int Order => order;
-
-        public Task<MigrationDescriptor?> DetectAsync(CancellationToken cancellationToken)
-        {
-            if (throwOnDetect)
-            {
-                throw new InvalidOperationException("Detection failed");
-            }
-
-            return Task.FromResult(descriptor);
-        }
-
-        public Task ApplyAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
 }

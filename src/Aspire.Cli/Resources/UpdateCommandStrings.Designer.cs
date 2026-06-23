@@ -127,5 +127,7 @@ namespace Aspire.Cli.Resources {
     internal static string YesOptionDescription => ResourceManager.GetString("YesOptionDescription", resourceCulture);
     internal static string NuGetConfigDirOptionDescription => ResourceManager.GetString("NuGetConfigDirOptionDescription", resourceCulture);
     internal static string NoChannelFoundMatching => ResourceManager.GetString("NoChannelFoundMatching", resourceCulture);
+    internal static string PendingMigrationsHeader => ResourceManager.GetString("PendingMigrationsHeader", resourceCulture);
+    internal static string PendingMigrationsHint => ResourceManager.GetString("PendingMigrationsHint", resourceCulture);
     }
 }
