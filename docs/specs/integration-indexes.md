@@ -27,7 +27,7 @@ The smallest useful implementation should be intentionally conservative:
 4. Preserve every existing package-derived friendly name as an alias.
 5. Add index/provenance metadata to human-readable output without changing install semantics.
 6. Move CLI, MCP, and integration-doc lookup to one shared integration-resolution service.
-7. Keep user-added external indexes out of the first implementation except for the internal abstractions needed to avoid painting the design into a corner.
+7. Keep user-added external indexes and dynamic NuGet search indexes out of the authoritative command path except for the internal abstractions needed to avoid painting the design into a corner.
 
 This cut is enough to validate the hard parts:
 
@@ -35,7 +35,7 @@ This cut is enough to validate the hard parts:
 - Whether "channel" can disappear from public integration UX by treating stable/daily/staging/PR/local as `aspire@variant`.
 - Whether runtime availability and NuGet provider resolution can stay fast when the catalog is data-driven.
 - Whether MCP, VS Code, and JSON consumers can migrate without relying on NuGet prefix-derived names.
-- Whether the index artifact format can support future external indexes without requiring executable plugins.
+- Whether the index model can support future external indexes and dynamic search-backed indexes without requiring executable plugins.
 
 It deliberately does not prove npm/container/template providers or arbitrary third-party index acquisition. Those should wait until the built-in NuGet-only path is stable.
 
@@ -46,7 +46,7 @@ It deliberately does not prove npm/container/template providers or arbitrary thi
 - Allow future user-added indexes, such as company or community indexes, without cloning or executing arbitrary code.
 - Support non-NuGet providers over time without changing the user-facing `aspire add <name>` model.
 - Preserve existing Aspire package-channel semantics as index-variant resolution semantics: stable, daily, staging, PR hives, local hives, and `ASPIRE_CLI_PACKAGES`.
-- Keep third-party NuGet discovery from [#16882](https://github.com/microsoft/aspire/pull/16882) as an optional dynamic discovery input.
+- Model third-party NuGet discovery from [#16882](https://github.com/microsoft/aspire/pull/16882) as an optional dynamic index source.
 - Give index contributions a normal repo contribution workflow: PR, schema validation, index validation, and review.
 - Define integrity requirements for downloaded index artifacts so the CLI can bind cached and project-pinned indexes to a specific index revision and content digest.
 
@@ -122,6 +122,14 @@ Concepts:
 | Provider coordinate | `nuget:Aspire.Hosting.Redis` | Ecosystem-specific artifact identity. |
 | Provenance | `official`, `community`, `third-party`, `internal` | Trust/support label surfaced to users. |
 
+Indexes can be backed by different source types:
+
+| Index source type | Example index ID | Description |
+| ----------------- | ---------------- | ----------- |
+| Static generated artifact | `aspire`, `community-toolkit` | Curated JSON artifact embedded in the CLI or fetched/cached from a repo. |
+| External generated artifact | `contoso` | User-added or enterprise JSON artifact fetched from GitHub or another HTTPS endpoint. |
+| Dynamic NuGet search | `nuget-search` | Runtime index that searches NuGet metadata and emits `IntegrationEntry` values for discovered packages. |
+
 This spec uses **index** for the curated integration catalog and reserves **source** for provider-specific package feeds, such as the existing `aspire add --source <nuget-feed>` option. Commands that need both concepts should keep that distinction visible in help text and output.
 
 The first built-in indexes are:
@@ -130,6 +138,25 @@ The first built-in indexes are:
 | --------- | ---------- | ------- |
 | `aspire` | `official` | Microsoft/Aspire-supported integrations. |
 | `community-toolkit` | `community` | Curated Community Toolkit integrations. |
+
+The first optional dynamic index is:
+
+| Index ID | Provenance | Purpose |
+| -------- | ---------- | ------- |
+| `nuget-search` | `third-party` | Search NuGet metadata for hosting integrations outside curated indexes. |
+
+The resolver should support both static and dynamic index source types from the beginning. A command should see a single merged candidate set regardless of whether entries came from a generated artifact or from NuGet search:
+
+```text
+IIntegrationIndexSource
+  - StaticGeneratedIndexSource
+  - DynamicNuGetSearchIndexSource
+
+IntegrationResolver
+  -> IEnumerable<IntegrationEntry>
+```
+
+That lets the current NuGet search behavior be wrapped as an index first, then curated static indexes can be introduced without changing the command-facing model again.
 
 The first provider type is:
 
@@ -660,9 +687,9 @@ orleans-redis CommunityToolkit.Aspire.Orleans   community-toolkit  community
 foo-cache     Contoso.Aspire.Hosting.FooCache   contoso            internal
 ```
 
-## Relationship to NuGet tag discovery
+## Dynamic NuGet search index
 
-[#16882](https://github.com/microsoft/aspire/pull/16882) adds NuGet metadata discovery for hosting integrations that do not follow the `Aspire.Hosting.*` naming convention. This proposal should compose with that work instead of replacing it.
+[#16882](https://github.com/microsoft/aspire/pull/16882) adds NuGet metadata discovery for hosting integrations that do not follow the `Aspire.Hosting.*` naming convention. In this model, that capability is a dynamic index source, not a separate discovery pipeline.
 
 The layered model:
 
@@ -670,8 +697,8 @@ The layered model:
 Curated indexes:
   "What integrations do we recommend and how should they be named?"
 
-NuGet tag discovery:
-  "What other hosting-looking NuGet packages exist?"
+Dynamic NuGet search index:
+  "What other hosting-looking NuGet packages exist in the configured NuGet search scope?"
 
 NuGet provider:
   "Does this package really look like an Aspire hosting integration, and what version should be installed?"
@@ -684,15 +711,46 @@ IntegrationIndex
   - AspireIndex
   - CommunityToolkitIndex
   - CustomRepoIndex
-  - NuGetTagDiscoveryIndex
+  - NuGetSearchIndex
 ```
 
-The NuGet tag discovery index should emit the same internal `IntegrationEntry` shape as curated indexes. It should mark entries as third-party and keep the validation from #16882:
+The NuGet search index should emit the same internal `IntegrationEntry` shape as curated indexes. It should mark entries as third-party and keep the validation from #16882:
 
 - Broad discovery by NuGet tags.
 - Strict validation by direct dependency on `Aspire.Hosting` or `Aspire.Hosting.AppHost`.
 - Optional `off` / `ask` / `on` discovery mode.
 - Optional feeds and package allowlist.
+
+There are two forms:
+
+| Form | Purpose |
+| ---- | ------- |
+| Built-in compatibility `NuGetSearchIndex` | Wraps today's NuGet search/prefix behavior so the new resolver can reproduce current behavior during migration. |
+| User-configured `NuGetSearchIndex` | Adds optional NuGet search scopes beyond curated indexes, such as `nuget-search` or `contoso-nuget`. |
+
+Unlike static indexes, the NuGet search index does not have a generated JSON artifact, index commit, or digest. Its identity is the search configuration:
+
+```json
+{
+  "id": "nuget-search",
+  "type": "nuget-search",
+  "feeds": ["https://api.nuget.org/v3/index.json"],
+  "mode": "ask",
+  "allow": ["Contoso.Aspire.Hosting.*"]
+}
+```
+
+Runtime entries derived from NuGet search should use:
+
+| Field | Value |
+| ----- | ----- |
+| Index ID | `nuget-search`, or a user-named NuGet search index such as `contoso-nuget`. |
+| Entry ID | Deterministic friendly name derived from the package ID, with exact package ID/provider-coordinate fallback. |
+| Provider | `nuget`. |
+| Provider coordinate | `nuget:<PackageId>`. |
+| Provenance | `third-party` unless configured by enterprise policy. |
+
+Because search results are dynamic, normal curated search remains deterministic by default. Enabling a NuGet search index should be explicit or policy-controlled, and output must show the dynamic index/provenance so users can distinguish recommended catalog entries from search-derived entries.
 
 Default behavior can remain curated-only:
 
@@ -704,6 +762,7 @@ Opt-in third-party discovery can include NuGet tag search:
 
 ```bash
 aspire integration search terraform --discovery-scope all
+aspire integration search terraform --index nuget-search
 ```
 
 ## Relationship to ATS projection and polyglot integrations
@@ -905,9 +964,9 @@ The fallback for hidden-but-valid entries is exact or index-qualified add: `aspi
 
 The key migration rule is that `name` must remain a valid add argument during the transition. Curated entry IDs can appear in `qualifiedName` before they replace legacy friendly names as the primary `name` value.
 
-### Choice 8: Should third-party NuGet tag discovery be on by default?
+### Choice 8: Should the dynamic NuGet search index be on by default?
 
-**Recommendation:** curated indexes are default; NuGet tag discovery is explicit or policy-controlled.
+**Recommendation:** curated indexes are default; the dynamic NuGet search index is explicit or policy-controlled.
 
 | Option | Pros | Cons |
 | ------ | ---- | ---- |
@@ -915,7 +974,7 @@ The key migration rule is that `name` must remain a valid add argument during th
 | Ask on first use | User-aware. | Awkward for non-interactive CLI, MCP, and VS Code flows. |
 | Explicit opt-in | Predictable and safer for enterprise users. | Users may miss useful third-party integrations. |
 
-The curated index should answer "what do we recommend?" Dynamic NuGet tag discovery should answer "what else exists?" and should be surfaced with `third-party` provenance.
+The curated index should answer "what do we recommend?" The dynamic NuGet search index should answer "what else exists in this NuGet search scope?" and should be surfaced with `third-party` provenance unless enterprise policy marks a configured search index differently.
 
 ### Choice 9: Do we need explicit provider coordinates?
 
@@ -957,12 +1016,13 @@ The riskiest implementation would replace discovery, naming, version resolution,
 
 Delivery rules:
 
-1. Change one axis at a time: model, data, resolver, output, external acquisition, then new providers.
+1. Change one axis at a time: model, dynamic NuGet search index, static generated indexes, resolver switch, output, external acquisition, then new providers.
 2. Keep NuGet provider resolution on `PackagingService` and `PackageChannel` until index-based discovery has proven equivalence.
 3. Preserve old package-derived names as accepted aliases before introducing curated names as the primary display value.
 4. Make every phase independently shippable with a rollback path to the previous resolver.
 5. Prefer additive output fields before changing existing fields.
 6. Require equivalence tests for current list/search/add behavior before new UX is enabled.
+7. Support static and dynamic index sources in the resolver before changing command UX, so migration does not require another model pivot.
 
 The first implementation should run the new model in **shadow mode** before it becomes authoritative:
 
@@ -986,9 +1046,18 @@ Each phase should have an explicit decision gate. If a gate fails, the next phas
 
 **Gate:** tests describe the current behavior closely enough that a resolver replacement cannot change names, packages, versions, availability, or non-interactive behavior without a deliberate test update.
 
-### Phase 1: Data model and generated built-in indexes
+### Phase 1: Index source model and dynamic NuGet search adapter
 
 - Add `IntegrationEntry`, `IntegrationProviderReference`, and `IntegrationIndex` data abstractions.
+- Add the `IIntegrationIndexSource` abstraction with at least two source shapes: static generated artifact and dynamic NuGet search.
+- Wrap the current NuGet package search behavior as a `NuGetSearchIndex` that emits `IntegrationEntry` values.
+- Do not add curated static indexes yet.
+- Do not change command behavior.
+
+**Gate:** the dynamic NuGet search index can reproduce the current prefix/tag search candidate set as `IntegrationEntry` values, including friendly names, provider coordinates, versions, and exact package ID fallback.
+
+### Phase 2: Generated built-in static indexes
+
 - Add JSON schema validation and deterministic generation for built-in Aspire and Community Toolkit index artifacts.
 - Author initial index entries from the existing prefix-discovered package set.
 - Preserve existing user-facing names by generating aliases from both current friendly-name schemes: `IntegrationPackageSearchService.GenerateFriendlyName` and `ListIntegrationsTool.GetFriendlyName`.
@@ -996,16 +1065,17 @@ Each phase should have an explicit decision gate. If a gate fails, the next phas
 
 **Gate:** generated built-in index artifacts cover the same current official/community package set, and index CI catches duplicate IDs, alias conflicts, invalid provider coordinates, and nondeterministic generation.
 
-### Phase 2: Shadow resolver
+### Phase 3: Shadow resolver over both index types
 
-- Add `IntegrationResolver`, `IIntegrationIndexSource`, and NuGet-only `IIntegrationProvider` abstractions.
-- Load built-in indexes and convert existing `PackageChannel` instances into `IntegrationIndexVariant` values.
+- Add `IntegrationResolver` and the NuGet-only `IIntegrationProvider` abstraction.
+- Load both static generated indexes and the dynamic NuGet search index.
+- Convert existing `PackageChannel` instances into `IntegrationIndexVariant` values.
 - Run resolver comparison tests against the legacy NuGet search pipeline.
 - Keep command paths using the legacy resolver.
 
-**Gate:** shadow resolver results match legacy resolver results for current supported scenarios, including package ID, selected version, aliases, availability, and AppHost language support.
+**Gate:** shadow resolver results match legacy resolver results for current supported scenarios, including package ID, selected version, aliases, availability, AppHost language support, and source-index attribution.
 
-### Phase 3: Compatibility adapter switch
+### Phase 4: Compatibility adapter switch
 
 - Support only NuGet providers.
 - Keep existing NuGet index-variant/version/install behavior.
@@ -1015,7 +1085,7 @@ Each phase should have an explicit decision gate. If a gate fails, the next phas
 
 **Gate:** existing `aspire add`, `aspire integration list`, `aspire integration search`, and MCP integration listing produce equivalent results for current official/community NuGet packages, with only additive index/provenance metadata.
 
-### Phase 4: Additive CLI/MCP UX
+### Phase 5: Additive CLI/MCP UX
 
 - Show index/provenance in human-readable output.
 - Add index-qualified names such as `aspire/redis`.
@@ -1025,7 +1095,7 @@ Each phase should have an explicit decision gate. If a gate fails, the next phas
 
 **Gate:** every old package-derived name remains an accepted alias, non-interactive ambiguity rules are tested, and JSON/MCP/VS Code consumers have a documented compatibility path.
 
-### Phase 5: External indexes
+### Phase 6: External static indexes
 
 - Add `aspire integration index list/add/remove/update`.
 - Add generated artifact acquisition and cache.
@@ -1034,15 +1104,16 @@ Each phase should have an explicit decision gate. If a gate fails, the next phas
 
 **Gate:** remote index acquisition validates ID, schema, commit, and digest; project pins persist URL, commit, and digest for every non-built-in index used by a project.
 
-### Phase 6: Dynamic NuGet discovery
+### Phase 7: User-configured dynamic NuGet search indexes
 
-- Integrate #16882-style NuGet tag discovery as an optional `NuGetTagDiscoveryIndex`.
-- Keep third-party discovery opt-in.
+- Expose #16882-style NuGet tag discovery as a user-visible `NuGetSearchIndex`.
+- Support user-named NuGet search indexes, such as `contoso-nuget`, with feeds, mode, and allowlist policy.
+- Keep third-party search indexes opt-in unless enterprise policy enables them.
 - Reuse dependency metadata validation for exact package ID flows.
 
-**Gate:** curated search remains the default, third-party discovery is visibly marked, and enterprise/non-interactive policy can disable it.
+**Gate:** curated search remains the default, search-derived entries are visibly marked with index/provenance, and enterprise/non-interactive policy can disable or constrain the NuGet search index.
 
-### Phase 7: Additional providers
+### Phase 8: Additional providers
 
 - Add new built-in providers only after the index/trust model is stable.
 - Candidate provider types: `npm`, `container`, `template`, `module`.
@@ -1072,6 +1143,7 @@ CLI tests should cover:
 - Alias resolution.
 - Fuzzy resolution.
 - Index-qualified resolution.
+- Dynamic NuGet search index resolution.
 - Same name across indexes.
 - Same package across indexes.
 - Version selection across implicit and explicit variants.
