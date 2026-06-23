@@ -377,9 +377,8 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
         // Assert that stdout contains only valid JSON parsable by jq.
-        await auto.TypeAsync("jq . /tmp/cmd-stdout.txt > /dev/null && echo JSON_VALID || echo JSON_INVALID");
+        await auto.TypeAsync("jq . /tmp/cmd-stdout.txt > /dev/null");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("JSON_VALID", timeout: TimeSpan.FromSeconds(10));
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Assert that the JSON content matches what the command returned.
@@ -389,9 +388,8 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Assert that stderr has content (status/progress messages from the CLI).
-        await auto.TypeAsync("test -s /tmp/cmd-stderr.txt && echo STDERR_HAS_CONTENT || echo STDERR_EMPTY");
+        await auto.TypeAsync("test -s /tmp/cmd-stderr.txt");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("STDERR_HAS_CONTENT", timeout: TimeSpan.FromSeconds(10));
         await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.TypeAsync("aspire stop");
