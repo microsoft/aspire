@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Dashboard bug fix: metrics chart filter rendering with many tags causes SignalR disconnect; capped at 20 items",
+  "mergedAt": "2026-06-23T05:47:06Z",
+  "number": 18382,
+  "runDate": "2026-06-23T07:09:30Z",
+  "status": "included",
+  "title": "Improve metrics chart filter rendering with many tags"
+}

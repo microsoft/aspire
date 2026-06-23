@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The Aspire CLI now detects when a command option is typed with the wrong case (e.g., --AppHost instead of --apphost) and returns a clear error with the correct spelling, rather than silently ignoring the option.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔤",
+  "firstMergedAt": "2026-06-23T02:08:25Z",
+  "lastMergedAt": "2026-06-23T02:08:25Z",
+  "name": "Clear error for miscased CLI options",
+  "owner": "JamesNK",
+  "prs": [
+    18393
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Test-only change: fixes flaky ResourceCommandServiceTests by disabling version check in test setup; no user-visible behavior change",
+  "mergedAt": "2026-06-23T05:46:32Z",
+  "number": 18418,
+  "runDate": "2026-06-23T07:09:30Z",
+  "status": "excluded",
+  "title": "Fix flaky ResourceCommandServiceTests by disabling version check"
+}

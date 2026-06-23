@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "VS Code extension new feature: Open terminal context menu action for terminal-enabled resources",
+  "mergedAt": "2026-06-23T03:53:53Z",
+  "number": 18260,
+  "runDate": "2026-06-23T07:09:30Z",
+  "status": "included",
+  "title": "VS Code: add resource context-menu Open terminal action"
+}

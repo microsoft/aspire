@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The dashboard no longer loses its SignalR connection when a metrics dimension has hundreds of tag values. Filter tags are now capped at 20 rendered items to prevent the browser reflow that was blocking the UI thread and causing the disconnect.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🛑",
+  "firstMergedAt": "2026-06-23T05:47:06Z",
+  "lastMergedAt": "2026-06-23T05:47:06Z",
+  "name": "Fix metrics filter disconnect with many tag values",
+  "owner": "JamesNK",
+  "prs": [
+    18382
+  ]
+}

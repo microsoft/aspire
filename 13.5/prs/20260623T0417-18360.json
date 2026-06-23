@@ -1,0 +1,9 @@
+{
+  "author": "DamianEdwards",
+  "comment": "AppHost SDK improvement: version-gates dotnet run delegation to aspire run (requires CLI 13.5+)",
+  "mergedAt": "2026-06-23T04:17:14Z",
+  "number": 18360,
+  "runDate": "2026-06-23T07:09:30Z",
+  "status": "included",
+  "title": "Gate AppHost dotnet run hook on Aspire CLI version"
+}

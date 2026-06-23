@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "CLI improvement: detects miscased options and shows correct spelling",
+  "mergedAt": "2026-06-23T02:08:25Z",
+  "number": 18393,
+  "runDate": "2026-06-23T07:09:30Z",
+  "status": "included",
+  "title": "Detect miscased CLI options and suggest correct spelling"
+}

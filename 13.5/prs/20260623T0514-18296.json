@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "CLI bug fix: socket file not deleted after aspire stop causes subsequent backchannel commands to fail",
+  "mergedAt": "2026-06-23T05:14:12Z",
+  "number": 18296,
+  "runDate": "2026-06-23T07:09:30Z",
+  "status": "included",
+  "title": "Clean up socket file after stopping running AppHost instance (#17587)"
+}

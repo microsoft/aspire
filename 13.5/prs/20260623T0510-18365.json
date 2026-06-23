@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Internal refactoring: parameter contract hardening, ExtensionInteractionService lifecycle fix, IEnvironment abstraction; no user-visible behavior change",
+  "mergedAt": "2026-06-23T05:10:32Z",
+  "number": 18365,
+  "runDate": "2026-06-23T07:09:30Z",
+  "status": "excluded",
+  "title": "CLI: Harden parameter contracts, fix ExtensionInteractionService lifecycle, introduce IEnvironment"
+}
