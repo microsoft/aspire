@@ -315,7 +315,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     public async Task UpdateCommand_GuestProject_WhenTargetSdkNewerThanCli_PromptsForCliUpdateBeforeProjectUpdateAndSkipsWhenAccepted()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        using var processPathScope = DotNetToolDetection.UseProcessPathForTesting("/home/test/.dotnet/tools/.store/aspire.cli/9.4.0/aspire.cli.linux-x64/9.4.0/tools/net10.0/linux-x64/aspire");
+        const string processPath = "/home/test/.dotnet/tools/.store/aspire.cli/9.4.0/aspire.cli.linux-x64/9.4.0/tools/net10.0/linux-x64/aspire";
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
         File.WriteAllText(appHostPath, "// test apphost");
 
@@ -332,6 +332,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
+            UseProcessPath(options, processPath);
+
             options.ProjectLocatorFactory = _ => new TestProjectLocator()
             {
                 UseOrFindAppHostProjectFileAsyncCallback = (_, _, _) => Task.FromResult<FileInfo?>(new FileInfo(appHostPath))
@@ -487,7 +489,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     public async Task UpdateCommand_WhenProjectUpdatedSuccessfullyAndRunningAsDotnetTool_DisplaysDotnetToolUpdateCommand()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        using var processPathScope = DotNetToolDetection.UseProcessPathForTesting("/home/test/.dotnet/tools/.store/aspire.cli/9.4.0/aspire.cli.linux-x64/9.4.0/tools/net10.0/linux-x64/aspire");
+        const string processPath = "/home/test/.dotnet/tools/.store/aspire.cli/9.4.0/aspire.cli.linux-x64/9.4.0/tools/net10.0/linux-x64/aspire";
         var interactionService = new TestInteractionService()
         {
             ConfirmCallback = (_, _) => true
@@ -496,6 +498,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
+            UseProcessPath(options, processPath);
+
             options.ProjectLocatorFactory = _ => new TestProjectLocator()
             {
                 UseOrFindAppHostProjectFileAsyncCallback = (projectFile, _, _) =>
@@ -563,7 +567,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var tempDirectory = new TestTempDirectory();
         var toolPath = Path.Combine(tempDirectory.Path, "custom tool path");
-        using var processPathScope = DotNetToolDetection.UseProcessPathForTesting(CreateCustomToolPathInstall(toolPath));
+        var processPath = CreateCustomToolPathInstall(toolPath);
         var interactionService = new TestInteractionService()
         {
             ConfirmCallback = (_, _) => true
@@ -572,6 +576,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
+            UseProcessPath(options, processPath);
+
             options.ProjectLocatorFactory = _ => new TestProjectLocator()
             {
                 UseOrFindAppHostProjectFileAsyncCallback = (projectFile, _, _) =>
@@ -637,7 +643,6 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     public async Task UpdateCommand_WhenProjectUpdatedSuccessfullyAndRunningFromNpm_DisplaysNpmUpdateCommand()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        using var processPathScope = DotNetToolDetection.UseProcessPathForTesting("/home/test/.aspire/bin/aspire");
         using var npmScope = NpmInstallDetection.UseEnvironmentForTesting(CreateNpmInstallEnvironment());
         var interactionService = new TestInteractionService()
         {
@@ -647,6 +652,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
+            UseProcessPath(options, "/home/test/.aspire/bin/aspire");
+
             options.ProjectLocatorFactory = _ => new TestProjectLocator()
             {
                 UseOrFindAppHostProjectFileAsyncCallback = (projectFile, _, _) =>
@@ -871,11 +878,11 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     public async Task UpdateCommand_SelfUpdate_WhenRunningAsNativeAotDotnetTool_DisplaysDotnetToolUpdateCommand()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        using var processPathScope = DotNetToolDetection.UseProcessPathForTesting("/home/test/.dotnet/tools/.store/aspire.cli/9.4.0/aspire.cli.linux-x64/9.4.0/tools/any/linux-x64/aspire");
         var interactionService = new TestInteractionService();
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
+            UseProcessPath(options, "/home/test/.dotnet/tools/.store/aspire.cli/9.4.0/aspire.cli.linux-x64/9.4.0/tools/any/linux-x64/aspire");
             options.InteractionServiceFactory = _ => interactionService;
         });
 
@@ -893,13 +900,13 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     public async Task UpdateCommand_SelfUpdate_WhenRunningFromNpm_DisplaysNpmUpdateCommand()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        using var processPathScope = DotNetToolDetection.UseProcessPathForTesting("/home/test/.aspire/bin/aspire");
         using var npmScope = NpmInstallDetection.UseEnvironmentForTesting(CreateNpmInstallEnvironment());
         var interactionService = new TestInteractionService();
         var downloaderInvoked = false;
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
+            UseProcessPath(options, "/home/test/.aspire/bin/aspire");
             options.InteractionServiceFactory = _ => interactionService;
             options.CliDownloaderFactory = _ => new TestCliDownloader(workspace.WorkspaceRoot)
             {
@@ -936,12 +943,12 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         File.WriteAllText(processPath, string.Empty);
         File.WriteAllText(Path.Combine(binaryDir, InstallSidecarReader.SidecarFileName), """{"source":"nix"}""");
 
-        using var processPathScope = DotNetToolDetection.UseProcessPathForTesting(processPath);
         var interactionService = new TestInteractionService();
         var downloaderInvoked = false;
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
+            UseProcessPath(options, processPath);
             options.InteractionServiceFactory = _ => interactionService;
             options.CliDownloaderFactory = _ => new TestCliDownloader(workspace.WorkspaceRoot)
             {
@@ -973,11 +980,12 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var tempDirectory = new TestTempDirectory();
         var toolPath = Path.Combine(tempDirectory.Path, "custom tool path");
-        using var processPathScope = DotNetToolDetection.UseProcessPathForTesting(CreateCustomToolPathInstall(toolPath));
+        var processPath = CreateCustomToolPathInstall(toolPath);
         var interactionService = new TestInteractionService();
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
+            UseProcessPath(options, processPath);
             options.InteractionServiceFactory = _ => interactionService;
         });
 
@@ -995,11 +1003,12 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     public async Task UpdateCommand_WhenNoProjectFoundAndRunningAsDotnetTool_DoesNotPromptForArchiveSelfUpdate()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        using var processPathScope = DotNetToolDetection.UseProcessPathForTesting("/home/test/.dotnet/tools/.store/aspire.cli/9.4.0/aspire.cli.linux-x64/9.4.0/tools/any/linux-x64/aspire");
 
         var confirmCallbackInvoked = false;
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
+            UseProcessPath(options, "/home/test/.dotnet/tools/.store/aspire.cli/9.4.0/aspire.cli.linux-x64/9.4.0/tools/any/linux-x64/aspire");
+
             options.ProjectLocatorFactory = _ => new TestProjectLocator()
             {
                 UseOrFindAppHostProjectFileAsyncCallback = (projectFile, _, _) =>
@@ -2905,6 +2914,11 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             features: new TestFeatures(),
             configureGlobalPackagesFolder: false,
             cliDownloadBaseUrl: cliDownloadBaseUrl);
+    }
+
+    private static void UseProcessPath(CliServiceCollectionTestOptions options, string? processPath)
+    {
+        options.ProcessPathProviderFactory = _ => new TestProcessPathProvider(processPath);
     }
 
 }

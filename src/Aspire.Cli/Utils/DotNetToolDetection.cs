@@ -8,7 +8,6 @@ namespace Aspire.Cli.Utils;
 /// </summary>
 internal static class DotNetToolDetection
 {
-    private static readonly AsyncLocal<string?> s_processPathOverride = new();
     private static readonly string[] s_toolPackageRuntimeIdentifiers =
     [
         "win-x64",
@@ -32,12 +31,7 @@ internal static class DotNetToolDetection
 
     internal static string? GetDotNetToolUpdateCommand()
     {
-        return GetDotNetToolUpdateCommand(GetCurrentProcessPath());
-    }
-
-    internal static string? GetCurrentProcessPath()
-    {
-        return s_processPathOverride.Value ?? Environment.ProcessPath;
+        return GetDotNetToolUpdateCommand(Environment.ProcessPath);
     }
 
     internal static string? GetDotNetToolUpdateCommand(string? processPath)
@@ -289,24 +283,9 @@ internal static class DotNetToolDetection
             string.Equals(runtimeIdentifier, "any", StringComparison.OrdinalIgnoreCase);
     }
 
-    internal static IDisposable UseProcessPathForTesting(string? processPath)
-    {
-        var previousValue = s_processPathOverride.Value;
-        s_processPathOverride.Value = processPath;
-        return new ProcessPathOverrideScope(previousValue);
-    }
-
     private static bool IsAspireExecutable(string executable)
     {
         return string.Equals(executable, "aspire", StringComparison.OrdinalIgnoreCase)
             || string.Equals(executable, "aspire.exe", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private sealed class ProcessPathOverrideScope(string? previousValue) : IDisposable
-    {
-        public void Dispose()
-        {
-            s_processPathOverride.Value = previousValue;
-        }
     }
 }
