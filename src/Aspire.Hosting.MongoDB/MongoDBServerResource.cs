@@ -46,12 +46,12 @@ public class MongoDBServerResource(string name) : ContainerResource(name), IReso
     /// <summary>
     /// Gets the parameter that contains the MongoDb server password.
     /// </summary>
-    public ParameterResource? PasswordParameter { get; }
+    public ParameterResource? PasswordParameter { get; internal set; }
 
     /// <summary>
     /// Gets the parameter that contains the MongoDb server username.
     /// </summary>
-    public ParameterResource? UserNameParameter { get; }
+    public ParameterResource? UserNameParameter { get; internal set; }
 
     /// <summary>
     /// Gets the name of the replica set this MongoDB server belongs to, or <see langword="null"/> if it is not part of a replica set.

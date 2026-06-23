@@ -22,13 +22,19 @@ public static class MongoDBReplicaSetBuilderExtensions
     /// <summary>
     /// Adds a MongoDB replica set resource to the application model.
     /// </summary>
+    /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/> to which the replica set resource will be added.</param>
+    /// <param name="name">The name of the replica set resource.</param>
+    /// <param name="userName">An optional parameter resource that contains the username for authenticating to the MongoDB replica set. If not provided, a default username will be used.</param>
+    /// <param name="password">An optional parameter resource that contains the password for authenticating to the MongoDB replica set. If not provided, a default password will be used.</param>
     /// <remarks>
     /// This is a "logical" resource that groups multiple <see cref="MongoDBServerResource"/> instances that are annotated as members of the replica set.
     /// </remarks>
     [AspireExport]
     public static IResourceBuilder<MongoDBReplicaSetResource> AddMongoDBReplicaSet(
         this IDistributedApplicationBuilder builder,
-        [ResourceName] string name
+        [ResourceName] string name,
+        IResourceBuilder<ParameterResource>? userName = null,
+        IResourceBuilder<ParameterResource>? password = null
     )
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -45,7 +51,10 @@ public static class MongoDBReplicaSetBuilderExtensions
                     MinLength = 512, // NOTE: MongoDB requires the key file content to be between 6 and 1024 characters — see https://www.mongodb.com/docs/manual/tutorial/deploy-replica-set-with-keyfile-access-control/#create-a-keyfile
                     Special = false,
                 }
-            )
+            ),
+            sharedUserName: userName?.Resource,
+            sharedPassword: password?.Resource
+                ?? ParameterResourceBuilderExtensions.CreateDefaultPasswordParameter(builder, $"{name}-password", special: false)
         );
 
         var connectionString = null as string;
@@ -67,21 +76,18 @@ public static class MongoDBReplicaSetBuilderExtensions
             })
             .OnInitializeResource(async (resource, evt, ct) =>
             {
+                var logger = evt.Services.GetRequiredService<ILogger<MongoDBReplicaSetResource>>();
+
                 var membersList = rsResource.Members.ToList();
                 if (membersList is [])
                 {
                     await evt.Notifications.PublishUpdateAsync(resource, s => s with
                     {
                         State = KnownResourceStates.FailedToStart,
-                        Properties = [new(
-                            Name: "Error",
-                            Value:  "Cannot initialize MongoDB replica set because it does not have any members."
-                        )],
                     }).ConfigureAwait(false);
+                    logger.LogCritical("Cannot initialize MongoDB replica set resource '{ResourceName}' because it does not have any members.", resource.Name);
                     return;
                 }
-
-                var logger = evt.Services.GetRequiredService<ILogger<MongoDBReplicaSetResource>>();
 
                 connectionString = await rsResource.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
 
@@ -93,28 +99,23 @@ public static class MongoDBReplicaSetBuilderExtensions
                     State = KnownResourceStates.Starting,
                 }).ConfigureAwait(false);
 
-                if (!rsResource.TryGetAnnotationsOfType<MongoReplicaSetMemberAnnotation>(out var memberAnnotations) || !memberAnnotations.Any())
-                {
-                    return;
-                }
-
-                var initialPrimary = memberAnnotations.First().Member;
+                var initialPrimary = membersList.First();
                 var connectionStringToPrimary = await initialPrimary.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
 
                 using var primaryClient = new MongoClient(connectionStringToPrimary);
 
                 var membersBsonArray = new BsonArray(
-                    await Task.WhenAll(memberAnnotations.Select(async (m, i) => new BsonDocument
+                    await Task.WhenAll(membersList.Select(async (m, i) => new BsonDocument
                     {
                         ["_id"] = i,
                         // NOTE: `host` represents the host and port that should be accessible from within the MongoDB server's container.
-                        ["host"] = $"{m.Member.Name}:{m.Member.PrimaryEndpoint.TargetPort!.Value}", // NOTE: We know this is always set.
+                        ["host"] = $"{m.Name}:{m.PrimaryEndpoint.TargetPort!.Value}", // NOTE: We know this is always set.
                         // NOTE: `horizons` is a poorly-documented but quite essential MongoDB feature when it comes to clustering — see https://github.com/mongodb/mongo/tree/master/src/mongo/db/repl/split_horizon as well as https://www.percona.com/blog/using-replicasethorizons-in-mongodb/
                         ["horizons"] = new BsonDocument
                         {
                             // NOTE: This represents the host and port that would actually be advertised to outside clients, and should as such be accessible from outside the MongoDB server's container
-                            // NOTE: The property name (`external`) here is merely information, what matters is the value and specifically whether or not the hostname in the value matches the SNI of the incoming client connections.
-                            ["external"] = await m.Member.PrimaryEndpoint
+                            // NOTE: The property name (`external`) here is purely informational, what matters is the value and specifically whether or not the hostname in the value matches the SNI of the incoming client connections.
+                            ["external"] = await m.PrimaryEndpoint
                                 .Property(EndpointProperty.HostAndPort)
                                 .GetValueAsync(ct)
                                 .ConfigureAwait(false),
@@ -223,6 +224,10 @@ public static class MongoDBReplicaSetBuilderExtensions
             .WithReplicaSet(builder.Resource.Name)
             .WithTls() // NOTE: TLS is actually necessary here, because the `horizons` feature used for initializing the replica set operates on top of SNI, which requires client-to-server TLS to be enabled.
             .WithKeyFile(builder.Resource.SharedKeyFileParameter);
+
+        // NOTE: Even if we don't do this, the primary will propagate its username/password credentials to the other members, but we make sure to model this at the level of the resource graph so that the connection strings to individual replica-set members would contain the correct credentials if they are used directly (e.g. for health checks or other purposes).
+        member.Resource.UserNameParameter = builder.Resource.SharedUserNameParameter;
+        member.Resource.PasswordParameter = builder.Resource.SharedPasswordParameter;
 
         return builder
             .WithAnnotation(new MongoReplicaSetMemberAnnotation(member.Resource))
