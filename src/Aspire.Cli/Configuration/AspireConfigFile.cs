@@ -28,7 +28,7 @@ namespace Aspire.Cli.Configuration;
 ///   "sdk": { "version": "9.2.0" },
 ///   "channel": "stable",
 ///   "docs": {
-///     "llmsTxtUrl": "https://aspire.dev/llms-small.txt",
+///     "llmsTxtUrl": "https://aspire.dev/llms-full.txt",
 ///     "api": { "sitemapUrl": "https://aspire.dev/sitemap-0.xml" }
 ///   },
 ///   "features": { "polyglotSupportEnabled": true },

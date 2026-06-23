@@ -30,7 +30,7 @@ public sealed class RabbitMQExchangeArguments
     /// Do not repeat a key that already has a typed property (e.g. <c>alternate-exchange</c>); doing so will throw at startup.
     /// Entries may be added until the application starts. Mutations after <see cref="BeforeStartEvent"/> are ignored.
     /// </remarks>
-    public Dictionary<string, object?> AdditionalArguments { get; } = [];
+    public Dictionary<string, object?> AdditionalArguments { get; init; } = [];
 
     /// <summary>Sets the alternate exchange; called by <see cref="RabbitMQExchangeExtensions.WithAlternateExchange{T}"/>.</summary>
     internal void SetAlternateExchange(RabbitMQExchangeResource ae)

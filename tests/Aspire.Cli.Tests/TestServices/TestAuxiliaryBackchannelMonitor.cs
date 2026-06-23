@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
+using System.Threading.Channels;
 using Aspire.Cli.Backchannel;
 
 namespace Aspire.Cli.Tests.TestServices;
@@ -10,6 +12,7 @@ internal sealed class TestAuxiliaryBackchannelMonitor : IAuxiliaryBackchannelMon
 {
     // Outer key: hash, Inner key: socketPath
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, IAppHostAuxiliaryBackchannel>> _connectionsByHash = new();
+    private readonly Channel<bool> _connectionChanges = Channel.CreateUnbounded<bool>();
 
     public IEnumerable<IAppHostAuxiliaryBackchannel> Connections =>
         _connectionsByHash.Values.SelectMany(d => d.Values);
@@ -33,6 +36,23 @@ internal sealed class TestAuxiliaryBackchannelMonitor : IAuxiliaryBackchannelMon
     {
         ScanCallCount++;
         return ScanAsyncCallback?.Invoke(cancellationToken) ?? Task.CompletedTask;
+    }
+
+    public async IAsyncEnumerable<IReadOnlyList<IAppHostAuxiliaryBackchannel>> WatchConnectionsAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        await ScanAsync(cancellationToken).ConfigureAwait(false);
+        yield return Connections.ToList();
+
+        await foreach (var _ in _connectionChanges.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+        {
+            await ScanAsync(cancellationToken).ConfigureAwait(false);
+            yield return Connections.ToList();
+        }
+    }
+
+    public void NotifyConnectionsChanged()
+    {
+        _connectionChanges.Writer.TryWrite(true);
     }
 
     public IAppHostAuxiliaryBackchannel? SelectedConnection

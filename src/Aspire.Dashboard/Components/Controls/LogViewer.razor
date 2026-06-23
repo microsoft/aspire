@@ -12,6 +12,13 @@
     <div class="@GetLogContainerClass()" id="logContainer">
         @if (LogEntries is { } logEntries)
         {
+            @if (ShowNoLogsMessage && logEntries.EntriesCount == 0)
+            {
+                <div class="console-empty-message" role="status" aria-live="polite">
+                    <FluentIcon Value="@(new Icons.Regular.Size24.SlideText())" aria-hidden="true" />
+                    <span>@Loc[nameof(ConsoleLogs.ConsoleLogsNoLogsFound)]</span>
+                </div>
+            }
             <Virtualize @ref="VirtualizeRef" ItemsProvider="@GetItems" ItemSize="20" OverscanCount="200" TItem="LogEntry">
                 @if (context.Pause is { } pause)
                 {
@@ -35,7 +42,7 @@
                                         {
                                             @s_spaceMarkup
                                         }
-                                        <span class="resource-prefix" style="background: @ColorGenerator.Instance.GetColorVariableByKey(resourcePrefix);">@resourcePrefix</span>
+                                        <span class="resource-prefix" style="@ResourcePrefixStyle.GetStyle(resourcePrefix)">@resourcePrefix</span>
                                     }
                                     @if (DisplayPrefix(ref hasPrefix))
                                     {
@@ -71,7 +78,7 @@
                                         {
                                             @s_spaceMarkup
                                         }
-                                        <span class="resource-prefix" style="background: @ColorGenerator.Instance.GetColorVariableByKey(resourcePrefix);">@resourcePrefix</span>
+                                        <span class="resource-prefix" style="@ResourcePrefixStyle.GetStyle(resourcePrefix)">@resourcePrefix</span>
                                     }
                                     @if (context.Type == LogEntryType.Error)
                                     {

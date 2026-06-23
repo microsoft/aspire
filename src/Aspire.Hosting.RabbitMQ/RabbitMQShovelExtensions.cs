@@ -22,7 +22,9 @@ public static class RabbitMQShovelExtensions
     /// <param name="destination">The destination resource builder.</param>
     /// <param name="shovelName">The name of the shovel in RabbitMQ. If not provided, defaults to the resource name.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a shovel to a RabbitMQ virtual host")]
+    /// <ats-summary>Adds a shovel to a RabbitMQ virtual host.</ats-summary>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<RabbitMQShovelResource> AddShovel<TSrc, TDest>(
         this IResourceBuilder<RabbitMQVirtualHostResource> vhost,
         [ResourceName] string name,
@@ -132,7 +134,9 @@ public static class RabbitMQShovelExtensions
     /// <param name="destination">The destination resource builder.</param>
     /// <param name="shovelName">The name of the shovel in RabbitMQ. If not provided, defaults to the resource name.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("addShovelOnServer", MethodName = "addShovel", Description = "Adds a shovel to the default '/' virtual host")]
+    /// <ats-summary>Adds a shovel to the default '/' virtual host.</ats-summary>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport("addShovelOnServer", MethodName = "addShovel")]
     public static IResourceBuilder<RabbitMQShovelResource> AddShovel<TSrc, TDest>(
         this IResourceBuilder<RabbitMQServerResource> server,
         [ResourceName] string name,

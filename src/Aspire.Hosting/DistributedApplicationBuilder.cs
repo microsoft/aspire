@@ -18,6 +18,7 @@ using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Cli;
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Dcp;
+using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Devcontainers;
 using Aspire.Hosting.Devcontainers.Codespaces;
 using Aspire.Hosting.Diagnostics;
@@ -180,6 +181,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
     public DistributedApplicationBuilder(DistributedApplicationOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostBuilderConstructing);
 
         _options = options;
 
@@ -209,8 +211,14 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<ILoggerProvider>(sp => sp.GetRequiredService<BackchannelLoggerProvider>());
         _innerBuilder.Logging.AddFilter("Microsoft.Hosting.Lifetime", LogLevel.Warning);
         _innerBuilder.Logging.AddFilter("Microsoft.AspNetCore.Server.Kestrel", LogLevel.Error);
-        _innerBuilder.Logging.AddFilter("Aspire.Hosting.Dashboard", LogLevel.Error);
         _innerBuilder.Logging.AddFilter("Grpc.AspNetCore.Server.ServerCallHandler", LogLevel.Error);
+        // Allow warnings from Aspire's dashboard code. We control this code and want to be able to log warnings to help troubleshoot issues in the dashboard.
+        // For example, misconfigured icons from the apphost are logged as warnings, and we want those to be visible to users.
+        // The volume of logs from this category should be low, so it shouldn't cause too much noise.
+        _innerBuilder.Logging.AddFilter("Aspire.Hosting.Dashboard", LogLevel.Warning);
+        // Third-party dashboard categories (e.g. Microsoft.AspNetCore, Grpc) are routed under
+        // Aspire.Hosting.Dashboard.ThirdParty so they can be filtered with a single rule.
+        _innerBuilder.Logging.AddFilter("Aspire.Hosting.Dashboard.ThirdParty", LogLevel.Error);
 
         // This is to reduce log noise when we activate health checks for resources which may not yet be
         // fully initialized. For example a database which is not yet created.
@@ -228,6 +236,19 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         // Add the logging configuration again to allow the user to override the defaults
         _innerBuilder.Logging.AddConfiguration(_innerBuilder.Configuration.GetSection("Logging"));
 
+        // The CLI sets ASPIRE_LOGLEVEL to control the default log level for Aspire processes
+        // without polluting child processes (unlike Logging__LogLevel__Default which cascades
+        // through DCP into project processes and overrides their appsettings.json configuration).
+        var aspireLogLevelValue = _innerBuilder.Configuration[KnownConfigNames.AspireLogLevel];
+        if (aspireLogLevelValue is not null && Enum.TryParse<LogLevel>(aspireLogLevelValue, ignoreCase: true, out var aspireLogLevel))
+        {
+            _innerBuilder.Logging.SetMinimumLevel(aspireLogLevel);
+            _innerBuilder.Services.Configure<LoggerFilterOptions>(options =>
+            {
+                options.Rules.Add(new LoggerFilterRule(providerName: null, categoryName: null, logLevel: aspireLogLevel, filter: null));
+            });
+        }
+
         AppHostDirectory = options.ProjectDirectory ?? _innerBuilder.Environment.ContentRootPath;
         var appHostName = options.ProjectName ?? _innerBuilder.Environment.ApplicationName;
         var appHostPath = Path.Join(AppHostDirectory, appHostName);
@@ -239,7 +260,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         var appHostFilePath = options.AppHostFilePath;
 
         var assemblyMetadata = AppHostAssembly?.GetCustomAttributes<AssemblyMetadataAttribute>();
-        var aspireDir = GetMetadataValue(assemblyMetadata, "AppHostProjectBaseIntermediateOutputPath");
+        var aspireDir = ResolveAspireStorePath(assemblyMetadata, AppHostDirectory);
 
         ConfigurePipelineOptions(options);
 
@@ -346,11 +367,10 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<ResourceNotificationService>();
         _innerBuilder.Services.AddSingleton<ResourceLoggerService>();
         _innerBuilder.Services.AddSingleton<ResourceCommandService>(s => new ResourceCommandService(s.GetRequiredService<ResourceNotificationService>(), s.GetRequiredService<ResourceLoggerService>(), s));
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+        _innerBuilder.Services.TryAddSingleton<IProcessRunner, DefaultProcessRunner>();
         _innerBuilder.Services.AddSingleton<InteractionService>();
         _innerBuilder.Services.AddSingleton<IInteractionService>(sp => sp.GetRequiredService<InteractionService>());
         _innerBuilder.Services.AddSingleton<ParameterProcessor>();
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         _innerBuilder.Services.AddSingleton<IDistributedApplicationEventing>(Eventing);
         _innerBuilder.Services.AddSingleton<LocaleOverrideContext>();
         _innerBuilder.Services.AddHealthChecks();
@@ -389,6 +409,8 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddHostedService<CliOrphanDetector>();
         _innerBuilder.Services.AddSingleton<BackchannelService>();
         _innerBuilder.Services.AddHostedService<BackchannelService>(sp => sp.GetRequiredService<BackchannelService>());
+        _innerBuilder.Services.AddSingleton<ProfilingTelemetry>();
+        _innerBuilder.Services.AddSingleton<AppHostStartupState>();
         _innerBuilder.Services.AddSingleton<AuxiliaryBackchannelService>();
         _innerBuilder.Services.AddHostedService<AuxiliaryBackchannelService>(sp => sp.GetRequiredService<AuxiliaryBackchannelService>());
         _innerBuilder.Services.AddSingleton<AppHostRpcTarget>();
@@ -460,7 +482,6 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
                 _innerBuilder.Services.AddSingleton<IDashboardEndpointProvider, HostDashboardEndpointProvider>();
                 _innerBuilder.Services.AddEventingSubscriber<DashboardEventHandlers>();
                 _innerBuilder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IConfigureOptions<DashboardOptions>, ConfigureDefaultDashboardOptions>());
-                _innerBuilder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<DashboardOptions>, ValidateDashboardOptions>());
             }
 
             if (options.EnableResourceLogging)
@@ -483,6 +504,16 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             _innerBuilder.Services.TryAddSingleton<IRequiredCommandValidator, RequiredCommandValidator>();
 #pragma warning restore ASPIRECOMMAND001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
             _innerBuilder.Services.TryAddEventingSubscriber<RequiredCommandValidationEventingSubscriber>();
+
+            // Terminal host binary path resolution (WithTerminal)
+            _innerBuilder.Services.TryAddEventingSubscriber<TerminalHostEventingSubscriber>();
+
+            // Terminal host failure diagnostics (WithTerminal): unhides the failed host
+            // resource and writes an actionable diagnostic to its console log when a
+            // terminal host transitions to a terminal-failure state. Most common cause is
+            // a CLI/AppHost version mismatch (old bundled aspire-managed without the
+            // 'terminalhost' subcommand). See TerminalHostFailureDiagnosticService.
+            _innerBuilder.Services.AddHostedService<TerminalHostFailureDiagnosticService>();
         }
 
         ConfigureProfilingTelemetry();
@@ -495,6 +526,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
             // DCP stuff
             _innerBuilder.Services.AddSingleton<DcpAppResourceStore>();
+            _innerBuilder.Services.AddSingleton<ProxylessEndpointPortAllocator>();
             _innerBuilder.Services.AddSingleton<ExecutableCreator>();
             _innerBuilder.Services.AddSingleton<ContainerCreator>();
             _innerBuilder.Services.AddSingleton<DcpExecutor>();
@@ -570,6 +602,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         _innerBuilder.Services.AddSingleton(ExecutionContext);
         LogBuilderConstructed(this);
+        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostBuilderConstructed, _innerBuilder.Configuration);
     }
 
     private void ConfigureHealthChecks()
@@ -764,37 +797,31 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
     /// <inheritdoc />
     public DistributedApplication Build()
     {
-        AspireEventSource.Instance.DistributedApplicationBuildStart();
-        try
+        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostBuildStarted, _innerBuilder.Configuration);
+        LogAppBuilding(this);
+
+        // ResourceCollection enforces unique names on Add/Insert/Set, but IResourceCollection
+        // could have a different implementation that doesn't. Validate as a safety net.
+        foreach (var duplicateResourceName in Resources.GroupBy(r => r.Name, StringComparers.ResourceName)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key))
         {
-            LogAppBuilding(this);
-
-            // ResourceCollection enforces unique names on Add/Insert/Set, but IResourceCollection
-            // could have a different implementation that doesn't. Validate as a safety net.
-            foreach (var duplicateResourceName in Resources.GroupBy(r => r.Name, StringComparers.ResourceName)
-                .Where(g => g.Count() > 1)
-                .Select(g => g.Key))
-            {
-                throw new DistributedApplicationException($"Multiple resources with the name '{duplicateResourceName}'. Resource names are case-insensitive.");
-            }
-
-            // Validate resource names. Resources added directly to the collection bypass AddResource validation.
-            foreach (var resource in Resources)
-            {
-                ValidateResourceName(resource);
-            }
-
-            var application = new DistributedApplication(_innerBuilder.Build());
-
-            _executionContextOptions.ServiceProvider = application.Services.GetRequiredService<IServiceProvider>();
-
-            LogAppBuilt(application);
-            return application;
+            throw new DistributedApplicationException($"Multiple resources with the name '{duplicateResourceName}'. Resource names are case-insensitive.");
         }
-        finally
+
+        // Validate resource names. Resources added directly to the collection bypass AddResource validation.
+        foreach (var resource in Resources)
         {
-            AspireEventSource.Instance.DistributedApplicationBuildStop();
+            ValidateResourceName(resource);
         }
+
+        var application = new DistributedApplication(_innerBuilder.Build());
+
+        _executionContextOptions.Services = application.Services.GetRequiredService<IServiceProvider>();
+
+        LogAppBuilt(application);
+        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostBuildCompleted, _innerBuilder.Configuration);
+        return application;
     }
 
     /// <inheritdoc />
@@ -980,4 +1007,19 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
     /// <returns>The metadata value if found; otherwise, null.</returns>
     private static string? GetMetadataValue(IEnumerable<AssemblyMetadataAttribute>? assemblyMetadata, string key) =>
         assemblyMetadata?.FirstOrDefault(a => string.Equals(a.Key, key, StringComparison.OrdinalIgnoreCase))?.Value;
+
+    private static string ResolveAspireStorePath(IEnumerable<AssemblyMetadataAttribute>? assemblyMetadata, string appHostDirectory)
+    {
+        var baseIntermediateOutputPath = GetMetadataValue(assemblyMetadata, "AppHostProjectBaseIntermediateOutputPath");
+        if (!string.IsNullOrEmpty(baseIntermediateOutputPath))
+        {
+            return baseIntermediateOutputPath;
+        }
+
+        // File-based and dynamically loaded AppHosts do not have the MSBuild intermediate output
+        // metadata that normal project AppHosts get. Use the AppHost directory as the root so
+        // IAspireStore resolves to the workspace-local .aspire folder instead of creating a
+        // .NET-style obj directory for non-.NET AppHosts.
+        return Path.GetFullPath(appHostDirectory);
+    }
 }

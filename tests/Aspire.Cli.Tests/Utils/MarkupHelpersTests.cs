@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text;
-using System.Text.RegularExpressions;
 using Aspire.Cli.Utils;
 using Spectre.Console;
 
@@ -59,11 +58,7 @@ public class MarkupHelpersTests
         console.MarkupLine(result);
 
         var rendered = output.ToString().Trim();
-        // OSC 8 format: ESC]8;id=N;url ESC\ text ESC]8;; ESC\
-        var escapedLink = Regex.Escape(link);
-        var escapedText = Regex.Escape(expectedText);
-        var pattern = $"\\x1b]8;id=\\d+;{escapedLink}\\x1b\\\\{escapedText}\\x1b]8;;\\x1b\\\\";
-        Assert.Matches(pattern, rendered);
+        TerminalLinkAssert.ContainsLink(rendered, link, expectedText);
     }
 
     [Theory]
@@ -100,5 +95,60 @@ public class MarkupHelpersTests
             console.Profile.Capabilities.Links = true;
         }
         return console;
+    }
+
+    [Fact]
+    public void SafeFileLink_WithEmptyPath_ReturnsEmpty()
+    {
+        Assert.Equal(string.Empty, MarkupHelpers.SafeFileLink(supportsLinks: true, string.Empty));
+        Assert.Equal(string.Empty, MarkupHelpers.SafeFileLink(supportsLinks: false, string.Empty));
+    }
+
+    [Fact]
+    public void SafeFileLink_WhenNoLinkSupport_ReturnsEscapedPath()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "logs", "cli [Dev].log");
+
+        var result = MarkupHelpers.SafeFileLink(supportsLinks: false, path);
+
+        Assert.Equal(path.EscapeMarkup(), result);
+        Assert.DoesNotContain("[link", result);
+    }
+
+    [Fact]
+    public void SafeFileLink_WhenSupportsLinks_BuildsLinkMarkupWithFileUri()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "logs", "aspire.log");
+
+        var result = MarkupHelpers.SafeFileLink(supportsLinks: true, path);
+
+        var expectedUri = new Uri(Path.GetFullPath(path)).AbsoluteUri;
+        Assert.Equal($"[link={expectedUri}]{path.EscapeMarkup()}[/]", result);
+    }
+
+    [Fact]
+    public void SafeFileLink_WhenSupportsLinks_EscapesBracketsInUriMarkup()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "logs", "cli [Dev].log");
+
+        var result = MarkupHelpers.SafeFileLink(supportsLinks: true, path);
+
+        var expectedUri = new Uri(Path.GetFullPath(path)).AbsoluteUri;
+        Assert.Equal($"[link={expectedUri.EscapeMarkup()}]{path.EscapeMarkup()}[/]", result);
+    }
+
+    [Fact]
+    public void SafeFileLink_WhenSupportsLinks_ProducesValidMarkup()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "logs", "cli [Dev].log");
+        var result = MarkupHelpers.SafeFileLink(supportsLinks: true, path);
+
+        var output = new StringBuilder();
+        var console = CreateAnsiConsole(output, ansi: true);
+        console.MarkupLine(result);
+
+        var rendered = output.ToString().Trim();
+        var fileUri = new Uri(Path.GetFullPath(path)).AbsoluteUri;
+        TerminalLinkAssert.ContainsLink(rendered, fileUri, path);
     }
 }

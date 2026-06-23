@@ -46,5 +46,5 @@ public sealed class RabbitMQBinding
     /// Used when the source exchange is of type <see cref="RabbitMQExchangeType.Headers"/> to specify
     /// which message headers must match for the binding to be selected.
     /// </remarks>
-    public Dictionary<string, object?>? MatchHeaders { get; }
+    public Dictionary<string, object?>? MatchHeaders { get; init; }
 }

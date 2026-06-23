@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
@@ -53,11 +54,11 @@ builder.AddParameter("testParameterResource", () => "value", secret: true);
 var apiKeyParam = builder.AddParameter("api-key", secret: true);
 var connectionStringParam = builder.AddParameter("db-connection-string");
 builder.AddContainer("hiddenContainer", "alpine")
+    .WithHidden()
     .WithInitialState(new CustomResourceSnapshot
     {
         ResourceType = "CustomHiddenContainerType",
-        Properties = [],
-        IsHidden = true
+        Properties = []
     });
 
 // TODO: OTEL env var can be removed when OTEL libraries are updated to 1.9.0
@@ -83,6 +84,11 @@ var telemetryBuilder = builder.AddProject<Projects.Stress_TelemetryService>("str
        .WithUrls(c => c.Urls.Add(new() { Url = "https://someplace.com", DisplayText = "Some place" }))
        .WithUrl("https://someotherplace.com/some-path", "Some other place")
        .WithUrl("https://extremely-long-url.com/abcdefghijklmnopqrstuvwxyz/abcdefghijklmnopqrstuvwxyz/abcdefghijklmnopqrstuvwxyz//abcdefghijklmnopqrstuvwxyz/abcdefghijklmnopqrstuvwxyz/abcdefghijklmnopqrstuvwxyz/abcdefghijklmnopqrstuvwxyz/abcdefghijklmno");
+
+for (var i = 0; i < 500; i++)
+{
+    telemetryBuilder.WithUrl($"https://example.com/service-{i.ToString(CultureInfo.InvariantCulture)}", $"Service {i}");
+}
 
 builder.AddCommandResources(serviceBuilder, telemetryBuilder);
 
@@ -122,5 +128,6 @@ builder.AddProject<Projects.Stress_Empty>("empty-profile-2", launchProfileName: 
     .WithArgs("arg_from_apphost");
 
 builder.AddNoStatusResource("no-status-resource");
+builder.AddPropertyStressResource("property-stress-resource");
 
 builder.Build().Run();

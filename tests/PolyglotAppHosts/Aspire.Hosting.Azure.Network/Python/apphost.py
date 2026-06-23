@@ -13,4 +13,11 @@ with create_builder() as builder:
     string_vnet.add_subnet("string-subnet", "10.1.1.0/24", subnet_name="string-subnet-name")
     parameter_vnet.add_subnet("parameter-subnet", subnet_prefix, subnet_name="parameter-subnet-name")
 
+    perimeter = builder.add_network_security_perimeter("data-boundary")
+    perimeter.with_access_rule({
+        "Name": "allow-corp-network",
+        "Direction": "Inbound",
+        "AddressPrefixes": ["203.0.113.0/24"],
+    })
+
     builder.run()

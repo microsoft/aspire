@@ -95,7 +95,8 @@
                                 <FluentButton Appearance="Appearance.Stealth"
                                               OnClick="@(() => LikeChatMessage(chatMessage))"
                                               Title="@Loc[nameof(AIAssistant.LikeMessageButtonText)]"
-                                              aria-label="@Loc[nameof(AIAssistant.LikeMessageButtonText)]">
+                                              aria-label="@Loc[nameof(AIAssistant.LikeMessageButtonText)]"
+                                              aria-pressed="@(chatMessage.IsLiked ? "true" : "false")">
                                     <FluentIcon Value="@(!chatMessage.IsLiked ? (Icon)new Icons.Regular.Size16.ThumbLike() : new Icons.Filled.Size16.ThumbLike())" Color="Color.Neutral" />
                                 </FluentButton>
                             </span>
@@ -103,7 +104,8 @@
                                 <FluentButton Appearance="Appearance.Stealth"
                                               OnClick="@(() => DislikeChatMessage(chatMessage))"
                                               Title="@Loc[nameof(AIAssistant.DislikeMessageButtonText)]"
-                                              aria-label="@Loc[nameof(AIAssistant.DislikeMessageButtonText)]">
+                                              aria-label="@Loc[nameof(AIAssistant.DislikeMessageButtonText)]"
+                                              aria-pressed="@(chatMessage.IsDisliked ? "true" : "false")">
                                     <FluentIcon Value="@(!chatMessage.IsDisliked ? (Icon)new Icons.Regular.Size16.ThumbDislike() : new Icons.Filled.Size16.ThumbDislike())" Color="Color.Neutral" />
                                 </FluentButton>
                             </span>

@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Tests.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.DotNet;
@@ -67,7 +68,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
 
         Assert.True(execution.Start());
 
-        var exitCode = await execution.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30));
+        var exitCode = await execution.WaitForExitAsync(CancellationToken.None).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
         await releaseTask.WaitAsync(TimeSpan.FromSeconds(1));
 
         Assert.Equal(0, exitCode);
@@ -131,7 +132,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
 
         Assert.True(execution.Start());
 
-        var exitCode = await execution.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30));
+        var exitCode = await execution.WaitForExitAsync(CancellationToken.None).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
         await releaseTask.WaitAsync(TimeSpan.FromSeconds(1));
 
         Assert.Equal(0, exitCode);
@@ -145,6 +146,34 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         var values = jsonDocument.RootElement.GetProperty("values");
         Assert.Equal(400, values.GetArrayLength());
         Assert.Equal("value-399", values[399].GetString());
+    }
+
+    [Fact]
+    public async Task WaitForExitAsync_KillsProcessWhenCanceled()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var scriptFile = await CreateLongRunningScriptAsync(workspace.WorkspaceRoot);
+        var startInfo = CreateStartInfo(scriptFile);
+        var process = new Process
+        {
+            StartInfo = startInfo
+        };
+
+        using var execution = new ProcessExecution(
+            process,
+            NullLogger.Instance,
+            new ProcessInvocationOptions());
+
+        Assert.True(execution.Start());
+
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => execution.WaitForExitAsync(cts.Token));
+        await process.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.True(process.HasExited);
     }
 
     private static string CreateJsonPayload(int lineCount)
@@ -201,7 +230,9 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
             var content =
                 "@echo off" + Environment.NewLine +
                 "echo ready" + Environment.NewLine +
-                "powershell -NoProfile -Command \"Start-Sleep -Seconds 6\"" + Environment.NewLine +
+                // Use ping instead of powershell to avoid variable PowerShell
+                // cold-start overhead on loaded CI agents (can add 10-20s).
+                "ping -n 7 127.0.0.1 > nul" + Environment.NewLine +
                 $"type \"{outputFile.FullName}\"" + Environment.NewLine;
             await File.WriteAllTextAsync(scriptFile.FullName, content);
             return scriptFile;
@@ -214,6 +245,35 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
                 "echo ready" + Environment.NewLine +
                 "sleep 6" + Environment.NewLine +
                 $"cat \"{outputFile.FullName}\"" + Environment.NewLine;
+            await File.WriteAllTextAsync(scriptFile.FullName, content);
+
+            File.SetUnixFileMode(
+                scriptFile.FullName,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+                UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+
+            return scriptFile;
+        }
+    }
+
+    private static async Task<FileInfo> CreateLongRunningScriptAsync(DirectoryInfo workspaceRoot)
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            var scriptFile = new FileInfo(Path.Combine(workspaceRoot.FullName, "long-running.cmd"));
+            var content =
+                "@echo off" + Environment.NewLine +
+                "powershell -NoProfile -Command \"Start-Sleep -Seconds 60\"" + Environment.NewLine;
+            await File.WriteAllTextAsync(scriptFile.FullName, content);
+            return scriptFile;
+        }
+        else
+        {
+            var scriptFile = new FileInfo(Path.Combine(workspaceRoot.FullName, "long-running.sh"));
+            var content =
+                "#!/usr/bin/env bash" + Environment.NewLine +
+                "sleep 60" + Environment.NewLine;
             await File.WriteAllTextAsync(scriptFile.FullName, content);
 
             File.SetUnixFileMode(

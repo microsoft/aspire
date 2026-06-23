@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Threading.Channels;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
@@ -24,7 +26,49 @@ internal interface IProjectLocator
     /// <param name="scope">Controls which files are considered. See <see cref="AppHostDiscoveryScope"/>.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A list of candidate AppHost projects with language metadata sorted by full path.</returns>
-    Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken);
+    Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(
+        DirectoryInfo searchDirectory,
+        AppHostDiscoveryScope scope,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Streams candidate AppHost projects as validation completes.
+    /// </summary>
+    /// <param name="searchDirectory">The directory to search recursively.</param>
+    /// <param name="scope">Controls which files are considered. See <see cref="AppHostDiscoveryScope"/>.</param>
+    /// <param name="onDirectoryEnumerated">
+    /// Optional callback invoked synchronously on the discovery thread with the running total of directories
+    /// enumerated so callers can render progress before validation completes. See
+    /// <see cref="IAppHostCandidateFinder.FindCandidateFilesAsync"/> for caller obligations.
+    /// </param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>An async stream of candidate AppHost projects in validation-completion order.</returns>
+    async IAsyncEnumerable<AppHostProjectCandidate> FindAppHostProjectsStreamAsync(
+        DirectoryInfo searchDirectory,
+        AppHostDiscoveryScope scope,
+        Action<int>? onDirectoryEnumerated = null,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var candidates = await FindAppHostProjectsAsync(searchDirectory, scope, cancellationToken).ConfigureAwait(false);
+        foreach (var candidate in candidates)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return candidate;
+        }
+    }
+
+    /// <summary>
+    /// Finds all candidate AppHost projects in the specified search directory up to the specified depth.
+    /// </summary>
+    /// <param name="searchDirectory">The directory to search.</param>
+    /// <param name="scope">Controls which files are considered. See <see cref="AppHostDiscoveryScope"/>.</param>
+    /// <param name="maxDepth">The maximum subdirectory depth to search, where 0 only considers files in <paramref name="searchDirectory"/>.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A list of candidate AppHost projects with language metadata sorted by full path.</returns>
+    Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, int? maxDepth, CancellationToken cancellationToken)
+        => maxDepth is null
+            ? FindAppHostProjectsAsync(searchDirectory, scope, cancellationToken)
+            : throw new NotSupportedException();
 
     /// <summary>
     /// Finds all candidate AppHost project files in the specified search directory, without language metadata.
@@ -34,16 +78,45 @@ internal interface IProjectLocator
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A list of candidate AppHost project files sorted by full path.</returns>
     Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Finds all candidate AppHost project files in the specified search directory up to the specified depth, without language metadata.
+    /// </summary>
+    /// <param name="searchDirectory">The directory to search.</param>
+    /// <param name="scope">Controls which files are considered. See <see cref="AppHostDiscoveryScope"/>.</param>
+    /// <param name="maxDepth">The maximum subdirectory depth to search, where 0 only considers files in <paramref name="searchDirectory"/>.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A list of candidate AppHost project files sorted by full path.</returns>
+    Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, int? maxDepth, CancellationToken cancellationToken)
+        => maxDepth is null
+            ? FindAppHostProjectFilesAsync(searchDirectory, scope, cancellationToken)
+            : throw new NotSupportedException();
     Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, CancellationToken cancellationToken = default);
+
     Task<FileInfo?> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, bool createSettingsFile, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Resolves the AppHost project file from <c>.aspire/settings.json</c> only, without any
-    /// user interaction or recursive filesystem scanning. Returns <c>null</c> when no settings
-    /// file or <c>appHostPath</c> entry is found, or when the configured path is no longer a
-    /// valid AppHost project.
+    /// Resolves the AppHost project file from Aspire settings, without any user interaction,
+    /// recursive filesystem scanning, or MSBuild-based validation of the configured path.
+    /// Returns <c>null</c> when no settings file is found, when the path entry is absent,
+    /// when the configured file does not exist, or when no registered handler can process it.
     /// </summary>
+    /// <remarks>
+    /// Unlike <see cref="UseOrFindAppHostProjectFileAsync(FileInfo?, bool, CancellationToken)"/>,
+    /// this method intentionally does not call into MSBuild to validate the configured AppHost.
+    /// Callers like <c>aspire update</c> need to operate on an AppHost whose pinned SDK no
+    /// longer resolves (that's the very condition the command exists to repair); environment
+    /// checks similarly just need the configured path so they can run their own targeted
+    /// inspections against it.
+    /// </remarks>
     Task<FileInfo?> GetAppHostFromSettingsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// As <see cref="GetAppHostFromSettingsAsync(CancellationToken)"/>, but rooted at a specific
+    /// directory.
+    /// </summary>
+    Task<FileInfo?> GetAppHostFromSettingsAsync(DirectoryInfo searchDirectory, bool searchParentDirectories, CancellationToken cancellationToken = default)
+        => GetAppHostFromSettingsAsync(cancellationToken);
 }
 
 internal sealed record AppHostProjectCandidate(FileInfo AppHostFile, string Language, AppHostProjectCandidateStatus Status = AppHostProjectCandidateStatus.Buildable);
@@ -65,6 +138,9 @@ internal sealed class ProjectLocator(
     IAppHostCandidateFinder appHostCandidateFinder,
     AspireCliTelemetry telemetry) : IProjectLocator
 {
+    private const string AspireConfigAppHostPathKey = "appHost.path";
+    private const string LegacySettingsAppHostPathKey = "appHostPath";
+
     /// <summary>
     /// Finds all candidate AppHost projects in the specified search directory with language metadata.
     /// </summary>
@@ -72,12 +148,88 @@ internal sealed class ProjectLocator(
     /// <param name="scope">Controls which files are considered. See <see cref="AppHostDiscoveryScope"/>.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A list of candidate AppHost projects with language metadata sorted by full path.</returns>
-    public async Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+    public async Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(
+        DirectoryInfo searchDirectory,
+        AppHostDiscoveryScope scope,
+        CancellationToken cancellationToken)
     {
-        var allCandidates = await FindAppHostProjectFilesAsync(searchDirectory, stopAfterMultipleBuildableAppHosts: false, displayProgress: false, scope, cancellationToken);
+        return await FindAppHostProjectsAsync(searchDirectory, scope, maxDepth: null, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>
+    /// Finds all candidate AppHost projects in the specified search directory with language metadata.
+    /// </summary>
+    /// <param name="searchDirectory">The directory to search.</param>
+    /// <param name="scope">Controls which files are considered. See <see cref="AppHostDiscoveryScope"/>.</param>
+    /// <param name="maxDepth">The maximum subdirectory depth to search, where 0 only considers files in <paramref name="searchDirectory"/>.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A list of candidate AppHost projects with language metadata sorted by full path.</returns>
+    public async Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, int? maxDepth, CancellationToken cancellationToken)
+    {
+        var allCandidates = await FindAppHostProjectFilesAsync(searchDirectory, stopAfterMultipleBuildableAppHosts: false, displayProgress: false, scope, maxDepth, cancellationToken: cancellationToken);
         var candidates = allCandidates.BuildableAppHost.Concat(allCandidates.UnbuildableSuspectedAppHostProjects).ToList();
-        candidates.Sort((x, y) => x.AppHostFile.FullName.CompareTo(y.AppHostFile.FullName));
+        candidates.Sort((x, y) => string.Compare(x.AppHostFile.FullName, y.AppHostFile.FullName, StringComparison.Ordinal));
         return candidates;
+    }
+
+    public async IAsyncEnumerable<AppHostProjectCandidate> FindAppHostProjectsStreamAsync(
+        DirectoryInfo searchDirectory,
+        AppHostDiscoveryScope scope,
+        Action<int>? onDirectoryEnumerated = null,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var channel = Channel.CreateUnbounded<AppHostProjectCandidate>(new UnboundedChannelOptions
+        {
+            SingleReader = true,
+            SingleWriter = false
+        });
+        using var discoveryCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var discoveryTask = CompleteFindAppHostProjectsStreamAsync(searchDirectory, scope, channel.Writer, onDirectoryEnumerated, discoveryCancellationTokenSource.Token);
+
+        try
+        {
+            await foreach (var candidate in channel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            {
+                yield return candidate;
+            }
+
+            await discoveryTask.ConfigureAwait(false);
+        }
+        finally
+        {
+            if (!discoveryTask.IsCompleted)
+            {
+                discoveryCancellationTokenSource.Cancel();
+            }
+
+            try
+            {
+                await discoveryTask.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (discoveryCancellationTokenSource.IsCancellationRequested)
+            {
+                // Enumeration can stop before discovery finishes (for example Ctrl+C). In that case
+                // cancellation is already being surfaced to the consumer through ReadAllAsync.
+            }
+        }
+    }
+
+    private async Task CompleteFindAppHostProjectsStreamAsync(
+        DirectoryInfo searchDirectory,
+        AppHostDiscoveryScope scope,
+        ChannelWriter<AppHostProjectCandidate> candidateWriter,
+        Action<int>? onDirectoryEnumerated,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await FindAppHostProjectFilesAsync(searchDirectory, stopAfterMultipleBuildableAppHosts: false, displayProgress: false, scope, maxDepth: null, candidateWriter, onDirectoryEnumerated, cancellationToken).ConfigureAwait(false);
+            candidateWriter.TryComplete();
+        }
+        catch (Exception ex)
+        {
+            candidateWriter.TryComplete(ex);
+        }
     }
 
     /// <summary>
@@ -89,7 +241,20 @@ internal sealed class ProjectLocator(
     /// <returns>A list of candidate AppHost project files sorted by full path.</returns>
     public async Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
     {
-        var candidates = await FindAppHostProjectsAsync(searchDirectory, scope, cancellationToken);
+        return await FindAppHostProjectFilesAsync(searchDirectory, scope, maxDepth: null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Finds all candidate AppHost project files in the specified search directory path.
+    /// </summary>
+    /// <param name="searchDirectory">The directory path to search.</param>
+    /// <param name="scope">Controls which files are considered. See <see cref="AppHostDiscoveryScope"/>.</param>
+    /// <param name="maxDepth">The maximum subdirectory depth to search, where 0 only considers files in <paramref name="searchDirectory"/>.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A list of candidate AppHost project files sorted by full path.</returns>
+    public async Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, int? maxDepth, CancellationToken cancellationToken)
+    {
+        var candidates = await FindAppHostProjectsAsync(searchDirectory, scope, maxDepth, cancellationToken);
         return candidates.Select(c => c.AppHostFile).ToList();
     }
 
@@ -110,10 +275,10 @@ internal sealed class ProjectLocator(
 
     private async Task<(List<AppHostProjectCandidate> BuildableAppHost, List<AppHostProjectCandidate> UnbuildableSuspectedAppHostProjects, bool HasUnsupportedProjects)> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, bool stopAfterMultipleBuildableAppHosts, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
     {
-        return await FindAppHostProjectFilesAsync(searchDirectory, stopAfterMultipleBuildableAppHosts, displayProgress: true, scope, cancellationToken);
+        return await FindAppHostProjectFilesAsync(searchDirectory, stopAfterMultipleBuildableAppHosts, displayProgress: true, scope, maxDepth: null, cancellationToken: cancellationToken);
     }
 
-    private async Task<(List<AppHostProjectCandidate> BuildableAppHost, List<AppHostProjectCandidate> UnbuildableSuspectedAppHostProjects, bool HasUnsupportedProjects)> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, bool stopAfterMultipleBuildableAppHosts, bool displayProgress, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+    private async Task<(List<AppHostProjectCandidate> BuildableAppHost, List<AppHostProjectCandidate> UnbuildableSuspectedAppHostProjects, bool HasUnsupportedProjects)> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, bool stopAfterMultipleBuildableAppHosts, bool displayProgress, AppHostDiscoveryScope scope, int? maxDepth, ChannelWriter<AppHostProjectCandidate>? candidateWriter = null, Action<int>? onDirectoryEnumerated = null, CancellationToken cancellationToken = default)
     {
         using var activity = telemetry.StartDiagnosticActivity();
 
@@ -124,6 +289,19 @@ internal sealed class ProjectLocator(
             var hasUnsupportedProjects = false;
             var lockObject = new object();
             logger.LogDebug("Searching for project files in {SearchDirectory}", searchDirectory.FullName);
+
+            async ValueTask ReportCandidateFoundAsync(AppHostProjectCandidate appHostProject, CancellationToken cancellationToken)
+            {
+                if (candidateWriter is null)
+                {
+                    return;
+                }
+
+                // Candidate validation runs in parallel, but consumers want one async stream they can
+                // await in command code. A channel bridges those parallel workers to IAsyncEnumerable<T>
+                // without letting terminal or JSON rendering re-enter state protected by lockObject.
+                await candidateWriter.WriteAsync(appHostProject, cancellationToken).ConfigureAwait(false);
+            }
 
             using var validationCancellationTokenSource = stopAfterMultipleBuildableAppHosts
                 ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
@@ -147,7 +325,7 @@ internal sealed class ProjectLocator(
 
             // Collect all candidates with their handlers across all patterns.
             var candidatesWithHandlers = new List<(FileInfo File, IAppHostProject Handler)>();
-            var candidateSearchResult = await appHostCandidateFinder.FindCandidateFilesAsync(searchDirectory, allPatterns, nugetCachePath, scope, cancellationToken);
+            var candidateSearchResult = await appHostCandidateFinder.FindCandidateFilesAsync(searchDirectory, allPatterns, nugetCachePath, scope, cancellationToken, maxDepth, onDirectoryEnumerated);
             var candidateFiles = candidateSearchResult.Files;
             var candidateCountsByPattern = candidateSearchResult.CountsByPattern;
 
@@ -203,19 +381,22 @@ internal sealed class ProjectLocator(
                     {
                         logger.LogDebug("Found {Language} apphost {CandidateFile}", handler.DisplayName, candidateFile.FullName);
                         var relativePath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, candidateFile.FullName);
+                        AppHostProjectCandidate appHostProject;
                         if (displayProgress)
                         {
                             interactionService.DisplaySubtleMessage(relativePath);
                         }
                         lock (lockObject)
                         {
-                            appHostProjects.Add(new(candidateFile, handler.LanguageId));
+                            appHostProject = new AppHostProjectCandidate(candidateFile, handler.LanguageId);
+                            appHostProjects.Add(appHostProject);
 
                             if (stopAfterMultipleBuildableAppHosts && appHostProjects.Count >= 2)
                             {
                                 validationCancellationTokenSource?.Cancel();
                             }
                         }
+                        await ReportCandidateFoundAsync(appHostProject, ct).ConfigureAwait(false);
                     }
                     else if (validationResult.IsUnsupported)
                     {
@@ -233,14 +414,17 @@ internal sealed class ProjectLocator(
                     else if (validationResult.IsPossiblyUnbuildable)
                     {
                         var relativePath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, candidateFile.FullName);
+                        AppHostProjectCandidate appHostProject;
                         if (displayProgress)
                         {
                             interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileMayBeUnbuildableAppHost, relativePath));
                         }
                         lock (lockObject)
                         {
-                            unbuildableSuspectedAppHostProjects.Add(new(candidateFile, handler.LanguageId, AppHostProjectCandidateStatus.PossiblyUnbuildable));
+                            appHostProject = new AppHostProjectCandidate(candidateFile, handler.LanguageId, AppHostProjectCandidateStatus.PossiblyUnbuildable);
+                            unbuildableSuspectedAppHostProjects.Add(appHostProject);
                         }
+                        await ReportCandidateFoundAsync(appHostProject, ct).ConfigureAwait(false);
                     }
                     else
                     {
@@ -253,11 +437,108 @@ internal sealed class ProjectLocator(
                 logger.LogDebug("Stopping AppHost discovery early after finding multiple valid AppHost projects.");
             }
 
+            await AddSettingsAppHostCandidateAsync().ConfigureAwait(false);
+
             // This sort is done here to make results deterministic since we get all the app
             // host information in parallel and the order may vary.
-            appHostProjects.Sort((x, y) => x.AppHostFile.FullName.CompareTo(y.AppHostFile.FullName));
+            appHostProjects.Sort((x, y) => string.Compare(x.AppHostFile.FullName, y.AppHostFile.FullName, StringComparison.Ordinal));
 
             return (appHostProjects, unbuildableSuspectedAppHostProjects, hasUnsupportedProjects);
+
+            async Task AddSettingsAppHostCandidateAsync()
+            {
+                var settingsAppHost = await GetAppHostProjectFileFromSettingsAsync(searchDirectory, searchParentDirectories: true, silent: false, cancellationToken).ConfigureAwait(false);
+                if (settingsAppHost is null)
+                {
+                    return;
+                }
+
+                // Windows and default macOS APFS volumes are case-insensitive, so a
+                // differently-cased settings path can still refer to the same file found
+                // by the discovery walk. See https://github.com/microsoft/aspire/issues/17635.
+                var pathComparison = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+                    ? StringComparison.OrdinalIgnoreCase
+                    : StringComparison.Ordinal;
+
+                // Canonicalize symlinks before comparing so a settings-derived candidate
+                // like /tmp/L5/x.cs does not produce a duplicate entry next to the
+                // discovery-walked /private/tmp/L5/x.cs on macOS, where /tmp is a symlink
+                // to /private/tmp. See https://github.com/microsoft/aspire/issues/17626.
+                // Resolved paths are used as comparison keys only — the surfaced
+                // AppHostProjectCandidate keeps the original FileInfo so display paths are
+                // unchanged from what the user-authored settings file pointed at.
+                //
+                // Symlink resolution does ~one syscall per path segment, so we keep it
+                // off the hot path: the exact-string compare below short-circuits before
+                // the per-candidate resolve runs at all in the common case (no symlinks
+                // involved). Pre-materializing canonical paths for every candidate would
+                // force the resolve even when the cheap compare would have matched.
+                var settingsCanonicalPath = PathNormalizer.ResolveSymlinks(settingsAppHost.FullName);
+                bool IsDuplicate(AppHostProjectCandidate candidate)
+                {
+                    if (string.Equals(candidate.AppHostFile.FullName, settingsAppHost.FullName, pathComparison))
+                    {
+                        return true;
+                    }
+
+                    var candidateCanonicalPath = PathNormalizer.ResolveSymlinks(candidate.AppHostFile.FullName);
+                    return string.Equals(candidateCanonicalPath, settingsCanonicalPath, pathComparison);
+                }
+
+                if (appHostProjects.Any(IsDuplicate) || unbuildableSuspectedAppHostProjects.Any(IsDuplicate))
+                {
+                    return;
+                }
+
+                var handler = projectFactory.TryGetProject(settingsAppHost);
+                if (handler is null)
+                {
+                    var relativePath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, settingsAppHost.FullName);
+                    if (displayProgress)
+                    {
+                        interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileUnsupportedInCurrentEnvironment, relativePath));
+                    }
+
+                    logger.LogDebug("Skipping configured AppHost project {SettingsAppHost} because no project handler was found.", settingsAppHost.FullName);
+                    hasUnsupportedProjects = true;
+                    return;
+                }
+
+                var validationResult = await handler.ValidateAppHostAsync(settingsAppHost, cancellationToken).ConfigureAwait(false);
+                var settingsAppHostRelativePath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, settingsAppHost.FullName);
+                if (validationResult.IsValid)
+                {
+                    if (displayProgress)
+                    {
+                        interactionService.DisplaySubtleMessage(settingsAppHostRelativePath);
+                    }
+
+                    var appHostProject = new AppHostProjectCandidate(settingsAppHost, handler.LanguageId);
+                    appHostProjects.Add(appHostProject);
+                    await ReportCandidateFoundAsync(appHostProject, cancellationToken).ConfigureAwait(false);
+                }
+                else if (validationResult.IsPossiblyUnbuildable)
+                {
+                    if (displayProgress)
+                    {
+                        interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileMayBeUnbuildableAppHost, settingsAppHostRelativePath));
+                    }
+
+                    var appHostProject = new AppHostProjectCandidate(settingsAppHost, handler.LanguageId, AppHostProjectCandidateStatus.PossiblyUnbuildable);
+                    unbuildableSuspectedAppHostProjects.Add(appHostProject);
+                    await ReportCandidateFoundAsync(appHostProject, cancellationToken).ConfigureAwait(false);
+                }
+                else if (validationResult.IsUnsupported)
+                {
+                    if (displayProgress)
+                    {
+                        interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileUnsupportedInCurrentEnvironment, settingsAppHostRelativePath));
+                    }
+
+                    logger.LogDebug("Skipping unsupported configured AppHost project {SettingsAppHost}", settingsAppHost.FullName);
+                    hasUnsupportedProjects = true;
+                }
+            }
         }
 
         if (displayProgress)
@@ -271,12 +552,40 @@ internal sealed class ProjectLocator(
     /// <inheritdoc />
     public async Task<FileInfo?> GetAppHostFromSettingsAsync(CancellationToken cancellationToken = default)
     {
-        return await GetValidatedAppHostProjectFileFromSettingsAsync(silent: true, cancellationToken);
+        return await GetAppHostFromSettingsAsync(executionContext.WorkingDirectory, searchParentDirectories: true, cancellationToken);
     }
 
-    private async Task<FileInfo?> GetValidatedAppHostProjectFileFromSettingsAsync(bool silent, CancellationToken cancellationToken)
+    /// <inheritdoc />
+    public async Task<FileInfo?> GetAppHostFromSettingsAsync(DirectoryInfo searchDirectory, bool searchParentDirectories, CancellationToken cancellationToken = default)
     {
-        var settingsAppHost = await GetAppHostProjectFileFromSettingsAsync(silent, cancellationToken);
+        // Intentionally does not call ValidateAppHostAsync. See interface XML docs for rationale.
+        // Probe-style callers (DotNetSdkCheck, AspireVersionCheck, TypeScriptAppHostToolingCheck,
+        // UpdateCommand, IntegrationPackageSearchService) drive this path and expect a
+        // non-interactive answer; the user-facing legacy-migration warning is emitted from the
+        // discovery walk (AddSettingsAppHostCandidateAsync) instead.
+        var settingsAppHost = await GetAppHostProjectFileFromSettingsAsync(searchDirectory, searchParentDirectories, silent: true, cancellationToken);
+        if (settingsAppHost is null)
+        {
+            return null;
+        }
+
+        var handler = projectFactory.TryGetProject(settingsAppHost);
+        if (handler is null)
+        {
+            logger.LogWarning("Ignoring AppHost path '{AppHostPath}' from settings because no project handler can process it.", settingsAppHost.FullName);
+            return null;
+        }
+
+        return settingsAppHost;
+    }
+
+    private async Task<FileInfo?> GetValidatedAppHostProjectFileFromSettingsAsync(DirectoryInfo searchDirectory, bool searchParentDirectories, CancellationToken cancellationToken)
+    {
+        // This is reached from UseOrFindAppHostProjectFileAsync. When the configured
+        // legacy settings point at a missing file we still want the warning to surface,
+        // but the discovery walk that runs afterwards (AddSettingsAppHostCandidateAsync)
+        // will emit the same warning. Stay silent here to avoid a duplicate.
+        var settingsAppHost = await GetAppHostProjectFileFromSettingsAsync(searchDirectory, searchParentDirectories, silent: true, cancellationToken);
         if (settingsAppHost is null)
         {
             return null;
@@ -312,10 +621,8 @@ internal sealed class ProjectLocator(
         return null;
     }
 
-    private async Task<FileInfo?> GetAppHostProjectFileFromSettingsAsync(bool silent, CancellationToken cancellationToken)
+    private async Task<FileInfo?> GetAppHostProjectFileFromSettingsAsync(DirectoryInfo searchDirectory, bool searchParentDirectories, bool silent, CancellationToken cancellationToken)
     {
-        var searchDirectory = executionContext.WorkingDirectory;
-
         while (true)
         {
             // Check aspire.config.json first
@@ -326,11 +633,24 @@ internal sealed class ProjectLocator(
             }
             catch (JsonException ex)
             {
-                interactionService.DisplayError(ex.Message);
+                ReportInvalidConfigurationFile(ex, ex.Message, silent);
                 return null;
             }
+
             if (aspireConfig?.AppHost?.Path is { } configAppHostPath)
             {
+                var configFilePath = Path.Combine(searchDirectory.FullName, AspireConfigFile.FileName);
+
+                // Validate before Path.Combine / new FileInfo, which throw ArgumentException
+                // ("Null character in path." / "Illegal characters in path.") on NUL bytes and
+                // other invalid characters that survive JSON parsing. Without this we surface
+                // as a generic "An unexpected error occurred" — see
+                // https://github.com/microsoft/aspire/issues/17624.
+                if (!IsValidConfiguredAppHostPath(configAppHostPath, configFilePath, fieldName: AspireConfigAppHostPathKey, silent: silent))
+                {
+                    return null;
+                }
+
                 var qualifiedPath = Path.IsPathRooted(configAppHostPath)
                     ? configAppHostPath
                     : Path.Combine(searchDirectory.FullName, configAppHostPath);
@@ -344,8 +664,10 @@ internal sealed class ProjectLocator(
                 }
                 else
                 {
-                    var configFilePath = Path.Combine(searchDirectory.FullName, AspireConfigFile.FileName);
-                    interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.AppHostWasSpecifiedButDoesntExist, configFilePath, qualifiedPath));
+                    if (!silent)
+                    {
+                        interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.AppHostWasSpecifiedButDoesntExist, configFilePath, qualifiedPath));
+                    }
                     return null;
                 }
             }
@@ -357,32 +679,69 @@ internal sealed class ProjectLocator(
 
             if (settingsFile.Exists)
             {
-                using var stream = settingsFile.OpenRead();
-                var json = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-
-                if (json.RootElement.TryGetProperty("appHostPath", out var appHostPathProperty) && appHostPathProperty.GetString() is { } appHostPath)
+                try
                 {
-                    var qualifiedAppHostPath = Path.IsPathRooted(appHostPath) ? appHostPath : Path.Combine(settingsFile.Directory!.FullName, appHostPath);
-                    qualifiedAppHostPath = PathNormalizer.NormalizePathForCurrentPlatform(qualifiedAppHostPath);
-                    var appHostFile = new FileInfo(qualifiedAppHostPath);
+                    using var stream = settingsFile.OpenRead();
+                    using var json = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-                    if (appHostFile.Exists)
+                    if (json.RootElement.ValueKind is not JsonValueKind.Object)
                     {
-                        return appHostFile;
-                    }
-                    else
-                    {
-                        // AppHost file was specified but doesn't exist, return null to trigger fallback logic
-                        if (!silent)
-                        {
-                            interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.AppHostWasSpecifiedButDoesntExist, settingsFile.FullName, qualifiedAppHostPath));
-                        }
+                        ReportInvalidConfigurationFileShape(settingsFile.FullName, silent);
                         return null;
                     }
+
+                    if (json.RootElement.TryGetProperty(LegacySettingsAppHostPathKey, out var appHostPathProperty))
+                    {
+                        if (appHostPathProperty.ValueKind is not JsonValueKind.Null and not JsonValueKind.String)
+                        {
+                            ReportInvalidConfiguredAppHostPathType(settingsFile.FullName, LegacySettingsAppHostPathKey, silent);
+                            return null;
+                        }
+
+                        if (appHostPathProperty.GetString() is { } appHostPath)
+                        {
+                            // Mirror the validation on the modern path above so the legacy branch also
+                            // cannot reach Path.Combine with a NUL byte or other Path.GetInvalidPathChars
+                            // value (https://github.com/microsoft/aspire/issues/17624).
+                            if (!IsValidConfiguredAppHostPath(appHostPath, settingsFile.FullName, fieldName: LegacySettingsAppHostPathKey, silent: silent))
+                            {
+                                return null;
+                            }
+
+                            var qualifiedAppHostPath = Path.IsPathRooted(appHostPath) ? appHostPath : Path.Combine(settingsFile.Directory!.FullName, appHostPath);
+                            qualifiedAppHostPath = PathNormalizer.NormalizePathForCurrentPlatform(qualifiedAppHostPath);
+                            var appHostFile = new FileInfo(qualifiedAppHostPath);
+
+                            if (appHostFile.Exists)
+                            {
+                                return appHostFile;
+                            }
+                            else
+                            {
+                                if (!silent)
+                                {
+                                    // Warn against the user-authored file (.aspire/settings.json), not the
+                                    // never-authored aspire.config.json. Earlier versions reported
+                                    // aspire.config.json because startup eagerly migrated the legacy
+                                    // settings (PR #17234); see https://github.com/microsoft/aspire/issues/17620
+                                    // for the user-facing impact of pointing users at a file they did
+                                    // not create.
+                                    interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.AppHostWasSpecifiedButDoesntExist, settingsFile.FullName, qualifiedAppHostPath));
+                                }
+                                return null;
+                            }
+                        }
+                    }
+                }
+                catch (JsonException ex)
+                {
+                    var message = string.Format(CultureInfo.CurrentCulture, ErrorStrings.InvalidJsonInConfigFile, settingsFile.FullName, ex.Message);
+                    ReportInvalidConfigurationFile(ex, message, silent);
+                    return null;
                 }
             }
 
-            if (searchDirectory.Parent is not null)
+            if (searchParentDirectories && searchDirectory.Parent is not null)
             {
                 searchDirectory = searchDirectory.Parent;
             }
@@ -391,6 +750,68 @@ internal sealed class ProjectLocator(
                 return null;
             }
         }
+    }
+
+    private void ReportInvalidConfigurationFileShape(string configFilePath, bool silent)
+    {
+        var message = string.Format(CultureInfo.CurrentCulture, ErrorStrings.ConfigurationFileMustBeJsonObject, configFilePath);
+        if (!silent)
+        {
+            interactionService.DisplayError(message);
+        }
+        else
+        {
+            logger.LogWarning("Ignoring AppHost settings in '{ConfigFilePath}' because the configuration root is not a JSON object.", configFilePath);
+        }
+    }
+
+    private void ReportInvalidConfiguredAppHostPathType(string configFilePath, string fieldName, bool silent)
+    {
+        var message = string.Format(CultureInfo.CurrentCulture, ErrorStrings.ConfiguredAppHostPathMustBeString, configFilePath, fieldName);
+        if (!silent)
+        {
+            interactionService.DisplayError(message);
+        }
+        else
+        {
+            logger.LogWarning("Ignoring configured AppHost path in '{ConfigFilePath}' ('{FieldName}') because it is not a JSON string.", configFilePath, fieldName);
+        }
+    }
+
+    private void ReportInvalidConfigurationFile(JsonException ex, string message, bool silent)
+    {
+        if (!silent)
+        {
+            interactionService.DisplayError(message);
+        }
+        else
+        {
+            logger.LogWarning(ex, "Unable to load AppHost settings: {Message}", message);
+        }
+    }
+
+    // Reject empty paths (Path.Combine("", base) collapses to the base directory and surfaces
+    // a misleading "directory doesn't exist" warning downstream) and paths that contain
+    // characters that would crash System.IO APIs. Path.GetInvalidPathChars() includes NUL on
+    // every platform plus the platform-specific set of disallowed characters (e.g. < > | on
+    // Windows). Plain Contains('\0') is included explicitly for readability even though it is
+    // redundant with the IndexOfAny check.
+    private bool IsValidConfiguredAppHostPath(string path, string configFilePath, string fieldName, bool silent)
+    {
+        if (path.Length == 0 || path.Contains('\0') || path.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
+        {
+            if (!silent)
+            {
+                interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ErrorStrings.ConfiguredAppHostPathHasInvalidCharacters, configFilePath, fieldName));
+            }
+            else
+            {
+                logger.LogWarning("Ignoring configured AppHost path in '{ConfigFilePath}' ('{FieldName}') because it is empty or contains invalid characters.", configFilePath, fieldName);
+            }
+            return false;
+        }
+
+        return true;
     }
 
     public async Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, CancellationToken cancellationToken = default)
@@ -493,6 +914,11 @@ internal sealed class ProjectLocator(
                     if (validationResult.IsValid)
                     {
                         logger.LogDebug("Using {Language} apphost {ProjectFile}", handler.DisplayName, projectFile.FullName);
+                        if (createSettingsFile)
+                        {
+                            await CreateSettingsFileAsync(projectFile, cancellationToken);
+                        }
+
                         return new AppHostProjectSearchResult(projectFile, [projectFile]);
                     }
                 }
@@ -509,7 +935,7 @@ internal sealed class ProjectLocator(
             }
         }
 
-        var settingsAppHost = await GetValidatedAppHostProjectFileFromSettingsAsync(silent: true, cancellationToken);
+        var settingsAppHost = await GetValidatedAppHostProjectFileFromSettingsAsync(executionContext.WorkingDirectory, searchParentDirectories: true, cancellationToken);
 
         if (settingsAppHost is not null && multipleAppHostProjectsFoundBehavior is not MultipleAppHostProjectsFoundBehavior.None)
         {
@@ -621,6 +1047,9 @@ internal sealed class ProjectLocator(
 
     private async Task CreateSettingsFileAsync(FileInfo projectFile, CancellationToken cancellationToken)
     {
+        FileInfo? settingsFile = null;
+        DirectoryInfo? appHostDirForScopedConfig = null;
+
         // Search from the apphost's directory upward for an existing config file.
         // This handles the case where "aspire new" created a project in a subdirectory
         // and the user runs "aspire run" from the parent without cd-ing first.
@@ -630,6 +1059,8 @@ internal sealed class ProjectLocator(
             if (nearAppHost is not null)
             {
                 var configDir = Path.GetDirectoryName(nearAppHost)!;
+                var targetSettingsFilePath = nearAppHost;
+                AspireConfigFile? existingConfig;
 
                 // For legacy .aspire/settings.json, the config root is the parent of .aspire/
                 var trimmedConfigDir = configDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
@@ -640,9 +1071,15 @@ internal sealed class ProjectLocator(
                     {
                         configDir = parentDir.FullName;
                     }
+
+                    targetSettingsFilePath = Path.Combine(configDir, AspireConfigFile.FileName);
+                    existingConfig = AspireConfigFile.LoadOrCreate(configDir);
+                }
+                else
+                {
+                    existingConfig = AspireConfigFile.Load(configDir);
                 }
 
-                var existingConfig = AspireConfigFile.Load(configDir);
                 if (existingConfig?.AppHost?.Path is { } existingPath)
                 {
                     // Resolve the stored path relative to the config file's directory.
@@ -659,10 +1096,16 @@ internal sealed class ProjectLocator(
                         return;
                     }
                 }
+
+                settingsFile = new FileInfo(targetSettingsFilePath);
+                appHostDirForScopedConfig = appHostDir;
             }
         }
 
-        var settingsFile = GetOrCreateLocalAspireConfigFile();
+        // Only use the working-directory config after checking the selected AppHost's tree.
+        // GetOrCreateLocalAspireConfigFile can migrate legacy .aspire/settings.json into
+        // aspire.config.json, so calling it earlier would recreate the split-config bug.
+        settingsFile ??= GetOrCreateLocalAspireConfigFile();
         var fileExisted = settingsFile.Exists;
 
         logger.LogDebug("Creating settings file at {SettingsFilePath}", settingsFile.FullName);
@@ -670,20 +1113,24 @@ internal sealed class ProjectLocator(
         var relativePathToProjectFile = Path.GetRelativePath(settingsFile.Directory!.FullName, projectFile.FullName).Replace(Path.DirectorySeparatorChar, '/');
 
         // Use the configuration writer to set the AppHost path, which will merge with any existing settings.
-        await configurationService.SetConfigurationAsync("appHost.path", relativePathToProjectFile, isGlobal: false, cancellationToken);
+        await ConfigurationService.SetConfigurationInFileAsync(settingsFile.FullName, AspireConfigAppHostPathKey, relativePathToProjectFile, cancellationToken);
 
         // For polyglot projects, also set language and inherit SDK version from parent/global config.
         var language = languageDiscovery.GetLanguageByFile(projectFile);
         if (language is not null && !language.LanguageId.Value.Equals(KnownLanguageId.CSharp, StringComparison.OrdinalIgnoreCase))
         {
-            await configurationService.SetConfigurationAsync("appHost.language", language.LanguageId.Value, isGlobal: false, cancellationToken);
+            await ConfigurationService.SetConfigurationInFileAsync(settingsFile.FullName, "appHost.language", language.LanguageId.Value, cancellationToken);
 
             // Inherit SDK version from parent/global config if available.
-            var inheritedSdkVersion = await configurationService.GetConfigurationAsync("sdk.version", cancellationToken)
-                ?? await configurationService.GetConfigurationAsync("sdkVersion", cancellationToken);
+            var inheritedSdkVersion = appHostDirForScopedConfig is not null
+                ? await configurationService.GetConfigurationFromDirectoryAsync("sdk.version", appHostDirForScopedConfig, continueSearchWhenKeyMissing: true, cancellationToken: cancellationToken)
+                    ?? await configurationService.GetConfigurationFromDirectoryAsync("sdkVersion", appHostDirForScopedConfig, continueSearchWhenKeyMissing: true, cancellationToken: cancellationToken)
+                : await configurationService.GetConfigurationAsync("sdk.version", cancellationToken)
+                    ?? await configurationService.GetConfigurationAsync("sdkVersion", cancellationToken);
+
             if (!string.IsNullOrEmpty(inheritedSdkVersion))
             {
-                await configurationService.SetConfigurationAsync("sdk.version", inheritedSdkVersion, isGlobal: false, cancellationToken);
+                await ConfigurationService.SetConfigurationInFileAsync(settingsFile.FullName, "sdk.version", inheritedSdkVersion, cancellationToken);
                 logger.LogDebug("Set SDK version {Version} in settings file (inherited from parent config)", inheritedSdkVersion);
             }
         }
@@ -763,22 +1210,22 @@ internal static class ProjectLocatorErrorHelper
         return ex.FailureReason switch
         {
             ProjectLocatorFailureReason.MultipleProjectFilesFound when projectOptionSpecifiedAsDirectory
-                => (ExitCodeConstants.FailedToFindProject, InteractionServiceStrings.ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts),
+                => (CliExitCodes.FailedToFindProject, InteractionServiceStrings.ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts),
             ProjectLocatorFailureReason.ProjectFileDoesntExist or ProjectLocatorFailureReason.NoProjectFileFound when projectOptionSpecifiedAsDirectory
-                => (ExitCodeConstants.FailedToFindProject, InteractionServiceStrings.ProjectOptionSpecifiedDirectoryContainsNoAppHosts),
+                => (CliExitCodes.FailedToFindProject, InteractionServiceStrings.ProjectOptionSpecifiedDirectoryContainsNoAppHosts),
             ProjectLocatorFailureReason.UnsupportedProjects
-                => (ExitCodeConstants.SdkNotInstalled, InteractionServiceStrings.NoSupportedAppHostsFound),
+                => (CliExitCodes.SdkNotInstalled, InteractionServiceStrings.NoSupportedAppHostsFound),
             ProjectLocatorFailureReason.ProjectFileNotAppHostProject
-                => (ExitCodeConstants.FailedToFindProject, InteractionServiceStrings.SpecifiedProjectFileNotAppHostProject),
+                => (CliExitCodes.FailedToFindProject, InteractionServiceStrings.SpecifiedProjectFileNotAppHostProject),
             ProjectLocatorFailureReason.ProjectFileDoesntExist
-                => (ExitCodeConstants.FailedToFindProject, InteractionServiceStrings.ProjectOptionDoesntExist),
+                => (CliExitCodes.FailedToFindProject, InteractionServiceStrings.ProjectOptionDoesntExist),
             ProjectLocatorFailureReason.MultipleProjectFilesFound
-                => (ExitCodeConstants.FailedToFindProject, InteractionServiceStrings.ProjectOptionNotSpecifiedMultipleAppHostsFound),
+                => (CliExitCodes.FailedToFindProject, InteractionServiceStrings.ProjectOptionNotSpecifiedMultipleAppHostsFound),
             ProjectLocatorFailureReason.NoProjectFileFound
-                => (ExitCodeConstants.FailedToFindProject, InteractionServiceStrings.ProjectOptionNotSpecifiedNoCsprojFound),
+                => (CliExitCodes.FailedToFindProject, InteractionServiceStrings.ProjectOptionNotSpecifiedNoCsprojFound),
             ProjectLocatorFailureReason.AppHostsMayNotBeBuildable
-                => (ExitCodeConstants.FailedToFindProject, InteractionServiceStrings.UnbuildableAppHostsDetected),
-            _ => (ExitCodeConstants.FailedToFindProject, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, ex.Message))
+                => (CliExitCodes.FailedToFindProject, InteractionServiceStrings.UnbuildableAppHostsDetected),
+            _ => (CliExitCodes.FailedToFindProject, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, ex.Message))
         };
     }
 }

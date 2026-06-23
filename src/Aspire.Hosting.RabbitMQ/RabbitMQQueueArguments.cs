@@ -58,7 +58,7 @@ public sealed class RabbitMQQueueArguments
     /// Do not repeat a key that already has a typed property (e.g. <c>x-message-ttl</c>); doing so will throw at startup.
     /// Entries may be added until the application starts. Mutations after <see cref="BeforeStartEvent"/> are ignored.
     /// </remarks>
-    public Dictionary<string, object?> AdditionalArguments { get; } = [];
+    public Dictionary<string, object?> AdditionalArguments { get; init; } = [];
 
     /// <summary>Sets the dead-letter exchange and optional routing key; called by <see cref="RabbitMQQueueExtensions.WithDeadLetterExchange{T}"/>.</summary>
     internal void SetDeadLetterExchange(RabbitMQExchangeResource dlx, string? routingKey)

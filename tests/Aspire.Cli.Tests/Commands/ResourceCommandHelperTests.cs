@@ -4,7 +4,6 @@
 using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
-using Aspire.Cli.Interaction;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -115,41 +114,6 @@ public class ResourceCommandHelperTests
     }
 
     [Fact]
-    public async Task ExecuteGenericCommandAsync_RoutesStatusToStderr_ResultToStdout()
-    {
-        var connection = new TestAppHostAuxiliaryBackchannel
-        {
-            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
-            {
-                Success = true,
-                Value = new ExecuteResourceCommandResult
-                {
-                    Value = "some output",
-                    Format = CommandResultFormat.Text
-                }
-            }
-        };
-
-        var interactionService = new TestInteractionService
-        {
-            DisplayRawTextCallback = (_) => { }
-        };
-
-        var exitCode = await ResourceCommandHelper.ExecuteGenericCommandAsync(
-            connection,
-            interactionService,
-            NullLogger.Instance,
-            "myResource",
-            "my-command",
-            arguments: null,
-            cancellationToken: CancellationToken.None).DefaultTimeout();
-
-        Assert.Equal(0, exitCode);
-        // Status messages should be routed to stderr
-        Assert.Equal(ConsoleOutput.Error, interactionService.Console);
-    }
-
-    [Fact]
     public async Task ExecuteGenericCommandAsync_WithArguments_PassesArgumentsToBackchannel()
     {
         var connection = new TestAppHostAuxiliaryBackchannel
@@ -211,9 +175,10 @@ public class ResourceCommandHelperTests
             arguments: null,
             cancellationToken: CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.FailedToExecuteResourceCommand, exitCode);
+        Assert.Equal(CliExitCodes.FailedToExecuteResourceCommand, exitCode);
         var error = Assert.Single(interactionService.DisplayedErrors);
-        Assert.Contains("Command argument validation failed.", error);
+        Assert.Contains("Failed to validate command arguments for command 'validate' on resource 'myResource'", error);
+        Assert.DoesNotContain("Command argument validation failed.", error);
         Assert.Contains("--target: Target must not be prod.", error);
     }
 
@@ -241,7 +206,7 @@ public class ResourceCommandHelperTests
             arguments: null,
             cancellationToken: CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.FailedToExecuteResourceCommand, exitCode);
+        Assert.Equal(CliExitCodes.FailedToExecuteResourceCommand, exitCode);
         var error = Assert.Single(interactionService.DisplayedErrors);
         Assert.Contains("Failed to execute command 'ss' on resource 'test-resource'", error);
         Assert.Contains("Command 'ss' not available for resource 'test-resource'.", error);

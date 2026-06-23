@@ -68,6 +68,12 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsLogsNotYetAvailable", resourceCulture);
             }
         }
+
+        public static string ConsoleLogsNoLogsFound {
+            get {
+                return ResourceManager.GetString("ConsoleLogsNoLogsFound", resourceCulture);
+            }
+        }
         
         public static string ConsoleLogsWatchingLogs {
             get {
@@ -162,6 +168,96 @@ namespace Aspire.Dashboard.Resources {
         public static string ConsoleLogsNoWrapLogs {
             get {
                 return ResourceManager.GetString("ConsoleLogsNoWrapLogs", resourceCulture);
+            }
+        }
+        
+        public static string TerminalToolbarDecreaseFontSize {
+            get {
+                return ResourceManager.GetString("TerminalToolbarDecreaseFontSize", resourceCulture);
+            }
+        }
+        
+        public static string TerminalToolbarFontSize {
+            get {
+                return ResourceManager.GetString("TerminalToolbarFontSize", resourceCulture);
+            }
+        }
+        
+        public static string TerminalToolbarIncreaseFontSize {
+            get {
+                return ResourceManager.GetString("TerminalToolbarIncreaseFontSize", resourceCulture);
+            }
+        }
+        
+        public static string TerminalToolbarGridSize {
+            get {
+                return ResourceManager.GetString("TerminalToolbarGridSize", resourceCulture);
+            }
+        }
+        
+        public static string TerminalToolbarGridSizeAuto {
+            get {
+                return ResourceManager.GetString("TerminalToolbarGridSizeAuto", resourceCulture);
+            }
+        }
+        
+        public static string TerminalToolbarCurrentGrid {
+            get {
+                return ResourceManager.GetString("TerminalToolbarCurrentGrid", resourceCulture);
+            }
+        }
+        
+        public static string TerminalToolbarPrimaryLabel {
+            get {
+                return ResourceManager.GetString("TerminalToolbarPrimaryLabel", resourceCulture);
+            }
+        }
+        
+        public static string TerminalToolbarConnectingLabel {
+            get {
+                return ResourceManager.GetString("TerminalToolbarConnectingLabel", resourceCulture);
+            }
+        }
+        
+        public static string TerminalToolbarTakeControlLabel {
+            get {
+                return ResourceManager.GetString("TerminalToolbarTakeControlLabel", resourceCulture);
+            }
+        }
+        
+        public static string TerminalToolbarPrimaryTitle {
+            get {
+                return ResourceManager.GetString("TerminalToolbarPrimaryTitle", resourceCulture);
+            }
+        }
+        
+        public static string TerminalToolbarNoPrimaryTitle {
+            get {
+                return ResourceManager.GetString("TerminalToolbarNoPrimaryTitle", resourceCulture);
+            }
+        }
+        
+        public static string TerminalToolbarViewerTitle {
+            get {
+                return ResourceManager.GetString("TerminalToolbarViewerTitle", resourceCulture);
+            }
+        }
+        
+        public static string TerminalToolbarConnectingTitle {
+            get {
+                return ResourceManager.GetString("TerminalToolbarConnectingTitle", resourceCulture);
+            }
+        }
+        
+        public static string TerminalHeader {
+            get {
+                return ResourceManager.GetString("TerminalHeader", resourceCulture);
+            }
+        }
+        
+        public static string TerminalPageTitle {
+            get {
+                return ResourceManager.GetString("TerminalPageTitle", resourceCulture);
             }
         }
     }

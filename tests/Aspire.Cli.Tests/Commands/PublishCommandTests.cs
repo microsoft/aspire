@@ -53,7 +53,7 @@ public class PublishCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
-        Assert.Equal(ExitCodeConstants.FailedToFindProject, exitCode); // Ensure the command fails
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode); // Ensure the command fails
     }
 
     [Fact]
@@ -84,7 +84,7 @@ public class PublishCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
-        Assert.Equal(ExitCodeConstants.AppHostIncompatible, exitCode); // Ensure the command fails
+        Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode); // Ensure the command fails
     }
 
     [Fact]
@@ -115,7 +115,7 @@ public class PublishCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
-        Assert.Equal(ExitCodeConstants.FailedToBuildArtifacts, exitCode); // Ensure the command fails
+        Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode); // Ensure the command fails
     }
 
     [Fact]
@@ -158,7 +158,7 @@ public class PublishCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
-        Assert.Equal(ExitCodeConstants.FailedToBuildArtifacts, exitCode); // Ensure the command fails
+        Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode); // Ensure the command fails
     }
 
     [Fact]

@@ -17,21 +17,46 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
 {
     public const string ActivitySourceName = "Aspire.Cli.Profiling";
 
-    internal const string EnabledEnvironmentVariable = KnownConfigNames.ProfilingEnabled;
-    internal const string SessionIdEnvironmentVariable = KnownConfigNames.ProfilingSessionId;
-    internal const string TraceParentEnvironmentVariable = KnownConfigNames.ProfilingTraceParent;
-    internal const string TraceStateEnvironmentVariable = KnownConfigNames.ProfilingTraceState;
-    internal const string SessionIdBaggageName = "aspire.profiling.session_id";
-
     private readonly ActivitySource _activitySource = new(ActivitySourceName);
 
+    internal ActivitySource ActivitySource => _activitySource;
+
     /// <summary>
-    /// Activity names for profiling spans. These names describe local diagnostic
+    /// Environment variable names used to propagate profiling state between CLI processes.
+    /// </summary>
+    internal static class EnvironmentVariables
+    {
+        public const string Enabled = KnownConfigNames.ProfilingEnabled;
+        public const string SessionId = KnownConfigNames.ProfilingSessionId;
+        public const string TraceParent = KnownConfigNames.ProfilingTraceParent;
+        public const string TraceState = KnownConfigNames.ProfilingTraceState;
+    }
+
+    /// <summary>
+    /// Activity baggage keys used to keep profiling context flowing through ambient activities.
+    /// </summary>
+    internal static class Baggage
+    {
+        public const string SessionId = "aspire.profiling.session_id";
+    }
+
+    /// <summary>
+    /// Span names for profiling activities. These names describe local diagnostic
     /// work such as CLI orchestration and child-process lifetimes; they are not
     /// exported through customer telemetry.
     /// </summary>
     internal static class Activities
     {
+        public const string Command = "aspire/cli/command";
+        public const string Process = "aspire/cli/process";
+        public const string AddCommand = "aspire/cli/add";
+        public const string AddFindAppHost = "aspire/cli/add.find_apphost";
+        public const string AddGetConfiguredChannel = "aspire/cli/add.get_configured_channel";
+        public const string AddSearchPackages = "aspire/cli/add.search_packages";
+        public const string AddSelectPackage = "aspire/cli/add.select_package";
+        public const string AddSelectPackagePrompt = "aspire/cli/add.select_package.prompt";
+        public const string AddStopExistingInstance = "aspire/cli/add.stop_existing_instance";
+        public const string AddPackage = "aspire/cli/add.package";
         public const string RunCommand = "aspire/cli/run";
         public const string LsCommand = "aspire/cli/ls";
         public const string LsFindAppHosts = "aspire/cli/ls.find_apphosts";
@@ -41,32 +66,26 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         public const string RunAppHostFindAppHost = "aspire/cli/run_apphost.find_apphost";
         public const string RunAppHostStopExistingInstance = "aspire/cli/run_apphost.stop_existing_instance";
         public const string RunAppHostStartProject = "aspire/cli/run_apphost.start_project";
+        public const string RunAppHostStartAppHostServer = "aspire/cli/run_apphost.start_apphost_server";
+        public const string RunAppHostStartGuestAppHost = "aspire/cli/run_apphost.start_guest_apphost";
         public const string RunAppHostWaitForBuild = "aspire/cli/run_apphost.wait_for_build";
         public const string RunAppHostWaitForBackchannel = "aspire/cli/run_apphost.wait_for_backchannel";
         public const string RunAppHostGetDashboardUrls = "aspire/cli/run_apphost.get_dashboard_urls";
         public const string RunAppHostLifetime = "aspire/cli/run_apphost.lifetime";
-        public const string StartAppHostSpawnChild = "aspire/cli/start_apphost.spawn_child";
         public const string StartAppHostWaitForBackchannel = "aspire/cli/start_apphost.wait_for_backchannel";
         public const string StartAppHostGetDashboardUrls = "aspire/cli/start_apphost.get_dashboard_urls";
         public const string BackchannelConnect = "aspire/cli/backchannel.connect";
         public const string BackchannelGetDashboardUrls = "aspire/cli/backchannel.get_dashboard_urls";
+        public const string JsonRpcClientCall = "aspire/cli/jsonrpc.client";
         public const string AppHostRun = "aspire/cli/apphost.run";
         public const string AppHostConfigureIsolatedMode = "aspire/cli/apphost.configure_isolated_mode";
         public const string AppHostEnsureDevCertificates = "aspire/cli/apphost.ensure_dev_certificates";
         public const string AppHostBuild = "aspire/cli/apphost.build";
         public const string AppHostCheckCompatibility = "aspire/cli/apphost.check_compatibility";
         public const string AppHostRunDotnetLifetime = "aspire/cli/apphost.run_dotnet.lifetime";
-        public const string AppHostServerLifetime = "aspire/cli/apphost_server.lifetime";
-        public const string DotNetRunLifetime = "aspire/cli/dotnet.run.lifetime";
-        public const string GuestInitializeCommand = "aspire/cli/guest.initialize_command";
-        public const string GuestInstallDependencies = "aspire/cli/guest.install_dependencies";
-        public const string GuestExecuteCommand = "aspire/cli/guest.execute_command";
-        public const string GitCommand = "aspire/cli/git.command";
-        public const string NpmCommand = "aspire/cli/npm.command";
+        public const string ProfileCaptureDelay = "aspire/cli/profile.capture_delay";
         public const string StopCommand = "aspire/cli/stop";
         public const string StopAppHost = "aspire/cli/stop_apphost";
-
-        public static string DotNetCommand(string command) => $"aspire/cli/dotnet.{command}";
     }
 
     /// <summary>
@@ -122,6 +141,7 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         public const string AppHostWatch = "aspire.cli.apphost.watch";
         public const string AppHostStopAll = "aspire.cli.apphost.stop_all";
         public const string AppHostStopCount = "aspire.cli.apphost.stop_count";
+        public const string ProfileCaptureDelayMilliseconds = "aspire.cli.profile.capture_delay_ms";
         public const string DevCertificateEnvironmentVariableCount = "aspire.cli.dev_cert.env_var_count";
         public const string BackchannelSocketFile = "aspire.cli.backchannel.socket_file";
         public const string BackchannelAutoReconnect = "aspire.cli.backchannel.auto_reconnect";
@@ -131,11 +151,16 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         public const string BackchannelScanCount = "aspire.cli.backchannel.scan_count";
         public const string BackchannelCapabilityCount = "aspire.cli.backchannel.capability_count";
         public const string BackchannelHasBaselineCapability = "aspire.cli.backchannel.has_baseline_capability";
+        public const string JsonRpcConnection = "aspire.cli.jsonrpc.connection";
+        public const string JsonRpcMethod = "rpc.method";
+        public const string JsonRpcStreaming = "aspire.cli.jsonrpc.streaming";
+        public const string JsonRpcStreamItemCount = "aspire.cli.jsonrpc.stream.item_count";
         public const string ChildCommand = "aspire.cli.child.command";
         public const string AppHostServerImplementation = "aspire.cli.apphost_server.implementation";
         public const string GuestRuntimeLanguage = "aspire.cli.guest.language";
         public const string GuestRuntimeDisplayName = "aspire.cli.guest.display_name";
         public const string GuestCommand = "aspire.cli.guest.command";
+        public const string GuestCommandPhase = "aspire.cli.guest.command.phase";
         public const string GuestWorkingDirectory = "aspire.cli.guest.working_directory";
         public const string GitCommand = "aspire.cli.git.command";
         public const string GitWorkingDirectory = "aspire.cli.git.working_directory";
@@ -145,7 +170,19 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         public const string NpmWorkingDirectory = "aspire.cli.npm.working_directory";
         public const string LsIncludeAll = "aspire.cli.ls.include_all";
         public const string LsOutputFormat = "aspire.cli.ls.output_format";
+        public const string ProcessCommandArgs = "process.command_args";
         public const string ProcessCommandArgsCount = "process.command_args.count";
+        public const string AddIntegrationName = "aspire.cli.add.integration.name";
+        public const string AddVersionSpecified = "aspire.cli.add.version_specified";
+        public const string AddSourceSpecified = "aspire.cli.add.source_specified";
+        public const string AddConfiguredChannel = "aspire.cli.add.configured_channel";
+        public const string AddPackageSearchResultCount = "aspire.cli.add.package.search_result_count";
+        public const string AddPackageMatchCount = "aspire.cli.add.package.match_count";
+        public const string AddPackageMatchKind = "aspire.cli.add.package.match_kind";
+        public const string AddPackageId = "aspire.cli.add.package.id";
+        public const string AddPackageVersion = "aspire.cli.add.package.version";
+        public const string AddPackageChannel = "aspire.cli.add.package.channel";
+        public const string AddPackageSuccess = "aspire.cli.add.package.success";
     }
 
     /// <summary>
@@ -176,6 +213,18 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         public const string AuxBackchannelGetDashboardUrlsResponse = "aspire/cli/aux_backchannel.get_dashboard_urls.response";
         public const string AuxBackchannelGetDashboardUrlsNotFound = "aspire/cli/aux_backchannel.get_dashboard_urls.not_found";
         public const string AppHostBuildReady = "aspire/cli/apphost.build_ready";
+        public const string JsonRpcResponseReceived = "aspire/cli/jsonrpc.response_received";
+        public const string JsonRpcStreamFirstItem = "aspire/cli/jsonrpc.stream.first_item";
+        public const string JsonRpcStreamCompleted = "aspire/cli/jsonrpc.stream.completed";
+        public const string GuestProcessResolveStart = "aspire/cli/guest.process_resolve_start";
+        public const string GuestProcessResolved = "aspire/cli/guest.process_resolved";
+        public const string GuestProcessResolveFailed = "aspire/cli/guest.process_resolve_failed";
+        public const string GuestProcessStart = "aspire/cli/guest.process_start";
+        public const string GuestProcessStarted = "aspire/cli/guest.process_started";
+        public const string GuestProcessExited = "aspire/cli/guest.process_exited";
+        public const string GuestFirstStdout = "aspire/cli/guest.first_stdout";
+        public const string GuestFirstStderr = "aspire/cli/guest.first_stderr";
+        public const string GuestOutputDrainTimeout = "aspire/cli/guest.output_drain_timeout";
     }
 
     /// <summary>
@@ -189,6 +238,15 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         public const string AppHostDiscoverySourceNone = "none";
         public const string AppHostDiscoverySourceGit = "git";
         public const string AppHostDiscoverySourceFilesystem = "filesystem";
+        public const string GuestCommandPhaseInitialize = "initialize";
+        public const string GuestCommandPhaseInstallDependencies = "install_dependencies";
+        public const string GuestCommandPhasePreExecute = "pre_execute";
+        public const string GuestCommandPhaseExecute = "execute";
+        public const string GuestCommandPhaseWatchExecute = "watch_execute";
+        public const string GuestCommandPhasePublishExecute = "publish_execute";
+        public const string AddPackageMatchKindExact = "exact";
+        public const string AddPackageMatchKindFuzzy = "fuzzy";
+        public const string AddPackageMatchKindNone = "none";
     }
 
     public bool IsEnabled => IsProfilingEnabled(configuration);
@@ -197,7 +255,7 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
 
     public static bool IsProfilingEnabled(IConfiguration configuration)
     {
-        return IsTruthy(configuration[EnabledEnvironmentVariable]) ||
+        return IsTruthy(configuration[EnvironmentVariables.Enabled]) ||
             IsTruthy(configuration[KnownConfigNames.Legacy.StartupProfilingEnabled]);
     }
 
@@ -213,25 +271,26 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
             return;
         }
 
-        environment[EnabledEnvironmentVariable] = "true";
-        environment[KnownConfigNames.Legacy.StartupProfilingEnabled] = "true";
-
         var sessionId = GetProfilingSessionId(activity);
-        if (!string.IsNullOrWhiteSpace(sessionId))
+        if (string.IsNullOrWhiteSpace(sessionId))
         {
-            environment[SessionIdEnvironmentVariable] = sessionId;
-            environment[KnownConfigNames.Legacy.StartupOperationId] = sessionId;
+            return;
         }
+
+        environment[EnvironmentVariables.Enabled] = "true";
+        environment[KnownConfigNames.Legacy.StartupProfilingEnabled] = "true";
+        environment[EnvironmentVariables.SessionId] = sessionId;
+        environment[KnownConfigNames.Legacy.StartupOperationId] = sessionId;
 
         if (!string.IsNullOrWhiteSpace(activity.Id))
         {
-            environment[TraceParentEnvironmentVariable] = activity.Id;
+            environment[EnvironmentVariables.TraceParent] = activity.Id;
             environment[KnownConfigNames.Legacy.StartupTraceParent] = activity.Id;
         }
 
         if (!string.IsNullOrWhiteSpace(activity.TraceStateString))
         {
-            environment[TraceStateEnvironmentVariable] = activity.TraceStateString;
+            environment[EnvironmentVariables.TraceState] = activity.TraceStateString;
             environment[KnownConfigNames.Legacy.StartupTraceState] = activity.TraceStateString;
         }
     }
@@ -283,8 +342,36 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
 
     internal ActivityScope StartBackchannelConnect(string socketPath)
     {
+        // Backchannel connection has two entry points: callers like GuestAppHostProject and
+        // DotNetCliRunner that start a parent BackchannelConnect activity with explicit context
+        // (the overloads below), and the inner AppHostCliBackchannel.ConnectAsync, which is
+        // invoked from inside that parent and also wants to record the connection. To avoid a
+        // nested duplicate span when the parent is already current, reuse it (non-owning) and
+        // just decorate it with the socket path.
+        if (IsCurrentActivity(Activities.BackchannelConnect))
+        {
+            var currentActivity = CurrentActivity;
+            currentActivity.SetBackchannelSocketFile(socketPath);
+            return currentActivity;
+        }
+
         var activity = StartActivity(Activities.BackchannelConnect);
         activity.SetBackchannelSocketFile(socketPath);
+        return activity;
+    }
+
+    internal ActivityScope StartBackchannelConnect(string socketPath, ActivityContext parentContext)
+    {
+        var activity = StartActivity(Activities.BackchannelConnect, parentContext: parentContext);
+        activity.SetBackchannelSocketFile(socketPath);
+        return activity;
+    }
+
+    internal ActivityScope StartBackchannelConnect(string socketPath, ActivityContext parentContext, bool autoReconnect, int retryCount)
+    {
+        var activity = StartBackchannelConnect(socketPath, parentContext);
+        activity.SetBackchannelAutoReconnect(autoReconnect);
+        activity.SetBackchannelRetryCount(retryCount);
         return activity;
     }
 
@@ -301,16 +388,29 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         return StartActivity(Activities.BackchannelGetDashboardUrls);
     }
 
+    internal ActivityScope StartJsonRpcClientCall(string connectionName, string methodName, bool streaming)
+    {
+        var activity = StartActivity(Activities.JsonRpcClientCall, ActivityKind.Client);
+        activity.SetJsonRpcCall(connectionName, methodName, streaming);
+        return activity;
+    }
+
+    internal ActivityScope StartProfileCaptureDelay(TimeSpan delay)
+    {
+        var activity = StartActivity(Activities.ProfileCaptureDelay);
+        activity.SetProfileCaptureDelay(delay);
+        return activity;
+    }
+
     internal ActivityScope StartDetachedGetDashboardUrls()
     {
         return StartActivity(Activities.StartAppHostGetDashboardUrls);
     }
 
-    internal ActivityScope StartDetachedSpawnChild(string executablePath, int argsCount, string childCommand)
+    internal ActivityScope StartDetachedSpawnChild(string executablePath, IReadOnlyList<string> args, string childCommand)
     {
-        var activity = StartActivity(Activities.StartAppHostSpawnChild);
-        activity.SetProcessExecutableName(Path.GetFileName(executablePath));
-        activity.SetProcessCommandArgsCount(argsCount);
+        var activity = StartActivity(Activities.Process, ActivityKind.Client);
+        activity.SetProcessInvocation(executablePath, args);
         activity.SetChildCommand(childCommand);
         return activity;
     }
@@ -326,50 +426,49 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
 
     internal ActivityScope StartDotNetProcess(string dotnetCommand, FileInfo? projectFile, DirectoryInfo workingDirectory, ProcessInvocationOptions options)
     {
-        var activityName = string.Equals(dotnetCommand, "run", StringComparison.Ordinal)
-            ? Activities.DotNetRunLifetime
-            : Activities.DotNetCommand(dotnetCommand);
-        var activity = StartActivity(activityName, ActivityKind.Client);
+        var activity = StartActivity(Activities.Process, ActivityKind.Client);
         activity.SetDotNetInvocation(dotnetCommand, projectFile, workingDirectory, options);
         return activity;
     }
 
     internal ActivityScope StartAppHostServerLifetime(string implementationName)
     {
-        var activity = StartActivity(Activities.AppHostServerLifetime, ActivityKind.Client);
+        // The server process span stays open for the process lifetime, but it should not become
+        // the ambient parent for later CLI operations such as backchannel connection attempts.
+        var activity = StartActivity(Activities.Process, ActivityKind.Client, restoreAmbientActivity: true);
         activity.SetAppHostServerImplementation(implementationName);
         return activity;
     }
 
-    internal ActivityScope StartGuestInitializeCommand(string languageId, string displayName, string command, int argsCount, DirectoryInfo workingDirectory)
+    internal ActivityScope StartGuestInitializeCommand(string languageId, string displayName, string command, string[] args, DirectoryInfo workingDirectory)
     {
-        var activity = StartGuestProcessActivity(Activities.GuestInitializeCommand, languageId, displayName, command, argsCount, workingDirectory);
+        var activity = StartGuestProcessActivity(languageId, displayName, command, args, workingDirectory, Values.GuestCommandPhaseInitialize);
         return activity;
     }
 
-    internal ActivityScope StartGuestInstallDependencies(string languageId, string displayName, string command, int argsCount, DirectoryInfo workingDirectory)
+    internal ActivityScope StartGuestInstallDependencies(string languageId, string displayName, string command, string[] args, DirectoryInfo workingDirectory)
     {
-        var activity = StartGuestProcessActivity(Activities.GuestInstallDependencies, languageId, displayName, command, argsCount, workingDirectory);
+        var activity = StartGuestProcessActivity(languageId, displayName, command, args, workingDirectory, Values.GuestCommandPhaseInstallDependencies);
         return activity;
     }
 
-    internal ActivityScope StartGuestExecuteCommand(string languageId, string displayName, string command, int argsCount, DirectoryInfo workingDirectory)
+    internal ActivityScope StartGuestExecuteCommand(string languageId, string displayName, string command, string[] args, DirectoryInfo workingDirectory, string phase)
     {
-        var activity = StartGuestProcessActivity(Activities.GuestExecuteCommand, languageId, displayName, command, argsCount, workingDirectory);
+        var activity = StartGuestProcessActivity(languageId, displayName, command, args, workingDirectory, phase);
         return activity;
     }
 
-    internal ActivityScope StartNpmCommand(string command, int argsCount, string workingDirectory)
+    internal ActivityScope StartNpmCommand(string command, IReadOnlyList<string> args, string workingDirectory)
     {
-        var activity = StartActivity(Activities.NpmCommand, ActivityKind.Client);
-        activity.SetNpmInvocation(command, argsCount, workingDirectory);
+        var activity = StartActivity(Activities.Process, ActivityKind.Client);
+        activity.SetNpmInvocation(command, args, workingDirectory);
         return activity;
     }
 
-    internal ActivityScope StartGitCommand(string command, int argsCount, DirectoryInfo workingDirectory)
+    internal ActivityScope StartGitCommand(string command, string executablePath, IReadOnlyList<string> args, DirectoryInfo workingDirectory)
     {
-        var activity = StartActivity(Activities.GitCommand, ActivityKind.Client);
-        activity.SetGitInvocation(command, argsCount, workingDirectory);
+        var activity = StartActivity(Activities.Process, ActivityKind.Client);
+        activity.SetGitInvocation(command, executablePath, args, workingDirectory);
         return activity;
     }
 
@@ -377,6 +476,57 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
     {
         var activity = StartActivity(Activities.RunAppHostFindAppHost);
         activity.SetAppHostProjectFileSpecified(passedAppHostProjectFile is not null);
+        return activity;
+    }
+
+    internal ActivityScope StartAddCommand(string? integrationName, string? version, string? source, FileInfo? passedAppHostProjectFile)
+    {
+        var activity = StartActivity(Activities.AddCommand, startWithRemoteParent: true);
+        activity.SetAddInvocation(integrationName, version, source, passedAppHostProjectFile);
+        return activity;
+    }
+
+    internal ActivityScope StartAddFindAppHost(FileInfo? passedAppHostProjectFile)
+    {
+        var activity = StartActivity(Activities.AddFindAppHost);
+        activity.SetAppHostProjectFileSpecified(passedAppHostProjectFile is not null);
+        return activity;
+    }
+
+    internal ActivityScope StartAddGetConfiguredChannel()
+    {
+        return StartActivity(Activities.AddGetConfiguredChannel);
+    }
+
+    internal ActivityScope StartAddSearchPackages(string? configuredChannel)
+    {
+        var activity = StartActivity(Activities.AddSearchPackages);
+        activity.SetAddConfiguredChannel(configuredChannel);
+        return activity;
+    }
+
+    internal ActivityScope StartAddSelectPackage(string? integrationName, string? version)
+    {
+        var activity = StartActivity(Activities.AddSelectPackage);
+        activity.SetAddPackageSelectionRequest(integrationName, version);
+        return activity;
+    }
+
+    internal ActivityScope StartAddSelectPackagePrompt()
+    {
+        return StartActivity(Activities.AddSelectPackagePrompt);
+    }
+
+    internal ActivityScope StartAddStopExistingInstance()
+    {
+        return StartActivity(Activities.AddStopExistingInstance);
+    }
+
+    internal ActivityScope StartAddPackage(string packageId, string packageVersion, string? source)
+    {
+        var activity = StartActivity(Activities.AddPackage);
+        activity.SetAddPackage(packageId, packageVersion);
+        activity.SetAddSourceSpecified(!string.IsNullOrEmpty(source));
         return activity;
     }
 
@@ -445,6 +595,18 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         return activity;
     }
 
+    internal ActivityScope StartRunAppHostStartAppHostServer()
+    {
+        return StartActivity(Activities.RunAppHostStartAppHostServer);
+    }
+
+    internal ActivityScope StartRunAppHostStartGuestAppHost(string languageId)
+    {
+        var activity = StartActivity(Activities.RunAppHostStartGuestAppHost);
+        activity.SetAppHostLanguage(languageId);
+        return activity;
+    }
+
     internal ActivityScope StartRunAppHostStopExistingInstance()
     {
         return StartActivity(Activities.RunAppHostStopExistingInstance);
@@ -463,6 +625,13 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
     internal ActivityScope StartRunCommand()
     {
         return StartActivity(Activities.RunCommand, startWithRemoteParent: true);
+    }
+
+    internal ActivityScope StartCommand(string commandName)
+    {
+        var activity = StartActivity(Activities.Command, startWithRemoteParent: true);
+        activity.SetCommandName(commandName);
+        return activity;
     }
 
     internal ActivityScope StartStopCommand(bool stopAll, bool passedAppHostProjectFile)
@@ -487,7 +656,9 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
     private ActivityScope StartActivity(
         string name,
         ActivityKind kind = ActivityKind.Internal,
-        bool startWithRemoteParent = false)
+        bool startWithRemoteParent = false,
+        ActivityContext? parentContext = null,
+        bool restoreAmbientActivity = false)
     {
         if (!IsEnabled)
         {
@@ -496,10 +667,14 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
 
         var ambientActivity = Activity.Current;
         Activity? activity;
-        if (startWithRemoteParent &&
-            TryGetConfiguredActivityContext(out var parentContext))
+        if (parentContext is { } explicitParentContext)
         {
-            activity = _activitySource.StartActivity(name, kind, parentContext);
+            activity = _activitySource.StartActivity(name, kind, explicitParentContext);
+        }
+        else if (startWithRemoteParent &&
+            TryGetConfiguredActivityContext(out var configuredParentContext))
+        {
+            activity = _activitySource.StartActivity(name, kind, configuredParentContext);
         }
         else
         {
@@ -507,6 +682,16 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         }
 
         AddProfilingSession(activity, ambientActivity);
+        // StartActivity makes the new span ambient when it is sampled. For long-lived process
+        // spans that are only used for lifetime/export context, immediately put the previous
+        // CLI activity back so unrelated follow-up operations do not become children of the
+        // process span. Only restore when our activity is still current; otherwise we could
+        // clobber a listener or helper that legitimately changed Activity.Current.
+        if (restoreAmbientActivity && ReferenceEquals(Activity.Current, activity))
+        {
+            Activity.Current = ambientActivity;
+        }
+
         return new ActivityScope(activity);
     }
 
@@ -525,15 +710,15 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
 
         // Keep profiling tags on profiling spans only. Reported/customer activities only
         // carry the session as baggage so it can flow across async and process boundaries.
-        activity.SetBaggage(SessionIdBaggageName, sessionId);
+        activity.SetBaggage(Baggage.SessionId, sessionId);
         activity.SetTag(Tags.ProfilingSessionId, sessionId);
         activity.SetTag(Tags.LegacyStartupOperationId, sessionId);
     }
 
     private bool TryGetConfiguredActivityContext(out ActivityContext activityContext)
     {
-        var traceParent = GetConfigurationValue(configuration, TraceParentEnvironmentVariable, KnownConfigNames.Legacy.StartupTraceParent);
-        var traceState = GetConfigurationValue(configuration, TraceStateEnvironmentVariable, KnownConfigNames.Legacy.StartupTraceState);
+        var traceParent = GetConfigurationValue(configuration, EnvironmentVariables.TraceParent, KnownConfigNames.Legacy.StartupTraceParent);
+        var traceState = GetConfigurationValue(configuration, EnvironmentVariables.TraceState, KnownConfigNames.Legacy.StartupTraceState);
         if (!string.IsNullOrWhiteSpace(traceParent) &&
             ActivityContext.TryParse(traceParent, traceState, out activityContext))
         {
@@ -546,12 +731,12 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
 
     private string? GetConfiguredSessionId()
     {
-        return GetConfigurationValue(configuration, SessionIdEnvironmentVariable, KnownConfigNames.Legacy.StartupOperationId);
+        return GetConfigurationValue(configuration, EnvironmentVariables.SessionId, KnownConfigNames.Legacy.StartupOperationId);
     }
 
     private static string? GetProfilingSessionId(Activity? activity)
     {
-        return activity?.GetBaggageItem(SessionIdBaggageName) is { Length: > 0 } sessionId ? sessionId : null;
+        return activity?.GetBaggageItem(Baggage.SessionId) is { Length: > 0 } sessionId ? sessionId : null;
     }
 
     private static string? GetProfilingSessionIdFromAncestors(Activity? activity)
@@ -573,7 +758,7 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         {
             if (GetProfilingSessionId(current) is null)
             {
-                current.SetBaggage(SessionIdBaggageName, sessionId);
+                current.SetBaggage(Baggage.SessionId, sessionId);
             }
         }
     }
@@ -588,10 +773,30 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         return string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) || value == "1";
     }
 
-    private ActivityScope StartGuestProcessActivity(string activityName, string languageId, string displayName, string command, int argsCount, DirectoryInfo workingDirectory)
+    internal static void SetProcessInvocation(Activity? activity, string executablePath, IReadOnlyList<string> args)
     {
-        var activity = StartActivity(activityName, ActivityKind.Client);
-        activity.SetGuestInvocation(languageId, displayName, command, argsCount, workingDirectory);
+        if (activity is null)
+        {
+            return;
+        }
+
+        var executableName = Path.GetFileName(executablePath);
+        if (string.IsNullOrEmpty(executableName))
+        {
+            executableName = executablePath;
+        }
+
+        activity.DisplayName = $"process {executableName}";
+        activity.SetTag(TelemetryConstants.Tags.ProcessExecutableName, executableName);
+        activity.SetTag(TelemetryConstants.Tags.ProcessExecutablePath, executablePath);
+        activity.SetTag(Tags.ProcessCommandArgs, args.ToArray());
+        activity.SetTag(Tags.ProcessCommandArgsCount, args.Count);
+    }
+
+    private ActivityScope StartGuestProcessActivity(string languageId, string displayName, string command, string[] args, DirectoryInfo workingDirectory, string phase)
+    {
+        var activity = StartActivity(Activities.Process, ActivityKind.Client);
+        activity.SetGuestInvocation(languageId, displayName, command, args, workingDirectory, phase);
         return activity;
     }
 
@@ -600,11 +805,21 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         _activitySource.Dispose();
     }
 
+    private static bool IsCurrentActivity(string name)
+    {
+        var currentActivity = Activity.Current;
+        return currentActivity is not null &&
+            currentActivity.Source.Name == ActivitySourceName &&
+            currentActivity.OperationName == name;
+    }
+
     internal readonly struct ActivityScope(Activity? activity, bool ownsActivity = true) : IDisposable
     {
         public bool IsRunning => activity is not null;
 
         public void AddAppHostBuildReadyEvent() => AddEvent(Events.AppHostBuildReady);
+
+        public void AddContextToEnvironment(IDictionary<string, string> environment) => AddActivityContextToEnvironment(activity, environment);
 
         public void AddAuxBackchannelGetDashboardUrlsInvokeEvent() => AddEvent(Events.AuxBackchannelGetDashboardUrlsInvoke);
 
@@ -644,6 +859,12 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
 
         public void AddDotNetFirstStdoutEvent() => AddEvent(Events.DotNetFirstStdout);
 
+        public void AddJsonRpcResponseReceivedEvent() => AddEvent(Events.JsonRpcResponseReceived);
+
+        public void AddJsonRpcStreamFirstItemEvent() => AddEvent(Events.JsonRpcStreamFirstItem);
+
+        public void AddJsonRpcStreamCompletedEvent() => AddEvent(Events.JsonRpcStreamCompleted);
+
         public void AddDotNetProcessExitedEvent() => AddEvent(Events.DotNetProcessExited);
 
         public void AddDotNetProcessStartFailedEvent() => AddEvent(Events.DotNetProcessStartFailed);
@@ -677,6 +898,46 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         public void SetAppHostBackchannelConnected(bool connected) => SetTag(Tags.AppHostBackchannelConnected, connected);
 
         public void SetAppHostBuildSuccess(bool buildSuccess) => SetTag(Tags.AppHostBuildSuccess, buildSuccess);
+
+        public void SetAddConfiguredChannel(string? configuredChannel) => SetTag(Tags.AddConfiguredChannel, configuredChannel);
+
+        public void SetAddInvocation(string? integrationName, string? version, string? source, FileInfo? passedAppHostProjectFile)
+        {
+            SetTag(Tags.AddIntegrationName, integrationName);
+            SetTag(Tags.AddVersionSpecified, !string.IsNullOrEmpty(version));
+            SetTag(Tags.AddSourceSpecified, !string.IsNullOrEmpty(source));
+            SetAppHostProjectFileSpecified(passedAppHostProjectFile is not null);
+        }
+
+        public void SetAddPackage(string packageId, string packageVersion)
+        {
+            SetTag(Tags.AddPackageId, packageId);
+            SetTag(Tags.AddPackageVersion, packageVersion);
+        }
+
+        public void SetAddPackageSelectionRequest(string? integrationName, string? version)
+        {
+            SetTag(Tags.AddIntegrationName, integrationName);
+            SetTag(Tags.AddVersionSpecified, !string.IsNullOrEmpty(version));
+        }
+
+        public void SetAddPackageMatch(int count, string matchKind)
+        {
+            SetTag(Tags.AddPackageMatchCount, count);
+            SetTag(Tags.AddPackageMatchKind, matchKind);
+        }
+
+        public void SetAddPackageSearchResultCount(int count) => SetTag(Tags.AddPackageSearchResultCount, count);
+
+        public void SetAddPackageSuccess(bool success) => SetTag(Tags.AddPackageSuccess, success);
+
+        public void SetAddSourceSpecified(bool sourceSpecified) => SetTag(Tags.AddSourceSpecified, sourceSpecified);
+
+        public void SetAddSelectedPackage(string packageId, string packageVersion, string channelName)
+        {
+            SetAddPackage(packageId, packageVersion);
+            SetTag(Tags.AddPackageChannel, channelName);
+        }
 
         public void SetAppHostBuildExitCode(int exitCode)
         {
@@ -770,6 +1031,8 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
 
         public void SetChildCommand(string command) => SetTag(Tags.ChildCommand, command);
 
+        public void SetCommandName(string commandName) => SetTag(TelemetryConstants.Tags.CommandName, commandName);
+
         public void SetDevCertificateEnvironmentVariables(int count) => SetTag(Tags.DevCertificateEnvironmentVariableCount, count);
 
         public void SetDotNetArgsCount(int argsCount) => SetTag(Tags.DotNetArgsCount, argsCount);
@@ -797,22 +1060,21 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
             SetTag(Tags.DotNetDebug, options.Debug);
         }
 
-        public void SetGuestInvocation(string languageId, string displayName, string command, int argsCount, DirectoryInfo workingDirectory)
+        public void SetGuestInvocation(string languageId, string displayName, string command, string[] args, DirectoryInfo workingDirectory, string phase)
         {
             SetTag(Tags.GuestRuntimeLanguage, languageId);
             SetTag(Tags.GuestRuntimeDisplayName, displayName);
             SetTag(Tags.GuestCommand, command);
+            SetTag(Tags.GuestCommandPhase, phase);
             SetTag(Tags.GuestWorkingDirectory, workingDirectory.FullName);
-            SetProcessExecutableName(Path.GetFileName(command));
-            SetProcessCommandArgsCount(argsCount);
+            SetProcessInvocation(command, args);
         }
 
-        public void SetGitInvocation(string command, int argsCount, DirectoryInfo workingDirectory)
+        public void SetGitInvocation(string command, string executablePath, IReadOnlyList<string> args, DirectoryInfo workingDirectory)
         {
             SetTag(Tags.GitCommand, command);
             SetTag(Tags.GitWorkingDirectory, workingDirectory.FullName);
-            SetProcessExecutableName("git");
-            SetProcessCommandArgsCount(argsCount);
+            SetProcessInvocation(executablePath, args);
         }
 
         public void SetGitOutputLengths(int stdoutLength, int stderrLength)
@@ -821,12 +1083,46 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
             SetTag(Tags.GitStderrLength, stderrLength);
         }
 
-        public void SetNpmInvocation(string command, int argsCount, string workingDirectory)
+        public void SetJsonRpcCall(string connectionName, string methodName, bool streaming)
+        {
+            SetTag(Tags.JsonRpcConnection, connectionName);
+            SetTag(Tags.JsonRpcMethod, methodName);
+            SetTag(Tags.JsonRpcStreaming, streaming);
+        }
+
+        public void SetJsonRpcStreamItemCount(int count) => SetTag(Tags.JsonRpcStreamItemCount, count);
+
+        public void SetProfileCaptureDelay(TimeSpan delay) => SetTag(Tags.ProfileCaptureDelayMilliseconds, delay.TotalMilliseconds);
+
+        public BackchannelTraceContext? CreateBackchannelTraceContext()
+        {
+            if (activity is null)
+            {
+                return null;
+            }
+
+            var baggage = new Dictionary<string, string>();
+            foreach (var (key, value) in activity.Baggage)
+            {
+                if (value is not null)
+                {
+                    baggage[key] = value;
+                }
+            }
+
+            return new BackchannelTraceContext
+            {
+                TraceParent = activity.Id,
+                TraceState = activity.TraceStateString,
+                Baggage = baggage
+            };
+        }
+
+        public void SetNpmInvocation(string command, IReadOnlyList<string> args, string workingDirectory)
         {
             SetTag(Tags.NpmCommand, command);
             SetTag(Tags.NpmWorkingDirectory, workingDirectory);
-            SetProcessExecutableName(Path.GetFileName(command));
-            SetProcessCommandArgsCount(argsCount);
+            SetProcessInvocation(command, args);
         }
 
         public void SetLsInvocation(string outputFormat, bool includeAll)
@@ -837,9 +1133,9 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
 
         public void SetDotNetMsBuildServer(string? msBuildServer) => SetTag(Tags.DotNetMsBuildServer, msBuildServer);
 
-        public void SetDotNetResolvedExecutable(string dotnetPath, string? msBuildServer)
+        public void SetDotNetResolvedExecutable(string dotnetPath, IReadOnlyList<string> args, string? msBuildServer)
         {
-            SetProcessExecutableName(Path.GetFileName(dotnetPath));
+            SetProcessInvocation(dotnetPath, args);
             SetDotNetMsBuildServer(msBuildServer);
         }
 
@@ -858,9 +1154,20 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
 
         public void SetError(string description) => activity?.SetStatus(ActivityStatusCode.Error, description);
 
+        public void SetError(Exception exception) => activity?.SetStatus(ActivityStatusCode.Error, exception.Message);
+
+        public void SetProcessInvocation(string executablePath, IReadOnlyList<string> args)
+        {
+            ProfilingTelemetry.SetProcessInvocation(activity, executablePath, args);
+        }
+
         public void SetProcessCommandArgsCount(int argsCount) => SetTag(Tags.ProcessCommandArgsCount, argsCount);
 
+        public void SetProcessCommandArgs(IReadOnlyList<string> args) => SetTag(Tags.ProcessCommandArgs, args.ToArray());
+
         public void SetProcessExecutableName(string? executableName) => SetTag(TelemetryConstants.Tags.ProcessExecutableName, executableName);
+
+        public void SetProcessExecutablePath(string? executablePath) => SetTag(TelemetryConstants.Tags.ProcessExecutablePath, executablePath);
 
         public void SetProcessExitCode(int exitCode) => SetTag(TelemetryConstants.Tags.ProcessExitCode, exitCode);
 

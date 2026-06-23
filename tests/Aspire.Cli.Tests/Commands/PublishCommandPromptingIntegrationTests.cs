@@ -1,4 +1,3 @@
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
@@ -12,7 +11,6 @@ using Aspire.Cli.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Spectre.Console;
 using Spectre.Console.Rendering;
-using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using Microsoft.AspNetCore.InternalTesting;
 
@@ -810,6 +808,7 @@ internal sealed class TestPromptBackchannel : IAppHostCliBackchannel
 
     // Default implementations for other interface methods
     public Task RequestStopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task NotifyAppHostReadyAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     public Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken) =>
         Task.FromResult(new DashboardUrlsState
         {
@@ -830,6 +829,7 @@ internal sealed class TestPromptBackchannel : IAppHostCliBackchannel
     }
     public Task ConnectAsync(string socketPath, int retryCount, CancellationToken cancellationToken) => Task.CompletedTask;
     public Task ConnectAsync(string socketPath, bool autoReconnect, int retryCount, CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task WaitForDisconnectAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     public Task<string[]> GetCapabilitiesAsync(CancellationToken cancellationToken) => Task.FromResult(new[] { "baseline.v2" });
 
     public Task<GetPipelineStepsResponse> GetPipelineStepsAsync(string? step, CancellationToken cancellationToken) =>
@@ -842,7 +842,6 @@ internal sealed record PromptData(string PromptId, IReadOnlyList<PromptInputData
 internal sealed record PromptCompletion(string PromptId, PublishingPromptInputAnswer[] Answers, bool UpdateResponse);
 
 // Enhanced TestConsoleInteractionService that tracks interaction types
-[SuppressMessage("Usage", "ASPIREINTERACTION001:Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.")]
 internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInteractionService
 {
     private readonly Queue<(string response, ResponseType type)> _responses = new();
@@ -888,7 +887,7 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
     public Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
         => PromptForStringAsync(promptText, validator, isSecret: false, required, binding, cancellationToken);
 
-    public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull
+    public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
     {
         if (_shouldCancel || cancellationToken.IsCancellationRequested)
         {
@@ -908,7 +907,7 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
         return Task.FromResult(choices.First());
     }
 
-    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull
+    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, IEnumerable<T>? bindingChoices = null, CancellationToken cancellationToken = default) where T : notnull
     {
         if (_shouldCancel || cancellationToken.IsCancellationRequested)
         {
@@ -946,14 +945,15 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
 
     // Default implementations for other interface methods
     public Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false) => action();
+    public Task<T> ShowDynamicStatusAsync<T>(string initialStatusText, Func<Action<string>, Task<T>> action, KnownEmoji? emoji = null) => action(_ => { });
     public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false) => action();
     public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion) => 0;
-    public void DisplayError(string errorMessage) => DisplayedErrors.Add(errorMessage);
-    public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false) { }
+    public void DisplayError(string errorMessage, bool allowMarkup = false) => DisplayedErrors.Add(errorMessage);
+    public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null) { }
     public void DisplaySuccess(string message, bool allowMarkup = false) { }
     public void DisplaySubtleMessage(string message, bool allowMarkup = false) { }
     public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines) { }
-    public void DisplayCancellationMessage() { }
+    public void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null) { }
     public void DisplayEmptyLine() { }
     public void DisplayPlainText(string text) { }
     public void DisplayRawText(string text, ConsoleOutput? consoleOverride = null) { }

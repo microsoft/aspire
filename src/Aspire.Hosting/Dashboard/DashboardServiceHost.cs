@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Net;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Dcp;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -18,24 +19,12 @@ using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Dashboard;
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
 /// <summary>
 /// Hosts a gRPC service via <see cref="DashboardService"/> (aka the "Resource Service") that a dashboard can connect to.
 /// Configures DI and networking options for the service.
 /// </summary>
 internal sealed class DashboardServiceHost : IHostedService
 {
-    /// <summary>
-    /// Name of the environment variable that optionally specifies the resource service URL,
-    /// which the dashboard will connect to over gRPC.
-    /// </summary>
-    /// <remarks>
-    /// This is primarily intended for cases outside of the local developer environment.
-    /// If no value exists for this variable, a port is assigned dynamically.
-    /// </remarks>
-    private const string ResourceServiceUrlVariableName = "DOTNET_RESOURCE_SERVICE_ENDPOINT_URL";
-
     /// <summary>
     /// Provides access to the URI at which the resource service endpoint is hosted.
     /// </summary>
@@ -52,6 +41,7 @@ internal sealed class DashboardServiceHost : IHostedService
         DistributedApplicationModel applicationModel,
         IConfiguration configuration,
         DistributedApplicationExecutionContext executionContext,
+        IOptions<DcpOptions> dcpOptions,
         ILoggerFactory loggerFactory,
         IConfigureOptions<LoggerFilterOptions> loggerOptions,
         ResourceNotificationService resourceNotificationService,
@@ -137,29 +127,25 @@ internal sealed class DashboardServiceHost : IHostedService
         void ConfigureKestrel(KestrelServerOptions kestrelOptions)
         {
             // Inspect environment for the address to listen on.
-            var uri = configuration.GetUri(ResourceServiceUrlVariableName);
+            // Prefer the new config name, falling back to the legacy name.
+            var uri = configuration.GetUri(KnownConfigNames.ResourceServiceEndpointUrl)
+                ?? configuration.GetUri(KnownConfigNames.Legacy.ResourceServiceEndpointUrl);
+            var allowUnsecuredTransport = configuration.GetBool(KnownConfigNames.AllowUnsecuredTransport) ?? false;
+            var randomizePorts = dcpOptions.Value.RandomizePorts;
 
-            string? scheme;
+            var endpoint = ResolveEndpoint(uri, randomizePorts, allowUnsecuredTransport);
 
-            if (uri is null)
+            if (endpoint.UseListenLocalhost)
             {
-                // No URI available from the environment.
-                scheme = null;
-
-                // Listen on a random port.
-                kestrelOptions.Listen(IPAddress.Loopback, port: 0, ConfigureListen);
-            }
-            else if (uri.IsLoopback)
-            {
-                scheme = uri.Scheme;
-
-                // Listen on the requested localhost port.
-                kestrelOptions.ListenLocalhost(uri.Port, ConfigureListen);
+                kestrelOptions.ListenLocalhost(endpoint.Port, ConfigureListen);
             }
             else
             {
-                throw new ArgumentException($"{ResourceServiceUrlVariableName} must contain a local loopback address.");
+                kestrelOptions.Listen(endpoint.BindAddress, endpoint.Port, ConfigureListen);
             }
+
+            _logger.LogDebug("Resource service endpoint: configured={Uri}, binding={BindAddress}:{Port}, scheme={Scheme}",
+                uri?.ToString() ?? "(none)", endpoint.BindAddress, endpoint.Port, endpoint.Scheme);
 
             void ConfigureListen(ListenOptions options)
             {
@@ -167,7 +153,7 @@ internal sealed class DashboardServiceHost : IHostedService
                 // which cannot negotiate between HTTP/1.1 and HTTP/2.
                 options.Protocols = HttpProtocols.Http2;
 
-                if (string.Equals(scheme, "https", StringComparison.Ordinal))
+                if (string.Equals(endpoint.Scheme, "https", StringComparison.Ordinal))
                 {
                     options.UseHttps();
                 }
@@ -176,11 +162,79 @@ internal sealed class DashboardServiceHost : IHostedService
     }
 
     /// <summary>
+    /// Resolves the endpoint that the resource service should bind to based on the configured URI,
+    /// port randomization settings, and transport security preferences.
+    /// </summary>
+    internal static ResourceServiceEndpointInfo ResolveEndpoint(Uri? configuredUri, bool randomizePorts, bool allowUnsecuredTransport)
+    {
+        var scheme = ResolveScheme(configuredUri, allowUnsecuredTransport);
+
+        // When randomizePorts is true (e.g. --isolated mode), override a fixed configured
+        // port to 0 so multiple instances don't collide. A configured port of 0 is already
+        // dynamic, so no override is needed.
+        var effectivePort = (randomizePorts && configuredUri is not null && configuredUri.Port != 0) ? 0 : configuredUri?.Port ?? 0;
+
+        if (configuredUri is null)
+        {
+            // No configured endpoint — bind to IPv4 loopback on a random port.
+            return new ResourceServiceEndpointInfo(IPAddress.Loopback, Port: 0, UseListenLocalhost: false, scheme);
+        }
+        else if (IPAddress.TryParse(configuredUri.DnsSafeHost, out var ip) && IPAddress.IsLoopback(ip))
+        {
+            // Bind to the exact loopback address specified (e.g. 127.0.0.1 or [::1]).
+            // Use DnsSafeHost to strip brackets from IPv6 literals so TryParse succeeds.
+            return new ResourceServiceEndpointInfo(ip, effectivePort, UseListenLocalhost: false, scheme);
+        }
+        else if (configuredUri.IsLoopback || IsLocalhostOrLocalhostTld(configuredUri))
+        {
+            // For "localhost" or *.localhost hosts, bind to both IPv4 and IPv6 loopback.
+            // Kestrel does not support ListenLocalhost with port 0, so fall back to
+            // binding on IPv4 loopback when a dynamic port is needed.
+            if (effectivePort == 0)
+            {
+                return new ResourceServiceEndpointInfo(IPAddress.Loopback, Port: 0, UseListenLocalhost: false, scheme);
+            }
+            else
+            {
+                return new ResourceServiceEndpointInfo(IPAddress.Loopback, effectivePort, UseListenLocalhost: true, scheme);
+            }
+        }
+        else
+        {
+            throw new ArgumentException($"{KnownConfigNames.ResourceServiceEndpointUrl} must contain a local loopback address.");
+        }
+    }
+
+    /// <summary>
+    /// Determines the scheme for the resource service endpoint. When a URI is explicitly
+    /// configured, its scheme is used. When no URI is provided, defaults to HTTPS unless
+    /// unsecured transport is explicitly allowed.
+    /// </summary>
+    internal static string ResolveScheme(Uri? configuredUri, bool allowUnsecuredTransport)
+    {
+        if (configuredUri is not null)
+        {
+            return configuredUri.Scheme;
+        }
+
+        return allowUnsecuredTransport ? "http" : "https";
+    }
+
+    private static bool IsLocalhostOrLocalhostTld(Uri uri)
+    {
+        var host = uri.Host.EndsWith(".", StringComparison.Ordinal)
+            ? uri.Host[..^1]
+            : uri.Host;
+
+        return EndpointHostHelpers.IsLocalhostOrLocalhostTld(host);
+    }
+
+    /// <summary>
     /// Gets the URI upon which the resource service is listening.
     /// </summary>
     /// <remarks>
     /// Intended to be used by the app model when launching the dashboard process, populating its
-    /// <c>DOTNET_RESOURCE_SERVICE_ENDPOINT_URL</c> environment variable with a single URI.
+    /// <c>ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL</c> environment variable with a single URI.
     /// </remarks>
     public async Task<string> GetResourceServiceUriAsync(CancellationToken cancellationToken = default)
     {
@@ -227,4 +281,11 @@ internal sealed class DashboardServiceHost : IHostedService
     }
 }
 
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+/// <summary>
+/// Describes the resolved endpoint binding for the resource service.
+/// </summary>
+internal readonly record struct ResourceServiceEndpointInfo(
+    IPAddress BindAddress,
+    int Port,
+    bool UseListenLocalhost,
+    string Scheme);

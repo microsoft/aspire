@@ -121,6 +121,19 @@ internal static class FluentUISetupHelpers
     {
         var textboxModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/TextField/FluentTextField.razor.js"));
         textboxModule.SetupVoid("setControlAttribute", _ => true);
+        textboxModule.SetupVoid("ensureCurrentValueMatch", _ => true);
+    }
+
+    public static void SetupFluentButton(TestContext context)
+    {
+        var buttonModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/Button/FluentButton.razor.js"));
+        buttonModule.SetupVoid("updateProxy", _ => true);
+    }
+
+    public static void SetupFluentCombobox(TestContext context)
+    {
+        var comboboxModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/List/FluentCombobox.razor.js"));
+        comboboxModule.SetupVoid("setControlAttribute", _ => true);
     }
 
     public static void AddCommonDashboardServices(
@@ -145,7 +158,9 @@ internal static class FluentUISetupHelpers
         context.Services.AddSingleton<DashboardTelemetryService>();
         context.Services.AddSingleton<IDashboardTelemetrySender, TestDashboardTelemetrySender>();
         context.Services.AddSingleton<ComponentTelemetryContextProvider>();
-        context.Services.AddSingleton<IAIContextProvider, TestAIContextProvider>();
+        context.Services.AddSingleton<TestAIContextProvider>();
+        context.Services.AddSingleton<IAIContextProvider>(serviceProvider => serviceProvider.GetRequiredService<TestAIContextProvider>());
+        context.Services.AddSingleton<IAssistantDisplayContext>(serviceProvider => serviceProvider.GetRequiredService<TestAIContextProvider>());
         context.Services.AddSingleton<ITelemetryErrorRecorder, TestTelemetryErrorRecorder>();
         context.Services.AddSingleton<ThemeManager>(themeManager ?? new ThemeManager(new TestThemeResolver()));
         context.Services.AddSingleton<GlobalState>();

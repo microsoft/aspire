@@ -37,11 +37,9 @@ public sealed class NewWithAgentInitTests(ITestOutputHelper output)
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -55,7 +53,10 @@ public sealed class NewWithAgentInitTests(ITestOutputHelper output)
 
         // Run aspire new with the Starter template, going through all prompts manually
         // so we can ACCEPT the agent init prompt instead of declining it.
-        await auto.TypeAsync("aspire new");
+        // Pass --skill-locations and --skills as CLI flags so the test does not depend on
+        // the position or count of entries in the interactive skill-selection menus, which
+        // change whenever the bundle ships a new skill.
+        await auto.TypeAsync("aspire new --skill-locations claudecode --skills playwright-cli");
         await auto.EnterAsync();
 
         // Template selection: accept default Starter App
@@ -109,26 +110,9 @@ public sealed class NewWithAgentInitTests(ITestOutputHelper output)
         await auto.WaitAsync(500);
         await auto.TypeAsync("y");
 
-        // Agent init: skill location - select Claude Code
-        await auto.WaitUntilAsync(
-            s => s.ContainsText("skill files be installed"),
-            timeout: TimeSpan.FromSeconds(60),
-            description: "skill location prompt");
-        await auto.TypeAsync(" "); // Toggle off default Standard location
-        await auto.DownAsync();
-        await auto.TypeAsync(" "); // Toggle on Claude Code location
-        await auto.EnterAsync();
-
-        // Agent init: skill selection - toggle on Playwright CLI
-        await auto.WaitUntilAsync(
-            s => s.ContainsText("skills should be installed"),
-            timeout: TimeSpan.FromSeconds(30),
-            description: "skill selection prompt");
-        await auto.DownAsync();
-        await auto.TypeAsync(" "); // Toggle on Playwright CLI
-        await auto.EnterAsync();
-
         // Wait for agent init to complete (downloads @playwright/cli from npm).
+        // Skill location and skill selection are provided via --skill-locations/--skills flags
+        // on the aspire new invocation above, so no interactive navigation is needed here.
         // Fail the test immediately if a provenance verification error appears.
         await auto.WaitUntilAsync(s =>
         {
@@ -152,10 +136,5 @@ public sealed class NewWithAgentInitTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("SKILL.md", timeout: TimeSpan.FromSeconds(10));
         await auto.WaitForSuccessPromptAsync(counter);
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 }

@@ -39,7 +39,7 @@ void main() throws Exception {
             .withConfigurationFile("./milvus.yaml");
         // ── 14. Fluent chaining: multiple With* methods ────────────────────────────
         var milvusChained = builder.addMilvus("milvus-chained");
-        milvusChained.withLifetime(ContainerLifetime.PERSISTENT);
+        milvusChained.withPersistentLifetime();
         milvusChained.withDataVolume(new WithDataVolumeOptions().name("milvus-chained-data"));
         milvusChained.withAttu();
         // ── 15. withReference: use Milvus database from a container resource ───────

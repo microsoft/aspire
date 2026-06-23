@@ -29,7 +29,7 @@ internal sealed class AppHostConnectionResult
     public int? ExitCode { get; init; }
 
     [MemberNotNullWhen(true, nameof(ExitCode))]
-    public bool IsProjectResolutionError => ExitCode is ExitCodeConstants.FailedToFindProject or ExitCodeConstants.SdkNotInstalled;
+    public bool IsProjectResolutionError => ExitCode is CliExitCodes.FailedToFindProject or CliExitCodes.SdkNotInstalled;
 }
 
 /// <summary>
@@ -43,8 +43,9 @@ internal sealed class AppHostConnectionResolver(
     IInteractionService interactionService,
     IProjectLocator projectLocator,
     CliExecutionContext executionContext,
-    ILogger logger,
-    ProfilingTelemetry? profilingTelemetry = null)
+    ICliHostEnvironment hostEnvironment,
+    ILogger<AppHostConnectionResolver> logger,
+    ProfilingTelemetry profilingTelemetry)
 {
     /// <summary>
     /// Resolves all running AppHost connections using socket-first discovery.
@@ -121,7 +122,7 @@ internal sealed class AppHostConnectionResolver(
                     return new AppHostConnectionResult
                     {
                         ErrorMessage = InteractionServiceStrings.ProjectOptionSpecifiedDirectoryContainsNoAppHosts,
-                        ExitCode = ExitCodeConstants.FailedToFindProject,
+                        ExitCode = CliExitCodes.FailedToFindProject,
                     };
                 }
             }
@@ -130,14 +131,15 @@ internal sealed class AppHostConnectionResolver(
                 return new AppHostConnectionResult
                 {
                     ErrorMessage = InteractionServiceStrings.ProjectOptionDoesntExist,
-                    ExitCode = ExitCodeConstants.FailedToFindProject,
+                    ExitCode = CliExitCodes.FailedToFindProject,
                 };
             }
 
-            var targetPath = projectFile.FullName;
-            var matchingSockets = AppHostHelper.FindMatchingSockets(
-                targetPath,
-                executionContext.HomeDirectory.FullName);
+            var matchingSockets = AppHostHelper.FindMatchingNonOrphanedSockets(
+                projectFile.FullName,
+                executionContext.HomeDirectory.FullName,
+                Environment.ProcessId,
+                logger);
 
             // Try each matching socket until we get a connection
             foreach (var socketPath in matchingSockets)
@@ -145,10 +147,12 @@ internal sealed class AppHostConnectionResolver(
                 try
                 {
                     var connection = await AppHostAuxiliaryBackchannel.ConnectAsync(
-                        socketPath, logger, cancellationToken, profilingTelemetry).ConfigureAwait(false);
+                        socketPath, logger, profilingTelemetry, cancellationToken).ConfigureAwait(false);
                     if (connection is not null)
                     {
-                        return new AppHostConnectionResult { Connection = connection };
+                        var result = new AppHostConnectionResult { Connection = connection };
+                        StoreAppHostCliLogFilePath(result);
+                        return result;
                     }
                 }
                 catch (Exception ex)
@@ -157,7 +161,9 @@ internal sealed class AppHostConnectionResolver(
                 }
             }
 
-            var displayPath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, targetPath);
+            // Display the path the user supplied (not the symlink-resolved lookup path) so the
+            // error message stays relative to the working directory and matches what they typed.
+            var displayPath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, projectFile.FullName);
 
             return new AppHostConnectionResult
             {
@@ -195,6 +201,17 @@ internal sealed class AppHostConnectionResolver(
         }
         else if (inScopeConnections.Count > 1)
         {
+            if (!hostEnvironment.SupportsInteractiveInput)
+            {
+                // Can't prompt the user to pick an AppHost in non-interactive mode;
+                // fail with an actionable message instead of letting the prompt throw.
+                return new AppHostConnectionResult
+                {
+                    ErrorMessage = SharedCommandStrings.MultipleAppHostsNonInteractive,
+                    ExitCode = CliExitCodes.FailedToFindProject,
+                };
+            }
+
             selectedConnection = await PromptForAppHostSelectionAsync(
                 inScopeConnections,
                 SharedCommandStrings.MultipleInScopeAppHosts,
@@ -204,6 +221,18 @@ internal sealed class AppHostConnectionResolver(
         }
         else if (outOfScopeConnections.Count > 0)
         {
+            if (!hostEnvironment.SupportsInteractiveInput)
+            {
+                // No in-scope AppHosts, and selecting from out-of-scope AppHosts requires
+                // a prompt. In non-interactive mode treat this as "not found" so scripts
+                // get a clean error and exit code instead of an unexpected prompt failure.
+                return new AppHostConnectionResult
+                {
+                    ErrorMessage = notFoundMessage,
+                    ExitCode = CliExitCodes.FailedToFindProject,
+                };
+            }
+
             selectedConnection = await PromptForAppHostSelectionAsync(
                 outOfScopeConnections,
                 SharedCommandStrings.NoInScopeAppHostsShowingAll,
@@ -217,12 +246,26 @@ internal sealed class AppHostConnectionResolver(
             return new AppHostConnectionResult { ErrorMessage = notFoundMessage };
         }
 
-        return new AppHostConnectionResult { Connection = selectedConnection };
+        var selectedResult = new AppHostConnectionResult { Connection = selectedConnection };
+        StoreAppHostCliLogFilePath(selectedResult);
+        return selectedResult;
+    }
+
+    /// <summary>
+    /// Stores the app host's CLI log file path on the execution context so that
+    /// <see cref="Commands.BaseCommand"/> can display it alongside the current CLI's log path on failure.
+    /// </summary>
+    internal void StoreAppHostCliLogFilePath(AppHostConnectionResult result)
+    {
+        if (result.Success && result.Connection.AppHostInfo?.CliLogFilePath is { } cliLogFilePath)
+        {
+            executionContext.AppHostCliLogFilePath = cliLogFilePath;
+        }
     }
 
     /// <summary>
     /// Displays an informational message, prompts the user to select from available AppHost connections,
-    /// and displays the selected AppHost.
+    /// and displays the selected AppHost with a success indicator.
     /// </summary>
     private async Task<IAppHostAuxiliaryBackchannel?> PromptForAppHostSelectionAsync(
         List<IAppHostAuxiliaryBackchannel> candidateConnections,
@@ -247,6 +290,7 @@ internal sealed class AppHostConnectionResolver(
             selectPrompt,
             choices.Select(c => c.Display).ToArray(),
             c => c.EscapeMarkup(),
+            echoSelected: false,
             cancellationToken: cancellationToken);
 
         var selectedConnection = choices.FirstOrDefault(c => c.Display == selectedDisplay).Connection;

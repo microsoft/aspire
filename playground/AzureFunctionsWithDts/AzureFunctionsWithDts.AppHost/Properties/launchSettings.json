@@ -5,24 +5,20 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "https://localhost:17244;http://localhost:15054",
+      "applicationUrl": "https://AzureFunctionsWithDts.dev.localhost:17244;http://AzureFunctionsWithDts.dev.localhost:15054",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21003",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22110"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     },
     "http": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "http://localhost:15054",
+      "applicationUrl": "http://AzureFunctionsWithDts.dev.localhost:15054",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:19010",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://localhost:20125"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     },
     "generate-manifest": {
@@ -30,11 +26,10 @@
       "launchBrowser": true,
       "dotnetRunMessages": true,
       "commandLineArgs": "--publisher manifest --output-path aspire-manifest.json",
-      "applicationUrl": "http://localhost:15888",
+      "applicationUrl": "http://AzureFunctionsWithDts.dev.localhost:15888",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:16175"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     }
   }

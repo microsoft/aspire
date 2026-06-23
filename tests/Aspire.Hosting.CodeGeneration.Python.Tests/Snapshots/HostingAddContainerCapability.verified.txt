@@ -2,7 +2,25 @@
   CapabilityId: Aspire.Hosting/addContainer,
   MethodName: addContainer,
   QualifiedMethodName: addContainer,
-  Description: Adds a container resource,
+  Description: Adds a container resource to the application.,
+  Documentation: {
+    Summary: Adds a container resource to the application.,
+    Returns: The resource builder.,
+    Parameters: [
+      {
+        Name: builder,
+        Description: The `IDistributedApplicationBuilder`.
+      },
+      {
+        Name: name,
+        Description: The name of the resource.
+      },
+      {
+        Name: image,
+        Description: The image name or image options for the container.
+      }
+    ]
+  },
   IsObsolete: false,
   Parameters: [
     {
@@ -18,7 +36,10 @@
       },
       IsOptional: false,
       IsNullable: false,
-      IsCallback: false
+      IsCallback: false,
+      Documentation: {
+        Summary: The name of the resource.
+      }
     },
     {
       Name: image,
@@ -54,7 +75,10 @@
       },
       IsOptional: false,
       IsNullable: false,
-      IsCallback: false
+      IsCallback: false,
+      Documentation: {
+        Summary: The image name or image options for the container.
+      }
     }
   ],
   ReturnType: {

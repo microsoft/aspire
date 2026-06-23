@@ -3,8 +3,6 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Globalization;
-using System.Text;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Extensions;
@@ -111,13 +109,10 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     [SupplyParameterFromQuery(Name = "resource")]
     public string? ResourceName { get; set; }
 
-    private ResourceViewModel? SelectedResource { get; set; }
-
     private readonly CancellationTokenSource _cts = new();
     private readonly ConcurrentDictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
     private readonly HashSet<string> _collapsedResourceNames = new(StringComparers.ResourceName);
     private readonly TaskCompletionSource _loadingTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private string _filter = "";
     private bool _isFilterPopupVisible;
     private Task? _resourceSubscriptionTask;
     private string? _elementIdBeforeDetailsViewOpened;
@@ -141,29 +136,8 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private ColumnSortLabels _sortLabels = ColumnSortLabels.Default;
     private bool _showResourceTypeColumn;
     private AIContext? _aiContext;
-    private bool _showHiddenResources;
 
-    private bool Filter(ResourceViewModel resource)
-    {
-        // In Parameters view, only show parameters; in Table view, exclude parameters
-        if (PageViewModel.SelectedViewKind == ResourceViewKind.Parameters && !resource.IsParameter)
-        {
-            return false;
-        }
-        if (PageViewModel.SelectedViewKind == ResourceViewKind.Table && resource.IsParameter)
-        {
-            return false;
-        }
-
-        // In Parameters view, ignore resource type filtering since we always show only parameters
-        return (PageViewModel.SelectedViewKind == ResourceViewKind.Parameters || IsKeyValueTrue(resource.ResourceType, PageViewModel.ResourceTypesToVisibility))
-               && IsKeyValueTrue(resource.State ?? string.Empty, PageViewModel.ResourceStatesToVisibility)
-               && IsKeyValueTrue(resource.HealthStatus?.Humanize() ?? string.Empty, PageViewModel.ResourceHealthStatusesToVisibility)
-               && (_filter.Length == 0 || resource.MatchesFilter(_filter))
-               && !resource.IsResourceHidden(_showHiddenResources);
-
-        static bool IsKeyValueTrue(string key, IDictionary<string, bool> dictionary) => dictionary.TryGetValue(key, out var value) && value;
-    }
+    private bool Filter(ResourceViewModel resource) => PageViewModel.Filter(resource);
 
     private async Task OnAllFilterVisibilityCheckedChangedAsync()
     {
@@ -187,7 +161,15 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private async Task VisibleResourcesChangedAsync()
     {
         await UpdateResourceGraphResourcesAsync();
-        await ClearSelectedResourceAsync();
+
+        // Only clear the selected resource if it no longer passes the current filter.
+        // This preserves the selection when a filter is removed (result set expands) and
+        // the selected resource is still visible.
+        if (PageViewModel.SelectedResource is null || !Filter(PageViewModel.SelectedResource))
+        {
+            await ClearSelectedResourceAsync();
+        }
+
         await _dataGrid.SafeRefreshDataAsync();
     }
 
@@ -216,7 +198,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             c.BuildIceBreakers = (builder, context) =>
             {
                 var hasUnhealthyResources = _resourceByName.Values
-                    .Where(r => !r.IsResourceHidden(_showHiddenResources))
+                    .Where(r => !r.IsResourceHidden(PageViewModel.ShowHiddenResources))
                     .Any(r => r.KnownState != KnownResourceState.Running || r.HealthStatus is HealthStatus.Unhealthy or HealthStatus.Degraded);
 
                 builder.Resources(context, hasUnhealthyResources);
@@ -257,7 +239,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         var showHiddenResources = await SessionStorage.GetAsync<bool>(BrowserStorageKeys.ResourcesShowHiddenResources);
         if (showHiddenResources.Success)
         {
-            _showHiddenResources = showHiddenResources.Value;
+            PageViewModel.ShowHiddenResources = showHiddenResources.Value;
         }
         UpdateMenuButtons();
 
@@ -324,9 +306,9 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                                 s => !PageViewModel.ResourceStatesToVisibility.TryGetValue(s, out var value) || value,
                                 s => !PageViewModel.ResourceHealthStatusesToVisibility.TryGetValue(s, out var value) || value);
 
-                            if (string.Equals(SelectedResource?.Name, resource.Name, StringComparisons.ResourceName))
+                            if (string.Equals(PageViewModel.SelectedResource?.Name, resource.Name, StringComparisons.ResourceName))
                             {
-                                SelectedResource = resource;
+                                PageViewModel.SelectedResource = resource;
                                 selectedResourceHasChanged = true;
                             }
                         }
@@ -423,7 +405,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         }
 
         var activeResources = _resourceByName.Values.Where(Filter).OrderBy(e => e.ResourceType).ThenBy(e => e.Name).ToList();
-        var resources = activeResources.Select(r => ResourceGraphMapper.MapResource(r, _resourceByName, ColumnsLoc, _showHiddenResources, IconResolver)).ToList();
+        var resources = activeResources.Select(r => ResourceGraphMapper.MapResource(r, _resourceByName, ColumnsLoc, PageViewModel.ShowHiddenResources, IconResolver)).ToList();
         await _jsModule.InvokeVoidAsync("updateResourcesGraph", resources);
     }
 
@@ -538,14 +520,14 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         CommonMenuItems.AddToggleHiddenResourcesMenuItem(
             _resourcesMenuItems,
             ControlsStringsLoc,
-            _showHiddenResources,
+            PageViewModel.ShowHiddenResources,
             _resourceByName.Values,
             SessionStorage,
             EventCallback.Factory.Create<bool>(
                 this,
                 async value =>
                 {
-                    _showHiddenResources = value;
+                    PageViewModel.ShowHiddenResources = value;
                     UpdateMenuButtons();
 
                     await VisibleResourcesChangedAsync();
@@ -554,7 +536,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     private bool HasCollapsedResources()
     {
-        return _resourceByName.Any(r => !r.Value.IsResourceHidden(_showHiddenResources) && _collapsedResourceNames.Contains(r.Value.PersistentKey));
+        return _resourceByName.Any(r => !r.Value.IsResourceHidden(PageViewModel.ShowHiddenResources) && _collapsedResourceNames.Contains(r.Value.PersistentKey));
     }
 
     private void UpdateMaxHighlightedCount()
@@ -672,13 +654,13 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
         _elementIdBeforeDetailsViewOpened = buttonId;
 
-        if (string.Equals(SelectedResource?.Name, resource.Name, StringComparisons.ResourceName))
+        if (string.Equals(PageViewModel.SelectedResource?.Name, resource.Name, StringComparisons.ResourceName))
         {
             await ClearSelectedResourceAsync();
         }
         else
         {
-            SelectedResource = resource;
+            PageViewModel.SelectedResource = resource;
 
             // Ensure that the selected resource is visible in the grid. All parents must be expanded.
             var current = resource;
@@ -719,7 +701,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     {
         Logger.LogDebug("Clearing selected resource.");
 
-        SelectedResource = null;
+        PageViewModel.SelectedResource = null;
 
         await InvokeAsync(StateHasChanged);
 
@@ -743,7 +725,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         var count = 0;
         foreach (var (_, item) in _resourceByName)
         {
-            if (item.IsResourceHidden(_showHiddenResources))
+            if (item.IsResourceHidden(PageViewModel.ShowHiddenResources))
             {
                 continue;
             }
@@ -762,7 +744,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     }
 
     private string GetRowClass(ResourceViewModel resource)
-        => string.Equals(resource.Name, SelectedResource?.Name, StringComparisons.ResourceName) ? "selected-row resource-row" : "resource-row";
+        => string.Equals(resource.Name, PageViewModel.SelectedResource?.Name, StringComparisons.ResourceName) ? "selected-row resource-row" : "resource-row";
 
     private async Task ExecuteResourceCommandAsync(ResourceViewModel resource, CommandViewModel command)
     {
@@ -780,31 +762,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             return (value, property.IsValueSensitive, isUnresolved);
         }
         return (null, false, isUnresolved);
-    }
-
-    private static string GetUrlsTooltip(ResourceViewModel resource)
-    {
-        var displayedUrls = GetDisplayedUrls(resource);
-
-        if (displayedUrls.Count == 0)
-        {
-            return string.Empty;
-        }
-
-        if (displayedUrls.Count == 1)
-        {
-            return displayedUrls[0].Text;
-        }
-
-        var maxShownUrls = 3;
-        var tooltipBuilder = new StringBuilder(string.Join(", ", displayedUrls.Take(maxShownUrls).Select(url => url.Text)));
-
-        if (displayedUrls.Count > maxShownUrls)
-        {
-            tooltipBuilder.Append(CultureInfo.CurrentCulture, $" + {displayedUrls.Count - maxShownUrls}");
-        }
-
-        return tooltipBuilder.ToString();
     }
 
     private async Task OnToggleCollapse(ResourceGridViewModel viewModel)
@@ -830,7 +787,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private async Task OnToggleCollapseAll()
     {
         var resourcesWithChildren = _resourceByName.Values
-            .Where(r => !r.IsResourceHidden(_showHiddenResources))
+            .Where(r => !r.IsResourceHidden(PageViewModel.ShowHiddenResources))
             .Where(r => _resourceByName.Values.Any(nested => nested.GetResourcePropertyValue(KnownProperties.Resource.ParentName) == r.Name))
             .ToList();
 
@@ -917,16 +874,41 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     {
         if (_jsModule != null)
         {
-            await _jsModule.InvokeVoidAsync("updateResourcesGraphSelected", SelectedResource?.Name);
+            await _jsModule.InvokeVoidAsync("updateResourcesGraphSelected", PageViewModel.SelectedResource?.Name);
         }
     }
 
     public sealed class ResourcesViewModel
     {
         public required ResourceViewKind SelectedViewKind { get; set; }
+        public ResourceViewModel? SelectedResource { get; set; }
+        public string TextFilter { get; set; } = "";
+        public bool ShowHiddenResources { get; set; }
         public ConcurrentDictionary<string, bool> ResourceTypesToVisibility { get; } = new(StringComparers.ResourceName);
         public ConcurrentDictionary<string, bool> ResourceStatesToVisibility { get; } = new(StringComparers.ResourceState);
         public ConcurrentDictionary<string, bool> ResourceHealthStatusesToVisibility { get; } = new(StringComparer.Ordinal);
+
+        public bool Filter(ResourceViewModel resource)
+        {
+            // In Parameters view, only show parameters; in Table view, exclude parameters
+            if (SelectedViewKind == ResourceViewKind.Parameters && !resource.IsParameter)
+            {
+                return false;
+            }
+            if (SelectedViewKind == ResourceViewKind.Table && resource.IsParameter)
+            {
+                return false;
+            }
+
+            // In Parameters view, ignore resource type filtering since we always show only parameters
+            return (SelectedViewKind == ResourceViewKind.Parameters || IsKeyValueTrue(resource.ResourceType, ResourceTypesToVisibility))
+                   && IsKeyValueTrue(resource.State ?? string.Empty, ResourceStatesToVisibility)
+                   && IsKeyValueTrue(resource.HealthStatus?.Humanize() ?? string.Empty, ResourceHealthStatusesToVisibility)
+                   && (TextFilter.Length == 0 || resource.MatchesFilter(TextFilter))
+                   && !resource.IsResourceHidden(ShowHiddenResources);
+
+            static bool IsKeyValueTrue(string key, IDictionary<string, bool> dictionary) => dictionary.TryGetValue(key, out var value) && value;
+        }
     }
 
     public class ResourcesPageState

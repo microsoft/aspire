@@ -589,7 +589,109 @@ var aks = builder.AddAzureKubernetesService("aks")
 - 🔲 AKS resource does not implement `IAzureContainerRegistry` (ACR outputs not exposed via standard interface)
 
 #### Ingress controller
-- 🔲 Application Gateway Ingress Controller (AGIC) or other ingress support
+- ✅ Azure Application Gateway for Containers (AGC) via `AddLoadBalancer()` + `WithLoadBalancer()` (see below)
+- ✅ Cert-manager auto-TLS via `WithTls(issuer)` on Gateway resources (bootstrap secret + post-FQDN cert-manager swap)
+- ✅ Helm `WithForceConflicts()` (`--force-conflicts`) for cert-manager / AGC controller SSA field-manager conflicts
+- ✅ AGC controller identity auto-granted `Network Contributor` on each ALB subnet
+- ✅ `AddHelmChart` / `AddLoadBalancer` skip model registration in run mode (matches `AddIngress` / `AddGateway`)
+- 🔲 Cluster-level no-arg `AddLoadBalancer()` (auto VNet + delegated subnet) — left as future work
+
+### Application Gateway for Containers (AGC) ingress ✅
+
+Opt-in, multi-LB ingress wired into Aspire's existing `AddGateway`/`AddIngress` model. The single public entry point is `AddLoadBalancer` on the AKS environment:
+
+```csharp
+var vnet = builder.AddAzureVirtualNetwork("vnet", "10.100.0.0/16");
+var aksSubnet = vnet.AddSubnet("aks", "10.100.0.0/22");
+var alb1Subnet = vnet.AddSubnet("alb1", "10.100.4.0/24");
+var alb2Subnet = vnet.AddSubnet("alb2", "10.100.5.0/24");
+
+var aks = builder.AddAzureKubernetesEnvironment("aks").WithSubnet(aksSubnet);
+
+var lb1 = aks.AddLoadBalancer("public", alb1Subnet);
+var lb2 = aks.AddLoadBalancer("admin", alb2Subnet);
+
+aks.AddGateway("storefront").WithLoadBalancer(lb1);
+aks.AddIngress("api").WithLoadBalancer(lb1);
+aks.AddGateway("admin-portal").WithLoadBalancer(lb2);
+```
+
+What `AddLoadBalancer` does:
+- Flips internal flags on the AKS environment so its emitted Bicep uses the
+  `2025-09-02-preview` API version and includes both
+  `properties.ingressProfile.gatewayAPI.installation: 'Standard'` and
+  `properties.ingressProfile.applicationLoadBalancer.enabled: true`. The preview API
+  shape is injected via `AksPreviewIngressProfileInjector`, which uses a small reflection
+  shim onto `ProvisionableConstruct.DefineProperty<T>` because the underlying
+  `ManagedClusterIngressProfile` type is `internal` in `Azure.Provisioning.ContainerService`
+  and cannot be subclassed like the other preview-Bicep injectors do. (These flags are
+  internal-only — the cluster-level toggles are intentionally not exposed as separate
+  public extensions to keep the surface small and prevent users from opting into the
+  preview API by accident.)
+- Applies an idempotent `AzureSubnetServiceDelegationAnnotation` for
+  `Microsoft.ServiceNetworking/trafficControllers` to the supplied subnet (multiple LBs
+  may share the same subnet).
+- Auto-grants `Network Contributor` on each ALB subnet to the AGC controller's
+  user-assigned identity (the cluster's `applicationLoadBalancer` ingress profile
+  identity), so the controller can program the subnet without manual role wiring.
+- Skips registering the resource in the model in run mode (mirrors `AddIngress` /
+  `AddGateway` / `AddHelmChart`) so the helm/k8s pipeline isn't pulled in when running
+  locally.
+- Returns an `AzureKubernetesLoadBalancerResource` whose own pipeline step
+  (`apply-alb-crd-{name}`) waits for the `azure-alb-external` GatewayClass to appear,
+  then `kubectl apply -f -` an `ApplicationLoadBalancer` CR named `alb-{name}` in the
+  `default` namespace, pointing at the supplied subnet.
+
+What `WithLoadBalancer` does on a `KubernetesGatewayResource` / `KubernetesIngressResource`:
+- Adds the AGC association annotations
+  (`alb.networking.azure.io/alb-name: alb-{lb}`, `alb.networking.azure.io/alb-namespace: default`)
+  to the rendered Helm template.
+- Defaults the `gatewayClassName` / `ingressClassName` to `azure-alb-external` if the
+  user did not set one explicitly.
+
+Why multi-LB by design: each AGC `ApplicationLoadBalancer` caps at five frontends, so
+larger apps need to spread Gateways/Ingresses across multiple LBs. Each
+`AzureKubernetesLoadBalancerResource` owns its own pipeline step so apply / wait-ready /
+future-destroy lifecycle is per-LB.
+
+#### TLS via cert-manager (`WithTls`) ✅
+
+Gateways can opt into auto-managed HTTPS via cert-manager + Let's Encrypt:
+
+```csharp
+aks.AddHelmChart("cert-manager", "https://charts.jetstack.io", "cert-manager")
+   .WithValues(new { crds = new { enabled = true } });
+
+aks.AddGateway("storefront")
+   .WithLoadBalancer(lb1)
+   .WithTls("letsencrypt-prod");  // ClusterIssuer name
+```
+
+`WithTls(issuer)` does:
+- Adds an HTTPS listener (port 443) referencing a TLS secret named `{gateway}-tls`.
+- Annotates the Gateway with `cert-manager.io/cluster-issuer: {issuer}` so cert-manager
+  watches the Gateway and mints a cert into the referenced secret once the AGC frontend
+  FQDN is discoverable.
+- Pre-creates a self-signed bootstrap TLS secret with placeholder hostname
+  `bootstrap.invalid` **before** waiting for the Gateway FQDN. AGC refuses to program a
+  Gateway whose HTTPS listener references a non-existent secret, but FQDN discovery
+  doesn't run until the Gateway is programmed — pre-creating the bootstrap secret breaks
+  this chicken-and-egg deadlock. Once the FQDN is known, the existing patch logic adds
+  the discovered hostname so cert-manager can swap in the real cert.
+
+Force-conflicts for SSA conflicts: helm chart resources support `WithForceConflicts()` which
+adds `--force-conflicts` to `helm upgrade`. Required because cert-manager
+and AGC controllers patch fields on the same Gateway/secret resources, producing
+server-side-apply field-manager conflicts that would otherwise fail subsequent helm
+upgrades.
+
+### AksDemo playground ✅
+
+`playground/AksDemo/` exercises the full AKS environment + AGC + Gateway API + cert-manager
+TLS path against a live AKS cluster. AppHost uses `AddAzureKubernetesEnvironment` +
+`AddLoadBalancer` + multiple `AddGateway` resources sharing one ALB, with
+`Standard_D2as_v5` system node pool and VNet at `10.100.0.0/16` (avoids the default AKS
+service CIDR `10.0.0.0/16`).
 
 #### Managed Prometheus/Grafana
 - 🔲 Azure Monitor workspace for managed Prometheus
@@ -617,4 +719,5 @@ var aks = builder.AddAzureKubernetesService("aks")
 
 - 31 AKS unit tests passing (extensions + infrastructure)
 - 88 K8s base tests passing
-- Manual E2E validation against live Azure clusters
+- `playground/AksDemo/` validated end-to-end against a live AKS cluster (multi-Gateway, AGC, cert-manager TLS)
+- `tests/Aspire.Deployment.EndToEnd.Tests/AksAzureKubernetesEnvironmentGatewayDeploymentTests` — automated deployment test that provisions an AKS environment with AGC + Gateway, deploys an API, and verifies an HTTP 200 from `<gateway-fqdn>/weatherforecast`. Passes against live Azure (`westus3`, `Standard_D2as_v5`).

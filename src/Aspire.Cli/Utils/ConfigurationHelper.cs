@@ -12,6 +12,8 @@ namespace Aspire.Cli.Utils;
 
 internal static class ConfigurationHelper
 {
+    internal const string IntegrationCacheFolderName = "integrations";
+
     /// <summary>
     /// Standard options for parsing JSON that may contain non-spec features like comments and trailing commas.
     /// </summary>
@@ -40,7 +42,24 @@ internal static class ConfigurationHelper
 
             // TODO: Remove legacy .aspire/settings.json fallback once confident most users have migrated.
             // Tracked by https://github.com/microsoft/aspire/issues/15239
-            // Fall back to .aspire/settings.json (legacy format)
+            // Fall back to .aspire/settings.json (legacy format).
+            //
+            // Startup is shared by every command — including read-only ones (aspire ls, ps,
+            // doctor, describe, --version). Earlier versions eagerly migrated the legacy file
+            // to aspire.config.json here so the workspace would move forward on the user's
+            // first run of a newer CLI (https://github.com/microsoft/aspire/issues/15488),
+            // but that broke the "read commands don't mutate the working tree" contract:
+            // running aspire ls in a workspace that only had .aspire/settings.json was
+            // silently writing aspire.config.json, polluting git status and tripping CI
+            // dirty-tree checks (https://github.com/microsoft/aspire/issues/17615).
+            //
+            // Migration is now deferred to commands that already mutate the workspace
+            // (aspire run/add/init/update/etc. via ProjectLocator.CreateSettingsFileAsync ->
+            // AspireConfigFile.LoadOrCreate). Read commands continue to work against the
+            // legacy file directly: AppHostPathConfigurationPolicy.TryFindAppHostPathKey
+            // accepts both the legacy flat "appHostPath" key and the modern "appHost:path"
+            // hierarchical key, and ProjectLocator's settings-file reader has its own legacy
+            // fallback that does not write.
             var legacySettingsPath = BuildPathToSettingsJsonFile(currentDirectory.FullName);
             if (File.Exists(legacySettingsPath))
             {
@@ -114,6 +133,12 @@ internal static class ConfigurationHelper
     {
         var configRoot = GetConfigRootDirectory(startDirectory);
         return new DirectoryInfo(Path.Combine(configRoot.FullName, AspireJsonConfiguration.SettingsFolder));
+    }
+
+    internal static DirectoryInfo GetIntegrationCacheDirectory(DirectoryInfo startDirectory)
+    {
+        var workspaceAspireDirectory = GetWorkspaceAspireDirectory(startDirectory);
+        return new DirectoryInfo(Path.Combine(workspaceAspireDirectory.FullName, IntegrationCacheFolderName));
     }
 
     /// <summary>

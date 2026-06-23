@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	builder, err := aspire.CreateBuilder(nil)
+	builder, err := aspire.CreateBuilder()
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
@@ -36,7 +36,9 @@ func main() {
 		WithDisabledFeatures([]string{"scripts"}).
 		WithOtlpExporter(&aspire.WithOtlpExporterOptions{Protocol: &protocol})
 
+	genericProtocol := aspire.OtlpProtocolHttpJson
 	builder.AddContainer("consumer", "nginx").
+		WithOtlpExporter(&aspire.WithOtlpExporterOptions{Protocol: &genericProtocol}).
 		WithReference(keycloak).
 		WithReference(keycloak2)
 
@@ -51,7 +53,7 @@ func main() {
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
-	if err := app.Run(nil); err != nil {
+	if err := app.Run(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
 }

@@ -5,7 +5,6 @@
 #pragma warning disable ASPIREPIPELINES002
 #pragma warning disable ASPIREPIPELINES003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECONTAINERRUNTIME001
-#pragma warning disable ASPIREINTERACTION001
 
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
@@ -515,14 +514,16 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
             var envVar = entry.Value;
             var defaultValue = envVar.DefaultValue;
 
-            if (defaultValue is null && envVar.Source is ParameterResource parameter)
+            // Only resolve from the parameter if no static default is already set;
+            // a caller that provides an explicit default intends to skip parameter resolution.
+            if (envVar.Source is ParameterResource parameter)
             {
-                defaultValue = await parameter.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
+                defaultValue ??= await parameter.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
             }
-
-            if (envVar.Source is ContainerImageReference cir)
+            else if (envVar.Source is IValueProvider vp)
             {
-                defaultValue = await ((IValueProvider)cir).GetValueAsync(context.CancellationToken).ConfigureAwait(false);
+                // IValueProvider sources are always resolved dynamically — a static default is never used.
+                defaultValue = await vp.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
             }
 
             envFile.Add(entry.Key, defaultValue, envVar.Description, onlyIfMissing: false);

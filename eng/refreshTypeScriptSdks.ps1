@@ -65,7 +65,7 @@ function Install-NodeDependencies([string]$appDir) {
 }
 
 function Assert-GeneratedSdkFiles([string]$appDir) {
-    $generatedDir = Join-Path $appDir '.modules'
+    $generatedDir = Join-Path $appDir '.aspire/modules'
     foreach ($file in $requiredGeneratedFiles) {
         $path = Join-Path $generatedDir $file
         if (-not (Test-Path $path)) {
@@ -109,7 +109,7 @@ foreach ($appHost in $appHosts) {
         Write-Host '  -> Installing npm dependencies...'
         Install-NodeDependencies -appDir $appHost.FullName
 
-        $generatedDir = Join-Path $appHost.FullName '.modules'
+        $generatedDir = Join-Path $appHost.FullName '.aspire/modules'
         if (Test-Path $generatedDir) {
             Write-Host '  -> Clearing existing generated SDK...'
             Remove-Item -Path $generatedDir -Recurse -Force

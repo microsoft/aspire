@@ -15,7 +15,9 @@ public static class RabbitMQVirtualHostExtensions
     /// <param name="name">The name of the resource.</param>
     /// <param name="virtualHostName">The name of the virtual host. If not provided, defaults to the resource name.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a RabbitMQ virtual host")]
+    /// <ats-summary>Adds a RabbitMQ virtual host.</ats-summary>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<RabbitMQVirtualHostResource> AddVirtualHost(
         this IResourceBuilder<RabbitMQServerResource> builder,
         [ResourceName] string name,

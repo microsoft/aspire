@@ -35,7 +35,7 @@ public class SecretCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse($"secret path --apphost \"{appHostFile.FullName}\"");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Contains(expectedPath, outputWriter.Logs);
     }
 
@@ -61,7 +61,7 @@ public class SecretCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse($"secret path --apphost \"{appHostFile.FullName}\"");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Contains(expectedPath, outputWriter.Logs);
     }
 
@@ -128,5 +128,6 @@ public class SecretCommandTests(ITestOutputHelper outputHelper)
         public Task<int> RunAsync(AppHostProjectContext context, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<UpdatePackagesResult> UpdatePackagesAsync(UpdatePackagesContext context, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<string?> GetAspireHostingVersionAsync(FileInfo appHostFile, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 }

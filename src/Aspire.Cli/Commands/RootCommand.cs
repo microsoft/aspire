@@ -13,14 +13,18 @@ using System.Diagnostics;
 
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Commands.Sdk;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Utils;
 using BaseRootCommand = System.CommandLine.RootCommand;
 
 namespace Aspire.Cli.Commands;
 
 internal sealed class RootCommand : BaseRootCommand
 {
+    internal const int DefaultCaptureProfileDelaySeconds = 5;
+
     public static readonly Option<bool> DebugOption = new(CommonOptionNames.Debug, CommonOptionNames.DebugShort)
     {
         Description = RootCommandStrings.DebugArgumentDescription,
@@ -65,6 +69,33 @@ internal sealed class RootCommand : BaseRootCommand
         Recursive = true,
         Hidden = true,
         DefaultValueFactory = _ => false
+    };
+
+    public static readonly Option<bool> StartDebugSessionOption = new(CommonOptionNames.StartDebugSession)
+    {
+        Description = RunCommandStrings.StartDebugSessionArgumentDescription,
+        Recursive = true,
+        DefaultValueFactory = _ => false
+    };
+
+    public static readonly Option<bool> CaptureProfileOption = new("--capture-profile")
+    {
+        Recursive = true,
+        Hidden = true,
+        DefaultValueFactory = _ => false
+    };
+
+    public static readonly Option<FileInfo?> CaptureProfileOutputOption = new("--capture-profile-output")
+    {
+        Recursive = true,
+        Hidden = true
+    };
+
+    public static readonly Option<int> CaptureProfileDelayOption = new("--capture-profile-delay")
+    {
+        Recursive = true,
+        Hidden = true,
+        DefaultValueFactory = _ => DefaultCaptureProfileDelaySeconds
     };
 
     /// <summary>
@@ -118,6 +149,7 @@ internal sealed class RootCommand : BaseRootCommand
         DescribeCommand describeCommand,
         LogsCommand logsCommand,
         IntegrationCommand integrationCommand,
+        TerminalCommand terminalCommand,
         AddCommand addCommand,
         PublishCommand publishCommand,
         DeployCommand deployCommand,
@@ -144,7 +176,9 @@ internal sealed class RootCommand : BaseRootCommand
         ExtensionInternalCommand extensionInternalCommand,
         IBundleService bundleService,
         IInteractionService interactionService,
-        IAnsiConsole ansiConsole)
+        IFeatures features,
+        IAnsiConsole ansiConsole,
+        CliExecutionContext executionContext)
         : base(RootCommandStrings.Description)
     {
         _interactionService = interactionService;
@@ -180,23 +214,30 @@ internal sealed class RootCommand : BaseRootCommand
         Options.Add(BannerOption);
         Options.Add(WaitForDebuggerOption);
         Options.Add(CliWaitForDebuggerOption);
+        if (ExtensionHelper.IsExtensionHost(interactionService, out _, out _))
+        {
+            Options.Add(StartDebugSessionOption);
+        }
+        Options.Add(CaptureProfileOption);
+        Options.Add(CaptureProfileOutputOption);
+        Options.Add(CaptureProfileDelayOption);
 
         // Handle standalone 'aspire' or 'aspire --banner' (no subcommand)
-        this.SetAction((context, cancellationToken) =>
+        this.SetAction((Func<ParseResult, CancellationToken, Task<int>>)((context, cancellationToken) =>
         {
             var bannerRequested = context.GetValue(BannerOption);
             if (bannerRequested)
             {
                 // If --banner was passed, we've already shown it in Main, just exit successfully
-                return Task.FromResult(ExitCodeConstants.Success);
+                return Task.FromResult((int)CliExitCodes.Success);
             }
 
             // No subcommand provided - show grouped help but return InvalidCommand to signal usage error
             var writer = _ansiConsole.Profile.Out.Writer;
             var consoleWidth = _ansiConsole.Profile.Width;
             GroupedHelpWriter.WriteHelp(this, writer, consoleWidth);
-            return Task.FromResult(ExitCodeConstants.InvalidCommand);
-        });
+            return Task.FromResult((int)CliExitCodes.InvalidCommand);
+        }));
 
         Subcommands.Add(newCommand);
         Subcommands.Add(initCommand);
@@ -210,6 +251,12 @@ internal sealed class RootCommand : BaseRootCommand
         Subcommands.Add(describeCommand);
         Subcommands.Add(logsCommand);
         Subcommands.Add(integrationCommand);
+        // 'aspire terminal' is hidden behind a feature flag while WithTerminal() is experimental.
+        // Toggle with `aspire config set features.terminalCommandsEnabled true`.
+        if (features.IsFeatureEnabled(KnownFeatures.TerminalCommandsEnabled, defaultValue: false))
+        {
+            Subcommands.Add(terminalCommand);
+        }
         Subcommands.Add(addCommand);
         Subcommands.Add(publishCommand);
         Subcommands.Add(configCommand);
@@ -252,6 +299,10 @@ internal sealed class RootCommand : BaseRootCommand
             else if (option is VersionOption versionOption)
             {
                 versionOption.Aliases.Add("-v");
+                // Report the resolved identity version so --version honors ASPIRE_CLI_VERSION /
+                // the install sidecar. Without an override this resolves to the assembly's
+                // informational version, matching the built-in action's output.
+                versionOption.Action = new IdentityVersionAction(executionContext);
             }
         }
 

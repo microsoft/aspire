@@ -70,7 +70,25 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Aspire CLI Version.
+        ///   Looks up a localized string similar to The AppHost is using an older Aspire version than the Aspire CLI. Update the AppHost&apos;s Aspire packages to continue..
+        /// </summary>
+        public static string AppHostNotCompatibleUpdateAppHost {
+            get {
+                return ResourceManager.GetString("AppHostNotCompatibleUpdateAppHost", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The Aspire CLI is older than the Aspire version used by the AppHost. Update the Aspire CLI to continue..
+        /// </summary>
+        public static string AppHostNotCompatibleUpdateCli {
+            get {
+                return ResourceManager.GetString("AppHostNotCompatibleUpdateCli", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire CLI version.
         /// </summary>
         public static string AspireCLIVersion {
             get {
@@ -79,7 +97,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Aspire.Hosting Version.
+        ///   Looks up a localized string similar to Aspire.Hosting version.
         /// </summary>
         public static string AspireHostingSDKVersion {
             get {
@@ -295,7 +313,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The project could not be built. See logs at {0}.
+        ///   Looks up a localized string similar to The project could not be built..
         /// </summary>
         public static string ProjectCouldNotBeBuilt {
             get {
@@ -304,7 +322,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The app could not be created. See logs at {0}.
+        ///   Looks up a localized string similar to The app could not be created..
         /// </summary>
         public static string ProjectCouldNotBeCreated {
             get {
@@ -358,7 +376,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Required Capability.
+        ///   Looks up a localized string similar to Required capability.
         /// </summary>
         public static string RequiredCapability {
             get {
@@ -435,6 +453,15 @@ namespace Aspire.Cli.Resources {
         public static string SeeLogsAt {
             get {
                 return ResourceManager.GetString("SeeLogsAt", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to See app host logs at {0}.
+        /// </summary>
+        public static string SeeAppHostLogsAt {
+            get {
+                return ResourceManager.GetString("SeeAppHostLogsAt", resourceCulture);
             }
         }
 

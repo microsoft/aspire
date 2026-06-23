@@ -31,7 +31,7 @@ public static class DockerComposeServiceExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Publishes the resource as a Docker Compose service with custom service configuration")]
+    [AspireExport]
     public static IResourceBuilder<T> PublishAsDockerComposeService<T>(this IResourceBuilder<T> builder, Action<DockerComposeServiceResource, Service> configure)
         where T : IComputeResource
     {
@@ -73,13 +73,15 @@ public static class DockerComposeServiceExtensions
     /// <summary>
     /// Creates a Docker Compose environment variable placeholder for the specified <see cref="ParameterResource"/>.
     /// </summary>
+    /// <ats-summary>Creates a Docker Compose environment variable placeholder from a parameter builder</ats-summary>
     /// <param name="builder">The resource builder for the parameter resource.</param>
     /// <param name="dockerComposeService">The Docker Compose service resource to associate the environment variable with.</param>
     /// <returns>A string representing the environment variable placeholder in Docker Compose syntax (e.g., <c>${ENV_VAR}</c>).</returns>
     /// <remarks>
     /// Use this overload with parameter builders returned by methods such as <see cref="ParameterResourceBuilderExtensions.AddParameter(IDistributedApplicationBuilder, string, bool)"/>.
     /// </remarks>
-    [AspireExport(Description = "Creates a Docker Compose environment variable placeholder from a parameter builder")]
+    /// <ats-remarks />
+    [AspireExport]
     public static string AsEnvironmentPlaceholder(this IResourceBuilder<ParameterResource> builder, DockerComposeServiceResource dockerComposeService)
     {
         return builder.Resource.AsEnvironmentPlaceholder(dockerComposeService);

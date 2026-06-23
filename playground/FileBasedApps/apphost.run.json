@@ -4,25 +4,16 @@
     "https": {
       "commandName": "Project",
       "dotnetRunMessages": true,
-      "launchBrowser": true,
-      "applicationUrl": "https://filebasedapps.dev.localhost:17123;http://filebasedapps.dev.localhost:15234",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21456",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22678"
+        "ASPNETCORE_ENVIRONMENT": "Development"
       }
     },
     "http": {
       "commandName": "Project",
       "dotnetRunMessages": true,
-      "launchBrowser": true,
       "applicationUrl": "http://filebasedapps.dev.localhost:15234",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:19456",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://localhost:20678"
+        "ASPNETCORE_ENVIRONMENT": "Development"
       }
     }
   }

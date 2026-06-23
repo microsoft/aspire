@@ -1,26 +1,37 @@
-# Aspire.Hosting.RabbitMQ library
+# RabbitMQ hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure a RabbitMQ resource.
+Use this integration to model, configure, and orchestrate a RabbitMQ resource in an Aspire solution.
 
 ## Getting started
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire RabbitMQ Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.RabbitMQ` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.RabbitMQ
+```bash
+aspire add Aspire.Hosting.RabbitMQ
 ```
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add a RabbitMQ resource and consume the connection using the following methods:
+In the AppHost, add a RabbitMQ resource and reference it from another resource with either C# or TypeScript:
+
+**C#**
 
 ```csharp
 var rmq = builder.AddRabbitMQ("rmq");
 
 var myService = builder.AddProject<Projects.MyService>()
                        .WithReference(rmq);
+```
+
+**TypeScript**
+
+```typescript
+const rmq = await builder.addRabbitMQ("rmq");
+
+const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
+                       .withReference(rmq);
 ```
 
 ## Virtual hosts, queues, exchanges, bindings, and shovels
@@ -91,11 +102,11 @@ var dead   = vhost.AddQueue("orders-dead");
 
 // Apply TTL + dead-letter policy to all queues matching "^orders"
 vhost.AddPolicy("orders-policy", "^orders", RabbitMQPolicyApplyTo.Queues)
-     .WithProperties(p =>
+     .WithQueueArguments(a =>
      {
-         p.Definition["message-ttl"]          = 60_000;
-         p.Definition["dead-letter-exchange"] = "dlx";
-     });
+         a.MessageTtl = TimeSpan.FromMinutes(1);
+     })
+     .WithDeadLetterExchange(dlx);
 
 // WaitFor(orders) blocks until the queue AND its policy are applied
 builder.AddProject<Projects.OrdersWorker>("worker")
@@ -189,7 +200,8 @@ Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPE
 
 ## Additional documentation
 
-* https://aspire.dev/integrations/messaging/rabbitmq/
+* https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/messaging/rabbitmq/rabbitmq-host/
 
 ## Feedback & contributing
 

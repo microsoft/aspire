@@ -46,7 +46,7 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
         var result = command.Parse("run");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.SdkNotInstalled, exitCode);
+        Assert.Equal(CliExitCodes.SdkNotInstalled, exitCode);
     }
 
     [Fact]
@@ -71,7 +71,7 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
         var result = command.Parse("add");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.SdkNotInstalled, exitCode);
+        Assert.Equal(CliExitCodes.SdkNotInstalled, exitCode);
     }
 
     [Fact]
@@ -95,7 +95,7 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         // aspire-starter is not registered when SDK is unavailable, so it's an invalid command
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
     }
 
     [Fact]
@@ -133,7 +133,7 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
         var result = command.Parse("publish");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.SdkNotInstalled, exitCode);
+        Assert.Equal(CliExitCodes.SdkNotInstalled, exitCode);
     }
 
     [Fact]
@@ -171,7 +171,7 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
         var result = command.Parse("deploy");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.SdkNotInstalled, exitCode);
+        Assert.Equal(CliExitCodes.SdkNotInstalled, exitCode);
     }
 
     [Fact]
@@ -194,6 +194,6 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         // Should fail at project location, not SDK check
-        Assert.Equal(ExitCodeConstants.FailedToFindProject, exitCode);
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
     }
 }

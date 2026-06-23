@@ -49,7 +49,7 @@ internal static class OutputPathHelper
         baseName = SanitizeBaseName(baseName);
 
         var baseCandidate = $"./{baseName}";
-        if (!IsNonEmptyDirectory(baseCandidate, workingDirectory))
+        if (!IsNonEmptyDirectory(Path.GetFullPath(baseCandidate, workingDirectory)))
         {
             return baseCandidate;
         }
@@ -57,7 +57,7 @@ internal static class OutputPathHelper
         for (var i = 2; i < 1000; i++)
         {
             var candidate = $"{baseCandidate}-{i}";
-            if (!IsNonEmptyDirectory(candidate, workingDirectory))
+            if (!IsNonEmptyDirectory(Path.GetFullPath(candidate, workingDirectory)))
             {
                 return candidate;
             }
@@ -75,54 +75,83 @@ internal static class OutputPathHelper
     {
         return path =>
         {
-            if (ContainsInvalidPathChars(path))
+            var validationResult = ValidateOutputPath(path, workingDirectory, isExplicitOutput: false);
+            if (validationResult is not null)
             {
-                return ValidationResult.Error(string.Format(CultureInfo.CurrentCulture, NewCommandStrings.OutputPathContainsInvalidCharacters, path));
-            }
-
-            if (IsNonEmptyDirectory(path, workingDirectory))
-            {
-                var fullPath = Path.GetFullPath(path, workingDirectory);
-                return ValidationResult.Error(string.Format(CultureInfo.CurrentCulture, NewCommandStrings.OutputDirectoryNotEmpty, fullPath));
+                return ValidationResult.Error(validationResult);
             }
 
             return ValidationResult.Success();
         };
     }
 
+    internal static async Task<bool> PromptExtensionCreateProjectNameSubdirectoryAsync(
+        IInteractionService interactionService,
+        bool isExtensionHost,
+        bool isExplicitOutput,
+        string projectName,
+        CancellationToken cancellationToken)
+    {
+        if (!isExtensionHost
+            || isExplicitOutput
+            || !CanCreateProjectNameSubdirectory(projectName))
+        {
+            return false;
+        }
+
+        var subdirectoryChoice = string.Format(CultureInfo.CurrentCulture, NewCommandStrings.CreateProjectNameSubdirectoryChoice, projectName);
+        var selectedChoice = await interactionService.PromptForSelectionAsync(
+            NewCommandStrings.SelectProjectCreationLocation,
+            [subdirectoryChoice, NewCommandStrings.CreateProjectDirectlyInSelectedFolderChoice],
+            static choice => choice,
+            cancellationToken: cancellationToken);
+
+        return string.Equals(selectedChoice, subdirectoryChoice, StringComparison.Ordinal);
+    }
+
+    internal static Func<string, string>? CreateProjectNameSubdirectoryOutputPathResolver(bool createProjectNameSubdirectory, string projectName)
+    {
+        if (!createProjectNameSubdirectory || !CanCreateProjectNameSubdirectory(projectName))
+        {
+            return null;
+        }
+
+        return outputPath => AppendProjectNameSubdirectory(outputPath, projectName);
+    }
+
     /// <summary>
     /// Validates a (possibly relative) output path before resolution. Returns an error message if the path
     /// contains invalid characters or targets a non-empty existing directory, or <see langword="null"/> if valid.
     /// </summary>
-    internal static string? ValidateOutputPath(string path, string workingDirectory)
+    internal static string? ValidateOutputPath(string path, string workingDirectory, bool isExplicitOutput = true)
     {
+        // Validate the path before calling Path.GetFullPath to avoid exceptions from invalid characters.
         if (ContainsInvalidPathChars(path))
         {
             return string.Format(CultureInfo.CurrentCulture, NewCommandStrings.OutputPathContainsInvalidCharacters, path);
         }
 
-        if (IsNonEmptyDirectory(path, workingDirectory))
+        var fullPath = Path.GetFullPath(path, workingDirectory);
+        if (IsNonEmptyDirectory(fullPath))
         {
-            var fullPath = Path.GetFullPath(path, workingDirectory);
-            return string.Format(CultureInfo.CurrentCulture, NewCommandStrings.OutputDirectoryNotEmpty, fullPath);
+            var format = isExplicitOutput ? NewCommandStrings.OutputDirectoryNotEmptyNonInteractive : NewCommandStrings.OutputDirectoryNotEmptyInteractive;
+            return string.Format(CultureInfo.CurrentCulture, format, fullPath);
         }
 
         return null;
     }
 
-    /// <summary>
-    /// Validates the resolved (absolute) output path and returns an error message if it's
-    /// a non-empty existing directory, or <see langword="null"/> if valid.
-    /// </summary>
-    internal static string? ValidateResolvedOutputPath(string absolutePath)
+    private static string AppendProjectNameSubdirectory(string outputPath, string projectName)
     {
-        if (Directory.Exists(absolutePath) && Directory.EnumerateFileSystemEntries(absolutePath).Any())
-        {
-            return string.Format(CultureInfo.CurrentCulture, NewCommandStrings.OutputDirectoryNotEmpty, absolutePath);
-        }
-
-        return null;
+        var normalizedOutputPath = Path.TrimEndingDirectorySeparator(outputPath);
+        return string.Equals(Path.GetFileName(normalizedOutputPath), projectName, StringComparison.OrdinalIgnoreCase)
+            ? normalizedOutputPath
+            : Path.Combine(normalizedOutputPath, projectName);
     }
+
+    private static bool CanCreateProjectNameSubdirectory(string projectName) =>
+        !projectName.Equals(".", StringComparison.Ordinal)
+        && !projectName.Equals("..", StringComparison.Ordinal);
 
     private static string SanitizeBaseName(string baseName)
     {
@@ -136,9 +165,8 @@ internal static class OutputPathHelper
         return path.AsSpan().IndexOfAny(Path.GetInvalidPathChars()) >= 0;
     }
 
-    private static bool IsNonEmptyDirectory(string relativePath, string workingDirectory)
+    private static bool IsNonEmptyDirectory(string fullPath)
     {
-        var fullPath = Path.GetFullPath(relativePath, workingDirectory);
-        return Directory.Exists(fullPath) && Directory.EnumerateFileSystemEntries(fullPath).Any();
+        return Path.IsPathRooted(fullPath) && Directory.Exists(fullPath) && Directory.EnumerateFileSystemEntries(fullPath).Any();
     }
 }

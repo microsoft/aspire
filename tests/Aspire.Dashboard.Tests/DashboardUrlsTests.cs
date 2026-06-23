@@ -82,4 +82,46 @@ public class DashboardUrlsTests
     {
         Assert.Equal("/api/set-language?language=fr-FR&redirectUrl=%2Fhi", DashboardUrls.SetLanguageUrl("fr-FR", "/hi"));
     }
+
+    [Fact]
+    public void TelemetryLogsApiUrl_WithSearch_AppendsSearchQueryParameter()
+    {
+        var url = DashboardUrls.TelemetryLogsApiUrl("http://localhost:18888", search: "connection error");
+
+        Assert.Contains("search=connection%20error", url);
+    }
+
+    [Fact]
+    public void TelemetryLogsApiUrl_WithoutSearch_DoesNotAppendSearchParameter()
+    {
+        var url = DashboardUrls.TelemetryLogsApiUrl("http://localhost:18888");
+
+        Assert.DoesNotContain("search", url);
+    }
+
+    [Fact]
+    public void TelemetrySpansApiUrl_WithSearch_AppendsSearchQueryParameter()
+    {
+        var url = DashboardUrls.TelemetrySpansApiUrl("http://localhost:18888", search: "GET /api");
+
+        Assert.Contains("search=GET%20%2Fapi", url);
+    }
+
+    [Fact]
+    public void TelemetryTracesApiUrl_WithSearch_AppendsSearchQueryParameter()
+    {
+        var url = DashboardUrls.TelemetryTracesApiUrl("http://localhost:18888", search: "timeout");
+
+        Assert.Contains("search=timeout", url);
+    }
+
+    [Fact]
+    public void TelemetryLogsApiUrl_WithSearchAndOtherParams_AppendsAllParameters()
+    {
+        var url = DashboardUrls.TelemetryLogsApiUrl("http://localhost:18888", resources: ["service1"], severity: "error", search: "failed");
+
+        Assert.Contains("resource=service1", url);
+        Assert.Contains("severity=error", url);
+        Assert.Contains("search=failed", url);
+    }
 }

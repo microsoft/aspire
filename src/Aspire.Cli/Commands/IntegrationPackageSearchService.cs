@@ -23,14 +23,30 @@ internal sealed class IntegrationPackageSearchService(
 
     public async Task<IEnumerable<(NuGetPackage Package, PackageChannel Channel)>> GetIntegrationPackagesWithChannelsAsync(DirectoryInfo workingDirectory, string? configuredChannel, CancellationToken cancellationToken)
     {
-        var allChannels = await packagingService.GetChannelsAsync(cancellationToken);
+        // `configuredChannel` (from a polyglot apphost's aspire.config.json) is forwarded
+        // as `requestedChannelName` so PackagingService can synthesize the staging channel
+        // for out-of-tree apphosts whose directory wasn't picked up by
+        // ConfigurationHelper.RegisterSettingsFiles.
+        var allChannels = await packagingService.GetChannelsAsync(cancellationToken, configuredChannel);
 
-        if (!string.IsNullOrEmpty(configuredChannel))
-        {
-            allChannels = allChannels.Where(c => string.Equals(c.Name, configuredChannel, StringComparison.OrdinalIgnoreCase));
-        }
-
-        var hasHives = executionContext.GetPrHiveCount() > 0;
+        // Channels included in the search:
+        //   * Implicit channel: always.
+        //   * Explicit channels (stable, daily, staging, custom): when PR hives exist OR the
+        //     apphost has pinned an explicit channel via aspire.config.json.
+        //
+        // What this method MUST NOT do is narrow the explicit channel set to just the pinned
+        // channel. That was the root cause of https://github.com/microsoft/aspire/issues/17724
+        // and https://github.com/microsoft/aspire/issues/17725: a TS apphost pinned to a
+        // Quality.Stable channel ended up with prerelease=false queries everywhere and
+        // prerelease-only packages (e.g. Aspire.Hosting.Foundry) became invisible. The implicit
+        // channel (Quality.Both) must always participate so prerelease packages are reachable
+        // even when the explicit pin is Stable-quality.
+        // An ASPIRE_CLI_PACKAGES / sidecar `packages` override deliberately points Aspire.*
+        // resolution at a local directory (used to emulate a released/staging build from locally
+        // built packages). Treat it like a hive so the synthesized local channel — named after the
+        // emulated identity (stable/daily/staging), not a local-build name — participates in the
+        // search instead of being filtered out, which would silently fall back to nuget.org.
+        var hasHives = executionContext.GetHiveCount() > 0 || executionContext.IdentityPackagesDirectory is not null;
         var channels = hasHives || !string.IsNullOrEmpty(configuredChannel)
             ? allChannels
             : allChannels.Where(c => c.Type is PackageChannelType.Implicit);
@@ -107,7 +123,7 @@ internal sealed class IntegrationPackageSearchService(
         catch (JsonException ex)
         {
             interactionService.DisplayError(ex.Message);
-            return (ConfiguredChannel: null, ExitCode: ExitCodeConstants.FailedToLoadConfiguration);
+            return (ConfiguredChannel: null, ExitCode: CliExitCodes.FailedToLoadConfiguration);
         }
     }
 

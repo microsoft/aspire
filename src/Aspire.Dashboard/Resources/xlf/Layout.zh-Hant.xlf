@@ -127,6 +127,16 @@
         <target state="translated">重試</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceServiceReconnectDisconnectedText">
+        <source>Lost connection to the AppHost. Attempting to reconnect...</source>
+        <target state="new">Lost connection to the AppHost. Attempting to reconnect...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceServiceReconnectRetryButtonText">
+        <source>Retry</source>
+        <target state="new">Retry</target>
+        <note />
+      </trans-unit>
     </body>
   </file>
 </xliff>

@@ -355,7 +355,7 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger, ProfilingTelemetry pr
             var startInfo = CreateNpmProcessStartInfo(npmPath, args, workingDirectory);
 
             using var process = new Process { StartInfo = startInfo };
-            using var activity = profilingTelemetry.StartNpmCommand(npmPath, args.Length, workingDirectory);
+            using var activity = profilingTelemetry.StartNpmCommand(npmPath, args, workingDirectory);
             process.Start();
             activity.SetProcessId(process.Id);
 

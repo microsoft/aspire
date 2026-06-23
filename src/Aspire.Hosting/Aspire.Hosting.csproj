@@ -2,7 +2,6 @@
 
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
-    <DefineConstants>$(DefineConstants);ASPIRE_EVENTSOURCE</DefineConstants>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <NoWarn>$(NoWarn);CS8002;IL3000</NoWarn>
     <IsPackable>true</IsPackable>
@@ -15,6 +14,7 @@
   </ItemGroup>
   
   <ItemGroup>
+    <Compile Include="$(SharedDir)AssemblyVersionHelper.cs" Link="Utils\AssemblyVersionHelper.cs" />
     <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Dcp\BundleDiscovery.cs" />
     <Compile Include="$(SharedDir)ChannelExtensions.cs" Link="ChannelExtensions.cs" />
     <Compile Include="$(SharedDir)CircularBuffer.cs" Link="CircularBuffer.cs" />
@@ -46,6 +46,7 @@
     <Compile Include="$(SharedDir)ConsoleLogs\LogEntry.cs" Link="Utils\ConsoleLogs\LogEntry.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\LogPauseViewModel.cs" Link="Utils\ConsoleLogs\LogPauseViewModel.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\TimestampParser.cs" Link="Utils\ConsoleLogs\TimestampParser.cs" />
+    <Compile Include="$(SharedDir)ConsoleLogs\AnsiParser.cs" Link="Utils\ConsoleLogs\AnsiParser.cs" />
     <Compile Include="$(SharedDir)CommandLineArgsParser.cs" Link="Utils\CommandLineArgsParser.cs" />
     <Compile Include="$(SharedDir)LaunchProfiles\*.cs" />
     <Compile Include="$(SharedDir)OverloadResolutionPriorityAttribute.cs" Link="Utils\OverloadResolutionPriorityAttribute.cs" />
@@ -54,6 +55,7 @@
     <Compile Include="$(SharedDir)LocaleHelpers.cs" Link="Utils\LocaleHelpers.cs" />
     <Compile Include="$(SharedDir)PathLookupHelper.cs" Link="Utils\PathLookupHelper.cs" />
     <Compile Include="$(SharedDir)BackchannelConstants.cs" Link="Backchannel\BackchannelConstants.cs" />
+    <Compile Include="$(SharedDir)TerminalHost\*.cs" Link="Backchannel\TerminalHost\%(Filename)%(Extension)" />
     <Compile Include="$(SharedDir)UserSecrets\UserSecretsPathHelper.cs" Link="UserSecrets\UserSecretsPathHelper.cs" />
     <Compile Include="$(SharedDir)X509Certificate2Extensions.cs" Link="Utils\X509Certificate2Extensions.cs" />
     <Compile Include="$(SharedDir)PasswordGenerator.cs" Link="Utils\PasswordGenerator.cs" />
@@ -125,6 +127,8 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Aspire.Hosting.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Yarp.Tests" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Go" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Go.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.JavaScript" />
     <InternalsVisibleTo Include="Aspire.Hosting.JavaScript.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Python" />

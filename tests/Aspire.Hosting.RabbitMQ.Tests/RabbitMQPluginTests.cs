@@ -57,7 +57,7 @@ public class RabbitMQPluginTests
 
         var context = new ContainerFileSystemCallbackContext
         {
-            ServiceProvider = new ServiceCollection().BuildServiceProvider(),
+            Services = new ServiceCollection().BuildServiceProvider(),
             Model = server.Resource
         };
         var items = await annotation.Callback(context, default);
@@ -94,7 +94,7 @@ public class RabbitMQPluginTests
 
         var context = new ContainerFileSystemCallbackContext
         {
-            ServiceProvider = new ServiceCollection().BuildServiceProvider(),
+            Services = new ServiceCollection().BuildServiceProvider(),
             Model = server.Resource
         };
         var items = await annotation.Callback(context, default);
@@ -126,7 +126,7 @@ public class RabbitMQPluginTests
 
         var context = new ContainerFileSystemCallbackContext
         {
-            ServiceProvider = new ServiceCollection().BuildServiceProvider(),
+            Services = new ServiceCollection().BuildServiceProvider(),
             Model = server.Resource
         };
         var items = await annotation.Callback(context, default);

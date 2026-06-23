@@ -229,6 +229,108 @@ public class LlmsTxtParserTests
     }
 
     [Fact]
+    public async Task ParseAsync_BashCommentInCodeFence_NotTreatedAsDocumentBoundary()
+    {
+        // Regression: a shell-style "# comment" line inside a fenced code block
+        // must not be interpreted as an H1 document boundary, which would split
+        // the article and truncate its body mid-fence.
+        var content = """
+            # First Document
+
+            Some prose about the first document.
+
+            ```bash
+            # This is a bash comment, not a heading
+            echo "hello"
+
+            # Another bash comment
+            ls -la
+            ```
+
+            Trailing prose that belongs to the first document.
+
+            # Second Document
+
+            Body of the second document.
+            """;
+
+        var result = await LlmsTxtParser.ParseAsync(content).DefaultTimeout();
+
+        Assert.Equal(2, result.Count);
+        Assert.Equal("First Document", result[0].Title);
+        Assert.Equal("Second Document", result[1].Title);
+        Assert.Contains("# This is a bash comment, not a heading", result[0].Content);
+        Assert.Contains("echo \"hello\"", result[0].Content);
+        Assert.Contains("Trailing prose that belongs to the first document.", result[0].Content);
+    }
+
+    [Fact]
+    public async Task ParseAsync_DuplicateSlugs_AreDisambiguatedWithNumericSuffix()
+    {
+        // Regression: the live llms-full.txt corpus has titles that differ only in
+        // letter case (e.g. "Azure Cosmos DB Client integration" vs "...client integration").
+        // Both lowercased to the same slug, making the second document unreachable via
+        // `aspire docs get <slug>`. The parser must disambiguate them.
+        var content = """
+            # Azure Cosmos DB Client integration
+
+            First document body.
+
+            # Azure Cosmos DB client integration
+
+            Second document body.
+
+            # Azure Cosmos DB client integration
+
+            Third document body.
+            """;
+
+        var result = await LlmsTxtParser.ParseAsync(content).DefaultTimeout();
+
+        Assert.Equal(3, result.Count);
+        Assert.Equal("azure-cosmos-db-client-integration", result[0].Slug);
+        Assert.Equal("azure-cosmos-db-client-integration-2", result[1].Slug);
+        Assert.Equal("azure-cosmos-db-client-integration-3", result[2].Slug);
+
+        // Titles remain unchanged — only the slug is disambiguated.
+        Assert.Equal("Azure Cosmos DB Client integration", result[0].Title);
+        Assert.Equal("Azure Cosmos DB client integration", result[1].Title);
+        Assert.Equal("Azure Cosmos DB client integration", result[2].Title);
+
+        // All slugs are distinct.
+        var slugs = result.Select(d => d.Slug).ToHashSet(StringComparer.Ordinal);
+        Assert.Equal(3, slugs.Count);
+    }
+
+    [Fact]
+    public async Task ParseAsync_DuplicateSlugs_SkipsOccupiedNumericSuffixSlug()
+    {
+        var content = """
+            # Service Discovery 2
+
+            First document body.
+
+            # Service Discovery
+
+            Second document body.
+
+            # Service Discovery
+
+            Third document body.
+            """;
+
+        var result = await LlmsTxtParser.ParseAsync(content).DefaultTimeout();
+
+        Assert.Equal(3, result.Count);
+        Assert.Equal("service-discovery-2", result[0].Slug);
+        Assert.Equal("service-discovery", result[1].Slug);
+        Assert.Equal("service-discovery-3", result[2].Slug);
+
+        var slugs = result.Select(d => d.Slug).ToHashSet(StringComparer.Ordinal);
+        Assert.Equal(3, slugs.Count);
+    }
+
+    [Fact]
     public async Task ParseAsync_H1WithoutSpace_NotRecognizedAsDocument()
     {
         // "#NoSpace" should not be recognized as H1

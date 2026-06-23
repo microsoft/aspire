@@ -124,16 +124,22 @@
     <value>The model contains Azure resources that require an Azure Subscription.</value>
   </data>
   <data name="NotificationPrimaryButtonText" xml:space="preserve">
-    <value>Enter values</value>
+    <value>Configure</value>
   </data>
   <data name="InputsTitle" xml:space="preserve">
-    <value>Azure provisioning</value>
+    <value>Configure Azure context</value>
   </data>
   <data name="InputsMessage" xml:space="preserve">
-    <value>The model contains Azure resources that require an Azure Subscription.
+    <value>Select the Azure tenant, subscription, resource group, and location Aspire should use for provisioning.
 
 To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/provisioning).</value>
     <comment>Contains markdown</comment>
+  </data>
+  <data name="InputsPrimaryButtonText" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="InputsSecondaryButtonText" xml:space="preserve">
+    <value>Cancel</value>
   </data>
   <data name="LocationLabel" xml:space="preserve">
     <value>Location</value>
@@ -197,5 +203,179 @@ To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/pro
   </data>
   <data name="ResourceGroupSelectionMessage" xml:space="preserve">
     <value>Select your Azure resource group or enter a new name:</value>
+  </data>
+  <data name="ResetProvisioningStateCommandName" xml:space="preserve">
+    <value>Reset provisioning state</value>
+  </data>
+  <data name="ResetProvisioningStateCommandDescription" xml:space="preserve">
+    <value>Clears the cached Azure context and deployment state for this AppHost. This does not delete live Azure resources and may leave them orphaned.</value>
+  </data>
+  <data name="ResetProvisioningStateCommandConfirmation" xml:space="preserve">
+    <value>This only clears the cached Azure tenant, subscription, resource group, location, and deployment state stored for this AppHost. Live Azure resources are not deleted and may be left orphaned. Do you want to continue?</value>
+  </data>
+  <data name="ResetProvisioningStateCommandSuccess" xml:space="preserve">
+    <value>Azure provisioning state reset.</value>
+  </data>
+  <data name="ChangeAzureContextCommandName" xml:space="preserve">
+    <value>Change Azure context</value>
+  </data>
+  <data name="ChangeAzureContextCommandDescription" xml:space="preserve">
+    <value>Updates the Azure tenant, subscription, resource group, or location for this AppHost and reprovisions all Azure resources.</value>
+  </data>
+  <data name="ChangeAzureContextCommandConfirmation" xml:space="preserve">
+    <value>This updates the Azure context for this AppHost and reprovisions all Azure resources using the values you enter next.</value>
+  </data>
+  <data name="ChangeAzureContextCommandSuccess" xml:space="preserve">
+    <value>Azure context updated and resources reprovisioned.</value>
+  </data>
+  <data name="ForgetStateCommandName" xml:space="preserve">
+    <value>Forget state</value>
+  </data>
+  <data name="ForgetStateCommandDescription" xml:space="preserve">
+    <value>Clears the cached Azure deployment state for this resource so it can be provisioned again using the current Azure context.</value>
+  </data>
+  <data name="ForgetStateCommandConfirmation" xml:space="preserve">
+    <value>This clears the cached Azure deployment state for this resource and resets its provisioning snapshot.</value>
+  </data>
+  <data name="ForgetStateCommandSuccess" xml:space="preserve">
+    <value>Azure resource provisioning state reset.</value>
+  </data>
+  <data name="ChangeResourceLocationCommandName" xml:space="preserve">
+    <value>Change location</value>
+  </data>
+  <data name="ChangeResourceLocationCommandDescription" xml:space="preserve">
+    <value>Overrides the Azure location for this resource and reprovisions it using that location.</value>
+  </data>
+  <data name="ChangeResourceLocationCommandSuccess" xml:space="preserve">
+    <value>Azure resource location updated and reprovisioning completed.</value>
+  </data>
+  <data name="GetAzureResourceCommandName" xml:space="preserve">
+    <value>Get Azure resource</value>
+  </data>
+  <data name="GetAzureResourceCommandDescription" xml:space="preserve">
+    <value>Returns cached deployment state and live Azure existence information for this resource.</value>
+  </data>
+  <data name="GetAzureResourceCommandSuccess" xml:space="preserve">
+    <value>Azure resource information retrieved.</value>
+  </data>
+  <data name="CancelDeploymentCommandName" xml:space="preserve">
+    <value>Cancel deployment</value>
+  </data>
+  <data name="CancelDeploymentCommandDescription" xml:space="preserve">
+    <value>Requests cancellation of the cached Azure deployment for this resource.</value>
+  </data>
+  <data name="CancelDeploymentCommandConfirmation" xml:space="preserve">
+    <value>This requests cancellation of the cached Azure deployment for this resource. Any Azure resources already created by the deployment are not deleted. Do you want to continue?</value>
+  </data>
+  <data name="CancelDeploymentCommandSuccess" xml:space="preserve">
+    <value>Azure deployment cancellation requested.</value>
+  </data>
+  <data name="DeleteAzureResourceCommandName" xml:space="preserve">
+    <value>Delete Azure resource</value>
+  </data>
+  <data name="DeleteAzureResourceCommandDescription" xml:space="preserve">
+    <value>Cancels the cached Azure deployment, deletes Azure resources targeted by the deployment, and clears cached deployment state for this resource.</value>
+  </data>
+  <data name="DeleteAzureResourceCommandConfirmation" xml:space="preserve">
+    <value>This cancels the cached Azure deployment, deletes Azure resources targeted by this resource's deployment, and clears cached deployment state. Do you want to continue?</value>
+  </data>
+  <data name="DeleteAzureResourceCommandSuccess" xml:space="preserve">
+    <value>Azure resources deleted and provisioning state reset.</value>
+  </data>
+  <data name="ChangeResourceLocationPromptTitle" xml:space="preserve">
+    <value>Change Azure resource location</value>
+  </data>
+  <data name="ChangeResourceLocationPromptMessage" xml:space="preserve">
+    <value>Select or enter a new Azure location for '{0}'. The resource will then be reprovisioned using that location.</value>
+  </data>
+  <data name="ReprovisionResourceCommandName" xml:space="preserve">
+    <value>Reprovision</value>
+  </data>
+  <data name="ReprovisionResourceCommandDescription" xml:space="preserve">
+    <value>Clears the cached Azure deployment state for this resource and provisions it again using the current Azure context.</value>
+  </data>
+  <data name="ReprovisionResourceCommandConfirmation" xml:space="preserve">
+    <value>This clears the cached Azure deployment state for this resource and reprovisions it again using the current Azure tenant, subscription, resource group, and location.</value>
+  </data>
+  <data name="ReprovisionResourceCommandSuccess" xml:space="preserve">
+    <value>Azure resource reprovisioning completed.</value>
+  </data>
+  <data name="ReprovisionAllCommandName" xml:space="preserve">
+    <value>Reprovision all</value>
+  </data>
+  <data name="ReprovisionAllCommandDescription" xml:space="preserve">
+    <value>Clears the cached Azure deployment state for this AppHost and provisions all Azure resources again using the current Azure context.</value>
+  </data>
+  <data name="ReprovisionAllCommandConfirmation" xml:space="preserve">
+    <value>This clears the cached Azure deployment state for this AppHost and reprovisions all Azure resources again using the current Azure tenant, subscription, resource group, and location.</value>
+  </data>
+  <data name="ReprovisionAllCommandSuccess" xml:space="preserve">
+    <value>Azure reprovisioning completed.</value>
+  </data>
+  <data name="DeleteAzureResourcesCommandName" xml:space="preserve">
+    <value>Delete Azure resources</value>
+  </data>
+  <data name="DeleteAzureResourcesCommandDescription" xml:space="preserve">
+    <value>Deletes the current Azure resource group for this AppHost, clears cached deployment state, and leaves the Azure context intact for reprovisioning.</value>
+  </data>
+  <data name="DeleteAzureResourcesCommandConfirmation" xml:space="preserve">
+    <value>This deletes the current Azure resource group and every Azure resource inside it for this AppHost, then clears the cached deployment state. Do you want to continue?</value>
+  </data>
+  <data name="DeleteAzureResourcesCommandSuccess" xml:space="preserve">
+    <value>Azure resources deleted and provisioning state reset.</value>
+  </data>
+  <data name="ContextPropertyLocationDisplayName" xml:space="preserve">
+    <value>Azure location</value>
+  </data>
+  <data name="ContextPropertyResourceGroupDisplayName" xml:space="preserve">
+    <value>Azure resource group</value>
+  </data>
+  <data name="ContextPropertySubscriptionIdDisplayName" xml:space="preserve">
+    <value>Azure subscription ID</value>
+  </data>
+  <data name="ContextPropertyTenantDomainDisplayName" xml:space="preserve">
+    <value>Azure tenant domain</value>
+  </data>
+  <data name="ContextPropertyTenantIdDisplayName" xml:space="preserve">
+    <value>Azure tenant ID</value>
+  </data>
+  <data name="FailurePropertyCodeDisplayName" xml:space="preserve">
+    <value>Azure error code</value>
+  </data>
+  <data name="FailurePropertyCorrelationIdDisplayName" xml:space="preserve">
+    <value>Azure correlation ID</value>
+  </data>
+  <data name="FailurePropertyCurrentLocationDisplayName" xml:space="preserve">
+    <value>Azure current location</value>
+  </data>
+  <data name="FailurePropertyHttpStatusDisplayName" xml:space="preserve">
+    <value>Azure HTTP status</value>
+  </data>
+  <data name="FailurePropertyMessageDisplayName" xml:space="preserve">
+    <value>Azure error message</value>
+  </data>
+  <data name="FailurePropertyOperationDisplayName" xml:space="preserve">
+    <value>Azure operation</value>
+  </data>
+  <data name="FailurePropertyProviderDisplayName" xml:space="preserve">
+    <value>Azure provider</value>
+  </data>
+  <data name="FailurePropertyRecommendedActionsDisplayName" xml:space="preserve">
+    <value>Azure recommended actions</value>
+  </data>
+  <data name="FailurePropertyRequestIdDisplayName" xml:space="preserve">
+    <value>Azure request ID</value>
+  </data>
+  <data name="FailurePropertyResourceNameDisplayName" xml:space="preserve">
+    <value>Azure resource name</value>
+  </data>
+  <data name="FailurePropertyResourceTypeDisplayName" xml:space="preserve">
+    <value>Azure resource type</value>
+  </data>
+  <data name="FailurePropertySupportedLocationsDisplayName" xml:space="preserve">
+    <value>Azure supported locations</value>
+  </data>
+  <data name="FailurePropertyTargetResourceIdDisplayName" xml:space="preserve">
+    <value>Azure target resource ID</value>
   </data>
 </root>

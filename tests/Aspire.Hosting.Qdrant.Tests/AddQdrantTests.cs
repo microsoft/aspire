@@ -179,12 +179,12 @@ public class AddQdrantTests(ITestOutputHelper testOutputHelper)
             .WithEndpoint("grpc", e =>
             {
                 e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 6334);
-                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "my-qdrant.dev.internal", 6334, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "my-qdrant.dev.internal", 6334, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
             })
             .WithEndpoint("http", e =>
             {
                 e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 6333);
-                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "my-qdrant.dev.internal", 6333, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "my-qdrant.dev.internal", 6333, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
             });
 
         var projectA = appBuilder.AddProject<ProjectA>("projecta", o => o.ExcludeLaunchProfile = true)
@@ -223,12 +223,12 @@ public class AddQdrantTests(ITestOutputHelper testOutputHelper)
             .WithEndpoint("grpc", e =>
             {
                 e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 6334);
-                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "my-qdrant.dev.internal", 6334, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "my-qdrant.dev.internal", 6334, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
             })
             .WithEndpoint("http", e =>
             {
                 e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 6333);
-                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "my-qdrant.dev.internal", 6333, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "my-qdrant.dev.internal", 6333, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
             });
         var consumer = appBuilder.AddContainer("consumer", "fake");
 

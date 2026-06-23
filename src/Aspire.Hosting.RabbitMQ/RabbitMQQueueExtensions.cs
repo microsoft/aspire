@@ -16,7 +16,9 @@ public static class RabbitMQQueueExtensions
     /// <param name="queueName">The name of the queue. Defaults to the resource name when not provided.</param>
     /// <param name="type">The type of the queue. Defaults to <see cref="RabbitMQQueueType.Classic"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a queue to a RabbitMQ virtual host")]
+    /// <ats-summary>Adds a queue to a RabbitMQ virtual host.</ats-summary>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<RabbitMQQueueResource> AddQueue(
         this IResourceBuilder<RabbitMQVirtualHostResource> builder,
         [ResourceName] string name,
@@ -75,7 +77,9 @@ public static class RabbitMQQueueExtensions
     /// <param name="queueName">The name of the queue. Defaults to the resource name when not provided.</param>
     /// <param name="type">The type of the queue. Defaults to <see cref="RabbitMQQueueType.Classic"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("addQueueOnServer", MethodName = "addQueue", Description = "Adds a queue to the default '/' virtual host")]
+    /// <ats-summary>Adds a queue to the default '/' virtual host.</ats-summary>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport("addQueueOnServer", MethodName = "addQueue")]
     public static IResourceBuilder<RabbitMQQueueResource> AddQueue(
         this IResourceBuilder<RabbitMQServerResource> builder,
         [ResourceName] string name,
@@ -107,7 +111,9 @@ public static class RabbitMQQueueExtensions
     ///      });
     /// </code>
     /// </example>
-    [AspireExport(Description = "Configures typed queue x-arguments", RunSyncOnBackgroundThread = true)]
+    /// <ats-summary>Configures typed queue x-arguments.</ats-summary>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<T> WithQueueArguments<T>(
         this IResourceBuilder<T> builder,
         Action<RabbitMQQueueArguments> configure)

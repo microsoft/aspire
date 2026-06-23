@@ -10,7 +10,7 @@
 <PageTitle><ApplicationName ResourceName="@nameof(Dashboard.Resources.Resources.ResourcesPageTitle)" Loc="@Loc" /></PageTitle>
 
 @{
-    var showDetailsView = SelectedResource is not null;
+    var showDetailsView = PageViewModel.SelectedResource is not null;
 }
 
 <div class="page-content-container">
@@ -24,7 +24,7 @@
                           Immediate="true"
                           ImmediateDelay="@FluentUIExtensions.InputDelay"
                           Name="resources-search"
-                          @bind-Value="_filter"
+                          @bind-Value="PageViewModel.TextFilter"
                           slot="end"
                           Label="@(ViewportInformation.IsDesktop ? null : ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)].Value)"
                           @bind-Value:after="HandleSearchFilterChangedAsync" />
@@ -85,10 +85,10 @@
                 </Body>
             </FluentPopover>
 
-            <SummaryDetailsView DetailsTitle="@(SelectedResource != null ? $"{SelectedResource.ResourceType}: {GetResourceName(SelectedResource)}" : null)"
+            <SummaryDetailsView DetailsTitle="@(PageViewModel.SelectedResource != null ? $"{PageViewModel.SelectedResource.ResourceType}: {GetResourceName(PageViewModel.SelectedResource)}" : null)"
                                 ShowDetails="@showDetailsView"
                                 OnDismiss="@(() => ClearSelectedResourceAsync(causedByUserAction: true))"
-                                SelectedValue="@SelectedResource"
+                                SelectedValue="@PageViewModel.SelectedResource"
                                 ViewKey="ResourcesList"
                                 OnResize="@(r => _manager.SetWidthFraction(r.Orientation == Orientation.Horizontal ? r.Panel1Fraction : 1))">
                 <Summary>
@@ -103,18 +103,18 @@
                                 <FluentTabs Class="resources-tab-header" ActiveTabId="@($"tab-{PageViewModel.SelectedViewKind}")" OnTabChange="@OnTabChangeAsync" Size="null">
                                     <FluentTab LabelClass="tab-label"
                                                Id="@($"tab-{ResourceViewKind.Table}")"
-                                               Label="@ControlsStringsLoc[nameof(ControlsStrings.ChartContainerTableTab)]"
+                                               Label="@ControlsStringsLoc[nameof(ControlsStrings.ResourcesContainerTableTab)]"
                                                Icon="@(new Icons.Regular.Size24.Table())">
                                     </FluentTab>
                                     <FluentTab LabelClass="tab-label"
                                                Id="@($"tab-{ResourceViewKind.Parameters}")"
-                                               Label="@ControlsStringsLoc[nameof(ControlsStrings.ChartContainerParametersTab)]"
+                                               Label="@ControlsStringsLoc[nameof(ControlsStrings.ResourcesContainerParametersTab)]"
                                                Icon="@(new Icons.Regular.Size24.Key())">
                                     </FluentTab>
                                     <FluentTab LabelClass="tab-label"
                                                Id="@($"tab-{ResourceViewKind.Graph}")"
-                                               aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ChartContainerGraphAccessibleLabel)]"
-                                               Label="@ControlsStringsLoc[nameof(ControlsStrings.ChartContainerGraphTab)]"
+                                               aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ResourcesContainerGraphAccessibleLabel)]"
+                                               Label="@ControlsStringsLoc[nameof(ControlsStrings.ResourcesContainerGraphTab)]"
                                                Icon="@(new Icons.Regular.Size24.ShareAndroid())">
                                     </FluentTab>
                                 </FluentTabs>
@@ -155,10 +155,10 @@
                                                             </FluentButton>
                                                         }
                                                     </span>
-                                                    <ResourceNameDisplay Resource="context.Resource" FilterText="@_filter" FormatName="GetResourceName" />
+                                                    <ResourceNameDisplay Resource="context.Resource" FilterText="@PageViewModel.TextFilter" FormatName="GetResourceName" />
                                                 </span>
                                             </AspireTemplateColumn>
-                                            <AspireTemplateColumn ColumnId="@StateColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesStateColumnHeader)]" Sortable="true" SortBy="@_stateSort" Tooltip="true" TooltipText="@(c => ResourceStateViewModel.GetResourceStateTooltip(c.Resource, ColumnsLoc))">
+                                            <AspireTemplateColumn ColumnId="@StateColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesStateColumnHeader)]" Sortable="true" SortBy="@_stateSort" Tooltip="true" TooltipText="@(c => ResourceStateViewModel.GetResourceStateTooltip(c.Resource, ColumnsLoc, _resourceByName.Values))">
                                                 <StateColumnDisplay Resource="@context.Resource" UnviewedErrorCounts="@_resourceUnviewedErrorCounts" />
                                             </AspireTemplateColumn>
                                             <AspireTemplateColumn ColumnId="@StartTimeColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesStartTimeColumnHeader)]" Sortable="true" SortBy="@_startTimeSort" TooltipText="@(context => context.Resource.StartTimeStamp != null ? FormatHelpers.FormatDateTime(TimeProvider, context.Resource.StartTimeStamp.Value, MillisecondsDisplay.None, CultureInfo.CurrentCulture) : null)" Tooltip="true">
@@ -168,7 +168,7 @@
                                             <AspireTemplateColumn ColumnId="@SourceColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesSourceColumnHeader)]" Tooltip="true" TooltipText="@(ctx => ResourceSourceViewModel.GetSourceViewModel(ctx.Resource)?.Tooltip)">
                                                 @if (ResourceSourceViewModel.GetSourceViewModel(context.Resource) is { } columnDisplay)
                                                 {
-                                                    <SourceColumnDisplay FilterText="@_filter" Value="@columnDisplay.Value" ContentAfterValue="@columnDisplay.ContentAfterValue" ValueToVisualize="@columnDisplay.ValueToVisualize" Tooltip="@columnDisplay.Tooltip" />
+                                                    <SourceColumnDisplay FilterText="@PageViewModel.TextFilter" Value="@columnDisplay.Value" ContentAfterValue="@columnDisplay.ContentAfterValue" ValueToVisualize="@columnDisplay.ValueToVisualize" Tooltip="@columnDisplay.Tooltip" />
                                                 }
                                                 else
                                                 {
@@ -199,7 +199,7 @@
                                                     <span class="empty-data"></span>
                                                 }
                                             </AspireTemplateColumn>
-                                            <AspireTemplateColumn ColumnId="@UrlsColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesUrlsColumnHeader)]" Tooltip="true" TooltipText="@(ctx => GetUrlsTooltip(ctx.Resource))">
+                                            <AspireTemplateColumn ColumnId="@UrlsColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesUrlsColumnHeader)]">
                                                 <UrlsColumnDisplay Resource="context.Resource"
                                                                    HasMultipleReplicas="HasMultipleReplicas(context.Resource)"
                                                                    DisplayedUrls="GetDisplayedUrls(context.Resource)" />
@@ -251,13 +251,13 @@
                         </div>
                     </div>
                     <FluentOverlay @bind-Visible="_contextMenuOpen" OnClose="ContextMenuClosed" Transparent="true" FullScreen="true" />
-                    <AspireMenu @bind-Open="_contextMenuOpen" @ref="_contextMenu" Anchor="resources-summary-layout-id" Anchored="false" Items="_contextMenuItems" VerticalThreshold="300" />
+                    <AspireMenu @bind-Open="_contextMenuOpen" @ref="_contextMenu" Anchor="resources-summary-layout-id" Anchored="false" Items="_contextMenuItems" />
                 </Summary>
                 <Details>
                     <ResourceDetails Resource="context"
                                      ResourceByName="_resourceByName"
                                      ShowSpecOnlyToggle="true"
-                                     ShowHiddenResources="@_showHiddenResources"
+                                     ShowHiddenResources="@PageViewModel.ShowHiddenResources"
                                      CommandSelected="@(command => ExecuteResourceCommandAsync(context!, command))"
                                      IsCommandExecuting="@((resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name))" />
                 </Details>

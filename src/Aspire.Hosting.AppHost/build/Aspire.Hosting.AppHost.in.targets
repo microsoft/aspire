@@ -149,6 +149,12 @@ namespace Projects%3B
     <Warning Code="ASPIRE001" Text="The '$(Language)' language isn't fully supported by Aspire - some code generation targets will not run, so will require manual authoring." HelpLink="https://aka.ms/aspire/diagnostics/aspire001" />
   </Target>
 
+  <Target Name="_WarnOnAspireCliBundleDisabled" BeforeTargets="PrepareForBuild" Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'false'">
+    <Warning Code="ASPIRE010"
+             Text="$(MSBuildProjectName) is configured with AspireUseCliBundle=false. Some Aspire features may not work when the Aspire CLI bundle is not being used."
+             HelpLink="https://aka.ms/aspire/diagnostics/aspire010" />
+  </Target>
+
   <!--
   Validates that all the ProjectReferences of an Aspire AppHost project are executables and
   informs the developer to set 'IsAspireProjectResource=false' if they really intended on ProjectReferencing a library.
@@ -193,21 +199,127 @@ namespace Projects%3B
       <Output TaskParameter="DcpDir" PropertyName="_AspireCliBundleDcpDir" />
       <Output TaskParameter="AspireDashboardDir" PropertyName="_AspireCliBundleDashboardDir" />
       <Output TaskParameter="AspireDashboardPath" PropertyName="_AspireCliBundleDashboardPath" />
+      <Output TaskParameter="AspireTerminalHostDir" PropertyName="_AspireCliBundleTerminalHostDir" />
+      <Output TaskParameter="AspireTerminalHostPath" PropertyName="_AspireCliBundleTerminalHostPath" />
+      <Output TaskParameter="AspireTerminalHostInvocationArgs" PropertyName="_AspireCliBundleTerminalHostInvocationArgs" />
     </ResolveAspireCliBundle>
 
     <PropertyGroup>
       <DcpDir Condition="'$(DcpDir)' == ''">$(_AspireCliBundleDcpDir)</DcpDir>
       <AspireDashboardDir Condition="'$(AspireDashboardDir)' == ''">$(_AspireCliBundleDashboardDir)</AspireDashboardDir>
       <AspireDashboardPath Condition="'$(AspireDashboardPath)' == ''">$(_AspireCliBundleDashboardPath)</AspireDashboardPath>
+      <AspireTerminalHostDir Condition="'$(AspireTerminalHostDir)' == ''">$(_AspireCliBundleTerminalHostDir)</AspireTerminalHostDir>
+      <AspireTerminalHostPath Condition="'$(AspireTerminalHostPath)' == ''">$(_AspireCliBundleTerminalHostPath)</AspireTerminalHostPath>
+      <AspireTerminalHostInvocationArgs Condition="'$(AspireTerminalHostInvocationArgs)' == ''">$(_AspireCliBundleTerminalHostInvocationArgs)</AspireTerminalHostInvocationArgs>
     </PropertyGroup>
 
     <PropertyGroup>
-      <_AspireCliBundleNotFoundError>$(MSBuildProjectName) is configured with AspireUseCliBundle=true, but the Aspire CLI bundle could not be resolved. Install the Aspire CLI from https://get.aspire.dev and ensure the aspire command is available on PATH, or set AspireCliBundlePath/AspireCliPath to a valid Aspire CLI installation or bundle layout.</_AspireCliBundleNotFoundError>
+      <_AspireCliBundleNotFoundError>
+        $(MSBuildProjectName) is configured to use the Aspire CLI bundle, but the bundle could not be resolved. New features require the Aspire CLI to be installed. The Aspire dashboard &amp; DCP packages will be deprecated in a future release.
+        Install the Aspire CLI from https://get.aspire.dev and ensure the aspire command is available on PATH, or set AspireCliBundlePath/AspireCliPath to a valid Aspire CLI installation or bundle layout.
+      </_AspireCliBundleNotFoundError>
     </PropertyGroup>
 
     <Error Code="ASPIRE009"
            Condition="'$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == '')"
            Text="$(_AspireCliBundleNotFoundError)" />
+  </Target>
+
+  <PropertyGroup>
+    <_AspireCliRunHookSuppressed Condition="'$(_AspireSuppressCliRunHook)' == 'true' or '$(_AspireSuppressCliRunHook)' == '1'">true</_AspireCliRunHookSuppressed>
+    <_AspireCliRunHookSuppressed Condition="'$(ASPIRE_SUPPRESS_CLI_RUN_HOOK)' == 'true' or '$(ASPIRE_SUPPRESS_CLI_RUN_HOOK)' == '1'">true</_AspireCliRunHookSuppressed>
+    <_AspireMinimumCliVersion>13.5.0</_AspireMinimumCliVersion>
+    <_AspireCliVersionSupportsRunHook>false</_AspireCliVersionSupportsRunHook>
+  </PropertyGroup>
+
+  <!-- Determines if the resolved CLI version is sufficient for the run hook delegation. -->
+  <Target Name="_AspireCheckCliVersion"
+          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(_AspireCliRunHookSuppressed)' != 'true'">
+    <PropertyGroup>
+      <!-- Probe the CLI version with Exec so the command runs through cmd.exe (Windows) or
+           /bin/sh (Unix): PATH/PATHEXT lookup and command shims such as aspire.cmd resolve the
+           same way they do for an interactive shell, and Exec owns the process, timeout, and
+           concurrent stream draining. -->
+      <_AspireCliVersionCommand Condition="'$(AspireCliPath)' != ''">"$(AspireCliPath)" --version</_AspireCliVersionCommand>
+      <_AspireCliVersionCommand Condition="'$(AspireCliPath)' == ''">aspire --version</_AspireCliVersionCommand>
+    </PropertyGroup>
+
+    <!-- The probe must never fail the build: IgnoreExitCode + ContinueOnError mean a missing,
+         failing, or hanging CLI (Timeout kills it after 5s) simply leaves the run hook disabled
+         and falls back to plain "dotnet run". -->
+    <Exec Command="$(_AspireCliVersionCommand)"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="true"
+          StandardOutputImportance="Low"
+          StandardErrorImportance="Low"
+          Timeout="5000"
+          ContinueOnError="true">
+      <Output TaskParameter="ConsoleOutput" ItemName="_AspireCliVersionOutput" />
+      <Output TaskParameter="ExitCode" PropertyName="_AspireCliVersionExitCode" />
+    </Exec>
+
+    <!-- ConsoleToMSBuild merges stdout and stderr in arrival order, so the version is not
+         necessarily the first captured line (a CLI may emit diagnostics on stderr before writing
+         the version to stdout). Only trust the output when the probe exited cleanly, then keep the
+         first line shaped like a version. Raw forms emitted by the CLI version command:
+           13.5.0
+           13.5.0-preview.1.26319.9
+           13.5.0+gabcdef
+           13.5.0-preview.1.26319.9+gabcdef -->
+    <ItemGroup Condition="'$(_AspireCliVersionExitCode)' == '0'">
+      <_AspireCliVersionCandidate Include="@(_AspireCliVersionOutput)"
+                                  Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(Identity)', '^\s*\d+\.\d+\.\d+([-+][0-9A-Za-z.+-]*)?\s*$'))" />
+    </ItemGroup>
+
+    <PropertyGroup>
+      <_AspireResolvedCliVersion>@(_AspireCliVersionCandidate)</_AspireResolvedCliVersion>
+      <!-- Keep only the first matching line when several were captured. -->
+      <_AspireResolvedCliVersion>$([System.Text.RegularExpressions.Regex]::Replace('$(_AspireResolvedCliVersion)', ';.*$', ''))</_AspireResolvedCliVersion>
+      <!-- VersionGreaterThanOrEquals parses with System.Version, which only accepts numeric
+           components, so strip the SemVer prerelease/build-metadata suffix. Build metadata may
+           itself contain '-', so cut at the first '-' or '+'. Reducing a 13.5.0 prerelease to
+           13.5.0 is intentional: 13.5 previews satisfy the minimum. -->
+      <_AspireResolvedCliVersion>$([System.Text.RegularExpressions.Regex]::Replace('$(_AspireResolvedCliVersion.Trim())', '[-+].*$', ''))</_AspireResolvedCliVersion>
+    </PropertyGroup>
+
+    <PropertyGroup>
+      <_AspireCliVersionSupportsRunHook Condition="'$(_AspireResolvedCliVersion)' != '' and $([MSBuild]::VersionGreaterThanOrEquals('$(_AspireResolvedCliVersion)', '$(_AspireMinimumCliVersion)'))">true</_AspireCliVersionSupportsRunHook>
+    </PropertyGroup>
+
+    <Message Text="Aspire CLI version check: $(_AspireResolvedCliVersion) (minimum required: $(_AspireMinimumCliVersion), supported: $(_AspireCliVersionSupportsRunHook))" Importance="Low" />
+  </Target>
+
+  <Target Name="_AspireComputeRunArguments"
+          BeforeTargets="ComputeRunArguments"
+          DependsOnTargets="_AspireCheckCliVersion"
+          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(_AspireCliRunHookSuppressed)' != 'true'">
+    <ItemGroup Condition="'$(_AspireCliVersionSupportsRunHook)' == 'true' and '$(FileBasedProgram)' == 'true'">
+      <_AspireFileBasedAppHostPath Include="%(RuntimeHostConfigurationOption.Value)"
+                                   Condition="'%(RuntimeHostConfigurationOption.Identity)' == 'EntryPointFilePath'" />
+      <_AspireFileBasedAppHostDirectory Include="%(RuntimeHostConfigurationOption.Value)"
+                                        Condition="'%(RuntimeHostConfigurationOption.Identity)' == 'EntryPointFileDirectoryPath'" />
+    </ItemGroup>
+
+    <PropertyGroup Condition="'$(_AspireCliVersionSupportsRunHook)' == 'true'">
+      <_AspireOriginalRunArguments>$(RunArguments)</_AspireOriginalRunArguments>
+      <_AspireRunProject>$(MSBuildProjectFullPath)</_AspireRunProject>
+      <!-- File-based dotnet run uses a synthetic apphost.csproj for MSBuild, but the Aspire CLI needs the original .cs file. -->
+      <_AspireRunProject Condition="'$(FileBasedProgram)' == 'true' and '@(_AspireFileBasedAppHostPath)' != ''">@(_AspireFileBasedAppHostPath)</_AspireRunProject>
+      <_AspireRunWorkingDirectory>$(MSBuildProjectDirectory)</_AspireRunWorkingDirectory>
+      <_AspireRunWorkingDirectory Condition="'$(FileBasedProgram)' == 'true' and '@(_AspireFileBasedAppHostDirectory)' != ''">@(_AspireFileBasedAppHostDirectory)</_AspireRunWorkingDirectory>
+      <RunCommand Condition="'$(AspireCliPath)' != ''">$(AspireCliPath)</RunCommand>
+      <!-- On Windows, Aspire can be installed as a command shim such as aspire.cmd.
+           dotnet run starts RunCommand directly, so use cmd /C for the default PATH
+           lookup to get the same PATHEXT resolution as an interactive shell. -->
+      <RunCommand Condition="'$(AspireCliPath)' == '' and '$(OS)' == 'Windows_NT'">cmd</RunCommand>
+      <RunCommand Condition="'$(AspireCliPath)' == '' and '$(OS)' != 'Windows_NT'">aspire</RunCommand>
+      <!-- dotnet run appends application arguments after ComputeRunArguments, so the double-dash separator
+           must be present even when RunArguments is initially empty. -->
+      <RunArguments>run --project "$(_AspireRunProject)" --no-build --</RunArguments>
+      <RunArguments Condition="'$(AspireCliPath)' == '' and '$(OS)' == 'Windows_NT'">/C aspire $(RunArguments)</RunArguments>
+      <RunArguments Condition="'$(_AspireOriginalRunArguments)' != ''">$(RunArguments) $(_AspireOriginalRunArguments)</RunArguments>
+      <RunWorkingDirectory>$(_AspireRunWorkingDirectory)</RunWorkingDirectory>
+    </PropertyGroup>
   </Target>
 
   <!-- This target registers the location of the Aspire orchestration dependencies -->
@@ -253,6 +365,28 @@ namespace Projects%3B
       <AssemblyAttribute Include="System.Reflection.AssemblyMetadata">
         <_Parameter1>aspiredashboardpath</_Parameter1>
         <_Parameter2>$(AspireDashboardPath)</_Parameter2>
+      </AssemblyAttribute>
+    </ItemGroup>
+  </Target>
+
+  <Target Name="SetTerminalHostDiscoveryAttributes" DependsOnTargets="ResolveAspireCliBundlePaths" BeforeTargets="GetAssemblyAttributes" Condition=" '$(AspireTerminalHostDir)' != '' or '$(AspireTerminalHostPath)' != '' ">
+    <PropertyGroup>
+      <AspireTerminalHostDir Condition=" '$(AspireTerminalHostDir)' != '' ">$([MSBuild]::EnsureTrailingSlash('$(AspireTerminalHostDir)'))</AspireTerminalHostDir>
+      <_AspireTerminalHostPathInferredFromDir Condition=" '$(AspireTerminalHostPath)' == '' and '$(AspireTerminalHostDir)' != '' ">true</_AspireTerminalHostPathInferredFromDir>
+      <AspireTerminalHostPath Condition=" '$(AspireTerminalHostPath)' == '' ">$([MSBuild]::NormalizePath($(AspireTerminalHostDir), 'Aspire.TerminalHost'))</AspireTerminalHostPath>
+      <AspireTerminalHostPath Condition=" '$(_AspireTerminalHostPathInferredFromDir)' == 'true' and '$(OS)' == 'Windows_NT' and !$(AspireTerminalHostPath.EndsWith('.exe')) ">$(AspireTerminalHostPath).exe</AspireTerminalHostPath>
+      <AspireTerminalHostPath Condition=" '$(_AspireTerminalHostPathInferredFromDir)' == 'true' and $([MSBuild]::IsOsPlatform('OSX')) and !$(AspireTerminalHostPath.EndsWith('.dll'))">$(AspireTerminalHostPath).dll</AspireTerminalHostPath>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadata">
+        <_Parameter1>aspireterminalhostpath</_Parameter1>
+        <_Parameter2>$(AspireTerminalHostPath)</_Parameter2>
+      </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadata"
+                         Condition=" '$(AspireTerminalHostInvocationArgs)' != '' ">
+        <_Parameter1>aspireterminalhostinvocationargs</_Parameter1>
+        <_Parameter2>$(AspireTerminalHostInvocationArgs)</_Parameter2>
       </AssemblyAttribute>
     </ItemGroup>
   </Target>

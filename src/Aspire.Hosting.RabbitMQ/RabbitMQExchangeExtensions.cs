@@ -22,7 +22,9 @@ public static class RabbitMQExchangeExtensions
     /// <param name="exchangeName">The name of the exchange. Defaults to the resource name when not provided.</param>
     /// <param name="type">The type of the exchange. Defaults to <see cref="RabbitMQExchangeType.Direct"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds an exchange to a RabbitMQ virtual host")]
+    /// <ats-summary>Adds an exchange to a RabbitMQ virtual host.</ats-summary>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<RabbitMQExchangeResource> AddExchange(
         this IResourceBuilder<RabbitMQVirtualHostResource> builder,
         [ResourceName] string name,
@@ -136,7 +138,9 @@ public static class RabbitMQExchangeExtensions
     /// <param name="exchangeName">The name of the exchange. Defaults to the resource name when not provided.</param>
     /// <param name="type">The type of the exchange. Defaults to <see cref="RabbitMQExchangeType.Direct"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("addExchangeOnServer", MethodName = "addExchange", Description = "Adds an exchange to the default '/' virtual host")]
+    /// <ats-summary>Adds an exchange to the default '/' virtual host.</ats-summary>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport("addExchangeOnServer", MethodName = "addExchange")]
     public static IResourceBuilder<RabbitMQExchangeResource> AddExchange(
         this IResourceBuilder<RabbitMQServerResource> builder,
         [ResourceName] string name,
@@ -160,7 +164,9 @@ public static class RabbitMQExchangeExtensions
     /// which message headers must match for the binding to be selected.
     /// </param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a binding from an exchange to a queue or another exchange")]
+    /// <ats-summary>Adds a binding from an exchange to a queue or another exchange.</ats-summary>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<RabbitMQExchangeResource> WithBinding<TDestination>(
         this IResourceBuilder<RabbitMQExchangeResource> exchange,
         IResourceBuilder<TDestination> destination,
@@ -200,7 +206,9 @@ public static class RabbitMQExchangeExtensions
     ///      .WithExchangeArguments(a => a.AlternateExchange = unroutable.Resource);
     /// </code>
     /// </example>
-    [AspireExport(Description = "Configures typed exchange x-arguments", RunSyncOnBackgroundThread = true)]
+    /// <ats-summary>Configures typed exchange x-arguments.</ats-summary>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<T> WithExchangeArguments<T>(
         this IResourceBuilder<T> builder,
         Action<RabbitMQExchangeArguments> configure)

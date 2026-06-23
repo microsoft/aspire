@@ -395,4 +395,5 @@ public class AtsGoCodeGeneratorTests
         var hostingAssembly = typeof(DistributedApplication).Assembly;
         return (testAssembly, hostingAssembly);
     }
+
 }

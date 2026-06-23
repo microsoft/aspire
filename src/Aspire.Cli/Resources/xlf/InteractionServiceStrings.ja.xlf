@@ -1,9 +1,9 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="ja" original="../InteractionServiceStrings.resx">
     <body>
       <trans-unit id="AppHostConnectionLost">
-        <source>The connection to the AppHost was lost: {0}.</source>
+        <source>The connection to the AppHost was lost: {0}</source>
         <target state="needs-review-translation">アプリ ホストへの接続が失われました: {0}。</target>
         <note />
       </trans-unit>
@@ -17,19 +17,29 @@
         <target state="needs-review-translation">AppHost のバージョンに互換性がありません。AppHost または Aspire CLI をアップグレードしてください。</target>
         <note />
       </trans-unit>
+      <trans-unit id="AppHostNotCompatibleUpdateAppHost">
+        <source>The AppHost is using an older Aspire version than the Aspire CLI. Update the AppHost's Aspire packages to continue.</source>
+        <target state="new">The AppHost is using an older Aspire version than the Aspire CLI. Update the AppHost's Aspire packages to continue.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostNotCompatibleUpdateCli">
+        <source>The Aspire CLI is older than the Aspire version used by the AppHost. Update the Aspire CLI to continue.</source>
+        <target state="new">The Aspire CLI is older than the Aspire version used by the AppHost. Update the Aspire CLI to continue.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AppHostShutDown">
         <source>The application shut down.</source>
         <target state="new">The application shut down.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireCLIVersion">
-        <source>Aspire CLI Version</source>
-        <target state="translated">Aspire CLI バージョン</target>
+        <source>Aspire CLI version</source>
+        <target state="needs-review-translation">Aspire CLI バージョン</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireHostingSDKVersion">
-        <source>Aspire.Hosting Version</source>
-        <target state="translated">Aspire.Hosting バージョン</target>
+        <source>Aspire.Hosting version</source>
+        <target state="needs-review-translation">Aspire.Hosting バージョン</target>
         <note />
       </trans-unit>
       <trans-unit id="BuildingAppHost">
@@ -73,7 +83,7 @@
         <note>Represents a type of link</note>
       </trans-unit>
       <trans-unit id="ErrorConnectingToAppHost">
-        <source>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}.</source>
+        <source>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}</source>
         <target state="needs-review-translation">アプリ ホスティング プロセスへの接続でエラーが発生しました。アプリ ホスティング プロセスが、利用可能になる前にクラッシュした可能性があります: {0}。</target>
         <note />
       </trans-unit>
@@ -128,13 +138,13 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeBuilt">
-        <source>The project could not be built. See logs at {0}</source>
-        <target state="translated">プロジェクトを構築できませんでした。{0} でログを表示する</target>
+        <source>The project could not be built.</source>
+        <target state="new">The project could not be built.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeCreated">
-        <source>The app could not be created. See logs at {0}</source>
-        <target state="new">The app could not be created. See logs at {0}</target>
+        <source>The app could not be created.</source>
+        <target state="new">The app could not be created.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionDoesntExist">
@@ -163,14 +173,19 @@
         <note />
       </trans-unit>
       <trans-unit id="RequiredCapability">
-        <source>Required Capability</source>
-        <target state="translated">必要な機能</target>
+        <source>Required capability</source>
+        <target state="needs-review-translation">必要な機能</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchingProjects">
         <source>Searching...</source>
         <target state="translated">検索しています...</target>
         <note />
+      </trans-unit>
+      <trans-unit id="SeeAppHostLogsAt">
+        <source>See AppHost logs at {0}</source>
+        <target state="new">See AppHost logs at {0}</target>
+        <note>{0} is the log file path of the CLI process managing the AppHost</note>
       </trans-unit>
       <trans-unit id="SeeLogsAt">
         <source>See logs at {0}</source>

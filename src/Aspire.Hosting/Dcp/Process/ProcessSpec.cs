@@ -12,12 +12,14 @@ internal sealed class ProcessSpec
     public IDictionary<string, string> EnvironmentVariables { get; init; } = new Dictionary<string, string>();
     public bool InheritEnv { get; init; } = true;
     public string? Arguments { get; init; }
+    public IReadOnlyList<string>? ArgumentList { get; init; }
     public Action<string>? OnOutputData { get; init; }
     public Action<string>? OnErrorData { get; init; }
     public Action<int>? OnStart { get; init; }
     public Action<int>? OnStop { get; init; }
     public bool KillEntireProcessTree { get; init; } = true;
     public bool ThrowOnNonZeroReturnCode { get; init; } = true;
+    public bool ResolveExecutablePath { get; init; }
     public int? RetainedOutputLineCount { get; init; }
     public string? StandardInputContent { get; init; }
 

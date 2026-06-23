@@ -12,6 +12,7 @@ using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Hosting;
+using Aspire.Tests;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.InternalTesting;
 
@@ -31,7 +32,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -45,7 +46,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("stop myresource");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.NotEqual(ExitCodeConstants.Success, exitCode);
+        Assert.NotEqual(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -67,7 +68,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.FailedToFindProject, exitCode);
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
     }
 
     [Fact]
@@ -99,7 +100,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.True(projectLocatorInvoked);
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         var displayedMessage = Assert.Single(interactionService.DisplayedMessages);
         Assert.Equal(
             string.Format(SharedCommandStrings.AppHostNotRunningAtPath, Path.Combine("Resolved.AppHost", "Resolved.AppHost.csproj")),
@@ -132,7 +133,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var expectedPath1 = Path.Combine("App1", "AppHost.cs");
         var expectedPath2 = Path.Combine("App2", "AppHost.cs");
@@ -168,7 +169,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var expectedPath = "App1.AppHost.csproj";
         var expectedIdentifier1 = string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostIdentifierWithProcessId, expectedPath, processId1);
@@ -202,7 +203,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var expectedPath = Path.Combine("App1", "App1.AppHost", "App1.AppHost.csproj");
         Assert.Contains(statusMessages, message => message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.StoppingAppHost, expectedPath));
@@ -235,7 +236,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         Assert.Contains(statusMessages, message => message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.StoppingAppHost, appHostPath));
         Assert.Contains(interactionService.DisplayedSuccess, message => message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, appHostPath));
@@ -246,7 +247,6 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var stoppedActivities = new ConcurrentQueue<Activity>();
-        using var listener = CreateProfilingActivityListener(stoppedActivities.Enqueue);
 
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var appHostPath1 = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost.csproj");
@@ -265,18 +265,20 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
             };
         });
         using var provider = services.BuildServiceProvider();
+        var profilingTelemetry = provider.GetRequiredService<ProfilingTelemetry>();
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStopped: stoppedActivities.Enqueue);
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("stop --all");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var stopCommandActivity = Assert.Single(stoppedActivities, activity => activity.OperationName == ProfilingTelemetry.Activities.StopCommand);
         Assert.Equal(true, stopCommandActivity.GetTagItem(ProfilingTelemetry.Tags.AppHostStopAll));
         Assert.Equal(2, stopCommandActivity.GetTagItem(ProfilingTelemetry.Tags.AppHostStopCount));
-        Assert.Equal(ExitCodeConstants.Success, stopCommandActivity.GetTagItem(TelemetryConstants.Tags.ProcessExitCode));
+        Assert.Equal(CliExitCodes.Success, stopCommandActivity.GetTagItem(TelemetryConstants.Tags.ProcessExitCode));
 
         var stopAppHostActivities = stoppedActivities.Where(activity => activity.OperationName == ProfilingTelemetry.Activities.StopAppHost).ToArray();
         Assert.Equal(2, stopAppHostActivities.Length);
@@ -287,7 +289,72 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
                 .Select(activity => Assert.IsType<int>(activity.GetTagItem(TelemetryConstants.Tags.ProcessPid)))
                 .Order()
                 .ToArray());
-        Assert.All(stopAppHostActivities, activity => Assert.Equal(ExitCodeConstants.Success, activity.GetTagItem(TelemetryConstants.Tags.ProcessExitCode)));
+        Assert.All(stopAppHostActivities, activity => Assert.Equal(CliExitCodes.Success, activity.GetTagItem(TelemetryConstants.Tags.ProcessExitCode)));
+    }
+
+    [Theory]
+    [InlineData("stop")]
+    [InlineData("stop --all")]
+    public async Task StopCommand_NoRunningAppHosts_ReturnsSuccess(string commandLine)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(commandLine);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var displayedMessage = Assert.Single(interactionService.DisplayedMessages);
+        Assert.Equal(SharedCommandStrings.AppHostNotRunning, displayedMessage.Message);
+    }
+
+    [Fact]
+    public async Task StopCommand_DeletesSocketFile_AfterSuccessfulStop()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/17587: 'aspire stop' is the command
+        // that leaks the socket, so it must delete the socket file once the AppHost has been confirmed stopped.
+        // Otherwise a later command rediscovers the stale socket and tries to connect to a dead process.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+
+        // The AppHost is reported with a process id that does not exist, so ProcessShutdownService observes
+        // termination immediately and the stop reaches the socket-cleanup branch.
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost.csproj");
+        var socketPath = Path.Combine(workspace.WorkspaceRoot.FullName, "a.sock");
+        File.WriteAllText(socketPath, "");
+        Assert.True(File.Exists(socketPath));
+
+        var connection = CreateConnection(appHostPath, int.MaxValue - 9);
+        connection.SocketPath = socketPath;
+
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("hash1", socketPath, connection);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("stop");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(File.Exists(socketPath));
     }
 
     private static TestAppHostAuxiliaryBackchannel CreateConnection(string appHostPath, int processId, bool isInScope = true)
@@ -312,17 +379,5 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
             .Concat(interactionService.DisplayedErrors)
             .Concat(statusMessages)
             .ToArray();
-    }
-
-    private static ActivityListener CreateProfilingActivityListener(Action<Activity> activityStopped)
-    {
-        var listener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == ProfilingTelemetry.ActivitySourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStopped = activityStopped
-        };
-        ActivitySource.AddActivityListener(listener);
-        return listener;
     }
 }

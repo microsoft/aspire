@@ -54,7 +54,7 @@ internal static class ResourceCommandHelper
                 },
                 cancellationToken));
 
-        return HandleResponse(response, interactionService, resourceName, progressVerb, baseVerb, pastTenseVerb);
+        return HandleResponse(response, interactionService, resourceName, commandName, progressVerb, baseVerb, pastTenseVerb);
     }
 
     /// <summary>
@@ -71,11 +71,8 @@ internal static class ResourceCommandHelper
     {
         logger.LogDebug("Executing command '{CommandName}' on resource '{ResourceName}'", commandName, resourceName);
 
-        // Route status messages to stderr so command results in stdout remain pipeable (e.g., | jq)
-        interactionService.Console = ConsoleOutput.Error;
-
         var response = await interactionService.ShowStatusAsync(
-            $"Executing command '{commandName}' on resource '{resourceName}'...",
+            $"Validating and executing command '{commandName}' on resource '{resourceName}'...",
             async () => await connection.ExecuteResourceCommandAsync(
                 resourceName,
                 commandName,
@@ -93,15 +90,23 @@ internal static class ResourceCommandHelper
         else if (response.Canceled)
         {
             interactionService.DisplayMessage(KnownEmojis.Warning, $"Command '{commandName}' on '{resourceName}' was canceled.");
-            return ExitCodeConstants.FailedToExecuteResourceCommand;
+            return CliExitCodes.FailedToExecuteResourceCommand;
         }
         else
         {
 #pragma warning disable CS0618 // Type or member is obsolete
             var errorMessage = GetFriendlyErrorMessage(response.Message ?? response.ErrorMessage);
 #pragma warning restore CS0618 // Type or member is obsolete
-            errorMessage = AppendValidationErrors(errorMessage, response.ValidationErrors);
-            interactionService.DisplayError($"Failed to execute command '{commandName}' on resource '{resourceName}': {errorMessage}");
+            if (HasValidationErrors(response))
+            {
+                errorMessage = FormatValidationErrors(errorMessage, response.ValidationErrors);
+                interactionService.DisplayError($"Failed to validate command arguments for command '{commandName}' on resource '{resourceName}':{Environment.NewLine}{errorMessage}");
+            }
+            else
+            {
+                errorMessage = AppendValidationErrors(errorMessage, response.ValidationErrors);
+                interactionService.DisplayError($"Failed to execute command '{commandName}' on resource '{resourceName}': {errorMessage}");
+            }
         }
 
         if (response.Value is not null)
@@ -109,13 +114,14 @@ internal static class ResourceCommandHelper
             DisplayCommandResult(interactionService, response.Value);
         }
 
-        return response.Success ? ExitCodeConstants.Success : ExitCodeConstants.FailedToExecuteResourceCommand;
+        return response.Success ? CliExitCodes.Success : CliExitCodes.FailedToExecuteResourceCommand;
     }
 
     private static int HandleResponse(
         ExecuteResourceCommandResponse response,
         IInteractionService interactionService,
         string resourceName,
+        string commandName,
         string progressVerb,
         string baseVerb,
         string pastTenseVerb)
@@ -127,15 +133,23 @@ internal static class ResourceCommandHelper
         else if (response.Canceled)
         {
             interactionService.DisplayMessage(KnownEmojis.Warning, $"{progressVerb} command for '{resourceName}' was canceled.");
-            return ExitCodeConstants.FailedToExecuteResourceCommand;
+            return CliExitCodes.FailedToExecuteResourceCommand;
         }
         else
         {
 #pragma warning disable CS0618 // Type or member is obsolete
             var errorMessage = GetFriendlyErrorMessage(response.Message ?? response.ErrorMessage);
 #pragma warning restore CS0618 // Type or member is obsolete
-            errorMessage = AppendValidationErrors(errorMessage, response.ValidationErrors);
-            interactionService.DisplayError($"Failed to {baseVerb} resource '{resourceName}': {errorMessage}");
+            if (HasValidationErrors(response))
+            {
+                errorMessage = FormatValidationErrors(errorMessage, response.ValidationErrors);
+                interactionService.DisplayError($"Failed to validate command arguments for command '{commandName}' on resource '{resourceName}':{Environment.NewLine}{errorMessage}");
+            }
+            else
+            {
+                errorMessage = AppendValidationErrors(errorMessage, response.ValidationErrors);
+                interactionService.DisplayError($"Failed to {baseVerb} resource '{resourceName}': {errorMessage}");
+            }
         }
 
         if (response.Value is not null)
@@ -143,7 +157,7 @@ internal static class ResourceCommandHelper
             DisplayCommandResult(interactionService, response.Value);
         }
 
-        return response.Success ? ExitCodeConstants.Success : ExitCodeConstants.FailedToExecuteResourceCommand;
+        return response.Success ? CliExitCodes.Success : CliExitCodes.FailedToExecuteResourceCommand;
     }
 
     private static void DisplayCommandResult(IInteractionService interactionService, ExecuteResourceCommandResult result)
@@ -172,6 +186,24 @@ internal static class ResourceCommandHelper
 
         var errors = validationErrors.Select(error => $"{FormatArgumentNameForDisplay(error.ArgumentName)}: {error.ErrorMessage}");
         return $"{errorMessage}{Environment.NewLine}{string.Join(Environment.NewLine, errors)}";
+    }
+
+    private static string FormatValidationErrors(string errorMessage, ResourceCommandArgumentValidationError[]? validationErrors)
+    {
+        if (validationErrors is not { Length: > 0 })
+        {
+            return errorMessage;
+        }
+
+        var errors = string.Join(Environment.NewLine, validationErrors.Select(error => $"{FormatArgumentNameForDisplay(error.ArgumentName)}: {error.ErrorMessage}"));
+        return string.Equals(errorMessage, "Command argument validation failed.", StringComparison.Ordinal)
+            ? errors
+            : $"{errorMessage}{Environment.NewLine}{errors}";
+    }
+
+    private static bool HasValidationErrors(ExecuteResourceCommandResponse response)
+    {
+        return response.ValidationErrors is { Length: > 0 };
     }
 
     internal static string FormatArgumentNameForDisplay(string argumentName)

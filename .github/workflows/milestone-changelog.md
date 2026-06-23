@@ -6,6 +6,8 @@ description: |
   of new features, improvements, and notable bug fixes. A companion GitHub issue collects
   editorial feedback (e.g., exclude a change, rename an entry, merge entries).
 
+max-daily-ai-credits: -1
+
 # ──────────────────────────────────────────────────────────
 # Architecture
 #
@@ -39,15 +41,15 @@ env:
   PRODUCT: "Aspire"
   REPO: "microsoft/aspire"
   DOCS_REPO: "microsoft/aspire.dev"
-  MILESTONE_START: "2026-05-08"
-  MILESTONE: "13.4"
-  PREVIOUS_MILESTONE: "13.3"
+  MILESTONE_START: "2026-06-02"
+  MILESTONE: "13.5"
+  PREVIOUS_MILESTONE: "13.4"
   RELEASE_NOTES_URL: "https://aka.ms/aspire/update-latest"
   BATCH_SIZE: "20"
 
 on:
   schedule:
-    - cron: '0 */2 * * *' # every 2 hours
+    - cron: '0 */6 * * *' # every 6 hours
   workflow_dispatch:
 
 jobs:
@@ -210,11 +212,21 @@ jobs:
             echo "Enriched $BATCH_COUNT batch PRs with authorAssociation, comments, and files"
           fi
 
-          # 2b. Fetch docs PRs from DOCS_REPO merged after milestone start date
+          # 2b. Fetch docs PRs from DOCS_REPO merged after milestone start date.
+          #     Cap the date range to the most recently merged PR in the current
+          #     batch so that docs PRs are only evaluated once their corresponding
+          #     product PRs have been processed. When the batch is smaller than
+          #     BATCH_SIZE, all product PRs are caught up and no cap is needed.
           DOCS_REPO="${{ env.DOCS_REPO }}"
           MILESTONE_START="${{ env.MILESTONE_START }}"
+          DOCS_MERGED_RANGE="merged:>=${MILESTONE_START}"
+          if [ "$BATCH_COUNT" -ge "$BATCH_SIZE" ]; then
+            BATCH_CUTOFF=$(jq -r '.[-1].mergedAt' "$DATA_DIR/batch-prs.json")
+            DOCS_MERGED_RANGE="merged:${MILESTONE_START}..${BATCH_CUTOFF}"
+            echo "Capping docs PRs to merged on or before $BATCH_CUTOFF (batch is full)"
+          fi
           gh pr list --repo "$DOCS_REPO" --state merged --limit 5000 \
-            --search "merged:>=${MILESTONE_START}" \
+            --search "$DOCS_MERGED_RANGE" \
             --json number,title,body,author,mergedBy,mergedAt,labels,additions,deletions,changedFiles,files \
             | jq 'sort_by(.mergedAt)' \
             > "$DATA_DIR/all-docs-prs.json"
@@ -312,6 +324,7 @@ permissions:
   contents: read
   issues: read
   pull-requests: read
+  copilot-requests: write
 
 network: defaults
 
@@ -452,8 +465,9 @@ Generate and maintain a changelog for the **${PRODUCT} ${MILESTONE} milestone** 
 Each run appends newly merged changes to the existing content while preserving
 previous entries. A companion feedback issue collects editorial comments.
 
+<!-- Keep the hardcoded values below in sync with the env block above. -->
 > **Note:** `${PRODUCT}`, `${REPO}`, `${DOCS_REPO}`, `${MILESTONE_START}`, `${MILESTONE}`, `${PREVIOUS_MILESTONE}`, `${RELEASE_NOTES_URL}`, and `${BATCH_SIZE}` refer to values set in the workflow's
-> `env` block (currently **`Aspire`**, **`microsoft/aspire`**, **`microsoft/aspire.dev`**, **`2026-05-08`**, **`13.4`**, **`13.3`**, **`https://aka.ms/aspire/update-latest`**, and **`20`**). All file names,
+> `env` block (currently **`Aspire`**, **`microsoft/aspire`**, **`microsoft/aspire.dev`**, **`2026-06-02`**, **`13.5`**, **`13.4`**, **`https://aka.ms/aspire/update-latest`**, and **`20`**). All file names,
 > titles, and references below derive from those values.
 
 ## Important: available tools
@@ -739,7 +753,7 @@ Then determine whether either of these optional flags applies:
 | Flag | Emoji | When to set |
 |------|-------|-------------|
 | **Breaking change** | ⚠️ | Removed or renamed API, changed default behavior, migration required |
-| **Docs required** | 📝 | Change needs documentation (new feature, changed behavior, new config options) |
+| **Docs required** | 📝 | Change needs documentation (new feature, changed behavior, new config options, new public API). Always set this for breaking changes. |
 | **Community contribution** | 🌍 | PR's `authorAssociation` (from the batch data) is not `MEMBER` or `OWNER`, **and** the PR's `author.is_bot` (from the batch data) is not `true` — i.e., the author is a human external community contributor. For **backport PRs** (Step 3a), use the original PR author's `authorAssociation` and ignore the backport bot's `is_bot` flag. |
 
 The `authorAssociation` field is pre-populated in the batch data by the fetch-data
@@ -828,15 +842,25 @@ rather than creating a new one:
 
 ### 5f. Filtering rules
 
+Apply a strict user-facing filter before creating or updating a changelog entry.
+A change is user-facing only when someone using Aspire can observe it in product
+behavior, supported APIs, CLI commands, dashboard/extension UX, templates,
+integrations, documented configuration, security posture, or meaningful
+compatibility/performance behavior. Do not create entries for issues or PRs that
+only affect repository operation or the engineering process.
+
 - **Include**: new features, notable bug fixes, breaking changes, performance
-  improvements, new integrations, new resource types, and notable engineering or
-  workflow changes that have clear developer or release impact.
+  improvements, new integrations, new resource types, and security or
+  compatibility changes that have clear user or application-developer impact.
 - **Exclude**:
   - Internal refactoring, test-only changes, trivial fixes.
   - Dependency version bumps, documentation-only changes.
   - Routine CI/build maintenance with no meaningful user or developer impact.
-- When in doubt about whether a change is notable, include it — it can always be
-  removed via a comment later.
+  - Agentic workflow, automation, release-engineering, changelog-generation, and
+    repository maintenance changes unless the change has a direct user-visible
+    effect in a released Aspire product.
+- When in doubt about whether a change is user-facing, exclude it and record the
+  reason in the PR tracker. It can be restored via editorial feedback later.
 
 ### 5g. Match documentation PRs
 
@@ -945,7 +969,7 @@ Field definitions:
   external community contributors. Empty array if none.
 - **description**: User-facing description (one to two sentences)
 - **docsPrs**: Array of PR numbers from `${DOCS_REPO}` that document this change. Empty array if none.
-- **docsRequired**: `true` if documentation is needed, `false` otherwise
+- **docsRequired**: `true` if documentation is needed or `breaking` is `true`, `false` otherwise
 - **emoji**: A single emoji representing the change
 - **firstMergedAt**: ISO 8601 UTC timestamp of the earliest PR's merge date
 - **lastMergedAt**: ISO 8601 UTC timestamp of the most recent PR's merge date

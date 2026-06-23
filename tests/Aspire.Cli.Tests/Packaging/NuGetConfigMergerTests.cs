@@ -7,6 +7,7 @@ using System.Xml;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Packaging;
 
@@ -26,7 +27,7 @@ public class NuGetConfigMergerTests
         return new FileInfo(path);
     }
 
-    private static PackageChannel CreateChannel(PackageMapping[] mappings) => PackageChannel.CreateExplicitChannel("test", PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache());
+    private static PackageChannel CreateChannel(PackageMapping[] mappings) => PackageChannel.CreateExplicitChannel("test", PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
 
     [Fact]
     public async Task CreateOrUpdateAsync_CreatesConfigFromMappings_WhenNoExistingConfig()
@@ -161,6 +162,50 @@ public class NuGetConfigMergerTests
         Assert.Single(psm.Elements("packageSource"));
         Assert.Equal("https://new.example", (string?)psm.Element("packageSource")!.Attribute("key"));
         Assert.Equal("Lib.*", (string?)psm.Element("packageSource")!.Element("package")!.Attribute("pattern"));
+    }
+
+    [Fact]
+    public async Task CreateOrUpdateAsync_RemapsAspirePackagesFromStagingToStableSource()
+    {
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        var root = workspace.WorkspaceRoot;
+        const string stagingSource = "https://pkgs.dev.azure.com/dnceng/public/_packaging/aspire-staging/nuget/v3/index.json";
+        const string stableSource = "https://api.nuget.org/v3/index.json";
+
+        await WriteConfigAsync(root,
+            $$"""
+            <?xml version="1.0"?>
+            <configuration>
+                <packageSources>
+                    <add key="aspire-staging" value="{{stagingSource}}" />
+                </packageSources>
+                <packageSourceMapping>
+                    <packageSource key="aspire-staging">
+                        <package pattern="Aspire.*" />
+                    </packageSource>
+                </packageSourceMapping>
+            </configuration>
+            """);
+
+        var mappings = new[]
+        {
+            new PackageMapping("Aspire.*", stableSource)
+        };
+
+        var channel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
+        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+
+        var xml = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
+        var packageSources = xml.Root!.Element("packageSources")!;
+        Assert.DoesNotContain(packageSources.Elements("add"), e => (string?)e.Attribute("value") == stagingSource);
+        Assert.Contains(packageSources.Elements("add"), e => (string?)e.Attribute("value") == stableSource);
+
+        var packageSourceMapping = xml.Root!.Element("packageSourceMapping")!;
+        Assert.DoesNotContain(packageSourceMapping.Elements("packageSource"), e => (string?)e.Attribute("key") == "aspire-staging");
+
+        var stableMapping = Assert.Single(packageSourceMapping.Elements("packageSource"));
+        Assert.Equal(stableSource, (string?)stableMapping.Attribute("key"));
+        Assert.Equal("Aspire.*", (string?)stableMapping.Element("package")!.Attribute("pattern"));
     }
 
     [Fact]
@@ -448,6 +493,60 @@ public class NuGetConfigMergerTests
     }
 
     [Fact]
+    public async Task CreateOrUpdateAsync_DoesNotAddWildcardToPrivateSourceWithExistingPatterns()
+    {
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        var root = workspace.WorkspaceRoot;
+
+        // User has nuget.org with wildcard and a private source with specific patterns
+        await WriteConfigAsync(root,
+            """
+            <?xml version="1.0"?>
+            <configuration>
+                <packageSources>
+                    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+                    <add key="github" value="https://nuget.pkg.github.com/myorg/index.json" />
+                </packageSources>
+                <packageSourceMapping>
+                    <packageSource key="nuget.org">
+                        <package pattern="*" />
+                    </packageSource>
+                    <packageSource key="github">
+                        <package pattern="myorg.*" />
+                        <package pattern="other" />
+                    </packageSource>
+                </packageSourceMapping>
+            </configuration>
+            """);
+
+        // Stable channel: maps everything to nuget.org
+        var mappings = new[]
+        {
+            new PackageMapping("*", "https://api.nuget.org/v3/index.json")
+        };
+
+        var channel = CreateChannel(mappings);
+        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+
+        var xml = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
+        var psm = xml.Root!.Element("packageSourceMapping")!;
+
+        // nuget.org should retain the wildcard
+        var nugetMapping = psm.Elements("packageSource")
+            .FirstOrDefault(ps => (string?)ps.Attribute("key") == "nuget.org");
+        Assert.NotNull(nugetMapping);
+        Assert.Contains(nugetMapping.Elements("package"), p => (string?)p.Attribute("pattern") == "*");
+
+        // The private source should keep its original patterns without a wildcard being added
+        var githubMapping = psm.Elements("packageSource")
+            .FirstOrDefault(ps => (string?)ps.Attribute("key") == "github");
+        Assert.NotNull(githubMapping);
+        Assert.Contains(githubMapping.Elements("package"), p => (string?)p.Attribute("pattern") == "myorg.*");
+        Assert.Contains(githubMapping.Elements("package"), p => (string?)p.Attribute("pattern") == "other");
+        Assert.DoesNotContain(githubMapping.Elements("package"), p => (string?)p.Attribute("pattern") == "*");
+    }
+
+    [Fact]
     public async Task CreateOrUpdateAsync_RemovesUnrequiredSources_InsteadOfAddingWildcardPattern()
     {
         using var workspace = TemporaryWorkspace.Create(_outputHelper);
@@ -506,11 +605,12 @@ public class NuGetConfigMergerTests
         Assert.DoesNotContain(psm.Elements("packageSource"), 
             ps => (string?)ps.Attribute("key") == "C:\\Users\\user\\.aspire\\hives\\invalid-pr");
         
-        // The user-defined source should get a wildcard pattern to remain functional
+        // The user-defined source should keep its original patterns without a wildcard being added
         var validExampleMapping = psm.Elements("packageSource")
             .FirstOrDefault(ps => (string?)ps.Attribute("key") == "https://valid.example");
         Assert.NotNull(validExampleMapping);
-        Assert.Contains(validExampleMapping.Elements("package"), p => (string?)p.Attribute("pattern") == "*");
+        Assert.Contains(validExampleMapping.Elements("package"), p => (string?)p.Attribute("pattern") == "ValidPkg*");
+        Assert.DoesNotContain(validExampleMapping.Elements("package"), p => (string?)p.Attribute("pattern") == "*");
         
         // NuGet.org should have all the patterns
         var nugetMapping = psm.Elements("packageSource")
@@ -522,6 +622,105 @@ public class NuGetConfigMergerTests
         
         // There should be two packageSource elements (nuget.org and valid.example)
         Assert.Equal(2, psm.Elements("packageSource").Count());
+    }
+
+    [Fact]
+    public async Task CreateOrUpdateAsync_RemovesOldPrHive_WhenSwitchingBetweenPrHives()
+    {
+        // Reproduces the scenario reported on `aspire update --channel pr-<new>` when the
+        // previous channel was also a PR hive: switching between two `~/.aspire/hives/pr-*/packages`
+        // sources must remove the old source from <packageSources>, not just from
+        // <packageSourceMapping>. If the stale path lingers, subsequent `dotnet restore`
+        // fails with NU1301 when that hive directory has since been deleted/cleaned.
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        var root = workspace.WorkspaceRoot;
+
+        const string oldHive = "/Users/midenn/.aspire/hives/pr-17182/packages";
+        const string newHive = "/Users/midenn/.aspire/hives/pr-17192/packages";
+
+        await WriteConfigAsync(root,
+            $"""
+            <?xml version="1.0" encoding="utf-8"?>
+            <configuration>
+                <packageSources>
+                    <add key="{oldHive}" value="{oldHive}" />
+                    <add key="https://api.nuget.org/v3/index.json" value="https://api.nuget.org/v3/index.json" />
+                </packageSources>
+                <packageSourceMapping>
+                    <packageSource key="{oldHive}">
+                        <package pattern="Aspire*" />
+                    </packageSource>
+                    <packageSource key="https://api.nuget.org/v3/index.json">
+                        <package pattern="*" />
+                    </packageSource>
+                </packageSourceMapping>
+            </configuration>
+            """);
+
+        var mappings = new[]
+        {
+            new PackageMapping("Aspire*", newHive),
+            new PackageMapping("*", "https://api.nuget.org/v3/index.json"),
+        };
+
+        var channel = CreateChannel(mappings);
+        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+
+        var xml = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
+        var packageSources = xml.Root!.Element("packageSources")!;
+
+        Assert.DoesNotContain(packageSources.Elements("add"),
+            e => string.Equals((string?)e.Attribute("value"), oldHive, StringComparison.Ordinal));
+        Assert.Contains(packageSources.Elements("add"),
+            e => string.Equals((string?)e.Attribute("value"), newHive, StringComparison.Ordinal));
+
+        var psm = xml.Root!.Element("packageSourceMapping")!;
+        Assert.DoesNotContain(psm.Elements("packageSource"),
+            ps => string.Equals((string?)ps.Attribute("key"), oldHive, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task CreateOrUpdateAsync_RemovesOldPrHive_WhenItHasNoMappingElement()
+    {
+        // This is the *real* shape of the regression reported on pr-17192 follow-up:
+        // the AppHost-level nuget.config had pr-17182 listed in <packageSources> but the
+        // <packageSourceMapping> contained no entry for that source at all. Because
+        // RemoveEmptyPackageSourceElements only cleans up entries whose mapping element
+        // became empty *during the merge*, a source that never had a mapping element
+        // survives the merge and breaks subsequent `dotnet restore` once the hive
+        // directory is deleted.
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        var root = workspace.WorkspaceRoot;
+
+        const string oldHive = "/Users/midenn/.aspire/hives/pr-17182/packages";
+        const string newHive = "/Users/midenn/.aspire/hives/pr-17192/packages";
+
+        await WriteConfigAsync(root,
+            $"""
+            <?xml version="1.0" encoding="utf-8"?>
+            <configuration>
+                <packageSources>
+                    <add key="{oldHive}" value="{oldHive}" />
+                </packageSources>
+                <packageSourceMapping>
+                </packageSourceMapping>
+            </configuration>
+            """);
+
+        var mappings = new[]
+        {
+            new PackageMapping("Aspire*", newHive),
+            new PackageMapping("*", "https://api.nuget.org/v3/index.json"),
+        };
+
+        var channel = CreateChannel(mappings);
+        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+
+        var xml = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
+        var packageSources = xml.Root!.Element("packageSources")!;
+
+        Assert.DoesNotContain(packageSources.Elements("add"),
+            e => string.Equals((string?)e.Attribute("value"), oldHive, StringComparison.Ordinal));
     }
 
     [Fact]

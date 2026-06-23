@@ -25,7 +25,9 @@ public static class RabbitMQPolicyExtensions
     /// <param name="priority">The policy priority. Higher values take precedence when multiple policies match the same entity. Defaults to <c>0</c>.</param>
     /// <param name="policyName">The name of the policy in RabbitMQ. Defaults to the resource name when not provided.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a policy to a RabbitMQ virtual host")]
+    /// <ats-summary>Adds a policy to a RabbitMQ virtual host.</ats-summary>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<RabbitMQPolicyResource> AddPolicy(
         this IResourceBuilder<RabbitMQVirtualHostResource> builder,
         [ResourceName] string name,
@@ -111,7 +113,9 @@ public static class RabbitMQPolicyExtensions
     /// <param name="priority">The policy priority. Higher values take precedence when multiple policies match the same entity. Defaults to <c>0</c>.</param>
     /// <param name="policyName">The name of the policy in RabbitMQ. Defaults to the resource name when not provided.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("addPolicyOnServer", MethodName = "addPolicy", Description = "Adds a policy to the default '/' virtual host")]
+    /// <ats-summary>Adds a policy to the default '/' virtual host.</ats-summary>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport("addPolicyOnServer", MethodName = "addPolicy")]
     public static IResourceBuilder<RabbitMQPolicyResource> AddPolicy(
         this IResourceBuilder<RabbitMQServerResource> server,
         [ResourceName] string name,

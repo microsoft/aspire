@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	builder, err := aspire.CreateBuilder(nil)
+	builder, err := aspire.CreateBuilder()
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
@@ -31,11 +31,18 @@ func main() {
 		SubnetName: aspire.StringPtr("parameter-subnet-name"),
 	})
 
+	perimeter := builder.AddNetworkSecurityPerimeter("data-boundary")
+	perimeter.WithAccessRule(&aspire.AzureNspAccessRule{
+		Name:            "allow-corp-network",
+		Direction:       aspire.NetworkSecurityPerimeterAccessRuleDirectionInbound,
+		AddressPrefixes: []string{"203.0.113.0/24"},
+	})
+
 	app, err := builder.Build()
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
-	if err := app.Run(nil); err != nil {
+	if err := app.Run(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
 }

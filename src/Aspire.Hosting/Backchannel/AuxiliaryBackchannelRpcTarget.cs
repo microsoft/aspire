@@ -2,12 +2,16 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Reflection;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Channels;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Diagnostics;
+using Aspire.Shared;
+using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -18,13 +22,13 @@ using ModelContextProtocol.Protocol;
 
 namespace Aspire.Hosting.Backchannel;
 
-#pragma warning disable ASPIREINTERACTION001 // InteractionInputCollection is used to validate resource command arguments.
-
 /// <summary>
 /// RPC target for the auxiliary backchannel.
 /// </summary>
 internal sealed class AuxiliaryBackchannelRpcTarget(
     ILogger<AuxiliaryBackchannelRpcTarget> logger,
+    IConfiguration configuration,
+    ProfilingTelemetry profilingTelemetry,
     IServiceProvider serviceProvider)
 {
     private static readonly TimeSpan s_mcpDiscoveryTimeout = TimeSpan.FromSeconds(5);
@@ -41,12 +45,12 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     public Task<GetCapabilitiesResponse> GetCapabilitiesAsync(GetCapabilitiesRequest? request = null, CancellationToken cancellationToken = default)
 #pragma warning restore CA1822
     {
-        _ = request;
         _ = cancellationToken;
+        using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(GetCapabilitiesAsync), streaming: false, request?.TraceContext);
 
         return Task.FromResult(new GetCapabilitiesResponse
         {
-            Capabilities = [AuxiliaryBackchannelCapabilities.V1, AuxiliaryBackchannelCapabilities.V2]
+            Capabilities = [AuxiliaryBackchannelCapabilities.V1, AuxiliaryBackchannelCapabilities.V2, AuxiliaryBackchannelCapabilities.V3, AuxiliaryBackchannelCapabilities.Terminals_V1]
         });
     }
 
@@ -58,51 +62,19 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// <returns>The AppHost information response.</returns>
     public async Task<GetAppHostInfoResponse> GetAppHostInfoAsync(GetAppHostInfoRequest? request = null, CancellationToken cancellationToken = default)
     {
-        _ = request;
+        using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(GetAppHostInfoAsync), streaming: false, request?.TraceContext);
 
         var legacyInfo = await GetAppHostInformationAsync(cancellationToken).ConfigureAwait(false);
 
         return new GetAppHostInfoResponse
         {
             Pid = legacyInfo.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            AspireHostVersion = GetAspireHostVersion(),
+            AspireHostVersion = AssemblyVersionHelper.GetDisplayVersion(typeof(AuxiliaryBackchannelRpcTarget).Assembly) ?? "unknown",
             AppHostPath = legacyInfo.AppHostPath,
             CliProcessId = legacyInfo.CliProcessId,
-            StartedAt = legacyInfo.StartedAt
+            StartedAt = legacyInfo.StartedAt,
+            CliLogFilePath = legacyInfo.CliLogFilePath
         };
-    }
-
-    private static string GetAspireHostVersion()
-    {
-        return GetDisplayVersion(typeof(AuxiliaryBackchannelRpcTarget).Assembly) ?? "unknown";
-    }
-
-    internal static string? GetDisplayVersion(Assembly assembly)
-    {
-        // The package version is stamped into the assembly's AssemblyInformationalVersionAttribute at build time, followed by a '+' and
-        // the commit hash, e.g.:
-        // [assembly: AssemblyInformationalVersion("8.0.0-preview.2.23604.7+e7762a46d31842884a0bc72c92e07ba700c99bf5")]
-
-        var version = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
-
-        if (version is not null)
-        {
-            var plusIndex = version.IndexOf('+');
-
-            if (plusIndex > 0)
-            {
-                return version[..plusIndex];
-            }
-
-            return version;
-        }
-
-        // Fallback to the file version, which is based on the CI build number, and then fallback to the assembly version, which is
-        // product stable version, e.g. 8.0.0.0
-        version = assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version
-            ?? assembly.GetCustomAttribute<AssemblyVersionAttribute>()?.Version;
-
-        return version;
     }
 
     /// <summary>
@@ -113,7 +85,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// <returns>The Dashboard information response.</returns>
     public async Task<GetDashboardInfoResponse> GetDashboardInfoAsync(GetDashboardInfoRequest? request = null, CancellationToken cancellationToken = default)
     {
-        _ = request;
+        using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(GetDashboardInfoAsync), streaming: false, request?.TraceContext);
 
         var info = await DashboardUrlsHelper.GetDashboardConnectionInfoAsync(serviceProvider, logger, cancellationToken).ConfigureAwait(false);
 
@@ -144,7 +116,8 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// <returns>The resources response containing snapshots.</returns>
     public async Task<GetResourcesResponse> GetResourcesAsync(GetResourcesRequest? request = null, CancellationToken cancellationToken = default)
     {
-        var snapshots = await GetResourceSnapshotsAsync(cancellationToken).ConfigureAwait(false);
+        using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(GetResourcesAsync), streaming: false, request?.TraceContext);
+        var snapshots = await GetResourceSnapshotsAsync(SupportsJsonResourceProperties(request?.ClientCapabilities), cancellationToken).ConfigureAwait(false);
 
         // Apply filter if specified
         if (!string.IsNullOrEmpty(request?.Filter))
@@ -167,17 +140,34 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// <returns>An async enumerable of resource snapshots as they change.</returns>
     public async IAsyncEnumerable<ResourceSnapshot> WatchResourcesAsync(WatchResourcesRequest? request = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(WatchResourcesAsync), streaming: true, request?.TraceContext);
         var filter = request?.Filter;
+        var yieldedCount = 0;
 
-        await foreach (var snapshot in WatchResourceSnapshotsAsync(cancellationToken).ConfigureAwait(false))
+        try
         {
-            // Apply filter if specified
-            if (!string.IsNullOrEmpty(filter) && !snapshot.Name.Contains(filter, StringComparison.OrdinalIgnoreCase))
+            await foreach (var snapshot in WatchResourceSnapshotsAsync(SupportsJsonResourceProperties(request?.ClientCapabilities), cancellationToken).ConfigureAwait(false))
             {
-                continue;
+                // Apply filter if specified
+                if (!string.IsNullOrEmpty(filter) && !snapshot.Name.Contains(filter, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (yieldedCount == 0)
+                {
+                    activity.AddJsonRpcStreamFirstItemEvent();
+                }
+
+                yieldedCount++;
+                yield return snapshot;
             }
 
-            yield return snapshot;
+            activity.AddJsonRpcStreamCompletedEvent();
+        }
+        finally
+        {
+            activity.SetJsonRpcStreamItemCount(yieldedCount);
         }
     }
 
@@ -190,7 +180,35 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     public IAsyncEnumerable<ResourceLogLine> GetConsoleLogsAsync(GetConsoleLogsRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return GetResourceLogsAsync(request.ResourceName, request.Follow, cancellationToken);
+        return GetResourceLogsAsync(
+            "GetConsoleLogsAsync",
+            request.TraceContext,
+            request.ResourceName,
+            request.Follow,
+            request.IncludeHidden,
+            request.Search,
+            request.Tail,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Gets console logs in batches to reduce per-item JSON-RPC stream overhead.
+    /// </summary>
+    /// <param name="request">The request specifying resource and options.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>An async enumerable of log batches.</returns>
+    public IAsyncEnumerable<ResourceLogBatch> GetConsoleLogBatchesAsync(GetConsoleLogsRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return GetResourceLogBatchesAsync(
+            "GetConsoleLogBatchesAsync",
+            request.TraceContext,
+            request.ResourceName,
+            request.Follow,
+            request.IncludeHidden,
+            request.Search,
+            request.Tail,
+            cancellationToken);
     }
 
     /// <summary>
@@ -202,6 +220,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     public async Task<CallMcpToolResponse> CallMcpToolAsync(CallMcpToolRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+        using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(CallMcpToolAsync), streaming: false, request.TraceContext);
 
         // Convert JsonElement arguments to Dictionary<string, object?> with proper value conversion
         var arguments = new Dictionary<string, object?>();
@@ -229,12 +248,12 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// <summary>
     /// Stops the AppHost (v2 API with request object).
     /// </summary>
-    /// <param name="request">The request with optional exit code.</param>
+    /// <param name="request">The stop request.</param>
     /// <param name="cancellationToken">A cancellation token.</param>
     /// <returns>The stop response.</returns>
     public async Task<StopAppHostResponse> StopAsync(StopAppHostRequest? request = null, CancellationToken cancellationToken = default)
     {
-        _ = request; // Exit code not yet used, but available for future expansion
+        using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(StopAsync), streaming: false, request?.TraceContext);
         await StopAppHostAsync(cancellationToken).ConfigureAwait(false);
         return new StopAppHostResponse();
     }
@@ -248,6 +267,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     public async Task<ExecuteResourceCommandResponse> ExecuteResourceCommandAsync(ExecuteResourceCommandRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+        using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(ExecuteResourceCommandAsync), streaming: false, request.TraceContext);
 
         var resourceCommandService = serviceProvider.GetRequiredService<ResourceCommandService>();
         var (arguments, argumentErrorMessage) = CreateCommandArguments(resourceCommandService, request);
@@ -263,9 +283,15 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             };
         }
 
-        var result = request.ValidateOnly
-            ? await ValidateResourceCommandAsync(resourceCommandService, request.ResourceName, request.CommandName, arguments, cancellationToken).ConfigureAwait(false)
-            : await resourceCommandService.ExecuteCommandAsync(
+        ExecuteCommandResult result;
+        InteractionInputCollection? loadedArguments = null;
+        if (request.ValidateOnly)
+        {
+            (result, loadedArguments) = await ValidateResourceCommandAsync(resourceCommandService, request.ResourceName, request.CommandName, arguments, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            result = await resourceCommandService.ExecuteCommandAsync(
                 request.ResourceName,
                 request.CommandName,
                 new ResourceCommandExecutionOptions
@@ -275,6 +301,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                     NonInteractive = request.NonInteractive
                 },
                 cancellationToken).ConfigureAwait(false);
+        }
 
 #pragma warning disable CS0618 // Type or member is obsolete
         var resolvedMessage = result.Message ?? result.ErrorMessage;
@@ -289,6 +316,9 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 #pragma warning restore CS0618 // Type or member is obsolete
             Message = resolvedMessage,
             ValidationErrors = CreateValidationErrors(result.InvalidArguments),
+            ArgumentInputs = request.ReturnArgumentInputs && loadedArguments is not null
+                ? loadedArguments.Select(CreateCommandArgument).ToArray()
+                : null,
             Value = result.Data is { } v ? new ExecuteResourceCommandResult
             {
                 Value = v.Value,
@@ -319,7 +349,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         };
     }
 
-    private static async Task<ExecuteCommandResult> ValidateResourceCommandAsync(ResourceCommandService resourceCommandService, string resourceName, string commandName, InteractionInputCollection arguments, CancellationToken cancellationToken)
+    private static async Task<(ExecuteCommandResult Result, InteractionInputCollection? Arguments)> ValidateResourceCommandAsync(ResourceCommandService resourceCommandService, string resourceName, string commandName, InteractionInputCollection arguments, CancellationToken cancellationToken)
     {
         return await resourceCommandService.ValidateCommandArgumentsAsync(resourceName, commandName, arguments, cancellationToken).ConfigureAwait(false);
     }
@@ -385,11 +415,219 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     }
 
     /// <summary>
+    /// Returns the discovery info needed to attach to a resource's terminal session(s). For a
+    /// resource configured with <c>WithTerminal()</c>, this enumerates the per-replica
+    /// consumer-side UDS endpoints by asking each per-replica terminal host process over its
+    /// control UDS in parallel. Returns <see cref="GetTerminalInfoResponse.IsAvailable"/> = false
+    /// when the resource has no <see cref="TerminalAnnotation"/>; per-host control RPC failures
+    /// (e.g. host not yet started) degrade to <see cref="TerminalReplicaInfo.IsAlive"/> = false
+    /// for that replica without failing the whole call.
+    /// </summary>
+    public async Task<GetTerminalInfoResponse> GetTerminalInfoAsync(GetTerminalInfoRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var appModel = serviceProvider.GetRequiredService<DistributedApplicationModel>();
+        var resource = appModel.Resources.FirstOrDefault(r => string.Equals(r.Name, request.ResourceName, StringComparisons.ResourceName));
+
+        if (resource is null)
+        {
+            logger.LogDebug("GetTerminalInfo: resource '{ResourceName}' not found.", request.ResourceName);
+            return new GetTerminalInfoResponse { IsAvailable = false };
+        }
+
+        var terminalAnnotation = resource.Annotations.OfType<TerminalAnnotation>().FirstOrDefault();
+        if (terminalAnnotation is null)
+        {
+            logger.LogDebug("GetTerminalInfo: resource '{ResourceName}' has no TerminalAnnotation.", request.ResourceName);
+            return new GetTerminalInfoResponse { IsAvailable = false };
+        }
+
+        var (replicas, _) = await CollectReplicaInfosAsync(
+            request.ResourceName,
+            terminalAnnotation,
+            cancellationToken).ConfigureAwait(false);
+
+        return new GetTerminalInfoResponse
+        {
+            IsAvailable = true,
+            Replicas = replicas,
+            Columns = terminalAnnotation.Options.Columns,
+            Rows = terminalAnnotation.Options.Rows,
+        };
+    }
+
+    /// <summary>
+    /// Fans out across each per-replica terminal host's control UDS in parallel and returns
+    /// the assembled per-replica info array plus an aggregate flag indicating whether at
+    /// least one host responded. Per-host failures (host not yet started, control RPC timeout)
+    /// materialize as a <see cref="TerminalReplicaInfo"/> with the AppHost-known consumer UDS
+    /// path and <see cref="TerminalReplicaInfo.IsAlive"/> = false, so callers can always render
+    /// a row per replica even when a host hasn't started.
+    /// </summary>
+    private async Task<(TerminalReplicaInfo[] Replicas, bool AnyHostReachable)> CollectReplicaInfosAsync(
+        string resourceName,
+        TerminalAnnotation terminalAnnotation,
+        CancellationToken cancellationToken)
+    {
+        var hosts = terminalAnnotation.TerminalHosts;
+        var tasks = new Task<(TerminalReplicaInfo Info, bool HostResponded)>[hosts.Count];
+        for (var i = 0; i < hosts.Count; i++)
+        {
+            tasks[i] = QueryReplicaAsync(resourceName, hosts[i], cancellationToken);
+        }
+
+        var results = await Task.WhenAll(tasks).ConfigureAwait(false);
+        var replicas = new TerminalReplicaInfo[results.Length];
+        var anyResponded = false;
+        for (var i = 0; i < results.Length; i++)
+        {
+            replicas[i] = results[i].Info;
+            anyResponded |= results[i].HostResponded;
+        }
+        return (replicas, anyResponded);
+    }
+
+    /// <summary>
+    /// Queries a single per-replica host's control UDS and translates the response (or the
+    /// failure) into a <see cref="TerminalReplicaInfo"/>. The AppHost is the source of truth
+    /// for the consumer UDS path and replica index — those come from <see cref="TerminalHostResource.Layout"/>
+    /// rather than from the host's echoed reply. The returned <c>HostResponded</c> flag is true
+    /// only when the control RPC actually succeeded.
+    /// </summary>
+    private async Task<(TerminalReplicaInfo Info, bool HostResponded)> QueryReplicaAsync(
+        string resourceName,
+        TerminalHostResource host,
+        CancellationToken cancellationToken)
+    {
+        var layout = host.Layout;
+        var replicaIndex = layout.ParentReplicaIndex;
+
+        Aspire.Shared.TerminalHost.TerminalHostSessionInfo? session = null;
+        try
+        {
+            session = await TerminalHostControlClient.GetSessionAsync(
+                layout.ControlUdsPath,
+                totalTimeout: TimeSpan.FromSeconds(3),
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            logger.LogDebug(
+                "Terminal host control RPC timed out for resource '{ResourceName}' replica {ReplicaIndex} (control path '{ControlPath}').",
+                resourceName, replicaIndex, layout.ControlUdsPath);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogDebug(
+                ex,
+                "Terminal host control RPC failed for resource '{ResourceName}' replica {ReplicaIndex} (control path '{ControlPath}').",
+                resourceName, replicaIndex, layout.ControlUdsPath);
+        }
+
+        var info = new TerminalReplicaInfo
+        {
+            ReplicaIndex = replicaIndex,
+            Label = $"replica {replicaIndex}",
+            ConsumerUdsPath = layout.ConsumerUdsPath,
+            IsAlive = session?.IsAlive ?? false,
+            ExitCode = session?.ExitCode,
+            ProducerConnected = session?.ProducerConnected ?? false,
+            RestartCount = session?.RestartCount ?? 0,
+            CurrentColumns = session?.CurrentColumns,
+            CurrentRows = session?.CurrentRows,
+            AttachedPeerCount = session?.AttachedPeerCount,
+            Peers = ConvertPeers(session?.Peers),
+        };
+        return (info, session is not null);
+    }
+
+    /// <summary>
+    /// Translates a host-side <see cref="Aspire.Shared.TerminalHost.TerminalHostPeerInfo"/> array
+    /// to the wire-facing <see cref="TerminalPeerInfo"/> array that ships over JsonRpc. Returns
+    /// null when the host didn't supply any peer info (older host) so newer clients can detect
+    /// "no info available" vs. "info available, currently empty".
+    /// </summary>
+    private static TerminalPeerInfo[]? ConvertPeers(Aspire.Shared.TerminalHost.TerminalHostPeerInfo[]? hostPeers)
+    {
+        if (hostPeers is null)
+        {
+            return null;
+        }
+        if (hostPeers.Length == 0)
+        {
+            return Array.Empty<TerminalPeerInfo>();
+        }
+        var result = new TerminalPeerInfo[hostPeers.Length];
+        for (var i = 0; i < hostPeers.Length; i++)
+        {
+            result[i] = new TerminalPeerInfo
+            {
+                PeerId = hostPeers[i].PeerId,
+                DisplayName = hostPeers[i].DisplayName,
+            };
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Lists every <c>WithTerminal</c>-enabled resource in the AppHost, with current grid size and
+    /// attached-peer details. Used by <c>aspire terminal ps</c>. Each per-resource snapshot is
+    /// independent: a resource whose terminal host hasn't started yet (or whose control RPC times
+    /// out) is reported with <see cref="TerminalSummary.IsHostReachable"/> = false rather than
+    /// failing the whole listing.
+    /// </summary>
+    public async Task<ListTerminalsResponse> ListTerminalsAsync(ListTerminalsRequest? request = null, CancellationToken cancellationToken = default)
+    {
+        _ = request;
+
+        var appModel = serviceProvider.GetRequiredService<DistributedApplicationModel>();
+
+        var terminals = new List<TerminalSummary>();
+        foreach (var resource in appModel.Resources)
+        {
+            var terminalAnnotation = resource.Annotations.OfType<TerminalAnnotation>().FirstOrDefault();
+            if (terminalAnnotation is null)
+            {
+                continue;
+            }
+
+            var (replicas, anyHostReachable) = await CollectReplicaInfosAsync(
+                resource.Name,
+                terminalAnnotation,
+                cancellationToken).ConfigureAwait(false);
+
+            terminals.Add(new TerminalSummary
+            {
+                ResourceName = resource.Name,
+                DisplayName = resource.Name,
+                ConfiguredColumns = terminalAnnotation.Options.Columns,
+                ConfiguredRows = terminalAnnotation.Options.Rows,
+                IsHostReachable = anyHostReachable,
+                // Always emit the per-replica array, even when no host is reachable.
+                // CollectReplicaInfosAsync returns one entry per replica with AppHost-known
+                // ReplicaIndex / ConsumerUdsPath populated and IsAlive=false on degraded
+                // entries. Dropping the array on aggregate failure would make `aspire
+                // terminal ps` blanker in the failure case than in the success case —
+                // exactly when users need the diagnostic shape — and would diverge from
+                // GetTerminalInfoAsync, which keeps the degraded per-replica shape.
+                Replicas = replicas,
+            });
+        }
+
+        return new ListTerminalsResponse
+        {
+            Terminals = [.. terminals],
+        };
+    }
+
+    /// <summary>
     /// Waits for a resource to reach a target status.
     /// </summary>
     public async Task<WaitForResourceResponse> WaitForResourceAsync(WaitForResourceRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+        using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(WaitForResourceAsync), streaming: false, request.TraceContext);
 
         var notificationService = serviceProvider.GetRequiredService<ResourceNotificationService>();
         var targetResolution = ResolveWaitTarget(notificationService, request.ResourceName);
@@ -464,7 +702,10 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         var resourceEvent = await WaitForResourceEventAsync(
             notificationService,
             target,
-            re => re.Snapshot.State?.Text == KnownResourceStates.Running || KnownResourceStates.TerminalStates.Contains(re.Snapshot.State?.Text) || re.Snapshot.ExitCode is not null,
+            re => re.Snapshot.State?.Text == KnownResourceStates.Running ||
+                KnownResourceStates.TerminalStates.Contains(re.Snapshot.State?.Text, StringComparers.ResourceState) ||
+                string.Equals(re.Snapshot.State?.Style, KnownResourceStateStyles.Error, StringComparisons.ResourceState) ||
+                re.Snapshot.ExitCode is not null,
             $"Resource '{target.DisplayName}' failed to reach the target state before the operation was cancelled.",
             cancellationToken).ConfigureAwait(false);
 
@@ -614,13 +855,6 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         // The cancellationToken parameter is not currently used, but is retained for API consistency and potential future support for cancellation.
         _ = cancellationToken;
 
-        var configuration = serviceProvider.GetService<IConfiguration>();
-        if (configuration is null)
-        {
-            logger.LogError("Configuration not found.");
-            throw new InvalidOperationException("Configuration not found.");
-        }
-
         // First try to get the file path (with extension), otherwise fall back to the path (without extension)
         var appHostPath = configuration["AppHost:FilePath"] ?? configuration["AppHost:Path"];
         if (string.IsNullOrEmpty(appHostPath))
@@ -649,7 +883,8 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             ProcessId = Environment.ProcessId,
             CliProcessId = cliProcessId,
             StartedAt = new DateTimeOffset(Process.GetCurrentProcess().StartTime),
-            CliStartedAt = cliStartedAt
+            CliStartedAt = cliStartedAt,
+            CliLogFilePath = configuration[KnownConfigNames.CliLogFilePath]
         });
     }
 
@@ -660,8 +895,34 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// <returns>The dashboard URL state including health and resolved dashboard URLs.</returns>
     public async Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken = default)
     {
+        using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(GetDashboardUrlsAsync), streaming: false);
         logger.LogDebug("GetDashboardUrlsAsync called on auxiliary backchannel");
-        return await DashboardUrlsHelper.GetDashboardUrlsAsync(serviceProvider, logger, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var urls = await DashboardUrlsHelper.GetDashboardUrlsAsync(serviceProvider, logger, cancellationToken).ConfigureAwait(false);
+            activity.SetDashboardHealthy(urls.DashboardHealthy);
+            return urls;
+        }
+        catch (Exception ex)
+        {
+            activity.SetError(ex);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Waits until the AppHost has reached its startup readiness point.
+    /// </summary>
+    /// <param name="request">The request (currently unused, for future expansion).</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The startup readiness state.</returns>
+    public async Task<WaitForAppHostReadyResponse> WaitForAppHostReadyAsync(WaitForAppHostReadyRequest? request = null, CancellationToken cancellationToken = default)
+    {
+        using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(WaitForAppHostReadyAsync), streaming: false, request?.TraceContext);
+
+        var startupState = serviceProvider.GetRequiredService<AppHostStartupState>();
+        await startupState.WaitForReadyAsync(cancellationToken).ConfigureAwait(false);
+        return new WaitForAppHostReadyResponse { IsReady = true };
     }
 
     /// <summary>
@@ -683,9 +944,18 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// <returns>A list of resource snapshots.</returns>
     public async Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(CancellationToken cancellationToken = default)
     {
+        return await GetResourceSnapshotsAsync(resourcePropertiesAsJson: false, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(bool resourcePropertiesAsJson, CancellationToken cancellationToken)
+    {
         var appModel = serviceProvider.GetRequiredService<DistributedApplicationModel>();
         var notificationService = serviceProvider.GetRequiredService<ResourceNotificationService>();
         var results = new List<ResourceSnapshot>();
+
+        // This is a point-in-time batch, so the set of resolved secret values is identical for
+        // every resource. Compute it once here rather than once per resource.
+        var secretParameterValues = GetResolvedSecretParameterValues();
 
         // Get current state for each resource directly using TryGetCurrentState
         foreach (var resource in appModel.Resources)
@@ -702,7 +972,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         {
             if (notificationService.TryGetCurrentState(resourceName, out var resourceEvent))
             {
-                var snapshot = await CreateResourceSnapshotFromEventAsync(resourceEvent, cancellationToken).ConfigureAwait(false);
+                var snapshot = await CreateResourceSnapshotFromEventAsync(resourceEvent, resourcePropertiesAsJson, secretParameterValues, cancellationToken).ConfigureAwait(false);
                 if (snapshot is not null)
                 {
                     results.Add(snapshot);
@@ -718,13 +988,27 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// <returns>An async enumerable of resource snapshots as they change.</returns>
     public async IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        await foreach (var snapshot in WatchResourceSnapshotsAsync(resourcePropertiesAsJson: false, cancellationToken).ConfigureAwait(false))
+        {
+            yield return snapshot;
+        }
+    }
+
+    private async IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync(
+        bool resourcePropertiesAsJson,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
         var notificationService = serviceProvider.GetRequiredService<ResourceNotificationService>();
 
         var resourceEvents = notificationService.WatchAsync(cancellationToken);
 
         await foreach (var resourceEvent in resourceEvents.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
-            var snapshot = await CreateResourceSnapshotFromEventAsync(resourceEvent, cancellationToken).ConfigureAwait(false);
+            // Recompute the resolved secret values for every event. Secrets can be resolved between
+            // events (e.g. interactive parameter entry after the watch starts), so caching the set
+            // once outside the loop would let a value that becomes secret later bypass redaction.
+            var secretParameterValues = GetResolvedSecretParameterValues();
+            var snapshot = await CreateResourceSnapshotFromEventAsync(resourceEvent, resourcePropertiesAsJson, secretParameterValues, cancellationToken).ConfigureAwait(false);
             if (snapshot is not null)
             {
                 yield return snapshot;
@@ -734,6 +1018,8 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
     private async Task<ResourceSnapshot?> CreateResourceSnapshotFromEventAsync(
         ResourceEvent resourceEvent,
+        bool resourcePropertiesAsJson,
+        HashSet<string> secretParameterValues,
         CancellationToken cancellationToken)
     {
         var resource = resourceEvent.Resource;
@@ -806,20 +1092,32 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             })
             .ToArray();
 
-        // Build environment variables
+        // Build environment variables. Values that match a secret parameter's value are
+        // redacted so secrets don't leak through clients (e.g. aspire describe --format json).
+        // The secret values are computed by the caller: once per batch for the one-shot
+        // GetResourceSnapshotsAsync, but per event for the streaming WatchResourceSnapshotsAsync
+        // so that secrets resolved mid-stream are still redacted.
         var environmentVariables = snapshot.EnvironmentVariables
             .Select(e => new ResourceSnapshotEnvironmentVariable
             {
                 Name = e.Name,
-                Value = e.Value,
+                Value = RedactIfSecretValue(e.Value, secretParameterValues),
                 IsFromSpec = e.IsFromSpec
             })
             .ToArray();
 
         // Build properties dictionary from ResourcePropertySnapshot
         // Redact sensitive property values to avoid leaking secrets
-        var properties = new Dictionary<string, string?>();
-        foreach (var prop in snapshot.Properties)
+        //
+        // Stamp the per-replica terminal properties (terminal.enabled, terminal.replicaIndex,
+        // terminal.replicaCount) the same way the dashboard gRPC path does so that `aspire describe`
+        // and the VS Code extension can detect terminal availability and target the right replica.
+        // The sensitive terminal.consumerUdsPath is redacted to null below by the IsSensitive check,
+        // which is intentional: the CLI resolves the real socket path via GetTerminalInfoAsync.
+        var stampedProperties = TerminalResourceSnapshotProperties.AddTerminalProperties(resource, resourceEvent.ResourceId, snapshot.Properties);
+        var properties = new Dictionary<string, JsonNode?>();
+        string[]? waitingFor = null;
+        foreach (var prop in stampedProperties)
         {
             // Redact sensitive property values
             if (prop.IsSensitive)
@@ -828,16 +1126,14 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 continue;
             }
 
-            // Convert value to string representation
-            var stringValue = prop.Value switch
+            properties[prop.Name] = resourcePropertiesAsJson
+                ? ConvertPropertyValueToJsonNode(prop.Value)
+                : ConvertPropertyValueToLegacyJsonNode(prop.Value);
+
+            if (string.Equals(prop.Name, KnownProperties.Resource.WaitingFor, StringComparisons.ResourcePropertyName))
             {
-                null => null,
-                string s => s,
-                IEnumerable<object> enumerable => string.Join(", ", enumerable),
-                System.Collections.IEnumerable enumerable => string.Join(", ", enumerable.Cast<object>()),
-                _ => prop.Value.ToString()
-            };
-            properties[prop.Name] = stringValue;
+                waitingFor = GetStringArrayPropertyValue(prop.Value);
+            }
         }
 
         // Build commands
@@ -847,21 +1143,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 Name = c.Name,
                 DisplayName = c.DisplayName,
                 Description = c.DisplayDescription,
-                ArgumentInputs = c.Arguments.Select(i => new ResourceSnapshotCommandArgument
-                {
-                    Name = i.Name,
-                    Label = i.Label,
-                    Description = i.Description,
-                    EnableDescriptionMarkdown = i.EnableDescriptionMarkdown,
-                    InputType = i.InputType.ToString(),
-                    Required = i.Required,
-                    Placeholder = i.Placeholder,
-                    Value = i.Value,
-                    Options = CreateOptionsDictionary(i.Options),
-                    AllowCustomChoice = i.AllowCustomChoice,
-                    Disabled = i.Disabled,
-                    MaxLength = i.MaxLength
-                }).ToArray(),
+                ArgumentInputs = c.Arguments.Select(CreateCommandArgument).ToArray(),
                 Visibility = c.Visibility.ToString(),
                 State = c.State.ToString()
             })
@@ -873,6 +1155,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             DisplayName = resource.Name,
             ResourceType = snapshot.ResourceType,
             State = snapshot.State?.Text,
+            WaitingFor = waitingFor,
             StateStyle = snapshot.State?.Style,
             IsHidden = snapshot.IsHidden,
             HealthStatus = snapshot.HealthStatus?.ToString(),
@@ -891,6 +1174,183 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         };
     }
 
+    /// <summary>
+    /// Redacts an environment variable value when it matches a secret parameter's resolved value
+    /// so secrets don't leak through clients (e.g. <c>aspire describe --format json</c>).
+    /// </summary>
+    /// <remarks>
+    /// Matching is value-based: a value is redacted only when it is exactly equal to a resolved secret
+    /// parameter value. This has two known limitations:
+    /// <list type="bullet">
+    /// <item>A non-secret value that coincidentally equals a secret value is also redacted (false positive).</item>
+    /// <item>A secret embedded as a substring of a larger composed value (e.g. a connection string) is not
+    /// detected, because only exact-equality matches are redacted.</item>
+    /// </list>
+    /// </remarks>
+    private static string? RedactIfSecretValue(string? value, HashSet<string> secretParameterValues)
+        => value is not null && secretParameterValues.Contains(value) ? null : value;
+
+    /// <summary>
+    /// Collects the resolved values of secret parameters in the application model so they can
+    /// be redacted from data sent to clients. Only values that have already been resolved are
+    /// returned; this never blocks waiting for interactive parameter resolution.
+    /// </summary>
+    private HashSet<string> GetResolvedSecretParameterValues()
+    {
+        var secretValues = new HashSet<string>(StringComparer.Ordinal);
+
+        if (serviceProvider.GetService<DistributedApplicationModel>() is not { } appModel)
+        {
+            return secretValues;
+        }
+
+        foreach (var parameter in appModel.Resources.OfType<ParameterResource>())
+        {
+            if (!parameter.Secret)
+            {
+                continue;
+            }
+
+            if (parameter.WaitForValueTcs is { } waitForValueTcs)
+            {
+                // Run mode: peek at the resolved value without waiting for resolution.
+                if (waitForValueTcs.Task is { IsCompletedSuccessfully: true } valueTask &&
+                    valueTask.Result is { Length: > 0 } value)
+                {
+                    secretValues.Add(value);
+                }
+            }
+            else
+            {
+                try
+                {
+                    if (parameter.ValueInternal is { Length: > 0 } value)
+                    {
+                        secretValues.Add(value);
+                    }
+                }
+                catch
+                {
+                    // The parameter's value isn't available (e.g. missing configuration); nothing to redact.
+                }
+            }
+        }
+
+        return secretValues;
+    }
+
+    private static ResourceSnapshotCommandArgument CreateCommandArgument(InteractionInput input)
+    {
+        return new ResourceSnapshotCommandArgument
+        {
+            Name = input.Name,
+            Label = input.Label,
+            Description = input.Description,
+            EnableDescriptionMarkdown = input.EnableDescriptionMarkdown,
+            InputType = input.InputType.ToString(),
+            Required = input.Required,
+            Placeholder = input.Placeholder,
+            Value = input.Value,
+            Options = CreateOptionsDictionary(input.Options),
+            AllowCustomChoice = input.AllowCustomChoice,
+            Disabled = input.Disabled,
+            MaxLength = input.MaxLength,
+            DynamicLoading = CreateDynamicLoadingMetadata(input.DynamicLoading)
+        };
+    }
+
+    private static JsonNode? ConvertPropertyValueToJsonNode(object? value)
+    {
+        return value switch
+        {
+            null => null,
+            JsonNode jsonNode => jsonNode.DeepClone(),
+            string stringValue => JsonValue.Create(stringValue),
+            bool boolValue => JsonValue.Create(boolValue),
+            byte byteValue => JsonValue.Create(byteValue),
+            sbyte sbyteValue => JsonValue.Create(sbyteValue),
+            short shortValue => JsonValue.Create(shortValue),
+            ushort ushortValue => JsonValue.Create(ushortValue),
+            int intValue => JsonValue.Create(intValue),
+            uint uintValue => JsonValue.Create(uintValue),
+            long longValue => JsonValue.Create(longValue),
+            ulong ulongValue => JsonValue.Create(ulongValue),
+            float floatValue => JsonValue.Create(floatValue),
+            double doubleValue => JsonValue.Create(doubleValue),
+            decimal decimalValue => JsonValue.Create(decimalValue),
+            System.Collections.IEnumerable enumerable => ConvertEnumerablePropertyValueToJsonArray(enumerable),
+            _ => JsonValue.Create(value.ToString())
+        };
+    }
+
+    private static JsonNode? ConvertPropertyValueToLegacyJsonNode(object? value)
+    {
+        var stringValue = ConvertPropertyValueToString(value);
+
+        return stringValue is null ? null : JsonValue.Create(stringValue);
+    }
+
+    private static string? ConvertPropertyValueToString(object? value)
+    {
+        return value switch
+        {
+            null => null,
+            JsonValue jsonValue when jsonValue.TryGetValue<string>(out var stringValue) => stringValue,
+            JsonValue jsonValue when jsonValue.TryGetValue<bool>(out var boolValue) => boolValue.ToString(CultureInfo.InvariantCulture),
+            JsonValue jsonValue when jsonValue.TryGetValue<IFormattable>(out var formattableValue) => formattableValue.ToString(null, CultureInfo.InvariantCulture),
+            JsonNode jsonNode => jsonNode.ToJsonString(),
+            string stringValue => stringValue,
+            IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
+            System.Collections.IEnumerable enumerable => ConvertEnumerablePropertyValueToString(enumerable),
+            _ => value.ToString()
+        };
+    }
+
+    private static string ConvertEnumerablePropertyValueToString(System.Collections.IEnumerable enumerable)
+    {
+        var values = new List<string>();
+        foreach (var value in enumerable)
+        {
+            if (ConvertPropertyValueToString(value) is { } stringValue)
+            {
+                values.Add(stringValue);
+            }
+        }
+
+        return string.Join(',', values);
+    }
+
+    private static JsonArray ConvertEnumerablePropertyValueToJsonArray(System.Collections.IEnumerable enumerable)
+    {
+        var array = new JsonArray();
+        foreach (var value in enumerable)
+        {
+            array.Add(ConvertPropertyValueToJsonNode(value));
+        }
+
+        return array;
+    }
+
+    private static bool SupportsJsonResourceProperties(string[]? clientCapabilities)
+    {
+        return clientCapabilities?.Contains(AuxiliaryBackchannelCapabilities.V3, StringComparer.Ordinal) == true;
+    }
+
+    private static string[]? GetStringArrayPropertyValue(object? value)
+    {
+        return value switch
+        {
+            null => null,
+            string s => [s],
+            IEnumerable<string> strings => strings.Where(static s => !string.IsNullOrEmpty(s)).ToArray(),
+            IEnumerable<object> objects => objects.OfType<string>().Where(static s => !string.IsNullOrEmpty(s)).ToArray(),
+            System.Collections.IEnumerable enumerable => enumerable.Cast<object>().OfType<string>().Where(static s => !string.IsNullOrEmpty(s)).ToArray(),
+            _ => null
+        } is { Length: > 0 } values
+            ? values
+            : null;
+    }
+
     private static Dictionary<string, string?>? CreateOptionsDictionary(IReadOnlyList<KeyValuePair<string, string>>? options)
     {
         if (options is null)
@@ -907,6 +1367,17 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         return result;
     }
 
+    private static ResourceSnapshotCommandArgumentDynamicLoading? CreateDynamicLoadingMetadata(InputLoadOptions? dynamicLoading)
+    {
+        return dynamicLoading is null
+            ? null
+            : new ResourceSnapshotCommandArgumentDynamicLoading
+            {
+                AlwaysLoadOnStart = dynamicLoading.AlwaysLoadOnStart,
+                DependsOnInputs = dynamicLoading.DependsOnInputs?.ToArray()
+            };
+    }
+
     /// <summary>
     /// Watches for resource log output and streams log lines to the client.
     /// </summary>
@@ -919,75 +1390,242 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         bool follow = false,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var resourceLoggerService = serviceProvider.GetRequiredService<ResourceLoggerService>();
-        var appModel = serviceProvider.GetRequiredService<DistributedApplicationModel>();
-
-        // Step 1: Calculate the resource names
-        var resourcesToLog = resourceName is not null
-            ? ResolveResourceIds(appModel, resourceName)
-            : ResolveAllResourceIds(appModel);
-
-        if (resourceName is not null && resourcesToLog.Count == 0)
-        {
-            logger.LogWarning("Resource '{ResourceName}' not found. No logs will be returned.", resourceName);
-            yield break;
-        }
-
-        if (resourcesToLog.Count == 0)
-        {
-            yield break;
-        }
-
-        // Step 2: Stream logs from all resources in parallel via a channel.
-        var channel = Channel.CreateUnbounded<ResourceLogLine>(new UnboundedChannelOptions
-        {
-            SingleReader = true,
-            SingleWriter = false
-        });
-        var tasks = new List<Task>();
-
-        foreach (var name in resourcesToLog)
-        {
-            var task = Task.Run(async () =>
-            {
-                try
-                {
-                    var logStream = follow
-                        ? resourceLoggerService.WatchAsync(name)
-                        : resourceLoggerService.GetAllAsync(name);
-
-                    await foreach (var batch in logStream.WithCancellation(cancellationToken).ConfigureAwait(false))
-                    {
-                        foreach (var logLine in batch)
-                        {
-                            await channel.Writer.WriteAsync(new ResourceLogLine
-                            {
-                                ResourceName = name,
-                                LineNumber = logLine.LineNumber,
-                                Content = logLine.Content,
-                                IsError = logLine.IsErrorMessage
-                            }, cancellationToken).ConfigureAwait(false);
-                        }
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    // Expected when cancelled
-                }
-                catch (Exception ex)
-                {
-                    logger.LogDebug(ex, "Error streaming logs for resource {ResourceName}", name);
-                }
-            }, cancellationToken);
-            tasks.Add(task);
-        }
-
-        _ = Task.WhenAll(tasks).ContinueWith(_ => channel.Writer.Complete(), CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
-
-        await foreach (var logLine in channel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+        await foreach (var logLine in GetResourceLogsAsync(
+            "GetResourceLogsAsync",
+            null,
+            resourceName,
+            follow,
+            includeHidden: true,
+            search: null,
+            tail: null,
+            cancellationToken).ConfigureAwait(false))
         {
             yield return logLine;
         }
+    }
+
+    private async IAsyncEnumerable<ResourceLogBatch> GetResourceLogBatchesAsync(
+        string rpcMethodName,
+        BackchannelTraceContext? traceContext,
+        string? resourceName,
+        bool follow,
+        bool includeHidden,
+        string? search,
+        int? tail,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var maxBatchSize = follow ? 1 : 256;
+        var logLines = GetResourceLogsAsync(
+            rpcMethodName,
+            traceContext,
+            resourceName,
+            follow,
+            includeHidden,
+            search,
+            tail,
+            cancellationToken);
+
+        await foreach (var batch in logLines.GetBatchesAsync(maxBatchSize, cancellationToken).ConfigureAwait(false))
+        {
+            yield return new ResourceLogBatch { Lines = batch };
+        }
+    }
+
+    private async IAsyncEnumerable<ResourceLogLine> GetResourceLogsAsync(
+        string rpcMethodName,
+        BackchannelTraceContext? traceContext,
+        string? resourceName,
+        bool follow,
+        bool includeHidden,
+        string? search,
+        int? tail,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var resourceLoggerService = serviceProvider.GetRequiredService<ResourceLoggerService>();
+        var appModel = serviceProvider.GetRequiredService<DistributedApplicationModel>();
+        var notificationService = serviceProvider.GetRequiredService<ResourceNotificationService>();
+        using var activity = profilingTelemetry.StartJsonRpcServerCall(rpcMethodName, streaming: true, traceContext);
+        var yieldedCount = 0;
+        using var logStreamCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var logStreamCancellationToken = logStreamCts.Token;
+        Task? completeWriterTask = null;
+
+        try
+        {
+            // Resolve logical resource names to runtime resource ids before reading logs.
+            // Replicated resources can produce multiple ids for a single app model resource.
+            var resourcesToLog = resourceName is not null
+                ? ResolveResourceIds(appModel, resourceName)
+                : ResolveAllResourceIds(appModel);
+
+            // IncludeHidden only filters the all-resource stream. A named resource request is
+            // treated as an explicit request for that resource, even when the resource is hidden.
+            if (!includeHidden && resourceName is null)
+            {
+                resourcesToLog = resourcesToLog
+                    .Where(resolvedResourceName => !IsHiddenResource(notificationService, resolvedResourceName))
+                    .ToList();
+            }
+
+            if (resourceName is not null && resourcesToLog.Count == 0)
+            {
+                logger.LogWarning("Resource '{ResourceName}' not found. No logs will be returned.", resourceName);
+                yield break;
+            }
+
+            if (resourcesToLog.Count == 0)
+            {
+                yield break;
+            }
+
+            // Server-side tailing only applies to finite snapshots for a single resource. Follow
+            // streams return new log lines, so any Tail value on a follow request is ignored here.
+            // For multiple resources, the CLI needs the parsed/merged ordering across resources
+            // before it can choose the final tail entries without changing observable output order.
+            var serverTailLineCount = !follow && tail.GetValueOrDefault() > 0 && resourcesToLog.Count == 1
+                ? tail.GetValueOrDefault()
+                : 0;
+
+            // Queue<T> capacity only preallocates storage; the dequeue/enqueue logic below
+            // enforces the fixed-size tail window.
+            Queue<ResourceLogLine>? tailBuffer = serverTailLineCount > 0 ? new Queue<ResourceLogLine>(serverTailLineCount) : null;
+
+            // Read each resource in parallel and filter before writing to the JSON-RPC stream.
+            // This keeps large non-matching log histories inside the AppHost instead of forcing
+            // the CLI to transfer and parse them just to discard them.
+            var channel = Channel.CreateUnbounded<ResourceLogLine>(new UnboundedChannelOptions
+            {
+                SingleReader = true,
+                SingleWriter = false
+            });
+            var tasks = new List<Task>();
+
+            foreach (var name in resourcesToLog)
+            {
+                var task = Task.Run(async () =>
+                {
+                    try
+                    {
+                        var logStream = follow
+                            ? resourceLoggerService.WatchAsync(name)
+                            : resourceLoggerService.GetAllAsync(name);
+
+                        await foreach (var batch in logStream.WithCancellation(logStreamCancellationToken).ConfigureAwait(false))
+                        {
+                            foreach (var logLine in batch)
+                            {
+                                var resourceLogLine = new ResourceLogLine
+                                {
+                                    ResourceName = name,
+                                    LineNumber = logLine.LineNumber,
+                                    Content = logLine.Content,
+                                    IsError = logLine.IsErrorMessage
+                                };
+
+                                // Search on the server as a transport optimization. The CLI applies
+                                // its parsed-log filter again so older AppHosts and display-name edge
+                                // cases keep the same output.
+                                if (!MatchesSearch(resourceLogLine, search))
+                                {
+                                    continue;
+                                }
+
+                                await channel.Writer.WriteAsync(resourceLogLine, logStreamCancellationToken).ConfigureAwait(false);
+                            }
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // Expected when cancelled
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogDebug(ex, "Error streaming logs for resource {ResourceName}", name);
+                    }
+                }, logStreamCancellationToken);
+                tasks.Add(task);
+            }
+
+            completeWriterTask = Task.WhenAll(tasks).ContinueWith(_ => channel.Writer.Complete(), CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+
+            await foreach (var logLine in channel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            {
+                if (tailBuffer is not null)
+                {
+                    if (tailBuffer.Count == serverTailLineCount)
+                    {
+                        tailBuffer.Dequeue();
+                    }
+
+                    tailBuffer.Enqueue(logLine);
+                    continue;
+                }
+
+                if (yieldedCount == 0)
+                {
+                    activity.AddJsonRpcStreamFirstItemEvent();
+                }
+
+                yieldedCount++;
+                yield return logLine;
+            }
+
+            if (tailBuffer is not null)
+            {
+                foreach (var logLine in tailBuffer)
+                {
+                    if (yieldedCount == 0)
+                    {
+                        activity.AddJsonRpcStreamFirstItemEvent();
+                    }
+
+                    yieldedCount++;
+                    yield return logLine;
+                }
+            }
+
+            activity.AddJsonRpcStreamCompletedEvent();
+        }
+        finally
+        {
+            // Consumers can stop enumerating a follow stream without cancelling the RPC token.
+            // Cancel the per-resource producers so they don't keep watching logs after the
+            // JSON-RPC stream has ended.
+            await logStreamCts.CancelAsync().ConfigureAwait(false);
+            if (completeWriterTask is not null)
+            {
+                await completeWriterTask.ConfigureAwait(false);
+            }
+
+            activity.SetJsonRpcStreamItemCount(yieldedCount);
+        }
+    }
+
+    private static bool IsHiddenResource(ResourceNotificationService notificationService, string resourceName)
+    {
+        return notificationService.TryGetCurrentState(resourceName, out var resourceEvent) && resourceEvent.Snapshot.IsHidden;
+    }
+
+    private static bool MatchesSearch(ResourceLogLine logLine, string? search)
+    {
+        if (string.IsNullOrEmpty(search))
+        {
+            return true;
+        }
+
+        if (logLine.Content.Contains(search, StringComparisons.FullTextSearch) ||
+            logLine.ResourceName.Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        // ResourceLoggerService stores raw lines like:
+        //   2000-12-29T20:59:59.0000000Z Re\u001b[31mady
+        // Strip ANSI control sequences for the server-side pre-filter so a
+        // visible-text search for "Ready" does not drop the line before the CLI
+        // can apply its parsed-log search semantics.
+        return AnsiParser.StripControlSequences(logLine.Content)
+            .Contains(search, StringComparisons.FullTextSearch);
     }
 
     /// <summary>
@@ -1163,7 +1801,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     public IAsyncEnumerable<BackchannelLogEntry> GetAppHostLogEntriesAsync(CancellationToken cancellationToken = default)
     {
         var rpcTarget = serviceProvider.GetRequiredService<AppHostRpcTarget>();
-        return rpcTarget.GetAppHostLogEntriesAsync(cancellationToken);
+        return rpcTarget.GetAppHostLogEntriesAsync(cancellationToken: cancellationToken);
     }
 
     /// <summary>

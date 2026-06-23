@@ -1,11 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -28,7 +31,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -60,7 +63,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         await Verify(helpWriter.ToString(), extension: "txt");
     }
 
@@ -91,7 +94,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         await Verify(helpWriter.ToString(), extension: "txt");
     }
 
@@ -117,7 +120,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
         var helpOutput = helpWriter.ToString();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Contains("Execute a command on a resource", helpOutput);
         Assert.DoesNotContain("Available resource commands:", helpOutput);
     }
@@ -140,7 +143,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
         var helpOutput = helpWriter.ToString();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Contains("Execute a command on a resource", helpOutput);
         Assert.DoesNotContain("Available resource commands:", helpOutput);
     }
@@ -181,7 +184,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
         var helpOutput = helpWriter.ToString();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(prompted);
         Assert.Contains("Execute a command on a resource", helpOutput);
         Assert.DoesNotContain("Available resource commands:", helpOutput);
@@ -230,7 +233,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
         var helpOutput = helpWriter.ToString();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(prompted);
         Assert.Contains("Execute a command on a resource", helpOutput);
         Assert.DoesNotContain("Available resource commands:", helpOutput);
@@ -259,7 +262,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         await Verify(helpWriter.ToString(), extension: "txt");
     }
 
@@ -277,7 +280,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("The 'resource' argument is required.", error.Message);
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.NotEqual(ExitCodeConstants.Success, exitCode);
+        Assert.NotEqual(CliExitCodes.Success, exitCode);
     }
 
     [Theory]
@@ -296,7 +299,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("The 'resource' argument is required.", error.Message);
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.NotEqual(ExitCodeConstants.Success, exitCode);
+        Assert.NotEqual(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -313,7 +316,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("The 'command' argument is required.", error.Message);
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.NotEqual(ExitCodeConstants.Success, exitCode);
+        Assert.NotEqual(CliExitCodes.Success, exitCode);
     }
 
     [Theory]
@@ -333,7 +336,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("The 'command' argument is required.", error.Message);
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.NotEqual(ExitCodeConstants.Success, exitCode);
+        Assert.NotEqual(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -347,7 +350,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("resource myresource my-command --help");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -361,32 +364,111 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("resource myresource my-command --apphost /path/to/project.csproj --help");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
-    [Fact]
-    public async Task ResourceCommand_AcceptsWellKnownCommandNames()
+    [Theory]
+    [InlineData("start")]
+    [InlineData("stop")]
+    [InlineData("restart")]
+    [InlineData("rebuild")]
+    [InlineData("set-parameter")]
+    [InlineData("delete-parameter")]
+    [InlineData("parameter-set")]
+    [InlineData("parameter-delete")]
+    public async Task ResourceCommand_AcceptsWellKnownCommandNames(string commandName)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"resource myresource {commandName} --help");
 
-        // Test with start
-        var startResult = command.Parse("resource myresource start --help");
-        var startExitCode = await startResult.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, startExitCode);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        // Test with stop
-        var stopResult = command.Parse("resource myresource stop --help");
-        var stopExitCode = await stopResult.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, stopExitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
+    }
 
-        // Test with restart
-        var restartResult = command.Parse("resource myresource restart --help");
-        var restartExitCode = await restartResult.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, restartExitCode);
+    [Theory]
+    [InlineData("start", "Starting resource 'myresource'...", "Resource 'myresource' started successfully.")]
+    [InlineData("stop", "Stopping resource 'myresource'...", "Resource 'myresource' stopped successfully.")]
+    [InlineData("restart", "Restarting resource 'myresource'...", "Resource 'myresource' restarted successfully.")]
+    [InlineData("rebuild", "Rebuilding resource 'myresource'...", "Resource 'myresource' rebuilt successfully.")]
+    [InlineData("set-parameter", "Setting parameter for resource 'myresource'...", "Resource 'myresource' set successfully.")]
+    [InlineData("delete-parameter", "Deleting parameter for resource 'myresource'...", "Resource 'myresource' deleted successfully.")]
+    [InlineData("parameter-set", "Setting parameter for resource 'myresource'...", "Resource 'myresource' set successfully.")]
+    [InlineData("parameter-delete", "Deleting parameter for resource 'myresource'...", "Resource 'myresource' deleted successfully.")]
+    public async Task ResourceCommand_UsesWellKnownCommandDisplayMetadata(string commandName, string statusMessage, string successMessage)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var statuses = new List<string>();
+        var interactionService = new TestInteractionService
+        {
+            ShowStatusCallback = statuses.Add
+        };
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true }
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel, interactionService);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"resource myresource {commandName}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(1, backchannel.ExecuteResourceCommandCallCount);
+        Assert.Collection(
+            statuses,
+            status => Assert.Equal("Scanning for running AppHosts...", status),
+            status => Assert.Equal(statusMessage, status));
+        Assert.Equal(successMessage, Assert.Single(interactionService.DisplayedSuccess));
+    }
+
+    [Fact]
+    public async Task ResourceCommand_RoutesStatusToStderrAndResultToStdout()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var consoleOutputPerStatus = new List<(string Message, ConsoleOutput Console)>();
+        TestInteractionService? interactionService = null;
+        interactionService = new TestInteractionService
+        {
+            ShowStatusCallback = msg => consoleOutputPerStatus.Add((msg, interactionService!.Console))
+        };
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
+            {
+                Success = true,
+                Value = new ExecuteResourceCommandResult
+                {
+                    Value = "{\"key\": \"value\"}",
+                    Format = CommandResultFormat.Json
+                }
+            }
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel, interactionService);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("resource myresource my-command");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        // The "Scanning for running AppHosts..." message must be routed to stderr,
+        // not stdout, so that piped JSON output remains valid (see #18102).
+        var scanningStatus = Assert.Single(consoleOutputPerStatus, s => s.Message == SharedCommandStrings.ScanningForRunningAppHosts);
+        Assert.Equal(ConsoleOutput.Error, scanningStatus.Console);
+
+        // The JSON result must be written to stdout so it can be piped to tools like jq.
+        var (rawText, consoleOverride) = Assert.Single(interactionService.DisplayedRawText);
+        Assert.Equal("{\"key\": \"value\"}", rawText);
+        Assert.Equal(ConsoleOutput.Standard, consoleOverride);
     }
 
     [Fact]
@@ -400,7 +482,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("resource myresource start --apphost /path/to/project.csproj --help");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -424,9 +506,9 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(1, backchannel.ExecuteResourceCommandCallCount);
-        Assert.Contains("Executing command 'Start' on resource 'myresource'...", statuses);
+        Assert.Contains("Validating and executing command 'Start' on resource 'myresource'...", statuses);
     }
 
     [Fact]
@@ -461,7 +543,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.Equal(0, backchannel.ExecuteResourceCommandCallCount);
     }
 
@@ -488,7 +570,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Null(backchannel.ExecuteResourceCommandArguments);
         Assert.True(backchannel.ExecuteResourceCommandOptions?.NonInteractive == true);
     }
@@ -525,8 +607,81 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("text", "Submitted Aspire!"), ("timeoutMilliseconds", "500"));
+    }
+
+    [Fact]
+    public async Task ResourceCommand_ForwardsArgumentAfterDoubleDashThatCollidesWithCliOption()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "mydb",
+                    CreateCommand(
+                        "configure",
+                        CreateArgument("AppHost")))
+            ]
+        };
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("hash", "/tmp/test.sock", backchannel);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        // "--AppHost" collides case-insensitively with the CLI's --apphost option, so it
+        // must be placed after "--" to bypass the miscased-option check and reach the
+        // resource command's second-pass parser.
+        var result = command.Parse("resource mydb configure -- --AppHost primary");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("AppHost", "primary"));
+    }
+
+    [Fact]
+    public async Task ResourceCommand_LegacyParameterCommandName_UsesCurrentCommandMetadata()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "greeting",
+                    CreateCommand(
+                        "set-parameter",
+                        CreateArgument("Value")))
+            ]
+        };
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("hash", "/tmp/test.sock", backchannel);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("resource greeting parameter-set --value \"Hello world\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("Value", "Hello world"));
     }
 
     [Fact]
@@ -558,7 +713,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.Equal(0, backchannel.ExecuteResourceCommandCallCount);
     }
 
@@ -585,7 +740,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("https://example.com/?q=aspire", null));
     }
 
@@ -612,7 +767,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("#submit", null), ("extra", null));
     }
 
@@ -639,7 +794,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("--selector #submit", null), ("--count 2", null));
     }
 
@@ -666,7 +821,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("--verbose", null));
     }
 
@@ -686,7 +841,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("--selector #submit", null));
     }
 
@@ -722,7 +877,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("timeoutMilliseconds", "500"));
     }
 
@@ -750,7 +905,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("--message hello", null));
     }
 
@@ -786,7 +941,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("timeoutMilliseconds", "500"), ("proxy", "true"));
     }
 
@@ -817,7 +972,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("proxy", expectedValue));
     }
 
@@ -852,7 +1007,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("flavor", "chocolate"));
     }
 
@@ -888,7 +1043,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.Equal(0, backchannel.ExecuteResourceCommandCallCount);
         var error = Assert.Single(interactionService.DisplayedErrors);
         Assert.Contains("--flavor", error);
@@ -918,7 +1073,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.Equal(0, backchannel.ExecuteResourceCommandCallCount);
         var error = Assert.Single(interactionService.DisplayedErrors);
         Assert.Equal("Unrecognized command option '--unknown value'.", error);
@@ -944,7 +1099,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("--mm ss", null));
     }
 
@@ -971,10 +1126,38 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.Equal(0, backchannel.ExecuteResourceCommandCallCount);
         var error = Assert.Single(interactionService.DisplayedErrors);
         Assert.Contains("maybe", error);
+    }
+
+    [Fact]
+    public async Task ResourceCommand_ReturnsInvalidCommandForDisabledCommandOption()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "web-browser-automation",
+                    CreateCommand("configure", CreateArgument("saveToUserSecrets", inputType: "Boolean", disabled: true)))
+            ]
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel, interactionService);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("""resource web-browser-automation configure --save-to-user-secrets true""");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Equal(0, backchannel.ExecuteResourceCommandCallCount);
+        Assert.Equal("Option '--save-to-user-secrets' is disabled.", Assert.Single(interactionService.DisplayedErrors));
     }
 
     [Fact]
@@ -1012,10 +1195,76 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.FailedToExecuteResourceCommand, exitCode);
+        Assert.Equal(CliExitCodes.FailedToExecuteResourceCommand, exitCode);
         var error = Assert.Single(interactionService.DisplayedErrors);
+        Assert.Contains("Failed to validate command arguments for command 'configure' on resource 'web-browser-automation'", error);
+        Assert.DoesNotContain("Command argument validation failed.", error);
         Assert.Contains("--timeout-seconds: Value must be greater than 0.", error);
         Assert.DoesNotContain("timeoutSeconds:", error);
+    }
+
+    [Fact]
+    public async Task ResourceCommand_FailedExecution_DisplaysAppHostCliLogFilePath()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = "/app/AppHost.csproj",
+                ProcessId = 42,
+                CliLogFilePath = "/tmp/aspire-logs/cli_apphost_20260516.log"
+            },
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
+            {
+                Success = false,
+                Message = "Something went wrong."
+            }
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel, interactionService);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("resource myresource my-command");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToExecuteResourceCommand, exitCode);
+
+        var executionContext = provider.GetRequiredService<CliExecutionContext>();
+        var expectedCliLogMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, executionContext.LogFilePath);
+        var expectedAppHostLogMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeAppHostLogsAt, "/tmp/aspire-logs/cli_apphost_20260516.log");
+
+        // Verify both the CLI log path and app host log path are displayed when the command fails
+        Assert.Contains(interactionService.DisplayedMessages, m => m.Message == expectedCliLogMessage);
+        Assert.Contains(interactionService.DisplayedMessages, m => m.Message == expectedAppHostLogMessage);
+    }
+
+    [Fact]
+    public async Task ResourceCommand_FailsWhenCommandUsesInteractionService()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "web",
+                    CreateCommand("configure", "Configures the resource."))
+            ]
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel, interactionService);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("""resource web configure""");
+
+        await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(1, backchannel.ExecuteResourceCommandCallCount);
+        Assert.True(backchannel.ExecuteResourceCommandOptions?.NonInteractive == true);
     }
 
     [Fact]
@@ -1050,7 +1299,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("flavor", "strawberry"));
     }
 
@@ -1080,7 +1329,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         AssertJsonObject(backchannel.ExecuteResourceCommandArguments);
     }
 
@@ -1113,7 +1362,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.Equal(0, backchannel.ExecuteResourceCommandCallCount);
         var error = Assert.Single(interactionService.DisplayedErrors);
         Assert.Contains(expectedOptionName, error);
@@ -1142,7 +1391,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.Equal(0, backchannel.ExecuteResourceCommandCallCount);
         var error = Assert.Single(interactionService.DisplayedErrors);
         Assert.Contains("--timeoutMilliseconds", error);
@@ -1171,7 +1420,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.Equal(0, backchannel.ExecuteResourceCommandCallCount);
     }
 
@@ -1201,7 +1450,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.Equal(0, backchannel.ExecuteResourceCommandCallCount);
         var error = Assert.Single(interactionService.DisplayedErrors);
         Assert.Contains("--selector", error);
@@ -1233,7 +1482,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.Equal(0, backchannel.ExecuteResourceCommandCallCount);
         var error = Assert.Single(interactionService.DisplayedErrors);
         Assert.Contains("--selector", error);
@@ -1271,7 +1520,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.Equal(0, backchannel.ExecuteResourceCommandCallCount);
     }
 
@@ -1307,7 +1556,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.Equal(0, backchannel.ExecuteResourceCommandCallCount);
     }
 
@@ -1342,7 +1591,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("logLevel", "Debug"));
     }
 
@@ -1371,7 +1620,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("message", "from delimiter"), ("timeoutMilliseconds", "10"));
     }
 
@@ -1400,7 +1649,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(1, backchannel.ExecuteResourceCommandCallCount);
         AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("message", "from hidden resource"));
     }
@@ -1429,7 +1678,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         AssertJsonObject(backchannel.ExecuteResourceCommandArguments);
     }
 
@@ -1464,8 +1713,210 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("noProxy", "localhost"));
+    }
+
+    [Fact]
+    public async Task ResourceCommand_LoadArgumentsWritesLoadedArgumentInputsAsJson()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var output = new StringWriter();
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
+            {
+                Success = false,
+                Message = "Command argument validation failed.",
+                ArgumentInputs =
+                [
+                    CreateArgument("browser", inputType: "Choice", value: "Chrome"),
+                    CreateArgument(
+                        "profile",
+                        inputType: "Choice",
+                        options: new Dictionary<string, string?>
+                        {
+                            ["Default"] = "Default"
+                        })
+                ]
+            },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "web-browser-automation",
+                    CreateCommand(
+                        "configure",
+                        CreateArgument("browser", inputType: "Choice")))
+            ]
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("""resource web-browser-automation configure --load-arguments -- --browser Chrome""");
+
+        var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = output }).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(backchannel.ExecuteResourceCommandOptions?.ValidateOnly);
+        Assert.True(backchannel.ExecuteResourceCommandOptions?.ReturnArgumentInputs);
+        AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("browser", "Chrome"));
+
+        var json = JsonNode.Parse(output.ToString());
+        var argumentInputs = Assert.IsType<JsonArray>(json);
+        Assert.Equal(2, argumentInputs.Count);
+        Assert.Equal("browser", argumentInputs[0]!["name"]!.GetValue<string>());
+        Assert.Equal("Chrome", argumentInputs[0]!["value"]!.GetValue<string>());
+        Assert.Equal("profile", argumentInputs[1]!["name"]!.GetValue<string>());
+        Assert.Equal("Default", argumentInputs[1]!["options"]!["Default"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task ResourceCommand_LoadArgumentsDoesNotWriteJsonWhenArgumentInputsAreMissing()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var output = new StringWriter();
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
+            {
+                Success = false,
+                Message = "Loaded argument inputs were not returned."
+            },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "web-browser-automation",
+                    CreateCommand(
+                        "configure",
+                        CreateArgument("browser", inputType: "Choice")))
+            ]
+        };
+        var interactionService = new TestInteractionService();
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel, interactionService);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("""resource web-browser-automation configure --load-arguments -- --browser Chrome""");
+
+        var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = output }).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToExecuteResourceCommand, exitCode);
+        Assert.True(backchannel.ExecuteResourceCommandOptions?.ValidateOnly);
+        Assert.True(backchannel.ExecuteResourceCommandOptions?.ReturnArgumentInputs);
+        Assert.DoesNotContain("[]", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Loaded argument inputs were not returned.", interactionService.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task ResourceCommand_LoadArgumentsReportsFallbackErrorWhenArgumentInputsAndMessageAreMissing()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var output = new StringWriter();
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
+            {
+                Success = false
+            },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "web-browser-automation",
+                    CreateCommand(
+                        "configure",
+                        CreateArgument("browser", inputType: "Choice")))
+            ]
+        };
+        var interactionService = new TestInteractionService();
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel, interactionService);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("""resource web-browser-automation configure --load-arguments -- --browser Chrome""");
+
+        var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = output }).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToExecuteResourceCommand, exitCode);
+        Assert.Contains("AppHost returned no loaded argument inputs.", interactionService.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task ResourceCommand_LoadArgumentsAllowsPartialDynamicArguments()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var output = new StringWriter();
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
+            {
+                Success = false,
+                Message = "Command argument validation failed.",
+                ArgumentInputs =
+                [
+                    CreateArgument("category", inputType: "Choice", required: true, value: "fruit"),
+                    CreateArgument("item", inputType: "Choice", required: true, options: new Dictionary<string, string?> { ["banana"] = "Banana" }),
+                ]
+            },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "argument-commands",
+                    CreateCommand(
+                        "dependent-arguments",
+                        CreateArgument("category", inputType: "Choice", required: true, options: new Dictionary<string, string?> { ["fruit"] = "Fruit" }),
+                        CreateArgument("item", inputType: "Choice", required: true, disabled: true, dynamicLoading: new ResourceSnapshotCommandArgumentDynamicLoading { DependsOnInputs = ["category"] })))
+            ]
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("""resource argument-commands dependent-arguments --load-arguments -- --category fruit""");
+
+        var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = output }).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(backchannel.ExecuteResourceCommandOptions?.ValidateOnly);
+        Assert.True(backchannel.ExecuteResourceCommandOptions?.ReturnArgumentInputs);
+        AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("category", "fruit"));
+        Assert.DoesNotContain("Required option '--item'", output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ResourceCommand_ExecuteAllowsDynamicallyEnabledArguments()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "argument-commands",
+                    CreateCommand(
+                        "dependent-arguments",
+                        CreateArgument("category", inputType: "Choice", required: true, options: new Dictionary<string, string?> { ["fruit"] = "Fruit" }),
+                        CreateArgument("item", inputType: "Choice", required: true, disabled: true, dynamicLoading: new ResourceSnapshotCommandArgumentDynamicLoading { DependsOnInputs = ["category"] }),
+                        CreateArgument("quantity", inputType: "Number", required: true),
+                        CreateArgument("priority", inputType: "Choice", disabled: true, dynamicLoading: new ResourceSnapshotCommandArgumentDynamicLoading { DependsOnInputs = ["item"] })))
+            ]
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("""resource argument-commands dependent-arguments -- --category=fruit --item=banana --quantity=2 --priority=express""");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        AssertJsonObject(
+            backchannel.ExecuteResourceCommandArguments,
+            ("category", "fruit"),
+            ("item", "banana"),
+            ("quantity", "2"),
+            ("priority", "express"));
     }
 
     [Fact]
@@ -1499,7 +1950,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.Equal(0, backchannel.ExecuteResourceCommandCallCount);
     }
 
@@ -1517,7 +1968,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
         var helpOutput = helpWriter.ToString();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Contains("Execute a command on a resource", helpOutput);
         Assert.Contains("resource <resource> <command>", helpOutput);
     }
@@ -1556,7 +2007,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
         var helpOutput = helpWriter.ToString();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Contains("Waits for text in the browser.", helpOutput);
         Assert.Contains("--selector <value>", helpOutput);
         Assert.Contains("Selector to wait for. Required.", helpOutput);
@@ -1590,7 +2041,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
         var helpOutput = helpWriter.ToString();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(0, backchannel.ExecuteResourceCommandCallCount);
         Assert.Contains("Waits for text in the browser.", helpOutput);
         Assert.Contains("--selector <value>", helpOutput);
@@ -1619,7 +2070,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(1, backchannel.ExecuteResourceCommandCallCount);
         Assert.DoesNotContain("Usage:", helpWriter.ToString());
         AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("--help", null));
@@ -1658,7 +2109,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
         var helpOutput = helpWriter.ToString();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Contains("aspire resource web-browser-automation configure [options] [[--] <command-options>...]", helpOutput);
         Assert.Contains("--log-level <value>", helpOutput);
         Assert.Contains("Log level for the resource command.", helpOutput);
@@ -1688,7 +2139,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
         var helpOutput = helpWriter.ToString();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Contains("--apphost <apphost>", helpOutput);
         Assert.Contains("-?, -h, /?, /h, --help", helpOutput);
         Assert.Contains("-l, --log-level <log-level>", helpOutput);
@@ -1725,7 +2176,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
         var helpOutput = helpWriter.ToString();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Contains("--count <value>", helpOutput);
         Assert.Contains("Count value. Default: 5.", helpOutput);
         Assert.DoesNotContain("Count value. Required.", helpOutput);
@@ -1746,7 +2197,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
         var helpOutput = helpWriter.ToString();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Contains("Usage:", helpOutput);
         Assert.DoesNotContain("Command options:", helpOutput);
     }
@@ -1772,7 +2223,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
         var helpOutput = helpWriter.ToString();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Contains("Usage:", helpOutput);
         Assert.DoesNotContain("Command options:", helpOutput);
     }
@@ -1822,7 +2273,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         await Verify(helpWriter.ToString(), extension: "txt");
     }
 
@@ -1914,7 +2365,9 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         bool required = false,
         string? value = null,
         Dictionary<string, string?>? options = null,
-        bool allowCustomChoice = false)
+        bool allowCustomChoice = false,
+        bool disabled = false,
+        ResourceSnapshotCommandArgumentDynamicLoading? dynamicLoading = null)
     {
         return new ResourceSnapshotCommandArgument
         {
@@ -1924,7 +2377,9 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
             Required = required,
             Value = value,
             Options = options,
-            AllowCustomChoice = allowCustomChoice
+            AllowCustomChoice = allowCustomChoice,
+            Disabled = disabled,
+            DynamicLoading = dynamicLoading
         };
     }
 }

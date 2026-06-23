@@ -298,6 +298,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
                 initialData[DashboardConfigNames.DebugSessionPortName.ConfigKey] = "8080";
                 initialData[DashboardConfigNames.DebugSessionServerCertificateName.ConfigKey] = Convert.ToBase64String(testCert.Export(X509ContentType.Cert));
                 initialData[DashboardConfigNames.DebugSessionTokenName.ConfigKey] = "token!";
+                initialData[DashboardConfigNames.DebugSessionDcpInstanceIdName.ConfigKey] = "aspire-extension-run-123-dashboard";
                 initialData[DashboardConfigNames.DebugSessionTelemetryOptOutName.ConfigKey] = "true";
             });
 
@@ -314,6 +315,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(testCert.Thumbprint, cert.Thumbprint);
 
         Assert.Equal("token!", app.DashboardOptionsMonitor.CurrentValue.DebugSession.Token);
+        Assert.Equal("aspire-extension-run-123-dashboard", app.DashboardOptionsMonitor.CurrentValue.DebugSession.DcpInstanceId);
         Assert.Equal(true, app.DashboardOptionsMonitor.CurrentValue.DebugSession.TelemetryOptOut);
 
         Assert.Equal(expectedAIDisabled, app.DashboardOptionsMonitor.CurrentValue.AI.Disabled);
@@ -628,7 +630,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         Assert.Collection(l,
             w =>
             {
-                Assert.Equal("Aspire version: {Version}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
+                Assert.Equal("Aspire dashboard version: {Version}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
             },
             w =>
             {
@@ -660,6 +662,10 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
             {
                 Assert.Equal("Dashboard API is unsecured. Untrusted apps can access sensitive telemetry data.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
                 Assert.Equal(LogLevel.Warning, w.LogLevel);
+            },
+            w =>
+            {
+                Assert.StartsWith("Aspire Dashboard", (string)LogTestHelpers.GetValue(w, "{OriginalFormat}")!);
             });
     }
 
@@ -686,7 +692,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         Assert.Collection(l,
             w =>
             {
-                Assert.Equal("Aspire version: {Version}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
+                Assert.Equal("Aspire dashboard version: {Version}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
             },
             w =>
             {
@@ -696,6 +702,10 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
             {
                 Assert.Equal("Dashboard API is unsecured. Untrusted apps can access sensitive telemetry data.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
                 Assert.Equal(LogLevel.Warning, w.LogLevel);
+            },
+            w =>
+            {
+                Assert.StartsWith("Aspire Dashboard", (string)LogTestHelpers.GetValue(w, "{OriginalFormat}")!);
             });
     }
 
@@ -802,7 +812,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         Assert.Collection(l,
             w =>
             {
-                Assert.Equal("Aspire version: {Version}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
+                Assert.Equal("Aspire dashboard version: {Version}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
             },
             w =>
             {
@@ -836,6 +846,10 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
             {
                 Assert.Equal("Dashboard API is unsecured. Untrusted apps can access sensitive telemetry data.", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
                 Assert.Equal(LogLevel.Warning, w.LogLevel);
+            },
+            w =>
+            {
+                Assert.StartsWith("Aspire Dashboard", (string)LogTestHelpers.GetValue(w, "{OriginalFormat}")!);
             });
     }
 
