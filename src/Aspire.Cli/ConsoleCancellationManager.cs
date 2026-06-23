@@ -23,13 +23,13 @@ namespace Aspire.Cli;
 /// so <c>Program.Main</c> abandons the handler task and returns the captured exit code.
 /// </para>
 /// <para>
-/// The three-stage signal counter mirrors the same ladder:
+/// The two-stage signal counter mirrors the same ladder:
 /// </para>
 /// <list type="number">
 ///   <item>First signal — primary <see cref="Token"/> cancels and the graceful watcher starts.</item>
 ///   <item>Second signal — the graceful window is collapsed via <see cref="Expire"/>; ladders see
-///         <see cref="GracefulShutdownToken"/> fire immediately and escalate.</item>
-///   <item>Third (or later) signal — <see cref="ProcessTerminationCompletionSource"/> fires; Main exits NOW.</item>
+///         <see cref="GracefulShutdownToken"/> fire immediately and escalate, then the bounded final
+///         drain forces exit. Third and later signals are ignored.</item>
 /// </list>
 /// <para>
 /// Graceful shutdown is all-or-nothing per command: <see cref="IsEnabled"/> reflects whether a positive
@@ -47,7 +47,7 @@ namespace Aspire.Cli;
 /// </para>
 /// <para>
 /// The completion source completing is treated as a strict superset of graceful expiration: when the source
-/// completes for any reason (drain timeout, third signal, future external triggers), <see cref="Expire"/> is
+/// completes for any reason (drain timeout, future external triggers), <see cref="Expire"/> is
 /// invoked synchronously so ladders observing only the graceful token unblock in time to issue a kill before
 /// Main abandons them.
 /// </para>
@@ -79,18 +79,17 @@ internal sealed class ConsoleCancellationManager : IDisposable, IGracefulShutdow
     private ILogger _logger;
     private Task? _startedHandler;
     // Number of termination signals (Ctrl+C, SIGINT, SIGTERM, SIGQUIT, ProcessExit) received.
-    // Drives the three-stage ladder: 1 = start graceful watcher; 2 = collapse graceful;
-    // 3+ = force-exit. Internal teardown paths (guest failures, normal completion) do NOT
-    // drive this counter — they rely on disposable-based cleanup (`await using` of the
-    // server session + guest launcher) to run the per-process shutdown ladders.
+    // Drives the two-stage ladder: 1 = start graceful watcher; 2 = collapse graceful so the bounded
+    // final drain forces exit. Third and later signals are ignored. Internal teardown paths (guest
+    // failures, normal completion) do NOT drive this counter — they rely on disposable-based cleanup
+    // (`await using` of the server session + guest launcher) to run the per-process shutdown ladders.
     private int _signalCount;
 
     private readonly TaskCompletionSource<int> _processTerminationCompletionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     /// <summary>
     /// A completion source that is signaled with a native exit code when the running handler
-    /// does not complete within the configured drain budget after a termination signal,
-    /// or when a third Ctrl+C arrives.
+    /// does not complete within the configured drain budget after a termination signal.
     /// </summary>
     internal TaskCompletionSource<int> ProcessTerminationCompletionSource => _processTerminationCompletionSource;
 
@@ -115,8 +114,8 @@ internal sealed class ConsoleCancellationManager : IDisposable, IGracefulShutdow
         _token = _cts.Token;
         _gracefulToken = _gracefulCts.Token;
 
-        // Phase 3 → Phase 2 fallthrough. When the termination completion source completes for any reason
-        // (drain timeout, third Ctrl+C, future external triggers), any ladder still observing only the
+        // Completion-source → graceful fallthrough. When the termination completion source completes for
+        // any reason (drain timeout, future external triggers), any ladder still observing only the
         // graceful token would otherwise sit on a Task.Delay(budget, GracefulShutdownToken) and miss its
         // last chance to issue a kill before Main abandons it. Cancel synchronously so this fires before
         // continuations of the completion source observe completion. Expire() is idempotent — multiple
@@ -300,18 +299,16 @@ internal sealed class ConsoleCancellationManager : IDisposable, IGracefulShutdow
         }
         else if (n == 2)
         {
-            // Second signal: collapse Phase 1 immediately. Ladders observing the graceful token
-            // unblock and escalate to forceful termination; the watcher's Task.Delay(graceful) gets
-            // cancelled and moves on to Phase 2 (final drain).
+            // Second (final) signal: collapse Phase 1 immediately. Ladders observing the graceful
+            // token unblock and escalate to forceful termination; the watcher's Task.Delay(graceful)
+            // gets cancelled and moves on to Phase 2 (the bounded final drain), which guarantees exit.
             _logger.LogWarning("Second termination signal received, expiring graceful shutdown window.");
             Expire();
         }
-        else
-        {
-            // Third (or later) signal: caller wants out NOW. Skip both graceful and drain budgets.
-            _logger.LogWarning("Third termination signal received, forcing immediate exit.");
-            _processTerminationCompletionSource.TrySetResult(exitCode);
-        }
+
+        // Third and later signals are intentionally ignored. The two-press ladder is complete after the
+        // second signal: Phase 2's bounded final drain (armed on the first signal) already guarantees the
+        // process exits, so there is nothing left to escalate.
     }
 
     private async Task ExpireGracefulThenFinalDrainAsync(int forcedTerminationExitCode)

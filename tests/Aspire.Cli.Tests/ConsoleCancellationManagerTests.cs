@@ -91,7 +91,7 @@ public class ConsoleCancellationManagerTests
         // Large graceful budget — without a 2nd signal the token would not fire for 30s.
         manager.ConfigureForCommand(TimeSpan.FromSeconds(30));
 
-        // Set a handler that never completes; 2nd signal should ONLY collapse graceful (not Phase 3).
+        // Set a handler that never completes; 2nd signal should ONLY collapse graceful (not force exit).
         manager.SetStartedHandler(new TaskCompletionSource<int>().Task);
 
         manager.Cancel(130);
@@ -107,27 +107,31 @@ public class ConsoleCancellationManagerTests
         // 2nd signal expires graceful synchronously.
         Assert.True(manager.GracefulShutdownToken.IsCancellationRequested);
 
-        // But the completion source should NOT have fired — that's Phase 3, requires a 3rd signal or drain timeout.
+        // But the completion source should NOT have fired yet — forced exit now happens only when the
+        // bounded final drain (here 30s) elapses, not synchronously on the 2nd signal.
         await Task.Delay(100);
         Assert.False(manager.ProcessTerminationCompletionSource.Task.IsCompleted);
     }
 
     [Fact]
-    public async Task ThirdSignal_FiresProcessTerminationImmediately()
+    public async Task AdditionalSignals_AfterSecond_AreIgnored()
     {
         using var manager = new ConsoleCancellationManager(TimeSpan.FromSeconds(30));
-        // Long graceful budget so the watcher would not naturally complete in the test window.
+        // Long graceful and drain budgets so neither elapses during the test window.
         manager.ConfigureForCommand(TimeSpan.FromSeconds(30));
 
-        // Handler that never completes so Phase 2's WhenAny doesn't resolve via the handler branch.
+        // Handler that never completes so the only way the completion source could fire promptly is an
+        // explicit force path — which the two-press ladder no longer has.
         manager.SetStartedHandler(new TaskCompletionSource<int>().Task);
 
         manager.Cancel(130);
         manager.Cancel(130);
         manager.Cancel(130);
 
-        var exitCode = await manager.ProcessTerminationCompletionSource.Task.DefaultTimeout();
-        Assert.Equal(130, exitCode);
+        // Third and later signals are no-ops: exit is driven solely by the bounded final drain elapsing,
+        // so the completion source must NOT have fired within this short window.
+        await Task.Delay(100);
+        Assert.False(manager.ProcessTerminationCompletionSource.Task.IsCompleted);
     }
 
     [Fact]
