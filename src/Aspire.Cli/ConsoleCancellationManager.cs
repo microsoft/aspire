@@ -276,9 +276,9 @@ internal sealed class ConsoleCancellationManager : IDisposable, IGracefulShutdow
 
     internal void Cancel(int exitCode)
     {
-        var n = Interlocked.Increment(ref _signalCount);
+        var signalNumber = Interlocked.Increment(ref _signalCount);
 
-        if (n == 1)
+        if (signalNumber == 1)
         {
             // First signal: request cooperative cancellation and schedule the graceful-then-drain
             // watcher. The signal handler returns immediately so Program.Main's Task.WhenAny observes
@@ -297,7 +297,7 @@ internal sealed class ConsoleCancellationManager : IDisposable, IGracefulShutdow
 
             _ = ExpireGracefulThenFinalDrainAsync(exitCode);
         }
-        else if (n == 2)
+        else if (signalNumber == 2)
         {
             // Second (final) signal: collapse Phase 1 immediately. Ladders observing the graceful
             // token unblock and escalate to forceful termination; the watcher's Task.Delay(graceful)
