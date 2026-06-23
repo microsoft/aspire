@@ -544,7 +544,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         var info = await _appHostInfoResolver.GetAppHostInfoAsync(effectiveAppHostFile, cancellationToken);
         var appHostCompatibilityCheck = AppHostHelper.EvaluateAppHostCompatibility(
             info.ExitCode,
-            info.IsAspireHost ?? throw new ArgumentException("IsAspireHost is null", nameof(effectiveAppHostFile)),
+            info.IsAspireHost ?? throw new InvalidOperationException("Evaluated AppHost info unexpectedly had a null IsAspireHost value."),
             info.AspireHostingVersion,
             _interactionService,
             _fileLoggerProvider.LogFilePath);
