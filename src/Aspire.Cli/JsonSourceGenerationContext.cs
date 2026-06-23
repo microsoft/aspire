@@ -13,8 +13,8 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.Documentation.ApiDocs;
 using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.Mcp.Tools;
-using Aspire.Cli.Projects;
 using Aspire.Cli.Utils.EnvironmentChecker;
+using Aspire.Shared;
 
 namespace Aspire.Cli;
 

@@ -135,17 +135,17 @@ internal sealed class DashboardFeedbackDiagnosticProvider(
         // Aspire.AppHost.Sdk, and Central Package Management via Directory.Packages.props) that a
         // textual scan would miss. This mirrors the Aspire CLI's AppHostInfoResolver, which uses
         // DotNetCliRunner.GetProjectItemsAndPropertiesAsync.
-        using var json = await RunMSBuildPropertyProbeAsync(appHostFilePath, cancellationToken).ConfigureAwait(false);
-        if (json is null)
+        var inspection = await RunMSBuildPropertyProbeAsync(appHostFilePath, cancellationToken).ConfigureAwait(false);
+        if (inspection is null)
         {
             return FormatCSharpAppHostContext(appHostFilePath, sdkVersion: null, appHostPackageVersion: null, targetFramework: null);
         }
 
-        var (sdkVersion, appHostPackageVersion, targetFramework) = ParseCSharpAppHostProperties(json.RootElement);
+        var (sdkVersion, appHostPackageVersion, targetFramework) = ParseCSharpAppHostProperties(inspection);
         return FormatCSharpAppHostContext(appHostFilePath, sdkVersion, appHostPackageVersion, targetFramework);
     }
 
-    private async Task<JsonDocument?> RunMSBuildPropertyProbeAsync(string appHostFilePath, CancellationToken cancellationToken)
+    private async Task<AppHostProjectInspectionOutput?> RunMSBuildPropertyProbeAsync(string appHostFilePath, CancellationToken cancellationToken)
     {
         // Single-file AppHosts (apphost.cs) must go through the `dotnet build` driver so the
         // file-based app is materialized into a project; project AppHosts use `dotnet msbuild`.
@@ -185,7 +185,10 @@ internal sealed class DashboardFeedbackDiagnosticProvider(
 
         try
         {
-            return JsonDocument.Parse(result.StandardOutput);
+            // Deserialize into the shared inspection model via source generation (trim/AOT safe).
+            // The records and the package-version precedence are shared with the CLI's
+            // AppHostInfoResolver through Aspire.Shared.AppHostProjectInspection.
+            return JsonSerializer.Deserialize(result.StandardOutput, AppHostInspectionSerializerContext.Default.AppHostProjectInspectionOutput);
         }
         catch (JsonException ex)
         {
@@ -194,7 +197,7 @@ internal sealed class DashboardFeedbackDiagnosticProvider(
         }
     }
 
-    private static (string? SdkVersion, string? AppHostPackageVersion, string? TargetFramework) ParseCSharpAppHostProperties(JsonElement root)
+    private static (string? SdkVersion, string? AppHostPackageVersion, string? TargetFramework) ParseCSharpAppHostProperties(AppHostProjectInspectionOutput inspection)
     {
         // The probe returns the MSBuild -getProperty/-getItem JSON shape:
         //   {
@@ -204,25 +207,13 @@ internal sealed class DashboardFeedbackDiagnosticProvider(
         //       "PackageVersion": [ ... ]
         //     }
         //   }
-        string? sdkVersion = null;
-        string? targetFramework = null;
-        if (root.TryGetProperty("Properties", out var properties))
-        {
-            sdkVersion = GetNonEmptyString(properties, "AspireHostingSDKVersion");
-            targetFramework = GetNonEmptyString(properties, "TargetFramework");
-        }
+        var properties = inspection.Properties;
+        var sdkVersion = string.IsNullOrWhiteSpace(properties?.AspireHostingSDKVersion) ? null : properties.AspireHostingSDKVersion;
+        var targetFramework = string.IsNullOrWhiteSpace(properties?.TargetFramework) ? null : properties.TargetFramework;
 
-        // AppHost package version precedence mirrors AppHostInfoResolver.ParseAppHostInfo:
-        // a direct PackageReference wins, then the SDK-provided AspireProjectOrPackageReference,
-        // then the Central Package Management PackageVersion entry.
-        string? appHostPackageVersion = null;
-        if (root.TryGetProperty("Items", out var items))
-        {
-            appHostPackageVersion =
-                GetPackageVersionFromItems(items, "PackageReference", AppHostPackageName)
-                ?? GetPackageVersionFromItems(items, "AspireProjectOrPackageReference", AppHostPackageName)
-                ?? GetPackageVersionFromItems(items, "PackageVersion", AppHostPackageName);
-        }
+        // AppHost package version precedence is applied by the shared helper, which is the same code
+        // the CLI's AppHostInfoResolver uses, so the rule is no longer mirrored here.
+        var appHostPackageVersion = AppHostProjectInspection.FindPackageVersion(inspection.Items, AppHostPackageName);
 
         return (sdkVersion, appHostPackageVersion, targetFramework);
     }
@@ -290,35 +281,5 @@ internal sealed class DashboardFeedbackDiagnosticProvider(
             .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
             .FirstOrDefault()?
             .Trim();
-    }
-
-    private static string? GetNonEmptyString(JsonElement element, string propertyName)
-    {
-        return element.TryGetProperty(propertyName, out var value)
-            && value.ValueKind == JsonValueKind.String
-            && value.GetString() is { Length: > 0 } stringValue
-                ? stringValue
-                : null;
-    }
-
-    private static string? GetPackageVersionFromItems(JsonElement items, string itemType, string packageId)
-    {
-        if (!items.TryGetProperty(itemType, out var array) || array.ValueKind != JsonValueKind.Array)
-        {
-            return null;
-        }
-
-        foreach (var item in array.EnumerateArray())
-        {
-            if (item.TryGetProperty("Identity", out var identity)
-                && identity.ValueKind == JsonValueKind.String
-                && string.Equals(identity.GetString(), packageId, StringComparison.Ordinal)
-                && GetNonEmptyString(item, "Version") is { } version)
-            {
-                return version;
-            }
-        }
-
-        return null;
     }
 }

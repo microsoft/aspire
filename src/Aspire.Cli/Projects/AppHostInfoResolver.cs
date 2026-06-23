@@ -3,9 +3,9 @@
 
 using System.Collections.Concurrent;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Aspire.Cli.Caching;
 using Aspire.Cli.DotNet;
+using Aspire.Shared;
 
 namespace Aspire.Cli.Projects;
 
@@ -209,45 +209,14 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
             return new AppHostProjectInfo(ExitCode: exitCode, IsAspireHost: false, AspireHostingVersion: null, IsUsingCliBundle: isUsingCliBundle, UserSecretsId: userSecretsId, RunCommand: runCommand, TargetPath: targetPath, RunWorkingDirectory: runWorkingDirectory, RunArguments: runArguments, TargetFramework: targetFramework, TargetFrameworks: targetFrameworks);
         }
 
-        // Try to get Aspire.Hosting version from PackageReference items first, then fall back
-        // to AspireProjectOrPackageReference (for SDK-provided refs) and PackageVersion (CPM),
-        // then finally to the SDK version. Mirrors DotNetCliRunner.GetAppHostInformationAsync.
-        string? aspireHostingVersion = null;
-
-        var items = msbuildOutput?.Items;
-        if (items is not null)
-        {
-            aspireHostingVersion = GetPackageVersionFromItems(items.PackageReference, "Aspire.Hosting")
-                ?? GetPackageVersionFromItems(items.PackageReference, "Aspire.Hosting.AppHost");
-
-            aspireHostingVersion ??= GetPackageVersionFromItems(items.AspireProjectOrPackageReference, "Aspire.Hosting")
-                ?? GetPackageVersionFromItems(items.AspireProjectOrPackageReference, "Aspire.Hosting.AppHost");
-
-            aspireHostingVersion ??= GetPackageVersionFromItems(items.PackageVersion, "Aspire.Hosting")
-                ?? GetPackageVersionFromItems(items.PackageVersion, "Aspire.Hosting.AppHost");
-        }
-
-        aspireHostingVersion ??= properties.AspireHostingSDKVersion;
+        // Resolve the Aspire package version using the shared precedence rule (PackageReference,
+        // then SDK-provided AspireProjectOrPackageReference, then CPM PackageVersion), trying
+        // Aspire.Hosting before Aspire.Hosting.AppHost within each list, then fall back to the SDK
+        // version. Shared with the Dashboard via AppHostProjectInspection so the rule isn't mirrored.
+        var aspireHostingVersion = AppHostProjectInspection.FindPackageVersion(msbuildOutput?.Items, "Aspire.Hosting", "Aspire.Hosting.AppHost")
+            ?? properties.AspireHostingSDKVersion;
 
         return new AppHostProjectInfo(ExitCode: exitCode, IsAspireHost: true, AspireHostingVersion: aspireHostingVersion, IsUsingCliBundle: isUsingCliBundle, UserSecretsId: userSecretsId, RunCommand: runCommand, TargetPath: targetPath, RunWorkingDirectory: runWorkingDirectory, RunArguments: runArguments, TargetFramework: targetFramework, TargetFrameworks: targetFrameworks);
-    }
-
-    private static string? GetPackageVersionFromItems(IReadOnlyList<AppHostProjectInspectionItem>? items, string packageId)
-    {
-        if (items is null)
-        {
-            return null;
-        }
-
-        foreach (var item in items)
-        {
-            if (string.Equals(item.Identity, packageId, StringComparison.Ordinal))
-            {
-                return item.Version;
-            }
-        }
-
-        return null;
     }
 }
 
@@ -263,66 +232,3 @@ internal sealed record AppHostProjectInfo(
     string? RunArguments,
     string? TargetFramework,
     string? TargetFrameworks);
-
-internal sealed record AppHostProjectInspectionOutput
-{
-    [JsonPropertyName("Properties")]
-    public AppHostProjectInspectionProperties? Properties { get; init; }
-
-    [JsonPropertyName("Items")]
-    public AppHostProjectInspectionItems? Items { get; init; }
-}
-
-internal sealed record AppHostProjectInspectionProperties
-{
-    [JsonPropertyName("IsAspireHost")]
-    public string? IsAspireHost { get; init; }
-
-    [JsonPropertyName("AspireHostingSDKVersion")]
-    public string? AspireHostingSDKVersion { get; init; }
-
-    [JsonPropertyName("AspireUseCliBundle")]
-    public string? AspireUseCliBundle { get; init; }
-
-    [JsonPropertyName("UserSecretsId")]
-    public string? UserSecretsId { get; init; }
-
-    [JsonPropertyName("RunCommand")]
-    public string? RunCommand { get; init; }
-
-    [JsonPropertyName("TargetPath")]
-    public string? TargetPath { get; init; }
-
-    [JsonPropertyName("RunWorkingDirectory")]
-    public string? RunWorkingDirectory { get; init; }
-
-    [JsonPropertyName("RunArguments")]
-    public string? RunArguments { get; init; }
-
-    [JsonPropertyName("TargetFramework")]
-    public string? TargetFramework { get; init; }
-
-    [JsonPropertyName("TargetFrameworks")]
-    public string? TargetFrameworks { get; init; }
-}
-
-internal sealed record AppHostProjectInspectionItems
-{
-    [JsonPropertyName("PackageReference")]
-    public IReadOnlyList<AppHostProjectInspectionItem>? PackageReference { get; init; }
-
-    [JsonPropertyName("AspireProjectOrPackageReference")]
-    public IReadOnlyList<AppHostProjectInspectionItem>? AspireProjectOrPackageReference { get; init; }
-
-    [JsonPropertyName("PackageVersion")]
-    public IReadOnlyList<AppHostProjectInspectionItem>? PackageVersion { get; init; }
-}
-
-internal sealed record AppHostProjectInspectionItem
-{
-    [JsonPropertyName("Identity")]
-    public string? Identity { get; init; }
-
-    [JsonPropertyName("Version")]
-    public string? Version { get; init; }
-}
