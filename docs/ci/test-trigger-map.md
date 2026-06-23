@@ -174,7 +174,10 @@ Highlights:
 - **non-.NET job loose triggers** — only the paths the project graph cannot
   attribute, such as `tests/PolyglotAppHosts/**`, checked-in `*.ats.txt` /
   `*.tscompat.suppression.txt` baselines, `tools/TypeScriptApiCompat/**`, and
-  `extension/**`.
+  `extension/**`. A `src/Aspire.Hosting*/api/*.ats.txt` baseline fans out to
+  **both** `job:typescript-api-compat` (baseline diff) and `job:polyglot`,
+  because the polyglot playground regenerates and compiles that exported surface
+  in every language.
 - **linked source with no owning project directory** — `src/Aspire/Cli/**`
   carries explicit targets because it is linked into another project but is not
   itself a project directory.
