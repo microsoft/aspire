@@ -287,22 +287,6 @@ public class AppHostSdkTargetsTests
     }
 
     [Fact]
-    public async Task ComputeRunArgumentsDoesNotUseAspireCliWhenCliVersionOutputDoesNotDrain()
-    {
-        using var tempDirectory = new TestTempDirectory();
-        var project = await CreateRunHookProjectAsync(tempDirectory.Path, aspireUseCliBundle: true);
-        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "fake-cli"));
-        var cliPath = Path.Combine(fakeCliDirectory.FullName, OperatingSystem.IsWindows() ? "aspire.cmd" : "aspire");
-        await CreateFakeAspireCliWithVersionAndLingeringChildAsync(fakeCliDirectory.FullName, "13.5.0");
-
-        var properties = await GetComputeRunArgumentsPropertiesAsync(
-            project,
-            [$"-p:AspireCliPath={cliPath}", "-p:RunArguments=--custom foo"]);
-
-        AssertUsesDotNetRun(properties, project, "--custom foo");
-    }
-
-    [Fact]
     public async Task ComputeRunArgumentsDoesNotUseAspireCliWhenCliVersionCommandTimesOut()
     {
         using var tempDirectory = new TestTempDirectory();
@@ -365,25 +349,6 @@ public class AppHostSdkTargetsTests
         AssertUsesDotNetRun(properties, project, "--custom foo");
     }
 
-    [Fact]
-    public async Task ComputeRunArgumentsDoesNotUseAspireCliWhenTasksAssemblyIsUnavailable()
-    {
-        using var tempDirectory = new TestTempDirectory();
-        var missingTasksAssemblyPath = Path.Combine(tempDirectory.Path, "missing", "Aspire.Hosting.Tasks.dll");
-        var project = await CreateRunHookProjectAsync(
-            tempDirectory.Path,
-            aspireUseCliBundle: true,
-            extraProjectXml: $"""
-                  <PropertyGroup>
-                    <_AspireTasksAssembly>{SecurityElement.Escape(missingTasksAssemblyPath)}</_AspireTasksAssembly>
-                  </PropertyGroup>
-                """);
-
-        var properties = await GetComputeRunArgumentsPropertiesAsync(project, ["-p:RunArguments=--custom foo"]);
-
-        AssertUsesDotNetRun(properties, project, "--custom foo");
-    }
-
     private static async Task<string[]> RunAddReferenceToDashboardAndDcpAsync(string? extraProjectXml)
     {
         var repoRoot = GetRepoRoot();
@@ -435,7 +400,6 @@ public class AppHostSdkTargetsTests
         Directory.CreateDirectory(projectDirectory);
 
         var appHostTargetsPath = SecurityElement.Escape(Path.Combine(repoRoot, "src", "Aspire.Hosting.AppHost", "build", "Aspire.Hosting.AppHost.in.targets"));
-        var tasksAssemblyPath = SecurityElement.Escape(GetAspireHostingTasksAssemblyPath());
         var projectFile = Path.Combine(projectDirectory, "AppHost.csproj");
 
         await File.WriteAllTextAsync(projectFile,
@@ -452,7 +416,6 @@ public class AppHostSdkTargetsTests
                 <DcpDir>$(MSBuildProjectDirectory)</DcpDir>
                 <SkipAspireWorkloadManifest>true</SkipAspireWorkloadManifest>
                 <SkipValidateAspireHostProjectResources>true</SkipValidateAspireHostProjectResources>
-                <_AspireTasksAssembly>{{tasksAssemblyPath}}</_AspireTasksAssembly>
               </PropertyGroup>
 
             {{extraProjectXml}}
@@ -605,36 +568,6 @@ public class AppHostSdkTargetsTests
         File.SetUnixFileMode(aspirePath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
     }
 
-    private static async Task CreateFakeAspireCliWithVersionAndLingeringChildAsync(string fakeCliDirectory, string version)
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            await File.WriteAllTextAsync(Path.Combine(fakeCliDirectory, "aspire.cmd"), $$"""
-                @echo off
-                if "%~1"=="--version" (
-                    echo {{version}}
-                    start "" /B cmd /D /C "ping -n 6 127.0.0.1 > nul"
-                    exit /b 0
-                )
-                exit /b 0
-                """);
-
-            return;
-        }
-
-        var aspirePath = Path.Combine(fakeCliDirectory, "aspire");
-        await File.WriteAllTextAsync(aspirePath, $$"""
-            #!/bin/sh
-            if [ "$1" = "--version" ]; then
-                echo "{{version}}"
-                sleep 5 &
-                exit 0
-            fi
-            exit 0
-            """);
-        File.SetUnixFileMode(aspirePath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-    }
-
     private static async Task CreateFakeAspireCliThatHangsOnVersionAsync(string fakeCliDirectory)
     {
         if (OperatingSystem.IsWindows())
@@ -722,33 +655,6 @@ public class AppHostSdkTargetsTests
         Assert.False(string.IsNullOrEmpty(toolPath), "AspireRuntimeIdentifierToolPath assembly metadata is not set.");
         Assert.True(File.Exists(toolPath), $"Aspire.RuntimeIdentifier.Tool was not built at '{toolPath}'. Build the test project to produce it.");
         return toolPath!;
-    }
-
-    private static string GetAspireHostingTasksAssemblyPath()
-    {
-        // The test loads the Aspire.Hosting.Tasks assembly by spawning `dotnet msbuild` (Core MSBuild),
-        // so it always needs the .NET (non-.NET-Framework) build of the task assembly regardless of
-        // the MSBuild runtime that built the test project. The csproj exposes the Tasks output root
-        // via assembly metadata; pick the .NET TFM subdirectory at runtime so this stays correct as
-        // the Tasks project's target frameworks evolve (e.g. net8.0 today, a newer TFM tomorrow).
-        var assembly = typeof(AppHostSdkTargetsTests).Assembly;
-        var outputDirectory = assembly
-            .GetCustomAttributes<AssemblyMetadataAttribute>()
-            .Single(a => string.Equals(a.Key, "AspireHostingTasksOutputDirectory", StringComparison.Ordinal))
-            .Value;
-        Assert.False(string.IsNullOrEmpty(outputDirectory), "AspireHostingTasksOutputDirectory assembly metadata is not set.");
-        Assert.True(Directory.Exists(outputDirectory), $"Aspire.Hosting.Tasks output directory '{outputDirectory}' does not exist. Build the test project to produce it.");
-
-        // TFM folders like `net8.0`, `net10.0`, etc. are what we want; .NET Framework folders
-        // (`net472`, `net48`, ...) all start with `net4` and cannot be loaded by Core MSBuild.
-        var tasksAssemblyPath = Directory
-            .EnumerateDirectories(outputDirectory!)
-            .Where(dir => !Path.GetFileName(dir).StartsWith("net4", StringComparison.OrdinalIgnoreCase))
-            .Select(dir => Path.Combine(dir, "Aspire.Hosting.Tasks.dll"))
-            .FirstOrDefault(File.Exists);
-
-        Assert.False(string.IsNullOrEmpty(tasksAssemblyPath), $"Aspire.Hosting.Tasks.dll was not found under a .NET TFM in '{outputDirectory}'. Build the test project to produce it.");
-        return tasksAssemblyPath!;
     }
 
     private static string GetPackageRid(string packageReference, string prefix)

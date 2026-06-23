@@ -18,8 +18,6 @@
   <UsingTask Condition="'$(_AspireUseTaskHostFactory)' == 'true'" TaskName="GetNonExecutableReferences" AssemblyFile="$(_AspireTasksAssembly)" TaskFactory="TaskHostFactory" />
   <UsingTask Condition="'$(_AspireUseTaskHostFactory)' != 'true'" TaskName="ResolveAspireCliBundle" AssemblyFile="$(_AspireTasksAssembly)" />
   <UsingTask Condition="'$(_AspireUseTaskHostFactory)' == 'true'" TaskName="ResolveAspireCliBundle" AssemblyFile="$(_AspireTasksAssembly)" TaskFactory="TaskHostFactory" />
-  <UsingTask Condition="'$(_AspireUseTaskHostFactory)' != 'true'" TaskName="GetAspireCliVersion" AssemblyFile="$(_AspireTasksAssembly)" />
-  <UsingTask Condition="'$(_AspireUseTaskHostFactory)' == 'true'" TaskName="GetAspireCliVersion" AssemblyFile="$(_AspireTasksAssembly)" TaskFactory="TaskHostFactory" />
 
   <ItemGroup>
     <ProjectCapability Include="Aspire" Condition=" '$(IsAspireHost)' == 'true' " />
@@ -236,10 +234,53 @@ namespace Projects%3B
 
   <!-- Determines if the resolved CLI version is sufficient for the run hook delegation. -->
   <Target Name="_AspireCheckCliVersion"
-          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(_AspireCliRunHookSuppressed)' != 'true' and Exists('$(_AspireTasksAssembly)')">
-    <GetAspireCliVersion AspireCliPath="$(AspireCliPath)">
-      <Output TaskParameter="AspireCliVersion" PropertyName="_AspireResolvedCliVersion" />
-    </GetAspireCliVersion>
+          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(_AspireCliRunHookSuppressed)' != 'true'">
+    <PropertyGroup>
+      <!-- Probe the CLI version with Exec so the command runs through cmd.exe (Windows) or
+           /bin/sh (Unix): PATH/PATHEXT lookup and command shims such as aspire.cmd resolve the
+           same way they do for an interactive shell, and Exec owns the process, timeout, and
+           concurrent stream draining. -->
+      <_AspireCliVersionCommand Condition="'$(AspireCliPath)' != ''">"$(AspireCliPath)" --version</_AspireCliVersionCommand>
+      <_AspireCliVersionCommand Condition="'$(AspireCliPath)' == ''">aspire --version</_AspireCliVersionCommand>
+    </PropertyGroup>
+
+    <!-- The probe must never fail the build: IgnoreExitCode + ContinueOnError mean a missing,
+         failing, or hanging CLI (Timeout kills it after 5s) simply leaves the run hook disabled
+         and falls back to plain "dotnet run". -->
+    <Exec Command="$(_AspireCliVersionCommand)"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="true"
+          StandardOutputImportance="Low"
+          StandardErrorImportance="Low"
+          Timeout="5000"
+          ContinueOnError="true">
+      <Output TaskParameter="ConsoleOutput" ItemName="_AspireCliVersionOutput" />
+      <Output TaskParameter="ExitCode" PropertyName="_AspireCliVersionExitCode" />
+    </Exec>
+
+    <!-- ConsoleToMSBuild merges stdout and stderr in arrival order, so the version is not
+         necessarily the first captured line (a CLI may emit diagnostics on stderr before writing
+         the version to stdout). Only trust the output when the probe exited cleanly, then keep the
+         first line shaped like a version. Raw forms emitted by the CLI version command:
+           13.5.0
+           13.5.0-preview.1.26319.9
+           13.5.0+gabcdef
+           13.5.0-preview.1.26319.9+gabcdef -->
+    <ItemGroup Condition="'$(_AspireCliVersionExitCode)' == '0'">
+      <_AspireCliVersionCandidate Include="@(_AspireCliVersionOutput)"
+                                  Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(Identity)', '^\s*\d+\.\d+\.\d+([-+][0-9A-Za-z.+-]*)?\s*$'))" />
+    </ItemGroup>
+
+    <PropertyGroup>
+      <_AspireResolvedCliVersion>@(_AspireCliVersionCandidate)</_AspireResolvedCliVersion>
+      <!-- Keep only the first matching line when several were captured. -->
+      <_AspireResolvedCliVersion>$([System.Text.RegularExpressions.Regex]::Replace('$(_AspireResolvedCliVersion)', ';.*$', ''))</_AspireResolvedCliVersion>
+      <!-- VersionGreaterThanOrEquals parses with System.Version, which only accepts numeric
+           components, so strip the SemVer prerelease/build-metadata suffix. Build metadata may
+           itself contain '-', so cut at the first '-' or '+'. Reducing a 13.5.0 prerelease to
+           13.5.0 is intentional: 13.5 previews satisfy the minimum. -->
+      <_AspireResolvedCliVersion>$([System.Text.RegularExpressions.Regex]::Replace('$(_AspireResolvedCliVersion.Trim())', '[-+].*$', ''))</_AspireResolvedCliVersion>
+    </PropertyGroup>
 
     <PropertyGroup>
       <_AspireCliVersionSupportsRunHook Condition="'$(_AspireResolvedCliVersion)' != '' and $([MSBuild]::VersionGreaterThanOrEquals('$(_AspireResolvedCliVersion)', '$(_AspireMinimumCliVersion)'))">true</_AspireCliVersionSupportsRunHook>

@@ -17,19 +17,11 @@
                       SkipGetTargetFrameworkProperties="true"
                       Private="false"
                       ExcludeAssets="all" />
-    <!-- Build the AppHost MSBuild tasks so tests importing the source targets can load them. -->
-    <ProjectReference Include="..\..\src\Aspire.Hosting.Tasks\Aspire.Hosting.Tasks.csproj"
-                      ReferenceOutputAssembly="false"
-                      SkipGetTargetFrameworkProperties="true"
-                      Private="false"
-                      ExcludeAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
     <!-- Expose the built RID tool path to tests via assembly metadata so the older-SDK fallback can be exercised. -->
     <AssemblyMetadata Include="AspireRuntimeIdentifierToolPath" Value="$(ArtifactsBinDir)Aspire.RuntimeIdentifier.Tool\$(Configuration)\$(DefaultTargetFramework)\Aspire.RuntimeIdentifier.Tool.dll" />
-    <!-- Expose the Aspire.Hosting.Tasks output root so the test can discover the correct TFM build at runtime. -->
-    <AssemblyMetadata Include="AspireHostingTasksOutputDirectory" Value="$(ArtifactsBinDir)Aspire.Hosting.Tasks\$(Configuration)\" />
   </ItemGroup>
 
   <ItemGroup>
