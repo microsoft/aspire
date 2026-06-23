@@ -4,7 +4,7 @@
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
-/// A resource that represents a NATS server container.
+/// A resource that represents a NATS cluster.
 /// </summary>
 /// <param name="name">The name of the resource.</param>
 [AspireExport(ExposeProperties = true)]
