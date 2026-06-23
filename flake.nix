@@ -2,6 +2,8 @@
   description = "Aspire CLI";
 
   inputs = {
+    # Default package set used when evaluating this flake directly. Consumers can
+    # make this input follow their own pinned nixpkgs input.
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   };
 

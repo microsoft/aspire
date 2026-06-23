@@ -15,16 +15,17 @@ nix run github:microsoft/aspire#aspire-cli
 Install it into a Nix profile:
 
 ```sh
-nix profile install github:microsoft/aspire#aspire-cli
+nix profile add github:microsoft/aspire#aspire-cli
 ```
 
-Use it from a project flake:
+Use it from a project flake by making Aspire follow the same `nixpkgs` input your project already pins. The `nixpkgs` input controls the Nix package set used to evaluate the derivation; the Aspire CLI version is pinned by the `aspire` input revision and `eng/nix/versions.json`.
 
 ```nix
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/<your-pinned-branch-or-rev>";
     aspire.url = "github:microsoft/aspire";
+    aspire.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
@@ -43,13 +44,14 @@ Use it from a project flake:
 }
 ```
 
-Use the overlay:
+Use the overlay the same way:
 
 ```nix
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/<your-pinned-branch-or-rev>";
     aspire.url = "github:microsoft/aspire";
+    aspire.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
